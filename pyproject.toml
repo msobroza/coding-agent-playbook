@@ -269,7 +269,6 @@ exhaustive = true
 # Top-level modules not yet in their target package: each move PR deletes its
 # names. hook_runtime stays here for good.
 exhaustive_ignores = [
-    "_gate_scan_files",
     "_guard_config_allowlists",
     "_guard_config_detect",
     "_guard_config_prompts",
@@ -281,7 +280,6 @@ exhaustive_ignores = [
     "_guard_config_toolchain",
     "_guard_config_verify",
     "evaluators",
-    "gate_scan",
     "git_env",
     "guard_config",
     "harness",
@@ -312,6 +310,7 @@ name = "A stdlib leaf imports only the stdlib and other leaves"
 type = "forbidden"
 # tests/engine_modules.py STDLIB_LEAVES: the only engine modules the two stacks import.
 source_modules = [
+    "coding_agent_playbook.artifacts.path_classes",
     "coding_agent_playbook.catalog.roots",
     "coding_agent_playbook.detector.pep503",
     "coding_agent_playbook.detector.pyproject_deps",
@@ -324,7 +323,6 @@ source_modules = [
 # (tests/engine_modules.py; test_leaf_contract_covers_every_stdlib_leaf prints the
 # expected list).
 forbidden_modules = [
-    "coding_agent_playbook._gate_scan_files",
     "coding_agent_playbook._guard_config_allowlists",
     "coding_agent_playbook._guard_config_detect",
     "coding_agent_playbook._guard_config_prompts",
@@ -336,7 +334,15 @@ forbidden_modules = [
     "coding_agent_playbook._guard_config_toolchain",
     "coding_agent_playbook._guard_config_verify",
     "coding_agent_playbook.adapters",
-    "coding_agent_playbook.artifacts",
+    "coding_agent_playbook.artifacts.frontmatter",
+    "coding_agent_playbook.artifacts.hook",
+    "coding_agent_playbook.artifacts.hook_frontmatter",
+    "coding_agent_playbook.artifacts.hook_schema",
+    "coding_agent_playbook.artifacts.identity",
+    "coding_agent_playbook.artifacts.member_reference",
+    "coding_agent_playbook.artifacts.prompt",
+    "coding_agent_playbook.artifacts.rule",
+    "coding_agent_playbook.artifacts.skill",
     "coding_agent_playbook.catalog._hook_walk",
     "coding_agent_playbook.catalog.layers",
     "coding_agent_playbook.catalog.resolve",
@@ -348,7 +354,6 @@ forbidden_modules = [
     "coding_agent_playbook.detector.predicate",
     "coding_agent_playbook.evals",
     "coding_agent_playbook.evaluators",
-    "coding_agent_playbook.gate_scan",
     "coding_agent_playbook.generated_output.file_identity",
     "coding_agent_playbook.generated_output.gitignore",
     "coding_agent_playbook.generated_output.output_io",
@@ -386,7 +391,6 @@ source_modules = ["coding_agent_playbook.hook_runtime"]
 # dependencies (tests/engine_modules.py; test_stack_contract_forbids_every_non_leaf_module
 # prints the expected list).
 forbidden_modules = [
-    "coding_agent_playbook._gate_scan_files",
     "coding_agent_playbook._guard_config_allowlists",
     "coding_agent_playbook._guard_config_detect",
     "coding_agent_playbook._guard_config_prompts",
@@ -398,7 +402,15 @@ forbidden_modules = [
     "coding_agent_playbook._guard_config_toolchain",
     "coding_agent_playbook._guard_config_verify",
     "coding_agent_playbook.adapters",
-    "coding_agent_playbook.artifacts",
+    "coding_agent_playbook.artifacts.frontmatter",
+    "coding_agent_playbook.artifacts.hook",
+    "coding_agent_playbook.artifacts.hook_frontmatter",
+    "coding_agent_playbook.artifacts.hook_schema",
+    "coding_agent_playbook.artifacts.identity",
+    "coding_agent_playbook.artifacts.member_reference",
+    "coding_agent_playbook.artifacts.prompt",
+    "coding_agent_playbook.artifacts.rule",
+    "coding_agent_playbook.artifacts.skill",
     "coding_agent_playbook.catalog._hook_walk",
     "coding_agent_playbook.catalog.layers",
     "coding_agent_playbook.catalog.resolve",
@@ -410,7 +422,6 @@ forbidden_modules = [
     "coding_agent_playbook.detector.predicate",
     "coding_agent_playbook.evals",
     "coding_agent_playbook.evaluators",
-    "coding_agent_playbook.gate_scan",
     "coding_agent_playbook.generated_output.file_identity",
     "coding_agent_playbook.generated_output.gitignore",
     "coding_agent_playbook.generated_output.output_io",
@@ -447,9 +458,6 @@ ignore_imports = [
     "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.evals.**",
     "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.catalog.source",
     "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.artifacts.**",
-    # N15 moves the judge into hook_runtime/judges/ and deletes these two lines
-    "coding_agent_playbook.hook_runtime.handlers.gate_weakening -> coding_agent_playbook.gate_scan",
-    "coding_agent_playbook.hook_runtime.handlers.gate_weakening_edit -> coding_agent_playbook.gate_scan",
     "coding_agent_playbook.hook_runtime.handlers.quality_metrics -> coding_agent_playbook.evaluators.**",
     "coding_agent_playbook.hook_runtime.handlers.quality_metrics -> coding_agent_playbook.metrics_gate.**",
     # N4: detect() (detector.facts) and evaluate_predicate (detector.predicate) both load on
@@ -472,7 +480,6 @@ source_modules = ["coding_agent_playbook.evaluators"]
 # dependencies (tests/engine_modules.py; test_stack_contract_forbids_every_non_leaf_module
 # prints the expected list).
 forbidden_modules = [
-    "coding_agent_playbook._gate_scan_files",
     "coding_agent_playbook._guard_config_allowlists",
     "coding_agent_playbook._guard_config_detect",
     "coding_agent_playbook._guard_config_prompts",
@@ -484,7 +491,15 @@ forbidden_modules = [
     "coding_agent_playbook._guard_config_toolchain",
     "coding_agent_playbook._guard_config_verify",
     "coding_agent_playbook.adapters",
-    "coding_agent_playbook.artifacts",
+    "coding_agent_playbook.artifacts.frontmatter",
+    "coding_agent_playbook.artifacts.hook",
+    "coding_agent_playbook.artifacts.hook_frontmatter",
+    "coding_agent_playbook.artifacts.hook_schema",
+    "coding_agent_playbook.artifacts.identity",
+    "coding_agent_playbook.artifacts.member_reference",
+    "coding_agent_playbook.artifacts.prompt",
+    "coding_agent_playbook.artifacts.rule",
+    "coding_agent_playbook.artifacts.skill",
     "coding_agent_playbook.catalog._hook_walk",
     "coding_agent_playbook.catalog.layers",
     "coding_agent_playbook.catalog.resolve",
@@ -495,7 +510,6 @@ forbidden_modules = [
     "coding_agent_playbook.detector.facts",
     "coding_agent_playbook.detector.predicate",
     "coding_agent_playbook.evals",
-    "coding_agent_playbook.gate_scan",
     "coding_agent_playbook.generated_output.file_identity",
     "coding_agent_playbook.generated_output.gitignore",
     "coding_agent_playbook.generated_output.output_io",
@@ -520,8 +534,6 @@ forbidden_modules = [
     "yaml",
 ]
 ignore_imports = [
-    # N15: TEST_PATH_GLOBS moves to artifacts/path_classes.py
-    "coding_agent_playbook.evaluators.paths -> coding_agent_playbook.gate_scan",
     # A12: the glob grammar moves to artifacts/path_globs.py (after #62)
     "coding_agent_playbook.evaluators.paths -> coding_agent_playbook.hook_runtime.**",
 ]
@@ -569,11 +581,6 @@ ignore_imports = [
     "coding_agent_playbook.commands._import_files -> coding_agent_playbook.adapters._skill_files",
     # CP-3: init's configure() owns --adapters (after #62)
     "coding_agent_playbook.cli.parser -> coding_agent_playbook.commands._init_adapters",
-    # N15: FIXTURE_GLOBS moves to the stdlib leaf artifacts/path_classes.py
-    "coding_agent_playbook.evaluators.paths -> coding_agent_playbook.hook_runtime.handlers._eval_paths",
-    "coding_agent_playbook.metrics_gate.config -> coding_agent_playbook.hook_runtime.handlers._eval_paths",
-    "coding_agent_playbook.gate_scan -> coding_agent_playbook.hook_runtime.handlers._eval_paths",
-    "coding_agent_playbook.guard_config -> coding_agent_playbook.hook_runtime.handlers._eval_paths",
     # A16: hook_runtime/_ruff.py becomes the public hook_runtime/ruff.py (after #62)
     "coding_agent_playbook._guard_config_quality -> coding_agent_playbook.hook_runtime._ruff",
     "coding_agent_playbook._guard_config_ruff -> coding_agent_playbook.hook_runtime._ruff",
@@ -590,8 +597,6 @@ ignore_imports = [
     "coding_agent_playbook.commands.twins._secret_scope -> coding_agent_playbook.hook_runtime._git_parse",
     "coding_agent_playbook.commands.twins.check_notebooks -> coding_agent_playbook.hook_runtime._git_parse",
     "coding_agent_playbook.commands.twins.scan_sinks -> coding_agent_playbook.hook_runtime._git_parse",
-    # N15: the gate judge moves inside hook_runtime, where _git_parse is its own package's
-    "coding_agent_playbook.gate_scan -> coding_agent_playbook.hook_runtime._git_parse",
     # N21: becomes hook_runtime/harness/payload.py
     "coding_agent_playbook.hook_runtime.dispatch -> coding_agent_playbook.hook_runtime.harness._payload",
     # A7: becomes generated_output/write_guard.py (after #62)
@@ -614,8 +619,7 @@ type = "forbidden"
 source_modules = ["coding_agent_playbook.commands.twins"]
 forbidden_modules = ["coding_agent_playbook.hook_runtime.handlers"]
 # Direct imports only: a twin still reaches handlers through modules outside
-# commands.twins. Until N15: gate_scan, metrics_gate.config and evaluators.paths
-# import handlers._eval_paths. With no scheduled end: judges.sink_scan lazily imports
+# commands.twins. With no scheduled end: judges.sink_scan lazily imports
 # handlers._sink_regex (its regex fallback). The layer and private-modules contracts
 # cover those chains (specs/prT-package-layout.md B.9.2).
 allow_indirect_imports = "true"

@@ -7,11 +7,11 @@ through K2's ask degradation):
 - an Edit/Write of a test file (the ``test`` path class: ``tests/``,
   ``test_*.py``, ``*_test.py``, ``conftest.py``) that **adds** an unjustified
   ``@pytest.mark.skip``, ``skipif(True)``, non-strict ``xfail`` or
-  ``pytest.skip(``, judged by ``gate_scan``'s own patterns on the lines the
+  ``pytest.skip(``, judged by ``judges.gate_weakening``'s own patterns on the lines the
   edit adds (the simulated file after the edit, against the file now);
 - a Bash ``rm``, ``git rm`` or ``mv`` of a test file.
 
-Any other call returns at once, before ``gate_scan`` is imported.
+Any other call returns at once, before ``judges.gate_weakening`` is imported.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 
 __all__ = ["SKIP_RULES", "gate_weakening_pre_edit"]
 
-#: The ``gate_scan`` rules that skip or soften a test.
+#: The ``judges.gate_weakening`` rules that skip or soften a test.
 SKIP_RULES: Final = frozenset(
     {"pytest-skip-marker", "pytest-skipif-true", "pytest-xfail-non-strict", "pytest-skip-call"}
 )
@@ -101,7 +101,7 @@ def _is_test(path: NormalizedPath, tests: GlobSet) -> bool:
 
 def _added_skip(tool: ToolCall, path: NormalizedPath) -> str | None:
     """The first skip rule an unjustified added line of ``path`` matches, else ``None``."""
-    from coding_agent_playbook.gate_scan import (
+    from coding_agent_playbook.hook_runtime.judges.gate_weakening import (
         DEFAULT_ADDED_LINE_PATTERNS,
         AddedLine,
         ScanPolicy,

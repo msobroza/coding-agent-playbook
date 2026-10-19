@@ -1,6 +1,6 @@
 """The pure gate-weakening scanner (specs/prK-hook-pack.md §E.2 gate-weakening-guard).
 
-``gate_scan.scan`` takes parsed diff lines and config file pairs, never git, so
+``gate_weakening.scan`` takes parsed diff lines and config file pairs, never git, so
 every rule is pinned here without a repository: the added-line patterns and
 their trailing-justification escape, the TOML key diffs that loosen a checker,
 the pre-commit hook and workflow step removals, the ``.gitleaks.toml`` watch,
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from coding_agent_playbook.gate_scan import (
+from coding_agent_playbook.hook_runtime.judges.gate_weakening import (
     DEFAULT_ADDED_LINE_PATTERNS,
     DEFAULT_JUSTIFICATION_REGEX,
     DEFAULT_PROTECTED_CONFIG_KEYS,
@@ -440,6 +440,6 @@ def test_findings_are_sorted_and_render_as_text_and_json() -> None:
 
 
 def test_importing_gate_scan_does_not_load_tomllib() -> None:
-    code = "import sys, coding_agent_playbook.gate_scan; print('tomllib' in sys.modules)"
+    code = "import sys, coding_agent_playbook.hook_runtime.judges.gate_weakening; print('tomllib' in sys.modules)"
 
     assert run_python_probe(code) == "False"

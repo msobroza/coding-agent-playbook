@@ -111,6 +111,8 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.evaluators.metrics_gate` | `coding_agent_playbook.metrics_gate.run` | N22 |
 | `coding_agent_playbook.evaluators.policy` | `coding_agent_playbook.metrics_gate.policy` | N22 |
 | `coding_agent_playbook.evaluators.types.MetricConfig` | `coding_agent_playbook.metrics_gate.config.MetricConfig` | N22 |
+| `coding_agent_playbook.gate_scan` | `coding_agent_playbook.hook_runtime.judges.gate_weakening` | N15 |
+| `coding_agent_playbook.gate_scan.TEST_PATH_GLOBS` | `coding_agent_playbook.artifacts.path_classes.TEST_PATH_GLOBS` | N15 |
 | `coding_agent_playbook.git_client` | `coding_agent_playbook.sync.git_client` | A6 |
 | `coding_agent_playbook.gitignore` | `coding_agent_playbook.generated_output.gitignore` | N6 |
 | `coding_agent_playbook.hook_runtime._config_keys` | `coding_agent_playbook.hook_runtime.config.keys` | N16 |
@@ -122,6 +124,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.hook_runtime.cutover` | `coding_agent_playbook.hook_runtime.judges.commit_cutover` | N14 |
 | `coding_agent_playbook.hook_runtime.handlers._cli_words` | `coding_agent_playbook.hook_runtime.judges.cli_words` | N14 |
 | `coding_agent_playbook.hook_runtime.handlers._dependency_tiers` | `coding_agent_playbook.hook_runtime.judges.dependency_tiers` | N14 |
+| `coding_agent_playbook.hook_runtime.handlers._eval_paths` | `coding_agent_playbook.artifacts.path_classes` | N15 |
 | `coding_agent_playbook.hook_runtime.handlers._install_cmds` | `coding_agent_playbook.hook_runtime.judges.install_commands` | N14 |
 | `coding_agent_playbook.hook_runtime.handlers._manifest_diff` | `coding_agent_playbook.hook_runtime.judges.manifest_diff` | N14 |
 | `coding_agent_playbook.hook_runtime.handlers._notebook_cells` | `coding_agent_playbook.hook_runtime.judges.notebook_cells` | N14 |

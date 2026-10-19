@@ -90,6 +90,7 @@ from coding_agent_playbook._guard_config_verify import (
     repo_layout,
 )
 from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
+from coding_agent_playbook.artifacts.path_classes import FIXTURE_GLOBS
 from coding_agent_playbook.generated_output.output_io import copy_output, write_output_bytes
 from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.hook_policy import HOOK_SCRIPTS_DIR
@@ -105,7 +106,6 @@ from coding_agent_playbook.hook_runtime.handlers._control_plane_paths import CON
 from coding_agent_playbook.hook_runtime.handlers._control_plane_text import (
     playbook_precommit_ids,
 )
-from coding_agent_playbook.hook_runtime.handlers._eval_paths import FIXTURE_GLOBS
 from coding_agent_playbook.hook_runtime.judges.notebook_check import NOTEBOOK_MAX_BYTES
 from coding_agent_playbook.hook_runtime.routing import ASYNC_AUDIT_MODE, ASYNC_EVENT, handler_route
 from coding_agent_playbook.security.patterns import SECRET_PATH_GLOBS

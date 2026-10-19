@@ -97,7 +97,7 @@ _ENGINE_PATHS = (
     "config/tables/hooks.py",
     "generated_output/sentinel.py",
     "detector/pep503.py",
-    "gate_scan.py",
+    "hook_runtime/judges/gate_weakening.py",
     "precommit.py",
     "templates/hook_shims/",
 )
