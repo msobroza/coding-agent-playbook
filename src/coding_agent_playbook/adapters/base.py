@@ -169,6 +169,19 @@ class Adapter(ABC):
         rule = hook.advisory
         return [] if rule is None else self.write_rule(rule, repo_root)
 
+    def writes_guardrails_skill(self, hooks: Sequence[ResolvedHook]) -> bool:
+        """Whether this adapter writes the ``playbook-guardrails`` skill for ``hooks`` (D6).
+
+        When it does, the dispatch adds the composed skill to the skills this
+        adapter's :meth:`write_skill` receives. Default ``False``: Continue and
+        agent_harness keep their per-hook guardrail rule files, ``AGENTS.md`` is
+        not a skill root, and an out-of-tree adapter keeps what it wrote before.
+
+        Example: ``OpenCodeAdapter().writes_guardrails_skill(hooks.resolved)`` -> ``True``.
+        """
+        del hooks
+        return False
+
     def planned_runtime_outputs(self, hooks: Sequence[ResolvedHook]) -> tuple[str, ...]:
         """The :attr:`runtime_outputs` :meth:`finalize` will write for ``hooks`` (repo-relative).
 
