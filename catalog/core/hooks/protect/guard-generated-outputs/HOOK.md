@@ -2,6 +2,7 @@
 id: guard-generated-outputs
 name: Guard generated outputs
 description: Deny hand-edits to files that playbook sync generates and point at the canonical source.
+summary: Do not hand-edit files `playbook sync` generates; edit the canonical source under `playbook/`, then sync.
 version: 1
 tier: default
 priority: 10

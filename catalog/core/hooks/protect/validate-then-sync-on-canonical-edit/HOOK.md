@@ -2,6 +2,7 @@
 id: validate-then-sync-on-canonical-edit
 name: Validate canonical edits
 description: Report playbook validate failures for an edited canonical source in-turn; sync only when [hooks] auto_sync allows.
+summary: After editing a canonical playbook source, run `playbook validate` and fix its failures; ask the user to sync.
 version: 1
 tier: default
 priority: 40

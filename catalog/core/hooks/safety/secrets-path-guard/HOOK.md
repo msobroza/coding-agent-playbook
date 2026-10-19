@@ -2,6 +2,7 @@
 id: secrets-path-guard
 name: Secrets path guard
 description: Deny agent reads and writes of credential files (.env, keys, cloud and SSH credentials); ask before creating a new .env or opening a hard link to a credential file.
+summary: Never read, print or write credential files (`.env*`, keys, `~/.aws`, `~/.ssh`); ask the user for the values.
 version: 1
 tier: default
 priority: 15

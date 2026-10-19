@@ -2,6 +2,7 @@
 id: stop-ci-parity-gate
 name: Stop until the checks pass
 description: The Stop coordinator; run the Stop stages once per working tree and block with one combined reason while any is red.
+summary: Before claiming done, run `ruff check .`, `ruff format --check .`, the type checker and the tests; report the results.
 version: 1
 tier: default
 priority: 10
