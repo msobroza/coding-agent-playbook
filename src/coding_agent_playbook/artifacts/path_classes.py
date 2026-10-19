@@ -3,7 +3,7 @@
 eval-task-authoring-lint and guard-eval-fixtures both locate an edited file's
 task directory (``.../eval_tasks/<id>/``); sync renders :data:`FIXTURE_GLOBS`
 as ``guard_config.eval.fixture_globs`` and the ``eval_fixture`` path class
-from the same constant; :data:`TEST_PATH_GLOBS` is test code. Stdlib-only (``re``).
+from the same constant; :data:`TEST_PATH_GLOBS` names the test-code paths. Stdlib-only.
 """
 
 from __future__ import annotations
