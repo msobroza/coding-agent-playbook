@@ -1,4 +1,4 @@
-"""Tests for the named-rubric registry — ``evaluators/rubrics.py``.
+"""Tests for the named-rubric registry — ``evals/compile/rubric_registry.py``.
 
 The named-rubric registry is the out-of-tree extension point that bridges a
 code-defined :class:`~coding_agent_playbook.evaluators.rubric.Rubric` subclass
@@ -16,14 +16,14 @@ from __future__ import annotations
 
 import pytest
 
-from coding_agent_playbook.evaluators import rubrics as rubrics_mod
-from coding_agent_playbook.evaluators.checks.judged import JudgeCheck
-from coding_agent_playbook.evaluators.rubric import Rubric
-from coding_agent_playbook.evaluators.rubrics import (
+from coding_agent_playbook.evals.compile import rubric_registry as rubrics_mod
+from coding_agent_playbook.evals.compile.rubric_registry import (
     all_rubric_names,
     get_rubric,
     register_rubric,
 )
+from coding_agent_playbook.evaluators.checks.judged import JudgeCheck
+from coding_agent_playbook.evaluators.rubric import Rubric
 
 
 def _register(name: str, criteria: tuple[tuple[str, float], ...]) -> type[Rubric]:
@@ -101,7 +101,7 @@ def test_entry_point_rubric_is_discovered(monkeypatch: pytest.MonkeyPatch) -> No
         return [_FakeEntryPoint()]
 
     monkeypatch.setattr(
-        "coding_agent_playbook.evaluators.rubrics.metadata.entry_points",
+        "coding_agent_playbook.evals.compile.rubric_registry.metadata.entry_points",
         _fake_entry_points,
     )
     assert "_plugin_rubric" in all_rubric_names()
@@ -126,7 +126,7 @@ def test_in_tree_registration_wins_over_entry_point(monkeypatch: pytest.MonkeyPa
         return [_FakeEntryPoint()]
 
     monkeypatch.setattr(
-        "coding_agent_playbook.evaluators.rubrics.metadata.entry_points",
+        "coding_agent_playbook.evals.compile.rubric_registry.metadata.entry_points",
         _fake_entry_points,
     )
     try:

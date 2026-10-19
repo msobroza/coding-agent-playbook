@@ -1,4 +1,4 @@
-"""Tests for the Gate registry — ``evaluators/gates.py``.
+"""Tests for the Gate registry — ``evals/compile/gate_registry.py``.
 
 A *gate* is a named, composed boolean :class:`~coding_agent_playbook.evaluators.check.Check`
 (typically built from the boolean composers ``AllOf``/``AnyOf``/``Not``) that an
@@ -15,10 +15,14 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.evaluators import gates as gates_mod
+from coding_agent_playbook.evals.checks.files import FileExistsCheck, FileForbiddenCheck
+from coding_agent_playbook.evals.compile import gate_registry as gates_mod
+from coding_agent_playbook.evals.compile.gate_registry import (
+    all_gate_names,
+    get_gate,
+    register_gate,
+)
 from coding_agent_playbook.evaluators.checks.compose import AllOf
-from coding_agent_playbook.evaluators.checks.files import FileExistsCheck, FileForbiddenCheck
-from coding_agent_playbook.evaluators.gates import all_gate_names, get_gate, register_gate
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evaluators.check import Check
@@ -77,7 +81,7 @@ def test_entry_point_gate_is_discovered(monkeypatch: pytest.MonkeyPatch) -> None
         return [_FakeEntryPoint()]
 
     monkeypatch.setattr(
-        "coding_agent_playbook.evaluators.gates.metadata.entry_points",
+        "coding_agent_playbook.evals.compile.gate_registry.metadata.entry_points",
         _fake_entry_points,
     )
     assert "_plugin_gate" in all_gate_names()
@@ -104,7 +108,7 @@ def test_in_tree_registration_wins_over_entry_point(monkeypatch: pytest.MonkeyPa
         return [_FakeEntryPoint()]
 
     monkeypatch.setattr(
-        "coding_agent_playbook.evaluators.gates.metadata.entry_points",
+        "coding_agent_playbook.evals.compile.gate_registry.metadata.entry_points",
         _fake_entry_points,
     )
     try:

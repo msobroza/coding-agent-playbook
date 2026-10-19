@@ -127,9 +127,25 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.evaluators.MetricConfig` | `coding_agent_playbook.metrics_gate.config.MetricConfig` | N22 |
 | `coding_agent_playbook.evaluators._metrics_inputs` | `coding_agent_playbook.metrics_gate.inputs` | N22 |
 | `coding_agent_playbook.evaluators._metrics_suite` | `coding_agent_playbook.metrics_gate.suite` | N22 |
+| `coding_agent_playbook.evaluators.all_rubric_names` | `coding_agent_playbook.evals.compile.rubric_registry.all_rubric_names` | N24 |
+| `coding_agent_playbook.evaluators.checks.AggregateCheck` | `coding_agent_playbook.evals.checks.aggregate.AggregateCheck` | N24 |
+| `coding_agent_playbook.evaluators.checks.AnswerMatchesCheck` | `coding_agent_playbook.evals.checks.answer.AnswerMatchesCheck` | N24 |
+| `coding_agent_playbook.evaluators.checks.FileContainsCheck` | `coding_agent_playbook.evals.checks.files.FileContainsCheck` | N24 |
+| `coding_agent_playbook.evaluators.checks.FileExistsCheck` | `coding_agent_playbook.evals.checks.files.FileExistsCheck` | N24 |
+| `coding_agent_playbook.evaluators.checks.FileForbiddenCheck` | `coding_agent_playbook.evals.checks.files.FileForbiddenCheck` | N24 |
+| `coding_agent_playbook.evaluators.checks.FileUnchangedCheck` | `coding_agent_playbook.evals.checks.files.FileUnchangedCheck` | N24 |
+| `coding_agent_playbook.evaluators.checks.PassAtK` | `coding_agent_playbook.evals.checks.aggregate.PassAtK` | N24 |
+| `coding_agent_playbook.evaluators.checks.PassPowK` | `coding_agent_playbook.evals.checks.aggregate.PassPowK` | N24 |
+| `coding_agent_playbook.evaluators.checks.aggregate` | `coding_agent_playbook.evals.checks.aggregate` | N24 |
+| `coding_agent_playbook.evaluators.checks.answer` | `coding_agent_playbook.evals.checks.answer` | N24 |
+| `coding_agent_playbook.evaluators.checks.files` | `coding_agent_playbook.evals.checks.files` | N24 |
+| `coding_agent_playbook.evaluators.gates` | `coding_agent_playbook.evals.compile.gate_registry` | N24 |
+| `coding_agent_playbook.evaluators.get_rubric` | `coding_agent_playbook.evals.compile.rubric_registry.get_rubric` | N24 |
 | `coding_agent_playbook.evaluators.measurement_snapshot` | `coding_agent_playbook.metrics_gate.snapshot` | N22 |
 | `coding_agent_playbook.evaluators.metrics_gate` | `coding_agent_playbook.metrics_gate.run` | N22 |
 | `coding_agent_playbook.evaluators.policy` | `coding_agent_playbook.metrics_gate.policy` | N22 |
+| `coding_agent_playbook.evaluators.register_rubric` | `coding_agent_playbook.evals.compile.rubric_registry.register_rubric` | N24 |
+| `coding_agent_playbook.evaluators.rubrics` | `coding_agent_playbook.evals.compile.rubric_registry` | N24 |
 | `coding_agent_playbook.evaluators.types.MetricConfig` | `coding_agent_playbook.metrics_gate.config.MetricConfig` | N22 |
 | `coding_agent_playbook.gate_scan` | `coding_agent_playbook.hook_runtime.judges.gate_weakening` | N15 |
 | `coding_agent_playbook.gate_scan.TEST_PATH_GLOBS` | `coding_agent_playbook.artifacts.path_classes.TEST_PATH_GLOBS` | N15 |
@@ -1646,8 +1662,9 @@ my_check = "my_pkg.checks:MyCheck"
 
 A `Check` implements `grade(self, ctx, measurements) -> CheckResult` and sets
 `id`, `weight`, `required`, `determinism`, and `cost: CostTier`. See
-`evaluators/check.py` (`ThresholdCheck`/`NonRegressionCheck`) and
-`evaluators/checks/` (file/judge/compose) for the built-in shapes.
+`evaluators/check.py` (`ThresholdCheck`/`NonRegressionCheck`),
+`evaluators/checks/` (judge/compose) and `evals/checks/files.py` (file) for the
+built-in shapes.
 
 ### 4. `grade()` → `Rubric.evaluate`
 
