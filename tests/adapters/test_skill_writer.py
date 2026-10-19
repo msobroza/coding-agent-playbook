@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from coding_agent_playbook.adapters import _skill_files
+from coding_agent_playbook.adapters.registry import installed_output_locations
 from coding_agent_playbook.adapters.skill_dirs import writer as _skill_writer
 from coding_agent_playbook.adapters.skill_dirs.ownership import judging_leftovers_with
 from coding_agent_playbook.adapters.skill_dirs.writer import (
@@ -22,7 +23,6 @@ from coding_agent_playbook.adapters.skill_dirs.writer import (
     render_skill_md,
     swap_blocker,
 )
-from coding_agent_playbook.adapters.registry import installed_output_locations
 from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.commands import sync as _sync
