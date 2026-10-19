@@ -19,7 +19,7 @@ import pytest
 from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName
-from coding_agent_playbook.hook_runtime.handlers import pii_prompt_guard as guard
+from coding_agent_playbook.hook_runtime.handlers.safety import pii_prompt_guard as guard
 from coding_agent_playbook.hook_runtime.harness.wire import WireOutput
 from coding_agent_playbook.hooks.contract.handler_catalog import RegistryCatalog
 from coding_agent_playbook.hooks.resolution.effective import resolve_effective_hooks

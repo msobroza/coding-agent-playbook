@@ -31,7 +31,7 @@ from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, clip
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
-from coding_agent_playbook.hook_runtime.handlers._git_identity import (
+from coding_agent_playbook.hook_runtime.handlers.safety._git_identity import (
     IDENTITY_REASON,
     identity_rule,
 )
@@ -131,7 +131,7 @@ def _git_verdict(git: GitInvocation, repo: RepoInfo, ctx: HandlerContext) -> Ver
 def _commit_verdict(git: GitInvocation, repo: RepoInfo, ctx: HandlerContext) -> Verdict | None:
     if _placeholder_identity(ctx):
         return Decision.DENY, "placeholder_identity", PLACEHOLDER_REASON
-    from coding_agent_playbook.hook_runtime.handlers._commit_checks import (
+    from coding_agent_playbook.hook_runtime.handlers.safety._commit_checks import (
         message_verdict,
         staged_paths,
     )

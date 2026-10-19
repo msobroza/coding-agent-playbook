@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING, Any, Final
 import pytest
 
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
-from coding_agent_playbook.hook_runtime.handlers._destructive_git import STASH_RECIPE
-from coding_agent_playbook.hook_runtime.handlers._destructive_paths import ROOT_REASON
+from coding_agent_playbook.hook_runtime.handlers.safety._destructive_git import STASH_RECIPE
+from coding_agent_playbook.hook_runtime.handlers.safety._destructive_paths import ROOT_REASON
 from coding_agent_playbook.security.patterns import DESTRUCTIVE_NATIVE_PREFIXES
 from tests.hook_runtime.fakes import FakeGit
 

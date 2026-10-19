@@ -9,7 +9,7 @@ and the enforcing hook never disagree, and the hook never evaluates a
 predicate at run time (it cannot import ``detector``).
 
 The resolved shape is ``{"rule": <rule id>, "skill": <skill id>, "warn": [<code>, ...]}``:
-the post-edit pipeline reads ``warn`` (``_ruff_pipeline.extended_codes``, the
+the post-edit pipeline reads ``warn`` (``_shared.ruff_pipeline.extended_codes``, the
 sync-time ruff probe) and names ``rule`` and ``skill`` in its line prefix
 (D16). ``skill`` is the rule's owning skill, absent when the rule names none
 (an always rule), so the prefix then stays ``rule <id>:``.

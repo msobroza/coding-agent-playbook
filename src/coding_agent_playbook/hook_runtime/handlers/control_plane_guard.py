@@ -1,6 +1,6 @@
 """control-plane-guard: stop the agent disabling or rewriting its own guardrails (specs/prK-hook-pack.md §E.1).
 
-Each write target is routed to its control-plane row (``_control_plane_paths``):
+Each write target is routed to its control-plane row (``_shared.control_plane_paths``):
 
 - rows decided by the path alone: the hook state dir and the trust store
   (any write denies), ``extra_paths`` (deny), the hook sources
@@ -37,13 +37,19 @@ from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.config.reader import read_small_file
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
-from coding_agent_playbook.hook_runtime.edit_preview import preview_after
-from coding_agent_playbook.hook_runtime.handlers._control_plane_paths import load_plane, route_of
 from coding_agent_playbook.hook_runtime.handlers._control_plane_shell import (
     command_verdict,
     names_state_dir,
 )
-from coding_agent_playbook.hook_runtime.handlers._targets import file_write_paths, shell_target
+from coding_agent_playbook.hook_runtime.handlers._shared.control_plane_paths import (
+    load_plane,
+    route_of,
+)
+from coding_agent_playbook.hook_runtime.handlers._shared.edit_preview import preview_after
+from coding_agent_playbook.hook_runtime.handlers._shared.targets import (
+    file_write_paths,
+    shell_target,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -51,7 +57,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, ToolCall
     from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.handlers._control_plane_paths import (
+    from coding_agent_playbook.hook_runtime.handlers._shared.control_plane_paths import (
         ControlPlane,
         RouteKind,
     )

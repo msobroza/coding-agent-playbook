@@ -33,9 +33,12 @@ from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.event import ToolClass
 from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
-from coding_agent_playbook.hook_runtime.handlers._data_reads import is_pattern, read_candidates
-from coding_agent_playbook.hook_runtime.handlers._secret_policy import spelled
-from coding_agent_playbook.hook_runtime.handlers._targets import shell_target
+from coding_agent_playbook.hook_runtime.handlers._shared.targets import shell_target
+from coding_agent_playbook.hook_runtime.handlers.safety._data_reads import (
+    is_pattern,
+    read_candidates,
+)
+from coding_agent_playbook.hook_runtime.handlers.safety._secret_policy import spelled
 from coding_agent_playbook.hook_runtime.judges.notebook_check import (
     NOTEBOOK_MAX_BYTES,
     NotebookLimits,

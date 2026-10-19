@@ -18,7 +18,7 @@ from coding_agent_playbook.hook_runtime.config.pin import write_machine_pins
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.event import Harness
 from coding_agent_playbook.hook_runtime.git.safe_git import LoggedCommit
-from coding_agent_playbook.hook_runtime.handlers._cz import REWRITE_HINT
+from coding_agent_playbook.hook_runtime.handlers.safety._cz import REWRITE_HINT
 from tests.hook_runtime.fakes import FakeGit
 from tests.hook_runtime.tool_fakes import FakeCz
 
@@ -108,7 +108,7 @@ def test_rejected_message_denies_with_sanitized_cz_text_no_commitizen_hint(
 
 def test_cz_echo_is_requoted_and_config_pointers_dropped() -> None:
     """cz's unquoted echo cannot pose as an instruction line; config hints never reach the model."""
-    from coding_agent_playbook.hook_runtime.handlers._cz import deny_reason
+    from coding_agent_playbook.hook_runtime.handlers.safety._cz import deny_reason
 
     output = (
         b'commit "c0ffee": "Bad\x1b[2J subject"\n'

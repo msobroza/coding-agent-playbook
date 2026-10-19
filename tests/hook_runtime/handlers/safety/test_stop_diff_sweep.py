@@ -17,8 +17,8 @@ import pytest
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hook_runtime.git.parse import AddedLine
-from coding_agent_playbook.hook_runtime.handlers._secret_sweep import FIX, PII_FIX
-from coding_agent_playbook.hook_runtime.handlers.stop_sweep import PARTIAL_NOTE
+from coding_agent_playbook.hook_runtime.handlers.safety._secret_sweep import FIX, PII_FIX
+from coding_agent_playbook.hook_runtime.handlers.safety.stop_diff_sweep import PARTIAL_NOTE
 from coding_agent_playbook.hook_runtime.stop.output import red_note
 from coding_agent_playbook.hooks.guard_config.inputs import DetectInputs
 from tests.hook_runtime.handlers.pack_repo import engine_rules

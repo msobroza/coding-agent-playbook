@@ -28,7 +28,7 @@ from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.event import ToolClass
 from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
-from coding_agent_playbook.hook_runtime.handlers._targets import file_write_paths, repo_file
+from coding_agent_playbook.hook_runtime.handlers._shared.targets import file_write_paths, repo_file
 from coding_agent_playbook.hook_runtime.judges.notebook_cells import cell_index, notebook_cells
 from coding_agent_playbook.hook_runtime.judges.notebook_check import (
     ADVICE,
