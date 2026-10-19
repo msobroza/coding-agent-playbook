@@ -8,7 +8,7 @@ priority: 30
 events: [post_tool_use]
 matcher:
   post_tool_use:
-    tools: [edit, write]
+    tools: [edit, write, notebook_edit]
 handler:
   builtin: skill_nudge
 decisions: [context, none]
