@@ -30,6 +30,7 @@ from coding_agent_playbook._output_io import is_character_device, refuse_special
 from coding_agent_playbook._symlinks import link_leaving, real_path
 from coding_agent_playbook.adapters.skill_dirs.writer import swap_blocker
 from coding_agent_playbook.commands._output_blockers import write_blocker
+from coding_agent_playbook.config.files import CONFIG_FILENAME, CONFIG_LOCAL_FILENAME
 from coding_agent_playbook.gitignore import (
     GITIGNORE_FILENAME,
     LOCKFILE_NAME,
@@ -53,11 +54,10 @@ ORPHAN_HINT = "    Orphaned generated file; run 'playbook sync' to remove."
 
 # Filenames that are state-source-managed and must be excluded from the
 # drift diff (otherwise the lockfile written by sync would itself look
-# like drift). Keep this in sync with the constants in
-# ``config.files.FileSystemStateSource``.
+# like drift): the two config files and the lockfile.
 _STATE_FILES_TO_SKIP: tuple[str, ...] = (
-    ".coding-agent-playbook.toml",
-    ".coding-agent-playbook.local.toml",
+    CONFIG_FILENAME,
+    CONFIG_LOCAL_FILENAME,
     LOCKFILE_NAME,
 )
 
