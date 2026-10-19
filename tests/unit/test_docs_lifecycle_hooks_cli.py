@@ -5,7 +5,7 @@ covers the model, config and architecture rows, and this module the rest: the
 adapter contract (§10), the CLI and the ``playbook-hook`` runtime (§12), the
 pre-commit ids (§13), the lockfile (§14.4), tests (§16), security (§17) and the
 new metrics (§21). Every name a test requires comes from the landed code (the
-``Adapter`` members, ``cli._SUBCOMMANDS`` and the argparse flags, ``CI_STEPS``,
+``Adapter`` members, ``cli.parser._SUBCOMMANDS`` and the argparse flags, ``CI_STEPS``,
 the ``playbook-hook`` usage, ``STOP_STAGE_ORDER``, ``.pre-commit-hooks.yaml``,
 the starter template, the OpenCode floor, the metric families), so a command,
 flag, step, hook id or metric that lands without documentation fails here.

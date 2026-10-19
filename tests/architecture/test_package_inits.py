@@ -18,6 +18,8 @@ from typing import Final
 
 import pytest
 
+from tests.engine_modules import ENGINE, engine_module
+
 _SRC: Final = Path(__file__).resolve().parents[2] / "src"
 _ROOT_INIT: Final = "coding_agent_playbook/__init__.py"
 #: L2 (specs/prT-package-layout.md H7): ``coding_agent_playbook.cli:main`` is the
@@ -72,7 +74,7 @@ def test_inits_with_code_baseline_is_current() -> None:
 
 
 def public_definitions(source: str) -> list[str]:
-    """The non-underscore names ``source`` defines at top level (imports excluded).
+    r"""The non-underscore names ``source`` defines at top level (imports excluded).
 
     Example::
 
@@ -109,6 +111,49 @@ def test_cli_init_defines_main_only() -> None:
     source = _SRC.joinpath(_CLI_INIT).read_text(encoding="utf-8")
 
     assert public_definitions(source) == ["main"]
+
+
+_CLI_PARSER_MODULE: Final = engine_module(f"{ENGINE}.cli.parser")
+
+
+def public_imports_from(source: str, module: str) -> list[str]:
+    r"""The names ``source`` imports from ``module`` under a non-underscore binding.
+
+    A public binding would make ``cli.<name>`` a second spelling of a
+    ``cli.parser`` name, i.e. a re-export (L2/L5), so the cli init must alias
+    every parser import private.
+
+    Example::
+
+        >>> public_imports_from("from m import a, b as _b\n", "m")
+        ['a']
+    """
+    names: list[str] = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.ImportFrom) and node.module == module:
+            names.extend(alias.asname or alias.name for alias in node.names)
+    return sorted(name for name in names if not name.startswith("_"))
+
+
+def test_cli_init_imports_parser_names_private_only() -> None:
+    # public_definitions skips imports, so a re-export of build_parser would pass it.
+    source = _SRC.joinpath(_CLI_INIT).read_text(encoding="utf-8")
+
+    assert public_imports_from(source, _CLI_PARSER_MODULE) == []
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        ("from coding_agent_playbook.cli.parser import build_parser\n", ["build_parser"]),
+        ("from coding_agent_playbook.cli.parser import build_parser as bp\n", ["bp"]),
+        ("from coding_agent_playbook.cli.parser import build_parser as _bp\n", []),
+        ("if True:\n    from coding_agent_playbook.cli.parser import _SUBCOMMANDS as s\n", ["s"]),
+        ("from coding_agent_playbook.config import ConfigError\n", []),
+    ],
+)
+def test_public_imports_from(source: str, expected: list[str]) -> None:
+    assert public_imports_from(source, _CLI_PARSER_MODULE) == expected
 
 
 @pytest.mark.parametrize(

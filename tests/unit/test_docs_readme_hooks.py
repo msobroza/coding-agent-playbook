@@ -6,7 +6,7 @@ the CLI subcommands, the dispatcher in the architecture overview, the caveats
 SPEC §10.3.2 and §10.6 record, the metrics and a ``playbook ci`` job that never
 interpolates the PR title into a ``run:`` line. Every test takes its expected
 names from the landed code (``.pre-commit-hooks.yaml``, the shipped ``HOOK.md``
-frontmatter, ``cli._SUBCOMMANDS``, ``CI_STEPS``, the escape-hatch variables,
+frontmatter, ``cli.parser._SUBCOMMANDS``, ``CI_STEPS``, the escape-hatch variables,
 the metric families, the OpenCode floor), so a hook, command, step or metric
 that lands undocumented fails here. Prose-only: the tests read markdown and
 parse frontmatter and config snippets; they never run engine behaviour.
