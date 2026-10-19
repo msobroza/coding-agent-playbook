@@ -27,6 +27,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.handlers._activity_record import activity_record, fitted
 from coding_agent_playbook.hook_runtime.handlers._pii_settings import (
@@ -80,24 +81,22 @@ def activity_log(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult | Non
     Example: ``activity_log(post_bash_mysql, ctx)`` writes ``argv0 mysql`` and
     flag ``-p``, never the password, and returns ``None``.
     """
+    config = HookConfig(ctx.config, CONFIG_SCHEMA)
     state = ctx.session.store.private_dir("")
     now = ctx.clock.time()
     if ev.name is EventName.SESSION_START:
-        prune_audit(state, retain_days=_retain_days(ctx.config), now=now)
+        prune_audit(
+            state,
+            retain_days=config.integer("retain_days", DEFAULT_RETAIN_DAYS, minimum=1),
+            now=now,
+        )
     record = activity_record(
         ev,
         now=now,
         secret=ctx.cfg.secret_paths,
         platform=ctx.platform,
-        full_commands=ctx.config.get("full_commands") is True,
+        full_commands=config.flag("full_commands", False),
         pii=pii_settings(ctx.config) if ev.prompt is not None else None,
     )
-    append_activity(state, fitted(record), chain=ctx.config.get("chain") is True)
+    append_activity(state, fitted(record), chain=config.flag("chain", False))
     return None
-
-
-def _retain_days(config: Mapping[str, object]) -> int:
-    days = config.get("retain_days")
-    if isinstance(days, int) and not isinstance(days, bool) and days > 0:
-        return days
-    return DEFAULT_RETAIN_DAYS

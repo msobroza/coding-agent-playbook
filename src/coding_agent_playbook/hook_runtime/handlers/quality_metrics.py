@@ -31,6 +31,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.hook_runtime.caps import quote_data
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.handlers._metrics_pass import (
     MAX_FILES,
     METRICS_HOOK_IDS,
@@ -202,7 +203,7 @@ def clean_code_metrics_post_edit(ev: CanonicalEvent, ctx: HandlerContext) -> Han
         >>> clean_code_metrics_post_edit(edit_growing_parse, ctx).context  # doctest: +SKIP
         ('quality: "src/x.py:3 C901 `parse` is too complex (12 > 10)"',)
     """
-    if ctx.config.get("lint_feedback") is False:
+    if not HookConfig(ctx.config, POST_EDIT_CONFIG_SCHEMA).flag("lint_feedback", True):
         return None  # switched off: it adds no code to D1 and spawns nothing
     from coding_agent_playbook.hook_runtime.handlers.ruff_feedback import bucket_feedback
 

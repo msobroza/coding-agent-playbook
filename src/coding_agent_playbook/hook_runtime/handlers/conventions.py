@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.hook_runtime.caps import clean_text, clip
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 
@@ -67,7 +68,7 @@ def command_convention_guard(ev: CanonicalEvent, ctx: HandlerContext) -> Handler
         >>> command_convention_guard(bash("uv run mypy"), ctx).reason  # doctest: +SKIP
         'Use uv run python -m mypy.'
     """
-    rows = convention_rows(ctx.config.get("rules"))
+    rows = convention_rows(HookConfig(ctx.config, CONFIG_SCHEMA).value("rules"))
     command = ev.tool.command if rows and ev.tool is not None else None
     if command is None:
         return None

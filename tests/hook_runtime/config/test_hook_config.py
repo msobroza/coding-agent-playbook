@@ -8,16 +8,20 @@ reading a key with a method that does not match its declared kind, raises.
 
 from __future__ import annotations
 
+import ast
 import re
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
 import pytest
 
+import coding_agent_playbook.hook_runtime as hook_runtime
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.config.keys import ConfigKey
+from coding_agent_playbook.hook_runtime.registry import builtin_handler_modules, load_builtin
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
 
     type Read = Callable[[HookConfig], object]
 
@@ -31,6 +35,10 @@ _SCHEMA: Final = {
     "extra_rows": ConfigKey("regex", "extend"),
     "trailers": ConfigKey("table"),
 }
+#: The packages whose builtins read their config through ``HookConfig`` (B.7.4).
+_BUILTIN_DIRS: Final = ("handlers", "stop")
+#: Chain files whose raw reads B.13 leaves to the writer-side work ("until #62" in B.7.4).
+_RAW_READS_ALLOWED: Final = frozenset({"ruff_feedback.py", "docstring_nonregression.py"})
 #: A list value as a TOML author may spell it, with the item kinds validate lets through.
 _HOSTS: Final = ["pypi.org", "", "  ", 3, None, "mirror.internal"]
 
@@ -224,3 +232,96 @@ def test_a_read_of_a_compatible_kind_is_allowed(read: Read, expected: object) ->
     config = HookConfig({"budget": 3, "trailers": {"Refs": "#1"}}, _SCHEMA)
 
     assert read(config) == expected
+
+
+def _is_ctx_config(node: ast.expr) -> bool:
+    """``ctx.config`` or ``self.ctx.config``: a builtin's merged handler config."""
+    if not isinstance(node, ast.Attribute) or node.attr != "config":
+        return False
+    owner = node.value
+    return (isinstance(owner, ast.Name) and owner.id == "ctx") or (
+        isinstance(owner, ast.Attribute) and owner.attr == "ctx"
+    )
+
+
+def _config_names(function: ast.FunctionDef) -> set[str]:
+    """The names holding a handler config in ``function``: a ``config`` parameter or alias."""
+    names = {arg.arg for arg in (*function.args.args, *function.args.kwonlyargs)}
+    aliases = {
+        target.id
+        for node in ast.walk(function)
+        if isinstance(node, ast.Assign) and _is_ctx_config(node.value)
+        for target in node.targets
+        if isinstance(target, ast.Name)
+    }
+    return (names & {"config"}) | aliases
+
+
+def _raw_read_key(node: ast.expr, names: set[str]) -> ast.expr | None:
+    """The key ``node`` reads raw from a handler config (``.get(key)`` or ``[key]``), else None."""
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.args:
+        owner = node.func.value
+        named = isinstance(owner, ast.Name) and owner.id in names
+        if node.func.attr == "get" and (named or _is_ctx_config(owner)):
+            return node.args[0]
+    if isinstance(node, ast.Subscript) and _is_ctx_config(node.value):
+        return node.slice
+    return None
+
+
+def _sync_written(key: ast.expr, declared: frozenset[str]) -> bool:
+    """Whether ``key`` names only keys no ``CONFIG_SCHEMA`` declares (HookConfig cannot read them)."""
+    spelled = {n.value for n in ast.walk(key) if isinstance(n, ast.Constant)}
+    return bool(spelled) and all(isinstance(k, str) and k not in declared for k in spelled)
+
+
+def _raw_reads(function: ast.FunctionDef) -> Iterator[tuple[int, ast.expr]]:
+    """``(line, key)`` of each raw handler-config read in ``function``."""
+    names = _config_names(function)
+    for node in (n for n in ast.walk(function) if isinstance(n, ast.expr)):
+        key = _raw_read_key(node, names)
+        if key is not None:
+            yield node.lineno, key
+
+
+def _raw_config_reads(source: str, declared: frozenset[str]) -> list[int]:
+    """The lines of ``source`` that read a declared handler-config key without ``HookConfig``."""
+    functions = [f for f in ast.walk(ast.parse(source)) if isinstance(f, ast.FunctionDef)]
+    reads = (read for function in functions for read in _raw_reads(function))
+    return sorted({line for line, key in reads if not _sync_written(key, declared)})
+
+
+def _declared_config_keys() -> frozenset[str]:
+    """Every key a builtin's ``CONFIG_SCHEMA`` declares."""
+    schemas = (load_builtin(name).config_schema for name in builtin_handler_modules())
+    return frozenset(key for schema in schemas for key in schema)
+
+
+def test_the_config_read_guard_finds_each_raw_read_shape() -> None:
+    source = (
+        "def handler(ev, ctx):\n"
+        "    a = ctx.config.get('mode')\n"
+        "    b = ctx.config['mode']\n"
+        "    config = self.ctx.config\n"
+        "    c = config.get('mode')\n"
+        "    d = ctx.config.get('install_hint')\n"
+        "def helper(config, rows):\n"
+        "    e = config.get(KEY)\n"
+        "    f = rows.get('mode')\n"
+    )
+
+    assert _raw_config_reads(source, frozenset({"mode"})) == [2, 3, 5, 8]
+
+
+def test_in_tree_builtins_read_their_config_through_hook_config() -> None:
+    declared = _declared_config_keys()
+    root = Path(hook_runtime.__file__).parent
+    offenders = [
+        f"{path.relative_to(root)}:{line}"
+        for folder in _BUILTIN_DIRS
+        for path in sorted((root / folder).glob("*.py"))
+        if path.name not in _RAW_READS_ALLOWED
+        for line in _raw_config_reads(path.read_text(encoding="utf-8"), declared)
+    ]
+
+    assert offenders == []

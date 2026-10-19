@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.caps import clean_text, clip
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.handlers._bypass_rules import segment_verdict
 from coding_agent_playbook.hook_runtime.handlers._targets import (
@@ -120,7 +121,7 @@ def _shell_verdict(
         return None
     if command.parse_error is not None:  # unknown: ask only when the text names a bypass
         return (Decision.ASK, "unparsed") if _UNPARSED_BYPASS.search(command.text) else None
-    strict = ctx.config.get("strict_skip") is True
+    strict = HookConfig(ctx.config, CONFIG_SCHEMA).flag("strict_skip", False)
     in_rebase = _rebase_in_progress(repo)
     if any(_hooks_dir(path, repo, ctx.platform) for path in shell_write_targets(ev, ctx, _touched)):
         return Decision.DENY, "hooks_dir"

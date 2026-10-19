@@ -21,6 +21,7 @@ from coding_agent_playbook.hook_runtime.handlers._activity_record import (
     fitted,
     flag_name,
 )
+from coding_agent_playbook.hook_runtime.handlers._pii_settings import pii_settings
 from coding_agent_playbook.hook_runtime.state.audit_log import (
     MAX_LINE_BYTES,
     encode_jsonl_line,
@@ -167,6 +168,18 @@ def test_prompt_pii_category_counts_only_when_enabled(
     assert counted["prompt"]["pii"] == {"card_pan": 1, "iban": 1}
     raw = on.log.read_text(encoding="ascii")
     assert IBAN[4:] not in raw and CARD not in raw and "wire" not in raw
+
+
+@pytest.mark.parametrize("value", [[], ()])
+def test_an_empty_pii_list_leaves_pii_off(value: object) -> None:
+    assert pii_settings({"pii": value}) is None
+
+
+@pytest.mark.parametrize("value", ["iban", ["iban", 3]])
+def test_a_pii_value_that_is_not_a_list_of_strings_raises_naming_the_key(value: object) -> None:
+    """The failure policy decides (``on_error: open``); validate refuses a non-list ``pii``."""
+    with pytest.raises(ValueError, match=r"'pii' must be a list of strings"):
+        pii_settings({"pii": value})
 
 
 def test_async_dispatch_writes_empty_stdout(audit: Audit) -> None:

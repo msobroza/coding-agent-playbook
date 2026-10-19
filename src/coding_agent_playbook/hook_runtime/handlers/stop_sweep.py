@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.caps import quote_data
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.event import EventName
 from coding_agent_playbook.hook_runtime.handlers._pii_settings import (
     PII_CONFIG_KEY,
@@ -122,8 +123,7 @@ def secrets_stage(ev: CanonicalEvent, ctx: HandlerContext) -> SecretsStage | Non
     ``None`` outside a repository and in ``mode = "off"``.
     Example: ``secrets_stage(stop_event, ctx).name == "secrets"``.
     """
-    mode = ctx.config.get("mode")
-    mode = mode if mode in MODES else "block"
+    mode = HookConfig(ctx.config, CONFIG_SCHEMA).choice("mode", "block")
     if ev.repo is None or mode == "off":
         return None
     return SecretsStage(ctx=ctx, root=ev.repo.worktree_root, mode=mode)
@@ -161,16 +161,12 @@ def _listed(lines: list[str]) -> list[str]:
     return [*lines[: _LISTED - 1], f"… and {len(lines) - _LISTED + 1} more secret findings"]
 
 
-def _limits(config: Mapping[str, object]) -> SweepLimits:
-    default = SweepLimits()
+def _limits(raw: Mapping[str, object]) -> SweepLimits:
+    config, default = HookConfig(raw, CONFIG_SCHEMA), SweepLimits()
     return SweepLimits(
-        max_scan_bytes=_positive(config.get("max_scan_bytes"), default.max_scan_bytes),
-        large_file_mb=_positive(config.get("large_file_mb"), default.large_file_mb),
+        max_scan_bytes=config.integer("max_scan_bytes", default.max_scan_bytes, minimum=1),
+        large_file_mb=config.integer("large_file_mb", default.large_file_mb, minimum=1),
     )
-
-
-def _positive(value: object, default: int) -> int:
-    return value if type(value) is int and value > 0 else default
 
 
 # --- the deserialization rescan (§E.3's Bash backstop) --------------------------------------------

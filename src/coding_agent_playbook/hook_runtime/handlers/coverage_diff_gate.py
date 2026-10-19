@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.caps import clean_text, clip
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.handlers._coverage_report import (
     CoverageGrade,
     coverage_lines,
@@ -186,7 +187,8 @@ class CoverageStage:
         """``HEAD``, or the merge base with the default branch (``HEAD`` when there is none)."""
         if self._base is None:
             self._base = "HEAD"
-            if self.ctx.config.get("diff_base") == "merge-base":
+            base = HookConfig(self.ctx.config, CONFIG_SCHEMA).choice("diff_base", "HEAD")
+            if base == "merge-base":
                 branch = self.ctx.git.default_branch()
                 merged = None if branch is None else self.ctx.git.merge_base(branch, "HEAD")
                 self._base = merged or "HEAD"
@@ -251,7 +253,8 @@ def coverage_stage(ev: CanonicalEvent, ctx: HandlerContext) -> CoverageStage | N
     """
     if ev.repo is None:
         return None
-    mode = "warn" if ctx.config.get("decision") == "context" else "block"
+    decision = HookConfig(ctx.config, CONFIG_SCHEMA).choice("decision", "deny")
+    mode = "warn" if decision == "context" else "block"
     return CoverageStage(ctx=ctx, repo=ev.repo, mode=mode)
 
 

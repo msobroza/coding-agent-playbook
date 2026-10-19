@@ -11,8 +11,10 @@ PII off pays nothing for it on the prompt path.
 
 from __future__ import annotations
 
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final
 
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.registry import ConfigKey
 
 if TYPE_CHECKING:
@@ -25,13 +27,15 @@ __all__ = ["PII_CONFIG_KEY", "PII_KEY", "pii_settings"]
 PII_KEY: Final = "pii"
 #: Detector names; ``extend`` because a detector is a deny-table entry (§A.6).
 PII_CONFIG_KEY: Final = ConfigKey("list", "extend")
+#: The schema every PII-observing hook declares ``pii`` with (each lists ``PII_KEY: PII_CONFIG_KEY``).
+_PII_SCHEMA: Final[Mapping[str, ConfigKey]] = MappingProxyType({PII_KEY: PII_CONFIG_KEY})
 
 
 def pii_settings(config: Mapping[str, Any]) -> PiiConfig | None:
     """The PII scan ``config`` enables, or ``None`` when its ``pii`` list is empty.
 
-    Raises ``ValueError`` naming an unknown detector (an internal error for
-    the failure policy: ``on_error: open``).
+    Raises ``ValueError`` naming an unknown detector or a ``pii`` value that is
+    not a list of strings (an internal error for the failure policy: ``on_error: open``).
 
     Example::
 
@@ -40,8 +44,8 @@ def pii_settings(config: Mapping[str, Any]) -> PiiConfig | None:
         >>> pii_settings({}) is None
         True
     """
-    names = config.get(PII_KEY)
-    if not isinstance(names, list | tuple) or not names:
+    names = HookConfig(config, _PII_SCHEMA).strings(PII_KEY, blanks="keep", strict=True)
+    if not names:
         return None
     from coding_agent_playbook.security.pii import pii_config
 

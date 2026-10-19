@@ -130,7 +130,7 @@ def _fix(finding: SecretFinding) -> str:
 
 def _secret_names(ctx: HandlerContext, rels: Iterable[str]) -> frozenset[str]:
     """The ``rels`` the rendered secret path policy names (each path matched once)."""
-    policy, home = path_policy(ctx.cfg, {}), ctx.home or user_home()
+    policy, home = path_policy(ctx.cfg), ctx.home or user_home()
     return frozenset(rel for rel in rels if policy.matches(rel, home=home, platform=ctx.platform))
 
 
