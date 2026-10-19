@@ -24,8 +24,11 @@ from coding_agent_playbook.adapters.claude_code.settings.drift import (
     stray_launcher_edited,
 )
 from coding_agent_playbook.commands._check_hooks import format_hooks_section
-from coding_agent_playbook.config import committed as _committed_config
-from coding_agent_playbook.config.files import FileSystemStateSource
+from coding_agent_playbook.config.committed import (
+    detector_cache_table,
+    plan_detector_cache_refresh,
+)
+from coding_agent_playbook.config.files import CONFIG_FILENAME, ConfigFiles
 from coding_agent_playbook.detector.facts import detect
 from coding_agent_playbook.detector.predicate import evaluate_predicate
 from coding_agent_playbook.lockfile.drift import drift_entries
@@ -217,12 +220,12 @@ def _refresh(repo_root: Path) -> None:
     """Re-run the detector and write ``[detector_cache]`` — only it — to the committed config.
 
     The committed file is rewritten from itself alone
-    (:func:`_committed_config.plan_detector_cache_refresh`): every other key
-    keeps its parsed value, as written — not as ``Config`` would rewrite it —
-    while comments and layout are lost; nothing from the gitignored local file
-    is written. Hence its own state source rather than ``SyncContext.config``,
-    which is the config *merged* with that file (and still what the report
-    describes).
+    (:func:`~coding_agent_playbook.config.committed.plan_detector_cache_refresh`):
+    every other key keeps its parsed value, as written — not as ``Config`` would
+    rewrite it — while comments and layout are lost; nothing from the gitignored
+    local file is written. Hence its own ``ConfigFiles`` rather than
+    ``SyncContext.config``, which is the config *merged* with that file (and
+    still what the report describes).
 
     Raises ``ConfigError`` (exit 2) before writing for a committed file ``Config``
     would misread on its own, e.g. one missing ``[engine] version`` that only the
@@ -232,9 +235,9 @@ def _refresh(repo_root: Path) -> None:
 
         >>> _refresh(repo_root)  # doctest: +SKIP
     """
-    state = FileSystemStateSource(repo_root=repo_root)
-    cache = _committed_config.detector_cache_table(detect(repo_root))
-    _committed_config.plan_detector_cache_refresh(state, cache).save(state)
+    files = ConfigFiles(repo_root)
+    cache = detector_cache_table(detect(repo_root))
+    plan_detector_cache_refresh(files, cache).save(files)
 
 
 def run(args: argparse.Namespace) -> int:
@@ -248,7 +251,7 @@ def run(args: argparse.Namespace) -> int:
     unusable = _sync_preflight.unusable_overlays(ctx.config.overlays_enabled)
     if getattr(args, "refresh", False):
         _refresh(repo_root)
-        print(f"Refreshed detector_cache in {FileSystemStateSource._CONFIG_FILENAME}.")
+        print(f"Refreshed detector_cache in {CONFIG_FILENAME}.")
     print(_format_env_section(ctx, unusable))
     print(_format_detected_section(ctx))
     print(_format_artifacts_section(ctx))

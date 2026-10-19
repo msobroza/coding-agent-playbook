@@ -35,12 +35,13 @@ from __future__ import annotations
 
 import shutil
 import tempfile
-import tomllib
 from contextlib import ExitStack
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.config.files import CONFIG_FILENAME, ConfigFiles
+from coding_agent_playbook.config.schema import ConfigError
 from coding_agent_playbook.evaluators.baseline_git import (
     BaselineGitError,
     SubprocessBaselineGit,
@@ -90,14 +91,10 @@ if TYPE_CHECKING:
     from coding_agent_playbook.evaluators.tool_runner import ToolRunner
     from coding_agent_playbook.evaluators.types import EvaluationReport, Measurement, Mode
 
-#: The committed config file whose ``[metrics]`` table seeds the gate.
-CONFIG_FILENAME = ".coding-agent-playbook.toml"
-
 #: The name the Rubric carries (stable per run; the gate has one rubric).
 _RUBRIC_NAME = "metrics"
 
 __all__ = [
-    "CONFIG_FILENAME",
     "MAX_FILE_BYTES",
     "MetricsGateDeps",
     "MetricsGateRequest",
@@ -229,23 +226,22 @@ def load_metrics_config(repo_root: Path) -> MetricConfig:
     """Parse ``[metrics]`` from ``<repo_root>/.coding-agent-playbook.toml`` if present.
 
     Only the committed file is read: ``[metrics]`` is team policy, so a personal
-    ``.local.toml`` never loosens it. Malformed TOML or an invalid ``[metrics]``
-    value raises :class:`MetricsGateUsageError` (the CLI's exit 2).
+    ``.local.toml`` never loosens it. Raises :class:`MetricsGateUsageError` (the
+    CLI's exit 2) for a file that does not decode or a ``[metrics]`` that is not a
+    table, in the words every command prints (``<file>: invalid TOML: …``), and
+    for an invalid ``[metrics]`` value (``invalid [metrics] config in <file>: …``).
 
     Example::
 
         >>> load_metrics_config(Path("/no/such/repo"))
         MetricConfig(mode='regression', fail_on_breach=True, strict=False, ...)
     """
-    config_path = repo_root / CONFIG_FILENAME
-    if not config_path.is_file():
-        return MetricConfig()
     try:
-        with config_path.open("rb") as handle:
-            data = tomllib.load(handle)
-        return parse_metrics_config(data.get("metrics", {}))
-    except tomllib.TOMLDecodeError as exc:
-        raise MetricsGateUsageError(f"malformed {CONFIG_FILENAME}: {exc}") from exc
+        table = ConfigFiles(repo_root).committed_table("metrics")
+    except ConfigError as exc:
+        raise MetricsGateUsageError(str(exc)) from exc
+    try:
+        return parse_metrics_config(dict(table))
     except ValueError as exc:
         raise MetricsGateUsageError(
             f"invalid [metrics] config in {CONFIG_FILENAME}: {exc}"
