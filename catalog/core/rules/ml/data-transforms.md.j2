@@ -1,0 +1,67 @@
+---
+id: ml-data-transforms
+name: Data transforms
+description: "Treat the arrays and frames a function receives as values: return new ones instead of mutating arguments, write through one indexer, rebind instead of inplace=True, and keep pipelines as readable chains with named aggregations."
+version: 1
+scope: scoped
+skill: ml-data
+globs:
+  - "**/*.py"
+  - "**/*.ipynb"
+applies_if:
+  any_ml_stack: ["numpy", "pandas", "polars"]
+priority: 71
+tags: [ml, pandas, polars, numpy]
+---
+
+# Data transforms
+
+A transform that edits the array or frame it was handed changes data its caller still holds, and the bug surfaces far from the edit, often only on the second run of a notebook cell. Treat inputs as values and make every step of a pipeline visible.
+
+## Inputs are values
+
+- A function takes an array or a frame and returns a new one. It never writes into its argument, and the caller rebinds the name: `readings = drop_faulty_sensors(readings)`.
+- Changing an object the function created itself is fine; the rule protects what the caller can see.
+- Keep each step small and named for what it does to the data (`convert_to_eur`, `drop_cancelled`), so a pipeline reads as a list of decisions.
+{% if has_ml_dep("numpy") %}
+
+## NumPy
+
+- Basic slicing (`batch[:, :3]`, `readings[10:]`) returns a view that shares memory with the original, so writing into a slice of an argument edits the caller's array. Copy before writing (`.copy()`), or compute a new array instead of assigning into one.
+- Boolean and integer-array indexing return copies when read, but an assignment through them (`readings[mask] = 0`) still writes into the array being indexed: do it only on an array the function created.
+- Pass `out=` only an array the function allocated itself.
+
+```python
+def cap_readings(readings: npt.NDArray[np.float64], ceiling: float) -> npt.NDArray[np.float64]:
+    # np.minimum allocates the result, so the caller's array is left as it was.
+    return np.minimum(readings, ceiling)
+```
+{% endif %}
+{% if has_ml_dep("pandas") %}
+
+## pandas
+
+- Write with one indexer: `.loc[rows, columns] = value` by label, `.iloc` by position. Never chain two indexers in an assignment (`frame[mask]["fee"] = 0`): the value is written to a temporary copy and lost under copy-on-write.
+- Assigning a whole column (`frame["fee_eur"] = frame["fee"] * rate`) is fine.
+- No `inplace=True`. It rarely saves memory and it hides the data flow; rebind the name instead (`invoices = invoices.dropna(subset=["due"])`). The one exception is a measured memory fix, at top level, with a comment that says so.
+- Write a pipeline as one parenthesized chain, one step per line: `assign`, filters through `.loc[lambda frame: ...]`, `rename`, and `pipe` into named functions that take a frame and return one. Use lambdas rather than `query` or `eval` strings, so linters and readers see the column names. Split a chain that outgrows a screen into named functions joined by `pipe`.
+- Aggregate with named aggregation and a flat result: `groupby("carrier", as_index=False).agg(total_fee=("fee_eur", "sum"))`. Use `transform` to broadcast a group result back onto every row, and pass `observed=True` when grouping by a categorical column, so categories with no rows do not appear.
+
+```python
+monthly_fees = (
+    shipments.assign(month=lambda frame: frame["shipped_at"].dt.to_period("M"))
+    .loc[lambda frame: frame["status"] == "delivered"]
+    .pipe(convert_to_eur, rates=eur_rates)
+    .groupby(["carrier", "month"], as_index=False)
+    .agg(total_fee=("fee_eur", "sum"), parcels=("shipment_id", "count"))
+)
+```
+{% endif %}
+{% if has_ml_dep("polars") %}
+
+## polars
+
+- Frame methods return a new frame, so rebind the name after each step. Keep the few that work in place (`insert_column`, `extend`) for frames the function created.
+- Build columns with expressions inside `with_columns` and `select`, and aggregate with `group_by(...).agg(pl.col("fee_eur").sum().alias("total_fee"))`.
+- For a large pipeline, start lazily (`pl.scan_parquet`, `pl.scan_csv` or `.lazy()`), chain the steps, and call `.collect()` once at the end, so the query planner sees the whole pipeline before it reads any data.
+{% endif %}

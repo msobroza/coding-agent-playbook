@@ -36,7 +36,8 @@ The following artifacts distill ideas from that collection:
 - Rules: python-performance-idioms, python-async,
   python-classes-and-protocols, pytest-test-doubles, pytest-fixtures,
   python-static-checks, pytest-configuration, python-uv-workflow,
-  pydantic-boundaries.
+  pydantic-boundaries, ml-vectorization, ml-data-transforms,
+  ml-dtypes-and-typing, ml-reproducibility-and-testing.
 - Additions to existing artifacts: the python-error-handling, python-typing,
   python-docstrings, python-dependency-injection, python-data-shapes,
   python-idioms and pytest rules.

@@ -67,7 +67,7 @@ changelog entry is v0.21.
 | Tooling or prompts that match lint-feedback lines (`rule <id>: …`) | Accept the new `rule <id> (skill <skill>): …` prefix and the ` (rule <id>, skill <skill>)` suffix; the next `playbook sync` turns them on. See "Guardrails and lint feedback point at skills". |
 | A repo with hooks on (the new `skill-nudge` hook) | Nothing: the next `playbook sync` turns it on. To keep it off, add `disable = ["skill-nudge"]` to `[hooks]`. See "Guardrails and lint feedback point at skills". |
 | A repo with hooks on (the new `playbook-guardrails` skill) | Nothing: the next `playbook sync` writes it to `.opencode/skills/` and `.agents/skills/`, and settles it as a leftover once hooks are off. See "Guardrails and lint feedback point at skills". |
-| Any repo with Python code (distilled python-best-practices content) | Nothing but `playbook sync`: `python-coding` gains three references and six change text; with pytest, `python-testing` gains two and `pytest` changes text; and `python-tooling` is now written in every Python repo, with up to four new references and a new (or, with FastAPI, reworded) "Where guidance lives" line. An overlay or repo-local rule with one of the nine new ids now replaces the core rule. See "Distilled python-best-practices content". |
+| Any repo with Python code (distilled python-best-practices content) | Nothing but `playbook sync`: `python-coding` gains three references and six change text; with pytest, `python-testing` gains two and `pytest` changes text; `python-tooling` is now written in every Python repo, with up to four new references and a new (or, with FastAPI, reworded) "Where guidance lives" line; and with NumPy, pandas or polars, `ml-data` gains four references and its "Where guidance lives" line is reworded. An overlay or repo-local rule with one of the thirteen new ids now replaces the core rule. See "Distilled python-best-practices content". |
 
 ### `package_manager` and per-key validation
 
@@ -343,8 +343,11 @@ alone. Sync derives the glob table from the member rules it writes, as
 `"skills"` in the hook's `guard_config.json` record; no layer can set it. The
 `✓ Hooks:` summary counts one more hook (`30 enabled` where 29 were on, and
 `claude_code: 30 enforced`), `playbook check` lists it as enforced on Claude
-Code and OpenCode, and `.claude/settings.json` gains no managed entry: edits and
-writes already reach the hook launcher. The hook has no body, so `AGENTS.md`
+Code and degraded on OpenCode (it also matches notebook edits, and OpenCode has
+no notebook tool; see "Distilled python-best-practices content"), and
+`.claude/settings.json` gains no managed entry: edits and writes already reach
+the hook launcher, and the existing `PostToolUse` entry's matcher only gains
+`NotebookEdit`. The hook has no body, so `AGENTS.md`
 and Continue get no text for it. To turn it off, add
 `disable = ["skill-nudge"]` to `[hooks]`. OpenCode v2 runs neither the nudge
 nor the `rule <id> (skill <skill>)` lint feedback: its plugin is the inert stub
@@ -418,7 +421,25 @@ ideas are written fresh in the catalog's own words. There is nothing to do but
   `28-python-uv-workflow.md` and `63-pydantic-boundaries.md`. Creating a
   `uv.lock` by hand or with `uv lock` alone does not trigger the resync hook, so
   the uv reference appears at the next `playbook sync`.
-- **Overrides.** An overlay or repo-local rule whose id is one of the nine new
+- **Four new `ml-data` references** in a repo whose ML stack includes NumPy,
+  pandas or polars: `ml-vectorization`, `ml-data-transforms`,
+  `ml-dtypes-and-typing` and `ml-reproducibility-and-testing`. Each renders only
+  the NumPy, pandas and polars sections for the libraries the repo declares, and
+  they also match `**/*.ipynb`. A repo with torch alone gets none of them. With
+  Continue enabled, `.continue/rules/` gains `71-ml-data-transforms.md`,
+  `71-ml-vectorization.md`, `73-ml-dtypes-and-typing.md` and
+  `73-ml-reproducibility-and-testing.md`.
+- **`ml-data`'s texts are generic.** Its description, its `use_when` and its
+  "Where guidance lives" phrase now cover arrays and data frames as well as
+  models, so the `ml-data` line of that section in `AGENTS.md` and the Claude
+  Code rules file reads "Model, array and data-frame code: skill `ml-data`".
+- **`skill-nudge` covers notebooks.** It also matches `notebook_edit`, so a
+  Claude Code notebook edit nudges `ml-data`: the next sync rewrites the
+  managed `PostToolUse` entry of `.claude/settings.json`, whose matcher gains
+  `NotebookEdit`. `playbook check` now labels the hook `degraded` on OpenCode,
+  which has no notebook tool; OpenCode writes of `.py` and `.ipynb` files still
+  nudge, and `playbook validate` reports no warning for it.
+- **Overrides.** An overlay or repo-local rule whose id is one of the thirteen new
   ids now replaces the core rule, like any rule with the same id; `playbook
   check` shows which one won. A repo-local override of `pytest` keeps its own
   text, so the moved fixture and test-double guidance then lives only in the
@@ -427,8 +448,9 @@ ideas are written fresh in the catalog's own words. There is nothing to do but
   rule's `lint_codes`, so lint feedback reports exactly what it did before; the
   always rules. `AGENTS.md` and the Claude Code rules file change only in their
   `python-tooling` line of "Where guidance lives", which is new in a repo
-  without FastAPI and reworded in one with it. `playbook sync --check` reports
-  drift until the repo re-syncs, as for any content upgrade.
+  without FastAPI and reworded in one with it, and in their reworded `ml-data`
+  line. `playbook sync --check` reports drift until the repo re-syncs, as for
+  any content upgrade.
 
 ## v0.20 — Assistant lifecycle hooks (PR K)
 
