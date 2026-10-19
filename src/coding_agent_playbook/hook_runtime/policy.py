@@ -7,7 +7,7 @@ value (clamped per event, §A.2), its failure class (guard before quality in
 the fan-out order), and the decision a failure becomes. ``ENGINE_DEADLINE_CAP_MS``
 bounds each event's watchdog deadline (§D.4).
 
-The runtime may not import ``hook_policy`` or ``evals`` (§D.1), so the tables
+The runtime may not import ``hooks`` or ``evals`` (§D.1), so the tables
 shared with them are re-declared here and pinned to their twins by parity tests.
 """
 

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from coding_agent_playbook.hook_policy import HOOK_SUPPORT, adapter_label
+from coding_agent_playbook.hooks.enforcement import adapter_label
+from coding_agent_playbook.hooks.resolution.tables import HOOK_SUPPORT
 from tests.hook_samples import resolved_hook
 
 CLAUDE = HOOK_SUPPORT["claude_code"]

@@ -21,7 +21,7 @@ from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.continue_ import ContinueAdapter
 from coding_agent_playbook.artifacts.rule import Rule
 from coding_agent_playbook.detector.predicate import evaluate_predicate
-from coding_agent_playbook.hook_policy import resolve_lint_codes
+from coding_agent_playbook.hooks.resolution.lint_codes import resolve_lint_codes
 from coding_agent_playbook.validation._frontmatter import lint_codes_problems
 from tests._catalog import CORE_ROOT
 

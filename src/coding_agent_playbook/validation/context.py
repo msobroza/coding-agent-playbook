@@ -49,7 +49,8 @@ from coding_agent_playbook.config.files import CONFIG_FILENAME, ConfigFiles, Fil
 from coding_agent_playbook.config.model import Config, ProjectMeta
 from coding_agent_playbook.config.tables.hooks import PolicyTables
 from coding_agent_playbook.detector.facts import detect
-from coding_agent_playbook.hook_policy import RegistryCatalog, split_hook_layers
+from coding_agent_playbook.hooks.contract.handler_catalog import RegistryCatalog
+from coding_agent_playbook.hooks.resolution.merge import split_hook_layers
 
 if TYPE_CHECKING:
     from coding_agent_playbook.adapters.base import Adapter
@@ -62,7 +63,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.catalog.source import ArtifactSource
     from coding_agent_playbook.config.files import StateSource
     from coding_agent_playbook.detector.facts import Facts
-    from coding_agent_playbook.hook_policy import HookViolation
+    from coding_agent_playbook.hooks.resolution.merge import HookViolation
     from coding_agent_playbook.renderer import RuleRegistry
 
 #: The checks config-less validate skips, one note line each. The hook policy

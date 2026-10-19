@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final, TypeGuard
 
-from coding_agent_playbook.hook_policy import did_you_mean
+from coding_agent_playbook.hooks.contract.findings import did_you_mean
 from coding_agent_playbook.validation.findings import RULE_CALL_RE, ValidationError
 
 if TYPE_CHECKING:
