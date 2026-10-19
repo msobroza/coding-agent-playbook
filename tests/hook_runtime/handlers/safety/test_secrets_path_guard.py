@@ -15,8 +15,11 @@ import pytest
 
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.event import Harness
-from coding_agent_playbook.hook_runtime.handlers._secret_inodes import build_inode_index
-from coding_agent_playbook.hook_runtime.handlers.secret_paths import ADVICE, ENV_CONTEXT
+from coding_agent_playbook.hook_runtime.handlers.safety._secret_inodes import build_inode_index
+from coding_agent_playbook.hook_runtime.handlers.safety.secrets_path_guard import (
+    ADVICE,
+    ENV_CONTEXT,
+)
 from coding_agent_playbook.security.paths import DEFAULT_PATH_POLICY
 from tests.hook_runtime.fakes import FakeClock
 

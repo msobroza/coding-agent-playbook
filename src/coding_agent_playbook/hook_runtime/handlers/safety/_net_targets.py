@@ -30,7 +30,7 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Literal
 
-from coding_agent_playbook.hook_runtime.handlers._egress import network_hosts
+from coding_agent_playbook.hook_runtime.handlers.safety._egress import network_hosts
 from coding_agent_playbook.hook_runtime.judges.cli_words import split_words, value_options
 from coding_agent_playbook.hook_runtime.judges.hosts import extract_hosts, url_host
 from coding_agent_playbook.hook_runtime.judges.install_commands import install_requests

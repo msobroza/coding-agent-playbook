@@ -22,7 +22,7 @@ from coding_agent_playbook.hook_runtime.handlers._activity_record import (
     fitted,
     flag_name,
 )
-from coding_agent_playbook.hook_runtime.handlers._pii_settings import pii_settings
+from coding_agent_playbook.hook_runtime.handlers._shared.pii_settings import pii_settings
 from coding_agent_playbook.hook_runtime.handlers.activity_log import CONFIG_SCHEMA
 from coding_agent_playbook.hook_runtime.state.audit_log import (
     MAX_LINE_BYTES,

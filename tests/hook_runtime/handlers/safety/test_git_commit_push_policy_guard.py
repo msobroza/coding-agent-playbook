@@ -13,8 +13,10 @@ from typing import TYPE_CHECKING, Any, Final
 import pytest
 
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
-from coding_agent_playbook.hook_runtime.handlers._git_identity import IDENTITY_REASON
-from coding_agent_playbook.hook_runtime.handlers.git_policy import PLACEHOLDER_REASON
+from coding_agent_playbook.hook_runtime.handlers.safety._git_identity import IDENTITY_REASON
+from coding_agent_playbook.hook_runtime.handlers.safety.git_commit_push_policy_guard import (
+    PLACEHOLDER_REASON,
+)
 from coding_agent_playbook.hook_runtime.stop.chain import write_last_green
 from tests.hook_runtime.fakes import FakeGit
 

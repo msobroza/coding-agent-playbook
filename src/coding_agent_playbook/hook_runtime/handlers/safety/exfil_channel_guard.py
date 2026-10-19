@@ -30,8 +30,8 @@ from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.paths import normalize_path
 from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
-from coding_agent_playbook.hook_runtime.handlers._egress import EGRESS_ARGV0S, segment_egress
-from coding_agent_playbook.hook_runtime.handlers._secret_policy import (
+from coding_agent_playbook.hook_runtime.handlers.safety._egress import EGRESS_ARGV0S, segment_egress
+from coding_agent_playbook.hook_runtime.handlers.safety._secret_policy import (
     classify_path,
     path_policy,
     spelled,
@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.handlers._egress import Egress, Remotes
+    from coding_agent_playbook.hook_runtime.handlers.safety._egress import Egress, Remotes
     from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
 __all__ = ["CONFIG_SCHEMA", "REMOTES_DOCUMENT", "exfil_guard", "remote_snapshot"]
@@ -219,7 +219,9 @@ def _row_verdicts(segments: Sequence[Segment], ctx: HandlerContext) -> list[_Ver
     rows = HookConfig(ctx.config, CONFIG_SCHEMA).value("extra_rows")
     if not rows:
         return []
-    from coding_agent_playbook.hook_runtime.handlers.destructive import extra_row_hits
+    from coding_agent_playbook.hook_runtime.handlers.safety.destructive_command_guard import (
+        extra_row_hits,
+    )
 
     return [(hit.decision, hit.rule, hit.reason) for hit in extra_row_hits(segments, rows)]
 

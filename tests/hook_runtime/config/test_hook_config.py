@@ -49,7 +49,7 @@ _RAW_READS_ALLOWED: Final = frozenset({"ruff_feedback.py", "docstring_nonregress
 _SYNC_WRITTEN_READS: Final = frozenset(
     {
         # The cut-over date sync copies from [hooks.commit_convention]; validate checks its text.
-        ("commit_convention.py", "cutover_date"),
+        ("commit_message_convention.py", "cutover_date"),
         # toolchain declares no schema: sync writes both install hints from the guard config.
         ("toolchain.py", "install_hint"),
         ("toolchain.py", "cz_install_hint"),

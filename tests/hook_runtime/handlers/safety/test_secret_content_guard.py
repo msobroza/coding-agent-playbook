@@ -18,7 +18,7 @@ from coding_agent_playbook.hook_runtime.dispatch.event import Harness
 from coding_agent_playbook.hook_runtime.dispatch.paths import find_repo
 from coding_agent_playbook.hook_runtime.git.parse import AddedLine, DiffLines
 from coding_agent_playbook.hook_runtime.git.safe_git import SafeGit
-from coding_agent_playbook.hook_runtime.handlers.secret_content import PRAGMA_ADVICE
+from coding_agent_playbook.hook_runtime.handlers.safety.secret_content_guard import PRAGMA_ADVICE
 from coding_agent_playbook.security.secrets import SECRET_ADVICE
 from tests.hook_runtime.fakes import FakeGit
 

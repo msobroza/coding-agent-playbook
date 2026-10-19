@@ -28,12 +28,12 @@ from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, clip
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
-from coding_agent_playbook.hook_runtime.handlers._destructive_git import (
+from coding_agent_playbook.hook_runtime.handlers.safety._destructive_git import (
     DEFAULT_PROTECTED_BRANCHES,
     GitFacts,
     git_hit,
 )
-from coding_agent_playbook.hook_runtime.handlers._destructive_paths import (
+from coding_agent_playbook.hook_runtime.handlers.safety._destructive_paths import (
     DEFAULT_SAFE_RM_DIRS,
     PATH_ARGV0S,
     Hit,
