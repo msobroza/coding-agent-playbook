@@ -95,6 +95,7 @@ _ENGINE_PATHS = (
     "_sentinel.py",
     "detector/pep503.py",
     "gate_scan.py",
+    "precommit.py",
     "templates/hook_shims/",
 )
 #: Catalog paths §5.1 must show, under ``catalog/`` (SPEC v0.19: content left the package).

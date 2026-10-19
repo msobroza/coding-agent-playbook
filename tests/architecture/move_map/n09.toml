@@ -1,0 +1,23 @@
+# N9 (#91, specs/prT-package-layout.md 4.8, 7.4): the pre-commit concept leaves
+# commands/ for the root module precommit.py: all of commands/_precommit_merge.py
+# plus the template half of commands/init.py (template dir, render, write). init
+# keeps the config predicates and passes booleans, so precommit.py imports no command.
+
+[[module]]
+pr = "N9"
+old = "coding_agent_playbook.commands._precommit_merge"
+new = "coding_agent_playbook.precommit"
+
+# The template half of init.py; the two private functions init now calls across
+# the package (render_fresh_pre_commit, write_pre_commit) lose their underscore by hand.
+[[names]]
+pr = "N9"
+old = "coding_agent_playbook.commands.init"
+new = "coding_agent_playbook.precommit"
+names = ["PrecommitTemplateMissingError", "precommit_template_dir"]
+
+# A module entry, not a [[path]] one: tests/cli/test_init.py imports its fixtures.
+[[module]]
+pr = "N9"
+old = "tests.unit.test_precommit_merge"
+new = "tests.unit.test_precommit"
