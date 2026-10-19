@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from coding_agent_playbook.adapters._settings_drift import (
+from coding_agent_playbook.adapters.claude_code.settings.drift import (
     managed_entry_drift,
     settings_document,
     stray_launcher_edited,
 )
-from coding_agent_playbook.adapters.claude_settings import (
+from coding_agent_playbook.adapters.claude_code.settings.managed_merge import (
     CLAUDE_SETTINGS_PATH,
     SettingsMergeError,
     parse_settings,

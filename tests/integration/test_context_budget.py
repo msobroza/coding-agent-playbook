@@ -17,7 +17,7 @@ from typing import Final
 import pytest
 
 from coding_agent_playbook.adapters._claude_hooks import CLAUDE_HEARTBEAT_LINE
-from coding_agent_playbook.adapters.claude_rule_paths import CLAUDE_MD_PATH, CLAUDE_RULES_PATH
+from coding_agent_playbook.adapters.claude_code.paths import CLAUDE_MD_PATH, CLAUDE_RULES_PATH
 from coding_agent_playbook.commands._sync_render import render_artifacts
 from coding_agent_playbook.orchestrator import SyncContext
 from coding_agent_playbook.renderer import render_for

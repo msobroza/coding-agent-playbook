@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, cast
 
-from coding_agent_playbook._hook_schema import MATCHER_KEYS
+from coding_agent_playbook.artifacts.hook_schema import MATCHER_KEYS
 from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE, REPO_LOCAL_SOURCE
 from coding_agent_playbook.hook_policy._contract_handlers import handler_findings
 from coding_agent_playbook.hook_policy._findings import (
@@ -57,9 +57,11 @@ from coding_agent_playbook.hook_policy.tables import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 
+    from coding_agent_playbook.artifacts.hook_frontmatter import HookFrontmatter
+    from coding_agent_playbook.artifacts.hook_schema import HookMatcher
     from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.hook_policy.handler_catalog import HandlerCatalog
-    from coding_agent_playbook.types import Hook, HookFrontmatter, HookMatcher
+    from coding_agent_playbook.types import Hook
 
 HOOK_ID_PATTERN: Final = "^[a-z0-9][a-z0-9-]{0,62}$"
 #: The H9 bounds: every hook, and hooks on the tool and prompt events.

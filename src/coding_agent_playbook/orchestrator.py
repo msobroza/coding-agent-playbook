@@ -47,6 +47,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.adapters.base import Adapter
+    from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
     from coding_agent_playbook.catalog.source import ArtifactSource
     from coding_agent_playbook.config.files import StateSource
     from coding_agent_playbook.config.model import Config
@@ -57,7 +58,7 @@ if TYPE_CHECKING:
         HookViolation,
     )
     from coding_agent_playbook.renderer import RuleRegistry
-    from coding_agent_playbook.types import Hook, HookSchemaError, Prompt, Rule, Skill
+    from coding_agent_playbook.types import Hook, Prompt, Rule, Skill
 
 
 @dataclass(frozen=True)

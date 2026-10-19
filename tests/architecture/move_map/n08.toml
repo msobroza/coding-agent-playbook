@@ -1,0 +1,76 @@
+# N8 (#90, specs/prT-package-layout.md 4.3, 7.4): the guard twins move into commands/twins/.
+# _git_base.py becomes twins/_git_scope.py with the range half of gate_scan.py, so no twin
+# imports the gate-scan command as a library; _twin_policy.py and _ci_policy.py are
+# concatenated into the public twins/policy.py (init imports it).
+
+[[module]]
+pr = "N8"
+old = "coding_agent_playbook.commands.gate_scan"
+new = "coding_agent_playbook.commands.twins.gate_scan"
+
+[[module]]
+pr = "N8"
+old = "coding_agent_playbook.commands.scan_secrets"
+new = "coding_agent_playbook.commands.twins.scan_secrets"
+
+[[module]]
+pr = "N8"
+old = "coding_agent_playbook.commands._secret_scope"
+new = "coding_agent_playbook.commands.twins._secret_scope"
+
+[[module]]
+pr = "N8"
+old = "coding_agent_playbook.commands.scan_sinks"
+new = "coding_agent_playbook.commands.twins.scan_sinks"
+
+[[module]]
+pr = "N8"
+old = "coding_agent_playbook.commands.check_notebooks"
+new = "coding_agent_playbook.commands.twins.check_notebooks"
+
+[[module]]
+pr = "N8"
+old = "coding_agent_playbook.commands.check_commit_trailers"
+new = "coding_agent_playbook.commands.twins.check_commit_trailers"
+
+[[module]]
+pr = "N8"
+old = "coding_agent_playbook.commands.check_deps"
+new = "coding_agent_playbook.commands.twins.check_deps"
+
+[[module]]
+pr = "N8"
+old = "coding_agent_playbook.commands.ci"
+new = "coding_agent_playbook.commands.twins.ci"
+
+[[module]]
+pr = "N8"
+old = "coding_agent_playbook.commands._ci_commit_convention"
+new = "coding_agent_playbook.commands.twins._ci_commit_convention"
+
+[[module]]
+pr = "N8"
+old = "coding_agent_playbook.commands._ci_report"
+new = "coding_agent_playbook.commands.twins._ci_report"
+
+[[module]]
+pr = "N8"
+old = "coding_agent_playbook.commands._git_base"
+new = "coding_agent_playbook.commands.twins._git_scope"
+
+[[module]]
+pr = "N8"
+old = "coding_agent_playbook.commands._twin_policy"
+new = "coding_agent_playbook.commands.twins.policy"
+
+[[module]]
+pr = "N8"
+old = "coding_agent_playbook.commands._ci_policy"
+new = "coding_agent_playbook.commands.twins.policy"
+
+# The range half of gate_scan.py (gate_scan.py:51-61, 82-104, 135-141 at the baseline).
+[[names]]
+pr = "N8"
+old = "coding_agent_playbook.commands.gate_scan"
+new = "coding_agent_playbook.commands.twins._git_scope"
+names = ["ScanRange", "resolve_range", "_symmetric_base"]

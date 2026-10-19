@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING, Any, Final
 # The stdlib-only paths module, not the adapter: this sync-time module stays free
 # of the renderer (jinja2, yaml), and no adapter import can cycle back here.
 from coding_agent_playbook._symlinks import real_path
-from coding_agent_playbook.adapters.claude_rule_paths import CLAUDE_CODE_COMPOSITES
+from coding_agent_playbook.adapters.claude_code.paths import CLAUDE_CODE_COMPOSITES
 from coding_agent_playbook.lockfile.model import merge_provenance
 
 if TYPE_CHECKING:

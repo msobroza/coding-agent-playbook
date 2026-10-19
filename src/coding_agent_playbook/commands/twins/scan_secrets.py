@@ -35,8 +35,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.commands._git_base import open_git
-from coding_agent_playbook.commands._secret_scope import (
+from coding_agent_playbook.commands.twins._git_scope import open_git
+from coding_agent_playbook.commands.twins._secret_scope import (
     SecretScope,
     paths_scope,
     range_scope,

@@ -23,7 +23,7 @@ import re
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook._hook_schema import GUARDRAIL_SUMMARY_MAX_CHARS
+from coding_agent_playbook.artifacts.hook_schema import GUARDRAIL_SUMMARY_MAX_CHARS
 from coding_agent_playbook.hook_policy.guardrails_skill import GUARDRAILS_SKILL_ID
 from coding_agent_playbook.hook_policy.tables import DEGRADED_EVENTS, HOOK_SUPPORT
 

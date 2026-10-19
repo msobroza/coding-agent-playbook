@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.commands._git_base import open_git
+from coding_agent_playbook.commands.twins._git_scope import open_git
 from coding_agent_playbook.hook_runtime.caps import quote_data
 from coding_agent_playbook.hook_runtime.git import GitError
 from coding_agent_playbook.hook_runtime.handlers._notebook_check import (

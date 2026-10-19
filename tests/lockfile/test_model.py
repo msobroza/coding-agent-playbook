@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.adapters.claude_settings import scoped_lock_entry
+from coding_agent_playbook.adapters.claude_code.settings.managed_merge import scoped_lock_entry
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.lockfile.drift import (
     DriftItem,
