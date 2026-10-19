@@ -13,7 +13,7 @@ not import this module: the hook-runtime-stack import contract keeps
 ``guard_config.json``; only sync-time and CLI code imports them from here.
 
 :func:`matches_any_glob` reuses the hook glob grammar
-(:mod:`coding_agent_playbook.hook_runtime.globs`), so a glob means the same thing
+(:mod:`coding_agent_playbook.artifacts.path_globs`), so a glob means the same thing
 to a hook and to its CLI twin. Python 3.12 has no ``PurePath.full_match``, and
 ``fnmatch`` lets ``*`` cross ``/``.
 """
@@ -24,12 +24,12 @@ from functools import lru_cache
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.artifacts.path_classes import FIXTURE_GLOBS, TEST_PATH_GLOBS
-from coding_agent_playbook.hook_runtime.globs import compile_globs
+from coding_agent_playbook.artifacts.path_globs import compile_globs
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from coding_agent_playbook.hook_runtime.globs import GlobSet
+    from coding_agent_playbook.artifacts.path_globs import GlobSet
 
 __all__ = ["EVAL_FIXTURE_GLOBS", "TEST_PATH_GLOBS", "is_test_path", "matches_any_glob"]
 

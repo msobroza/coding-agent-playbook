@@ -46,6 +46,7 @@ _REQUIREMENT_NAME: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 STDLIB_LEAVES: Final = frozenset(
     {
         "artifacts.path_classes",
+        "artifacts.path_globs",
         "catalog.roots",
         "detector.pep503",
         "detector.pyproject_deps",

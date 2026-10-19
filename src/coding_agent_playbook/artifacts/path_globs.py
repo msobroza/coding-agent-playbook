@@ -19,12 +19,13 @@ import sys
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.hook_runtime.dispatch.paths import fold_key
-
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-__all__ = ["GlobSet", "compile_globs", "glob_to_regex"]
+__all__ = ["FOLDING_PLATFORMS", "GlobSet", "compile_globs", "fold_key", "glob_to_regex"]
+
+#: Platforms whose default filesystems compare names case-insensitively (§D.2.4 step 6).
+FOLDING_PLATFORMS = frozenset({"darwin", "win32"})
 
 _ANY_DIRS = "(?:.*/)?"
 #: Characters escaped inside a class: ``re`` reads them as nested sets or set operators.
@@ -89,6 +90,25 @@ def glob_to_regex(pattern: str) -> str:
         pieces.append(piece)
     body = "".join(pieces)
     return body if "/" in pattern else _ANY_DIRS + body
+
+
+def fold_key(text: str, platform: str) -> str:
+    """``text`` as a match key: NFC + case-folded on darwin and win32, else unchanged.
+
+    ``fnmatch`` does not fold case on darwin and ``realpath`` does not fold it
+    either, while both platforms' default filesystems do; over-matching on a
+    case-sensitive volume is the safe direction for guards.
+
+    Example::
+
+        >>> fold_key(".ENV", "darwin")
+        '.env'
+    """
+    if platform not in FOLDING_PLATFORMS:
+        return text
+    import unicodedata  # only the folding platforms pay for it (§D.1)
+
+    return unicodedata.normalize("NFC", text).casefold()
 
 
 def _prepared(pattern: str, platform: str, home: str | None) -> str:
