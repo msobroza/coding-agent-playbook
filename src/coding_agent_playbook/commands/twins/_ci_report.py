@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from typing import TextIO
 
-    from coding_agent_playbook.commands.ci import StepRecord
+    from coding_agent_playbook.commands.twins.ci import StepRecord
 
 __all__ = ["json_report", "log_step", "summary_text"]
 

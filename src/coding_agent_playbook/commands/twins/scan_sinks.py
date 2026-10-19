@@ -13,7 +13,7 @@ Python files and the code cells of notebooks are scanned. A block sink under
 a ``# playbook: trusted-artifact`` comment that the base already had passes;
 under a new one it is a note (a reviewer confirms the provenance, as the
 hook's ``ask`` would). Warn rows are notes. git runs through the stateless
-``SafeGit`` of ``_git_base``.
+``SafeGit`` of ``_git_scope``.
 
 Exit codes: 0 clean (notes only), 1 a new block sink, 2 a usage or git error.
 """
@@ -26,8 +26,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal
 
-from coding_agent_playbook.commands._git_base import open_git
-from coding_agent_playbook.commands.gate_scan import resolve_range
+from coding_agent_playbook.commands.twins._git_scope import open_git, resolve_range
 from coding_agent_playbook.hook_runtime.git import GitError
 from coding_agent_playbook.hook_runtime.handlers._notebook_cells import notebook_code
 from coding_agent_playbook.hook_runtime.handlers.deser import (

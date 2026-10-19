@@ -5,7 +5,7 @@ the ``gate-integrity`` Stop stage uses, so CI and the hook share one policy:
 
 - ``--range A..B`` diffs ``A`` to ``B``; ``A...B`` diffs their merge base to
   ``B``; without ``--range`` the range is ``<merge base with the default
-  branch>..HEAD`` (``_git_base``).
+  branch>..HEAD`` (``_git_scope``).
 - The policy is the engine default extended by the
   ``[hooks.gate-weakening-guard]`` table **as committed at the range's base**:
   a change cannot loosen the rules it is judged by (a new pattern applies once
@@ -20,11 +20,10 @@ from __future__ import annotations
 
 import json
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.commands._git_base import open_git, resolve_merge_base
+from coding_agent_playbook.commands.twins._git_scope import ScanRange, open_git, resolve_range
 from coding_agent_playbook.gate_scan import (
     ConfigPair,
     ScanPolicy,
@@ -40,23 +39,11 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.git import GitPort
 
-__all__ = ["ScanRange", "load_policy", "resolve_range", "run", "scan_range"]
+__all__ = ["load_policy", "run", "scan_range"]
 
 CONFIG_FILE: Final = ".coding-agent-playbook.toml"
 HOOK_ID: Final = "gate-weakening-guard"
 _FIX_HINT: Final = "Fix the root cause, or justify each line inline with a trailing `# <reason>`."
-
-
-@dataclass(frozen=True, slots=True)
-class ScanRange:
-    """The revisions a scan diffs (``base`` to ``head``) and how to name the range.
-
-    Example: ``ScanRange("HEAD~1", "HEAD", "HEAD~1..HEAD")``.
-    """
-
-    base: str
-    head: str
-    label: str
 
 
 def run(args: argparse.Namespace, *, git: GitPort | None = None) -> int:
@@ -77,29 +64,6 @@ def run(args: argparse.Namespace, *, git: GitPort | None = None) -> int:
         return 2
     print(_json(report, span) if args.format == "json" else _text(report, span))
     return report.exit_code
-
-
-def resolve_range(git: GitPort, text: str | None) -> ScanRange:
-    """``A..B``, ``A...B`` (from their merge base) or, for ``None``, the default range.
-
-    An empty side means ``HEAD``. Raises ``ValueError`` for any other form.
-
-    Example::
-
-        >>> resolve_range(git, "HEAD~1..HEAD")  # doctest: +SKIP
-        ScanRange(base='HEAD~1', head='HEAD', label='HEAD~1..HEAD')
-    """
-    if text is None:
-        base = resolve_merge_base(git, None)
-        return ScanRange(base.sha, "HEAD", f"{base.sha[:12]}..HEAD")
-    if "..." in text:
-        left, _, right = text.partition("...")
-        head = right or "HEAD"
-        return ScanRange(_symmetric_base(git, left or "HEAD", head), head, text)
-    if ".." in text:
-        left, _, right = text.partition("..")
-        return ScanRange(left or "HEAD", right or "HEAD", text)
-    raise ValueError(f"--range {text!r}: expected A..B or A...B (revisions)")
 
 
 def load_policy(git: GitPort, base: str, repo_root: Path) -> ScanPolicy:
@@ -130,13 +94,6 @@ def scan_range(git: GitPort, span: ScanRange, policy: ScanPolicy) -> ScanReport:
         if is_config_path(path)
     ]
     return scan(diff.added, diff.removed, pairs, policy)
-
-
-def _symmetric_base(git: GitPort, left: str, right: str) -> str:
-    sha = git.merge_base(left, right)
-    if sha is None:
-        raise ValueError(f"--range {left}...{right}: the two share no history")
-    return sha
 
 
 def _hook_table(raw: bytes | None) -> dict[str, object]:

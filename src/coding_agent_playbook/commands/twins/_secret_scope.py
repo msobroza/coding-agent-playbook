@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.commands.gate_scan import resolve_range
+from coding_agent_playbook.commands.twins._git_scope import resolve_range
 from coding_agent_playbook.hook_runtime._git_parse import AddedLine, parse_diff_lines, split_z
 from coding_agent_playbook.hook_runtime.git_range import PATCH_FLAGS, checked_rev
 
