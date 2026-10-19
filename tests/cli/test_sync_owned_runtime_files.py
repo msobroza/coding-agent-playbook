@@ -18,11 +18,9 @@ from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 import pytest
 
 from coding_agent_playbook.generated_output.sentinel import sentinel_line
-from coding_agent_playbook.hook_registrations import (
-    LAUNCHER_PATH,
-    OPENCODE_SHIM_PATH,
-    render_claude_launcher,
-)
+from coding_agent_playbook.hooks.registrations.claude import render_claude_launcher
+from coding_agent_playbook.hooks.registrations.launcher import LAUNCHER_PATH
+from coding_agent_playbook.hooks.registrations.opencode import OPENCODE_SHIM_PATH
 from coding_agent_playbook.sync import pipeline as _sync
 from tests.cli.hook_repo import CONFIG, hook_deps, make_hook_repo, tree
 from tests.fakes import FakeGitClient

@@ -17,13 +17,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.adapters.claude_code.settings.managed_merge import LAUNCHER_TOKEN
 from coding_agent_playbook.generated_output.sentinel import sentinel_line
-from coding_agent_playbook.hook_registrations import (
-    LAUNCHER_PATH,
-    claude_command,
-    render_claude_launcher,
-)
+from coding_agent_playbook.hooks.registrations.claude import claude_command, render_claude_launcher
+from coding_agent_playbook.hooks.registrations.launcher import LAUNCHER_PATH, LAUNCHER_TOKEN
 
 if TYPE_CHECKING:
     from pathlib import Path

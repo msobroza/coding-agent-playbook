@@ -5,7 +5,9 @@ layer's hook definitions into the effective view sync compiles into
 ``guard_config.json``; ``contract`` is the trust contract ``playbook validate``
 enforces; ``enforcement`` labels how each adapter carries a hook and projects its
 body to advisory text; ``guardrails_skill`` composes the ``playbook-guardrails``
-skill. Sync-time only, stdlib plus the import-light ``hook_runtime`` tables and
+skill; ``registrations`` turns the enabled hooks into each harness's
+registrations (the Claude settings groups and launcher, the OpenCode shim) and
+holds their ``str.replace`` templates. Sync-time only, stdlib plus the import-light ``hook_runtime`` tables and
 registry it shares with the dispatcher: ``hook_runtime`` never imports it, it
 reads the compiled ``guard_config.json`` instead (§D.8).
 """
