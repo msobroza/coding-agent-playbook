@@ -1,4 +1,4 @@
-"""``sync``, ``validate`` and ``render`` keep their flags after declaring them (CP-1).
+"""``init``, ``sync``, ``validate`` and ``render`` keep their flags after declaring them (CP-1, CP-3).
 
 The flag table of each subcommand (``option_strings``, ``dest``, ``default``,
 ``choices``, ``nargs``, ``help`` and the mutually exclusive groups) is compared
@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Final
 import pytest
 
 from coding_agent_playbook.cli.parser import build_parser
+from coding_agent_playbook.commands import init as init_cmd
 from coding_agent_playbook.commands import render as render_cmd
 from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.commands import validate as validate_cmd
@@ -30,6 +31,16 @@ _ROW_FIELDS = ("option_strings", "dest", "default", "choices", "nargs", "help")
 
 #: Each migrated command, with argv it must accept and the flags those set.
 _ACCEPTED_ARGV: Final = [
+    (
+        init_cmd,
+        ["--non-interactive", "--name", "x", "--kind", "python-library"],
+        {"non_interactive": True, "name": "x", "kind": "python-library", "overlays": None},
+    ),
+    (
+        init_cmd,
+        ["--no-hooks", "--adapters", "continue"],
+        {"no_hooks": True, "adapters": "continue"},
+    ),
     (sync_cmd, ["--check"], {"check": True, "check_staged": False, "repo_root": None}),
     (sync_cmd, ["--check-staged"], {"check": False, "check_staged": True}),
     (sync_cmd, ["--repo-root", "/r"], {"check": False, "repo_root": "/r"}),
