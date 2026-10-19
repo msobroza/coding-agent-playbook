@@ -15,7 +15,7 @@ does two jobs:
   user's link dangling. That holds whatever order the adapters declare the two
   roots in, and in either link direction (specs/prS-skills-context.md 5.4.3).
 
-Paths resolve through ``_symlinks.real_path`` (:func:`os.path.realpath`), not
+Paths resolve through ``generated_output.symlinks.real_path`` (:func:`os.path.realpath`), not
 ``Path.resolve()``: on Python 3.12 the latter raises ``RuntimeError`` on a
 symlink loop, so ``OutputLocations`` keeps a looping path as spelled and never
 raises on one. The sync path's other loop-prone resolutions use the same helper

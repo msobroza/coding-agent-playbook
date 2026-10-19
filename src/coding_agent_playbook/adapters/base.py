@@ -66,7 +66,7 @@ class Adapter(ABC):
     #: (Claude Code's ``.claude/settings.json``): it edits managed elements in
     #: place, so ``playbook sync`` never gives one a whole-file lock entry,
     #: gitignores it, flags it as staged output, or deletes it. Each must be
-    #: written by atomic replace (``_atomic_io.atomic_write_bytes``): ``sync
+    #: written by atomic replace (``generated_output.atomic_io.atomic_write_bytes``): ``sync
     #: --check`` relies on it to call a dangling link at one no blocker, since
     #: the rename replaces the link (``_output_blockers.write_blocker``).
     shared_outputs: ClassVar[tuple[str, ...]] = ()

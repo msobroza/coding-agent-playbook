@@ -142,7 +142,7 @@ def test_an_unreadable_link_target_keeps_its_own_error(repo: Path, tmp_path: Pat
         locked.chmod(0o755)
 
     frames = [str(entry.path) for entry in raised.traceback]
-    assert not [frame for frame in frames if "_output_blockers" in frame or "_symlinks" in frame]
+    assert not [frame for frame in frames if "_output_blockers" in frame or "symlinks.py" in frame]
 
 
 @pytest.mark.parametrize("dangling", [False, True], ids=["live", "dangling"])

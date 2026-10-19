@@ -84,7 +84,7 @@ def with_sentinel_body(frontmatter: str, body: str) -> str:
     Parsers such as OpenCode's (gray-matter) and the Agent Skills loaders only
     see frontmatter when the file *starts* with ``---``, so the sentinel cannot
     be line 1 there: :func:`~coding_agent_playbook.generated_output.sentinel.sentinel_line` is
-    the **first body line** (the second position ``_sentinel.has_sentinel``
+    the **first body line** (the second position ``generated_output.sentinel.has_sentinel``
     accepts), followed by a blank line and ``body``. ``frontmatter`` must start
     with ``---``.
 
@@ -424,7 +424,7 @@ def _render_prompt_claude_command(
     A read-only prompt instead opens with a ``disallowed-tools`` frontmatter
     block (Claude removes those tools while the command runs) and carries the
     sentinel on its first body line, the second anchored position
-    ``_sentinel.has_sentinel`` accepts (specs/prK-lifecycle-hooks.md §C.4.3).
+    ``generated_output.sentinel.has_sentinel`` accepts (specs/prK-lifecycle-hooks.md §C.4.3).
     Every other prompt renders exactly as before.
     """
     output = insert_pointer_block(_titled(body, frontmatter["name"]), block)

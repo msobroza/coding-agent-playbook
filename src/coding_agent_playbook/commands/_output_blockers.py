@@ -12,7 +12,7 @@ whose it is:
   ``.claude/commands``): ``FileExistsError`` or ``NotADirectoryError``;
 - a directory where the output file goes (``AGENTS.md/``): ``IsADirectoryError``;
 - a FIFO, socket or device where the output file goes: the owned output writers
-  refuse it before ``open()`` would block or fail (``_output_io``).
+  refuse it before ``open()`` would block or fail (``generated_output.output_io``).
 
 Write mode attributes the failed write's ``OSError`` to the blocker on its path
 (:func:`blocker_in`) and exits 1 naming it (:func:`report_blocker`); ``--check``
@@ -51,7 +51,8 @@ _BLOCKER_ERRNOS: Final = frozenset(
         errno.EOPNOTSUPP,
     }
 )
-#: What a FIFO, socket or device at the path reports: ``_output_io``'s refusal, or ``open()`` on a socket.
+#: What a FIFO, socket or device at the path reports: ``generated_output.output_io``'s
+#: refusal, or ``open()`` on a socket.
 _SPECIAL_ERRNOS: Final = frozenset({errno.ENXIO, errno.EOPNOTSUPP})
 _MOVE_REMEDY: Final = "Move or rename it (sync never deletes it)"
 _LINK_REMEDY: Final = "Re-point or remove the link"

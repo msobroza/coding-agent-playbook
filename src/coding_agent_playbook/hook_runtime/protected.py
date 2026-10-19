@@ -22,7 +22,7 @@ sync rendered: nothing is rendered and nothing is spawned here. The order of
    position (``_sentinel.file_has_sentinel``), never read when it is a
    symlink, on a secret path or when it is not a regular file.
 
-Stdlib, ``hook_runtime``, the zero-import ``_sentinel`` and the stdlib-only
+Stdlib, ``hook_runtime``, the zero-import ``generated_output.sentinel`` and the stdlib-only
 ``catalog.roots`` module (a leaf) only (§D.1).
 """
 
