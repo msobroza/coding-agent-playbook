@@ -8,8 +8,6 @@ modules in ``coding_agent_playbook.commands`` consume. The pieces here:
 - :class:`OverlayResolver` — three-layer merge per SPEC §11 (engine, overlays,
   repo-local). Records collisions for ``playbook check``; hooks merge through
   the additive ``hook_policy.merge_hook_layers`` (specs/prK-lifecycle-hooks.md §A.6).
-- :func:`filter_applies_if` — the shared applies_if filter every render
-  (``sync``, ``render``, the eval runner) applies the same way.
 - :func:`discover_adapters` — entry-point discovery + always-enable
   ``agents_md``.
 
@@ -33,7 +31,7 @@ from importlib import metadata
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.catalog import canonical_overlay_name
-from coding_agent_playbook.detector import detect, evaluate_predicate
+from coding_agent_playbook.detector.facts import detect
 from coding_agent_playbook.hook_policy import (
     NO_HANDLER_SCHEMAS,
     RegistryCatalog,
@@ -52,7 +50,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.adapters.base import Adapter
     from coding_agent_playbook.config import Config
-    from coding_agent_playbook.detector import Facts
+    from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.hook_policy import (
         ConfigSchemaLookup,
         HookLayerMerger,
@@ -246,27 +244,6 @@ def template_source(artifact: Rule | Prompt) -> str:
     """
     path = artifact.source_path
     return str(path) if path is not None else artifact_id_of(artifact)
-
-
-def filter_applies_if[T: "Rule | Prompt"](
-    artifacts: list[T],
-    facts: Facts,
-    repo_root: Path,
-) -> list[T]:
-    """Drop the artifacts whose ``applies_if`` is false for ``facts`` (SPEC §6.4).
-
-    An empty predicate always passes. ``repo_root`` anchors ``has_file`` paths.
-
-    Example::
-
-        rules = filter_applies_if(ctx.rules_resolved, ctx.facts, ctx.repo_root)
-    """
-    kept: list[T] = []
-    for artifact in artifacts:
-        predicate = artifact.frontmatter.applies_if or {}
-        if not predicate or evaluate_predicate(predicate, facts, repo_root=repo_root):
-            kept.append(artifact)
-    return kept
 
 
 def discover_adapters(

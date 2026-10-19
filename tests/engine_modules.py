@@ -48,10 +48,10 @@ STDLIB_LEAVES: Final = frozenset(
         "_atomic_io",
         "_canonical_json",
         "_lock_drift",
-        "_pep503",
-        "_pyproject_deps",
         "_sentinel",
         "catalog",
+        "detector.pep503",
+        "detector.pyproject_deps",
         "lockfile",
         "security",
     }

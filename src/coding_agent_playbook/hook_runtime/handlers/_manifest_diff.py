@@ -7,8 +7,8 @@ stance). One reader per manifest kind:
 
 - ``pyproject.toml``: ``tomllib`` (imported here only, the §D.1 branch-local
   row) over ``[project].dependencies``, every optional-dependency and
-  ``[dependency-groups]`` group and Poetry's tables (``_pyproject_deps``);
-- ``requirements*.txt`` / ``requirements*.in``: pip's line grammar (``_pep503``);
+  ``[dependency-groups]`` group and Poetry's tables (``detector.pyproject_deps``);
+- ``requirements*.txt`` / ``requirements*.in``: pip's line grammar (``detector.pep503``);
 - ``setup.cfg``: the ``install_requires`` / ``setup_requires`` /
   ``tests_require`` values and ``[options.extras_require]``;
 - ``environment.yml``: the list items (conda specs and the nested ``pip:`` list).
@@ -26,7 +26,11 @@ import fnmatch
 import re
 from typing import TYPE_CHECKING, Any, Final, Literal
 
-from coding_agent_playbook._pep503 import canonical_name, requirement_name, requirement_names
+from coding_agent_playbook.detector.pep503 import (
+    canonical_name,
+    requirement_name,
+    requirement_names,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -111,7 +115,7 @@ def _names(kind: ManifestKind, text: str) -> frozenset[str] | None:
 def _pyproject_names(text: str) -> frozenset[str] | None:
     import tomllib  # branch-local (§D.1): only a pyproject.toml edit pays ~19 ms
 
-    from coding_agent_playbook._pyproject_deps import manifest_dependency_names
+    from coding_agent_playbook.detector.pyproject_deps import manifest_dependency_names
 
     try:
         return manifest_dependency_names(tomllib.loads(text))

@@ -31,7 +31,7 @@ from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
 from coding_agent_playbook.commands import _sync_output
 from coding_agent_playbook.commands import sync as _sync
-from coding_agent_playbook.detector import detect
+from coding_agent_playbook.detector.facts import detect
 from coding_agent_playbook.lockfile import LockEntry, compute_hash
 from coding_agent_playbook.security.files import is_secret_file
 from coding_agent_playbook.sources.filesystem import FileSystemStateSource
@@ -41,7 +41,7 @@ from tests.fakes import FakeGitClient
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from coding_agent_playbook.detector import Facts
+    from coding_agent_playbook.detector.facts import Facts
 
     SyntheticRepoFactory = Callable[..., Path]
 

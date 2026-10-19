@@ -14,7 +14,7 @@ nothing. Recognized:
   ``pipx run``): read from ``raw_argv``, since the effective argv is then the
   tool being run.
 
-Names are PEP 503-normalized (``_pep503``); a self-install (``-e .``,
+Names are PEP 503-normalized (``detector.pep503``); a self-install (``-e .``,
 ``".[dev]"``, a local path) names nothing, and ``-r FILE`` is returned as a
 file for the caller to read. ``uv sync``, ``uv run`` without ``--with``, ``npm
 ci`` and a bare ``npm install`` request nothing.
@@ -27,7 +27,7 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Literal
 
-from coding_agent_playbook._pep503 import canonical_name, requirement_names
+from coding_agent_playbook.detector.pep503 import canonical_name, requirement_names
 from coding_agent_playbook.hook_runtime.handlers._cli_words import (
     CliWords,
     split_words,
