@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.adapters._secret_native import DENY_POINTER
+from coding_agent_playbook.adapters.claude_code._secret_native import DENY_POINTER
 from coding_agent_playbook.security.patterns import DESTRUCTIVE_NATIVE_PREFIXES
 
 if TYPE_CHECKING:

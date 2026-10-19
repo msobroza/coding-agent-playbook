@@ -41,6 +41,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook._pyproject_deps` | `coding_agent_playbook.detector.pyproject_deps` | N4 |
 | `coding_agent_playbook._toml` | `coding_agent_playbook.toml_writer` | N1 |
 | `coding_agent_playbook.adapters._agent_skill_rules` | `coding_agent_playbook.skills.naming` | A3 |
+| `coding_agent_playbook.adapters._claude_hooks` | `coding_agent_playbook.adapters.claude_code.hooks` | A8 |
 | `coding_agent_playbook.adapters._settings_drift` | `coding_agent_playbook.adapters.claude_code.settings.drift` | N13 |
 | `coding_agent_playbook.adapters._skill_writer.AGENT_SKILL_DESCRIPTION_MAX_CHARS` | `coding_agent_playbook.skills.naming.AGENT_SKILL_DESCRIPTION_MAX_CHARS` | A3 |
 | `coding_agent_playbook.adapters._skill_writer.AGENT_SKILL_NAME_MAX_CHARS` | `coding_agent_playbook.skills.naming.AGENT_SKILL_NAME_MAX_CHARS` | A3 |
@@ -48,12 +49,14 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.adapters._skill_writer.agent_skill_issues` | `coding_agent_playbook.skills.naming.agent_skill_issues` | A3 |
 | `coding_agent_playbook.adapters._skill_writer.has_declared_id` | `coding_agent_playbook.skills.naming.has_declared_id` | A3 |
 | `coding_agent_playbook.adapters._skill_writer.skill_id_of` | `coding_agent_playbook.skills.naming.skill_id_of` | A3 |
+| `coding_agent_playbook.adapters.claude_code_adapter` | `coding_agent_playbook.adapters.claude_code.adapter` | A8 |
 | `coding_agent_playbook.adapters.claude_rule_paths` | `coding_agent_playbook.adapters.claude_code.paths` | N13 |
 | `coding_agent_playbook.adapters.claude_settings` | `coding_agent_playbook.adapters.claude_code.settings.managed_merge` | N13 |
 | `coding_agent_playbook.catalog` | `coding_agent_playbook.catalog.roots` | N3 |
 | `coding_agent_playbook.cli.build_parser` | `coding_agent_playbook.cli.parser.build_parser` | N7 |
 | `coding_agent_playbook.commands._ci_policy` | `coding_agent_playbook.commands.twins.policy` | N8 |
 | `coding_agent_playbook.commands._committed_config` | `coding_agent_playbook.config.committed` | N10 |
+| `coding_agent_playbook.commands._precommit_merge` | `coding_agent_playbook.precommit` | N9 |
 | `coding_agent_playbook.commands._twin_policy` | `coding_agent_playbook.commands.twins.policy` | N8 |
 | `coding_agent_playbook.commands.check_commit_trailers` | `coding_agent_playbook.commands.twins.check_commit_trailers` | N8 |
 | `coding_agent_playbook.commands.check_deps` | `coding_agent_playbook.commands.twins.check_deps` | N8 |
@@ -62,6 +65,8 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.commands.gate_scan` | `coding_agent_playbook.commands.twins.gate_scan` | N8 |
 | `coding_agent_playbook.commands.gate_scan.ScanRange` | `coding_agent_playbook.commands.twins._git_scope.ScanRange` | N8 |
 | `coding_agent_playbook.commands.gate_scan.resolve_range` | `coding_agent_playbook.commands.twins._git_scope.resolve_range` | N8 |
+| `coding_agent_playbook.commands.init.PrecommitTemplateMissingError` | `coding_agent_playbook.precommit.PrecommitTemplateMissingError` | N9 |
+| `coding_agent_playbook.commands.init.precommit_template_dir` | `coding_agent_playbook.precommit.precommit_template_dir` | N9 |
 | `coding_agent_playbook.commands.scan_secrets` | `coding_agent_playbook.commands.twins.scan_secrets` | N8 |
 | `coding_agent_playbook.commands.scan_sinks` | `coding_agent_playbook.commands.twins.scan_sinks` | N8 |
 | `coding_agent_playbook.config` | `coding_agent_playbook.config.model` | N2 |
