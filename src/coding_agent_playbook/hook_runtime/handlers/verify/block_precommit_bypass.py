@@ -32,11 +32,11 @@ from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, clip
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
-from coding_agent_playbook.hook_runtime.handlers._bypass_rules import segment_verdict
 from coding_agent_playbook.hook_runtime.handlers._shared.targets import (
     file_write_paths,
     shell_write_targets,
 )
+from coding_agent_playbook.hook_runtime.handlers.verify._bypass_rules import segment_verdict
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

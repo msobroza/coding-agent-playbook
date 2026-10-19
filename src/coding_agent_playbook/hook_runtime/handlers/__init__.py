@@ -5,7 +5,7 @@ and is listed, name by name, in ``dispatch.registry._BUILTIN_HANDLER_MODULES``; 
 dispatcher imports only the modules bound to the current event, never this
 package as a whole. The pack tracks (K5-K10) add them, starting with K5's
 ``guard_generated_outputs`` and ``control_plane_guard``. A pack package
-(``safety``) holds one module per hook, named after its hook id; ``_shared``
-holds the helpers more than one pack imports. A ``_``-prefixed module, or any
+(``audit``, ``safety``, ``verify``) holds one module per hook, named after its
+hook id; ``_shared`` holds the helpers more than one pack imports. A ``_``-prefixed module, or any
 module under ``_shared``, is a private helper and registers none.
 """

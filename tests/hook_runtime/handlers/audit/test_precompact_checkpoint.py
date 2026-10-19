@@ -21,13 +21,13 @@ import pytest
 
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName
-from coding_agent_playbook.hook_runtime.handlers._transcript_prompts import (
+from coding_agent_playbook.hook_runtime.handlers.audit._transcript_prompts import (
     EntryRef,
     TranscriptShapeError,
     human_prompt_text,
     tail_lines,
 )
-from coding_agent_playbook.hook_runtime.handlers.compaction import (
+from coding_agent_playbook.hook_runtime.handlers.audit.precompact_checkpoint import (
     CHECKPOINT_CAP,
     SAID,
     select_human_prompts,

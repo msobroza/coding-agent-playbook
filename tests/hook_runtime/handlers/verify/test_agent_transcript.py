@@ -14,8 +14,11 @@ from typing import TYPE_CHECKING, Any, BinaryIO
 
 import pytest
 
-from coding_agent_playbook.hook_runtime import _agent_transcript
-from coding_agent_playbook.hook_runtime._agent_transcript import TranscriptError, edited_files
+from coding_agent_playbook.hook_runtime.handlers.verify import _agent_transcript
+from coding_agent_playbook.hook_runtime.handlers.verify._agent_transcript import (
+    TranscriptError,
+    edited_files,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path

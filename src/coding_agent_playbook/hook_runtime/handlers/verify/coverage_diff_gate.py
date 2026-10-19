@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Final
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, clip
 from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
-from coding_agent_playbook.hook_runtime.handlers._coverage_report import (
+from coding_agent_playbook.hook_runtime.handlers.verify._coverage_report import (
     CoverageGrade,
     coverage_lines,
     head_snapshot,
@@ -38,7 +38,7 @@ from coding_agent_playbook.hook_runtime.handlers._coverage_report import (
     suite_total,
     write_snapshot_rows,
 )
-from coding_agent_playbook.hook_runtime.handlers._verify_claim import completion_claim
+from coding_agent_playbook.hook_runtime.handlers.verify._verify_claim import completion_claim
 from coding_agent_playbook.hook_runtime.stop.alone import run_alone
 from coding_agent_playbook.hook_runtime.stop.stages import StageCost, StageResult
 
@@ -161,7 +161,7 @@ class CoverageStage:
 
     def _gate(self, root: Path, handle: ProjectHandle, snapshot: Path | None) -> MetricsGateResult:
         """``run_metrics_gate`` over the shared run: no new suite run, ``[metrics]`` read live."""
-        from coding_agent_playbook.hook_runtime.handlers._metrics_pass import PortBaselineGit
+        from coding_agent_playbook.hook_runtime.handlers.verify._metrics_pass import PortBaselineGit
         from coding_agent_playbook.metrics_gate import run as gates
 
         config = gates.load_metrics_config(root)

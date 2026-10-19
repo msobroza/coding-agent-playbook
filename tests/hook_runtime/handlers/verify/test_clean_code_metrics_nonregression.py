@@ -20,8 +20,12 @@ from coding_agent_playbook.hook_runtime.dispatch.escape import EscapeHatches
 from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, EventName, Harness
 from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext, load_builtin
 from coding_agent_playbook.hook_runtime.git.parse import AddedLine
-from coding_agent_playbook.hook_runtime.handlers.docstring_nonregression import DocstringsStage
-from coding_agent_playbook.hook_runtime.handlers.quality_metrics import QualityMetricsStage
+from coding_agent_playbook.hook_runtime.handlers.verify.clean_code_metrics_nonregression import (
+    QualityMetricsStage,
+)
+from coding_agent_playbook.hook_runtime.handlers.verify.docstring_nonregression import (
+    DocstringsStage,
+)
 from coding_agent_playbook.hook_runtime.state.session import SessionState
 from coding_agent_playbook.hook_runtime.stop.stages import StopPlan
 from tests.hook_runtime.fakes import FakeClock, FakeProc, FakeRuff, ruff_row

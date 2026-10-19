@@ -861,7 +861,7 @@ def test_async_audit_branch_imports_nothing_forbidden(
     imported = _imports(real_proc, audited, EventName.POST_TOOL_USE, payload, extra=("--async",))
 
     # importlib.import_module bypasses -X importtime: the helper's line shows the handler ran.
-    assert "coding_agent_playbook.hook_runtime.handlers._activity_record" in imported
+    assert "coding_agent_playbook.hook_runtime.handlers.audit._activity_record" in imported
     assert _forbidden(imported) == []
     assert "subprocess" not in imported
     assert _GIT_MODULE not in imported

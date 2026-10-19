@@ -30,8 +30,8 @@ from typing import TYPE_CHECKING, Final
 from coding_agent_playbook.artifacts.path_globs import fold_key
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, clip
-from coding_agent_playbook.hook_runtime.handlers._verify_claim import completion_claim
-from coding_agent_playbook.hook_runtime.handlers.stop_ci_parity_gate import CONFIG_SCHEMA
+from coding_agent_playbook.hook_runtime.handlers.verify._verify_claim import completion_claim
+from coding_agent_playbook.hook_runtime.handlers.verify.stop_ci_parity_gate import CONFIG_SCHEMA
 from coding_agent_playbook.hook_runtime.stop.stages import StageCost, StageResult
 from coding_agent_playbook.hook_runtime.stop.tools import (
     edited_py,

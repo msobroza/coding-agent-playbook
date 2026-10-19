@@ -23,7 +23,7 @@ from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hook_runtime.git.parse import AddedLine, DiffLines
-from coding_agent_playbook.hook_runtime.handlers._coverage_report import (
+from coding_agent_playbook.hook_runtime.handlers.verify._coverage_report import (
     ADVICE_LINE,
     NO_SNAPSHOT_LINE,
 )
