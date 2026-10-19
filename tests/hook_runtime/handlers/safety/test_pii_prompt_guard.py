@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.simulate import SimulateReport
+    from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
     from coding_agent_playbook.security.pii import PiiMatch
     from tests.hook_runtime.handlers.pack_repo import PackRepo
 

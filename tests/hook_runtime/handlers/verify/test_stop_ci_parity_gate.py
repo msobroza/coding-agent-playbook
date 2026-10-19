@@ -49,7 +49,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.simulate import SimulateReport
+    from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
 
 pytestmark = pytest.mark.catalog
 

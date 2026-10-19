@@ -16,9 +16,9 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from coding_agent_playbook.generated_output.sentinel import SENTINEL, sentinel_line
-from coding_agent_playbook.hook_runtime.canary import DEFAULT_CANARIES, run_canaries
 from coding_agent_playbook.hook_runtime.config.pin import write_machine_pins
 from coding_agent_playbook.hook_runtime.decision import Decision
+from coding_agent_playbook.hook_runtime.diagnostics.canary import DEFAULT_CANARIES, run_canaries
 from coding_agent_playbook.hook_runtime.event import Harness
 from coding_agent_playbook.hook_runtime.policy import UNATTENDED_ENV_VAR
 from coding_agent_playbook.hook_runtime.state.store import StateStore
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
-    from coding_agent_playbook.hook_runtime.simulate import SimulateReport
+    from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
     from tests.hook_payloads import HookPayloadCase
 
     type Payload = Callable[[str, str, str], HookPayloadCase]
