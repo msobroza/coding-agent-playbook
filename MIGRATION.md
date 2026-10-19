@@ -529,6 +529,20 @@ change.
 <!-- module-moves: end-keep -->
 
 <!-- module-moves: keep -->
+The `guard_config.json` writer has one entry point,
+`coding_agent_playbook.hooks.guard_config.compile.compile_guard_config`. It takes a
+`GuardConfigRequest` holding only what sync computes (the resolved hooks, the
+`[hooks]` and `[guardrails]` policy, the engine version, the generated locations,
+the protected set, the detector facts and the rendered prompts and rules), reads the
+repo's pre-commit config, ruff config, pyproject and committed `[metrics]` from its
+`repo_root` itself, and returns a `CompiledGuardConfig`: the document, its canonical
+`data` and `write(out_root)`. `GuardConfigInputs`, `render_guard_config` and
+`write_guard_config` are gone, and so is `GUARD_CONFIG_PATH`: use
+`coding_agent_playbook.hook_runtime.config.schema.GUARD_CONFIG_REL`. The bytes of
+`guard_config.json` do not change.
+<!-- module-moves: end-keep -->
+
+<!-- module-moves: keep -->
 Out-of-tree hook handler authors: the event and decision model moved into the
 `coding_agent_playbook.hook_runtime.dispatch` package, with no shim at the old
 paths. Import `CanonicalEvent` from `coding_agent_playbook.hook_runtime.dispatch.event`

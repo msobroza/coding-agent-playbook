@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from coding_agent_playbook.hooks.guard_config.compile import GUARD_CONFIG_PATH
+from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL
 from coding_agent_playbook.hooks.registrations.opencode import OPENCODE_SHIM_PATH
 from coding_agent_playbook.lockfile.model import LockEntry, Lockfile
 from coding_agent_playbook.sync._hook_outputs import opencode_restart_notice
@@ -52,8 +52,8 @@ def test_restart_notice_when_shim_first_written_or_removed(
 
 def test_no_restart_notice_when_only_guard_config_changes() -> None:
     shim = _entry(OPENCODE_SHIM_PATH, "a" * 64)
-    previous = _lock(_entry(GUARD_CONFIG_PATH, "1" * 64), shim)
-    current = _lock(_entry(GUARD_CONFIG_PATH, "2" * 64), shim)
+    previous = _lock(_entry(GUARD_CONFIG_REL, "1" * 64), shim)
+    current = _lock(_entry(GUARD_CONFIG_REL, "2" * 64), shim)
 
     assert opencode_restart_notice(previous, current) is None
 
@@ -61,8 +61,8 @@ def test_no_restart_notice_when_only_guard_config_changes() -> None:
 @pytest.mark.parametrize(
     ("previous", "current"),
     [
-        (None, _lock(_entry(GUARD_CONFIG_PATH, "1" * 64))),
-        (_lock(_entry(GUARD_CONFIG_PATH, "1" * 64)), _lock(_entry(GUARD_CONFIG_PATH, "2" * 64))),
+        (None, _lock(_entry(GUARD_CONFIG_REL, "1" * 64))),
+        (_lock(_entry(GUARD_CONFIG_REL, "1" * 64)), _lock(_entry(GUARD_CONFIG_REL, "2" * 64))),
         (None, _lock()),
     ],
     ids=["first-sync", "guard-config-only", "empty"],
