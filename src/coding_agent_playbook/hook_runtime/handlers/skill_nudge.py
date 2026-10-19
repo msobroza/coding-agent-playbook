@@ -17,8 +17,8 @@ carries ``dedupe_key``, and combine burns ``ctx:skill-nudge:<sha1(line)[:8]>``
 only for a line it shows, so a line a cap cuts shows on the next matching edit.
 A stateless store would answer every ``once`` with True and repeat the line on
 every edit, so the hook is silent there. A missing or malformed table yields no
-line; ``on_error: open``. Imports ``globs``, ``decision`` and ``registry`` only
-(the hot path, specs/prK-lifecycle-hooks.md §D.1).
+line; ``on_error: open``. Imports ``artifacts.path_globs``, ``decision`` and
+``registry`` only (the hot path, specs/prK-lifecycle-hooks.md §D.1).
 """
 
 from __future__ import annotations
