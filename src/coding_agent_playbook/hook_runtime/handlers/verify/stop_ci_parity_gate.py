@@ -92,17 +92,11 @@ STAGE_FACTORIES: Final[Mapping[str, str]] = MappingProxyType(
         "output-contract": (
             "coding_agent_playbook.hook_runtime.handlers.verify.prompt_output_contract_on_stop:output_contract_stage"
         ),
-        "tests-nudge": (
-            "coding_agent_playbook.hook_runtime.handlers.verify.tests_with_source_nudge:tests_nudge_stage"
-        ),
-        "typecheck": (
-            "coding_agent_playbook.hook_runtime.handlers.verify._exec_stages:typecheck_stage"
-        ),
+        "tests-nudge": "coding_agent_playbook.hook_runtime.handlers.verify.tests_with_source_nudge:tests_nudge_stage",
+        "typecheck": "coding_agent_playbook.hook_runtime.handlers.verify._exec_stages:typecheck_stage",
         "tests": "coding_agent_playbook.hook_runtime.handlers.verify._exec_stages:tests_stage",
         "notebooks": "coding_agent_playbook.hook_runtime.handlers.notebooks:notebooks_stage",
-        "coverage": (
-            "coding_agent_playbook.hook_runtime.handlers.verify.coverage_diff_gate:coverage_stage"
-        ),
+        "coverage": "coding_agent_playbook.hook_runtime.handlers.verify.coverage_diff_gate:coverage_stage",
     }
 )
 #: Leaves the dispatcher time to compose and write before the watchdog fires.
