@@ -266,23 +266,18 @@ def _commit_convention_run(
     return run_cz_commands(checks, ctx.repo_root, runner, timeout_s)
 
 
+def _range_argv(command: str) -> Callable[[CiContext], list[str]]:
+    """The argv builder of a row that runs ``command`` over ``<merge base>..HEAD``."""
+    return lambda ctx: [command, "--range", f"{ctx.merge_base}..HEAD"]
+
+
 CI_STEPS: Final[tuple[CiStep, ...]] = (
     CiStep("sync-check", "prerequisites", lambda ctx: ["sync", "--check"], _sync_check_skip),
     CiStep("validate", "existing", lambda ctx: ["validate"]),
     CiStep("metrics", "F.2/F.3", _metrics_argv, needs_base=True),
     CiStep("coverage", "F.1", _coverage_argv, _coverage_skip, needs_base=True),
-    CiStep(
-        "gate-scan",
-        "E.2",
-        lambda ctx: ["gate-scan", "--range", f"{ctx.merge_base}..HEAD"],
-        needs_base=True,
-    ),
-    CiStep(
-        "scan-secrets",
-        "E.4",
-        lambda ctx: ["scan-secrets", "--range", f"{ctx.merge_base}..HEAD"],
-        needs_base=True,
-    ),
+    CiStep("gate-scan", "E.2", _range_argv("gate-scan"), needs_base=True),
+    CiStep("scan-secrets", "E.4", _range_argv("scan-secrets"), needs_base=True),
     CiStep(
         COMMIT_STEP,
         "F.4",
@@ -294,7 +289,7 @@ CI_STEPS: Final[tuple[CiStep, ...]] = (
     CiStep(
         "commit-trailers",
         "E.4",
-        lambda ctx: ["check-commit-trailers", "--range", f"{ctx.merge_base}..HEAD"],
+        _range_argv("check-commit-trailers"),
         _commit_trailers_skip,
         needs_base=True,
     ),
@@ -305,13 +300,7 @@ CI_STEPS: Final[tuple[CiStep, ...]] = (
         _check_deps_skip,
         needs_base=True,
     ),
-    CiStep(
-        "scan-sinks",
-        "E.3",
-        lambda ctx: ["scan-sinks", "--range", f"{ctx.merge_base}..HEAD"],
-        _scan_sinks_skip,
-        needs_base=True,
-    ),
+    CiStep("scan-sinks", "E.3", _range_argv("scan-sinks"), _scan_sinks_skip, needs_base=True),
 )
 
 
@@ -347,9 +336,7 @@ class SubprocessCiStepRunner:
 def configure(parser: argparse.ArgumentParser) -> None:
     """Declare ``playbook ci [--base REF] [--steps NAMES] [--format F]`` (SPEC §12.11).
 
-    Example::
-
-        >>> configure(argparse.ArgumentParser(prog="playbook ci"))  # doctest: +SKIP
+    Example: ``configure(argparse.ArgumentParser(prog="playbook ci"))``.
     """
     parser.add_argument("--base", help=BASE_FLAG_HELP)
     parser.add_argument("--steps", help="comma-separated CI_STEPS names (default: every row)")
