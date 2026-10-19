@@ -16,7 +16,7 @@ import pytest
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.event import Harness
 from coding_agent_playbook.hook_runtime.dispatch.policy import UNATTENDED_ENV_VAR
-from coding_agent_playbook.hook_runtime.handlers.precommit_bypass import reason_for
+from coding_agent_playbook.hook_runtime.handlers.verify.block_precommit_bypass import reason_for
 from tests.hook_runtime.handlers.pack_repo import precommit_config
 
 if TYPE_CHECKING:

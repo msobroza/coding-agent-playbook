@@ -17,7 +17,7 @@ The policy is the engine default extended by the hook's merged config
 ``justification_regex`` replaces): the shipped ``HOOK.md`` adds nothing, so
 the hook and the CLI twin share ``judges.gate_weakening``'s defaults as their one source.
 ``judges.gate_weakening`` is imported only when the stage runs. The ``pre_edit``
-companion lives in :mod:`.gate_weakening_edit`.
+companion lives in :mod:`.gate_weakening_guard_edit`.
 """
 
 from __future__ import annotations

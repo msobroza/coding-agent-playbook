@@ -1,6 +1,6 @@
 """prompt-output-contract-on-stop: the ``output-contract`` Stop stage (specs/prK-hook-pack.md §E.2).
 
-While the turn's active playbook prompt (:mod:`..active_prompt`, resolved per
+While the turn's active playbook prompt (:mod:`...state.active_prompt`, resolved per
 turn) declares an ``output_contract``, every one of its regexes must match the
 last 4,000 characters of ``last_assistant_message``, e.g. ``/review``'s final
 ``approve`` / ``request changes`` verdict line.

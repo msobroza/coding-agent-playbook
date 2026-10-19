@@ -13,7 +13,7 @@ import importlib.util
 import pytest
 
 from coding_agent_playbook.hook_runtime.dispatch.registry import _BUILTIN_HANDLER_MODULES
-from coding_agent_playbook.hook_runtime.handlers.stop_ci_parity_gate import STAGE_FACTORIES
+from coding_agent_playbook.hook_runtime.handlers.verify.stop_ci_parity_gate import STAGE_FACTORIES
 
 
 @pytest.mark.parametrize(("stage", "target"), sorted(STAGE_FACTORIES.items()))

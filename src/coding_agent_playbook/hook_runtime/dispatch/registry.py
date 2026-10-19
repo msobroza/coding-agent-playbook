@@ -94,28 +94,38 @@ _BUILTIN_HANDLER_MODULES: Final[Mapping[str, str]] = MappingProxyType(
         "session_start_playbook_briefing": (
             "coding_agent_playbook.hook_runtime.handlers.session_start_playbook_briefing"
         ),
-        "stop_ci_parity_gate": "coding_agent_playbook.hook_runtime.handlers.stop_ci_parity_gate",
+        "stop_ci_parity_gate": (
+            "coding_agent_playbook.hook_runtime.handlers.verify.stop_ci_parity_gate"
+        ),
         "clean_code_metrics_nonregression": (
-            "coding_agent_playbook.hook_runtime.handlers.quality_metrics"
+            "coding_agent_playbook.hook_runtime.handlers.verify.clean_code_metrics_nonregression"
         ),
         "clean_code_metrics_nonregression:post_edit": (
-            "coding_agent_playbook.hook_runtime.handlers.quality_metrics"
+            "coding_agent_playbook.hook_runtime.handlers.verify.clean_code_metrics_nonregression"
         ),
         "docstring_nonregression": (
-            "coding_agent_playbook.hook_runtime.handlers.docstring_nonregression"
+            "coding_agent_playbook.hook_runtime.handlers.verify.docstring_nonregression"
         ),
         "docstring_nonregression:post_edit": (
-            "coding_agent_playbook.hook_runtime.handlers.docstring_nonregression"
+            "coding_agent_playbook.hook_runtime.handlers.verify.docstring_nonregression"
         ),
-        "gate_weakening_guard": "coding_agent_playbook.hook_runtime.handlers.gate_weakening",
+        "gate_weakening_guard": (
+            "coding_agent_playbook.hook_runtime.handlers.verify.gate_weakening_guard"
+        ),
         "gate_weakening_guard:pre_edit": (
-            "coding_agent_playbook.hook_runtime.handlers.gate_weakening_edit"
+            "coding_agent_playbook.hook_runtime.handlers.verify.gate_weakening_guard_edit"
         ),
-        "block_precommit_bypass": "coding_agent_playbook.hook_runtime.handlers.precommit_bypass",
-        "tests_with_source_nudge": "coding_agent_playbook.hook_runtime.handlers.tests_nudge",
-        "subagent_stop_verify": "coding_agent_playbook.hook_runtime.handlers.subagent_verify",
+        "block_precommit_bypass": (
+            "coding_agent_playbook.hook_runtime.handlers.verify.block_precommit_bypass"
+        ),
+        "tests_with_source_nudge": (
+            "coding_agent_playbook.hook_runtime.handlers.verify.tests_with_source_nudge"
+        ),
+        "subagent_stop_verify": (
+            "coding_agent_playbook.hook_runtime.handlers.verify.subagent_stop_verify"
+        ),
         "prompt_output_contract_on_stop": (
-            "coding_agent_playbook.hook_runtime.handlers.output_contract"
+            "coding_agent_playbook.hook_runtime.handlers.verify.prompt_output_contract_on_stop"
         ),
         "prompt_scope_guard": "coding_agent_playbook.hook_runtime.handlers.prompt_scope",
         "ruff_post_edit": "coding_agent_playbook.hook_runtime.handlers.ruff_feedback",
@@ -125,7 +135,9 @@ _BUILTIN_HANDLER_MODULES: Final[Mapping[str, str]] = MappingProxyType(
         "deser_sink_guard": "coding_agent_playbook.hook_runtime.handlers.deser",
         "notebook_hygiene": "coding_agent_playbook.hook_runtime.handlers.notebooks",
         "notebook_hygiene:stop_stage": "coding_agent_playbook.hook_runtime.handlers.notebooks",
-        "coverage_diff_gate": "coding_agent_playbook.hook_runtime.handlers.coverage_diff_gate",
+        "coverage_diff_gate": (
+            "coding_agent_playbook.hook_runtime.handlers.verify.coverage_diff_gate"
+        ),
         "secret_path_guard": (
             "coding_agent_playbook.hook_runtime.handlers.safety.secrets_path_guard"
         ),
@@ -161,10 +173,14 @@ _BUILTIN_HANDLER_MODULES: Final[Mapping[str, str]] = MappingProxyType(
         ),
         # K9: the decision sink is never selected (``routing``); it is mapped so
         # validate (H6) can read its declaration like any other builtin.
-        "decision_log": "coding_agent_playbook.hook_runtime.handlers.decision_log",
-        "activity_log": "coding_agent_playbook.hook_runtime.handlers.activity_log",
-        "precompact_checkpoint": "coding_agent_playbook.hook_runtime.handlers.compaction",
-        "precompact_checkpoint:reinject": "coding_agent_playbook.hook_runtime.handlers.compaction",
+        "decision_log": "coding_agent_playbook.hook_runtime.handlers.audit.guard_decision_log",
+        "activity_log": "coding_agent_playbook.hook_runtime.handlers.audit.local_audit_log",
+        "precompact_checkpoint": (
+            "coding_agent_playbook.hook_runtime.handlers.audit.precompact_checkpoint"
+        ),
+        "precompact_checkpoint:reinject": (
+            "coding_agent_playbook.hook_runtime.handlers.audit.precompact_checkpoint"
+        ),
         "pii_prompt_guard": "coding_agent_playbook.hook_runtime.handlers.safety.pii_prompt_guard",
         "network_egress_guard": (
             "coding_agent_playbook.hook_runtime.handlers.safety.network_egress_guard"
