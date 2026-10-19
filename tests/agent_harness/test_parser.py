@@ -1,4 +1,4 @@
-"""Tests for harness.parser — parse_harness (Track H1)."""
+"""Tests for agent_harness.parser — parse_harness (Track H1)."""
 
 from __future__ import annotations
 

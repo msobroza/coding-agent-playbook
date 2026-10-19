@@ -1,4 +1,4 @@
-"""Tests for harness.leaf_detectors (Track H1)."""
+"""Tests for agent_harness.leaf_detectors (Track H1)."""
 
 from __future__ import annotations
 

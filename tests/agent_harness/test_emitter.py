@@ -1,4 +1,4 @@
-"""Tests for harness.emitter — pure emit helpers (Track H1)."""
+"""Tests for agent_harness.emitter — pure emit helpers (Track H1)."""
 
 from __future__ import annotations
 

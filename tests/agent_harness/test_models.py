@@ -1,4 +1,4 @@
-"""Tests for harness.models — frozen dataclasses (Track H1)."""
+"""Tests for agent_harness.models — frozen dataclasses (Track H1)."""
 
 from __future__ import annotations
 

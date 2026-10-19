@@ -1,4 +1,4 @@
-"""Tests for harness.manifest — .playbook/manifest.toml sidecar (Track H1)."""
+"""Tests for agent_harness.manifest — .playbook/manifest.toml sidecar (Track H1)."""
 
 from __future__ import annotations
 
