@@ -10,7 +10,7 @@ so they stay fast and focused on the rendering contract.
 from __future__ import annotations
 
 from coding_agent_playbook.commands.eval import _format_result_text, _result_to_dict
-from coding_agent_playbook.evals.runner import TaskResult
+from coding_agent_playbook.evals.run.harness_runner import TaskResult
 from coding_agent_playbook.evaluators.scope import CostTier, Determinism
 from coding_agent_playbook.evaluators.types import (
     CheckResult,

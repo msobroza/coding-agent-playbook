@@ -48,8 +48,8 @@ from coding_agent_playbook.evals.loader import (
     discover_eval_task_dirs,
     load_eval_task_from_dir,
 )
-from coding_agent_playbook.evals.runner import capture, materialize
-from coding_agent_playbook.evals.scoring import score
+from coding_agent_playbook.evals.run.harness_runner import capture, materialize
+from coding_agent_playbook.evals.run.scoring import score
 from coding_agent_playbook.evals.validator import validate_tasks
 from coding_agent_playbook.evaluators.types import CheckResult
 from coding_agent_playbook.types import Prompt, PromptFrontmatter
@@ -114,9 +114,11 @@ def stub_uv_sync(monkeypatch: pytest.MonkeyPatch) -> None:
             return subprocess.CompletedProcess(args, 0, "", "")
         return real_run(args, **kwargs)
 
-    monkeypatch.setattr("coding_agent_playbook.evals.runner.subprocess.run", _fake_uv_run)
     monkeypatch.setattr(
-        "coding_agent_playbook.evals.runner.shutil.which", lambda _binary: "/fake/uv"
+        "coding_agent_playbook.evals.run.harness_runner.subprocess.run", _fake_uv_run
+    )
+    monkeypatch.setattr(
+        "coding_agent_playbook.evals.run.harness_runner.shutil.which", lambda _binary: "/fake/uv"
     )
 
 

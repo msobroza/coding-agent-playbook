@@ -2,7 +2,7 @@
 
 Those fixtures are **review-only**: the agent must not edit, so it produces no
 diff and is graded on its *answer* (the transcript — see
-:func:`coding_agent_playbook.evals.scoring._graded_artifact`). Each fixture's
+:func:`coding_agent_playbook.evals.run.scoring._graded_artifact`). Each fixture's
 ``[gate]`` carries a deterministic ``answer_matches`` handle that fails an answer
 naming the wrong vulnerability class, so a hermetic run needs a transcript that
 actually names the right one.

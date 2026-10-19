@@ -7,7 +7,7 @@ group, run a task end-to-end in a temp scratch dir, render the unified
 and map the report's ``passed`` onto the process exit code.
 
 Everything is hermetic: the only runner ever *executed* is the
-:class:`~coding_agent_playbook.evals.fake_runner.FakeRunner` (no network, no CLI).
+:class:`~coding_agent_playbook.evals.run.fake_runner.FakeRunner` (no network, no CLI).
 The ``--runner claude_code`` path is exercised only with its ``available()`` guard
 monkeypatched to ``False`` so a real CLI is never invoked.
 """
@@ -120,7 +120,7 @@ def test_run_default_runner_is_claude_code(
     With the CLI absent the command exits 2 with the clear unavailable message —
     proving the default is ``claude_code`` (not ``fake``) without invoking a CLI.
     """
-    from coding_agent_playbook.evals.claude_code_runner import ClaudeCodeRunner
+    from coding_agent_playbook.evals.run.claude_code_runner import ClaudeCodeRunner
 
     _seed(tmp_path, make_synthetic_repo)
     monkeypatch.setattr(ClaudeCodeRunner, "available", classmethod(lambda cls: False))
@@ -138,7 +138,7 @@ def test_run_claude_code_unavailable_exits_2(
     tmp_path: Path, make_synthetic_repo: Any, capsys: Any, monkeypatch: Any
 ) -> None:
     """``--runner claude_code`` with no CLI exits 2 and suggests ``--runner fake``."""
-    from coding_agent_playbook.evals.claude_code_runner import ClaudeCodeRunner
+    from coding_agent_playbook.evals.run.claude_code_runner import ClaudeCodeRunner
 
     _seed(tmp_path, make_synthetic_repo)
     monkeypatch.setattr(ClaudeCodeRunner, "available", classmethod(lambda cls: False))
@@ -232,7 +232,7 @@ def test_run_judge_available_is_passed_to_runner(
     samples.
     """
     from coding_agent_playbook.evals.judge import StubJudge
-    from coding_agent_playbook.evals.runner import HarnessRunner
+    from coding_agent_playbook.evals.run.harness_runner import HarnessRunner
 
     _seed(tmp_path, make_synthetic_repo)
 
@@ -284,7 +284,7 @@ def test_run_failing_gate_exits_1(
     """
     import textwrap
 
-    from coding_agent_playbook.evals.fake_runner import FakeRunner, write_files
+    from coding_agent_playbook.evals.run.fake_runner import FakeRunner, write_files
 
     _seed(tmp_path, make_synthetic_repo)
 
@@ -475,7 +475,7 @@ def test_run_prompt_render_error_exits_2(
 ) -> None:
     """A prompt that fails to render is an authoring error (exit 2), not a FAIL (1)."""
     from coding_agent_playbook.evals.prompting import PromptResolutionError
-    from coding_agent_playbook.evals.runner import HarnessRunner
+    from coding_agent_playbook.evals.run.harness_runner import HarnessRunner
 
     def _boom(self: Any, task: Any, scratch: Any, **kwargs: Any) -> Any:
         raise PromptResolutionError("prompt 'refactor' for task 'x' failed to render: boom")

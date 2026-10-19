@@ -7,7 +7,7 @@ non-zero if the list is non-empty.
 The schema rules (``[gate]``/``[rubric]``/``[verdict]``) are checked by **trial-
 compiling** the task via :func:`~coding_agent_playbook.evals.task.compile_eval_task`
 and turning any :exc:`ValueError` / :exc:`KeyError` (incl.
-:exc:`~coding_agent_playbook.evals._expr.ExprError`, a ``ValueError`` subclass) into
+:exc:`~coding_agent_playbook.evals.compile._expr.ExprError`, a ``ValueError`` subclass) into
 an :class:`EvalValidationError`. The compiler already validates: at-least-one
 layer present, unknown check ids / metric names / gate-refs / rubric-refs,
 malformed handle bindings, expression identifiers ⊄ bind keys, the rubric
@@ -161,7 +161,7 @@ def _validate_schema(task: EvalTask) -> list[EvalValidationError]:
     """Trial-compile the task; turn any compiler fault into a validation error.
 
     :func:`compile_eval_task` raises :exc:`ValueError` (incl.
-    :exc:`~coding_agent_playbook.evals._expr.ExprError`) or :exc:`KeyError` on any
+    :exc:`~coding_agent_playbook.evals.compile._expr.ExprError`) or :exc:`KeyError` on any
     structural fault. A clean compile means the gate/rubric/verdict schema is
     well-formed. Imported lazily so the validator module stays import-light and
     free of any eval ↔ evaluator import cycle at module load.

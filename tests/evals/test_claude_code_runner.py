@@ -18,14 +18,10 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.evals.claude_code_runner import ClaudeCodeRunner
-from coding_agent_playbook.evals.fake_runner import write_files
-from coding_agent_playbook.evals.runner import (
-    AgentRun,
-    PromptResolutionError,
-    materialize,
-    render_prompt,
-)
+from coding_agent_playbook.evals.prompting import PromptResolutionError, render_prompt
+from coding_agent_playbook.evals.run.claude_code_runner import ClaudeCodeRunner
+from coding_agent_playbook.evals.run.fake_runner import write_files
+from coding_agent_playbook.evals.run.harness_runner import AgentRun, materialize
 from coding_agent_playbook.evals.task import EvalTask, TaskInvocation
 
 if TYPE_CHECKING:

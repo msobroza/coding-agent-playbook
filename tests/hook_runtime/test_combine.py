@@ -13,7 +13,7 @@ import json
 
 import pytest
 
-from coding_agent_playbook.evals.agent_env import UNATTENDED_ENV_VAR as EVALS_UNATTENDED_ENV_VAR
+from coding_agent_playbook.evals.run.agent_env import UNATTENDED_ENV_VAR as EVALS_UNATTENDED_ENV_VAR
 from coding_agent_playbook.hook_policy import ENGINE_DEADLINE_CAP_MS as POLICY_DEADLINE_CAP_MS
 from coding_agent_playbook.hook_policy import HOOK_EVENTS
 from coding_agent_playbook.hook_runtime.caps import (

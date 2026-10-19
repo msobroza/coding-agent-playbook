@@ -1,0 +1,144 @@
+# N23 (#103, specs/prT-package-layout.md 4.7, 7.4): the task compiler moves into
+# evals/compile/ and the run pipeline into evals/run/; root git_env.py joins evals/run/.
+# evals/__init__.py becomes a docstring only, so its re-exports go (L2, L5).
+
+[[module]]
+pr = "N23"
+old = "coding_agent_playbook.evals._compile"
+new = "coding_agent_playbook.evals.compile.compiler"
+
+[[module]]
+pr = "N23"
+old = "coding_agent_playbook.evals._expr"
+new = "coding_agent_playbook.evals.compile._expr"
+
+[[module]]
+pr = "N23"
+old = "coding_agent_playbook.evals._handles"
+new = "coding_agent_playbook.evals.compile._handles"
+
+[[module]]
+pr = "N23"
+old = "coding_agent_playbook.evals.runner"
+new = "coding_agent_playbook.evals.run.harness_runner"
+
+[[module]]
+pr = "N23"
+old = "coding_agent_playbook.evals.scoring"
+new = "coding_agent_playbook.evals.run.scoring"
+
+[[module]]
+pr = "N23"
+old = "coding_agent_playbook.evals.fake_runner"
+new = "coding_agent_playbook.evals.run.fake_runner"
+
+[[module]]
+pr = "N23"
+old = "coding_agent_playbook.evals.claude_code_runner"
+new = "coding_agent_playbook.evals.run.claude_code_runner"
+
+[[module]]
+pr = "N23"
+old = "coding_agent_playbook.evals.opencode_runner"
+new = "coding_agent_playbook.evals.run.opencode_runner"
+
+[[module]]
+pr = "N23"
+old = "coding_agent_playbook.evals.agent_env"
+new = "coding_agent_playbook.evals.run.agent_env"
+
+[[module]]
+pr = "N23"
+old = "coding_agent_playbook.git_env"
+new = "coding_agent_playbook.evals.run.git_env"
+
+# The evals/__init__.py re-exports, removed: importers name the defining module.
+[[names]]
+pr = "N23"
+old = "coding_agent_playbook.evals"
+new = "coding_agent_playbook.evals.task"
+names = ["EvalTask", "Layer", "TaskInvocation", "TaskSetup"]
+
+[[names]]
+pr = "N23"
+old = "coding_agent_playbook.evals"
+new = "coding_agent_playbook.evals.loader"
+names = ["discover_eval_task_dirs", "load_eval_task_from_dir"]
+
+[[names]]
+pr = "N23"
+old = "coding_agent_playbook.evals"
+new = "coding_agent_playbook.evals.validator"
+names = ["EvalValidationError", "validate_tasks"]
+
+[[path]]
+pr = "N23"
+old = "tests/evaluators/test_eval_runner.py"
+new = "tests/evals/test_harness_runner.py"
+
+[[path]]
+pr = "N23"
+old = "tests/evaluators/test_aggregate_runner.py"
+new = "tests/evals/test_aggregate_runner.py"
+
+[[path]]
+pr = "N23"
+old = "tests/evaluators/test_claude_code_runner.py"
+new = "tests/evals/test_claude_code_runner.py"
+
+[[path]]
+pr = "N23"
+old = "tests/evaluators/test_opencode_runner.py"
+new = "tests/evals/test_opencode_runner.py"
+
+[[path]]
+pr = "N23"
+old = "tests/evaluators/test_runner_git_isolation.py"
+new = "tests/evals/test_runner_git_isolation.py"
+
+[[path]]
+pr = "N23"
+old = "tests/evaluators/test_judge.py"
+new = "tests/evals/test_judge.py"
+
+[[path]]
+pr = "N23"
+old = "tests/unit/test_evals_compile_blocks.py"
+new = "tests/evals/test_compile_blocks.py"
+
+[[path]]
+pr = "N23"
+old = "tests/unit/test_evals_loader.py"
+new = "tests/evals/test_loader.py"
+
+[[path]]
+pr = "N23"
+old = "tests/unit/test_evals_task.py"
+new = "tests/evals/test_task.py"
+
+[[path]]
+pr = "N23"
+old = "tests/unit/test_evals_validator.py"
+new = "tests/evals/test_validator.py"
+
+[[path]]
+pr = "N23"
+old = "tests/unit/test_evals_placeholders.py"
+new = "tests/evals/test_placeholders.py"
+
+[[path]]
+pr = "N23"
+old = "tests/unit/test_evals_package.py"
+new = "tests/evals/test_package.py"
+
+[[path]]
+pr = "N23"
+old = "tests/unit/test_git_env.py"
+new = "tests/evals/test_git_env.py"
+
+# The evals/runner.py prompt re-exports (6.3.4), removed: importers name evals.prompting.
+[[names]]
+pr = "N23"
+old = "coding_agent_playbook.evals.runner"
+new = "coding_agent_playbook.evals.prompting"
+names = ["PromptResolutionError", "render_prompt"]

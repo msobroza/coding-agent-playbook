@@ -37,7 +37,7 @@ __all__ = [
 ]
 
 #: Set to ``1`` by the eval runners on the agent's env (P-D2); the twin of
-#: ``evals.agent_env.UNATTENDED_ENV_VAR``.
+#: ``evals.run.agent_env.UNATTENDED_ENV_VAR``.
 UNATTENDED_ENV_VAR: Final = "PLAYBOOK_HOOK_UNATTENDED"
 
 type OnError = Literal["ask", "deny", "open"]

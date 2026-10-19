@@ -23,7 +23,7 @@ import math
 
 import pytest
 
-from coding_agent_playbook.evals._handles import build_handles
+from coding_agent_playbook.evals.compile._handles import build_handles
 from coding_agent_playbook.evaluators import gates as gates_mod
 from coding_agent_playbook.evaluators import rubrics as rubrics_mod
 from coding_agent_playbook.evaluators.check import Check, ThresholdCheck
