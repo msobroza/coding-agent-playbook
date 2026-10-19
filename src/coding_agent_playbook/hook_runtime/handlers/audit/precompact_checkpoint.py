@@ -41,7 +41,7 @@ from coding_agent_playbook.hook_runtime.handlers._shared.pii_settings import (
     PII_KEY,
     pii_settings,
 )
-from coding_agent_playbook.hook_runtime.handlers._transcript_prompts import (
+from coding_agent_playbook.hook_runtime.handlers.audit._transcript_prompts import (
     EntryRef,
     TranscriptShapeError,
     read_prompts,

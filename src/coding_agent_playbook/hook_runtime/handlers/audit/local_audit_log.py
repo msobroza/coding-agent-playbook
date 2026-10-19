@@ -30,11 +30,14 @@ from typing import TYPE_CHECKING, Final
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
-from coding_agent_playbook.hook_runtime.handlers._activity_record import activity_record, fitted
 from coding_agent_playbook.hook_runtime.handlers._shared.pii_settings import (
     PII_CONFIG_KEY,
     PII_KEY,
     pii_settings,
+)
+from coding_agent_playbook.hook_runtime.handlers.audit._activity_record import (
+    activity_record,
+    fitted,
 )
 from coding_agent_playbook.hook_runtime.state.audit_log import append_activity, prune_audit
 

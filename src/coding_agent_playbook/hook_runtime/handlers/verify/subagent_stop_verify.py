@@ -28,7 +28,6 @@ from contextlib import ExitStack
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime._agent_transcript import TranscriptError, edited_files
 from coding_agent_playbook.hook_runtime.config.guard_tables import (
     DEFAULT_MAX_BLOCKS,
     MAX_BLOCKS_RANGE,
@@ -39,9 +38,13 @@ from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, Handl
 from coding_agent_playbook.hook_runtime.dispatch.paths import normalize_path
 from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.git.head_snapshot import head_moved_note
-from coding_agent_playbook.hook_runtime.handlers._lint_stage import LintStage
-from coding_agent_playbook.hook_runtime.handlers._verify_claim import completion_claim
-from coding_agent_playbook.hook_runtime.handlers.stop_ci_parity_gate import (
+from coding_agent_playbook.hook_runtime.handlers.verify._agent_transcript import (
+    TranscriptError,
+    edited_files,
+)
+from coding_agent_playbook.hook_runtime.handlers.verify._lint_stage import LintStage
+from coding_agent_playbook.hook_runtime.handlers.verify._verify_claim import completion_claim
+from coding_agent_playbook.hook_runtime.handlers.verify.stop_ci_parity_gate import (
     WRITE_MARGIN_S,
     build_stage,
     trust_opener,

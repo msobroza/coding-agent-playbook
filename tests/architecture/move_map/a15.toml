@@ -1,0 +1,132 @@
+# A15 (#129, specs/prT-package-layout.md 4.24, 7.6): the verify and audit packs leave
+# the flat hook_runtime/handlers/ for handlers/verify/ and handlers/audit/, each handler
+# module named after its snake-cased hook id (the registry names, hook ids and stage
+# names never change). The two transcript and public-API readers only the verify pack
+# imports leave hook_runtime/ for handlers/verify/. gate-weakening-guard keeps two
+# modules, because its pre-edit companion is on the dispatch hot path.
+
+# The audit pack: 2 private helpers keep their names, 3 handlers take their hook ids.
+
+[[module]]
+pr = "A15"
+old = "coding_agent_playbook.hook_runtime.handlers._activity_record"
+new = "coding_agent_playbook.hook_runtime.handlers.audit._activity_record"
+
+[[module]]
+pr = "A15"
+old = "coding_agent_playbook.hook_runtime.handlers._transcript_prompts"
+new = "coding_agent_playbook.hook_runtime.handlers.audit._transcript_prompts"
+
+[[module]]
+pr = "A15"
+old = "coding_agent_playbook.hook_runtime.handlers.activity_log"
+new = "coding_agent_playbook.hook_runtime.handlers.audit.local_audit_log"
+
+[[module]]
+pr = "A15"
+old = "coding_agent_playbook.hook_runtime.handlers.compaction"
+new = "coding_agent_playbook.hook_runtime.handlers.audit.precompact_checkpoint"
+
+[[module]]
+pr = "A15"
+old = "coding_agent_playbook.hook_runtime.handlers.decision_log"
+new = "coding_agent_playbook.hook_runtime.handlers.audit.guard_decision_log"
+
+# The verify pack: 8 private helpers keep their names, 10 handler modules take their
+# hook ids (coverage_diff_gate, docstring_nonregression and stop_ci_parity_gate
+# already do).
+
+[[module]]
+pr = "A15"
+old = "coding_agent_playbook.hook_runtime._agent_transcript"
+new = "coding_agent_playbook.hook_runtime.handlers.verify._agent_transcript"
+
+[[module]]
+pr = "A15"
+old = "coding_agent_playbook.hook_runtime._public_api"
+new = "coding_agent_playbook.hook_runtime.handlers.verify._public_api"
+
+[[module]]
+pr = "A15"
+old = "coding_agent_playbook.hook_runtime.handlers._bypass_rules"
+new = "coding_agent_playbook.hook_runtime.handlers.verify._bypass_rules"
+
+[[module]]
+pr = "A15"
+old = "coding_agent_playbook.hook_runtime.handlers._coverage_report"
+new = "coding_agent_playbook.hook_runtime.handlers.verify._coverage_report"
+
+[[module]]
+pr = "A15"
+old = "coding_agent_playbook.hook_runtime.handlers._exec_stages"
+new = "coding_agent_playbook.hook_runtime.handlers.verify._exec_stages"
+
+[[module]]
+pr = "A15"
+old = "coding_agent_playbook.hook_runtime.handlers._lint_stage"
+new = "coding_agent_playbook.hook_runtime.handlers.verify._lint_stage"
+
+[[module]]
+pr = "A15"
+old = "coding_agent_playbook.hook_runtime.handlers._metrics_pass"
+new = "coding_agent_playbook.hook_runtime.handlers.verify._metrics_pass"
+
+[[module]]
+pr = "A15"
+old = "coding_agent_playbook.hook_runtime.handlers._verify_claim"
+new = "coding_agent_playbook.hook_runtime.handlers.verify._verify_claim"
+
+[[module]]
+pr = "A15"
+old = "coding_agent_playbook.hook_runtime.handlers.coverage_diff_gate"
+new = "coding_agent_playbook.hook_runtime.handlers.verify.coverage_diff_gate"
+
+[[module]]
+pr = "A15"
+old = "coding_agent_playbook.hook_runtime.handlers.docstring_nonregression"
+new = "coding_agent_playbook.hook_runtime.handlers.verify.docstring_nonregression"
+
+[[module]]
+pr = "A15"
+old = "coding_agent_playbook.hook_runtime.handlers.gate_weakening"
+new = "coding_agent_playbook.hook_runtime.handlers.verify.gate_weakening_guard"
+
+[[module]]
+pr = "A15"
+old = "coding_agent_playbook.hook_runtime.handlers.gate_weakening_edit"
+new = "coding_agent_playbook.hook_runtime.handlers.verify.gate_weakening_guard_edit"
+
+[[module]]
+pr = "A15"
+old = "coding_agent_playbook.hook_runtime.handlers.output_contract"
+new = "coding_agent_playbook.hook_runtime.handlers.verify.prompt_output_contract_on_stop"
+
+[[module]]
+pr = "A15"
+old = "coding_agent_playbook.hook_runtime.handlers.precommit_bypass"
+new = "coding_agent_playbook.hook_runtime.handlers.verify.block_precommit_bypass"
+
+[[module]]
+pr = "A15"
+old = "coding_agent_playbook.hook_runtime.handlers.quality_metrics"
+new = "coding_agent_playbook.hook_runtime.handlers.verify.clean_code_metrics_nonregression"
+
+[[module]]
+pr = "A15"
+old = "coding_agent_playbook.hook_runtime.handlers.stop_ci_parity_gate"
+new = "coding_agent_playbook.hook_runtime.handlers.verify.stop_ci_parity_gate"
+
+[[module]]
+pr = "A15"
+old = "coding_agent_playbook.hook_runtime.handlers.subagent_verify"
+new = "coding_agent_playbook.hook_runtime.handlers.verify.subagent_stop_verify"
+
+[[module]]
+pr = "A15"
+old = "coding_agent_playbook.hook_runtime.handlers.tests_nudge"
+new = "coding_agent_playbook.hook_runtime.handlers.verify.tests_with_source_nudge"
+
+[[path]]
+pr = "A15"
+old = "tests/hook_runtime/test_agent_transcript.py"
+new = "tests/hook_runtime/handlers/verify/test_agent_transcript.py"

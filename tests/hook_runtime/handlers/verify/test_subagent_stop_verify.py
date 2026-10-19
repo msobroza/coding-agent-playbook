@@ -17,7 +17,7 @@ import pytest
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hook_runtime.git.head_snapshot import HeadSnapshot, head_snapshot_doc
-from coding_agent_playbook.hook_runtime.handlers.subagent_verify import (
+from coding_agent_playbook.hook_runtime.handlers.verify.subagent_stop_verify import (
     EXEC_LOCK,
     NO_STAGES_NOTE,
     TRANSCRIPT_NOTE,

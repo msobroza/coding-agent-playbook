@@ -365,7 +365,9 @@ coding-agent-playbook/
 │   │   ├── diagnostics/                    # playbook-hook doctor and simulate, the canaries, the heartbeat
 │   │   ├── dispatch/                       # the dispatch pipeline, handler registry and selection, event and decision model
 │   │   ├── handlers/                       # builtin hook handlers (@register_hook_handler)
+│   │   │   ├── audit/                      # the audit pack: one module per hook id, plus its private helpers
 │   │   │   ├── safety/                     # the safety pack: one module per hook id, plus its private helpers
+│   │   │   ├── verify/                     # the verify pack: one module per hook id, plus its private helpers
 │   │   │   └── _shared/                    # helpers more than one pack imports (targets, edit_preview, ...)
 │   │   ├── harness/                        # per-harness payload parsers and wire renderers
 │   │   ├── judges/                         # the checks a guard hook shares with its guard twin
