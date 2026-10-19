@@ -22,7 +22,6 @@ from typing import TYPE_CHECKING, Any
 import yaml
 
 from coding_agent_playbook._output_io import copy_output
-from coding_agent_playbook._sentinel import sentinel_line
 from coding_agent_playbook.harness.leaf_detectors import HARNESS_LEAF_MARKER
 
 # ``with_sentinel_body`` lives in the renderer (it also shapes OpenCode commands);
@@ -53,18 +52,6 @@ def routing_file(description: str, body: str) -> str:
     and carry the playbook sentinel as their first body line.
     """
     return with_sentinel_body(frontmatter_block({"description": description}), body)
-
-
-def strip_leading_sentinel(text: str) -> str:
-    """Drop a leading html sentinel line, so a re-wrapped leaf carries exactly one.
-
-    Example::
-
-        >>> strip_leading_sentinel(sentinel_line("html") + "\\n# Title\\n")
-        '# Title\\n'
-    """
-    marker = f"{sentinel_line('html')}\n"
-    return text[len(marker) :] if text.startswith(marker) else text
 
 
 def input_variables_note(variables: Sequence[Mapping[str, Any]]) -> str:
