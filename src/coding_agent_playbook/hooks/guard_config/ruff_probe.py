@@ -5,8 +5,9 @@ The per-machine half of the §E.3 ruff tables (the committed half is
 candidate codes it knows (``ruff rule --all --output-format json``, or one
 ``ruff rule <code>`` each when that fails, OQ-37), once per ruff signature
 (cached under the git dir), and :func:`ruff_drop_codes` turns the answer into
-``machine.json`` ``tools.ruff.drop``. :func:`ruff_candidate_codes` lists what to
-ask: every rule code an enabled hook adds. Never at hook time.
+``machine.json`` ``tools.ruff.drop``. :func:`ruff_probe_codes` lists what to ask:
+every rule code an enabled hook adds (:func:`ruff_candidate_codes`) plus the quality
+family of the committed ``[metrics]``. Never at hook time.
 """
 
 from __future__ import annotations
@@ -19,9 +20,11 @@ from typing import TYPE_CHECKING, Any, Final, Literal
 from coding_agent_playbook.hook_runtime.config.pin import tool_signature
 from coding_agent_playbook.hook_runtime.dispatch.proc import ProcTimeout
 from coding_agent_playbook.hook_runtime.state.store import StateUnavailable
+from coding_agent_playbook.hooks.guard_config._tables_quality import read_quality_lint
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
+    from pathlib import Path
 
     from coding_agent_playbook.hook_runtime.config.pin import Signature
     from coding_agent_playbook.hook_runtime.dispatch.deps import ProcPort
@@ -34,6 +37,7 @@ __all__ = [
     "probe_ruff_rules",
     "ruff_candidate_codes",
     "ruff_drop_codes",
+    "ruff_probe_codes",
 ]
 
 #: ``ruff rule --all`` prints ~1 MB of JSON; generous, it runs once per ruff signature.
@@ -60,6 +64,18 @@ def ruff_candidate_codes(hooks: Iterable[ResolvedHook]) -> list[str]:
             if handler.kind == "builtin":
                 codes.update(_listed_codes(handler.config.get("lint_codes")))
     return sorted(codes)
+
+
+def ruff_probe_codes(hooks: Iterable[ResolvedHook], repo_root: Path) -> list[str]:
+    """Sorted rule codes the pinned ruff is probed for: hook lint codes plus the quality family's.
+
+    The quality companion's codes are derived from the committed ``[metrics]`` when
+    ``guard_config.json`` is compiled (§F.2.2), so no hook config lists them yet: they
+    are read here from the same table, with the same defaults.
+
+    Example: ``ruff_probe_codes(hooks.resolved, repo)`` -> ``["C901", "D100", ...]``.
+    """
+    return sorted({*ruff_candidate_codes(hooks), *read_quality_lint(repo_root).codes})
 
 
 def _listed_codes(value: object) -> list[str]:

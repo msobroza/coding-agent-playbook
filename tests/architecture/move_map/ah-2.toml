@@ -1,0 +1,26 @@
+# AH-2 (#143, specs/prT-package-layout.md section 9 AC.4.5): the importer splits into
+# importer.py, _lossless.py, _best_effort.py and _import_writes.py, which absorbs
+# _import_files.py; _import_hooks.py is deleted. Its write half joins _import_writes
+# and its best-effort warning joins _best_effort (its only caller); its read half,
+# hook_from_entry, became hook_sidecars.read_hook_sidecar (a rename the script cannot
+# make: it rewrites module paths, never names). Not listed, for the same reason: the
+# lint names of commands/validate_harness.py, renamed into agent_harness/lint.py
+# (_collect_findings -> lint_harness, _Finding -> HarnessFinding), and
+# agent_harness.models.Harness, renamed HarnessTree without an alias (AH-D2).
+
+[[module]]
+pr = "AH-2"
+old = "coding_agent_playbook.agent_harness._import_files"
+new = "coding_agent_playbook.agent_harness._import_writes"
+
+[[names]]
+pr = "AH-2"
+old = "coding_agent_playbook.agent_harness._import_hooks"
+new = "coding_agent_playbook.agent_harness._import_writes"
+names = ["write_hook"]
+
+[[names]]
+pr = "AH-2"
+old = "coding_agent_playbook.agent_harness._import_hooks"
+new = "coding_agent_playbook.agent_harness._best_effort"
+names = ["guardrail_warning"]

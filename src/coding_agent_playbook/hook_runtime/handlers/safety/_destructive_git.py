@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.paths import find_repo
-from coding_agent_playbook.hook_runtime.handlers._destructive_paths import Hit
+from coding_agent_playbook.hook_runtime.handlers.safety._destructive_paths import Hit
 from coding_agent_playbook.hook_runtime.shell.git_options import git_args
 
 if TYPE_CHECKING:

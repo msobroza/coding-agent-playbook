@@ -45,7 +45,7 @@ from coding_agent_playbook.hook_runtime._ruff import (
 )
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName
-from coding_agent_playbook.hook_runtime.handlers._targets import file_write_paths, repo_file
+from coding_agent_playbook.hook_runtime.handlers._shared.targets import file_write_paths, repo_file
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence

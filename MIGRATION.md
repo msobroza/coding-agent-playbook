@@ -377,6 +377,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.hook_runtime.dispatch.paths.FOLDING_PLATFORMS` | `coding_agent_playbook.artifacts.path_globs.FOLDING_PLATFORMS` | A12 |
 | `coding_agent_playbook.hook_runtime.dispatch.paths.fold_key` | `coding_agent_playbook.artifacts.path_globs.fold_key` | A12 |
 | `coding_agent_playbook.hook_runtime.doctor` | `coding_agent_playbook.hook_runtime.diagnostics.doctor` | N20 |
+| `coding_agent_playbook.hook_runtime.edit_preview` | `coding_agent_playbook.hook_runtime.handlers._shared.edit_preview` | A14 |
 | `coding_agent_playbook.hook_runtime.escape` | `coding_agent_playbook.hook_runtime.dispatch.escape` | A11 |
 | `coding_agent_playbook.hook_runtime.event` | `coding_agent_playbook.hook_runtime.dispatch.event` | A10 |
 | `coding_agent_playbook.hook_runtime.git` | `coding_agent_playbook.hook_runtime.git.safe_git` | N18 |
@@ -397,11 +398,24 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.hook_runtime.handlers._notebook_cells` | `coding_agent_playbook.hook_runtime.judges.notebook_cells` | N14 |
 | `coding_agent_playbook.hook_runtime.handlers._notebook_check` | `coding_agent_playbook.hook_runtime.judges.notebook_check` | N14 |
 | `coding_agent_playbook.hook_runtime.handlers._sink_scan` | `coding_agent_playbook.hook_runtime.judges.sink_scan` | N14 |
+| `coding_agent_playbook.hook_runtime.handlers.commit_convention` | `coding_agent_playbook.hook_runtime.handlers.safety.commit_message_convention` | A14 |
+| `coding_agent_playbook.hook_runtime.handlers.conventions` | `coding_agent_playbook.hook_runtime.handlers.safety.command_convention_guard` | A14 |
+| `coding_agent_playbook.hook_runtime.handlers.dependencies` | `coding_agent_playbook.hook_runtime.handlers.safety.dependency_allowlist_guard` | A14 |
 | `coding_agent_playbook.hook_runtime.handlers.deser.PRAGMA` | `coding_agent_playbook.hook_runtime.judges.sink_scan.PRAGMA` | N14 |
 | `coding_agent_playbook.hook_runtime.handlers.deser.SinkHit` | `coding_agent_playbook.hook_runtime.judges.sink_scan.SinkHit` | N14 |
 | `coding_agent_playbook.hook_runtime.handlers.deser.SinkTable` | `coding_agent_playbook.hook_runtime.judges.sink_scan.SinkTable` | N14 |
 | `coding_agent_playbook.hook_runtime.handlers.deser.new_sink_calls` | `coding_agent_playbook.hook_runtime.judges.sink_scan.new_sink_calls` | N14 |
 | `coding_agent_playbook.hook_runtime.handlers.deser.trusted_artifact_line` | `coding_agent_playbook.hook_runtime.judges.sink_scan.trusted_artifact_line` | N14 |
+| `coding_agent_playbook.hook_runtime.handlers.destructive` | `coding_agent_playbook.hook_runtime.handlers.safety.destructive_command_guard` | A14 |
+| `coding_agent_playbook.hook_runtime.handlers.exfil` | `coding_agent_playbook.hook_runtime.handlers.safety.exfil_channel_guard` | A14 |
+| `coding_agent_playbook.hook_runtime.handlers.git_policy` | `coding_agent_playbook.hook_runtime.handlers.safety.git_commit_push_policy_guard` | A14 |
+| `coding_agent_playbook.hook_runtime.handlers.network` | `coding_agent_playbook.hook_runtime.handlers.safety.network_egress_guard` | A14 |
+| `coding_agent_playbook.hook_runtime.handlers.pii_prompt_guard` | `coding_agent_playbook.hook_runtime.handlers.safety.pii_prompt_guard` | A14 |
+| `coding_agent_playbook.hook_runtime.handlers.secret_content` | `coding_agent_playbook.hook_runtime.handlers.safety.secret_content_guard` | A14 |
+| `coding_agent_playbook.hook_runtime.handlers.secret_paths` | `coding_agent_playbook.hook_runtime.handlers.safety.secrets_path_guard` | A14 |
+| `coding_agent_playbook.hook_runtime.handlers.sensitive_reads` | `coding_agent_playbook.hook_runtime.handlers.safety.sensitive_data_read_guard` | A14 |
+| `coding_agent_playbook.hook_runtime.handlers.stop_sweep` | `coding_agent_playbook.hook_runtime.handlers.safety.stop_diff_sweep` | A14 |
+| `coding_agent_playbook.hook_runtime.handlers.taint` | `coding_agent_playbook.hook_runtime.handlers.safety.taint_escalation` | A14 |
 | `coding_agent_playbook.hook_runtime.harness.CLAUDE_EVENT_NAMES` | `coding_agent_playbook.hook_runtime.harness.wire.CLAUDE_EVENT_NAMES` | N21 |
 | `coding_agent_playbook.hook_runtime.harness.ContractFault` | `coding_agent_playbook.hook_runtime.harness.wire.ContractFault` | N21 |
 | `coding_agent_playbook.hook_runtime.harness.DENY_EXIT` | `coding_agent_playbook.hook_runtime.harness.wire.DENY_EXIT` | N21 |
@@ -535,6 +549,20 @@ change.
 <!-- module-moves: end-keep -->
 
 <!-- module-moves: keep -->
+The `guard_config.json` writer has one entry point,
+`coding_agent_playbook.hooks.guard_config.compile.compile_guard_config`. It takes a
+`GuardConfigRequest` holding only what sync computes (the resolved hooks, the
+`[hooks]` and `[guardrails]` policy, the engine version, the generated locations,
+the protected set, the detector facts and the rendered prompts and rules), reads the
+repo's pre-commit config, ruff config, pyproject and committed `[metrics]` from its
+`repo_root` itself, and returns a `CompiledGuardConfig`: the document, its canonical
+`data` and `write(out_root)`. `GuardConfigInputs`, `render_guard_config` and
+`write_guard_config` are gone, and so is `GUARD_CONFIG_PATH`: use
+`coding_agent_playbook.hook_runtime.config.schema.GUARD_CONFIG_REL`. The bytes of
+`guard_config.json` do not change.
+<!-- module-moves: end-keep -->
+
+<!-- module-moves: keep -->
 Out-of-tree hook handler authors: the event and decision model moved into the
 `coding_agent_playbook.hook_runtime.dispatch` package, with no shim at the old
 paths. Import `CanonicalEvent` from `coding_agent_playbook.hook_runtime.dispatch.event`
@@ -545,6 +573,27 @@ dispatcher: import `register_hook_handler` and `HandlerContext` from
 `coding_agent_playbook.hook_runtime.dispatch.registry` (was
 `coding_agent_playbook.hook_runtime.registry`). Hook ids, registry names and the
 `hook_handlers` entry-point group do not change.
+<!-- module-moves: end-keep -->
+
+<!-- module-moves: keep -->
+Out-of-tree code that reads an Agent Harness tree: the parsed tree
+`coding_agent_playbook.agent_harness.models.Harness` is now `HarnessTree`, with no
+alias (Harness names a coding-agent runtime), and `parse_harness` returns it. The
+`playbook validate-harness` checks are `coding_agent_playbook.agent_harness.lint.lint_harness`,
+which returns `HarnessFindings`; `HarnessFindings.failed(strict=...)` is the
+`--strict` choice. A hook sidecar entry reads back through
+`coding_agent_playbook.agent_harness.hook_sidecars.read_hook_sidecar(path, entry, source_package=...)`;
+the keyword names the package recorded on the rebuilt `Hook` (the importer passes
+`"<imported>"`). The command output, the exit codes and every byte the adapter
+writes do not change.
+<!-- module-moves: end-keep -->
+
+<!-- module-moves: keep -->
+Code that catches `coding_agent_playbook.precommit.PrecommitTemplateMissingError`
+programmatically: it now subclasses the CLI's shared exit-2 error type,
+`coding_agent_playbook.exit_two.ExitTwoError`, instead of `RuntimeError`, so an
+`except RuntimeError` no longer catches it. `playbook init` still prints the same
+`error:` line and exits 2.
 <!-- module-moves: end-keep -->
 
 <!-- module-moves: keep -->

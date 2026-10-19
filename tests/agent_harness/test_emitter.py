@@ -7,19 +7,31 @@ import stat
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.agent_harness.emitter import (
+    always_rule_filename,
     copy_script,
     frontmatter_block,
+    harness_md_text,
     harnessleaf_path,
     input_variables_note,
+    inside_skill_dir,
     leaf_detectors_file,
     routing_file,
 )
 from coding_agent_playbook.agent_harness.leaf_detectors import HARNESS_LEAF_MARKER
+from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.rendering.formats import with_sentinel_body
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+
+def _always_rule(rule_id: str, priority: int, description: str) -> Rule:
+    fm = RuleFrontmatter(
+        id=rule_id, name=rule_id, description=description, scope="always", priority=priority
+    )
+    return Rule(fm, "Body.\n", "Body.\n", False, None, "test")
+
 
 # --- frontmatter_block -----------------------------------------------------
 
@@ -158,3 +170,48 @@ def test_input_variables_note_lists_names_and_descriptions() -> None:
 
     assert note == "## Input variables\n\n- `path` — file\n- `n`\n"
     assert input_variables_note([]) == ""
+
+
+# --- HARNESS.md and rule file names (moved out of the adapter, AH-2 #143) -----
+
+
+def test_always_rule_filename_prefixes_the_two_digit_priority() -> None:
+    assert always_rule_filename(_always_rule("style", 5, "Style")) == "05-style.md"
+    assert always_rule_filename(_always_rule("guardrail-x", 30, "X")) == "30-guardrail-x.md"
+
+
+def test_harness_md_text_indexes_the_emitted_dirs_and_sorts_the_always_rules() -> None:
+    rules = [_always_rule("beta", 50, "Second."), _always_rule("alpha", 10, "First.")]
+
+    text = harness_md_text("demo", ["skills", "rules"], rules)
+
+    head = "---\nname: demo\ndescription: Coding-agent harness for demo.\n---\n"
+    assert text == with_sentinel_body(
+        head,
+        "# demo\n\n"
+        "This harness provides the coding rules, prompts and skills for this project. "
+        "Consult the routing files in each directory for details.\n\n"
+        "## Contents\n\n"
+        "- `skills/` — see `skills/SKILLS.md`\n"
+        "- `rules/` — see `rules/RULES.md`\n\n"
+        "## Always consult these\n\n"
+        "Read these rules at the start of every session:\n\n"
+        "- `rules/10-alpha.md` — First.\n"
+        "- `rules/50-beta.md` — Second.\n",
+    )
+
+
+def test_harness_md_text_without_always_rules_has_no_consult_section() -> None:
+    text = harness_md_text("demo", ["prompts"], [])
+
+    assert text.endswith("## Contents\n\n- `prompts/` — see `prompts/PROMPTS.md`\n")
+    assert "Always consult these" not in text
+
+
+def test_inside_skill_dir_is_true_only_below_a_skill_id(tmp_path: Path) -> None:
+    skills = tmp_path / "skills"
+
+    assert inside_skill_dir(skills / "db" / "SKILL.md", skills) is True
+    assert inside_skill_dir(skills / "db" / "scripts" / "run.py", skills) is True
+    assert inside_skill_dir(skills / "SKILLS.md", skills) is False
+    assert inside_skill_dir(tmp_path / "rules" / "50-style.md", skills) is False

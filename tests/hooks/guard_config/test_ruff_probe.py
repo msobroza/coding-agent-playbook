@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from coding_agent_playbook.config.files import CONFIG_FILENAME
 from coding_agent_playbook.hook_runtime.state.store import StateStore
 from coding_agent_playbook.hooks.guard_config.ruff_probe import (
     RuleCache,
@@ -17,6 +18,7 @@ from coding_agent_playbook.hooks.guard_config.ruff_probe import (
     probe_ruff_rules,
     ruff_candidate_codes,
     ruff_drop_codes,
+    ruff_probe_codes,
 )
 from coding_agent_playbook.hooks.resolution.resolved import ResolvedHandler
 from coding_agent_playbook.sync._machine_local import SyncHookDeps, write_pins
@@ -131,6 +133,22 @@ def _with_handler(hook: Any, handler: ResolvedHandler) -> Any:
     import dataclasses
 
     return dataclasses.replace(hook, handlers={"post_tool_use": handler})
+
+
+def test_probe_codes_add_the_quality_family(tmp_path: Path) -> None:
+    """The pinned ruff is asked about every code D1 may add: the hooks' lint codes and the
+    committed quality family (§F.2.2, its defaults without one), each once, sorted."""
+    (tmp_path / CONFIG_FILENAME).write_text(
+        '[metrics.ruff_violations]\nfamilies = { quality = ["PLR1702", "C901", "B006"] }\n',
+        encoding="utf-8",
+    )
+    handler = ResolvedHandler("builtin", name="x", config={"lint_codes": ["B006", "ANN001"]})
+    lint = _with_handler(resolved_hook("lint-x", events=("post_tool_use",)), handler)
+    bare = tmp_path / "bare"
+    bare.mkdir()
+
+    assert ruff_probe_codes([lint], tmp_path) == ["ANN001", "B006", "C901", "PLR1702"]
+    assert ruff_probe_codes([], bare) == ["C901", "PLR0911", "PLR0912", "PLR0913", "PLR0915"]
 
 
 # --- the program the pins name -----------------------------------------------------------

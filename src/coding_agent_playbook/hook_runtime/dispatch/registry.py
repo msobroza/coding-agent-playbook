@@ -71,62 +71,107 @@ __all__ = [
 #: The attribute the decorator sets on a handler function: its declaration.
 HANDLER_ATTR: Final = "__playbook_hook_handler__"
 
-_HANDLERS: Final = "coding_agent_playbook.hook_runtime.handlers"
 #: Registry name -> module; the pack tracks (K5-K10) add a row per handler.
 _BUILTIN_HANDLER_MODULES: Final[Mapping[str, str]] = MappingProxyType(
     {
-        "guard_generated_outputs": f"{_HANDLERS}.guard_generated_outputs",
-        "control_plane_guard": f"{_HANDLERS}.control_plane_guard",
-        "validate_then_sync_on_canonical_edit": (
-            f"{_HANDLERS}.validate_then_sync_on_canonical_edit"
+        "guard_generated_outputs": (
+            "coding_agent_playbook.hook_runtime.handlers.guard_generated_outputs"
         ),
-        "resync_on_detector_input_change": f"{_HANDLERS}.resync_on_detector_input_change",
-        "eval_task_authoring_lint": f"{_HANDLERS}.eval_task_authoring_lint",
-        "guard_eval_fixtures": f"{_HANDLERS}.guard_eval_fixtures",
-        "stop_drift_and_orphan_gate": f"{_HANDLERS}.stop_drift_and_orphan_gate",
-        "session_start_playbook_briefing": f"{_HANDLERS}.session_start_playbook_briefing",
-        "stop_ci_parity_gate": f"{_HANDLERS}.stop_ci_parity_gate",
-        "clean_code_metrics_nonregression": f"{_HANDLERS}.quality_metrics",
-        "clean_code_metrics_nonregression:post_edit": f"{_HANDLERS}.quality_metrics",
-        "docstring_nonregression": f"{_HANDLERS}.docstring_nonregression",
-        "docstring_nonregression:post_edit": f"{_HANDLERS}.docstring_nonregression",
-        "gate_weakening_guard": f"{_HANDLERS}.gate_weakening",
-        "gate_weakening_guard:pre_edit": f"{_HANDLERS}.gate_weakening_edit",
-        "block_precommit_bypass": f"{_HANDLERS}.precommit_bypass",
-        "tests_with_source_nudge": f"{_HANDLERS}.tests_nudge",
-        "subagent_stop_verify": f"{_HANDLERS}.subagent_verify",
-        "prompt_output_contract_on_stop": f"{_HANDLERS}.output_contract",
-        "prompt_scope_guard": f"{_HANDLERS}.prompt_scope",
-        "ruff_post_edit": f"{_HANDLERS}.ruff_feedback",
-        "ruff_lint_feedback": f"{_HANDLERS}.ruff_feedback",
-        "toolchain_hint": f"{_HANDLERS}.toolchain",
-        "skill_nudge": f"{_HANDLERS}.skill_nudge",
-        "deser_sink_guard": f"{_HANDLERS}.deser",
-        "notebook_hygiene": f"{_HANDLERS}.notebooks",
-        "notebook_hygiene:stop_stage": f"{_HANDLERS}.notebooks",
-        "coverage_diff_gate": f"{_HANDLERS}.coverage_diff_gate",
-        "secret_path_guard": f"{_HANDLERS}.secret_paths",
-        "secret_content_guard": f"{_HANDLERS}.secret_content",
-        "stop_secret_sweep": f"{_HANDLERS}.stop_sweep",
-        "destructive_command_guard": f"{_HANDLERS}.destructive",
-        "git_policy_guard": f"{_HANDLERS}.git_policy",
-        "command_convention_guard": f"{_HANDLERS}.conventions",
-        "commit_message_convention": f"{_HANDLERS}.commit_convention",
-        "dependency_guard": f"{_HANDLERS}.dependencies",
-        "exfil_guard": f"{_HANDLERS}.exfil",
-        "exfil_guard:session_start": f"{_HANDLERS}.exfil",
-        "taint_escalation": f"{_HANDLERS}.taint",
-        "taint_escalation:marker": f"{_HANDLERS}.taint",
-        "taint_escalation:session_start": f"{_HANDLERS}.taint",
+        "control_plane_guard": "coding_agent_playbook.hook_runtime.handlers.control_plane_guard",
+        "validate_then_sync_on_canonical_edit": (
+            "coding_agent_playbook.hook_runtime.handlers.validate_then_sync_on_canonical_edit"
+        ),
+        "resync_on_detector_input_change": (
+            "coding_agent_playbook.hook_runtime.handlers.resync_on_detector_input_change"
+        ),
+        "eval_task_authoring_lint": (
+            "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint"
+        ),
+        "guard_eval_fixtures": "coding_agent_playbook.hook_runtime.handlers.guard_eval_fixtures",
+        "stop_drift_and_orphan_gate": (
+            "coding_agent_playbook.hook_runtime.handlers.stop_drift_and_orphan_gate"
+        ),
+        "session_start_playbook_briefing": (
+            "coding_agent_playbook.hook_runtime.handlers.session_start_playbook_briefing"
+        ),
+        "stop_ci_parity_gate": "coding_agent_playbook.hook_runtime.handlers.stop_ci_parity_gate",
+        "clean_code_metrics_nonregression": (
+            "coding_agent_playbook.hook_runtime.handlers.quality_metrics"
+        ),
+        "clean_code_metrics_nonregression:post_edit": (
+            "coding_agent_playbook.hook_runtime.handlers.quality_metrics"
+        ),
+        "docstring_nonregression": (
+            "coding_agent_playbook.hook_runtime.handlers.docstring_nonregression"
+        ),
+        "docstring_nonregression:post_edit": (
+            "coding_agent_playbook.hook_runtime.handlers.docstring_nonregression"
+        ),
+        "gate_weakening_guard": "coding_agent_playbook.hook_runtime.handlers.gate_weakening",
+        "gate_weakening_guard:pre_edit": (
+            "coding_agent_playbook.hook_runtime.handlers.gate_weakening_edit"
+        ),
+        "block_precommit_bypass": "coding_agent_playbook.hook_runtime.handlers.precommit_bypass",
+        "tests_with_source_nudge": "coding_agent_playbook.hook_runtime.handlers.tests_nudge",
+        "subagent_stop_verify": "coding_agent_playbook.hook_runtime.handlers.subagent_verify",
+        "prompt_output_contract_on_stop": (
+            "coding_agent_playbook.hook_runtime.handlers.output_contract"
+        ),
+        "prompt_scope_guard": "coding_agent_playbook.hook_runtime.handlers.prompt_scope",
+        "ruff_post_edit": "coding_agent_playbook.hook_runtime.handlers.ruff_feedback",
+        "ruff_lint_feedback": "coding_agent_playbook.hook_runtime.handlers.ruff_feedback",
+        "toolchain_hint": "coding_agent_playbook.hook_runtime.handlers.toolchain",
+        "skill_nudge": "coding_agent_playbook.hook_runtime.handlers.skill_nudge",
+        "deser_sink_guard": "coding_agent_playbook.hook_runtime.handlers.deser",
+        "notebook_hygiene": "coding_agent_playbook.hook_runtime.handlers.notebooks",
+        "notebook_hygiene:stop_stage": "coding_agent_playbook.hook_runtime.handlers.notebooks",
+        "coverage_diff_gate": "coding_agent_playbook.hook_runtime.handlers.coverage_diff_gate",
+        "secret_path_guard": (
+            "coding_agent_playbook.hook_runtime.handlers.safety.secrets_path_guard"
+        ),
+        "secret_content_guard": (
+            "coding_agent_playbook.hook_runtime.handlers.safety.secret_content_guard"
+        ),
+        "stop_secret_sweep": "coding_agent_playbook.hook_runtime.handlers.safety.stop_diff_sweep",
+        "destructive_command_guard": (
+            "coding_agent_playbook.hook_runtime.handlers.safety.destructive_command_guard"
+        ),
+        "git_policy_guard": (
+            "coding_agent_playbook.hook_runtime.handlers.safety.git_commit_push_policy_guard"
+        ),
+        "command_convention_guard": (
+            "coding_agent_playbook.hook_runtime.handlers.safety.command_convention_guard"
+        ),
+        "commit_message_convention": (
+            "coding_agent_playbook.hook_runtime.handlers.safety.commit_message_convention"
+        ),
+        "dependency_guard": (
+            "coding_agent_playbook.hook_runtime.handlers.safety.dependency_allowlist_guard"
+        ),
+        "exfil_guard": "coding_agent_playbook.hook_runtime.handlers.safety.exfil_channel_guard",
+        "exfil_guard:session_start": (
+            "coding_agent_playbook.hook_runtime.handlers.safety.exfil_channel_guard"
+        ),
+        "taint_escalation": "coding_agent_playbook.hook_runtime.handlers.safety.taint_escalation",
+        "taint_escalation:marker": (
+            "coding_agent_playbook.hook_runtime.handlers.safety.taint_escalation"
+        ),
+        "taint_escalation:session_start": (
+            "coding_agent_playbook.hook_runtime.handlers.safety.taint_escalation"
+        ),
         # K9: the decision sink is never selected (``routing``); it is mapped so
         # validate (H6) can read its declaration like any other builtin.
-        "decision_log": f"{_HANDLERS}.decision_log",
-        "activity_log": f"{_HANDLERS}.activity_log",
-        "precompact_checkpoint": f"{_HANDLERS}.compaction",
-        "precompact_checkpoint:reinject": f"{_HANDLERS}.compaction",
-        "pii_prompt_guard": f"{_HANDLERS}.pii_prompt_guard",
-        "network_egress_guard": f"{_HANDLERS}.network",
-        "sensitive_read_guard": f"{_HANDLERS}.sensitive_reads",
+        "decision_log": "coding_agent_playbook.hook_runtime.handlers.decision_log",
+        "activity_log": "coding_agent_playbook.hook_runtime.handlers.activity_log",
+        "precompact_checkpoint": "coding_agent_playbook.hook_runtime.handlers.compaction",
+        "precompact_checkpoint:reinject": "coding_agent_playbook.hook_runtime.handlers.compaction",
+        "pii_prompt_guard": "coding_agent_playbook.hook_runtime.handlers.safety.pii_prompt_guard",
+        "network_egress_guard": (
+            "coding_agent_playbook.hook_runtime.handlers.safety.network_egress_guard"
+        ),
+        "sensitive_read_guard": (
+            "coding_agent_playbook.hook_runtime.handlers.safety.sensitive_data_read_guard"
+        ),
     }
 )
 #: The only handlers that may rewrite the file the tool just edited (specs/prK-hook-pack.md

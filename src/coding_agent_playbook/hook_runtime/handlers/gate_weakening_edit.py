@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Final
 from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.registry import register_hook_handler
-from coding_agent_playbook.hook_runtime.handlers._targets import (
+from coding_agent_playbook.hook_runtime.handlers._shared.targets import (
     file_write_paths,
     shell_write_targets,
 )
@@ -120,7 +120,7 @@ def _added_skip(tool: ToolCall, path: NormalizedPath) -> str | None:
 
 def _added_texts(tool: ToolCall, path: NormalizedPath) -> list[str]:
     """The lines the call adds to ``path``: simulated after-text minus the current text."""
-    from coding_agent_playbook.hook_runtime.edit_preview import preview_after
+    from coding_agent_playbook.hook_runtime.handlers._shared.edit_preview import preview_after
 
     before = _read(path)
     after = preview_after(tool, before)

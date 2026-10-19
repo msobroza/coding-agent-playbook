@@ -18,7 +18,7 @@ from coding_agent_playbook.hook_runtime.config.pin import write_machine_pins
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.event import Harness
 from coding_agent_playbook.hook_runtime.git.safe_git import LoggedCommit
-from coding_agent_playbook.hook_runtime.handlers._cz import REWRITE_HINT
+from coding_agent_playbook.hook_runtime.handlers.safety._cz import REWRITE_HINT
 from tests.hook_runtime.fakes import FakeGit
 from tests.hook_runtime.tool_fakes import FakeCz
 
@@ -108,7 +108,7 @@ def test_rejected_message_denies_with_sanitized_cz_text_no_commitizen_hint(
 
 def test_cz_echo_is_requoted_and_config_pointers_dropped() -> None:
     """cz's unquoted echo cannot pose as an instruction line; config hints never reach the model."""
-    from coding_agent_playbook.hook_runtime.handlers._cz import deny_reason
+    from coding_agent_playbook.hook_runtime.handlers.safety._cz import deny_reason
 
     output = (
         b'commit "c0ffee": "Bad\x1b[2J subject"\n'
@@ -348,17 +348,22 @@ def test_cutover_date_rendered_from_the_commit_convention_table(pack_repo: PackR
         HooksConfig,
     )
     from coding_agent_playbook.hooks.guard_config.compile import (
-        GuardConfigInputs,
-        render_guard_config,
+        GuardConfigRequest,
+        compile_guard_config,
     )
     from tests.hook_runtime.handlers.pack_repo import resolve_engine_hooks
 
-    hooks = resolve_engine_hooks([HOOK_ID], pack_repo.root)
     convention = CommitConventionConfig(cutover_date="2026-10-15")
-    config = HooksConfig(enabled=True, commit_convention=convention)
-    inputs = GuardConfigInputs(hooks, config, GuardrailsConfig(), "0.1.0a0")
+    request = GuardConfigRequest(
+        repo_root=pack_repo.root,
+        hooks=resolve_engine_hooks([HOOK_ID], pack_repo.root),
+        hooks_config=HooksConfig(enabled=True, commit_convention=convention),
+        guardrails=GuardrailsConfig(),
+        engine_version="0.1.0a0",
+    )
 
-    rendered = render_guard_config(inputs)["hooks"][HOOK_ID]["handlers"]["pre_tool_use"]
+    compiled = compile_guard_config(request).document
+    rendered = compiled["hooks"][HOOK_ID]["handlers"]["pre_tool_use"]
 
     assert rendered["config"] == {"check_push": False, "cutover_date": "2026-10-15"}
 

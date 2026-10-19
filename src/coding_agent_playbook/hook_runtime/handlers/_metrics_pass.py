@@ -274,7 +274,7 @@ def _ruff_tools(
 ) -> tuple[dict[str, str], ToolRunner | None, str]:
     """``(tool_paths, memoized runner, problem)`` from the worktree's ruff pin."""
     from coding_agent_playbook.grading.tool_runner import MemoToolRunner
-    from coding_agent_playbook.hook_runtime.handlers._ruff_pipeline import event_ruff_pin
+    from coding_agent_playbook.hook_runtime.handlers._shared.ruff_pipeline import event_ruff_pin
 
     pin = "missing" if git_dir is None else event_ruff_pin(ctx, git_dir)
     if isinstance(pin, str):

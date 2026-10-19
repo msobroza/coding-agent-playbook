@@ -110,12 +110,16 @@ def test_static_module_map_equals_decorator_registry() -> None:
 
 
 def test_every_in_tree_handler_module_is_in_the_static_map() -> None:
-    """Public handler modules are mapped; ``_``-prefixed ones are helpers registering nothing."""
-    names = {
-        f"{handlers_package.__name__}.{info.name}"
-        for info in pkgutil.iter_modules(handlers_package.__path__)
-    }
-    helpers = {name for name in names if name.rsplit(".", 1)[1].startswith("_")}
+    """Public handler modules are mapped; ``_``-prefixed ones are helpers registering nothing.
+
+    The walk descends into the pack packages: a module under a ``_``-prefixed
+    segment (``_shared/``) is a helper too.
+    """
+    prefix = f"{handlers_package.__name__}."
+    infos = pkgutil.walk_packages(handlers_package.__path__, prefix)
+    names = {info.name for info in infos if not info.ispkg}
+    segments = {name: name.removeprefix(prefix).split(".") for name in names}
+    helpers = {name for name in names if any(s.startswith("_") for s in segments[name])}
     for module in sorted(names):
         importlib.import_module(module)
 

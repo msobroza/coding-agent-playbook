@@ -17,6 +17,7 @@ from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.event import Harness
 from coding_agent_playbook.hook_runtime.dispatch.policy import UNATTENDED_ENV_VAR
 from coding_agent_playbook.hook_runtime.handlers.precommit_bypass import reason_for
+from tests.hook_runtime.handlers.pack_repo import precommit_config
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -39,7 +40,9 @@ GIT_CONFIG: Final = "[core]\n\tbare = false\n"
 def repo(pack_repo: PackRepo) -> PackRepo:
     (pack_repo.root / ".git" / "hooks").mkdir(parents=True, exist_ok=True)
     (pack_repo.root / ".git" / "config").write_text(GIT_CONFIG, "utf-8")
-    pack_repo.install_pack([HOOK_ID], precommit_ids=IDS, wrapper_prefixes=("proxy",))
+    # Declared out of order: sync renders the ids sorted, as IDS lists them.
+    pack_repo.write(".pre-commit-config.yaml", precommit_config(*reversed(IDS)))
+    pack_repo.install_pack([HOOK_ID], wrapper_prefixes=("proxy",))
     return pack_repo
 
 
