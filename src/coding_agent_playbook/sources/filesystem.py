@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, Any
 from coding_agent_playbook._atomic_io import atomic_write_bytes
 from coding_agent_playbook._layers import ENGINE_PACKAGE as ENGINE_PACKAGE
 from coding_agent_playbook._layers import REPO_LOCAL_SOURCE as REPO_LOCAL_SOURCE
-from coding_agent_playbook._toml import dump_toml
 from coding_agent_playbook.catalog import catalog_layer_root, is_bundled_layer
 from coding_agent_playbook.config import Config, ConfigError, check_config_file
 from coding_agent_playbook.evals.loader import (
@@ -25,6 +24,7 @@ from coding_agent_playbook.evals.loader import (
 from coding_agent_playbook.lockfile import Lockfile
 from coding_agent_playbook.sources._hook_walk import walk_hook_layer
 from coding_agent_playbook.sources.base import ArtifactSource, StateSource
+from coding_agent_playbook.toml_writer import dump_toml
 from coding_agent_playbook.types import Prompt, Rule, Skill, split_frontmatter
 
 if TYPE_CHECKING:
