@@ -65,7 +65,9 @@ from coding_agent_playbook.renderer import render_for
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
 
-    from coding_agent_playbook._typing import Prompt, Rule, Skill
+    from coding_agent_playbook.artifacts.prompt import Prompt
+    from coding_agent_playbook.artifacts.rule import Rule
+    from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.prompt_rule_delivery import SkillReferenceIndex
 
