@@ -1,7 +1,7 @@
 """``playbook validate-harness <path> [--strict]`` (PR H Track H4).
 
 Runs ``harnesses-ref``-equivalent structural checks on an Agent Harness tree
-(emitted by :class:`~coding_agent_playbook.adapters.agent_harness_adapter.AgentHarnessAdapter`
+(emitted by :class:`~coding_agent_playbook.agent_harness.adapter.AgentHarnessAdapter`
 or authored by hand / foreign). This is the lint half of decision #3 in
 ``specs/prH-agent-harness.md`` §D: the playbook does **not** implement the
 client runtime (``load_content`` / ``run_script``) — it validates structure.
@@ -70,7 +70,7 @@ def _is_opaque(directory: HarnessDirectory) -> bool:
     directory that carries a ``.harnessleaf`` marker (e.g. a top-level ``evals/``).
     Per spec §A/§B such a directory is an opaque leaf — generic clients stop
     traversing it — so the validator must NEVER expect a routing file for it and
-    must NOT inspect its internal content. Mirrors ``import_harness._walk_directory``.
+    must NOT inspect its internal content. Mirrors ``agent_harness._best_effort._walk_directory``.
     """
     return any(
         isinstance(leaf, LeafMarker) and leaf.path == directory.path for leaf in directory.leaves
@@ -102,7 +102,7 @@ def _check_routing_and_content(directory: HarnessDirectory, warnings: list[_Find
     An opaque ``.harnessleaf`` directory is a terminal leaf (spec §A/§B): clients
     stop traversing it, so it must NEVER be expected to carry a routing file and
     its internal content must NOT be inspected. Skip both checks (and recursion)
-    for such directories — mirrors ``import_harness._walk_directory``.
+    for such directories — mirrors ``agent_harness._best_effort._walk_directory``.
     """
     if _is_opaque(directory):
         return

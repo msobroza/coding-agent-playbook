@@ -18,8 +18,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
 from coding_agent_playbook.adapters.base import Adapter
+from coding_agent_playbook.agent_harness.adapter import AgentHarnessAdapter
 from coding_agent_playbook.agent_harness.manifest import read_manifest
 from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
@@ -806,6 +806,14 @@ def test_entry_point_discoverable():
     cls = by_name["agent_harness"].load()
     assert cls is AgentHarnessAdapter
     assert cls.name == "agent_harness"
+
+
+def test_agent_harness_entry_point_targets_the_package() -> None:
+    # AH-1 (#134): the adapter lives in the agent_harness package, which sits above
+    # adapters/; only the entry-point value moved, the group and the name did not.
+    [entry] = metadata.entry_points(group="coding_agent_playbook.adapters", name="agent_harness")
+    assert entry.value == "coding_agent_playbook.agent_harness.adapter:AgentHarnessAdapter"
+    assert entry.load() is AgentHarnessAdapter
 
 
 def test_entry_point_not_in_defaults():

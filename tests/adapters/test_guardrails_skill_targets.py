@@ -14,13 +14,13 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
 from coding_agent_playbook.adapters.agents_md import AgentsMdAdapter
 from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.claude_code.paths import CLAUDE_RULES_PATH
 from coding_agent_playbook.adapters.continue_ import ContinueAdapter
 from coding_agent_playbook.adapters.opencode import OpenCodeAdapter
 from coding_agent_playbook.adapters.shared_skills import SharedSkillsAdapter
+from coding_agent_playbook.agent_harness.adapter import AgentHarnessAdapter
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.config.tables.hooks import HooksConfig
 from coding_agent_playbook.generated_output.sentinel import sentinel_line

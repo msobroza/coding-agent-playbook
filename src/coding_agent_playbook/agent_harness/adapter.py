@@ -16,7 +16,7 @@ Layout (§B):
 - ``.leaf-detectors`` (``skill=SKILL.md``) when any skill/prompt leaf exists.
 - ``.playbook/manifest.toml`` (round-trip sidecar) + ``.playbook/.harnessleaf``.
 - ``.playbook/hooks/<id>/`` hook sidecars and ``rules/30-guardrail-<id>.md``
-  advisories (:mod:`._harness_hooks`, specs/prK-lifecycle-hooks.md §C.6).
+  advisories (:mod:`.hook_sidecars`, specs/prK-lifecycle-hooks.md §C.6).
 
 Eval tasks are authoring-only and never dispatched to adapters, so this adapter
 never emits an ``evals/`` directory — consistent with the five built-in adapters.
@@ -35,14 +35,14 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING, ClassVar
 
-from coding_agent_playbook.adapters._harness_hooks import (
+from coding_agent_playbook.adapters.base import Adapter
+from coding_agent_playbook.agent_harness import emitter, manifest
+from coding_agent_playbook.agent_harness.hook_sidecars import (
     copy_scripts,
     emit_hook_sidecars,
     guardrail_rules,
     stale_sidecar_candidates,
 )
-from coding_agent_playbook.adapters.base import Adapter
-from coding_agent_playbook.agent_harness import emitter, manifest
 from coding_agent_playbook.generated_output.file_identity import FileSet
 from coding_agent_playbook.generated_output.output_io import write_output_bytes, write_output_text
 from coding_agent_playbook.generated_output.source_files import copyable_skill_files
