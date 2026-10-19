@@ -2,7 +2,7 @@
 # for the sync/ package. commands/sync.py keeps only run and _resolve_repo_root; the
 # pipeline it ran becomes sync/pipeline.py and its two check modes sync/_check_modes.py.
 # _sync_orphans.py and _output_locations.py are concatenated into sync/_leftovers.py
-# (454 lines together, under the 480-line bound of 4.4).
+# (455 lines together, under the 480-line bound of 4.4).
 
 [[module]]
 pr = "A6"
