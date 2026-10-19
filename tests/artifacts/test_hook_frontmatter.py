@@ -2,9 +2,9 @@
 
 specs/prS-skills-context.md §6.4.1 split it out of ``types``; specs/prT-package-layout.md
 A1 moved it to ``artifacts/`` and removed the ``types`` re-export, so importers name
-the defining module. The leaf must not import ``types`` back (``types`` imports it),
-or the pair would be an import cycle. The class's own behaviour stays covered,
-unmodified, by test_types_hook.py and test_types_hook_roundtrip.py.
+the defining module. The leaf must not import ``artifacts.hook`` back
+(``artifacts.hook`` imports it), or the pair would be an import cycle. The class's
+own behaviour stays covered, unmodified, by test_hook.py and test_hook_roundtrip.py.
 """
 
 from __future__ import annotations
