@@ -75,8 +75,8 @@ class AgentHarnessAdapter(Adapter):
 
     Registers under ``coding_agent_playbook.adapters`` as ``agent_harness``.
     **Opt-in** — it is not force-enabled like ``agents_md`` and is not in the
-    default-adapter set; enable it via ``adapters_enabled`` in the config. The
-    orchestrator discovers and instantiates it through the entry point — never
+    default-adapter set; enable it via ``adapters_enabled`` in the config.
+    ``adapters.registry`` discovers and instantiates it through the entry point — never
     construct it directly outside of tests.
 
     The optional ``rule_registry`` is used to inline a prompt's

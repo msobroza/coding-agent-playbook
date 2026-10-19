@@ -124,9 +124,9 @@ def spelled_exactly(path: Path, base: Path) -> bool:
 def defined_names(source: Path) -> frozenset[str]:
     """The top-level names a module binds, read with ``ast`` (cached per file version).
 
-    Imports count (``orchestrator.detect`` is current while orchestrator imports it),
+    Imports count (``validation.context.detect`` is current while that module imports it),
     and so do names bound under ``if TYPE_CHECKING:`` or ``try:`` at top level.
-    Example: ``"detect" in defined_names(repo / "src/coding_agent_playbook/orchestrator.py")``.
+    Example: ``"detect" in defined_names(repo / "src/coding_agent_playbook/validation/context.py")``.
     """
     if source.is_dir():
         return frozenset()

@@ -455,7 +455,7 @@ def test_check_facts_come_from_the_real_repo(
         detected.append(root)
         return detect(root)
 
-    monkeypatch.setattr("coding_agent_playbook.orchestrator.detect", spy_detect)
+    monkeypatch.setattr("coding_agent_playbook.validation.context.detect", spy_detect)
     rc, out = _check(repo, capsys)
     assert rc == 0, out
     assert detected == [repo]

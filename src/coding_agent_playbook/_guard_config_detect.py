@@ -12,7 +12,7 @@ path is one ``tomllib`` read and a set comparison:
   ``applies_if`` is a list of predicates that must all hold (a hook's own,
   then its linked rule's; ``[]`` = always) and ``active`` whether they held at
   this sync, so the runtime can name what a fact change turns on or off
-  without rebuilding a ``SyncContext`` (``orchestrator`` imports jinja2).
+  without rebuilding a ``SyncContext`` (``validation.context`` imports yaml).
 
 Both depend only on the repository (``detect()`` and ``has_file`` read the
 repo, never the machine), so ``sync --check`` byte-compares them. Split out of

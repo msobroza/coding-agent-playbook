@@ -32,8 +32,8 @@ from coding_agent_playbook.config.files import CONFIG_FILENAME, ConfigFiles
 from coding_agent_playbook.detector.facts import detect
 from coding_agent_playbook.detector.predicate import evaluate_predicate
 from coding_agent_playbook.lockfile.drift import drift_entries
-from coding_agent_playbook.orchestrator import SyncContext
 from coding_agent_playbook.validation import preflight as _sync_preflight
+from coding_agent_playbook.validation.context import SyncContext
 
 if TYPE_CHECKING:
     import argparse

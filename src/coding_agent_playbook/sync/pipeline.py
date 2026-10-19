@@ -61,14 +61,10 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook.adapters._owned_files import UserOwnedFileError
 from coding_agent_playbook.adapters.claude_code.settings.managed_merge import SettingsMergeError
+from coding_agent_playbook.adapters.registry import discover_adapters, installed_output_locations
 from coding_agent_playbook.adapters.skill_dirs.ownership import judging_leftovers_with
 from coding_agent_playbook.gitignore import LOCKFILE_NAME
 from coding_agent_playbook.guard_config import SYNC_OUTPUT_LOCATIONS
-from coding_agent_playbook.orchestrator import (
-    SyncContext,
-    discover_adapters,
-    installed_output_locations,
-)
 from coding_agent_playbook.renderer import TemplateSecurityError
 from coding_agent_playbook.sync import _hook_outputs as _sync_hooks
 from coding_agent_playbook.sync import _leftovers as _sync_orphans
@@ -91,6 +87,7 @@ from coding_agent_playbook.sync.render import (
 )
 from coding_agent_playbook.validation import preflight as _sync_preflight
 from coding_agent_playbook.validation.checks import sync_gate_errors
+from coding_agent_playbook.validation.context import SyncContext
 from coding_agent_playbook.validation.findings import report_validation_errors
 
 if TYPE_CHECKING:

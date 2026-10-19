@@ -52,6 +52,7 @@ from coding_agent_playbook.adapters.claude_code.settings.managed_merge import (
     decode_settings,
     parse_settings,
 )
+from coding_agent_playbook.catalog.source import engine_package_of
 from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
 from coding_agent_playbook.guard_config import (
     SYNC_OUTPUT_LOCATIONS,
@@ -77,7 +78,6 @@ from coding_agent_playbook.hook_policy import (
 )
 from coding_agent_playbook.hook_registrations import OPENCODE_SHIM_PATH, stop_stage_records
 from coding_agent_playbook.lockfile.model import Provenance
-from coding_agent_playbook.orchestrator import engine_package_of
 from coding_agent_playbook.sync import _machine_local as _sync_hook_local
 from coding_agent_playbook.sync._dispatch import HookDispatch
 from coding_agent_playbook.sync._output_policy import shared_outputs
@@ -97,9 +97,9 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.hook_policy import ResolvedHook, SkippedHook
     from coding_agent_playbook.lockfile.model import Lockfile
-    from coding_agent_playbook.orchestrator import SyncContext
     from coding_agent_playbook.sync._dispatch import ProvenanceRecorder
     from coding_agent_playbook.sync._machine_local import SyncHookDeps
+    from coding_agent_playbook.validation.context import SyncContext
 
 __all__ = [
     "HOOKS_NOTICE",

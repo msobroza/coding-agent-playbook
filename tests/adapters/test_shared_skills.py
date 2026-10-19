@@ -15,6 +15,7 @@ import pytest
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.opencode import OpenCodeAdapter
+from coding_agent_playbook.adapters.registry import discover_adapters, installed_output_locations
 from coding_agent_playbook.adapters.shared_skills import (
     SHARED_SKILLS_ROOT,
     SharedSkillsAdapter,
@@ -23,7 +24,6 @@ from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.config.model import Config, ProjectMeta
-from coding_agent_playbook.orchestrator import discover_adapters, installed_output_locations
 from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.sync._hook_outputs import _generated_locations
 
@@ -214,7 +214,7 @@ def test_cleanup_stale_never_deletes_skill_files(tmp_path: Path) -> None:
 
 def test_discover_adapters_builds_shared_skills_without_rule_registry() -> None:
     """``discover_adapters`` passes ``rule_registry``; the adapter takes none,
-    so the orchestrator's no-arg fallback constructs it (like ``agents_md``)."""
+    so its no-arg fallback constructs it (like ``agents_md``)."""
 
     class _StubRegistry:
         def render_for_inclusion(self, rule_id: str, context: dict[str, object]) -> str:

@@ -39,8 +39,8 @@ if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
 
     from coding_agent_playbook.lockfile.model import Lockfile
-    from coding_agent_playbook.orchestrator import SyncContext
     from coding_agent_playbook.sync.git_client import GitClient
+    from coding_agent_playbook.validation.context import SyncContext
 
 
 @contextlib.contextmanager

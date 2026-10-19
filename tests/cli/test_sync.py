@@ -23,10 +23,10 @@ from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, Provenance, compute_hash
-from coding_agent_playbook.orchestrator import SyncContext
 from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.sync import _dispatch as _sync_lockfile
 from coding_agent_playbook.sync import pipeline as _sync
+from coding_agent_playbook.validation.context import SyncContext
 from tests.fakes import FakeGitClient
 
 if TYPE_CHECKING:

@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from coding_agent_playbook.adapters import _skill_files
+from coding_agent_playbook.adapters.registry import installed_output_locations
 from coding_agent_playbook.adapters.skill_dirs import writer as _skill_writer
 from coding_agent_playbook.adapters.skill_dirs.ownership import judging_leftovers_with
 from coding_agent_playbook.adapters.skill_dirs.writer import (
@@ -27,7 +28,6 @@ from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.harness.manifest import read_manifest
 from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, compute_hash
-from coding_agent_playbook.orchestrator import installed_output_locations
 from coding_agent_playbook.renderer import SENTINEL
 from coding_agent_playbook.skills.naming import agent_skill_issues, has_declared_id, skill_id_of
 from coding_agent_playbook.sync import pipeline as _sync
