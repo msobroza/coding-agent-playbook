@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from coding_agent_playbook.evaluators.scope import CostTier
+from coding_agent_playbook.grading.scope import CostTier
 from coding_agent_playbook.hook_runtime.event import CanonicalEvent, EventName, Harness
 from coding_agent_playbook.hook_runtime.stop.stages import (
     STAGE_COSTS,
@@ -68,7 +68,7 @@ def test_stop_stage_order_matches_e04_table() -> None:
         assert STAGE_COSTS[name] is expected, name
 
 
-def test_stage_cost_mirrors_evaluators_cost_tier() -> None:
+def test_stage_cost_mirrors_grading_cost_tier() -> None:
     assert {m.name: m.value for m in StageCost} == {
         m.name: m.value for m in CostTier if m.name in StageCost.__members__
     }

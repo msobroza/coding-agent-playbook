@@ -6,10 +6,10 @@ per-criterion primitive :meth:`Judge.score_criterion` is canonical (returns one
 the batch :meth:`Judge.score` is a thin wrapper that maps it over a sequence of
 criterion strings.
 
-:class:`~coding_agent_playbook.evaluators.checks.judged.JudgeCheck` calls
+:class:`~coding_agent_playbook.grading.judged.JudgeCheck` calls
 ``score_criterion`` directly through the structural
-:class:`~coding_agent_playbook.evaluators.types.JudgeLike` protocol, so
-``evaluators`` never imports ``evals`` (no cycle). A concrete ``Judge`` satisfies
+:class:`~coding_agent_playbook.grading.types.JudgeLike` protocol, so
+``grading`` never imports ``evals`` (no cycle). A concrete ``Judge`` satisfies
 ``JudgeLike`` structurally.
 
 Two concrete judges:

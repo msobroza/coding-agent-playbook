@@ -2,20 +2,20 @@
 
 The four ``[expected]`` file checks (``files_created``/``files_must_contain``/
 ``files_unchanged``/``files_forbidden``) are first-class
-:class:`~coding_agent_playbook.evaluators.check.Check` instances. Unlike the
+:class:`~coding_agent_playbook.grading.check.Check` instances. Unlike the
 metric-backed checks these ignore the
-:class:`~coding_agent_playbook.evaluators.check.MeasurementSet` and read the
+:class:`~coding_agent_playbook.grading.check.MeasurementSet` and read the
 candidate tree (:attr:`EvalContext.tree`) - and, for the unchanged check, the
 baseline tree (:attr:`EvalContext.baseline_tree`) - directly.
 
 Each is a pure gate (``weight=0.0``, ``required=True`` by default, DETERMINISTIC,
 DETERMINISTIC-cost) whose ``passed`` comes **straight from the predicate**. The
 result carries one
-:class:`~coding_agent_playbook.evaluators.types.ScopeDetail` describing the path,
+:class:`~coding_agent_playbook.grading.types.ScopeDetail` describing the path,
 with ``score = 1.0`` when the predicate holds and ``0.0`` otherwise.
 
 The ``slug`` id-sanitizer is the shared one defined in
-:mod:`coding_agent_playbook.evaluators.check` (re-exported here as a thin wrapper
+:mod:`coding_agent_playbook.grading.check` (re-exported here as a thin wrapper
 that pins the ``"path"`` fallback) so the families do not each carry their own
 copy.
 """
@@ -25,24 +25,24 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.evaluators.check import Check
-from coding_agent_playbook.evaluators.check import slug as _slug
-from coding_agent_playbook.evaluators.checks.registry import register_check
-from coding_agent_playbook.evaluators.scope import CostTier, Determinism
-from coding_agent_playbook.evaluators.types import CheckResult, ScopeDetail
+from coding_agent_playbook.grading.check import Check
+from coding_agent_playbook.grading.check import slug as _slug
+from coding_agent_playbook.grading.check_registry import register_check
+from coding_agent_playbook.grading.scope import CostTier, Determinism
+from coding_agent_playbook.grading.types import CheckResult, ScopeDetail
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from coding_agent_playbook.evaluators.check import MeasurementSet
-    from coding_agent_playbook.evaluators.types import EvalContext
+    from coding_agent_playbook.grading.check import MeasurementSet
+    from coding_agent_playbook.grading.types import EvalContext
 
 
 def slug(text: str) -> str:
     """Slug ``text`` for a file-check id, falling back to ``"path"`` when empty.
 
     A thin wrapper over the shared
-    :func:`coding_agent_playbook.evaluators.check.slug` that pins the file-check
+    :func:`coding_agent_playbook.grading.check.slug` that pins the file-check
     fallback (the shared helper defaults to ``"criterion"``). Kept as a named
     function so existing ``files.slug`` imports keep working.
     """

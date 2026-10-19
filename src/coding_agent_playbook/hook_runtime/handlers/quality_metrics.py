@@ -50,7 +50,7 @@ from coding_agent_playbook.hook_runtime.stop.stages import StageCost, StageResul
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
-    from coding_agent_playbook.evaluators.types import ScopeDetail
+    from coding_agent_playbook.grading.types import ScopeDetail
     from coding_agent_playbook.hook_runtime.decision import HandlerResult
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.handlers._metrics_pass import MetricsPass
@@ -143,7 +143,7 @@ class QualityMetricsStage:
 
 def _in_quality(finding: ScopeDetail) -> bool:
     """A ``quality``-family finding: a quality metric, or ruff's ``ruff:quality`` count."""
-    from coding_agent_playbook.evaluators.builtins.ruff_violations import ruff_family
+    from coding_agent_playbook.grading.static_metrics.ruff_violations import ruff_family
     from coding_agent_playbook.metrics_gate.policy import METRIC_FAMILIES
 
     if finding.evaluator == "ruff_violations":

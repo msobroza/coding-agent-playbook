@@ -21,7 +21,7 @@ from tests.fakes import FakeProjectHandle, empty_run
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
-    from coding_agent_playbook.evaluators.execution.project import ProjectHandle, RunArtifacts
+    from coding_agent_playbook.grading.execution_metrics.project import ProjectHandle, RunArtifacts
     from coding_agent_playbook.hook_runtime.stop.suite import SuiteSpec
 
 __all__ = ["CZ_REJECTION", "FailingProjectHandle", "FakeCz", "FakeSuiteFactory"]

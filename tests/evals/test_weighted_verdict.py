@@ -21,8 +21,8 @@ from coding_agent_playbook.evals.compile.compiler import (
     _mean_leaf_scores,
     weighted_verdict,
 )
-from coding_agent_playbook.evaluators.scope import CostTier, Determinism
-from coding_agent_playbook.evaluators.types import (
+from coding_agent_playbook.grading.scope import CostTier, Determinism
+from coding_agent_playbook.grading.types import (
     CheckResult,
     EvaluationReport,
     ScopeDetail,

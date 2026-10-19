@@ -2,7 +2,7 @@
 
 A snapshot is ``{"schema": 1, "tree": "<git tree id or null>", "measurements":
 [{"evaluator", "scope_key", "value"}]}`` (prK §F.0.3 item 4); the keys match
-:class:`~coding_agent_playbook.evaluators.types.Measurement` and the
+:class:`~coding_agent_playbook.grading.types.Measurement` and the
 ``playbook metrics --format json`` findings. Comparing against a cached
 snapshot replaces a second suite run on a baseline worktree: main's CI job
 emits one, pull-request jobs and the coverage Stop stage read it.
@@ -18,8 +18,8 @@ import json
 import math
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.evaluators.types import Measurement
 from coding_agent_playbook.generated_output.atomic_io import atomic_write_bytes
+from coding_agent_playbook.grading.types import Measurement
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

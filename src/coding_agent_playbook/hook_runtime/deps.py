@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
     from typing import TextIO
 
-    from coding_agent_playbook.evaluators.execution.project import ProjectHandle
+    from coding_agent_playbook.grading.execution_metrics.project import ProjectHandle
     from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
     from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
     from coding_agent_playbook.hook_runtime.proc import ProcResult

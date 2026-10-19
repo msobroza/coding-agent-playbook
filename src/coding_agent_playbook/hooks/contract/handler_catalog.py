@@ -2,7 +2,7 @@
 
 A builtin handler name resolves to the in-tree registry first (the runtime's
 static module map), then to the ``coding_agent_playbook.hook_handlers``
-entry-point group; in-tree wins, as in ``evaluators/checks/registry.py``. Sync
+entry-point group; in-tree wins, as in ``grading/check_registry.py``. Sync
 records an entry-point handler in ``guard_config.json`` as ``{"kind":
 "entry_point", "target", "dist"}``, so the runtime never scans entry points.
 

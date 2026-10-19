@@ -4,7 +4,7 @@ A real ``dispatch stop`` in a fresh interpreter, with the coordinator and the
 ``drift`` stage hook bound to their builtins: the coordinator and its stage
 planning load, an inactive stage loads nothing of its own, and no forbidden
 module (jinja2, yaml, tomllib without an active stage, the CLI, the
-renderers, ``evaluators``) is imported. K6's §D.1 rows: ``metrics_gate.run``
+renderers, ``grading``) is imported. K6's §D.1 rows: ``metrics_gate.run``
 loads only once ``quality-metrics`` measures something, and ``judges.gate_weakening`` only
 when ``gate-integrity`` scans or gate-weakening-guard's ``pre_edit`` companion
 judges a test-file edit, never ``tomllib`` on that ``pre_tool_use`` path. The

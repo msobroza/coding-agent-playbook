@@ -45,7 +45,7 @@ from coding_agent_playbook.hook_runtime.stop.stages import StageCost, StageResul
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from coding_agent_playbook.evaluators.execution.project import ProjectHandle, RunArtifacts
+    from coding_agent_playbook.grading.execution_metrics.project import ProjectHandle, RunArtifacts
     from coding_agent_playbook.hook_runtime.decision import HandlerResult
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, RepoInfo
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
@@ -137,7 +137,7 @@ class CoverageStage:
     def _grade(
         self, plan: StopPlan, handle: ProjectHandle, artifacts: RunArtifacts
     ) -> CoverageGrade:
-        from coding_agent_playbook.evaluators.execution.diff_coverage import (
+        from coding_agent_playbook.grading.execution_metrics.diff_coverage import (
             changed_line_coverage,
         )
 
@@ -196,7 +196,7 @@ class CoverageStage:
 
     def _scored(self) -> list[str]:
         """The changed paths the gate scores (memoized per Stop); none on a git error."""
-        from coding_agent_playbook.evaluators.execution.diff_coverage import scored_changes
+        from coding_agent_playbook.grading.execution_metrics.diff_coverage import scored_changes
         from coding_agent_playbook.hook_runtime.git.safe_git import GitError
 
         if self._changes is None:
