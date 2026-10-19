@@ -75,7 +75,7 @@ from coding_agent_playbook.hook_policy import HOOK_SUPPORT, guardrail_line, guar
 from coding_agent_playbook.hook_policy.guardrails_skill import has_guardrail_text
 from coding_agent_playbook.hook_registrations import LAUNCHER_PATH
 from coding_agent_playbook.renderer import render_for
-from coding_agent_playbook.skill_membership import is_skill_member
+from coding_agent_playbook.skills.membership import is_skill_member
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence

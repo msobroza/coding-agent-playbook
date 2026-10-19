@@ -251,7 +251,7 @@ layers = [
     "adapters",
     "(rendering)",
     "(hooks)",
-    "(skills)",
+    "skills",
     "metrics_gate",
     "config",
     "catalog",
@@ -297,8 +297,6 @@ exhaustive_ignores = [
     "prompt_rule_delivery",
     "renderer",
     "rule_registry",
-    "skill_document",
-    "skill_membership",
     "types",
 ]
 ignore_imports = [
@@ -306,6 +304,8 @@ ignore_imports = [
     "coding_agent_playbook._typing -> coding_agent_playbook.evals.task",
     # kept: catalog-layers (the artifact source parses eval tasks) is not scheduled (L12)
     "coding_agent_playbook.catalog.source -> coding_agent_playbook.evals.**",
+    # SK-1 types undelivered_member_warning with a local Protocol (TYPE_CHECKING Adapter)
+    "coding_agent_playbook.skills.membership -> coding_agent_playbook.adapters.base",
 ]
 broken_contract_guidance = """
 A lower layer may not import a higher one, directly or through modules outside the layers.
@@ -373,8 +373,7 @@ forbidden_modules = [
     "coding_agent_playbook.prompt_rule_delivery",
     "coding_agent_playbook.renderer",
     "coding_agent_playbook.rule_registry",
-    "coding_agent_playbook.skill_document",
-    "coding_agent_playbook.skill_membership",
+    "coding_agent_playbook.skills",
     "coding_agent_playbook.toml_writer",
     "coding_agent_playbook.types",
     "jinja2",
@@ -436,8 +435,7 @@ forbidden_modules = [
     "coding_agent_playbook.prompt_rule_delivery",
     "coding_agent_playbook.renderer",
     "coding_agent_playbook.rule_registry",
-    "coding_agent_playbook.skill_document",
-    "coding_agent_playbook.skill_membership",
+    "coding_agent_playbook.skills",
     "coding_agent_playbook.toml_writer",
     "coding_agent_playbook.types",
     "jinja2",
@@ -524,8 +522,7 @@ forbidden_modules = [
     "coding_agent_playbook.prompt_rule_delivery",
     "coding_agent_playbook.renderer",
     "coding_agent_playbook.rule_registry",
-    "coding_agent_playbook.skill_document",
-    "coding_agent_playbook.skill_membership",
+    "coding_agent_playbook.skills",
     "coding_agent_playbook.toml_writer",
     "coding_agent_playbook.types",
     "jinja2",
@@ -618,13 +615,6 @@ ignore_imports = [
     "coding_agent_playbook.gate_scan -> coding_agent_playbook.hook_runtime._git_parse",
     # N21: becomes hook_runtime/harness/payload.py
     "coding_agent_playbook.hook_runtime.dispatch -> coding_agent_playbook.hook_runtime.harness._payload",
-    # A3: becomes skills/naming.py (after #62)
-    "coding_agent_playbook.commands._sync_lockfile -> coding_agent_playbook.adapters._agent_skill_rules",
-    "coding_agent_playbook.commands._sync_render -> coding_agent_playbook.adapters._agent_skill_rules",
-    "coding_agent_playbook.commands._validate_skills -> coding_agent_playbook.adapters._agent_skill_rules",
-    "coding_agent_playbook.commands._validation -> coding_agent_playbook.adapters._agent_skill_rules",
-    "coding_agent_playbook.skill_document -> coding_agent_playbook.adapters._agent_skill_rules",
-    "coding_agent_playbook.skill_membership -> coding_agent_playbook.adapters._agent_skill_rules",
     # A9: becomes adapters/skill_dirs/ownership.py (after #62)
     "coding_agent_playbook.commands.sync -> coding_agent_playbook.adapters._prior_output",
     # A7: becomes generated_output/write_guard.py (after #62)
@@ -633,7 +623,6 @@ ignore_imports = [
     # A9: becomes adapters/skill_dirs/writer.py (after #62)
     "coding_agent_playbook.commands._sync_output -> coding_agent_playbook.adapters._skill_writer",
     "coding_agent_playbook.commands.sync -> coding_agent_playbook.adapters._skill_writer",
-    "coding_agent_playbook.commands.validate -> coding_agent_playbook.adapters._skill_writer",
     # A7: becomes generated_output/source_files.py (after #62)
     "coding_agent_playbook.commands.validate -> coding_agent_playbook.adapters._skill_sources",
     "coding_agent_playbook.guard_config -> coding_agent_playbook.adapters._skill_sources",
