@@ -67,7 +67,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook._typing import Prompt, Rule, Skill
     from coding_agent_playbook.hook_policy import ResolvedHook
-    from coding_agent_playbook.renderer import RuleRegistry
+    from coding_agent_playbook.prompt_rule_delivery import SkillReferenceIndex
 
 
 class OpenCodeAdapter(Adapter):
@@ -78,12 +78,12 @@ class OpenCodeAdapter(Adapter):
     member rules as references of the skills :meth:`write_skill` writes. See
     SPEC.md §10.6 and §10.6.4 for the OpenCode-touches/does-not-touch matrix.
 
-    The optional ``rule_registry`` is plumbed into :func:`render_for` so the
-    ``includes_rules:`` appendix in prompts can be rendered. When the
-    orchestrator (PR 10) builds the merged-overlay registry, it passes it in;
-    when callers (or tests) omit it, prompts render with no auto-appendix —
-    ``includes_rules:`` becomes purely declarative. Mirrors the
-    ``ContinueAdapter`` plumbing pattern.
+    The optional ``rule_registry`` (the sync's ``RuleRegistryImpl``) is used
+    only as a ``SkillReferenceIndex``: :func:`render_for` builds each command's
+    ``## Before you start`` block from it, naming the skill references of the
+    prompt's ``includes_rules``; a command never carries rule text (D15). When
+    callers (or tests) omit it, prompts render with no block —
+    ``includes_rules:`` becomes purely declarative.
 
     Hooks are buffered by :meth:`write_hook` and rendered by :meth:`finalize`
     into the one shim; with no hook OpenCode enforces, nothing is written.
@@ -110,7 +110,7 @@ class OpenCodeAdapter(Adapter):
     #: The shim carries no artifact of its own: a ``kind = "runtime"`` lock entry (§B.6).
     runtime_outputs: ClassVar[tuple[str, ...]] = (OPENCODE_SHIM_PATH,)
 
-    def __init__(self, *, rule_registry: RuleRegistry | None = None) -> None:
+    def __init__(self, *, rule_registry: SkillReferenceIndex | None = None) -> None:
         self._rule_registry = rule_registry
         self._hooks: list[ResolvedHook] = []
 
@@ -135,7 +135,8 @@ class OpenCodeAdapter(Adapter):
         * replaces ``{{ var }}`` placeholders for each ``input_variables``
           entry with ``$ARGUMENTS`` (single variable) or ``$1`` / ``$2`` / …
           (multiple variables), and
-        * appends an ``includes_rules`` appendix when applicable.
+        * inserts the ``## Before you start`` block naming the skill
+          references of ``includes_rules`` (D15), when any is active.
 
         See SPEC §10.6.1 for the canonical OpenCode command layout and
         SPEC §9.7 for the renderer contract.
@@ -147,8 +148,7 @@ class OpenCodeAdapter(Adapter):
             prompt.body,
             "prompt_opencode_command",
             frontmatter=dataclasses.asdict(prompt.frontmatter),
-            rule_registry=self._rule_registry,
-            template_body=prompt.template_body,
+            skill_references=self._rule_registry,
         )
         write_output_text(target, rendered)
         return [target]

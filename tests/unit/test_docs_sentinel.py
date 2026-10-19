@@ -1,6 +1,6 @@
 """Docs-consistency guard: SPEC.md quotes the code sentinel verbatim (prK §P3).
 
-``renderer.SENTINEL`` (defined in ``_sentinel``) is canonical — changing it
+``generated_output.sentinel.SENTINEL`` is canonical — changing it
 would make every consumer's generated files drift on upgrade — so the SPEC must
 quote it exactly, never the stale prose forms it carried before. Prose-only:
 these tests read markdown, never engine behaviour.
