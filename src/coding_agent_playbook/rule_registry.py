@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook._member_reference import member_reference_path
+from coding_agent_playbook.artifacts.member_reference import member_reference_path
 from coding_agent_playbook.orchestrator import template_source
 from coding_agent_playbook.prompt_rule_delivery import SkillReference
 from coding_agent_playbook.renderer import build_environment, render_sandboxed

@@ -14,7 +14,7 @@ diff base, timeout, ``--cov`` sources) would run without running a suite; its
 (K2) behind :class:`coding_agent_playbook.hook_policy.ConfigSchemaLookup`.
 ``FakePinWriter`` stands in for the ``hook_runtime.config.pin`` writers ``playbook sync``
 calls (the interpreter pin and ``machine.json`` under the git dir).
-``FakeCiStepRunner`` stands in for :class:`coding_agent_playbook.commands.ci.SubprocessCiStepRunner`
+``FakeCiStepRunner`` stands in for :class:`coding_agent_playbook.commands.twins.ci.SubprocessCiStepRunner`
 so ``playbook ci`` tests see each step's argv without spawning a child.
 ``FakeRuffRunner`` stands in for the metrics gate's ``ToolRunner`` (a ruff
 subprocess), so ``ruff_violations`` tests script ruff's JSON per source text.
@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.commands.ci import StepRun
+from coding_agent_playbook.commands.twins.ci import StepRun
 from coding_agent_playbook.evaluators.baseline_git import BaselineGitError, GitTimeoutError
 from coding_agent_playbook.evaluators.execution.coverage_xml import CoverageReport
 from coding_agent_playbook.evaluators.execution.junit import JunitSummary
@@ -318,7 +318,7 @@ class FakePinWriter:
 
 @dataclass
 class FakeCiStepRunner:
-    """In-memory :class:`~coding_agent_playbook.commands.ci.CiStepRunner`.
+    """In-memory :class:`~coding_agent_playbook.commands.twins.ci.CiStepRunner`.
 
     ``exits`` maps a step's subcommand (``validate``, ``sync``, ``gate-scan``)
     to its exit code, ``None`` for a timeout; unlisted steps exit 0. Any other

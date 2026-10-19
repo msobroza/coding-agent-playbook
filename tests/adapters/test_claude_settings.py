@@ -16,8 +16,12 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.adapters._json_spans import JsonSpanIndex, apply_splices, line_col
-from coding_agent_playbook.adapters.claude_settings import (
+from coding_agent_playbook.adapters.claude_code.settings._json_spans import (
+    JsonSpanIndex,
+    apply_splices,
+    line_col,
+)
+from coding_agent_playbook.adapters.claude_code.settings.managed_merge import (
     CLAUDE_SETTINGS_PATH,
     MANAGED_STRING_POINTERS,
     DesiredGroup,
@@ -523,7 +527,9 @@ def test_canonical_hash_ignores_key_order() -> None:
 
 def test_claude_settings_imports_only_the_stdlib() -> None:
     """The merge must stay light: ``playbook check`` and the adapter import it."""
-    loaded = new_modules_after("import coding_agent_playbook.adapters.claude_settings")
+    loaded = new_modules_after(
+        "import coding_agent_playbook.adapters.claude_code.settings.managed_merge"
+    )
     ours = [name for name in loaded if name.startswith("coding_agent_playbook")]
     foreign = [
         name
@@ -535,10 +541,12 @@ def test_claude_settings_imports_only_the_stdlib() -> None:
         "coding_agent_playbook._atomic_io",
         "coding_agent_playbook._output_io",  # refuse_special_file before the read: stdlib-only
         "coding_agent_playbook.adapters",
-        "coding_agent_playbook.adapters._json_edits",
-        "coding_agent_playbook.adapters._json_spans",
-        "coding_agent_playbook.adapters._settings_plan",
-        "coding_agent_playbook.adapters.claude_settings",
+        "coding_agent_playbook.adapters.claude_code",
+        "coding_agent_playbook.adapters.claude_code.settings",
+        "coding_agent_playbook.adapters.claude_code.settings._json_edits",
+        "coding_agent_playbook.adapters.claude_code.settings._json_spans",
+        "coding_agent_playbook.adapters.claude_code.settings._plan",
+        "coding_agent_playbook.adapters.claude_code.settings.managed_merge",
         "coding_agent_playbook.lockfile",
         "coding_agent_playbook.lockfile.canonical_json",
         "coding_agent_playbook.lockfile.model",

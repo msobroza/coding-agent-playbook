@@ -26,7 +26,7 @@ from coding_agent_playbook.adapters._overlay_native import (
 )
 from coding_agent_playbook.adapters._owned_files import check_engine_owned, write_engine_owned
 from coding_agent_playbook.adapters._secret_native import secret_native_rows
-from coding_agent_playbook.adapters.claude_settings import (
+from coding_agent_playbook.adapters.claude_code.settings.managed_merge import (
     CLAUDE_SETTINGS_PATH,
     DesiredGroup,
     MergeResult,

@@ -6,6 +6,9 @@ with a CLI-sized per-call timeout. The base is ``--base`` or the default branch
 (``SafeGit.default_branch``: ``origin/HEAD``, then ``main``, then ``master``),
 and the compared range starts at its merge base with ``HEAD``. A shallow CI
 checkout has neither, hence :data:`FETCH_DEPTH_HINT` in every such error.
+
+A twin's ``--range A..B`` / ``A...B`` resolves to a :class:`ScanRange` here
+(:func:`resolve_range`), so no twin imports the gate-scan command for it.
 """
 
 from __future__ import annotations
@@ -28,8 +31,10 @@ __all__ = [
     "FETCH_DEPTH_HINT",
     "GitBaseError",
     "MergeBase",
+    "ScanRange",
     "open_git",
     "resolve_merge_base",
+    "resolve_range",
 ]
 
 #: Per git call; a range diff of a large PR can outlive the hooks' 2-5 s bounds.
@@ -89,3 +94,45 @@ def resolve_merge_base(git: GitPort, base: str | None) -> MergeBase:
     if sha is None:
         raise GitBaseError(f"{ref} and HEAD share no history; {FETCH_DEPTH_HINT}")
     return MergeBase(ref, sha)
+
+
+@dataclass(frozen=True, slots=True)
+class ScanRange:
+    """The revisions a scan diffs (``base`` to ``head``) and how to name the range.
+
+    Example: ``ScanRange("HEAD~1", "HEAD", "HEAD~1..HEAD")``.
+    """
+
+    base: str
+    head: str
+    label: str
+
+
+def resolve_range(git: GitPort, text: str | None) -> ScanRange:
+    """``A..B``, ``A...B`` (from their merge base) or, for ``None``, the default range.
+
+    An empty side means ``HEAD``. Raises ``ValueError`` for any other form.
+
+    Example::
+
+        >>> resolve_range(git, "HEAD~1..HEAD")  # doctest: +SKIP
+        ScanRange(base='HEAD~1', head='HEAD', label='HEAD~1..HEAD')
+    """
+    if text is None:
+        base = resolve_merge_base(git, None)
+        return ScanRange(base.sha, "HEAD", f"{base.sha[:12]}..HEAD")
+    if "..." in text:
+        left, _, right = text.partition("...")
+        head = right or "HEAD"
+        return ScanRange(_symmetric_base(git, left or "HEAD", head), head, text)
+    if ".." in text:
+        left, _, right = text.partition("..")
+        return ScanRange(left or "HEAD", right or "HEAD", text)
+    raise ValueError(f"--range {text!r}: expected A..B or A...B (revisions)")
+
+
+def _symmetric_base(git: GitPort, left: str, right: str) -> str:
+    sha = git.merge_base(left, right)
+    if sha is None:
+        raise ValueError(f"--range {left}...{right}: the two share no history")
+    return sha

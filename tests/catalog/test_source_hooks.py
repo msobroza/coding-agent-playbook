@@ -17,8 +17,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
-from coding_agent_playbook.types import HookSchemaError
 
 if TYPE_CHECKING:
     from collections.abc import Callable

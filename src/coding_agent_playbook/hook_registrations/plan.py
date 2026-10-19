@@ -18,7 +18,7 @@ import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final, Protocol
 
-from coding_agent_playbook._hook_schema import HookMatcher
+from coding_agent_playbook.artifacts.hook_schema import HookMatcher
 from coding_agent_playbook.hook_policy import (
     ENGINE_DEADLINE_CAP_MS,
     HOOK_CAPABLE_ADAPTERS,
@@ -39,8 +39,9 @@ from coding_agent_playbook.hook_runtime.stop.stages import DEFAULT_BUDGET_S
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
 
+    from coding_agent_playbook.artifacts.hook_frontmatter import HookFrontmatter
+    from coding_agent_playbook.artifacts.hook_schema import HookHandler
     from coding_agent_playbook.hook_policy import ResolvedHook
-    from coding_agent_playbook.types import HookFrontmatter, HookHandler
 
 __all__ = [
     "BOOTSTRAP_DEADLINE_MS",

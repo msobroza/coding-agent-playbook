@@ -19,27 +19,12 @@ from typing import Any, Literal
 
 import yaml
 
-from coding_agent_playbook import _hook_schema as schema
-
-# HookFrontmatter lives in a leaf of its own (file-size budget); this module is
-# still its public home, so every importer keeps
-# ``from coding_agent_playbook.types import HookFrontmatter``.
-from coding_agent_playbook._hook_frontmatter import HookFrontmatter as HookFrontmatter
-
-# The nested HOOK.md levels live beside their key sets (file-size budget); this
-# module is their public home, so import them from here.
-from coding_agent_playbook._hook_schema import HookDecision as HookDecision
-from coding_agent_playbook._hook_schema import HookEvent as HookEvent
-from coding_agent_playbook._hook_schema import HookHandler as HookHandler
-from coding_agent_playbook._hook_schema import HookLauncher as HookLauncher
-from coding_agent_playbook._hook_schema import HookMatcher as HookMatcher
-from coding_agent_playbook._hook_schema import HookOnError as HookOnError
-from coding_agent_playbook._hook_schema import HookSchemaError as HookSchemaError
-from coding_agent_playbook._hook_schema import HookTier as HookTier
-from coding_agent_playbook._hook_schema import ToolClass as ToolClass
+from coding_agent_playbook.artifacts import hook_schema as schema
+from coding_agent_playbook.artifacts.hook_frontmatter import HookFrontmatter
+from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
 
 # Imported at run time: Skill.from_dict rebuilds member references from dicts.
-from coding_agent_playbook._member_reference import MemberReference
+from coding_agent_playbook.artifacts.member_reference import MemberReference
 
 _FENCE = "---"
 
@@ -314,8 +299,8 @@ class Skill:
 
 
 # --- Hook: the 4th canonical kind (specs/prK-lifecycle-hooks.md §A) -----------
-# Its frontmatter class, HookFrontmatter, is defined in _hook_frontmatter (imported
-# at the top of this module).
+# Its frontmatter class, HookFrontmatter, is defined in artifacts.hook_frontmatter
+# (imported at the top of this module).
 
 
 @dataclass

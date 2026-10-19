@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from coding_agent_playbook.artifacts.hook_schema import HookMatcher
 from coding_agent_playbook.hook_policy.resolved import ResolvedHandler, ResolvedHook
 from coding_agent_playbook.hook_runtime.config.guard_config import (
     GUARD_CONFIG_REL,
@@ -34,7 +35,6 @@ from coding_agent_playbook.hook_runtime.shell import ShellConfig
 from coding_agent_playbook.hook_runtime.state import StateStore
 from coding_agent_playbook.lockfile.model import Lockfile
 from coding_agent_playbook.security.patterns import SECRET_PATH_GLOBS
-from coding_agent_playbook.types import HookMatcher
 from tests.engine_modules import engine_module
 from tests.import_probe import new_modules_after
 
