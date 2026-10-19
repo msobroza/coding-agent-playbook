@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
+from coding_agent_playbook.agent_harness.adapter import AgentHarnessAdapter
 from coding_agent_playbook.agent_harness.manifest import ScriptEntry, read_manifest
 from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.artifacts.hook_frontmatter import HookFrontmatter

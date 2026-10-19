@@ -330,7 +330,6 @@ def test_file_drift_names_a_link_leaving_a_native_skill_dir(tmp_path: Path) -> N
 
 
 def test_native_skill_roots_are_the_skill_writer_roots_of_the_given_adapters() -> None:
-    from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
     from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
     from coding_agent_playbook.adapters.continue_ import ContinueAdapter
     from coding_agent_playbook.adapters.opencode import OpenCodeAdapter
@@ -338,6 +337,7 @@ def test_native_skill_roots_are_the_skill_writer_roots_of_the_given_adapters() -
         SHARED_SKILLS_ROOT,
         SharedSkillsAdapter,
     )
+    from coding_agent_playbook.agent_harness.adapter import AgentHarnessAdapter
 
     native = {
         "claude_code": ClaudeCodeAdapter(),
