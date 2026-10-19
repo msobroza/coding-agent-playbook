@@ -34,9 +34,9 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.deps import Clock, ProcPort
     from coding_agent_playbook.hook_runtime.event import RepoInfo
     from coding_agent_playbook.hook_runtime.git import GitPort
-    from coding_agent_playbook.hook_runtime.gitargv import GitInvocation
     from coding_agent_playbook.hook_runtime.judges.commit_cutover import CzPlan
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
+    from coding_agent_playbook.hook_runtime.shell.git_command import GitInvocation
 
 __all__ = [
     "CZ_TIMEOUT_S",
@@ -183,7 +183,7 @@ def push_ranges(git: GitInvocation, port: GitPort) -> list[tuple[str, str]]:
 
     Example: ``push_ranges(parse_git(seg("git push")), git) == [("refs/remotes/origin/x", "HEAD")]``.
     """
-    from coding_agent_playbook.hook_runtime._git_options import git_args
+    from coding_agent_playbook.hook_runtime.shell.git_options import git_args
 
     parsed = git_args(git.args, "push")
     if parsed.has(*_NO_PUSH_RANGE):

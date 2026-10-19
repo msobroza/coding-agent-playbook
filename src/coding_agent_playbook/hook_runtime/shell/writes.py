@@ -16,12 +16,12 @@ import re
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime._shell_options import OptionSpec, long_names, option_arity
+from coding_agent_playbook.hook_runtime.shell._options import OptionSpec, long_names, option_arity
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from coding_agent_playbook.hook_runtime._shell_segments import Redirect, Segment
+    from coding_agent_playbook.hook_runtime.shell.segments import Redirect, Segment
 
 _FILE_WRITE_OPS = frozenset({">", ">>", ">|", "&>", "&>>", "<>"})
 _FD_TARGET = re.compile(r"\d+|-")
@@ -33,7 +33,7 @@ def write_targets(segment: Segment) -> list[str]:
 
     Example::
 
-        >>> from coding_agent_playbook.hook_runtime.shell import parse_shell
+        >>> from coding_agent_playbook.hook_runtime.shell.parse import parse_shell
         >>> write_targets(parse_shell("cp AGENTS.md /tmp/x", "posix", "/r").segments[0])
         ['/tmp/x']
     """

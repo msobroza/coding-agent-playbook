@@ -27,7 +27,6 @@ import posixpath
 import re
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime._git_options import git_args
 from coding_agent_playbook.hook_runtime.caps import clean_text, clip
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.handlers._git_identity import (
@@ -35,14 +34,15 @@ from coding_agent_playbook.hook_runtime.handlers._git_identity import (
     identity_rule,
 )
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
+from coding_agent_playbook.hook_runtime.shell.git_options import git_args
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
 
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, RepoInfo
-    from coding_agent_playbook.hook_runtime.gitargv import GitInvocation
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.shell import Segment
+    from coding_agent_playbook.hook_runtime.shell.git_command import GitInvocation
+    from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
     type Verdict = tuple[Decision, str, str]
 
@@ -102,7 +102,7 @@ def git_policy_guard(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult |
 
 
 def _segment_verdict(segment: Segment, repo: RepoInfo, ctx: HandlerContext) -> Verdict | None:
-    from coding_agent_playbook.hook_runtime.gitargv import parse_git
+    from coding_agent_playbook.hook_runtime.shell.git_command import parse_git
 
     git = parse_git(segment)
     rule = identity_rule(segment, git)

@@ -13,9 +13,9 @@ from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 
-from coding_agent_playbook.hook_runtime._verify_tag import verify_ids
 from coding_agent_playbook.hook_runtime.event import ShellSource, ToolCall, ToolClass
-from coding_agent_playbook.hook_runtime.shell import ShellConfig
+from coding_agent_playbook.hook_runtime.shell.parse import ShellConfig
+from coding_agent_playbook.hook_runtime.stop.verify_tag import verify_ids
 
 if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig

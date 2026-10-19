@@ -32,7 +32,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.config.reader import FileTooLarge, read_small_file
-from coding_agent_playbook.hook_runtime.wrapper_policy import WrapperDeclaration, declare_wrappers
+from coding_agent_playbook.hook_runtime.shell.wrapper_policy import (
+    WrapperDeclaration,
+    declare_wrappers,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence

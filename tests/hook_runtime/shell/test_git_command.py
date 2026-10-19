@@ -10,13 +10,13 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.gitargv import (
+from coding_agent_playbook.hook_runtime.shell.git_command import (
     GitInvocation,
     Uninspectable,
     commit_message_sources,
     parse_git,
 )
-from coding_agent_playbook.hook_runtime.shell import ShellConfig, parse_shell
+from coding_agent_playbook.hook_runtime.shell.parse import ShellConfig, parse_shell
 
 if TYPE_CHECKING:
     from pathlib import Path

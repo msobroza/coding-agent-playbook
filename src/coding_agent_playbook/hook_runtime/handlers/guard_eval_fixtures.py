@@ -42,7 +42,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.globs import GlobSet
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.shell import Segment
+    from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
 __all__ = ["FROZEN_REASON", "guard_eval_fixtures"]
 
@@ -81,7 +81,7 @@ def guard_eval_fixtures(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResul
 
 def _targets(ev: CanonicalEvent, ctx: HandlerContext) -> list[NormalizedPath]:
     """File-tool write paths, then each Bash segment's write targets and formatter operands."""
-    from coding_agent_playbook.hook_runtime.shell import write_targets  # Bash branch only
+    from coding_agent_playbook.hook_runtime.shell.parse import write_targets  # Bash branch only
 
     assert ev.tool is not None  # checked by the handler
     found = file_write_paths(ev.tool)
@@ -95,7 +95,7 @@ def _targets(ev: CanonicalEvent, ctx: HandlerContext) -> list[NormalizedPath]:
 
 def _formatter_paths(argv: Sequence[str]) -> list[str]:
     """The path operands of ``ruff format``, ``ruff [check] --fix``, ``black`` or ``isort``."""
-    from coding_agent_playbook.hook_runtime._shell_writes import operands
+    from coding_agent_playbook.hook_runtime.shell.writes import operands
 
     if not argv:
         return []
