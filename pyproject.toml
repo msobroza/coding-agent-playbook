@@ -296,15 +296,12 @@ exhaustive_ignores = [
     "prompt_rule_delivery",
     "renderer",
     "rule_registry",
-    "types",
 ]
 ignore_imports = [
     # CF-2 deletes _typing.py (after #62)
     "coding_agent_playbook._typing -> coding_agent_playbook.evals.task",
     # kept: catalog-layers (the artifact source parses eval tasks) is not scheduled (L12)
     "coding_agent_playbook.catalog.source -> coding_agent_playbook.evals.**",
-    # SK-1 types undelivered_member_warning with a local Protocol (TYPE_CHECKING Adapter)
-    "coding_agent_playbook.skills.membership -> coding_agent_playbook.adapters.base",
 ]
 broken_contract_guidance = """
 A lower layer may not import a higher one, directly or through modules outside the layers.
@@ -374,7 +371,6 @@ forbidden_modules = [
     "coding_agent_playbook.rule_registry",
     "coding_agent_playbook.skills",
     "coding_agent_playbook.toml_writer",
-    "coding_agent_playbook.types",
     "coding_agent_playbook.validation",
     "jinja2",
     "packaging",
@@ -437,7 +433,6 @@ forbidden_modules = [
     "coding_agent_playbook.rule_registry",
     "coding_agent_playbook.skills",
     "coding_agent_playbook.toml_writer",
-    "coding_agent_playbook.types",
     "coding_agent_playbook.validation",
     "jinja2",
     "packaging",
@@ -456,7 +451,7 @@ ignore_imports = [
     "coding_agent_playbook.hook_runtime.handlers.docstring_nonregression -> coding_agent_playbook.evaluators.**",
     "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.evals.**",
     "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.catalog.source",
-    "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.types",
+    "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.artifacts.**",
     # N15 moves the judge into hook_runtime/judges/ and deletes these two lines
     "coding_agent_playbook.hook_runtime.handlers.gate_weakening -> coding_agent_playbook.gate_scan",
     "coding_agent_playbook.hook_runtime.handlers.gate_weakening_edit -> coding_agent_playbook.gate_scan",
@@ -525,7 +520,6 @@ forbidden_modules = [
     "coding_agent_playbook.rule_registry",
     "coding_agent_playbook.skills",
     "coding_agent_playbook.toml_writer",
-    "coding_agent_playbook.types",
     "coding_agent_playbook.validation",
     "jinja2",
     "packaging",

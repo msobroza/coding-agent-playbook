@@ -10,9 +10,9 @@ from typing import Any
 
 import pytest
 
+from coding_agent_playbook.artifacts.hook import Hook
 from coding_agent_playbook.artifacts.hook_frontmatter import HookFrontmatter
 from coding_agent_playbook.artifacts.hook_schema import HookHandler, HookSchemaError
-from coding_agent_playbook.types import Hook
 from tests.hook_samples import (
     GUARD_GENERATED_OUTPUTS_MD,
     HOOK_WHERE,

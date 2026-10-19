@@ -25,8 +25,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from coding_agent_playbook.artifacts.prompt import Prompt
     from coding_agent_playbook.evals.task import EvalTask
-    from coding_agent_playbook.types import Prompt
 
 #: The aggregate handle ``metric`` axis the multi-trial layer recognizes.
 _AGGREGATE_METRICS = frozenset({"pass_at_k", "pass_pow_k"})

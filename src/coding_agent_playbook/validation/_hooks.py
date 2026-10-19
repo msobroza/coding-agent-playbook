@@ -44,11 +44,11 @@ from coding_agent_playbook.validation.findings import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
+    from coding_agent_playbook.artifacts.hook import Hook
     from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
     from coding_agent_playbook.config.tables.hooks import HooksConfig
     from coding_agent_playbook.hook_policy import HandlerCatalog
     from coding_agent_playbook.orchestrator import SyncContext
-    from coding_agent_playbook.types import Hook
 
 #: Every enabled hook's advisory lands in AGENTS.md (§C.4.2); past this many
 #: characters of body, validate warns so the Guardrails section stays lean.

@@ -17,7 +17,7 @@ from coding_agent_playbook.hook_runtime.active_prompt import SCOPE_GUARD_ID
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
-    from coding_agent_playbook.types import Prompt
+    from coding_agent_playbook.artifacts.prompt import Prompt
 
 __all__ = ["SCOPE_GUARD_ID", "prompt_scopes", "with_prompt_scopes"]
 

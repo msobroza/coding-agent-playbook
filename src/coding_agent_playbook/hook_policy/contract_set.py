@@ -44,9 +44,10 @@ from coding_agent_playbook.hook_runtime.wrapper_policy import hidden_program
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
 
+    from coding_agent_playbook.artifacts.hook import Hook
+    from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.config.tables.hooks import HooksConfig
     from coding_agent_playbook.hook_policy.handler_catalog import HandlerCatalog
-    from coding_agent_playbook.types import Hook, Rule
 
 #: The stages ``[hooks.stop-ci-parity-gate] stages`` may enable (§B.1): the two
 #: that run repo-controlled code, so trust-gated (§B.4).

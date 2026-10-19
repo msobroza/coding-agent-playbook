@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from coding_agent_playbook.types import Prompt, PromptFrontmatter
+from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
 from coding_agent_playbook.validation.findings import ValidationError
 from coding_agent_playbook.validation.prompts import (
     check_prompt_rule_calls,

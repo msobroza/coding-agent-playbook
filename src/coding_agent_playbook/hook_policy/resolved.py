@@ -27,8 +27,9 @@ from coding_agent_playbook.hook_policy.tables import HOOK_SCRIPTS_DIR
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
+    from coding_agent_playbook.artifacts.hook import Hook
     from coding_agent_playbook.artifacts.hook_schema import HookHandler, HookMatcher
-    from coding_agent_playbook.types import Hook, Rule
+    from coding_agent_playbook.artifacts.rule import Rule
 
 #: ``entry_point`` is a builtin name resolved at sync to an out-of-tree handler of the
 #: ``coding_agent_playbook.hook_handlers`` group (``target`` + ``dist``; in-tree wins).

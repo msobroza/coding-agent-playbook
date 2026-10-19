@@ -13,8 +13,8 @@ from __future__ import annotations
 from importlib import resources
 from pathlib import Path
 
+from coding_agent_playbook.artifacts.rule import Rule
 from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE
-from coding_agent_playbook.types import Rule
 
 #: The repository checkout this test suite runs from.
 REPO_ROOT: Path = Path(__file__).resolve().parents[1]

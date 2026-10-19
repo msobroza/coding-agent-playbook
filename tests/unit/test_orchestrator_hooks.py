@@ -36,7 +36,7 @@ from tests.hook_samples import sample_hook
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from coding_agent_playbook.types import Hook
+    from coding_agent_playbook.artifacts.hook import Hook
 
 
 def _make_hook(hook_id: str, source: str, **overrides: Any) -> Hook:

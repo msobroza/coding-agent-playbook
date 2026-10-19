@@ -1,0 +1,56 @@
+# A2 (#115, specs/prT-package-layout.md 4.19, 7.6): types.py is split verbatim into
+# artifacts/frontmatter.py, rule.py, prompt.py, skill.py and hook.py, and deleted. A
+# split has no single [[module]] destination, so one [[names]] row per destination
+# lets apply split every ``from ...types import A, B`` by defining module. Only the
+# public names importers use are listed: nothing outside types.py imported _FENCE,
+# _without_empty or _read_markdown (a grep over src/ and tests/ at the move).
+
+[[names]]
+pr = "A2"
+old = "coding_agent_playbook.types"
+new = "coding_agent_playbook.artifacts.frontmatter"
+names = ["format_frontmatter", "split_frontmatter"]
+
+[[names]]
+pr = "A2"
+old = "coding_agent_playbook.types"
+new = "coding_agent_playbook.artifacts.rule"
+names = ["Rule", "RuleFrontmatter"]
+
+[[names]]
+pr = "A2"
+old = "coding_agent_playbook.types"
+new = "coding_agent_playbook.artifacts.prompt"
+names = ["Prompt", "PromptFrontmatter"]
+
+[[names]]
+pr = "A2"
+old = "coding_agent_playbook.types"
+new = "coding_agent_playbook.artifacts.skill"
+names = ["Skill"]
+
+[[names]]
+pr = "A2"
+old = "coding_agent_playbook.types"
+new = "coding_agent_playbook.artifacts.hook"
+names = ["Hook"]
+
+[[path]]
+pr = "A2"
+old = "tests/unit/test_types.py"
+new = "tests/artifacts/test_artifacts.py"
+
+[[path]]
+pr = "A2"
+old = "tests/unit/test_types_hook.py"
+new = "tests/artifacts/test_hook.py"
+
+[[path]]
+pr = "A2"
+old = "tests/unit/test_types_hook_roundtrip.py"
+new = "tests/artifacts/test_hook_roundtrip.py"
+
+[[path]]
+pr = "A2"
+old = "tests/unit/test_types_skill_fields.py"
+new = "tests/artifacts/test_skill_fields.py"

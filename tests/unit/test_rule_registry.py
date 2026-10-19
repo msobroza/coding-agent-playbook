@@ -19,10 +19,10 @@ import pytest
 from jinja2 import UndefinedError
 
 from coding_agent_playbook import orchestrator
+from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.prompt_rule_delivery import SkillReference
 from coding_agent_playbook.renderer import TemplateSecurityError, build_environment, render_string
 from coding_agent_playbook.rule_registry import RuleRegistryImpl, build_prompt_environment
-from coding_agent_playbook.types import Rule, RuleFrontmatter
 from tests.engine_modules import engine_module
 from tests.import_probe import new_modules_after
 

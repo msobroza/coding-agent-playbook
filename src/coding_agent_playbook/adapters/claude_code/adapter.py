@@ -81,11 +81,13 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
 
     from coding_agent_playbook.adapters.claude_code.settings.managed_merge import MergeResult
+    from coding_agent_playbook.artifacts.prompt import Prompt
+    from coding_agent_playbook.artifacts.rule import Rule
+    from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.config.tables.hooks import HooksConfig
     from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.lockfile.model import LockEntry, Lockfile
     from coding_agent_playbook.prompt_rule_delivery import SkillReferenceIndex
-    from coding_agent_playbook.types import Prompt, Rule, Skill
 
 #: The committed launcher's directory: sentinel-scanned, and a declared output location.
 _LAUNCHER_DIR = LAUNCHER_PATH.rsplit("/", 1)[0]
