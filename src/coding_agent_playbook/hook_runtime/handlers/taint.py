@@ -26,10 +26,10 @@ import os
 import re
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime._hosts import is_loopback
 from coding_agent_playbook.hook_runtime.caps import quote_data
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.event import ToolClass
+from coding_agent_playbook.hook_runtime.judges.hosts import is_loopback
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.security.files import user_home
 
@@ -157,7 +157,7 @@ def _risky_action(
 def _segment_action(segment: Segment) -> tuple[str, str] | None:
     from coding_agent_playbook.hook_runtime.gitargv import parse_git
     from coding_agent_playbook.hook_runtime.handlers._egress import network_hosts, segment_egress
-    from coding_agent_playbook.hook_runtime.handlers._install_cmds import install_requests
+    from coding_agent_playbook.hook_runtime.judges.install_commands import install_requests
 
     git = parse_git(segment)
     if git is not None and git.subcommand == "push":

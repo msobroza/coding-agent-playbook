@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.hook_runtime._hosts import (
+from coding_agent_playbook.hook_runtime.judges.hosts import (
     extract_hosts,
     host_matches,
     is_loopback,

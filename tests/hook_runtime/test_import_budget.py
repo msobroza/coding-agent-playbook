@@ -758,7 +758,7 @@ def test_bash_guards_need_no_git_and_no_process_off_git_segments(
 
 
 #: The helpers each guard imports at module load: their presence shows the guard ran.
-_INSTALL_CMDS: Final = engine_module("coding_agent_playbook.hook_runtime.handlers._install_cmds")
+_INSTALL_CMDS: Final = engine_module("coding_agent_playbook.hook_runtime.judges.install_commands")
 _EGRESS: Final = engine_module("coding_agent_playbook.hook_runtime.handlers._egress")
 _BRANCH_LOCAL: Final = ("tomllib", "difflib", "ipaddress")
 

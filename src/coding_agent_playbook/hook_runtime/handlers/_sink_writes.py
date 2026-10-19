@@ -5,7 +5,7 @@ built in memory before anything reaches the disk:
 
 - Write / Edit / MultiEdit: ``edit_preview.preview_after`` on the current
   text (``replace_all`` honored); a notebook's images are its code cells
-  (``_notebook_cells.cells_code``), so an earlier cell's import resolves a
+  (``judges.notebook_cells.cells_code``), so an earlier cell's import resolves a
   later cell's alias;
 - NotebookEdit: the notebook with that cell's ``new_source`` replaced or
   inserted (a ``delete`` or a markdown cell adds nothing);
@@ -27,14 +27,14 @@ from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.edit_preview import preview_after
 from coding_agent_playbook.hook_runtime.event import ToolClass
-from coding_agent_playbook.hook_runtime.handlers._notebook_cells import (
+from coding_agent_playbook.hook_runtime.handlers._targets import file_write_paths, repo_file
+from coding_agent_playbook.hook_runtime.judges.notebook_cells import (
     cell_index,
     cells_code,
     is_code_cell,
     notebook_cells,
     notebook_code,
 )
-from coding_agent_playbook.hook_runtime.handlers._targets import file_write_paths, repo_file
 
 if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.config import GuardConfig

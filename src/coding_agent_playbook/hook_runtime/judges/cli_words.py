@@ -1,6 +1,6 @@
 """A command's words split the way a typical CLI reads them (specs/prK-hook-pack.md §E.4).
 
-The install parser (``_install_cmds``) and the egress classifier (``_egress``)
+The install parser (``install_commands``) and the egress classifier (``_egress``)
 read pip, uv, npm, curl, wget, scp and friends, whose option grammars agree on
 the basics: ``--name=value``; ``--name value`` and ``-x value`` when the option
 takes a value (the caller's table); ``-xvalue`` for a short one; ``--`` ends
