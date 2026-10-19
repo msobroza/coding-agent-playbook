@@ -63,6 +63,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook._toml` | `coding_agent_playbook.toml_writer` | N1 |
 | `coding_agent_playbook.adapters._agent_skill_rules` | `coding_agent_playbook.skills.naming` | A3 |
 | `coding_agent_playbook.adapters._claude_hooks` | `coding_agent_playbook.adapters.claude_code.hooks` | A8 |
+| `coding_agent_playbook.adapters._harness_hooks` | `coding_agent_playbook.agent_harness.hook_sidecars` | AH-1 |
 | `coding_agent_playbook.adapters._owned_files` | `coding_agent_playbook.generated_output.write_guard` | A7 |
 | `coding_agent_playbook.adapters._prior_output` | `coding_agent_playbook.adapters.skill_dirs.ownership` | A9 |
 | `coding_agent_playbook.adapters._settings_drift` | `coding_agent_playbook.adapters.claude_code.settings.drift` | N13 |
@@ -75,6 +76,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.adapters._skill_writer.agent_skill_issues` | `coding_agent_playbook.skills.naming.agent_skill_issues` | A3 |
 | `coding_agent_playbook.adapters._skill_writer.has_declared_id` | `coding_agent_playbook.skills.naming.has_declared_id` | A3 |
 | `coding_agent_playbook.adapters._skill_writer.skill_id_of` | `coding_agent_playbook.skills.naming.skill_id_of` | A3 |
+| `coding_agent_playbook.adapters.agent_harness_adapter` | `coding_agent_playbook.agent_harness.adapter` | AH-1 |
 | `coding_agent_playbook.adapters.agents_md_adapter` | `coding_agent_playbook.adapters.agents_md` | A9 |
 | `coding_agent_playbook.adapters.claude_code.settings._plan.LAUNCHER_TOKEN` | `coding_agent_playbook.hooks.registrations.launcher.LAUNCHER_TOKEN` | A18 |
 | `coding_agent_playbook.adapters.claude_code.settings.managed_merge.LAUNCHER_TOKEN` | `coding_agent_playbook.hooks.registrations.launcher.LAUNCHER_TOKEN` | A18 |
@@ -102,6 +104,9 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.commands.gate_scan` | `coding_agent_playbook.commands.twins.gate_scan` | N8 |
 | `coding_agent_playbook.commands.gate_scan.ScanRange` | `coding_agent_playbook.commands.twins._git_scope.ScanRange` | N8 |
 | `coding_agent_playbook.commands.gate_scan.resolve_range` | `coding_agent_playbook.commands.twins._git_scope.resolve_range` | N8 |
+| `coding_agent_playbook.commands.import_harness.IMPORTED_SOURCE_PACKAGE` | `coding_agent_playbook.agent_harness.importer.IMPORTED_SOURCE_PACKAGE` | AH-1 |
+| `coding_agent_playbook.commands.import_harness.ImportResult` | `coding_agent_playbook.agent_harness.importer.ImportResult` | AH-1 |
+| `coding_agent_playbook.commands.import_harness.import_harness` | `coding_agent_playbook.agent_harness.importer.import_harness` | AH-1 |
 | `coding_agent_playbook.commands.init.PrecommitTemplateMissingError` | `coding_agent_playbook.precommit.PrecommitTemplateMissingError` | N9 |
 | `coding_agent_playbook.commands.init.precommit_template_dir` | `coding_agent_playbook.precommit.precommit_template_dir` | N9 |
 | `coding_agent_playbook.commands.scan_secrets` | `coding_agent_playbook.commands.twins.scan_secrets` | N8 |

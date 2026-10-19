@@ -15,7 +15,8 @@ import shutil
 import stat
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.adapters.agent_harness_adapter import AgentHarnessAdapter
+from coding_agent_playbook.agent_harness.adapter import AgentHarnessAdapter
+from coding_agent_playbook.agent_harness.importer import import_harness
 from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill
@@ -278,7 +279,7 @@ def _emit_member_rule_harness(tmp_path: Path) -> Path:
 def test_lossless_import_restores_rule_skill(tmp_path: Path) -> None:
     harness = _emit_member_rule_harness(tmp_path)
 
-    [rule] = _import.import_harness(harness).rules
+    [rule] = import_harness(harness).rules
 
     assert (rule.frontmatter.id, rule.frontmatter.skill) == ("python-typing", "python-coding")
 
@@ -287,7 +288,7 @@ def test_best_effort_import_warns_that_scoped_rules_need_a_skill(tmp_path: Path)
     harness = _emit_member_rule_harness(tmp_path)
     shutil.rmtree(harness / ".playbook")  # no sidecar: best-effort (foreign) import
 
-    result = _import.import_harness(harness)
+    result = import_harness(harness)
 
     [rule] = result.rules
     assert rule.frontmatter.skill is None
@@ -303,7 +304,7 @@ def test_best_effort_import_of_an_always_rule_asks_for_no_skill(tmp_path: Path) 
     harness = _emit_full_harness(tmp_path)
     shutil.rmtree(harness / ".playbook")
 
-    warnings = _import.import_harness(harness).warnings
+    warnings = import_harness(harness).warnings
 
     [always] = [w for w in warnings if w.startswith("rule 'python-house-style'")]
     assert "skill" not in always
