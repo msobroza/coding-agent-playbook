@@ -435,7 +435,7 @@ def _read_text(root: str, rel: str) -> str | None:
 
 
 def _head_text(ctx: HandlerContext, rel: str) -> str | None:
-    from coding_agent_playbook.metrics_gate.inputs import decode_source_blob
+    from coding_agent_playbook.grading.measuring import decode_source_blob
 
     blob = ctx.git.cat_head(rel)
     return None if blob is None else decode_source_blob(blob)

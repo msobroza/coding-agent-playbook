@@ -296,23 +296,18 @@ def test_report_has_per_check_subresults_shape(tmp_path):
     function scope as ``fail``.
     """
     from coding_agent_playbook.grading.check import MeasurementSet
+    from coding_agent_playbook.grading.measuring import SourceMeter, measured_metrics
     from coding_agent_playbook.grading.metric import static_metrics
-    from coding_agent_playbook.grading.parse import parse_module
-    from coding_agent_playbook.grading.types import EvalContext, ScopeDetail
+    from coding_agent_playbook.grading.types import EvalContext, MeasureSetup, ScopeDetail
     from coding_agent_playbook.metrics_gate.config import MetricConfig
 
     static = static_metrics()
-    source = _HIGH_CC_SOURCE
-    module = parse_module(source, "tangled.py")
-    ctx = EvalContext(module=module, source=source, label="tangled.py")
-    candidate = []
-    for metric in static:
-        if metric.available(ctx):
-            candidate.extend(metric.measure(ctx))
+    candidate = SourceMeter(static, MeasureSetup()).measure(_HIGH_CC_SOURCE, "tangled.py")
 
     config = MetricConfig(mode="absolute")
     rubric = build_rubric(static, config)
-    grading_ctx = EvalContext(module=parse_module("", "metrics"), source="", label="metrics")
+    measured = measured_metrics(static, MeasureSetup())
+    grading_ctx = EvalContext(module=None, source="", label="metrics", measured_metrics=measured)
     report = rubric.evaluate(grading_ctx, MeasurementSet(candidate, None), fail_fast=False)
 
     assert report.passed is False

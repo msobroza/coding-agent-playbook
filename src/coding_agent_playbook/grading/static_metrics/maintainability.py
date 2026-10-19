@@ -27,21 +27,19 @@ from coding_agent_playbook.grading.scope import Scope
 from coding_agent_playbook.grading.types import Measurement
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.grading.types import EvalContext
+    from coding_agent_playbook.grading.types import EvalContext, MeasureSetup
 
 _NAME = "maintainability_index"
 
 
-def _available(ctx: EvalContext) -> bool:
-    """True only when radon is importable *and* a parsed module is present.
+def _radon_importable() -> bool:
+    """True only when radon is importable (the optional ``metrics`` extra).
 
-    Mirrors :meth:`Metric.available`'s dependency probe (``find_spec``) but also
-    requires a parsed module, so the gate skips MI both when the optional extra is
-    missing and when there is nothing static to measure.
+    Looked up through ``importlib.util`` at call time, like
+    :meth:`Metric.runnable`'s dependency probe (``find_spec``), so the gate skips
+    MI when the optional extra is missing.
     """
-    if importlib.util.find_spec("radon") is None:
-        return False
-    return ctx.module is not None
+    return importlib.util.find_spec("radon") is not None
 
 
 def _measure(ctx: EvalContext) -> list[Measurement]:
@@ -82,8 +80,19 @@ class MaintainabilityIndexMetric(Metric):
     normalizer = PercentNormalizer()
     requires = "radon"
 
+    def runnable(self, setup: MeasureSetup) -> bool:
+        """Only with radon importable.
+
+        Example::
+
+            >>> MaintainabilityIndexMetric().runnable(MeasureSetup())  # radon is an extra
+            False
+        """
+        return _radon_importable()
+
     def available(self, ctx: EvalContext) -> bool:
-        return _available(ctx)
+        """Radon importable *and* a parsed module: nothing static to measure otherwise."""
+        return self.runnable(ctx.measure_setup) and ctx.module is not None
 
     def measure(self, ctx: EvalContext) -> list[Measurement]:
         return _measure(ctx)

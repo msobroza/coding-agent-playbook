@@ -18,9 +18,9 @@ from coding_agent_playbook.grading.execution_metrics.project import ProjectHandl
 from coding_agent_playbook.grading.metric import Metric, static_metrics
 from coding_agent_playbook.grading.normalizer import Identity
 from coding_agent_playbook.grading.scope import Scope
+from coding_agent_playbook.grading.types import MAX_FILE_BYTES
 from coding_agent_playbook.metrics_gate.config import MetricConfig
 from coding_agent_playbook.metrics_gate.run import (
-    MAX_FILE_BYTES,
     MetricsGateDeps,
     MetricsGateRequest,
     MetricsGateUsageError,

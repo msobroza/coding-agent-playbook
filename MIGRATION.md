@@ -342,7 +342,14 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.lockfile.managed_drift` | `coding_agent_playbook.lockfile.drift.managed_drift` | N5 |
 | `coding_agent_playbook.lockfile.parse_json_document` | `coding_agent_playbook.lockfile.drift.parse_json_document` | N5 |
 | `coding_agent_playbook.metrics_config` | `coding_agent_playbook.metrics_gate.config` | N22 |
+| `coding_agent_playbook.metrics_gate.inputs.IGNORED_DIRS` | `coding_agent_playbook.grading.measuring.IGNORED_DIRS` | B8 |
+| `coding_agent_playbook.metrics_gate.inputs.MAX_FILE_BYTES` | `coding_agent_playbook.grading.types.MAX_FILE_BYTES` | B8 |
+| `coding_agent_playbook.metrics_gate.inputs.SourceMeter` | `coding_agent_playbook.grading.measuring.SourceMeter` | B8 |
+| `coding_agent_playbook.metrics_gate.inputs.decode_source_blob` | `coding_agent_playbook.grading.measuring.decode_source_blob` | B8 |
 | `coding_agent_playbook.metrics_gate.run.CONFIG_FILENAME` | `coding_agent_playbook.config.files.CONFIG_FILENAME` | B2 |
+| `coding_agent_playbook.metrics_gate.run.MAX_FILE_BYTES` | `coding_agent_playbook.grading.types.MAX_FILE_BYTES` | B8 |
+| `coding_agent_playbook.metrics_gate.suite.ProjectFactory` | `coding_agent_playbook.grading.execution_metrics.project.ProjectFactory` | B8 |
+| `coding_agent_playbook.metrics_gate.suite.SUITE_LABEL` | `coding_agent_playbook.grading.measuring.SUITE_LABEL` | B8 |
 | `coding_agent_playbook.orchestrator.Collision` | `coding_agent_playbook.catalog.resolve.Collision` | A5 |
 | `coding_agent_playbook.orchestrator.OverlayResolver` | `coding_agent_playbook.catalog.resolve.OverlayResolver` | A5 |
 | `coding_agent_playbook.orchestrator.SyncContext` | `coding_agent_playbook.validation.context.SyncContext` | A5 |
@@ -394,6 +401,19 @@ rubric and gate registries are
 `coding_agent_playbook.evals.compile.gate_registry`. There is no shim, and the
 entry-point groups do not change.
 <!-- module-moves: end-keep -->
+
+Out-of-tree `Metric` authors: at grade time, a threshold or non-regression check
+over a static or execution metric no longer calls the metric's `available(ctx)`.
+The grading kernel's one measuring pass (`coding_agent_playbook.grading.measuring`)
+promises each metric it measures whose `runnable(setup)` holds, and the check
+runs when its metric is in that promise (`EvalContext.measured_metrics`), even if
+no file produced a row. The default `Metric.runnable` checks only `requires`, so
+a metric that needs anything else from its environment (a tool, an environment
+variable, another import) must override `runnable(setup)` with that condition
+(`setup` is a `coding_agent_playbook.grading.types.MeasureSetup`). A condition
+left only in `available(ctx)` still stops the metric from measuring, but its
+check then runs over no rows and passes instead of reporting `skipped`. A check
+over a judge-backed metric still asks the metric's `available(ctx)`.
 
 ## v0.21 — Skills-first context
 

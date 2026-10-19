@@ -34,6 +34,11 @@ Mode = Literal["regression", "absolute", "both"]
 #: so one slower than this means a wedged repository (lock contention, network FS).
 DEFAULT_GIT_TIMEOUT_S = 10.0
 
+#: Default :attr:`MeasureSetup.max_file_bytes`: a larger source is never parsed. A
+#: module that size is generated or vendored, and parsing it would blow the Stop
+#: stage budget.
+MAX_FILE_BYTES: Final = 1_000_000
+
 #: Default ``[metrics.ruff_violations] families`` (prK §F.2.1): the Clean Code
 #: budget codes and pydocstyle's missing-docstring codes, all stable in ruff 0.15.
 DEFAULT_RUFF_FAMILIES: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
@@ -96,6 +101,26 @@ class ToolSetup:
     git: Callable[[Path, float], GitRunner] | None = None
     exclude: tuple[str, ...] = ()
     changed_lines: Callable[[Path, str], Mapping[str, frozenset[int]]] | None = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class MeasureSetup:
+    """What a measuring pass may run: the tools, how they run, the per-file byte cap.
+
+    ``tool_paths`` maps a consumer-toolchain binary name (``"ruff"``) to the
+    executable a subprocess-backed metric runs; ``tool_setup`` is how it runs.
+    The measuring pass (:mod:`coding_agent_playbook.grading.measuring`) never
+    parses a source over ``max_file_bytes``.
+
+    Example::
+
+        >>> MeasureSetup(tool_paths={"ruff": "/usr/bin/ruff"}).max_file_bytes
+        1000000
+    """
+
+    tool_paths: Mapping[str, str] = field(default_factory=dict)
+    tool_setup: ToolSetup = field(default_factory=ToolSetup)
+    max_file_bytes: int = MAX_FILE_BYTES
 
 
 @dataclass(frozen=True)
@@ -314,6 +339,11 @@ class EvalContext:
     ``shutil.which`` for the CLI. ``tool_setup`` says how that tool runs (the
     runner, the repository root, the timeout, the ruff settings); only
     ``ruff_violations`` reads either.
+
+    ``measured_metrics`` names the metrics the measuring pass
+    (:mod:`coding_agent_playbook.grading.measuring`) ran before grading, whether
+    or not a file produced a row: a check over any other non-judge metric is
+    unavailable at grade time.
     """
 
     module: ModuleModel | None
@@ -330,3 +360,17 @@ class EvalContext:
     trials: list[TrialResult] | None = None
     tool_paths: Mapping[str, str] = field(default_factory=dict)
     tool_setup: ToolSetup = field(default_factory=ToolSetup)
+    measured_metrics: frozenset[str] = frozenset()
+
+    @property
+    def measure_setup(self) -> MeasureSetup:
+        """The tools this context lets a metric run, as :meth:`Metric.runnable` reads them.
+
+        The byte cap is the default: a context holds one source, already read.
+
+        Example::
+
+            >>> EvalContext(module=None, source="", label="a.py").measure_setup.tool_paths
+            {}
+        """
+        return MeasureSetup(tool_paths=self.tool_paths, tool_setup=self.tool_setup)

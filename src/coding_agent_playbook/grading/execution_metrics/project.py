@@ -36,7 +36,7 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 from coding_agent_playbook.grading.execution_metrics.coverage_xml import (
     CoverageReport,
@@ -274,3 +274,22 @@ class ProjectHandle:
         if not path.is_file():
             return CoverageReport()
         return parse_coverage_xml(path.read_text(encoding="utf-8"))
+
+
+class ProjectFactory(Protocol):
+    """Builds the :class:`ProjectHandle` a suite run measures (``ProjectHandle.create``).
+
+    ``diff_base`` is set on the candidate handle only; ``timeout_s`` bounds the
+    run; ``cov_sources`` shape the default command (never an explicit one).
+    """
+
+    def __call__(
+        self,
+        root: Path,
+        report_dir: Path,
+        test_cmd: list[str] | None = None,
+        *,
+        diff_base: str | None = None,
+        timeout_s: float | None = None,
+        cov_sources: Sequence[str] = (),
+    ) -> ProjectHandle: ...
