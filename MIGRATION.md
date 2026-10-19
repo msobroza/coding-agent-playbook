@@ -238,6 +238,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.hook_runtime.pin` | `coding_agent_playbook.hook_runtime.config.pin` | N16 |
 | `coding_agent_playbook.hook_runtime.protected` | `coding_agent_playbook.hook_runtime.config.protected` | N16 |
 | `coding_agent_playbook.hook_runtime.shell` | `coding_agent_playbook.hook_runtime.shell.parse` | N17 |
+| `coding_agent_playbook.hook_runtime.stop.coordinator.DEFAULT_MAX_BLOCKS` | `coding_agent_playbook.hook_runtime.config.guard_tables.DEFAULT_MAX_BLOCKS` | B3 |
 | `coding_agent_playbook.hook_runtime.wrapper_policy` | `coding_agent_playbook.hook_runtime.shell.wrapper_policy` | N17 |
 | `coding_agent_playbook.hooks_config` | `coding_agent_playbook.config.tables.hooks` | N2 |
 | `coding_agent_playbook.links` | `coding_agent_playbook.validation.link_check` | A4 |

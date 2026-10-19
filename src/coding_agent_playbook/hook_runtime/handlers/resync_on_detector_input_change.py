@@ -39,7 +39,6 @@ from coding_agent_playbook.hook_runtime.handlers._detector_inputs import (
     inputs_changed,
 )
 from coding_agent_playbook.hook_runtime.handlers._source_changed import (
-    auto_sync_enabled,
     context_result,
     run_playbook,
 )
@@ -96,8 +95,8 @@ def resync_on_detector_input_change(
         'Detector inputs changed; now applicable but not synced yet: rule "ml-..." ...'
     """
     tool, repo = ev.tool, ev.repo
-    facts = ctx.cfg.tables.get("facts")
-    if tool is None or repo is None or not _succeeded(tool) or not isinstance(facts, dict):
+    facts = ctx.cfg.tables.facts()
+    if tool is None or repo is None or not _succeeded(tool) or facts is None:
         return None
     triggers = detector_triggers(tool)
     root = repo.worktree_root
@@ -149,13 +148,7 @@ def _holds(row: _Row, facts: Facts, root: str) -> bool:
 
 
 def _rows(cfg: GuardConfig) -> list[_Row]:
-    raw = cfg.tables.get("applicability", [])
-    rows: list[_Row] = []
-    for item in raw if isinstance(raw, list) else []:
-        row = _row(item)
-        if row is not None:
-            rows.append(row)
-    return rows
+    return [row for item in cfg.tables.applicability() if (row := _row(item)) is not None]
 
 
 def _row(item: object) -> _Row | None:
@@ -173,10 +166,7 @@ def _row(item: object) -> _Row | None:
 
 def _known_ids(cfg: GuardConfig) -> frozenset[str]:
     """The lockfile's ``artifact_id`` set plus the on hooks: already rendered."""
-    protected = cfg.tables.get("protected")
-    entries = protected.get("entries", []) if isinstance(protected, dict) else []
-    ids = {e.get("artifact_id") for e in entries if isinstance(e, dict)}
-    return frozenset({i for i in ids if isinstance(i, str) and i} | set(cfg.hooks))
+    return cfg.tables.protected().artifact_ids | frozenset(cfg.hooks)
 
 
 def _message(ctx: HandlerContext, root: str, on: Sequence[_Row], off: Sequence[_Row]) -> str:
@@ -194,7 +184,7 @@ def _message(ctx: HandlerContext, root: str, on: Sequence[_Row], off: Sequence[_
 
 def _tail(ctx: HandlerContext, root: str, *, add_only: bool) -> str:
     """Run ``playbook sync`` for an add-only change under auto-sync; else ask the user."""
-    if not (add_only and auto_sync_enabled(ctx.cfg)):
+    if not (add_only and ctx.cfg.tables.auto_sync()):
         return f"Then {_ASK}."
     try:
         synced = run_playbook(ctx, root, ["sync"])

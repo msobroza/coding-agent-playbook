@@ -79,7 +79,7 @@ def block_precommit_bypass(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerRe
         ... # doctest: +SKIP
         <Decision.DENY: 'deny'>
     """
-    ids = playbook_ids(ctx)
+    ids = ctx.cfg.tables.precommit_hook_ids()
     if not ids or ev.tool is None or ev.repo is None:
         return None
     found = _shell_verdict(ev, ctx, ids, ev.repo) or _file_verdict(ev.tool, ctx, ev.repo)
@@ -89,16 +89,6 @@ def block_precommit_bypass(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerRe
     return HandlerResult(
         decision=decision, hook_id=ctx.hook.id, rule_id=rule, reason=reason_for(decision, ids)
     )
-
-
-def playbook_ids(ctx: HandlerContext) -> tuple[str, ...]:
-    """``guard_config.precommit.playbook_hook_ids``; empty when absent or malformed.
-
-    Example: ``playbook_ids(ctx) == ("playbook-metrics", "playbook-validate")``.
-    """
-    table = ctx.cfg.tables.get("precommit")
-    ids = table.get("playbook_hook_ids") if isinstance(table, dict) else None
-    return tuple(i for i in ids if isinstance(i, str) and i) if isinstance(ids, list) else ()
 
 
 def reason_for(decision: Decision, ids: tuple[str, ...]) -> str:

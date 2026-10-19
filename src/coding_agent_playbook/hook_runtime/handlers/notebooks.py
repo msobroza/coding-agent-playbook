@@ -76,10 +76,8 @@ def limits_of(ctx: HandlerContext) -> NotebookLimits:
 
     Example: ``limits_of(ctx).max_cell_output_kb == 64`` with the shipped config.
     """
-    table = ctx.cfg.tables.get("notebooks")
-    max_bytes = table.get("max_bytes") if isinstance(table, dict) else None
     return NotebookLimits(
-        max_bytes=_positive(max_bytes, NOTEBOOK_MAX_BYTES),
+        max_bytes=ctx.cfg.tables.notebook_max_bytes(NOTEBOOK_MAX_BYTES),
         max_cell_output_kb=_positive(
             ctx.config.get("max_cell_output_kb"), DEFAULT_MAX_CELL_OUTPUT_KB
         ),
