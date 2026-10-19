@@ -320,6 +320,6 @@ def test_the_writer_pin_sees_the_names_it_guards() -> None:
         name for _, name in _called_names(modules[_HOME])
     }
     check = engine_module_file("coding_agent_playbook.commands.check")
-    init = engine_module_file("coding_agent_playbook.commands.init")
+    init = engine_module_file("coding_agent_playbook.commands._init_config_plan")
     assert _imports_committed_config(modules[check])
     assert _imports_committed_config(modules[init])

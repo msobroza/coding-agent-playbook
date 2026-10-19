@@ -1,0 +1,29 @@
+# CP-2 (#136, specs/prT-package-layout.md 7.6, section 9 AC.5.5): commands/init.py is
+# split verbatim into flat private helpers (H6): the answers and prompts, the config
+# plan and the overlay checks. Only the names that keep their spelling are listed: the
+# script rewrites module paths, never names, so the ones init imports across modules
+# lose their underscore by hand (Answers, collect_answers -> _init_answers; plan_config
+# -> _init_config_plan; overlay_lists_to_check, refuse_unusable_overlays,
+# warn_deprecated_flag_overlays -> _init_overlays). No [[path]] row: SPEC names these
+# functions through commands/init.py, which stays (AC.5.5 doc-path map: none).
+
+[[names]]
+pr = "CP-2"
+old = "coding_agent_playbook.commands.init"
+new = "coding_agent_playbook.commands._init_answers"
+names = [
+    "_VALID_KINDS",
+    "_HOOKS_QUESTION",
+    "_YES",
+    "_NO",
+    "_prompt",
+    "_prompt_multi_select",
+    "_prompt_yes_no",
+    "_hooks_answer",
+]
+
+[[names]]
+pr = "CP-2"
+old = "coding_agent_playbook.commands.init"
+new = "coding_agent_playbook.commands._init_config_plan"
+names = ["_project_meta", "_with_hooks_answer", "_fresh_config", "_apply_answers"]
