@@ -23,7 +23,7 @@ runtime's regex so control-plane-guard and sync never disagree; ``facts`` and
 ``applicability`` (resync-on-detector-input-change) come from
 ``_guard_config_detect``, ``eval`` is the fixture-glob engine constant and
 ``auto_sync`` mirrors ``[hooks] auto_sync``. ``stop_gate`` (K6) is the Stop
-coordinator's table from ``hook_registrations.stop_gate``: its stage records,
+coordinator's table from ``hooks.registrations.stop_gate``: its stage records,
 budget and verify commands, also machine-independent; ``prompts`` and the
 tests-with-source-nudge layout come from ``_guard_config_verify``. ``ruff`` (K7) is the
 repo's own ruff selection and the safe-fix rules the post-edit pipeline may
@@ -93,16 +93,10 @@ from coding_agent_playbook.artifacts.path_classes import FIXTURE_GLOBS
 from coding_agent_playbook.generated_output.output_io import copy_output, write_output_bytes
 from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.generated_output.source_files import copyable_skill_files
-from coding_agent_playbook.hook_registrations import (
-    LAUNCHER_PATH,
-    OPENCODE_SHIM_PATH,
-    resolved_deadlines_ms,
-    stop_gate_table,
-)
 from coding_agent_playbook.hook_runtime.config.schema import (
     CONTROL_PLANE,
     GUARD_CONFIG_REL,
-    GUARD_CONFIG_SCHEMA,
+    GUARD_CONFIG_SCHEMA_VERSION,
     HOOKS_OUTPUT_DIR,
     PRECOMMIT_CONFIG,
     playbook_precommit_ids,
@@ -114,6 +108,10 @@ from coding_agent_playbook.hook_runtime.dispatch.routing import (
 )
 from coding_agent_playbook.hook_runtime.judges.notebook_check import NOTEBOOK_MAX_BYTES
 from coding_agent_playbook.hook_runtime.shell.wrappers import DEFAULT_RUNNER_WRAPPERS
+from coding_agent_playbook.hooks.registrations.launcher import LAUNCHER_PATH
+from coding_agent_playbook.hooks.registrations.opencode import OPENCODE_SHIM_PATH
+from coding_agent_playbook.hooks.registrations.plan import resolved_deadlines_ms
+from coding_agent_playbook.hooks.registrations.stop_gate import stop_gate_table
 from coding_agent_playbook.hooks.resolution.tables import HOOK_SCRIPTS_DIR
 from coding_agent_playbook.security.patterns import SECRET_PATH_GLOBS
 
@@ -272,7 +270,7 @@ def render_guard_config(inputs: GuardConfigInputs) -> dict[str, Any]:
         SKILL_NUDGE_HOOK_ID: {"skills": [dict(row) for row in inputs.skill_globs]},
     }
     return {
-        "schema_version": GUARD_CONFIG_SCHEMA,
+        "schema_version": GUARD_CONFIG_SCHEMA_VERSION,
         "engine_version": inputs.engine_version,
         "hooks": {
             hook.id: bake_layout(

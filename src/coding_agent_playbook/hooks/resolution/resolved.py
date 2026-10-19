@@ -1,9 +1,10 @@
 """The effective hook records and their ``guard_config.json`` schema (specs/prK-lifecycle-hooks.md §A.7).
 
 :class:`ResolvedHook` is one hook that is on, after every layer and config merge;
-:meth:`ResolvedHook.to_json` is the **single** hook-record schema of
-``guard_config.json`` (§D.8.2 references it field by field), with one name per
-field: ``supports``, ``matcher``, ``timeout_ms``. Every value is
+:meth:`ResolvedHook.to_json` builds the **single** hook record of
+``guard_config.json``, typed as the runtime's ``HookRecordJson`` (§D.8.2
+references it field by field), with one name per field: ``supports``,
+``matcher``, ``timeout_ms``. Every value is
 machine-independent (K-6): an external handler's argv holds the logical launcher
 and the repo-relative script copy under :data:`HOOK_SCRIPTS_DIR`, never an
 absolute path; the interpreter comes from the per-machine pin at run time.
@@ -30,6 +31,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.hook import Hook
     from coding_agent_playbook.artifacts.hook_schema import HookHandler, HookMatcher
     from coding_agent_playbook.artifacts.rule import Rule
+    from coding_agent_playbook.hook_runtime.config.schema import HandlerRecordJson, HookRecordJson
 
 #: ``entry_point`` is a builtin name resolved at sync to an out-of-tree handler of the
 #: ``coding_agent_playbook.hook_handlers`` group (``target`` + ``dist``; in-tree wins).
@@ -56,16 +58,14 @@ class ResolvedHandler:
     target: str | None = None
     dist: str | None = None
 
-    def to_json(self) -> dict[str, Any]:
+    def to_json(self) -> HandlerRecordJson:
         """``{"kind", "name"|"target"+"dist"|"argv", "config"}``, the config deep-copied."""
-        where: dict[str, Any]
+        config = copy.deepcopy(self.config)
         if self.kind == "builtin":
-            where = {"name": self.name}
-        elif self.kind == "entry_point":
-            where = {"target": self.target, "dist": self.dist}
-        else:
-            where = {"argv": list(self.argv)}
-        return {"kind": self.kind, **where, "config": copy.deepcopy(self.config)}
+            return {"kind": self.kind, "name": self.name, "config": config}
+        if self.kind == "entry_point":
+            return {"kind": self.kind, "target": self.target, "dist": self.dist, "config": config}
+        return {"kind": self.kind, "argv": list(self.argv), "config": config}
 
 
 @dataclass(frozen=True)
@@ -151,8 +151,12 @@ class ResolvedHook:
         rule = dataclasses.replace(self.advisory, body=text, template_body=text)
         return dataclasses.replace(self, advisory=rule, definition=definition)
 
-    def to_json(self) -> dict[str, Any]:
-        """The ``guard_config.json`` record: JSON-ready values, copies of every container."""
+    def to_json(self) -> HookRecordJson:
+        """The ``guard_config.json`` record: JSON-ready values, copies of every container.
+
+        Its keys are exactly the runtime's ``HOOK_RECORD_KEYS``; the advisory, the
+        definition and ``guardrail_text`` are never part of it.
+        """
         return {
             "id": self.id,
             "source_package": self.source_package,

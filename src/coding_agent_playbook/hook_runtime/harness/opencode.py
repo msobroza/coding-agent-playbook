@@ -63,7 +63,7 @@ WIRE_VERSION: Final = 1
 
 #: The generated V1 shim that spawns this dispatcher, repo-relative (§C.3.1). The
 #: runtime owns the value so ``doctor`` can check the shim without importing the
-#: engine; ``hook_registrations.OPENCODE_SHIM_PATH`` is this same constant.
+#: engine; ``hooks.registrations.opencode.OPENCODE_SHIM_PATH`` is this same constant.
 OPENCODE_SHIM_REL: Final = ".opencode/plugins/playbook-hooks.js"
 
 #: The inverse of the shim's ``TOOL`` map (§C.3.2): Claude-shaped -> OpenCode V1 name.

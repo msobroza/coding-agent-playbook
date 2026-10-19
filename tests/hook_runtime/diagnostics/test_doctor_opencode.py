@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.hook_registrations import OPENCODE_SHIM_PATH, render_opencode_shim
 from coding_agent_playbook.hook_runtime.config.schema import LOCKFILE_REL
 from coding_agent_playbook.hook_runtime.diagnostics._doctor_opencode import (
     DISABLE_PROJECT_CONFIG,
@@ -25,6 +24,10 @@ from coding_agent_playbook.hook_runtime.diagnostics._doctor_opencode import (
 )
 from coding_agent_playbook.hook_runtime.diagnostics.doctor import Check, exit_code, run_doctor
 from coding_agent_playbook.hook_runtime.harness.opencode import OPENCODE_SHIM_REL
+from coding_agent_playbook.hooks.registrations.opencode import (
+    OPENCODE_SHIM_PATH,
+    render_opencode_shim,
+)
 from tests.hook_runtime.fakes import FakeProc
 from tests.hook_runtime.guard_repo import GuardRepo, hook_record
 
@@ -32,9 +35,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
     from pathlib import Path
 
-    from coding_agent_playbook.hook_registrations import OpenCodeRegEntry
     from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.dispatch.proc import ProcResult
+    from coding_agent_playbook.hooks.registrations.opencode import OpenCodeRegEntry
 
 _OPENCODE = "/opt/bin/opencode"
 _REG: dict[str, OpenCodeRegEntry] = {

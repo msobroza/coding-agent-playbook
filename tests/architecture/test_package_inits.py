@@ -26,11 +26,8 @@ _ROOT_INIT: Final = "coding_agent_playbook/__init__.py"
 #: frozen console-script target, so ``cli/__init__.py`` holds ``main``; permanent.
 _CLI_INIT: Final = "coding_agent_playbook/cli/__init__.py"
 _PERMANENT_INITS: Final = frozenset({_ROOT_INIT, _CLI_INIT})
-_INITS_WITH_CODE: Final = frozenset(
-    {
-        "coding_agent_playbook/hook_registrations/__init__.py",
-    }
-)
+# A18 emptied the last facade init; the baseline stays so a regression names its file.
+_INITS_WITH_CODE: Final[frozenset[str]] = frozenset()
 
 
 def holds_only_a_docstring(source: str) -> bool:

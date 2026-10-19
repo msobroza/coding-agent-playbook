@@ -1,4 +1,4 @@
-"""The packaged hook-shim templates under ``templates/hook_shims/`` (specs/prK-lifecycle-hooks.md §C.3.1).
+"""The packaged hook-shim templates under ``hooks/registrations/templates/`` (specs/prK-lifecycle-hooks.md §C.3.1).
 
 The Claude Code launcher and the OpenCode plugin are rendered by ``str.replace``
 of fixed placeholders, never Jinja (L7): shell and JS braces would fight it, and
@@ -17,11 +17,11 @@ __all__ = ["SENTINEL_PLACEHOLDER", "fill_placeholder", "shim_template"]
 
 #: Line 1 of every template: replaced by the engine sentinel in the file's comment style.
 SENTINEL_PLACEHOLDER: Final = "@@SENTINEL_LINE@@"
-_TEMPLATE_DIR: Final = ("templates", "hook_shims")
+_TEMPLATE_DIR: Final = ("hooks", "registrations", "templates")
 
 
 def shim_template(name: str) -> str:
-    """The text of ``templates/hook_shims/<name>``, line endings read as LF.
+    """The text of ``hooks/registrations/templates/<name>``, line endings read as LF.
 
     Text mode reads a CRLF checkout (``core.autocrlf``) back as LF, so every
     clone renders the same bytes.

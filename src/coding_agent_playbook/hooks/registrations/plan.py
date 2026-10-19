@@ -19,12 +19,6 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final, Protocol
 
 from coding_agent_playbook.artifacts.hook_schema import HookMatcher
-from coding_agent_playbook.hook_registrations.stop_gate import (
-    STOP_COORDINATOR_ID,
-    budget_of,
-    coordinator_budget_s,
-    execution_timeouts_s,
-)
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hook_runtime.dispatch.policy import effective_on_error
 from coding_agent_playbook.hook_runtime.dispatch.routing import (
@@ -33,6 +27,12 @@ from coding_agent_playbook.hook_runtime.dispatch.routing import (
     handler_route,
 )
 from coding_agent_playbook.hook_runtime.stop.stages import DEFAULT_BUDGET_S
+from coding_agent_playbook.hooks.registrations.stop_gate import (
+    STOP_COORDINATOR_ID,
+    budget_of,
+    coordinator_budget_s,
+    execution_timeouts_s,
+)
 from coding_agent_playbook.hooks.resolution.tables import (
     ENGINE_DEADLINE_CAP_MS,
     HOOK_CAPABLE_ADAPTERS,

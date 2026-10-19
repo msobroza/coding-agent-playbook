@@ -27,6 +27,7 @@ from tests.hook_samples import sample_hook
 if TYPE_CHECKING:
     import pytest
 
+    from coding_agent_playbook.hook_runtime.config.schema import HandlerRecordJson
     from coding_agent_playbook.hooks.resolution.merge import ConfigKeySpec
 
 THIS_MODULE = __name__
@@ -257,7 +258,7 @@ def test_h21_skips_external_only_hooks_and_unknown_ids() -> None:
 # --- sync-time resolution -----------------------------------------------------------------
 
 
-def _effective(hook: Any, catalog: RegistryCatalog) -> dict[str, Any]:
+def _effective(hook: Any, catalog: RegistryCatalog) -> HandlerRecordJson:
     view = resolve_effective_hooks(
         [hook],
         [],
@@ -269,8 +270,7 @@ def _effective(hook: Any, catalog: RegistryCatalog) -> dict[str, Any]:
         handlers=catalog,
     )
     (resolved,) = view.resolved
-    handler: dict[str, Any] = resolved.to_json()["handlers"]["pre_tool_use"]
-    return handler
+    return resolved.to_json()["handlers"]["pre_tool_use"]
 
 
 def test_entry_point_handler_resolved_at_sync_in_tree_wins() -> None:

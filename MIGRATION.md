@@ -60,6 +60,8 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.adapters._skill_writer.has_declared_id` | `coding_agent_playbook.skills.naming.has_declared_id` | A3 |
 | `coding_agent_playbook.adapters._skill_writer.skill_id_of` | `coding_agent_playbook.skills.naming.skill_id_of` | A3 |
 | `coding_agent_playbook.adapters.agents_md_adapter` | `coding_agent_playbook.adapters.agents_md` | A9 |
+| `coding_agent_playbook.adapters.claude_code.settings._plan.LAUNCHER_TOKEN` | `coding_agent_playbook.hooks.registrations.launcher.LAUNCHER_TOKEN` | A18 |
+| `coding_agent_playbook.adapters.claude_code.settings.managed_merge.LAUNCHER_TOKEN` | `coding_agent_playbook.hooks.registrations.launcher.LAUNCHER_TOKEN` | A18 |
 | `coding_agent_playbook.adapters.claude_code_adapter` | `coding_agent_playbook.adapters.claude_code.adapter` | A8 |
 | `coding_agent_playbook.adapters.claude_rule_paths` | `coding_agent_playbook.adapters.claude_code.paths` | N13 |
 | `coding_agent_playbook.adapters.claude_settings` | `coding_agent_playbook.adapters.claude_code.settings.managed_merge` | N13 |
@@ -190,7 +192,6 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.git_client` | `coding_agent_playbook.sync.git_client` | A6 |
 | `coding_agent_playbook.git_env` | `coding_agent_playbook.evals.run.git_env` | N23 |
 | `coding_agent_playbook.gitignore` | `coding_agent_playbook.generated_output.gitignore` | N6 |
-| `coding_agent_playbook.guard_config.GUARD_CONFIG_SCHEMA` | `coding_agent_playbook.hook_runtime.config.schema.GUARD_CONFIG_SCHEMA` | GC-1 |
 | `coding_agent_playbook.guard_config.HOOKS_OUTPUT_DIR` | `coding_agent_playbook.hook_runtime.config.schema.HOOKS_OUTPUT_DIR` | GC-1 |
 | `coding_agent_playbook.guard_config.PRECOMMIT_CONFIG` | `coding_agent_playbook.hook_runtime.config.schema.PRECOMMIT_CONFIG` | GC-1 |
 | `coding_agent_playbook.harness` | `coding_agent_playbook.agent_harness` | N12 |
@@ -265,6 +266,46 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.hook_policy.resolved` | `coding_agent_playbook.hooks.resolution.resolved` | A17 |
 | `coding_agent_playbook.hook_policy.split_hook_layers` | `coding_agent_playbook.hooks.resolution.merge.split_hook_layers` | A17 |
 | `coding_agent_playbook.hook_policy.tables` | `coding_agent_playbook.hooks.resolution.tables` | A17 |
+| `coding_agent_playbook.hook_registrations` | `coding_agent_playbook.hooks.registrations` | A18 |
+| `coding_agent_playbook.hook_registrations.BOOTSTRAP_DEADLINE_MS` | `coding_agent_playbook.hooks.registrations.plan.BOOTSTRAP_DEADLINE_MS` | A18 |
+| `coding_agent_playbook.hook_registrations.BoundHandler` | `coding_agent_playbook.hooks.registrations.plan.BoundHandler` | A18 |
+| `coding_agent_playbook.hook_registrations.DeclaredMember` | `coding_agent_playbook.hooks.registrations.plan.DeclaredMember` | A18 |
+| `coding_agent_playbook.hook_registrations.HookRegistration` | `coding_agent_playbook.hooks.registrations.plan.HookRegistration` | A18 |
+| `coding_agent_playbook.hook_registrations.LAUNCHER_PATH` | `coding_agent_playbook.hooks.registrations.launcher.LAUNCHER_PATH` | A18 |
+| `coding_agent_playbook.hook_registrations.OPENCODE_REG_EVENTS` | `coding_agent_playbook.hooks.registrations.opencode.OPENCODE_REG_EVENTS` | A18 |
+| `coding_agent_playbook.hook_registrations.OPENCODE_SHIM_PATH` | `coding_agent_playbook.hooks.registrations.opencode.OPENCODE_SHIM_PATH` | A18 |
+| `coding_agent_playbook.hook_registrations.OPENCODE_V1_TOOLS` | `coding_agent_playbook.hooks.registrations.opencode.OPENCODE_V1_TOOLS` | A18 |
+| `coding_agent_playbook.hook_registrations.OpenCodeRegEntry` | `coding_agent_playbook.hooks.registrations.opencode.OpenCodeRegEntry` | A18 |
+| `coding_agent_playbook.hook_registrations.REG_PLACEHOLDER` | `coding_agent_playbook.hooks.registrations.opencode.REG_PLACEHOLDER` | A18 |
+| `coding_agent_playbook.hook_registrations.RegistrationMember` | `coding_agent_playbook.hooks.registrations.plan.RegistrationMember` | A18 |
+| `coding_agent_playbook.hook_registrations.RegistrationTimeoutError` | `coding_agent_playbook.hooks.registrations.plan.RegistrationTimeoutError` | A18 |
+| `coding_agent_playbook.hook_registrations.STOP_COORDINATOR_ID` | `coding_agent_playbook.hooks.registrations.stop_gate.STOP_COORDINATOR_ID` | A18 |
+| `coding_agent_playbook.hook_registrations.STOP_EVENTS` | `coding_agent_playbook.hooks.registrations.plan.STOP_EVENTS` | A18 |
+| `coding_agent_playbook.hook_registrations.STOP_STATUS_MESSAGE` | `coding_agent_playbook.hooks.registrations.claude.STOP_STATUS_MESSAGE` | A18 |
+| `coding_agent_playbook.hook_registrations.STRICT_LAUNCH_FLAG` | `coding_agent_playbook.hooks.registrations.claude.STRICT_LAUNCH_FLAG` | A18 |
+| `coding_agent_playbook.hook_registrations.StageRecord` | `coding_agent_playbook.hooks.registrations.stop_gate.StageRecord` | A18 |
+| `coding_agent_playbook.hook_registrations.WATCHDOG_MARGIN_MS` | `coding_agent_playbook.hooks.registrations.plan.WATCHDOG_MARGIN_MS` | A18 |
+| `coding_agent_playbook.hook_registrations.checked_registration_timeout_s` | `coding_agent_playbook.hooks.registrations.plan.checked_registration_timeout_s` | A18 |
+| `coding_agent_playbook.hook_registrations.claude.LAUNCHER_PATH` | `coding_agent_playbook.hooks.registrations.launcher.LAUNCHER_PATH` | A18 |
+| `coding_agent_playbook.hook_registrations.claude_command` | `coding_agent_playbook.hooks.registrations.claude.claude_command` | A18 |
+| `coding_agent_playbook.hook_registrations.claude_settings_projection` | `coding_agent_playbook.hooks.registrations.claude.claude_settings_projection` | A18 |
+| `coding_agent_playbook.hook_registrations.coordinator_budget_s` | `coding_agent_playbook.hooks.registrations.stop_gate.coordinator_budget_s` | A18 |
+| `coding_agent_playbook.hook_registrations.deadlines_ms` | `coding_agent_playbook.hooks.registrations.plan.deadlines_ms` | A18 |
+| `coding_agent_playbook.hook_registrations.declared_stop_budget_s` | `coding_agent_playbook.hooks.registrations.plan.declared_stop_budget_s` | A18 |
+| `coding_agent_playbook.hook_registrations.execution_timeouts_s` | `coding_agent_playbook.hooks.registrations.stop_gate.execution_timeouts_s` | A18 |
+| `coding_agent_playbook.hook_registrations.matcher_union` | `coding_agent_playbook.hooks.registrations.claude.matcher_union` | A18 |
+| `coding_agent_playbook.hook_registrations.member_route` | `coding_agent_playbook.hooks.registrations.plan.member_route` | A18 |
+| `coding_agent_playbook.hook_registrations.opencode_reg_json` | `coding_agent_playbook.hooks.registrations.opencode.opencode_reg_json` | A18 |
+| `coding_agent_playbook.hook_registrations.plan_opencode_reg` | `coding_agent_playbook.hooks.registrations.opencode.plan_opencode_reg` | A18 |
+| `coding_agent_playbook.hook_registrations.plan_registrations` | `coding_agent_playbook.hooks.registrations.plan.plan_registrations` | A18 |
+| `coding_agent_playbook.hook_registrations.registration_timeout_s` | `coding_agent_playbook.hooks.registrations.plan.registration_timeout_s` | A18 |
+| `coding_agent_playbook.hook_registrations.render_claude_launcher` | `coding_agent_playbook.hooks.registrations.claude.render_claude_launcher` | A18 |
+| `coding_agent_playbook.hook_registrations.render_opencode_shim` | `coding_agent_playbook.hooks.registrations.opencode.render_opencode_shim` | A18 |
+| `coding_agent_playbook.hook_registrations.resolved_deadlines_ms` | `coding_agent_playbook.hooks.registrations.plan.resolved_deadlines_ms` | A18 |
+| `coding_agent_playbook.hook_registrations.stop_gate_table` | `coding_agent_playbook.hooks.registrations.stop_gate.stop_gate_table` | A18 |
+| `coding_agent_playbook.hook_registrations.stop_stage_records` | `coding_agent_playbook.hooks.registrations.stop_gate.stop_stage_records` | A18 |
+| `coding_agent_playbook.hook_registrations.to_claude_group` | `coding_agent_playbook.hooks.registrations.claude.to_claude_group` | A18 |
+| `coding_agent_playbook.hook_registrations.to_opencode_reg` | `coding_agent_playbook.hooks.registrations.opencode.to_opencode_reg` | A18 |
 | `coding_agent_playbook.hook_runtime._config_keys` | `coding_agent_playbook.hook_runtime.config.keys` | N16 |
 | `coding_agent_playbook.hook_runtime._config_reader` | `coding_agent_playbook.hook_runtime.config.reader` | N16 |
 | `coding_agent_playbook.hook_runtime._event_memo` | `coding_agent_playbook.hook_runtime.dispatch.event_memo` | A11 |
@@ -389,6 +430,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.sources.filesystem.ENGINE_PACKAGE` | `coding_agent_playbook.catalog.layers.ENGINE_PACKAGE` | N3 |
 | `coding_agent_playbook.sources.filesystem.FileSystemStateSource` | `coding_agent_playbook.config.files.FileSystemStateSource` | N2 |
 | `coding_agent_playbook.sources.filesystem.REPO_LOCAL_SOURCE` | `coding_agent_playbook.catalog.layers.REPO_LOCAL_SOURCE` | N3 |
+| `coding_agent_playbook.templates.hook_shims.opencode_wire_port` | `coding_agent_playbook.hooks.registrations.templates.opencode_wire_port` | A18 |
 | `coding_agent_playbook.types.Hook` | `coding_agent_playbook.artifacts.hook.Hook` | A2 |
 | `coding_agent_playbook.types.HookDecision` | `coding_agent_playbook.artifacts.hook_schema.HookDecision` | A1 |
 | `coding_agent_playbook.types.HookEvent` | `coding_agent_playbook.artifacts.hook_schema.HookEvent` | A1 |
@@ -419,6 +461,17 @@ rubric and gate registries are
 `coding_agent_playbook.evals.compile.rubric_registry` and
 `coding_agent_playbook.evals.compile.gate_registry`. There is no shim, and the
 entry-point groups do not change.
+<!-- module-moves: end-keep -->
+
+<!-- module-moves: keep -->
+The `guard_config.json` contract names have one definition each, in
+`coding_agent_playbook.hook_runtime.config.schema`. The writer's schema version,
+`coding_agent_playbook.guard_config.GUARD_CONFIG_SCHEMA` before GC-1, is now
+`GUARD_CONFIG_SCHEMA_VERSION`, and `SUPPORTED_SCHEMA_VERSIONS` ends at it. The
+module also types one `hooks.<id>` record: `HookRecordJson` (with
+`HandlerRecordJson` for each handler) is what `ResolvedHook.to_json()` returns,
+and `HOOK_RECORD_KEYS` is its key set. The bytes of `guard_config.json` do not
+change.
 <!-- module-moves: end-keep -->
 
 <!-- module-moves: keep -->
@@ -1025,7 +1078,7 @@ before, apart from the Claude Code rules file (§12). Authoritative design: `spe
 | Code calling **`CoverageCheck(warn=80.0)`** | Pass the 0–1 cutoff, `warn=0.8` (§6). |
 | A repo whose **dependency names** use `_`, `.` or capitals | Commit the one-time `[detector_cache]` change (§8). |
 | An **overlay author** | Nothing required. Overlays may now ship hooks under `<pkg>/resources/hooks/`, which only add to the engine's (SPEC §11.6), and `playbook validate` runs in an overlay checkout with no consumer config (§2). |
-| An **engine content contributor** | Edit under `catalog/`, the new name of v0.19's `content/` (§11). The engine's hooks are content: `catalog/core/hooks/<category>/<id>/HOOK.md`, and a bundled plugin may ship `catalog/plugins/<name>/hooks/` or `eval_tasks/` (`catalog/README.md`). The launcher and OpenCode shim templates are engine wiring and stay in `src/coding_agent_playbook/templates/hook_shims/`. |
+| An **engine content contributor** | Edit under `catalog/`, the new name of v0.19's `content/` (§11). The engine's hooks are content: `catalog/core/hooks/<category>/<id>/HOOK.md`, and a bundled plugin may ship `catalog/plugins/<name>/hooks/` or `eval_tasks/` (`catalog/README.md`). The launcher and OpenCode shim templates are engine wiring and stay in `src/coding_agent_playbook/hooks/registrations/templates/`. |
 | An **out-of-tree adapter** author | Nothing required; read §10 (the hook members, and `stale_outputs` over `cleanup_stale`). |
 | Code importing **`coding_agent_playbook.bundled_content`**, or scripts matching the engine's `content/` tree, `_content/` or the `bundled content was not found` line | Switch to the `catalog` names (§11). |
 
