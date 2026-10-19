@@ -3,7 +3,7 @@
 The frontmatter and body a skill with member rules is written with, its
 ``## References`` index, the member reference files and the ``## Where guidance
 lives`` section. Expected texts are the spec's worked examples, copied
-verbatim. Split from ``test_skill_document.py`` (the descriptions) to keep each
+verbatim. Split from ``test_document.py`` (the descriptions) to keep each
 test module under 300 lines.
 """
 
@@ -13,7 +13,7 @@ import pytest
 
 from coding_agent_playbook.artifacts.member_reference import MemberReference
 from coding_agent_playbook.artifacts.skill import Skill
-from coding_agent_playbook.skill_document import (
+from coding_agent_playbook.skills.document import (
     WhereEntry,
     emitted_body,
     emitted_frontmatter,

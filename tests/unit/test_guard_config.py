@@ -21,7 +21,7 @@ import pytest
 from coding_agent_playbook import renderer
 from coding_agent_playbook._guard_config_protect import COMPOSITE_SINGLETONS
 from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
-from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
+from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.continue_adapter import ContinueAdapter
 from coding_agent_playbook.adapters.opencode_adapter import OpenCodeAdapter
 from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter

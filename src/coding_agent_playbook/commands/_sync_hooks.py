@@ -43,14 +43,14 @@ from coding_agent_playbook._guard_config_skills import skill_glob_rows
 from coding_agent_playbook._guard_config_toolchain import read_toolchain_inputs
 from coding_agent_playbook._output_io import refuse_special_file
 from coding_agent_playbook.adapters._owned_files import check_engine_owned
+from coding_agent_playbook.adapters.claude_code.adapter import (
+    ClaudeCodeAdapter,
+    check_rule_files_writable,
+)
 from coding_agent_playbook.adapters.claude_code.settings.managed_merge import (
     CLAUDE_SETTINGS_PATH,
     decode_settings,
     parse_settings,
-)
-from coding_agent_playbook.adapters.claude_code_adapter import (
-    ClaudeCodeAdapter,
-    check_rule_files_writable,
 )
 from coding_agent_playbook.commands import _sync_hook_local
 from coding_agent_playbook.commands._sync_lockfile import HookDispatch
@@ -327,8 +327,8 @@ def check_runtime_outputs_owned(
     or a symlink on the way stops the sync with nothing written (review
     findings #1, #2).
     With ``claude_code`` on, its two rule files are checked too, hooks or not
-    (:func:`~.claude_code_adapter.check_rule_files_writable`): the rules file
-    sits in ``.claude/rules/``, a directory of the user's own files, and the
+    (:func:`~coding_agent_playbook.adapters.claude_code.adapter.check_rule_files_writable`):
+    the rules file sits in ``.claude/rules/``, a directory of the user's own files, and the
     stub is never written through a symlink or a hard link (SPEC §10.3.1).
     Conservatively, even when no rule would be written there.
 

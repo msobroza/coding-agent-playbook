@@ -10,7 +10,7 @@ sandbox rejects aborts the sync with nothing written and the offending file
 named (:class:`~coding_agent_playbook.renderer.TemplateSecurityError`,
 specs/prK-lifecycle-hooks.md §P1).
 
-Skills are composed here too (``skill_membership.compose_skills``, ADR 0001): a
+Skills are composed here too (``skills.membership.compose_skills``, ADR 0001): a
 skill with a ``playbook:`` block gets its active member rules, rendered by the
 same pass as every other rule, and is dropped when none of them passes
 ``applies_if``; any other skill passes through unchanged. Each composed skill's
@@ -30,7 +30,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook import __version__ as _engine_version
-from coding_agent_playbook.adapters._agent_skill_rules import skill_id_of
 from coding_agent_playbook.commands._sync_hooks import SyncHooks, resolve_sync_hooks
 from coding_agent_playbook.detector.predicate import filter_applies_if
 from coding_agent_playbook.hook_policy.guardrails_skill import (
@@ -44,8 +43,9 @@ from coding_agent_playbook.renderer import (
     render_sandboxed,
 )
 from coding_agent_playbook.rule_registry import build_prompt_environment
-from coding_agent_playbook.skill_document import DescriptionOverflowError, emitted_frontmatter
-from coding_agent_playbook.skill_membership import compose_skills, undelivered_member_warning
+from coding_agent_playbook.skills.document import DescriptionOverflowError, emitted_frontmatter
+from coding_agent_playbook.skills.membership import compose_skills, undelivered_member_warning
+from coding_agent_playbook.skills.naming import skill_id_of
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -188,7 +188,7 @@ def render_artifacts(ctx: SyncContext) -> RenderedArtifacts:
     ``[hooks]`` table, ``_sync_hooks.HookPolicyError``, and for a composed
     description over 300 chars, :class:`SkillDescriptionOverflowError`) before
     any adapter has written a file. Skills come from
-    ``skill_membership.compose_skills``; when member rules are active but no
+    ``skills.membership.compose_skills``; when member rules are active but no
     enabled adapter delivers them, one ``warning:`` line goes to stderr (E12:
     there is no fallback).
 

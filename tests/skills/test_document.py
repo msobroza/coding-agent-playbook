@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.skill_document import (
+from coding_agent_playbook.skills.document import (
     DESCRIPTION_MAX_CHARS,
     DescriptionOverflowError,
     compose_description,

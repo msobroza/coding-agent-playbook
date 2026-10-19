@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.claude_code.settings.managed_merge import CLAUDE_SETTINGS_PATH
-from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.commands import check as _check
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.config.tables.hooks import HooksConfig

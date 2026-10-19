@@ -19,32 +19,32 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from coding_agent_playbook._sentinel import sentinel_line
-from coding_agent_playbook.adapters._claude_hooks import (
-    CLAUDE_HEARTBEAT_LINE,
-    REMEDIATION_ALLOW,
-    ClaudeHookEmitter,
-    runs_natively,
-)
-from coding_agent_playbook.adapters._destructive_native import (
+from coding_agent_playbook.adapters._owned_files import UserOwnedFileError
+from coding_agent_playbook.adapters.claude_code._destructive_native import (
     DESTRUCTIVE_COMMAND_GUARD,
     destructive_native_rows,
 )
-from coding_agent_playbook.adapters._overlay_native import (
+from coding_agent_playbook.adapters.claude_code._overlay_native import (
     network_native_rows,
     sensitive_read_native_rows,
 )
-from coding_agent_playbook.adapters._owned_files import UserOwnedFileError
-from coding_agent_playbook.adapters._secret_native import (
+from coding_agent_playbook.adapters.claude_code._secret_native import (
     DENY_POINTER,
     DENY_READ_POINTER,
     SECRETS_PATH_GUARD,
     secret_native_rows,
 )
+from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
+from coding_agent_playbook.adapters.claude_code.hooks import (
+    CLAUDE_HEARTBEAT_LINE,
+    REMEDIATION_ALLOW,
+    ClaudeHookEmitter,
+    runs_natively,
+)
 from coding_agent_playbook.adapters.claude_code.settings.managed_merge import (
     CLAUDE_SETTINGS_PATH,
     SettingsMergeError,
 )
-from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.config.tables.hooks import HooksConfig
 from coding_agent_playbook.hook_policy import HOOK_SUPPORT

@@ -16,10 +16,9 @@ import jinja2
 import pytest
 from jinja2.sandbox import SandboxedEnvironment
 
-from coding_agent_playbook import renderer
+from coding_agent_playbook import precommit, renderer
 from coding_agent_playbook.artifacts.prompt import Prompt
 from coding_agent_playbook.artifacts.rule import Rule
-from coding_agent_playbook.commands import init as init_cmd
 from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.config.files import FileSystemStateSource
 from tests._catalog import CORE_ROOT
@@ -106,6 +105,6 @@ def test_shipped_templates_render_byte_identical_under_sandbox(
 def test_precommit_starter_renders_byte_identical_under_sandbox(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    sandboxed = init_cmd._render_fresh_pre_commit()
+    sandboxed = precommit.render_fresh_pre_commit()
     _use_plain_twin(monkeypatch)
-    assert init_cmd._render_fresh_pre_commit() == sandboxed
+    assert precommit.render_fresh_pre_commit() == sandboxed

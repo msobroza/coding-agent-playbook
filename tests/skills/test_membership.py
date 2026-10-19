@@ -19,7 +19,7 @@ from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.commands._sync_render import render_rule_body
 from coding_agent_playbook.renderer import build_environment
-from coding_agent_playbook.skill_membership import (
+from coding_agent_playbook.skills.membership import (
     compose_skills,
     is_rule_skill,
     is_skill_member,

@@ -18,7 +18,7 @@ guard that composition before ``playbook sync`` writes anything:
 
 Every check runs over the merged sets and ignores ``applies_if``, so overlay
 authors and consumers see the same findings whatever the detector facts.
-V11 measures with ``skill_document.worst_case_description``, the bound sync's
+V11 measures with ``skills.document.worst_case_description``, the bound sync's
 ``compose_description`` holds, so a skill that validates cannot make sync raise.
 
 The user-facing text is documented, not only coded: SPEC §12.6 lists every check
@@ -34,18 +34,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, TypeGuard
 
-from coding_agent_playbook.adapters._agent_skill_rules import (
-    AGENT_SKILL_NAME_MAX_CHARS,
-    AGENT_SKILL_NAME_PATTERN,
-    skill_id_of,
-)
 from coding_agent_playbook.artifacts.member_reference import member_reference_path
 from coding_agent_playbook.commands._validation import (
     ValidationError,
     ValidationFindings,
     skill_label,
 )
-from coding_agent_playbook.skill_document import (
+from coding_agent_playbook.skills.document import (
     DESCRIPTION_MAX_CHARS,
     PLAYBOOK_BLOCK_KEY,
     covered_member_count,
@@ -53,7 +48,12 @@ from coding_agent_playbook.skill_document import (
     skill_catalog_block,
     worst_case_description,
 )
-from coding_agent_playbook.skill_membership import is_rule_skill, member_rules_of
+from coding_agent_playbook.skills.membership import is_rule_skill, member_rules_of
+from coding_agent_playbook.skills.naming import (
+    AGENT_SKILL_NAME_MAX_CHARS,
+    AGENT_SKILL_NAME_PATTERN,
+    skill_id_of,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

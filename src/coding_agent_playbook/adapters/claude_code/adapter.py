@@ -20,7 +20,7 @@ Code's native layout:
   output is byte-identical to the ``opencode`` / ``shared_skills`` skill roots.
 - Hooks it enforces become managed groups in the co-owned
   ``.claude/settings.json`` plus the committed ``.claude/hooks/playbook/launch.sh``
-  (:mod:`._claude_hooks`, specs/prK-lifecycle-hooks.md §C.2); the rest degrade
+  (:mod:`.hooks`, specs/prK-lifecycle-hooks.md §C.2); the rest degrade
   to one line each in the rules file's ``## Guardrails`` section, with their
   full text in ``.claude/skills/playbook-guardrails/`` (D6, D26), and the
   session-start heartbeat line closes the rules file.
@@ -51,11 +51,6 @@ from typing import TYPE_CHECKING, ClassVar, Final
 
 from coding_agent_playbook._output_io import write_output_bytes, write_output_text
 from coding_agent_playbook._sentinel import sentinel_line
-from coding_agent_playbook.adapters._claude_hooks import (
-    ClaudeHookEmitter,
-    plans_launcher,
-    runs_natively,
-)
 from coding_agent_playbook.adapters._owned_files import (
     check_engine_owned,
     check_unlinked,
@@ -65,6 +60,11 @@ from coding_agent_playbook.adapters._owned_files import (
 from coding_agent_playbook.adapters._skill_writer import SkillWriter
 from coding_agent_playbook.adapters._where_guidance import WhereGuidanceBuffer
 from coding_agent_playbook.adapters.base import Adapter
+from coding_agent_playbook.adapters.claude_code.hooks import (
+    ClaudeHookEmitter,
+    plans_launcher,
+    runs_natively,
+)
 from coding_agent_playbook.adapters.claude_code.paths import (
     CLAUDE_CODE_COMPOSITES,
     CLAUDE_MD_PATH,
@@ -75,7 +75,7 @@ from coding_agent_playbook.hook_policy import HOOK_SUPPORT, guardrail_line, guar
 from coding_agent_playbook.hook_policy.guardrails_skill import has_guardrail_text
 from coding_agent_playbook.hook_registrations import LAUNCHER_PATH
 from coding_agent_playbook.renderer import render_for
-from coding_agent_playbook.skill_membership import is_skill_member
+from coding_agent_playbook.skills.membership import is_skill_member
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
@@ -216,7 +216,7 @@ class ClaudeCodeAdapter(Adapter):
         Claude Code runs the core pack natively, so its skill listing pays for
         no guardrails skill; an overlay hook without ``claude_code`` in
         ``supports``, or one whose events Claude cannot reach, degrades and gets
-        its full text there. :func:`~._claude_hooks.runs_natively` is the test
+        its full text there. :func:`~.hooks.runs_natively` is the test
         :meth:`write_hook` uses too, so the two never disagree.
 
         Example: ``adapter.writes_guardrails_skill([native_hook])`` -> ``False``.

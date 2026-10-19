@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from coding_agent_playbook.adapters._where_guidance import WhereGuidanceBuffer
 from coding_agent_playbook.artifacts.skill import Skill
-from coding_agent_playbook.skill_document import WhereEntry, where_guidance_section
+from coding_agent_playbook.skills.document import WhereEntry, where_guidance_section
 from tests.member_skill_samples import sample_member_reference, sample_member_skill
 
 _RULE_SECTION = "## Project context\n\nAsk first.\n\n---\n"
