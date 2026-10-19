@@ -5,9 +5,9 @@ The task config declares its named *handles* in a ``[gate.bind]`` /
 *binding* that the :func:`~coding_agent_playbook.evals.compile._expr.compile_expr`
 interpreter later references by name. This module is the **Factory** that turns
 each binding into a concrete
-:class:`~coding_agent_playbook.evaluators.check.Check`, and (because the
+:class:`~coding_agent_playbook.grading.check.Check`, and (because the
 boolean-group bindings recurse) a **Composite** builder over the
-:mod:`coding_agent_playbook.evaluators.checks.compose` tree. The task compiler
+:mod:`coding_agent_playbook.grading.compose` tree. The task compiler
 (:mod:`coding_agent_playbook.evals.compile.compiler`) calls it once per present layer.
 
 A binding (and any nested child) carries exactly one of six mutually exclusive
@@ -15,19 +15,19 @@ shape-keys (plus the aggregate ``metric``-alone fallback described in
 :func:`_build_one`):
 
 * **boolean group** - ``{all_of = [<binding>, …]}`` / ``{any_of = […]}`` /
-  ``{not = <binding>}`` -> :class:`~coding_agent_playbook.evaluators.checks.compose.AllOf`
-  / :class:`~coding_agent_playbook.evaluators.checks.compose.AnyOf` /
-  :class:`~coding_agent_playbook.evaluators.checks.compose.Not` over the
+  ``{not = <binding>}`` -> :class:`~coding_agent_playbook.grading.compose.AllOf`
+  / :class:`~coding_agent_playbook.grading.compose.AnyOf` /
+  :class:`~coding_agent_playbook.grading.compose.Not` over the
   recursively-built children;
 * **rubric group** - ``{rubric = [{judge="…", weight=…}, …], fail = 0.8}`` -> a
-  :class:`~coding_agent_playbook.evaluators.rubric.Rubric` built by
-  :meth:`Rubric.of <coding_agent_playbook.evaluators.rubric.Rubric.of>` (weighted
-  :class:`~coding_agent_playbook.evaluators.checks.judged.JudgeCheck`\\ s, weights
+  :class:`~coding_agent_playbook.grading.rubric.Rubric` built by
+  :meth:`Rubric.of <coding_agent_playbook.grading.rubric.Rubric.of>` (weighted
+  :class:`~coding_agent_playbook.grading.judged.JudgeCheck`\\ s, weights
   normalized to sum ``1.0``), then **wrapped** as a boolean in a
-  :class:`~coding_agent_playbook.evaluators.check.ThresholdCheck` (``warn``/``fail``
+  :class:`~coding_agent_playbook.grading.check.ThresholdCheck` (``warn``/``fail``
   on the rubric's ``0-1`` composite) - a rubric *is* a ``Metric``, so it thresholds;
 * **standalone check** - ``{check = "threshold"|"file_exists"|…, …kwargs}`` ->
-  :func:`~coding_agent_playbook.evaluators.checks.registry.get_check`;
+  :func:`~coding_agent_playbook.grading.check_registry.get_check`;
 * **ref** - ``{ref = "name"}`` -> the gate registry
   (:func:`~coding_agent_playbook.evals.compile.gate_registry.get_gate`) when ``layer ==
   "gate"``, else the named-rubric registry
@@ -53,18 +53,18 @@ from typing import TYPE_CHECKING, Any
 from coding_agent_playbook.evals.checks import aggregate, answer, files
 from coding_agent_playbook.evals.compile.gate_registry import get_gate
 from coding_agent_playbook.evals.compile.rubric_registry import get_rubric
-from coding_agent_playbook.evaluators.check import ThresholdCheck
-from coding_agent_playbook.evaluators.checks import compose
-from coding_agent_playbook.evaluators.checks.registry import get_check
-from coding_agent_playbook.evaluators.rubric import Rubric
+from coding_agent_playbook.grading import compose
+from coding_agent_playbook.grading.check import ThresholdCheck
+from coding_agent_playbook.grading.check_registry import get_check
+from coding_agent_playbook.grading.rubric import Rubric
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from coding_agent_playbook.evaluators.check import Check
+    from coding_agent_playbook.grading.check import Check
 
 #: The eval-only check families, imported for their ``@register_check`` side effect:
-#: the kernel's checks package does not import them, and a family imported after
+#: the kernel's check registry does not import them, and a family imported after
 #: the first ``get_check`` lookup would be missing from it.
 _EVAL_CHECK_FAMILIES = (aggregate, answer, files)
 

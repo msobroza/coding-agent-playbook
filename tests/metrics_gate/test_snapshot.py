@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.evaluators.types import Measurement
+from coding_agent_playbook.grading.types import Measurement
 from coding_agent_playbook.metrics_gate.snapshot import (
     SNAPSHOT_SCHEMA,
     SnapshotError,

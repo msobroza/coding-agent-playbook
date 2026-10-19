@@ -1,9 +1,9 @@
 """Tests for the named-rubric registry — ``evals/compile/rubric_registry.py``.
 
 The named-rubric registry is the out-of-tree extension point that bridges a
-code-defined :class:`~coding_agent_playbook.evaluators.rubric.Rubric` subclass
+code-defined :class:`~coding_agent_playbook.grading.rubric.Rubric` subclass
 (its :attr:`CRITERIA`) and a TOML ``[rubric] ref = "<name>"`` reference. It
-mirrors the :mod:`coding_agent_playbook.evaluators.metric` registry idiom:
+mirrors the :mod:`coding_agent_playbook.grading.metric` registry idiom:
 builtins/registered classes win over an entry-point plugin of the same name,
 :func:`get_rubric` resolves a *built* :class:`Rubric` instance, and
 :func:`all_rubric_names` lists every known name for validator messages.
@@ -22,8 +22,8 @@ from coding_agent_playbook.evals.compile.rubric_registry import (
     get_rubric,
     register_rubric,
 )
-from coding_agent_playbook.evaluators.checks.judged import JudgeCheck
-from coding_agent_playbook.evaluators.rubric import Rubric
+from coding_agent_playbook.grading.judged import JudgeCheck
+from coding_agent_playbook.grading.rubric import Rubric
 
 
 def _register(name: str, criteria: tuple[tuple[str, float], ...]) -> type[Rubric]:

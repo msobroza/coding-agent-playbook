@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook.cli.parser import build_parser
 from coding_agent_playbook.commands import metrics as _metrics
-from coding_agent_playbook.evaluators.execution.project import ProjectHandle
+from coding_agent_playbook.grading.execution_metrics.project import ProjectHandle
 from coding_agent_playbook.metrics_gate.run import MetricsGateDeps
 
 if TYPE_CHECKING:

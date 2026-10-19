@@ -124,28 +124,66 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.evals.runner.render_prompt` | `coding_agent_playbook.evals.prompting.render_prompt` | N23 |
 | `coding_agent_playbook.evals.scoring` | `coding_agent_playbook.evals.run.scoring` | N23 |
 | `coding_agent_playbook.evals.validate_tasks` | `coding_agent_playbook.evals.validator.validate_tasks` | N23 |
+| `coding_agent_playbook.evaluators` | `coding_agent_playbook.grading` | N25 |
+| `coding_agent_playbook.evaluators.AbsoluteThreshold` | `coding_agent_playbook.grading.types.AbsoluteThreshold` | N25 |
+| `coding_agent_playbook.evaluators.Determinism` | `coding_agent_playbook.grading.scope.Determinism` | N25 |
+| `coding_agent_playbook.evaluators.EvalContext` | `coding_agent_playbook.grading.types.EvalContext` | N25 |
+| `coding_agent_playbook.evaluators.EvaluationReport` | `coding_agent_playbook.grading.types.EvaluationReport` | N25 |
+| `coding_agent_playbook.evaluators.GradePolicy` | `coding_agent_playbook.grading.types.GradePolicy` | N25 |
+| `coding_agent_playbook.evaluators.JudgeLike` | `coding_agent_playbook.grading.types.JudgeLike` | N25 |
+| `coding_agent_playbook.evaluators.Measurement` | `coding_agent_playbook.grading.types.Measurement` | N25 |
+| `coding_agent_playbook.evaluators.Metric` | `coding_agent_playbook.grading.metric.Metric` | N25 |
 | `coding_agent_playbook.evaluators.MetricConfig` | `coding_agent_playbook.metrics_gate.config.MetricConfig` | N22 |
+| `coding_agent_playbook.evaluators.ModuleModel` | `coding_agent_playbook.grading.parse.ModuleModel` | N25 |
+| `coding_agent_playbook.evaluators.RegressionPolicy` | `coding_agent_playbook.grading.types.RegressionPolicy` | N25 |
+| `coding_agent_playbook.evaluators.ResolvedPolicy` | `coding_agent_playbook.grading.types.ResolvedPolicy` | N25 |
+| `coding_agent_playbook.evaluators.Rubric` | `coding_agent_playbook.grading.rubric.Rubric` | N25 |
+| `coding_agent_playbook.evaluators.Scope` | `coding_agent_playbook.grading.scope.Scope` | N25 |
+| `coding_agent_playbook.evaluators.TrialResult` | `coding_agent_playbook.grading.types.TrialResult` | N25 |
 | `coding_agent_playbook.evaluators._metrics_inputs` | `coding_agent_playbook.metrics_gate.inputs` | N22 |
 | `coding_agent_playbook.evaluators._metrics_suite` | `coding_agent_playbook.metrics_gate.suite` | N22 |
+| `coding_agent_playbook.evaluators.all_metrics` | `coding_agent_playbook.grading.metric.all_metrics` | N25 |
 | `coding_agent_playbook.evaluators.all_rubric_names` | `coding_agent_playbook.evals.compile.rubric_registry.all_rubric_names` | N24 |
+| `coding_agent_playbook.evaluators.builtins` | `coding_agent_playbook.grading.static_metrics` | N25 |
 | `coding_agent_playbook.evaluators.checks.AggregateCheck` | `coding_agent_playbook.evals.checks.aggregate.AggregateCheck` | N24 |
+| `coding_agent_playbook.evaluators.checks.AllOf` | `coding_agent_playbook.grading.compose.AllOf` | N25 |
 | `coding_agent_playbook.evaluators.checks.AnswerMatchesCheck` | `coding_agent_playbook.evals.checks.answer.AnswerMatchesCheck` | N24 |
+| `coding_agent_playbook.evaluators.checks.AnyOf` | `coding_agent_playbook.grading.compose.AnyOf` | N25 |
+| `coding_agent_playbook.evaluators.checks.CoverageCheck` | `coding_agent_playbook.grading.execution_checks.CoverageCheck` | N25 |
 | `coding_agent_playbook.evaluators.checks.FileContainsCheck` | `coding_agent_playbook.evals.checks.files.FileContainsCheck` | N24 |
 | `coding_agent_playbook.evaluators.checks.FileExistsCheck` | `coding_agent_playbook.evals.checks.files.FileExistsCheck` | N24 |
 | `coding_agent_playbook.evaluators.checks.FileForbiddenCheck` | `coding_agent_playbook.evals.checks.files.FileForbiddenCheck` | N24 |
 | `coding_agent_playbook.evaluators.checks.FileUnchangedCheck` | `coding_agent_playbook.evals.checks.files.FileUnchangedCheck` | N24 |
+| `coding_agent_playbook.evaluators.checks.JudgeCheck` | `coding_agent_playbook.grading.judged.JudgeCheck` | N25 |
+| `coding_agent_playbook.evaluators.checks.JudgeMetric` | `coding_agent_playbook.grading.judge_metric.JudgeMetric` | N25 |
+| `coding_agent_playbook.evaluators.checks.Not` | `coding_agent_playbook.grading.compose.Not` | N25 |
 | `coding_agent_playbook.evaluators.checks.PassAtK` | `coding_agent_playbook.evals.checks.aggregate.PassAtK` | N24 |
 | `coding_agent_playbook.evaluators.checks.PassPowK` | `coding_agent_playbook.evals.checks.aggregate.PassPowK` | N24 |
+| `coding_agent_playbook.evaluators.checks.TestsPassCheck` | `coding_agent_playbook.grading.execution_checks.TestsPassCheck` | N25 |
 | `coding_agent_playbook.evaluators.checks.aggregate` | `coding_agent_playbook.evals.checks.aggregate` | N24 |
+| `coding_agent_playbook.evaluators.checks.all_check_ids` | `coding_agent_playbook.grading.check_registry.all_check_ids` | N25 |
 | `coding_agent_playbook.evaluators.checks.answer` | `coding_agent_playbook.evals.checks.answer` | N24 |
+| `coding_agent_playbook.evaluators.checks.compose` | `coding_agent_playbook.grading.compose` | N25 |
+| `coding_agent_playbook.evaluators.checks.execution` | `coding_agent_playbook.grading.execution_checks` | N25 |
 | `coding_agent_playbook.evaluators.checks.files` | `coding_agent_playbook.evals.checks.files` | N24 |
+| `coding_agent_playbook.evaluators.checks.get_check` | `coding_agent_playbook.grading.check_registry.get_check` | N25 |
+| `coding_agent_playbook.evaluators.checks.judge_metric` | `coding_agent_playbook.grading.judge_metric` | N25 |
+| `coding_agent_playbook.evaluators.checks.judged` | `coding_agent_playbook.grading.judged` | N25 |
+| `coding_agent_playbook.evaluators.checks.register_check` | `coding_agent_playbook.grading.check_registry.register_check` | N25 |
+| `coding_agent_playbook.evaluators.checks.registry` | `coding_agent_playbook.grading.check_registry` | N25 |
+| `coding_agent_playbook.evaluators.execution` | `coding_agent_playbook.grading.execution_metrics` | N25 |
+| `coding_agent_playbook.evaluators.execution_metrics` | `coding_agent_playbook.grading.metric.execution_metrics` | N25 |
 | `coding_agent_playbook.evaluators.gates` | `coding_agent_playbook.evals.compile.gate_registry` | N24 |
+| `coding_agent_playbook.evaluators.get_metric` | `coding_agent_playbook.grading.metric.get_metric` | N25 |
 | `coding_agent_playbook.evaluators.get_rubric` | `coding_agent_playbook.evals.compile.rubric_registry.get_rubric` | N24 |
 | `coding_agent_playbook.evaluators.measurement_snapshot` | `coding_agent_playbook.metrics_gate.snapshot` | N22 |
 | `coding_agent_playbook.evaluators.metrics_gate` | `coding_agent_playbook.metrics_gate.run` | N22 |
+| `coding_agent_playbook.evaluators.parse_module` | `coding_agent_playbook.grading.parse.parse_module` | N25 |
 | `coding_agent_playbook.evaluators.policy` | `coding_agent_playbook.metrics_gate.policy` | N22 |
+| `coding_agent_playbook.evaluators.register_metric` | `coding_agent_playbook.grading.metric.register_metric` | N25 |
 | `coding_agent_playbook.evaluators.register_rubric` | `coding_agent_playbook.evals.compile.rubric_registry.register_rubric` | N24 |
 | `coding_agent_playbook.evaluators.rubrics` | `coding_agent_playbook.evals.compile.rubric_registry` | N24 |
+| `coding_agent_playbook.evaluators.static_metrics` | `coding_agent_playbook.grading.metric.static_metrics` | N25 |
 | `coding_agent_playbook.evaluators.types.MetricConfig` | `coding_agent_playbook.metrics_gate.config.MetricConfig` | N22 |
 | `coding_agent_playbook.gate_scan` | `coding_agent_playbook.hook_runtime.judges.gate_weakening` | N15 |
 | `coding_agent_playbook.gate_scan.TEST_PATH_GLOBS` | `coding_agent_playbook.artifacts.path_classes.TEST_PATH_GLOBS` | N15 |
@@ -334,6 +372,18 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.types.format_frontmatter` | `coding_agent_playbook.artifacts.frontmatter.format_frontmatter` | A2 |
 | `coding_agent_playbook.types.split_frontmatter` | `coding_agent_playbook.artifacts.frontmatter.split_frontmatter` | A2 |
 <!-- module-moves:end -->
+
+<!-- module-moves: keep -->
+Out-of-tree `Metric`, `Check`, rubric and gate authors: the grading kernel
+`coding_agent_playbook.evaluators.*` is now `coding_agent_playbook.grading.*`
+(`builtins` is `static_metrics`, `execution` is `execution_metrics`, and the
+kernel's `checks.*` modules sit in `grading` itself, with `checks.registry` as
+`check_registry` and `checks.execution` as `execution_checks`), and the named
+rubric and gate registries are
+`coding_agent_playbook.evals.compile.rubric_registry` and
+`coding_agent_playbook.evals.compile.gate_registry`. There is no shim, and the
+entry-point groups do not change.
+<!-- module-moves: end-keep -->
 
 ## v0.21 — Skills-first context
 
@@ -1499,7 +1549,7 @@ group (weights still sum to 1.0), thresholded to a boolean by `fail`.
 ### 2. `higher_is_worse` → a per-`Metric` `Normalizer`; thresholds are 0–1
 
 `higher_is_worse` is **deleted**. Every `Metric` now owns a `Normalizer`
-(`evaluators/normalizer.py`) mapping its raw value to a **0–1 goodness** where
+(`grading/normalizer.py`) mapping its raw value to a **0–1 goodness** where
 higher is always better, folding the metric's native direction in:
 
 ```python
@@ -1509,7 +1559,7 @@ class MyMetric(Metric):
 
 
 # after
-from coding_agent_playbook.evaluators.normalizer import RampNormalizer
+from coding_agent_playbook.grading.normalizer import RampNormalizer
 
 
 class MyMetric(Metric):
@@ -1677,8 +1727,8 @@ my_check = "my_pkg.checks:MyCheck"
 
 A `Check` implements `grade(self, ctx, measurements) -> CheckResult` and sets
 `id`, `weight`, `required`, `determinism`, and `cost: CostTier`. See
-`evaluators/check.py` (`ThresholdCheck`/`NonRegressionCheck`),
-`evaluators/checks/` (judge/compose) and `evals/checks/files.py` (file) for the
+`grading/check.py` (`ThresholdCheck`/`NonRegressionCheck`),
+`grading/judged.py` and `grading/compose.py` (judge/compose) and `evals/checks/files.py` (file) for the
 built-in shapes.
 
 ### 4. `grade()` → `Rubric.evaluate`

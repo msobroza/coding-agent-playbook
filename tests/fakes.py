@@ -8,7 +8,7 @@ in for ``playbook sync``'s validate gate. ``FakeProjectFactory`` stands in for
 ``ProjectHandle.create`` so metrics-gate tests see which test command (and
 diff base, timeout, ``--cov`` sources) would run without running a suite; its
 ``FakeProjectHandle`` serves canned ``RunArtifacts``. ``FakeBaselineGit`` stands in for
-:class:`coding_agent_playbook.evaluators.baseline_git.SubprocessBaselineGit`;
+:class:`coding_agent_playbook.grading.baseline_git.SubprocessBaselineGit`;
 ``FakeGitRunner`` stands in for its working-tree reads (``SubprocessGitRunner``).
 ``FakeHandlerSchemas`` stands in for the hook-handler ``CONFIG_SCHEMA`` registry
 (K2) behind :class:`coding_agent_playbook.hooks.resolution.merge.ConfigSchemaLookup`.
@@ -33,11 +33,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.commands.twins.ci import StepRun
-from coding_agent_playbook.evaluators.baseline_git import BaselineGitError, GitTimeoutError
-from coding_agent_playbook.evaluators.execution.coverage_xml import CoverageReport
-from coding_agent_playbook.evaluators.execution.junit import JunitSummary
-from coding_agent_playbook.evaluators.execution.project import ProjectHandle, RunArtifacts
-from coding_agent_playbook.evaluators.tool_runner import ToolRunError
+from coding_agent_playbook.grading.baseline_git import BaselineGitError, GitTimeoutError
+from coding_agent_playbook.grading.execution_metrics.coverage_xml import CoverageReport
+from coding_agent_playbook.grading.execution_metrics.junit import JunitSummary
+from coding_agent_playbook.grading.execution_metrics.project import ProjectHandle, RunArtifacts
+from coding_agent_playbook.grading.tool_runner import ToolRunError
 from coding_agent_playbook.hook_runtime.config.pin import PinResult
 
 if TYPE_CHECKING:
@@ -176,7 +176,7 @@ class FakeProjectFactory:
 
 @dataclass
 class FakeBaselineGit:
-    """In-memory :class:`~coding_agent_playbook.evaluators.baseline_git.BaselineGit`.
+    """In-memory :class:`~coding_agent_playbook.grading.baseline_git.BaselineGit`.
 
     ``blobs`` maps ``(ref, repo-relative path)`` to the source at that ref, and
     ``commits`` holds the refs that verify. A git command named in
@@ -226,7 +226,7 @@ class FakeBaselineGit:
 
 @dataclass
 class FakeGitRunner:
-    """In-memory :data:`~coding_agent_playbook.evaluators.baseline_git.GitRunner`.
+    """In-memory :data:`~coding_agent_playbook.grading.baseline_git.GitRunner`.
 
     ``outputs`` maps a git subcommand (``"diff"``, ``"ls-files"``, ``"status"``,
     ``"rev-parse"``) to its stdout; an unlisted one prints nothing. A subcommand

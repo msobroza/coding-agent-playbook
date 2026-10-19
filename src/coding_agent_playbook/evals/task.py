@@ -12,7 +12,7 @@ its evaluation as up to four raw blocks the compiler
 
 * ``[gate]`` — ``{"bind": <handle table>, "expr": <bool expr | None>}``. The
   deterministic layer (file predicates, metric thresholds, composed gates). Every
-  handle is a boolean :class:`~coding_agent_playbook.evaluators.check.Check`.
+  handle is a boolean :class:`~coding_agent_playbook.grading.check.Check`.
 * ``[rubric]`` — same shape; the judged llm-judge layer (a ``rubric`` group of
   weighted ``JudgeCheck``\\ s, thresholded to a boolean).
 * ``[verdict].trial`` — a boolean expression over ``gate``/``rubric`` (default
@@ -78,7 +78,7 @@ class Layer:
 
     ``bind`` is the raw ``[<layer>.bind]`` handle table (one entry per handle, the
     value a binding the :func:`~coding_agent_playbook.evals.compile._handles.build_handles`
-    factory turns into a :class:`~coding_agent_playbook.evaluators.check.Check`).
+    factory turns into a :class:`~coding_agent_playbook.grading.check.Check`).
     ``expr`` is the optional boolean/aggregate expression over those handle names
     (``None`` defaults to the sole handle's name for a single-handle layer).
     """
@@ -215,7 +215,7 @@ def compile_eval_task(task: EvalTask) -> CompiledTask:
     task's gate/rubric/aggregate bind tables + exprs and the verdict trial
     expression. The returned
     :class:`~coding_agent_playbook.evals.compile.compiler.CompiledTask` carries the
-    per-trial :class:`~coding_agent_playbook.evaluators.rubric.Rubric` (the gate +
+    per-trial :class:`~coding_agent_playbook.grading.rubric.Rubric` (the gate +
     rubric layer checks), the parsed verdict AST, and the compiled ``[aggregate]``
     layer + ``trials_needed`` (``None``/``1`` when no ``[aggregate]`` block).
 
@@ -226,7 +226,7 @@ def compile_eval_task(task: EvalTask) -> CompiledTask:
     naming an absent layer. The validator turns these into validation errors.
 
     The compiler is imported lazily so the ``task`` module stays import-light; the
-    ``compile.compiler`` module imports only from ``evaluators`` (never back from ``task``),
+    ``compile.compiler`` module imports only from ``grading`` (never back from ``task``),
     so this is acyclic regardless.
     """
     from coding_agent_playbook.evals.compile.compiler import compile_task

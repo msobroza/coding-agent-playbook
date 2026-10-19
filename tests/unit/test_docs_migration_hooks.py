@@ -23,7 +23,7 @@ from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.claude_code.hooks import CLAUDE_HEARTBEAT_LINE
 from coding_agent_playbook.adapters.claude_code.paths import CLAUDE_RULES_PATH
 from coding_agent_playbook.detector.pep503 import canonical_name
-from coding_agent_playbook.evaluators.checks.execution import CoverageCheck
+from coding_agent_playbook.grading.execution_checks import CoverageCheck
 from coding_agent_playbook.sync._dispatch import LOCKFILE_SCHEMA
 from coding_agent_playbook.sync._hook_outputs import HOOKS_NOTICE
 from coding_agent_playbook.sync.pipeline import _ABORT_OUTCOME
