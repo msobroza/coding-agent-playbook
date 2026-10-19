@@ -4,7 +4,7 @@ Default, ``pre_tool_use`` on shell calls running ``git`` (the argv0
 prefilter), on the shared parse with wrapper prefixes such as ``proxy``
 unwrapped. The convention is the consumer's commitizen config
 (``[tool.commitizen]``, default ``cz_conventional_commits``), which ``cz``
-reads itself: the engine has no linter, only D-Q3's cut-over (``cutover``).
+reads itself: the engine has no linter, only D-Q3's cut-over (``judges.commit_cutover``).
 
 - **commit**: the message ``gitargv.commit_message_sources`` reads (``-m``
   paragraphs, a ``-F`` file inside the worktree up to 64 KiB, heredoc bodies)
@@ -147,9 +147,12 @@ def _check(
 
 def _push(git: GitInvocation, cz: CzRunner, ctx: HandlerContext) -> str | None:
     """Check the commits the push publishes past the cut-over; ``None`` when they pass."""
-    from coding_agent_playbook.hook_runtime.cutover import parse_cutover, plan_cz_checks
     from coding_agent_playbook.hook_runtime.git import GitError
     from coding_agent_playbook.hook_runtime.handlers._cz import push_ranges
+    from coding_agent_playbook.hook_runtime.judges.commit_cutover import (
+        parse_cutover,
+        plan_cz_checks,
+    )
 
     try:
         cutover = parse_cutover(ctx.config.get("cutover_date"))

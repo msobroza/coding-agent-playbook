@@ -5,7 +5,7 @@ commit-message-convention's push scan and the ``playbook ci``
 **committer** date and message, so D-Q3's cut-over (``cutover_date``) can
 grandfather legacy history while a rebased or amended commit (a new committer
 date) still has to conform. The parents say whether one ``cz check --rev-range``
-covers exactly the kept commits (``hook_runtime.cutover``). One ``git log -z``
+covers exactly the kept commits (``hook_runtime.judges.commit_cutover``). One ``git log -z``
 call gives every field; it reads no worktree content, and ``SafeGit.run`` adds
 the hardening flags.
 

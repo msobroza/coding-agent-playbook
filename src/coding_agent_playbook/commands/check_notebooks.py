@@ -5,7 +5,7 @@ stdlib check is what the ``playbook-notebooks`` pre-commit entry
 (``types: [jupyter]``) runs: every cell of each notebook named (pre-commit
 passes the staged ones), or of every tracked ``.ipynb`` file without PATHS,
 must keep no outputs. The check is the hook's own
-(``_notebook_check.check_cells``), with a larger parse cap: a CLI may take
+(``judges.notebook_check.check_cells``), with a larger parse cap: a CLI may take
 the time a hook may not.
 
 Exit codes: 0 clean, 1 a notebook keeps outputs or is not valid notebook
@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Final
 from coding_agent_playbook.commands._git_base import open_git
 from coding_agent_playbook.hook_runtime.caps import quote_data
 from coding_agent_playbook.hook_runtime.git import GitError
-from coding_agent_playbook.hook_runtime.handlers._notebook_check import (
+from coding_agent_playbook.hook_runtime.judges.notebook_check import (
     NotebookLimits,
     Oversized,
     check_cells,

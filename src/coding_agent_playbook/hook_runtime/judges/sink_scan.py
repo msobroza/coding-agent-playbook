@@ -23,6 +23,7 @@ Stop rescan share this one pure implementation: text in, findings out.
 from __future__ import annotations
 
 import ast
+import re
 from collections import Counter
 from dataclasses import dataclass
 from fnmatch import fnmatchcase
@@ -34,6 +35,7 @@ if TYPE_CHECKING:
 __all__ = [
     "CONVENTIONAL_ALIASES",
     "EXPR",
+    "PRAGMA",
     "SPLAT",
     "Keyword",
     "SinkCall",
@@ -43,6 +45,7 @@ __all__ = [
     "new_sink_calls",
     "resolve_alias",
     "sink_calls",
+    "trusted_artifact_line",
 ]
 
 type SinkKind = Literal["block", "warn"]
@@ -57,6 +60,8 @@ SPLAT: Final = "**"
 #: in another cell, and an ML snippet's ``np.load`` is numpy's in practice.
 CONVENTIONAL_ALIASES: Final[Mapping[str, str]] = {"np": "numpy", "pd": "pandas"}
 _ROW_KEYS: Final = frozenset({"call", "kwarg", "missing", "unless", "advice"})
+#: The escape: a provenance must follow the marker.
+PRAGMA: Final = re.compile(r"#\s*playbook:\s*trusted-artifact\s+\S")
 
 
 @dataclass(frozen=True, slots=True)
@@ -294,3 +299,20 @@ def resolve_alias(dotted: str, aliases: Mapping[str, str]) -> str:
     head, _, rest = dotted.partition(".")
     base = aliases.get(head, head)
     return f"{base}.{rest}" if rest else base
+
+
+def trusted_artifact_line(text: str, line: int) -> str | None:
+    """The stripped line holding a trusted-artifact pragma for a call on ``line``, else ``None``.
+
+    The pragma counts on the call line itself or on the line above.
+
+    Example::
+
+        >>> trusted_artifact_line("# playbook: trusted-artifact s3://m/v3\\nm = load(p)\\n", 2)
+        '# playbook: trusted-artifact s3://m/v3'
+    """
+    lines = text.splitlines()
+    for number in (line, line - 1):
+        if 0 < number <= len(lines) and PRAGMA.search(lines[number - 1]):
+            return lines[number - 1].strip()
+    return None

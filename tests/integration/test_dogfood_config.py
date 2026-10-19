@@ -34,7 +34,7 @@ from coding_agent_playbook.config.tables.hooks import (
     HooksConfig,
     policy_tables,
 )
-from coding_agent_playbook.hook_runtime.cutover import parse_cutover
+from coding_agent_playbook.hook_runtime.judges.commit_cutover import parse_cutover
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG_PATH = ROOT / ".coding-agent-playbook.toml"

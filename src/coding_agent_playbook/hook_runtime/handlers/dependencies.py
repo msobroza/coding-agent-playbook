@@ -1,10 +1,10 @@
 """dependency-allowlist-guard: the detected package manager, new direct deps, lockfiles (specs/prK-hook-pack.md §E.4).
 
 ``pre_tool_use``; a boundary for manifest edits, a speed bump for Bash. The
-requests come from ``_install_cmds`` (install-shaped segments) and
-``_manifest_diff`` (an Edit/Write of a manifest, simulated by
+requests come from ``judges.install_commands`` (install-shaped segments) and
+``judges.manifest_diff`` (an Edit/Write of a manifest, simulated by
 ``edit_preview``); only NEWLY added names count, so existing dependencies are
-grandfathered. ``_dependency_tiers`` judges them, strongest first:
+grandfathered. ``judges.dependency_tiers`` judges them, strongest first:
 
 - (c) a hand edit of ``uv.lock`` / ``poetry.lock`` -> deny (regenerate it);
 - (a) the wrong installer for ``facts.package_manager`` -> deny with the
@@ -35,7 +35,7 @@ from coding_agent_playbook.hook_runtime._config_reader import read_small_file
 from coding_agent_playbook.hook_runtime.caps import quote_data
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.event import ToolClass
-from coding_agent_playbook.hook_runtime.handlers._dependency_tiers import (
+from coding_agent_playbook.hook_runtime.judges.dependency_tiers import (
     NEW_DEPENDENCY,
     DependencyPolicy,
     Finding,
@@ -45,8 +45,8 @@ from coding_agent_playbook.hook_runtime.handlers._dependency_tiers import (
     mismatch,
     name_findings,
 )
-from coding_agent_playbook.hook_runtime.handlers._install_cmds import install_requests
-from coding_agent_playbook.hook_runtime.handlers._manifest_diff import (
+from coding_agent_playbook.hook_runtime.judges.install_commands import install_requests
+from coding_agent_playbook.hook_runtime.judges.manifest_diff import (
     LOCKFILES,
     added_indexes,
     added_names,
@@ -59,8 +59,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent, ToolCall
-    from coding_agent_playbook.hook_runtime.handlers._install_cmds import InstallRequest
-    from coding_agent_playbook.hook_runtime.handlers._manifest_diff import ManifestKind
+    from coding_agent_playbook.hook_runtime.judges.install_commands import InstallRequest
+    from coding_agent_playbook.hook_runtime.judges.manifest_diff import ManifestKind
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.shell import Segment

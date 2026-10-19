@@ -12,8 +12,8 @@ from typing import Final
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.handlers._cli_words import split_words, value_options
-from coding_agent_playbook.hook_runtime.handlers._install_cmds import (
+from coding_agent_playbook.hook_runtime.judges.cli_words import split_words, value_options
+from coding_agent_playbook.hook_runtime.judges.install_commands import (
     InstallRequest,
     install_requests,
 )

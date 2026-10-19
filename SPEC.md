@@ -334,6 +334,7 @@ coding-agent-playbook/
 │   ├── hook_runtime/                       # the playbook-hook dispatcher: import-light, never imports cli/
 │   │   ├── handlers/                       # builtin hook handlers (@register_hook_handler)
 │   │   ├── harness/                        # per-harness payload parsers and wire renderers
+│   │   ├── judges/                         # the checks a guard hook shares with its guard twin
 │   │   └── stop/                           # the Stop stage contract and coordinator
 │   ├── security/                           # secret paths/patterns, PII, trust store, audit log (stdlib)
 │   ├── gate_scan.py                        # added-line suppression/loosening scan (`playbook gate-scan`)
