@@ -37,7 +37,9 @@ from coding_agent_playbook.hook_policy.guardrails_skill import has_guardrail_tex
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from coding_agent_playbook._typing import Prompt, Rule, Skill
+    from coding_agent_playbook.artifacts.prompt import Prompt
+    from coding_agent_playbook.artifacts.rule import Rule
+    from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.hook_policy import ResolvedHook
 
 #: Repo-relative shared skill root; Codex and OpenCode read ``.agents/skills/`` natively.
