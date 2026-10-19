@@ -4,7 +4,7 @@
 re-serialized (comments and layout are lost) and no local override is written.
 
 A diagnostic, so it exits 0 whatever it finds (drift included). An overlay in
-``overlays_enabled`` that ``playbook sync`` would refuse (``_sync_preflight``) is
+``overlays_enabled`` that ``playbook sync`` would refuse (``validation.preflight``) is
 flagged under Environment, and the Drift section then never reports a clean state.
 The Hooks block comes from :mod:`._check_hooks` (specs/prK-lifecycle-hooks.md
 §A.8). The Drift lines are ``lockfile.drift.drift_entries``, the definition the
@@ -19,8 +19,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook import __version__ as _engine_version
-from coding_agent_playbook.adapters._settings_drift import settings_document, stray_launcher_edited
-from coding_agent_playbook.commands import _sync_preflight
+from coding_agent_playbook.adapters.claude_code.settings.drift import (
+    settings_document,
+    stray_launcher_edited,
+)
 from coding_agent_playbook.commands._check_hooks import format_hooks_section
 from coding_agent_playbook.config import committed as _committed_config
 from coding_agent_playbook.config.files import FileSystemStateSource
@@ -28,13 +30,14 @@ from coding_agent_playbook.detector.facts import detect
 from coding_agent_playbook.detector.predicate import evaluate_predicate
 from coding_agent_playbook.lockfile.drift import drift_entries
 from coding_agent_playbook.orchestrator import SyncContext
+from coding_agent_playbook.validation import preflight as _sync_preflight
 
 if TYPE_CHECKING:
     import argparse
     from collections.abc import Sequence
 
-    from coding_agent_playbook.commands._sync_preflight import UnusableOverlay
     from coding_agent_playbook.lockfile.model import Lockfile
+    from coding_agent_playbook.validation.preflight import UnusableOverlay
 
 _SYNC_REFUSES = "'playbook sync' refuses to run until every overlay in overlays_enabled is usable"
 

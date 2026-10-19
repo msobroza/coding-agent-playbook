@@ -19,7 +19,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.types import Hook, HookSchemaError
+from coding_agent_playbook.artifacts.hook import Hook
+from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

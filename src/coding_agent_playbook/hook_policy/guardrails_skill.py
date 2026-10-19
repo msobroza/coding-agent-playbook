@@ -17,8 +17,8 @@ from typing import TYPE_CHECKING, Final
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
+    from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.hook_policy.resolved import ResolvedHook
-    from coding_agent_playbook.types import Skill
 
 __all__ = [
     "GUARDRAILS_SKILL_ID",

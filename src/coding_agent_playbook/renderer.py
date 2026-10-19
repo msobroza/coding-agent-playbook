@@ -22,6 +22,7 @@ from jinja2.sandbox import SandboxedEnvironment
 # working; the import-light ``_sentinel`` module is the single home (prK §P3).
 from coding_agent_playbook._sentinel import SENTINEL as SENTINEL
 from coding_agent_playbook._sentinel import sentinel_line
+from coding_agent_playbook.artifacts.hook_frontmatter import HookFrontmatter
 from coding_agent_playbook.hook_policy import advisory_block, advisory_text
 from coding_agent_playbook.hook_registrations import (
     DeclaredMember,
@@ -33,7 +34,6 @@ from coding_agent_playbook.prompt_rule_delivery import (
     insert_pointer_block,
     skill_pointer_block,
 )
-from coding_agent_playbook.types import HookFrontmatter
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence

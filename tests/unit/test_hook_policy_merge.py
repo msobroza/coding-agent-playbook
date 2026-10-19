@@ -15,6 +15,9 @@ from typing import Any
 
 import pytest
 
+from coding_agent_playbook.artifacts.hook import Hook
+from coding_agent_playbook.artifacts.hook_frontmatter import HookFrontmatter
+from coding_agent_playbook.artifacts.hook_schema import HookHandler
 from coding_agent_playbook.hook_policy import (
     NO_HANDLER_SCHEMAS,
     ConfigKeySpec,
@@ -22,7 +25,6 @@ from coding_agent_playbook.hook_policy import (
     merge_config,
     merge_hook_layers,
 )
-from coding_agent_playbook.types import Hook, HookFrontmatter, HookHandler
 from tests.fakes import FakeHandlerSchemas
 from tests.hook_samples import sample_hook
 

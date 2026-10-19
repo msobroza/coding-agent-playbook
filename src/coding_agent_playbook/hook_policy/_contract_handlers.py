@@ -22,14 +22,16 @@ import re
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Final, get_args
 
-from coding_agent_playbook._hook_schema import HookLauncher
+from coding_agent_playbook.artifacts.hook_schema import HookLauncher
 from coding_agent_playbook.hook_policy._findings import Finding, error
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
-    from coding_agent_playbook.types import Hook, HookFrontmatter, HookHandler
+    from coding_agent_playbook.artifacts.hook import Hook
+    from coding_agent_playbook.artifacts.hook_frontmatter import HookFrontmatter
+    from coding_agent_playbook.artifacts.hook_schema import HookHandler
 
 #: The launchers an external handler may name (§A.2); never a shell string.
 LAUNCHERS: Final[tuple[str, ...]] = get_args(HookLauncher)

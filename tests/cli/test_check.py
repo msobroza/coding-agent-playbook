@@ -9,7 +9,10 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.adapters._settings_drift import settings_document, stray_launcher_edited
+from coding_agent_playbook.adapters.claude_code.settings.drift import (
+    settings_document,
+    stray_launcher_edited,
+)
 from coding_agent_playbook.cli import main
 from coding_agent_playbook.commands import check as _check
 from coding_agent_playbook.commands import sync as _sync

@@ -20,14 +20,16 @@ from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any, Final, Literal, NamedTuple
 
-from coding_agent_playbook._hook_schema import MATCHER_KEYS
+from coding_agent_playbook.artifacts.hook_schema import MATCHER_KEYS
 from coding_agent_playbook.hook_policy.advisory import advisory_text, guardrail_summary
 from coding_agent_playbook.hook_policy.tables import HOOK_SCRIPTS_DIR
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from coding_agent_playbook.types import Hook, HookHandler, HookMatcher, Rule
+    from coding_agent_playbook.artifacts.hook import Hook
+    from coding_agent_playbook.artifacts.hook_schema import HookHandler, HookMatcher
+    from coding_agent_playbook.artifacts.rule import Rule
 
 #: ``entry_point`` is a builtin name resolved at sync to an out-of-tree handler of the
 #: ``coding_agent_playbook.hook_handlers`` group (``target`` + ``dist``; in-tree wins).

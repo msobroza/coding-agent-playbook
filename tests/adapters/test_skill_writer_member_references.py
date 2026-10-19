@@ -17,14 +17,15 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.adapters._skill_writer import (
+from coding_agent_playbook.adapters.skill_dirs.writer import (
     SKILL_FILENAME,
     SkillWriter,
     render_skill_md,
 )
+from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
+from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.renderer import SENTINEL
-from coding_agent_playbook.skill_document import references_index
-from coding_agent_playbook.types import Skill, split_frontmatter
+from coding_agent_playbook.skills.document import references_index
 from tests.member_skill_samples import (
     sample_member_reference,
     sample_member_skill,
@@ -33,7 +34,7 @@ from tests.member_skill_samples import (
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
 
 if TYPE_CHECKING:
-    from coding_agent_playbook._member_reference import MemberReference
+    from coding_agent_playbook.artifacts.member_reference import MemberReference
 
 _TYPING = sample_member_reference("python-typing", name="Typing", priority=50)
 _DI = sample_member_reference(

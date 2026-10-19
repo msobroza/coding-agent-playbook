@@ -496,9 +496,17 @@ def test_evals_and_yaml_load_only_on_an_eval_task_edit(
         *(
             engine_module(f"{ENGINE}.{name}")
             for name in (
-                "_hook_frontmatter",
-                "_hook_schema",
-                "_member_reference",
+                # The package itself until N15 makes artifacts.path_classes a dotted
+                # leaf; FORBIDDEN then names its submodules, and this entry goes.
+                "artifacts",
+                "artifacts.frontmatter",
+                "artifacts.hook",
+                "artifacts.hook_frontmatter",
+                "artifacts.hook_schema",
+                "artifacts.member_reference",
+                "artifacts.prompt",
+                "artifacts.rule",
+                "artifacts.skill",
                 "catalog._hook_walk",
                 "catalog.layers",
                 "catalog.source",
@@ -507,7 +515,6 @@ def test_evals_and_yaml_load_only_on_an_eval_task_edit(
                 "evaluators",
                 "metrics_gate",
                 "toml_writer",
-                "types",
             )
         ),
     )

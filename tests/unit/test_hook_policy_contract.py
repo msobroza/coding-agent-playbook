@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from coding_agent_playbook.artifacts.hook import Hook
 from coding_agent_playbook.hook_policy import HookCheckContext, HookIssue, classify_hook
-from coding_agent_playbook.types import Hook
 from tests.hook_samples import HOOK_WHERE, sample_hook, write_hook
 
 if TYPE_CHECKING:

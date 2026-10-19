@@ -61,11 +61,11 @@ playbook-hook = "coding_agent_playbook.hook_runtime.cli:main"
 [project.entry-points."coding_agent_playbook.adapters"]
 # Populated by PRs 6–9: continue, claude_code, opencode, agents_md.
 agent_harness = "coding_agent_playbook.adapters.agent_harness_adapter:AgentHarnessAdapter"
-agents_md = "coding_agent_playbook.adapters.agents_md_adapter:AgentsMdAdapter"
-claude_code = "coding_agent_playbook.adapters.claude_code_adapter:ClaudeCodeAdapter"
-continue = "coding_agent_playbook.adapters.continue_adapter:ContinueAdapter"
-opencode = "coding_agent_playbook.adapters.opencode_adapter:OpenCodeAdapter"
-shared_skills = "coding_agent_playbook.adapters.shared_skills_adapter:SharedSkillsAdapter"
+agents_md = "coding_agent_playbook.adapters.agents_md:AgentsMdAdapter"
+claude_code = "coding_agent_playbook.adapters.claude_code.adapter:ClaudeCodeAdapter"
+continue = "coding_agent_playbook.adapters.continue_:ContinueAdapter"
+opencode = "coding_agent_playbook.adapters.opencode:OpenCodeAdapter"
+shared_skills = "coding_agent_playbook.adapters.shared_skills:SharedSkillsAdapter"
 
 [project.entry-points."coding_agent_playbook.overlays"]
 # Populated by overlay packages (e.g. playbook-rules-bnp). Engine ships none.
@@ -246,19 +246,19 @@ layers = [
     "cli",
     "commands",
     "(sync)",
-    "(validation)",
-    "(agent_harness) | evals | (precommit)",
+    "validation",
+    "(agent_harness) | evals | precommit",
     "adapters",
     "(rendering)",
     "(hooks)",
-    "(skills)",
+    "skills",
     "metrics_gate",
     "config",
     "catalog",
     "detector | lockfile",
     "(grading)",
     "(generated_output)",
-    "(artifacts)",
+    "artifacts",
     "security | toml_writer | (_plugin_registry)",
 ]
 exhaustive = true
@@ -278,9 +278,6 @@ exhaustive_ignores = [
     "_guard_config_skills",
     "_guard_config_toolchain",
     "_guard_config_verify",
-    "_hook_frontmatter",
-    "_hook_schema",
-    "_member_reference",
     "_output_io",
     "_sentinel",
     "_symlinks",
@@ -295,14 +292,10 @@ exhaustive_ignores = [
     "hook_policy",
     "hook_registrations",
     "hook_runtime",
-    "links",
     "orchestrator",
     "prompt_rule_delivery",
     "renderer",
     "rule_registry",
-    "skill_document",
-    "skill_membership",
-    "types",
 ]
 ignore_imports = [
     # CF-2 deletes _typing.py (after #62)
@@ -346,13 +339,11 @@ forbidden_modules = [
     "coding_agent_playbook._guard_config_skills",
     "coding_agent_playbook._guard_config_toolchain",
     "coding_agent_playbook._guard_config_verify",
-    "coding_agent_playbook._hook_frontmatter",
-    "coding_agent_playbook._hook_schema",
-    "coding_agent_playbook._member_reference",
     "coding_agent_playbook._output_io",
     "coding_agent_playbook._symlinks",
     "coding_agent_playbook._typing",
     "coding_agent_playbook.adapters",
+    "coding_agent_playbook.artifacts",
     "coding_agent_playbook.catalog._hook_walk",
     "coding_agent_playbook.catalog.layers",
     "coding_agent_playbook.catalog.source",
@@ -372,16 +363,15 @@ forbidden_modules = [
     "coding_agent_playbook.hook_policy",
     "coding_agent_playbook.hook_registrations",
     "coding_agent_playbook.hook_runtime",
-    "coding_agent_playbook.links",
     "coding_agent_playbook.metrics_gate",
     "coding_agent_playbook.orchestrator",
+    "coding_agent_playbook.precommit",
     "coding_agent_playbook.prompt_rule_delivery",
     "coding_agent_playbook.renderer",
     "coding_agent_playbook.rule_registry",
-    "coding_agent_playbook.skill_document",
-    "coding_agent_playbook.skill_membership",
+    "coding_agent_playbook.skills",
     "coding_agent_playbook.toml_writer",
-    "coding_agent_playbook.types",
+    "coding_agent_playbook.validation",
     "jinja2",
     "packaging",
     "yaml",
@@ -412,13 +402,11 @@ forbidden_modules = [
     "coding_agent_playbook._guard_config_skills",
     "coding_agent_playbook._guard_config_toolchain",
     "coding_agent_playbook._guard_config_verify",
-    "coding_agent_playbook._hook_frontmatter",
-    "coding_agent_playbook._hook_schema",
-    "coding_agent_playbook._member_reference",
     "coding_agent_playbook._output_io",
     "coding_agent_playbook._symlinks",
     "coding_agent_playbook._typing",
     "coding_agent_playbook.adapters",
+    "coding_agent_playbook.artifacts",
     "coding_agent_playbook.catalog._hook_walk",
     "coding_agent_playbook.catalog.layers",
     "coding_agent_playbook.catalog.source",
@@ -437,16 +425,15 @@ forbidden_modules = [
     "coding_agent_playbook.harness",
     "coding_agent_playbook.hook_policy",
     "coding_agent_playbook.hook_registrations",
-    "coding_agent_playbook.links",
     "coding_agent_playbook.metrics_gate",
     "coding_agent_playbook.orchestrator",
+    "coding_agent_playbook.precommit",
     "coding_agent_playbook.prompt_rule_delivery",
     "coding_agent_playbook.renderer",
     "coding_agent_playbook.rule_registry",
-    "coding_agent_playbook.skill_document",
-    "coding_agent_playbook.skill_membership",
+    "coding_agent_playbook.skills",
     "coding_agent_playbook.toml_writer",
-    "coding_agent_playbook.types",
+    "coding_agent_playbook.validation",
     "jinja2",
     "packaging",
     "yaml",
@@ -464,7 +451,7 @@ ignore_imports = [
     "coding_agent_playbook.hook_runtime.handlers.docstring_nonregression -> coding_agent_playbook.evaluators.**",
     "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.evals.**",
     "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.catalog.source",
-    "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.types",
+    "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.artifacts.**",
     # N15 moves the judge into hook_runtime/judges/ and deletes these two lines
     "coding_agent_playbook.hook_runtime.handlers.gate_weakening -> coding_agent_playbook.gate_scan",
     "coding_agent_playbook.hook_runtime.handlers.gate_weakening_edit -> coding_agent_playbook.gate_scan",
@@ -502,13 +489,11 @@ forbidden_modules = [
     "coding_agent_playbook._guard_config_skills",
     "coding_agent_playbook._guard_config_toolchain",
     "coding_agent_playbook._guard_config_verify",
-    "coding_agent_playbook._hook_frontmatter",
-    "coding_agent_playbook._hook_schema",
-    "coding_agent_playbook._member_reference",
     "coding_agent_playbook._output_io",
     "coding_agent_playbook._symlinks",
     "coding_agent_playbook._typing",
     "coding_agent_playbook.adapters",
+    "coding_agent_playbook.artifacts",
     "coding_agent_playbook.catalog._hook_walk",
     "coding_agent_playbook.catalog.layers",
     "coding_agent_playbook.catalog.source",
@@ -527,16 +512,15 @@ forbidden_modules = [
     "coding_agent_playbook.hook_policy",
     "coding_agent_playbook.hook_registrations",
     "coding_agent_playbook.hook_runtime",
-    "coding_agent_playbook.links",
     "coding_agent_playbook.metrics_gate",
     "coding_agent_playbook.orchestrator",
+    "coding_agent_playbook.precommit",
     "coding_agent_playbook.prompt_rule_delivery",
     "coding_agent_playbook.renderer",
     "coding_agent_playbook.rule_registry",
-    "coding_agent_playbook.skill_document",
-    "coding_agent_playbook.skill_membership",
+    "coding_agent_playbook.skills",
     "coding_agent_playbook.toml_writer",
-    "coding_agent_playbook.types",
+    "coding_agent_playbook.validation",
     "jinja2",
     "packaging",
     "yaml",
@@ -556,34 +540,29 @@ the hook runtime: only the stdlib, itself and STDLIB_LEAVES (tests/engine_module
 id = "command-independence"
 name = "No command imports another command"
 type = "independence"
-# Every public module of commands/ (test_command_independence_lists_every_command).
+# Every public module of commands/ and commands/twins/ but the shared twins.policy
+# (test_command_independence_lists_every_command).
 modules = [
     "coding_agent_playbook.commands.check",
-    "coding_agent_playbook.commands.check_commit_trailers",
-    "coding_agent_playbook.commands.check_deps",
-    "coding_agent_playbook.commands.check_notebooks",
-    "coding_agent_playbook.commands.ci",
     "coding_agent_playbook.commands.eval",
-    "coding_agent_playbook.commands.gate_scan",
     "coding_agent_playbook.commands.import_harness",
     "coding_agent_playbook.commands.init",
     "coding_agent_playbook.commands.metrics",
     "coding_agent_playbook.commands.render",
-    "coding_agent_playbook.commands.scan_secrets",
-    "coding_agent_playbook.commands.scan_sinks",
     "coding_agent_playbook.commands.sync",
+    "coding_agent_playbook.commands.twins.check_commit_trailers",
+    "coding_agent_playbook.commands.twins.check_deps",
+    "coding_agent_playbook.commands.twins.check_notebooks",
+    "coding_agent_playbook.commands.twins.ci",
+    "coding_agent_playbook.commands.twins.gate_scan",
+    "coding_agent_playbook.commands.twins.scan_secrets",
+    "coding_agent_playbook.commands.twins.scan_sinks",
     "coding_agent_playbook.commands.validate",
     "coding_agent_playbook.commands.validate_harness",
 ]
 ignore_imports = [
-    # N8: resolve_range moves to commands/twins/_git_scope.py
-    "coding_agent_playbook.commands._secret_scope -> coding_agent_playbook.commands.gate_scan",
-    "coding_agent_playbook.commands.check_commit_trailers -> coding_agent_playbook.commands.gate_scan",
-    "coding_agent_playbook.commands.scan_sinks -> coding_agent_playbook.commands.gate_scan",
     # A6: init calls sync.pipeline.execute, not the sync command (after #62)
     "coding_agent_playbook.commands.init -> coding_agent_playbook.commands.sync",
-    # A4: the sync command imports validation/, not the validate command (after #62)
-    "coding_agent_playbook.commands.sync -> coding_agent_playbook.commands.validate",
 ]
 broken_contract_guidance = """
 Shared code goes below commands (a domain package) or into a commands/_helper module that
@@ -598,8 +577,6 @@ containers = ["coding_agent_playbook"]
 ignore_imports = [
     # A7: adapters/_skill_files.py becomes generated_output/source_files.py (after #62)
     "coding_agent_playbook.commands._import_files -> coding_agent_playbook.adapters._skill_files",
-    # N13: becomes adapters/claude_code/settings/drift.py
-    "coding_agent_playbook.commands.check -> coding_agent_playbook.adapters._settings_drift",
     # CP-3: init's configure() owns --adapters (after #62)
     "coding_agent_playbook.cli.parser -> coding_agent_playbook.commands._init_adapters",
     # N15: FIXTURE_GLOBS moves to the stdlib leaf artifacts/path_classes.py
@@ -619,40 +596,27 @@ ignore_imports = [
     "coding_agent_playbook.guard_config -> coding_agent_playbook.hook_runtime.handlers._control_plane_paths",
     "coding_agent_playbook.guard_config -> coding_agent_playbook.hook_runtime.handlers._control_plane_text",
     # N14: the twin-shared judges get public modules in hook_runtime/judges/
-    "coding_agent_playbook.commands.check_deps -> coding_agent_playbook.hook_runtime.handlers._dependency_tiers",
-    "coding_agent_playbook.commands.check_deps -> coding_agent_playbook.hook_runtime.handlers._manifest_diff",
-    "coding_agent_playbook.commands.check_notebooks -> coding_agent_playbook.hook_runtime.handlers._notebook_check",
+    "coding_agent_playbook.commands.twins.check_deps -> coding_agent_playbook.hook_runtime.handlers._dependency_tiers",
+    "coding_agent_playbook.commands.twins.check_deps -> coding_agent_playbook.hook_runtime.handlers._manifest_diff",
+    "coding_agent_playbook.commands.twins.check_notebooks -> coding_agent_playbook.hook_runtime.handlers._notebook_check",
     "coding_agent_playbook.guard_config -> coding_agent_playbook.hook_runtime.handlers._notebook_check",
-    "coding_agent_playbook.commands.scan_sinks -> coding_agent_playbook.hook_runtime.handlers._notebook_cells",
+    "coding_agent_playbook.commands.twins.scan_sinks -> coding_agent_playbook.hook_runtime.handlers._notebook_cells",
     # N18: becomes hook_runtime/git/parse.py
-    "coding_agent_playbook.commands._secret_scope -> coding_agent_playbook.hook_runtime._git_parse",
-    "coding_agent_playbook.commands.check_notebooks -> coding_agent_playbook.hook_runtime._git_parse",
-    "coding_agent_playbook.commands.scan_sinks -> coding_agent_playbook.hook_runtime._git_parse",
+    "coding_agent_playbook.commands.twins._secret_scope -> coding_agent_playbook.hook_runtime._git_parse",
+    "coding_agent_playbook.commands.twins.check_notebooks -> coding_agent_playbook.hook_runtime._git_parse",
+    "coding_agent_playbook.commands.twins.scan_sinks -> coding_agent_playbook.hook_runtime._git_parse",
     # N15: the gate judge moves inside hook_runtime, where _git_parse is its own package's
     "coding_agent_playbook.gate_scan -> coding_agent_playbook.hook_runtime._git_parse",
     # N21: becomes hook_runtime/harness/payload.py
     "coding_agent_playbook.hook_runtime.dispatch -> coding_agent_playbook.hook_runtime.harness._payload",
-    # A3: becomes skills/naming.py (after #62)
-    "coding_agent_playbook.commands._sync_lockfile -> coding_agent_playbook.adapters._agent_skill_rules",
-    "coding_agent_playbook.commands._sync_render -> coding_agent_playbook.adapters._agent_skill_rules",
-    "coding_agent_playbook.commands._validate_skills -> coding_agent_playbook.adapters._agent_skill_rules",
-    "coding_agent_playbook.commands._validation -> coding_agent_playbook.adapters._agent_skill_rules",
-    "coding_agent_playbook.skill_document -> coding_agent_playbook.adapters._agent_skill_rules",
-    "coding_agent_playbook.skill_membership -> coding_agent_playbook.adapters._agent_skill_rules",
-    # A9: becomes adapters/skill_dirs/ownership.py (after #62)
-    "coding_agent_playbook.commands.sync -> coding_agent_playbook.adapters._prior_output",
     # A7: becomes generated_output/write_guard.py (after #62)
     "coding_agent_playbook.commands._sync_hooks -> coding_agent_playbook.adapters._owned_files",
     "coding_agent_playbook.commands.sync -> coding_agent_playbook.adapters._owned_files",
-    # A9: becomes adapters/skill_dirs/writer.py (after #62)
-    "coding_agent_playbook.commands._sync_output -> coding_agent_playbook.adapters._skill_writer",
-    "coding_agent_playbook.commands.sync -> coding_agent_playbook.adapters._skill_writer",
-    "coding_agent_playbook.commands.validate -> coding_agent_playbook.adapters._skill_writer",
     # A7: becomes generated_output/source_files.py (after #62)
-    "coding_agent_playbook.commands.validate -> coding_agent_playbook.adapters._skill_sources",
+    "coding_agent_playbook.validation.checks -> coding_agent_playbook.adapters._skill_sources",
     "coding_agent_playbook.guard_config -> coding_agent_playbook.adapters._skill_sources",
     # A17: becomes hooks/contract/findings.py (after #62)
-    "coding_agent_playbook.commands._validate_hooks -> coding_agent_playbook.hook_policy._findings",
+    "coding_agent_playbook.validation._hooks -> coding_agent_playbook.hook_policy._findings",
 ]
 broken_contract_guidance = """
 Import a public module of the owning package, or move the importer inside that package.

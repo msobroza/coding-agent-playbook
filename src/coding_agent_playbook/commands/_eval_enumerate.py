@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING
 from coding_agent_playbook.catalog.roots import is_bundled_layer
 
 if TYPE_CHECKING:
+    from coding_agent_playbook.artifacts.prompt import Prompt
     from coding_agent_playbook.evals.task import EvalTask
-    from coding_agent_playbook.types import Prompt
 
 #: Default runner when ``--runner`` is omitted (the one thin real runner).
 _DEFAULT_RUNNER = "claude_code"

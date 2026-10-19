@@ -182,14 +182,21 @@ def test_exhaustive_ignores_are_exactly_the_unplaced_top_level_modules() -> None
     assert contract["exhaustive_ignores"] == sorted(_top_level_names() - placed)
 
 
-def test_command_independence_lists_every_command() -> None:
-    commands = [
-        name
-        for name in child_modules(f"{ENGINE}.commands")
-        if not name.rsplit(".", 1)[1].startswith("_")
-    ]
+#: The guard-twin subpackage: its public modules are commands too (CONTEXT: Guard twin).
+_TWINS: Final = f"{ENGINE}.commands.twins"
+#: A public twins/ module that is a shared helper, not a command: init reads it (6.3.3).
+_TWIN_SHARED_HELPERS: Final = frozenset({f"{_TWINS}.policy"})
 
-    assert _contract("command-independence")["modules"] == commands
+
+def _public_children(package: str) -> list[str]:
+    return [name for name in child_modules(package) if not name.rsplit(".", 1)[1].startswith("_")]
+
+
+def test_command_independence_lists_every_command() -> None:
+    flat = [name for name in _public_children(f"{ENGINE}.commands") if name != _TWINS]
+    twins = [name for name in _public_children(_TWINS) if name not in _TWIN_SHARED_HELPERS]
+
+    assert _contract("command-independence")["modules"] == sorted(flat + twins)
 
 
 @pytest.mark.parametrize(
