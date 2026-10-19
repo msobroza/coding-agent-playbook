@@ -1,0 +1,10 @@
+# B2 (#106, specs/prT-package-layout.md B.5): the one definition of the committed
+# config's filename is config/files.py's, beside ConfigFiles, so the metrics gate
+# drops its own copy from its __all__ (B.5.4). Not a module move: this entry keeps
+# MIGRATION.md's table and a stale import of the old name in step with that.
+
+[[names]]
+pr = "B2"
+old = "coding_agent_playbook.metrics_gate.run"
+new = "coding_agent_playbook.config.files"
+names = ["CONFIG_FILENAME"]

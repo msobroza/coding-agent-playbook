@@ -45,7 +45,7 @@ from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE
 from coding_agent_playbook.catalog.resolve import OverlayResolver
 from coding_agent_playbook.catalog.roots import canonical_overlay_name
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource, engine_package_of
-from coding_agent_playbook.config.files import FileSystemStateSource
+from coding_agent_playbook.config.files import CONFIG_FILENAME, ConfigFiles, FileSystemStateSource
 from coding_agent_playbook.config.model import Config, ProjectMeta
 from coding_agent_playbook.config.tables.hooks import PolicyTables
 from coding_agent_playbook.detector.facts import detect
@@ -86,7 +86,7 @@ def has_consumer_config(repo_root: Path) -> bool:
         >>> has_consumer_config(Path("/no/such/repo"))
         False
     """
-    return (repo_root / FileSystemStateSource._CONFIG_FILENAME).is_file()
+    return ConfigFiles(repo_root).has_committed()
 
 
 def config_less_notes(repo_root: Path) -> list[str]:
@@ -98,7 +98,7 @@ def config_less_notes(repo_root: Path) -> list[str]:
         'skipped: overlays_enabled usability (no overlay list to check)'
     """
     return [
-        f"note: no {FileSystemStateSource._CONFIG_FILENAME} in {repo_root}; validating the "
+        f"note: no {CONFIG_FILENAME} in {repo_root}; validating the "
         "engine package, src/*/resources/ and playbook/ only",
         *(f"skipped: {check}" for check in CONSUMER_CONFIG_CHECKS),
     ]

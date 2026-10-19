@@ -117,6 +117,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.lockfile.managed_drift` | `coding_agent_playbook.lockfile.drift.managed_drift` | N5 |
 | `coding_agent_playbook.lockfile.parse_json_document` | `coding_agent_playbook.lockfile.drift.parse_json_document` | N5 |
 | `coding_agent_playbook.metrics_config` | `coding_agent_playbook.metrics_gate.config` | N22 |
+| `coding_agent_playbook.metrics_gate.run.CONFIG_FILENAME` | `coding_agent_playbook.config.files.CONFIG_FILENAME` | B2 |
 | `coding_agent_playbook.orchestrator.Collision` | `coding_agent_playbook.catalog.resolve.Collision` | A5 |
 | `coding_agent_playbook.orchestrator.OverlayResolver` | `coding_agent_playbook.catalog.resolve.OverlayResolver` | A5 |
 | `coding_agent_playbook.orchestrator.SyncContext` | `coding_agent_playbook.validation.context.SyncContext` | A5 |
