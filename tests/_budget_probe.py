@@ -141,7 +141,7 @@ def render_core_rule(
     rules = core_rules()
     if rule_id not in rules:
         raise KeyError(f"core ships no rule {rule_id!r}; expected one of {sorted(rules)}")
-    env = build_environment([], is_prompt_context=False)
+    env = build_environment([])
     env.globals["_facts"] = dict(facts)
     context: dict[str, object] = {
         **facts,

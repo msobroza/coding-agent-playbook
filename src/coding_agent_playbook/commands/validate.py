@@ -5,7 +5,8 @@ Validates:
 - ``applies_if`` predicates use only known fact keys and well-formed values
   (delegates to :func:`coding_agent_playbook.detector.evaluate_predicate` one key
   at a time, as hooks do, and treats each ``ValueError`` as an error).
-- Prompts that call ``{{ rule("X") }}`` declare ``X`` in ``includes_rules:``.
+- Prompts never call ``{{ rule() }}``; every ``includes_rules`` id names a rule
+  (``_validate_prompts``, specs/prS-skills-context.md §7.5).
 - Every prompt ``output_contract`` entry compiles as a Python regex (fail-closed,
   like ``AnswerMatchesCheck``; specs/prK-hook-pack.md §E.2).
 - Rule templates never call ``{{ rule(...) }}`` (rules cannot include rules,
@@ -67,6 +68,7 @@ from coding_agent_playbook.commands._validate_frontmatter import (
 )
 from coding_agent_playbook.commands._validate_hooks import check_hooks
 from coding_agent_playbook.commands._validate_links import check_markdown_links, load_links_config
+from coding_agent_playbook.commands._validate_prompts import check_prompt_rule_references
 from coding_agent_playbook.commands._validate_skills import (
     check_rule_skills,
     check_skill_membership,
@@ -147,28 +149,6 @@ def _check_applies_if(
             repo_root,
         )
     ]
-
-
-def _check_prompt_rule_calls(prompts: list[Prompt]) -> list[ValidationError]:
-    """Prompts that call ``{{ rule("X") }}`` must list ``X`` in
-    ``includes_rules:``.
-    """
-    errors: list[ValidationError] = []
-    for prompt in prompts:
-        declared = set(prompt.frontmatter.includes_rules or [])
-        for match in RULE_CALL_RE.finditer(prompt.template_body):
-            rule_id = match.group(1)
-            if rule_id not in declared:
-                errors.append(
-                    ValidationError(
-                        path=str(prompt.source_path or prompt.frontmatter.id),
-                        message=(
-                            f'body calls {{ rule("{rule_id}") }} but {rule_id!r} '
-                            "is not in includes_rules"
-                        ),
-                    )
-                )
-    return errors
 
 
 _CONTRACT_SHAPE = (
@@ -387,7 +367,7 @@ def _artifact_errors(ctx: SyncContext, *, config_less: bool) -> list[ValidationE
     rules, prompts = ctx.rules_resolved, ctx.prompts_resolved
     errors = [] if config_less else _check_overlays_usable(ctx.config.overlays_enabled)
     errors.extend(_check_applies_if(rules, prompts, ctx.facts, ctx.repo_root))
-    errors.extend(_check_prompt_rule_calls(prompts))
+    errors.extend(check_prompt_rule_references(prompts, {r.frontmatter.id for r in rules}))
     errors.extend(_check_output_contracts(prompts))
     errors.extend(check_write_scope(prompts))
     errors.extend(

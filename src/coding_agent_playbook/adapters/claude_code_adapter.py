@@ -78,7 +78,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_policy import ResolvedHook
     from coding_agent_playbook.hooks_config import HooksConfig
     from coding_agent_playbook.lockfile import LockEntry, Lockfile
-    from coding_agent_playbook.renderer import RuleRegistry
+    from coding_agent_playbook.prompt_rule_delivery import SkillReferenceIndex
     from coding_agent_playbook.types import Prompt, Rule, Skill
 
 #: The committed launcher's directory: sentinel-scanned, and a declared output location.
@@ -132,12 +132,12 @@ def _write_output(path: Path, text: str) -> Path:
 class ClaudeCodeAdapter(Adapter):
     """Adapter for Anthropic's Claude Code (``.claude/`` layout).
 
-    The optional ``rule_registry`` is plumbed into :func:`render_for` so the
-    ``includes_rules:`` appendix in prompts can be rendered. When the
-    orchestrator (PR 10) builds the merged-overlay registry, it passes it in;
-    when callers (or tests) omit it, prompts render with no auto-appendix —
-    ``includes_rules:`` becomes purely declarative. Mirrors the
-    ``ContinueAdapter`` plumbing pattern.
+    The optional ``rule_registry`` (the sync's ``RuleRegistryImpl``) is used
+    only as a ``SkillReferenceIndex``: :func:`render_for` builds each command's
+    ``## Before you start`` block from it, naming the skill references of the
+    prompt's ``includes_rules``; a command never carries rule text (D15). When
+    callers (or tests) omit it, prompts render with no block —
+    ``includes_rules:`` becomes purely declarative.
     """
 
     name = "claude_code"
@@ -163,7 +163,7 @@ class ClaudeCodeAdapter(Adapter):
     #: The launcher carries no artifact of its own: a ``kind = "runtime"`` lock entry (§B.6).
     runtime_outputs: ClassVar[tuple[str, ...]] = (LAUNCHER_PATH,)
 
-    def __init__(self, *, rule_registry: RuleRegistry | None = None) -> None:
+    def __init__(self, *, rule_registry: SkillReferenceIndex | None = None) -> None:
         # Buffer of (priority, rule_id, rendered_section) tuples populated by
         # ``write_rule``. ``finalize`` sorts by (priority, rule_id) and joins.
         self._buffered_rules: list[tuple[int, str, str]] = []
@@ -247,15 +247,16 @@ class ClaudeCodeAdapter(Adapter):
 
         Claude Code commands are pure markdown (no top-level frontmatter
         fence); the ``prompt_claude_command`` renderer handles that shape
-        plus optional ``includes_rules`` appendix.
+        plus the ``## Before you start`` block pointing at skills (D15).
+
+        Example: ``adapter.write_prompt(prompt, repo_root)`` -> ``[.claude/commands/review.md]``.
         """
         rendered = render_for(
             prompt.source_path or Path("inline"),
             prompt.body,
             "prompt_claude_command",
             frontmatter=dataclasses.asdict(prompt.frontmatter),
-            rule_registry=self._rule_registry,
-            template_body=prompt.template_body,
+            skill_references=self._rule_registry,
         )
         output_path = repo_root / ".claude" / "commands" / f"{prompt.frontmatter.slash}.md"
         output_path.parent.mkdir(parents=True, exist_ok=True)

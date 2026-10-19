@@ -3,7 +3,8 @@
 
 Supports ``--format <fmt>`` (defaults to the artifact's natural format),
 ``--show-source`` (template path + overrides), and ``--show-rules`` (for
-prompts, lists the inclusion graph with applies_if outcomes). A hook id
+prompts, lists each ``includes_rules`` id with its applies_if outcome and its
+delivery: the owning skill and reference, or always loaded). A hook id
 renders ``hook_advisory`` by default, or ``hook_claude_settings``
 (specs/prK-lifecycle-hooks.md §C.4.1).
 """
@@ -26,7 +27,7 @@ from coding_agent_playbook.commands._sync_render import (
     report_template_error,
 )
 from coding_agent_playbook.detector import evaluate_predicate
-from coding_agent_playbook.orchestrator import SyncContext, artifact_id_of
+from coding_agent_playbook.orchestrator import SyncContext, artifact_id_of, template_source
 from coding_agent_playbook.renderer import (
     BUILTIN_FORMATS,
     FORMAT_ALIASES,
@@ -34,7 +35,7 @@ from coding_agent_playbook.renderer import (
     build_environment,
     render_for,
 )
-from coding_agent_playbook.rule_registry import build_prompt_environment
+from coding_agent_playbook.rule_registry import build_prompt_environment, skill_reference_of
 from coding_agent_playbook.types import Hook, Prompt, Rule, Skill
 
 if TYPE_CHECKING:
@@ -54,6 +55,23 @@ _KIND_FORMATS = {
 
 # Any of the four artifact dataclasses can come back from _find_artifact.
 _Artifact = Rule | Prompt | Skill | Hook
+
+
+class PromptBodyUndefinedError(Exception):
+    """A prompt body named something its Jinja context lacks, such as the removed ``rule()``.
+
+    Raised only for the prompt's own body, so ``playbook render`` names that
+    file; an undefined name inside an included rule's template keeps its traceback.
+
+    Example::
+
+        PromptBodyUndefinedError("playbook/prompts/x.md.j2", "'rule' is undefined")
+    """
+
+    def __init__(self, source: str, detail: str) -> None:
+        super().__init__(f"{source}: {detail}")
+        self.source = source
+        self.detail = detail
 
 
 def _find_artifact(ctx: SyncContext, artifact_id: str) -> tuple[str | None, _Artifact | None]:
@@ -170,6 +188,11 @@ def _rule_applies(rule: Rule, ctx: SyncContext) -> bool:
 
 
 def _show_rules(prompt: Prompt, ctx: SyncContext) -> str:
+    """The ``--show-rules`` listing: each included id with its gate and its delivery (D15).
+
+    Example line: ``  - pytest  (coding_agent_playbook, applies_if=True -> skill
+    python-testing, references/pytest.md)``.
+    """
     rule_index = {rule.frontmatter.id: rule for rule in ctx.rules_resolved}
     lines = [f"Prompt:    {prompt.frontmatter.id}", "includes_rules:"]
     if not prompt.frontmatter.includes_rules:
@@ -181,13 +204,25 @@ def _show_rules(prompt: Prompt, ctx: SyncContext) -> str:
             lines.append(f"  - {rule_id}  (UNKNOWN)")
             continue
         applies = _rule_applies(rule, ctx)
-        marker = "INLINED" if applies else "OMITTED"
+        marker = _delivery(rule) if applies else "OMITTED"
         lines.append(f"  - {rule_id}  ({rule.source_package}, applies_if={applies} -> {marker})")
     return "\n".join(lines)
 
 
+def _delivery(rule: Rule) -> str:
+    """Where an applicable included rule reaches a Claude Code or OpenCode command.
+
+    Its skill reference, ``always loaded`` for an always rule, or ``no skill`` for
+    a scoped rule that names none (``playbook validate`` rejects one, V1).
+    """
+    reference = skill_reference_of(rule)
+    if reference is not None:
+        return f"skill {reference.skill_id}, {reference.path}"
+    return "always loaded" if rule.frontmatter.scope == "always" else "no skill"
+
+
 def _render_rule(ctx: SyncContext, rule: Rule, resolved_format: str) -> str:
-    base_env = build_environment([], is_prompt_context=False)
+    base_env = build_environment([])
     base_env.globals["_facts"] = dict(ctx.facts)
     context = build_jinja_context(ctx)
     rendered = render_rule_body(rule, context, base_env)
@@ -200,7 +235,12 @@ def _render_rule(ctx: SyncContext, rule: Rule, resolved_format: str) -> str:
 
 
 def _render_prompt(ctx: SyncContext, prompt: Prompt, resolved_format: str) -> str:
-    base_env = build_environment([], is_prompt_context=False)
+    """``prompt`` in ``resolved_format``: the pointer block for commands, the appendix for Continue.
+
+    Raises :class:`PromptBodyUndefinedError` naming the prompt when its own
+    body uses an undefined name (a leftover ``rule()`` call, a typo).
+    """
+    base_env = build_environment([])
     base_env.globals["_facts"] = dict(ctx.facts)
     context = build_jinja_context(ctx)
     # Only applicable rules enter the registry, as sync delivers them (SPEC §6.2.5);
@@ -211,14 +251,17 @@ def _render_prompt(ctx: SyncContext, prompt: Prompt, resolved_format: str) -> st
         if _rule_applies(rule, ctx)
     ]
     registry, prompt_env = build_prompt_environment(rendered_rules, ctx.facts)
-    rendered_prompt = render_prompt_body(prompt, context, prompt_env)
+    try:
+        rendered_prompt = render_prompt_body(prompt, context, prompt_env)
+    except UndefinedError as exc:
+        raise PromptBodyUndefinedError(template_source(prompt), str(exc)) from exc
     return render_for(
         rendered_prompt.source_path or Path("inline"),
         rendered_prompt.body,
         resolved_format,
         frontmatter=dataclasses.asdict(rendered_prompt.frontmatter),
         rule_registry=registry,
-        template_body=rendered_prompt.template_body,
+        skill_references=registry,
     )
 
 
@@ -228,7 +271,7 @@ def _render_hook(ctx: SyncContext, hook: Hook, resolved_format: str) -> str:
     Only the body renders, in the sandboxed base environment, where ``rule()``
     is undefined (H19); both formats read the declared frontmatter.
     """
-    base_env = build_environment([], is_prompt_context=False)
+    base_env = build_environment([])
     base_env.globals["_facts"] = dict(ctx.facts)
     body = render_hook_body(hook, build_jinja_context(ctx), base_env)
     return render_for(
@@ -294,6 +337,11 @@ def run(args: argparse.Namespace) -> int:
         # Every applicable rule renders here, so one escaping template anywhere
         # names its file instead of dumping a traceback (prK §P1).
         return report_sandbox_violation(exc, ctx.repo_root, outcome="playbook render aborted.")
+    except PromptBodyUndefinedError as exc:
+        # A prompt that still calls the removed rule() (D15): name the file.
+        return report_template_error(
+            exc.source, exc.detail, ctx.repo_root, outcome="playbook render aborted."
+        )
     except UndefinedError as exc:
         if not isinstance(artifact, Hook):
             raise

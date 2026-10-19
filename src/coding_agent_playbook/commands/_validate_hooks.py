@@ -118,7 +118,7 @@ def _check_context(ctx: SyncContext, handlers: HandlerCatalog) -> HookCheckConte
 def _body_errors(hook: Hook) -> Iterator[ValidationError]:
     """H19: the body compiles under the sandbox and never calls ``rule()``.
 
-    A hook body renders with ``is_prompt_context=False`` (§A.8): rules are not in scope.
+    A hook body renders in the base environment (§A.8), which has no ``rule()`` helper.
     """
     where = hook_location(hook)
     problem = jinja_syntax_error(hook.template_body) if hook.is_templated else None

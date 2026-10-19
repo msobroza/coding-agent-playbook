@@ -33,7 +33,6 @@ leftover policy (SPEC §4.2 step 9), like every native skill root.
 from __future__ import annotations
 
 import dataclasses
-from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
 from coding_agent_playbook._file_identity import FileSet
@@ -47,10 +46,11 @@ from coding_agent_playbook.adapters._harness_hooks import (
 from coding_agent_playbook.adapters._skill_sources import copyable_skill_files
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.harness import emitter, manifest
-from coding_agent_playbook.renderer import render_for
+from coding_agent_playbook.renderer import render_inline_prompt_markdown
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
+    from pathlib import Path
 
     from coding_agent_playbook.harness.manifest import ManifestEntry
     from coding_agent_playbook.hook_policy import ResolvedHook
@@ -78,8 +78,10 @@ class AgentHarnessAdapter(Adapter):
     construct it directly outside of tests.
 
     The optional ``rule_registry`` is used to inline a prompt's
-    ``includes_rules:`` (mirrors :class:`ContinueAdapter`). When omitted,
-    ``includes_rules:`` is declarative-only.
+    ``includes_rules:`` as a ``## Reference rules`` appendix (mirrors
+    :class:`ContinueAdapter`): this tree's scoped rules are top-level
+    ``references/<id>.md`` files, not skill references, so there is no skill to
+    point at (P3-6). When omitted, ``includes_rules:`` is declarative-only.
 
     Uniqueness assumption: leaf paths are keyed on canonical ids/slashes —
     scoped rules at ``references/<id>.md``, always-rules at
@@ -270,29 +272,17 @@ class AgentHarnessAdapter(Adapter):
         return written
 
     def _prompt_body(self, prompt: Prompt) -> str:
-        """Build a prompt-leaf body: the rendered command + an input-variable note.
+        """Build a prompt-leaf body: the titled body, its rules inline, an input-variable note.
 
-        ``includes_rules:`` is inlined through the rule registry by reusing the
-        ``prompt_claude_command`` renderer (pure markdown + the
-        ``## Reference rules`` appendix). Input variables are noted so the agent
-        knows what to substitute.
+        ``includes_rules:`` is inlined through the rule registry as the
+        ``## Reference rules`` appendix (``render_inline_prompt_markdown``): pure
+        markdown with no sentinel and no ``disallowed-tools`` block, since the
+        leaf's own ``SKILL.md`` envelope carries both. Input variables are noted
+        so the agent knows what to substitute.
         """
-        # Without write_scope: the leaf is pure markdown under SKILL.md's own
-        # frontmatter, so the Claude command's ``disallowed-tools`` block (and its
-        # body-line sentinel) must never be nested into it.
-        frontmatter = dataclasses.asdict(prompt.frontmatter)
-        frontmatter.pop("write_scope", None)
-        rendered = render_for(
-            prompt.source_path or Path("inline"),
-            prompt.body,
-            "prompt_claude_command",
-            frontmatter=frontmatter,
-            rule_registry=self._rule_registry,
-            template_body=prompt.template_body,
+        rendered = render_inline_prompt_markdown(
+            prompt.body, dataclasses.asdict(prompt.frontmatter), self._rule_registry
         )
-        # The claude-command renderer prepends its own sentinel comment; drop it
-        # so this leaf carries exactly one sentinel (placed by with_sentinel_body).
-        rendered = emitter.strip_leading_sentinel(rendered)
 
         note = emitter.input_variables_note(prompt.frontmatter.input_variables)
         if note:

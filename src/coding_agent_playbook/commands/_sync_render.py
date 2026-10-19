@@ -1,9 +1,10 @@
 """Jinja rendering of the canonical artifacts for ``playbook sync`` / ``render`` (SPEC §9.4).
 
 Every template a sync executes runs here, **before any adapter writes**: rule
-bodies, prompt bodies, every rule a prompt inlines through ``includes_rules``
-(pre-rendered — adapters repeat that render inside ``write_prompt``, after
-earlier files are on disk), and the advisory body of every on hook (resolved
+bodies, prompt bodies, every rule a prompt lists in ``includes_rules``
+(pre-rendered — the Continue and agent_harness adapters repeat that render for
+their ``## Reference rules`` appendix inside ``write_prompt``, after earlier
+files are on disk), and the advisory body of every on hook (resolved
 by ``_sync_hooks``, specs/prK-lifecycle-hooks.md §C.1.3). So a template the Jinja
 sandbox rejects aborts the sync with nothing written and the offending file
 named (:class:`~coding_agent_playbook.renderer.TemplateSecurityError`,
@@ -31,7 +32,6 @@ from coding_agent_playbook.commands._sync_hooks import SyncHooks, resolve_sync_h
 from coding_agent_playbook.orchestrator import filter_applies_if, template_source
 from coding_agent_playbook.renderer import (
     TemplateSecurityError,
-    appendix_rule_ids,
     build_environment,
     render_sandboxed,
 )
@@ -54,8 +54,10 @@ if TYPE_CHECKING:
 class RenderedArtifacts:
     """The applicable artifacts with their bodies rendered, ready for the adapters.
 
-    ``registry`` resolves ``includes_rules`` for the adapters (already
-    exercised once per included rule, so the adapters' repeat cannot fail).
+    ``registry`` resolves ``includes_rules`` for the adapters: the skill
+    reference of each rule for Claude Code and OpenCode commands, its text for
+    the Continue and agent_harness appendix (already rendered once per included
+    rule, so the adapters' repeat cannot fail).
     ``hooks`` holds the ``[hooks]`` policy and the on hooks, bodies rendered.
     ``skills`` are composed: each carries its active member rules as
     ``member_references``, while ``rules`` still holds every active rule.
@@ -97,8 +99,8 @@ class SkillDescriptionOverflowError(ValueError):
 def build_jinja_context(ctx: SyncContext) -> dict[str, object]:
     """Per SPEC §9.4: facts + project metadata + engine metadata.
 
-    Helpers (``has_framework``, ``rule``) are registered on the env globals by
-    :func:`build_environment`; the context dict carries only data fields.
+    Helpers (``has_framework``, ``has_ml_dep``) are registered on the env globals
+    by :func:`build_environment`; the context dict carries only data fields.
     """
     context: dict[str, object] = dict(ctx.facts)
     context["project_name"] = ctx.config.project.name
@@ -112,8 +114,8 @@ def render_rule_body(rule: Rule, context: dict[str, object], env: Environment) -
     """Re-emit a Rule with ``body`` set to the Jinja-rendered output.
 
     Non-templated rules pass through verbatim. The template/body split lets
-    callers re-render from ``template_body`` again (e.g. for inline
-    inclusion from a prompt with a different context). A sandbox violation
+    callers re-render from ``template_body`` again (e.g. for a prompt's
+    ``## Reference rules`` appendix). A sandbox violation
     raises :class:`TemplateSecurityError` naming the rule's source file.
     """
     if not rule.is_templated:
@@ -147,11 +149,11 @@ def render_prompt_body(prompt: Prompt, context: dict[str, object], env: Environm
 def render_hook_body(hook: Hook, context: dict[str, object], env: Environment) -> str:
     """The advisory body of ``hook``: ``HOOK.md`` verbatim, ``HOOK.md.j2`` rendered (§C.1.3).
 
-    Renders ``template_body`` through ``env``, the sandboxed *base* environment
-    (``is_prompt_context=False``): ``rule()`` is undefined there, so a body
-    cannot include a rule (H19). Only the body renders; frontmatter, handler
-    commands and scripts never do (L7). A sandbox violation raises
-    :class:`TemplateSecurityError` naming the hook's file (its id without one).
+    Renders ``template_body`` through ``env``, the sandboxed base environment:
+    ``rule()`` is undefined there, so a body cannot include a rule (H19). Only
+    the body renders; frontmatter, handler commands and scripts never do (L7).
+    A sandbox violation raises :class:`TemplateSecurityError` naming the hook's
+    file (its id without one).
 
     Example::
 
@@ -181,7 +183,7 @@ def render_artifacts(ctx: SyncContext) -> RenderedArtifacts:
     """
     rules = filter_applies_if(ctx.rules_resolved, ctx.facts, ctx.repo_root)
     prompts = filter_applies_if(ctx.prompts_resolved, ctx.facts, ctx.repo_root)
-    base_env = build_environment([], is_prompt_context=False)
+    base_env = build_environment([])
     base_env.globals["_facts"] = dict(ctx.facts)
     base_context = build_jinja_context(ctx)
     # Render rule bodies first (their template_body may also be re-rendered
@@ -247,15 +249,15 @@ def _with_body(hook: ResolvedHook, context: dict[str, object], env: Environment)
 def _prerender_inclusions(prompts: list[Prompt], registry: RuleRegistryImpl) -> None:
     """Run each ``includes_rules`` appendix render once, now, before any write.
 
-    The adapters render the appendix inside ``write_prompt`` with the very
-    same call (``render_for_inclusion(rule_id, {})``) — after AGENTS.md and
-    earlier commands are on disk. Running it here first makes a sandbox
-    violation in an included rule abort the sync with nothing written. Whether a
-    prompt gets the appendix is decided on its un-rendered ``template_body``,
-    exactly as ``render_for`` decides it.
+    The Continue and agent_harness adapters render the appendix inside
+    ``write_prompt`` with the very same call (``render_for_inclusion(rule_id,
+    {})``) — after AGENTS.md and earlier commands are on disk. Running it here
+    first makes a sandbox violation in an included rule abort the sync with
+    nothing written. Every prompt with ``includes_rules`` gets the appendix
+    there, each id once (D15).
     """
     for prompt in prompts:
-        for rule_id in appendix_rule_ids(prompt.frontmatter.includes_rules, prompt.template_body):
+        for rule_id in dict.fromkeys(prompt.frontmatter.includes_rules):
             registry.render_for_inclusion(rule_id, {})
 
 
