@@ -233,8 +233,8 @@ def test_the_import_probe_reads_the_importtime_report(
     assert {"json", engine_module("coding_agent_playbook.hook_runtime.cli")} <= imported
 
 
-_PROTECTED_MODULE: Final = engine_module("coding_agent_playbook.hook_runtime.protected")
-_PIN_MODULE: Final = engine_module("coding_agent_playbook.hook_runtime.pin")
+_PROTECTED_MODULE: Final = engine_module("coding_agent_playbook.hook_runtime.config.protected")
+_PIN_MODULE: Final = engine_module("coding_agent_playbook.hook_runtime.config.pin")
 
 
 @pytest.fixture

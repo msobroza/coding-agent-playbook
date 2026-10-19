@@ -37,7 +37,7 @@ from coding_agent_playbook.hook_runtime.stop.runner import ToolRun
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
-    from coding_agent_playbook.hook_runtime.config import HookRecord
+    from coding_agent_playbook.hook_runtime.config.guard_config import HookRecord
     from coding_agent_playbook.hook_runtime.event import EventName
     from coding_agent_playbook.hook_runtime.git import AddedLine, Fingerprint, LoggedCommit
     from coding_agent_playbook.hook_runtime.registry import HandlerFn, ResolveContext

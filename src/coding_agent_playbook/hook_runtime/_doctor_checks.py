@@ -25,17 +25,17 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal
 
 from coding_agent_playbook.hook_runtime._ports import open_trust_store
-from coding_agent_playbook.hook_runtime.config import GuardConfig, load_guard_config
-from coding_agent_playbook.hook_runtime.escape import (
-    WRAPPER_PREFIXES_VAR,
-    read_escape_hatches,
-    settings_files,
-)
-from coding_agent_playbook.hook_runtime.pin import (
+from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, load_guard_config
+from coding_agent_playbook.hook_runtime.config.pin import (
     INTERPRETER_PIN,
     MACHINE_PINS,
     is_ephemeral,
     parse_machine_pins,
+)
+from coding_agent_playbook.hook_runtime.escape import (
+    WRAPPER_PREFIXES_VAR,
+    read_escape_hatches,
+    settings_files,
 )
 from coding_agent_playbook.hook_runtime.state import STATE_DIR_NAME
 from coding_agent_playbook.hook_runtime.wrapper_policy import hidden_program
@@ -43,10 +43,10 @@ from coding_agent_playbook.hook_runtime.wrapper_policy import hidden_program
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from coding_agent_playbook.hook_runtime.config import ConfigFault
+    from coding_agent_playbook.hook_runtime.config.guard_config import ConfigFault
+    from coding_agent_playbook.hook_runtime.config.pin import MachinePins
     from coding_agent_playbook.hook_runtime.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.event import RepoInfo
-    from coding_agent_playbook.hook_runtime.pin import MachinePins
 
 __all__ = ["SEVERITY", "Check", "Severity", "environment_checks", "read_regular_file"]
 

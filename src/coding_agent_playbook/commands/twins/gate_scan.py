@@ -19,11 +19,10 @@ error, an unresolvable base, a malformed policy table, or a git failure.
 from __future__ import annotations
 
 import json
-import sys
-from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.commands.twins._git_scope import ScanRange, open_git, resolve_range
+from coding_agent_playbook.commands.twins._runner import TwinOutcome, run_twin
 from coding_agent_playbook.config.files import CONFIG_FILENAME, CommittedDocument
 from coding_agent_playbook.gate_scan import (
     ConfigPair,
@@ -33,10 +32,10 @@ from coding_agent_playbook.gate_scan import (
     policy_from_table,
     scan,
 )
-from coding_agent_playbook.hook_runtime.git import GitError
 
 if TYPE_CHECKING:
     import argparse
+    from pathlib import Path
 
     from coding_agent_playbook.hook_runtime.git import GitPort
 
@@ -54,16 +53,15 @@ def run(args: argparse.Namespace, *, git: GitPort | None = None) -> int:
         >>> run(build_parser().parse_args(["gate-scan", "--range", "HEAD~1..HEAD"]))  # doctest: +SKIP
         1
     """
-    repo_root = Path(args.repo_root or ".").resolve()
-    try:
-        port = git if git is not None else open_git(repo_root)
-        span = resolve_range(port, args.rev_range)
-        report = scan_range(port, span, load_policy(port, span.base, repo_root))
-    except (GitError, ValueError) as exc:  # GitBaseError and policy errors are ValueErrors
-        print(f"error: {exc}", file=sys.stderr)
-        return 2
-    print(_json(report, span) if args.format == "json" else _text(report, span))
-    return report.exit_code
+    return run_twin(args.repo_root, lambda root: _outcome(args, root, git))
+
+
+def _outcome(args: argparse.Namespace, repo_root: Path, git: GitPort | None) -> TwinOutcome:
+    port = git if git is not None else open_git(repo_root)
+    span = resolve_range(port, args.rev_range)
+    report = scan_range(port, span, load_policy(port, span.base, repo_root))
+    text = _json(report, span) if args.format == "json" else _text(report, span)
+    return TwinOutcome(report.exit_code, text)
 
 
 def load_policy(git: GitPort, base: str, repo_root: Path) -> ScanPolicy:

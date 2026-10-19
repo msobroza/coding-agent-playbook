@@ -20,7 +20,7 @@ import pytest
 
 from coding_agent_playbook.artifacts.hook_schema import HookMatcher
 from coding_agent_playbook.hook_policy.resolved import ResolvedHandler, ResolvedHook
-from coding_agent_playbook.hook_runtime.config import (
+from coding_agent_playbook.hook_runtime.config.guard_config import (
     GUARD_CONFIG_REL,
     LOCKFILE_REL,
     ConfigFault,
@@ -41,7 +41,7 @@ from tests.import_probe import new_modules_after
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from coding_agent_playbook.hook_runtime._lock_digest import TomlLoader
+    from coding_agent_playbook.hook_runtime.config.lock_digest import TomlLoader
 
 
 def _resolved_hook() -> ResolvedHook:
@@ -474,7 +474,7 @@ def test_stateless_store_parses_the_lockfile_every_time(tmp_path: Path) -> None:
     ],
 )
 def test_lock_entry_lookup_matches_lockfile_module(document: dict[str, Any]) -> None:
-    from coding_agent_playbook.hook_runtime._lock_digest import lock_entry_sha256
+    from coding_agent_playbook.hook_runtime.config.lock_digest import lock_entry_sha256
 
     header = {"schema_version": 2, "engine_version": "0.1.0a0", "rendered_at": "t"}
     entry = Lockfile.from_dict({**header, **document}).find(GUARD_CONFIG_REL)
@@ -491,13 +491,13 @@ def test_lock_entry_lookup_matches_lockfile_module(document: dict[str, Any]) -> 
     ],
 )
 def test_malformed_lock_entries_give_no_digest(document: dict[str, Any]) -> None:
-    from coding_agent_playbook.hook_runtime._lock_digest import lock_entry_sha256
+    from coding_agent_playbook.hook_runtime.config.lock_digest import lock_entry_sha256
 
     assert lock_entry_sha256(document, GUARD_CONFIG_REL) is None
 
 
 def test_config_module_never_imports_tomllib_or_the_lockfile_module() -> None:
-    loaded = new_modules_after("import coding_agent_playbook.hook_runtime.config")
+    loaded = new_modules_after("import coding_agent_playbook.hook_runtime.config.guard_config")
 
     assert "tomllib" not in loaded
     assert engine_module("coding_agent_playbook.lockfile") not in loaded
