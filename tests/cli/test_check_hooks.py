@@ -97,6 +97,7 @@ _ENGINE_PACK = (
     "secrets-path-guard",
     "sensitive-data-read-guard",
     "session-start-playbook-briefing",
+    "skill-nudge",
     "stop-ci-parity-gate",
     "stop-diff-sweep",
     "stop-drift-and-orphan-gate",
@@ -137,7 +138,7 @@ def test_hooks_block_labels_per_adapter(
 
     assert lines == [
         "  [hooks]: on",
-        "  Hooks (29 on / 44 total):",
+        "  Hooks (30 on / 45 total):",
         # The engine pack (Track K5): OpenCode has no notebook tool, so guard-generated-outputs
         # is degraded there; control-plane-guard matches no notebook edit. OpenCode's Stop is
         # evidence-only (§C.3.6), so every Stop-stage hook is degraded there (K6).
@@ -212,6 +213,8 @@ def test_hooks_block_labels_per_adapter(
         # rides an experimental API and its Stop is evidence-only (§C.3.6): degraded.
         "    [✓] session-start-playbook-briefing (agents_md: —, claude_code: enforced, "
         "continue: —, opencode: degraded)",
+        # spec 8.5: no body, so no advisory; edit and write are reachable on both harnesses.
+        "    [✓] skill-nudge (agents_md: —, claude_code: enforced, continue: —, opencode: enforced)",
         "    [✓] stop-ci-parity-gate (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: degraded)",
         "    [✓] stop-diff-sweep (agents_md: advisory, claude_code: enforced, "
@@ -242,7 +245,7 @@ def test_hooks_block_when_the_table_is_absent(
 
     assert lines == [
         "  [hooks]: off — no [hooks] table (add [hooks] enabled = true or re-run 'playbook init')",
-        "  Hooks (0 on / 42 total):",
+        "  Hooks (0 on / 43 total):",
         *_off(_ENGINE_PACK[:17]),
         "    [✗] guard-x (skipped: hooks are off)",
         *_off(_ENGINE_PACK[17:]),
@@ -262,7 +265,7 @@ def test_hooks_block_when_hooks_are_switched_off_or_unreadable(
 
     assert off_lines == [
         "  [hooks]: off — [hooks] enabled is not true",
-        "  Hooks (0 on / 41 total):",
+        "  Hooks (0 on / 42 total):",
         *_off(_ENGINE_PACK),
     ]
     assert bad_lines[-1] == "  [hooks] cannot be read; run 'playbook validate'."

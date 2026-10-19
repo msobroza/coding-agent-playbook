@@ -95,6 +95,7 @@ _BUILTIN_HANDLER_MODULES: Final[Mapping[str, str]] = MappingProxyType(
         "ruff_post_edit": f"{_HANDLERS}.ruff_feedback",
         "ruff_lint_feedback": f"{_HANDLERS}.ruff_feedback",
         "toolchain_hint": f"{_HANDLERS}.toolchain",
+        "skill_nudge": f"{_HANDLERS}.skill_nudge",
         "deser_sink_guard": f"{_HANDLERS}.deser",
         "notebook_hygiene": f"{_HANDLERS}.notebooks",
         "notebook_hygiene:stop_stage": f"{_HANDLERS}.notebooks",

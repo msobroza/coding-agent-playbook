@@ -39,6 +39,7 @@ from coding_agent_playbook._guard_config_ruff import (
     read_project_ruff_selection,
     ruff_candidate_codes,
 )
+from coding_agent_playbook._guard_config_skills import skill_glob_rows
 from coding_agent_playbook._guard_config_toolchain import read_toolchain_inputs
 from coding_agent_playbook._output_io import refuse_special_file
 from coding_agent_playbook.adapters._owned_files import check_engine_owned
@@ -93,7 +94,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_policy import ResolvedHook, SkippedHook
     from coding_agent_playbook.lockfile import Lockfile
     from coding_agent_playbook.orchestrator import SyncContext
-    from coding_agent_playbook.types import Prompt
+    from coding_agent_playbook.types import Prompt, Rule
 
 __all__ = [
     "HOOKS_NOTICE",
@@ -193,12 +194,15 @@ def write_runtime_outputs(
     recorder: ProvenanceRecorder,
     *,
     prompts: Sequence[Prompt] = (),
+    rules: Sequence[Rule] = (),
 ) -> None:
     """Write ``guard_config.json`` and the script copies into ``out_root``; record provenance.
 
     ``prompts`` are the prompts this sync renders: they become the ``prompts``
     table of output contracts (specs/prK-hook-pack.md §E.2), and their
-    ``write_scope`` prompt-write-scope-guard's ``scopes`` (§E.3).
+    ``write_scope`` prompt-write-scope-guard's ``scopes`` (§E.3). ``rules`` are
+    the rules it renders: their member globs become skill-nudge's ``skills``
+    table (specs/prS-skills-context.md 8.5.2).
 
     Example: ``write_runtime_outputs(ctx, hooks, scratch, recorder, prompts=rendered.prompts)``.
     """
@@ -219,6 +223,7 @@ def write_runtime_outputs(
         ruff=read_project_ruff_selection(ctx.repo_root),
         toolchain=read_toolchain_inputs(ctx.repo_root, ctx.facts),
         quality=read_quality_lint(ctx.repo_root),
+        skill_globs=skill_glob_rows(rules),
     )
     path = write_guard_config(out_root, render_guard_config(inputs))
     recorder.record([path], Provenance(kind="runtime"))

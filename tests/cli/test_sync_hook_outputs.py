@@ -163,6 +163,7 @@ def test_first_sync_writes_every_hook_output(synced: Path) -> None:
         "secret-content-guard",
         "secrets-path-guard",
         "session-start-playbook-briefing",
+        "skill-nudge",
         "stop-ci-parity-gate",
         "stop-diff-sweep",
         "stop-drift-and-orphan-gate",
@@ -400,24 +401,25 @@ def test_summary_lines_counts_and_hand_edit_warning(
     repo = make_hook_repo(tmp_path / "repo", make_synthetic_repo)
     assert _sync_repo(repo, tmp_path) == 0
     out = capsys.readouterr().out
-    # guard-x, guard-ext and the engine pack's twenty-seven default-tier hooks on here (seven
+    # guard-x, guard-ext and the engine pack's twenty-eight default-tier hooks on here (seven
     # protect, the Stop coordinator, four of its stage hooks (K6, K10), block-precommit-bypass,
     # post-edit-ruff-format, prompt-write-scope-guard, the error-handling and typing lint
     # hooks, toolchain-missing-hint (K7), the three secret hooks, the two Bash guards and the
     # dependency and exfil guards (K8), guard-decision-log (K9), commit-message-convention
-    # (K10)); pytest's is off (no pytest detected), and so is the ML deserialization guard (no
-    # ML stack); the opt-in ones (guard-eval-fixtures, two K6 Stop hooks, the notebook hook,
-    # command-convention-guard, taint-escalation, local-audit-log, precompact-checkpoint,
-    # coverage-diff-gate) are skipped, as are the inert overlay-tier pii-prompt-guard,
-    # network-egress-guard and sensitive-data-read-guard (K9). The briefing, the two lint hooks
-    # and the decision sink have no advisory body, so Continue gets four fewer; the sink
-    # registers nothing, so the managed entries are unchanged. Each registered event's
+    # (K10), skill-nudge); pytest's is off (no pytest detected), and so is the ML
+    # deserialization guard (no ML stack); the opt-in ones (guard-eval-fixtures, two K6 Stop
+    # hooks, the notebook hook, command-convention-guard, taint-escalation, local-audit-log,
+    # precompact-checkpoint, coverage-diff-gate) are skipped, as are the inert overlay-tier
+    # pii-prompt-guard, network-egress-guard and sensitive-data-read-guard (K9). The briefing, the two lint hooks,
+    # the decision sink and skill-nudge have no advisory body, so Continue gets five fewer; the
+    # sink registers nothing and skill-nudge's edit and write classes are already in the
+    # PostToolUse matcher, so the managed entries are unchanged. Each registered event's
     # group is one entry (toolchain-missing-hint's PostToolUseFailure among them; no
     # UserPromptSubmit, finding #6), and each native deny row (secrets and destructive
     # prefixes) one more.
     native = sum(len(rows) for rows in _native_rows().values())
-    assert "✓ Hooks: 29 enabled, 14 skipped (" in out
-    assert "claude_code: 29 enforced" in out
+    assert "✓ Hooks: 30 enabled, 14 skipped (" in out
+    assert "claude_code: 30 enforced" in out
     assert "continue: 25 advisory" in out
     updated = f"{len(ENGINE_PACK_EVENTS) + native} managed entries updated, 0 removed"
     assert f"✓ {SETTINGS}: {updated} (user keys untouched)" in out

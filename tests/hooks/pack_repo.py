@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from coding_agent_playbook._guard_config_quality import read_quality_lint
 from coding_agent_playbook._guard_config_ruff import read_project_ruff_selection
+from coding_agent_playbook._guard_config_skills import skill_glob_rows
 from coding_agent_playbook._guard_config_toolchain import read_toolchain_inputs
 from coding_agent_playbook.adapters.agents_md_adapter import AgentsMdAdapter
 from coding_agent_playbook.adapters.claude_code_adapter import ClaudeCodeAdapter
@@ -218,7 +219,8 @@ class PackRepo(GuardRepo):
         ``prompts`` the rendered prompts (the ``prompts`` table and their
         ``write_scope``, §E.2/§E.3); ``precommit_ids`` the repo's playbook
         pre-commit ids; ``wrapper_prefixes`` ``[hooks] wrapper_prefixes``;
-        ``rules`` the rules a ``linked_rule`` names. The layout (source and test
+        ``rules`` the rules a ``linked_rule`` names, and the rendered rules whose
+        member globs become skill-nudge's ``skills`` table. The layout (source and test
         roots), the ``ruff`` table, the toolchain inputs and the committed
         ``[metrics.ruff_violations]`` are read from the repository, as sync does; ``extra_tables`` replace top-level tables
         (e.g. a ``stop_gate`` with a typecheck stage). ``handler_config`` sets
@@ -252,6 +254,7 @@ class PackRepo(GuardRepo):
             ruff=read_project_ruff_selection(self.root),
             toolchain=read_toolchain_inputs(self.root, detect.facts),
             quality=read_quality_lint(self.root),
+            skill_globs=skill_glob_rows(rules),
         )
         document = render_guard_config(inputs)
         document.update(extra_tables or {})
