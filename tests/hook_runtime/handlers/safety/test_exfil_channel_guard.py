@@ -129,6 +129,16 @@ def test_allowed_hosts_relax_uploads_but_never_gists(pack_repo: PackRepo, deps: 
     ]
 
 
+def test_a_string_allowed_hosts_allows_no_host(pack_repo: PackRepo, deps: Deps) -> None:
+    """A string is not a list of hosts (validate refuses it): its characters allow nothing."""
+    config = {HOOK_ID: {"allowed_hosts": "corp.example"}}
+    pack_repo.install_pack([HOOK_ID], handler_config=config)
+
+    report = _bash(pack_repo, deps, "scp a.tar build.e:/tmp")
+
+    assert _decision(report) is Decision.ASK
+
+
 def test_without_snapshot_falls_back_to_git_remote_v(repo: PackRepo, deps: Deps) -> None:
     git = _git()
 

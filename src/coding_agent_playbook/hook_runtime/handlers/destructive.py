@@ -25,6 +25,7 @@ import re
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.caps import clean_text, clip
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.handlers._destructive_git import (
     DEFAULT_PROTECTED_BRANCHES,
@@ -156,12 +157,15 @@ def _command_hit(command: ShellCommand, repo: RepoInfo, ctx: HandlerContext) -> 
         return _unreadable_hit(_POWERSHELL_SHAPES, command.text, "powershell")
     if command.parse_error is not None:
         return _unreadable_hit(_RAW_SHAPES, command.text, "unparsed")
-    where = _where(repo, ctx)
+    config = HookConfig(ctx.config, CONFIG_SCHEMA)
+    where = _where(repo, ctx, config)
     facts = GitFacts(ctx.git, repo)
-    protected = _strings(ctx.config.get("protected_branches"), DEFAULT_PROTECTED_BRANCHES)
+    protected = config.strings(
+        "protected_branches", DEFAULT_PROTECTED_BRANCHES, blanks="drop_empty"
+    )
     hits = [*_segment_hits(command.segments, where, facts, protected)]
     hits.extend(filter(None, [pipe_hit(command.segments)]))
-    hits.extend(extra_row_hits(command.segments, ctx.config.get("extra_rows")))
+    hits.extend(extra_row_hits(command.segments, config.value("extra_rows")))
     return _strongest(hits)
 
 
@@ -181,8 +185,8 @@ def _segment_hits(
                 return  # a deny is final: no git query for the segments after it
 
 
-def _where(repo: RepoInfo, ctx: HandlerContext) -> Where:
-    safe = _strings(ctx.config.get("safe_rm_dirs"), DEFAULT_SAFE_RM_DIRS)
+def _where(repo: RepoInfo, ctx: HandlerContext, config: HookConfig) -> Where:
+    safe = config.strings("safe_rm_dirs", DEFAULT_SAFE_RM_DIRS, blanks="drop_empty")
     return Where(
         root=os.path.realpath(repo.worktree_root),
         git_dirs=(os.path.realpath(repo.git_dir), os.path.realpath(repo.common_dir)),
@@ -222,9 +226,3 @@ def _row_reason(value: Any) -> str:
         return _DEFAULT_ROW_REASON
     lines = clean_text(value).strip().splitlines()[:2]
     return clip("\n".join(lines), _ROW_REASON_CHARS)
-
-
-def _strings(value: object, default: tuple[str, ...]) -> tuple[str, ...]:
-    if not isinstance(value, list | tuple):
-        return default
-    return tuple(item for item in value if isinstance(item, str) and item)
