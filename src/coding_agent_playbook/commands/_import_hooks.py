@@ -19,7 +19,7 @@ from coding_agent_playbook.commands._import_files import copy_tree, restore_exec
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from coding_agent_playbook.harness.manifest import ManifestEntry
+    from coding_agent_playbook.agent_harness.manifest import ManifestEntry
 
 __all__ = ["guardrail_warning", "hook_from_entry", "write_hook"]
 

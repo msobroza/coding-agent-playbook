@@ -21,8 +21,7 @@ import os
 import posixpath
 import re
 from functools import lru_cache
-from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.hook_runtime.caps import quote_data
 from coding_agent_playbook.security.paths import PathPolicy
@@ -32,12 +31,12 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
     from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
+    from coding_agent_playbook.hook_runtime.config.guard_tables import SecretPattern
     from coding_agent_playbook.hook_runtime.paths import NormalizedPath
     from coding_agent_playbook.security.paths import PathVerdict
     from coding_agent_playbook.security.secrets import SecretFinding, SecretRule
 
 __all__ = [
-    "RULES_TABLE",
     "classify_path",
     "content_rules",
     "finding_line",
@@ -45,11 +44,6 @@ __all__ = [
     "spelled",
     "strings",
 ]
-
-#: The ``guard_config`` table holding the ruleset and the overlay patterns.
-RULES_TABLE: Final = "secret_rules"
-_EXEMPT_TABLE: Final = "secret_path_exempt"
-_GLOB_EXEMPT_TABLE: Final = "secret_glob_exempt"
 
 
 def path_policy(cfg: GuardConfig, config: Mapping[str, Any]) -> PathPolicy:
@@ -60,12 +54,11 @@ def path_policy(cfg: GuardConfig, config: Mapping[str, Any]) -> PathPolicy:
         >>> path_policy(cfg, {"allow_paths": ["tests/fixtures/**"]}).allow[-1]  # doctest: +SKIP
         'tests/fixtures/**'
     """
-    tables = cfg.tables
-    exempt = strings(tables.get(_EXEMPT_TABLE), default=SECRET_PATH_EXEMPT)
+    exempt = cfg.tables.secret_path_exempt(SECRET_PATH_EXEMPT)
     return PathPolicy(
         deny=_unique((*cfg.secret_paths.patterns, *strings(config.get("extra_globs")))),
         allow=_unique((*exempt, *strings(config.get("allow_paths")))),
-        glob_exempt=_glob_exempt(tables.get(_GLOB_EXEMPT_TABLE)),
+        glob_exempt=cfg.tables.secret_glob_exempt(SECRET_GLOB_EXEMPT),
     )
 
 
@@ -119,16 +112,8 @@ def content_rules(cfg: GuardConfig) -> tuple[SecretRule, ...]:
     # Imported here: secrets-path-guard (path-only) never compiles the content rules.
     from coding_agent_playbook.security.secrets import DEFAULT_RULES
 
-    table = cfg.tables.get(RULES_TABLE)
-    raw = table.get("extra_patterns") if isinstance(table, dict) else None
-    rows = tuple(
-        (row["id"], row["regex"], row.get("label") or row["id"])
-        for row in (raw if isinstance(raw, list) else ())
-        if isinstance(row, dict)
-        and isinstance(row.get("id"), str)
-        and isinstance(row.get("regex"), str)
-    )
-    return DEFAULT_RULES + _compiled(rows) if rows else DEFAULT_RULES
+    patterns = cfg.tables.secret_patterns()
+    return DEFAULT_RULES + _compiled(patterns) if patterns else DEFAULT_RULES
 
 
 def finding_line(finding: SecretFinding) -> str:
@@ -158,23 +143,15 @@ def strings(value: object, *, default: Iterable[str] = ()) -> tuple[str, ...]:
     return tuple(item for item in value if isinstance(item, str) and item)
 
 
-def _glob_exempt(value: object) -> Mapping[str, tuple[str, ...]]:
-    if not isinstance(value, dict):
-        return SECRET_GLOB_EXEMPT
-    return MappingProxyType(
-        {glob: strings(globs) for glob, globs in value.items() if isinstance(glob, str)}
-    )
-
-
 @lru_cache(maxsize=8)
-def _compiled(rows: tuple[tuple[str, str, str], ...]) -> tuple[SecretRule, ...]:
+def _compiled(patterns: tuple[SecretPattern, ...]) -> tuple[SecretRule, ...]:
     """The overlay rows compiled once per process; a broken pattern is left out."""
     from coding_agent_playbook.security.secrets import SecretRule
 
     compiled: list[SecretRule] = []
-    for rule_id, source, label in rows:
+    for pattern in patterns:
         try:
-            compiled.append(SecretRule(rule_id, re.compile(source), label))
+            compiled.append(SecretRule(pattern.id, re.compile(pattern.regex), pattern.label))
         except re.error:
             continue
     return tuple(compiled)

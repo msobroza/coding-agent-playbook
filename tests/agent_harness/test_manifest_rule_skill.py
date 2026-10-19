@@ -10,7 +10,11 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.harness.manifest import ManifestEntry, read_manifest, write_manifest
+from coding_agent_playbook.agent_harness.manifest import (
+    ManifestEntry,
+    read_manifest,
+    write_manifest,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path

@@ -30,6 +30,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
 
+from coding_agent_playbook.hook_runtime.config.guard_tables import DEFAULT_MAX_BLOCKS
 from coding_agent_playbook.hook_runtime.stop import chain as chains
 from coding_agent_playbook.hook_runtime.stop.output import (
     GATE_OFF_NOTE,
@@ -49,6 +50,7 @@ from coding_agent_playbook.hook_runtime.stop.stages import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
+    from coding_agent_playbook.hook_runtime.config.guard_tables import StopGate
     from coding_agent_playbook.hook_runtime.deps import Clock, TrustPort
     from coding_agent_playbook.hook_runtime.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.git.safe_git import Fingerprint, GitPort
@@ -58,7 +60,6 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.stop.stages import SkipCategory, Stage
 
 __all__ = [
-    "DEFAULT_MAX_BLOCKS",
     "CoordinatorDeps",
     "GatePolicy",
     "StopCoordinator",
@@ -66,9 +67,6 @@ __all__ = [
     "StopScope",
 ]
 
-#: ``[hooks.stop-ci-parity-gate] max_blocks`` default and range (§B.1).
-DEFAULT_MAX_BLOCKS: Final = 2
-_MAX_BLOCKS_RANGE: Final = (1, 8)
 #: tests-nudge runs only when no stage up to this one is red (§E.0.4: stages 0-7).
 _NUDGE: Final = "tests-nudge"
 _NUDGE_GATE: Final = STOP_STAGE_ORDER.index("verify-claim")
@@ -83,8 +81,8 @@ class GatePolicy:
 
     Example::
 
-        >>> GatePolicy.from_table({"max_blocks": 99}).max_blocks
-        8
+        >>> GatePolicy.from_gate(GuardTables({"stop_gate": {"budget_s": 7.5}}).stop_gate()).budget_s
+        7.5
     """
 
     budget_s: float = DEFAULT_BUDGET_S
@@ -92,17 +90,12 @@ class GatePolicy:
     stages: tuple[Any, ...] = ()
 
     @classmethod
-    def from_table(cls, table: object) -> GatePolicy:
-        """The policy of a rendered ``stop_gate`` table; anything malformed is its default."""
-        if not isinstance(table, dict):
-            return cls()
-        blocks, stages = table.get("max_blocks"), table.get("stages")
-        low, high = _MAX_BLOCKS_RANGE
-        return cls(
-            budget_s=_budget(table.get("budget_s")),
-            max_blocks=min(high, max(low, blocks)) if type(blocks) is int else DEFAULT_MAX_BLOCKS,
-            stages=tuple(stages) if isinstance(stages, list) else (),
-        )
+    def from_gate(cls, gate: StopGate) -> GatePolicy:
+        """The policy of the parsed ``stop_gate`` table; its stage rows verbatim.
+
+        Example: ``GatePolicy.from_gate(cfg.tables.stop_gate()).stages_sha256()``.
+        """
+        return cls(budget_s=gate.budget_s, max_blocks=gate.max_blocks, stages=gate.stage_rows)
 
     def stages_sha256(self) -> str:
         """The digest an execution approval must match (``security.trust.sha256_of_json``)."""
@@ -366,10 +359,3 @@ def _quiet[T](read: Callable[[], T]) -> T | None:
 
 def _skipped(stage: str, category: SkipCategory) -> StageResult:
     return StageResult(stage, "skipped", skip_category=category)
-
-
-def _budget(value: object) -> float:
-    """A positive ``budget_s``, else the default (the runtime re-checks: §D.1 bars sync code)."""
-    if isinstance(value, bool) or not isinstance(value, int | float) or value <= 0:
-        return DEFAULT_BUDGET_S
-    return float(value)

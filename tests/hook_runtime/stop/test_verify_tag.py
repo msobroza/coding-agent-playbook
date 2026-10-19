@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 
+from coding_agent_playbook.hook_runtime.config.guard_tables import GuardTables
 from coding_agent_playbook.hook_runtime.event import ShellSource, ToolCall, ToolClass
 from coding_agent_playbook.hook_runtime.shell.parse import ShellConfig
 from coding_agent_playbook.hook_runtime.stop.verify_tag import verify_ids
@@ -32,7 +33,9 @@ ROWS: list[dict[str, Any]] = [
 class _Cfg:
     """The one part of ``GuardConfig`` ``verify_ids`` reads."""
 
-    tables: dict[str, Any] = field(default_factory=lambda: {"stop_gate": {"verify_commands": ROWS}})
+    tables: GuardTables = field(
+        default_factory=lambda: GuardTables({"stop_gate": {"verify_commands": ROWS}})
+    )
     shell: ShellConfig = field(default_factory=ShellConfig)
 
 
@@ -62,7 +65,7 @@ def test_segments_matched_after_their_launchers(command: str, expected: list[str
 
 
 def test_no_rows_no_shell_no_ids() -> None:
-    empty = cast("GuardConfig", _Cfg(tables={}))
+    empty = cast("GuardConfig", _Cfg(tables=GuardTables({})))
     edit = ToolCall(name="Edit", native_name="Edit", tool_class=ToolClass.EDIT)
 
     assert verify_ids(_bash("pytest"), empty) == []
@@ -93,7 +96,8 @@ def test_a_row_written_with_launchers_matches_the_bare_run() -> None:
     """Regression: a row's own launchers (``timeout``, a configured wrapper) were never stripped."""
     rows = [{"id": "slow", "argv": ["timeout", "900", "proxy", "uvx", "pytest", "-x"]}]
     cfg = cast(
-        "GuardConfig", _Cfg(tables={"stop_gate": {"verify_commands": rows}}, shell=_LAUNCHER)
+        "GuardConfig",
+        _Cfg(tables=GuardTables({"stop_gate": {"verify_commands": rows}}), shell=_LAUNCHER),
     )
 
     assert verify_ids(_bash("pytest -x tests"), cfg) == ["slow"]
@@ -102,6 +106,6 @@ def test_a_row_written_with_launchers_matches_the_bare_run() -> None:
 
 def test_an_unreadable_launcher_tags_nothing_and_never_raises() -> None:
     rows = [*ROWS, {"id": "odd", "argv": ["env", "-S", "'unbalanced", "pytest"]}]
-    cfg = cast("GuardConfig", _Cfg(tables={"stop_gate": {"verify_commands": rows}}))
+    cfg = cast("GuardConfig", _Cfg(tables=GuardTables({"stop_gate": {"verify_commands": rows}})))
 
     assert verify_ids(_bash("pytest -q"), cfg) == ["tests"]

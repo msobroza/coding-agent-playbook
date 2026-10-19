@@ -1,4 +1,4 @@
-"""Tests for harness.emitter — pure emit helpers (Track H1)."""
+"""Tests for agent_harness.emitter — pure emit helpers (Track H1)."""
 
 from __future__ import annotations
 
@@ -6,8 +6,7 @@ import os
 import stat
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.generated_output.sentinel import SENTINEL
-from coding_agent_playbook.harness.emitter import (
+from coding_agent_playbook.agent_harness.emitter import (
     copy_script,
     frontmatter_block,
     harnessleaf_path,
@@ -16,7 +15,8 @@ from coding_agent_playbook.harness.emitter import (
     routing_file,
     with_sentinel_body,
 )
-from coding_agent_playbook.harness.leaf_detectors import HARNESS_LEAF_MARKER
+from coding_agent_playbook.agent_harness.leaf_detectors import HARNESS_LEAF_MARKER
+from coding_agent_playbook.generated_output.sentinel import SENTINEL
 
 if TYPE_CHECKING:
     from pathlib import Path

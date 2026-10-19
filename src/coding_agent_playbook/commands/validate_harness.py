@@ -15,12 +15,12 @@ Checks (``specs/prH-agent-harness.md`` §A + Track H4):
   grouping (non-leaf) subdirectory lacks its routing file
   (``<DIR>.upper() + ".md"``); a content ``.md`` file lacks a ``description``.
 
-The check reuses :func:`coding_agent_playbook.harness.parser.parse_harness`
+The check reuses :func:`coding_agent_playbook.agent_harness.parser.parse_harness`
 rather than re-walking the tree. ``parse_harness`` *raises* on a missing
 ``HARNESS.md`` (:exc:`NotAHarnessError`) or missing/empty required frontmatter
 (:exc:`ValueError`), so both are caught and translated into ERROR reports instead
 of crashing. Skill-leaf / routing / content findings are then derived from the
-parsed :class:`~coding_agent_playbook.harness.models.Harness` model.
+parsed :class:`~coding_agent_playbook.agent_harness.models.Harness` model.
 
 Routing-file presence is not surfaced directly by the model (a parsed
 :class:`HarnessDirectory` exposes ``routing_file_name`` but its ``description``
@@ -37,19 +37,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.harness.models import (
+from coding_agent_playbook.agent_harness.models import (
     ContentFile,
     HarnessDirectory,
     LeafMarker,
     NotAHarnessError,
     SkillLeaf,
 )
-from coding_agent_playbook.harness.parser import parse_harness
+from coding_agent_playbook.agent_harness.parser import parse_harness
 
 if TYPE_CHECKING:
     import argparse
 
-    from coding_agent_playbook.harness.models import Harness
+    from coding_agent_playbook.agent_harness.models import Harness
 
 
 @dataclass(frozen=True)

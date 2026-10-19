@@ -74,8 +74,6 @@ ACTIVE_PROMPT_CONSUMERS: Final = (SCOPE_GUARD_ID, "prompt-output-contract-on-sto
 SKILL_TOOL: Final = "Skill"
 #: The stored record's shape version; a record of another version reads as none.
 RECORD_VERSION: Final = 2
-#: The guard_config table of output contracts (K6): its keys are slashes too.
-_PROMPTS_TABLE: Final = "prompts"
 _SLASH_MAX_CHARS: Final = 128
 
 type Via = Literal["prompt", "skill"]
@@ -210,7 +208,7 @@ def known_slashes(cfg: GuardConfig) -> frozenset[str]:
     spec = None if guard is None else guard.handlers.get(EventName.PRE_TOOL_USE)
     if spec is not None:
         slashes.update(_keys(spec.config.get("scopes")))
-    slashes.update(_contract_slashes(cfg.tables.get(_PROMPTS_TABLE)))
+    slashes.update(cfg.tables.prompts_with_output_contract())
     return frozenset(slashes)
 
 
@@ -250,17 +248,6 @@ def _skill_of(ev: CanonicalEvent) -> str | None:
         return None
     skill = ev.tool.raw_input.get("skill")
     return skill.strip().lstrip("/") if isinstance(skill, str) else None
-
-
-def _contract_slashes(table: Any) -> list[str]:
-    """The slashes of the ``prompts`` table whose row carries a non-empty ``output_contract``."""
-    if not isinstance(table, Mapping):
-        return []
-    return [
-        slash
-        for slash, row in table.items()
-        if isinstance(slash, str) and isinstance(row, Mapping) and row.get("output_contract")
-    ]
 
 
 def _keys(table: Any) -> list[str]:

@@ -30,7 +30,6 @@ from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
-    from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
     from coding_agent_playbook.hook_runtime.proc import ProcResult
     from coding_agent_playbook.hook_runtime.registry import HandlerContext
 
@@ -38,7 +37,6 @@ __all__ = [
     "CHILD_TIMEOUT_S",
     "DEBOUNCE_S",
     "MAX_FAIL_LINES",
-    "auto_sync_enabled",
     "context_result",
     "fail_lines",
     "run_playbook",
@@ -104,17 +102,6 @@ def fail_lines(
         return shown
     hidden = len(shown) - (cap - 1)
     return [*shown[: cap - 1], f"… {hidden} more FAIL lines (run playbook validate)"]
-
-
-def auto_sync_enabled(cfg: GuardConfig) -> bool:
-    """Whether ``[hooks] auto_sync`` is on (``guard_config.auto_sync``, rendered at sync).
-
-    Example::
-
-        >>> auto_sync_enabled(cfg)  # doctest: +SKIP
-        False
-    """
-    return cfg.tables.get("auto_sync") is True
 
 
 def context_result(ctx: HandlerContext, text: str, rule_id: str = "") -> HandlerResult:

@@ -103,6 +103,9 @@ The engine part that writes rendered content in one harness's native format and 
 **Harness**:
 A coding-agent runtime the engine writes files for, such as Claude Code, OpenCode, Codex, Continue or Cursor.
 
+**Agent Harness tree**:
+The directory tree the agent_harness adapter writes for Agent Harness clients and `import-harness` reads back; it is not a Harness.
+
 **OpenCode plugin**:
 A JavaScript module OpenCode loads to react to its runtime events; the engine generates exactly one, to run hooks.
 

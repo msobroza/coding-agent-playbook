@@ -53,9 +53,9 @@ def completion_claim(ev: CanonicalEvent, cfg: GuardConfig) -> str | None:
     message = ev.stop.last_assistant_message if ev.stop is not None else ""
     if not message:
         return None
-    for pattern in _table_list(cfg, "claim_patterns"):
+    for pattern in cfg.tables.stop_gate().claim_patterns:
         try:
-            found = re.search(str(pattern), message)
+            found = re.search(pattern, message)
         except re.error:
             continue
         if found is not None and found.group(0).strip():
@@ -105,9 +105,8 @@ def verify_claim_stage(ev: CanonicalEvent, ctx: HandlerContext) -> VerifyClaimSt
     Example: ``verify_claim_stage(stop_event, ctx).applies(plan)``.
     """
     commands = tuple(
-        (str(row["id"]), _command_text(row["argv"]))
-        for row in _table_list(ctx.cfg, "verify_commands")
-        if isinstance(row, dict) and isinstance(row.get("argv"), list) and row.get("id")
+        (command.id, _command_text(command.argv))
+        for command in ctx.cfg.tables.stop_gate().verify_commands
     )
     return VerifyClaimStage(claim=completion_claim(ev, ctx.cfg), commands=commands)
 
@@ -121,11 +120,5 @@ def _green_since_last_edit(ledger: Sequence[Mapping[str, Any]], ids: frozenset[s
     )
 
 
-def _command_text(argv: list[object]) -> str:
-    return clip(" ".join(clean_text(str(word)) for word in argv), _COMMAND_CHARS)
-
-
-def _table_list(cfg: GuardConfig, key: str) -> list[Any]:
-    table = cfg.tables.get("stop_gate")
-    value = table.get(key) if isinstance(table, dict) else None
-    return value if isinstance(value, list) else []
+def _command_text(argv: Sequence[str]) -> str:
+    return clip(" ".join(clean_text(word) for word in argv), _COMMAND_CHARS)

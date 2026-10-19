@@ -136,6 +136,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.git_client` | `coding_agent_playbook.sync.git_client` | A6 |
 | `coding_agent_playbook.git_env` | `coding_agent_playbook.evals.run.git_env` | N23 |
 | `coding_agent_playbook.gitignore` | `coding_agent_playbook.generated_output.gitignore` | N6 |
+| `coding_agent_playbook.harness` | `coding_agent_playbook.agent_harness` | N12 |
 | `coding_agent_playbook.hook_policy` | `coding_agent_playbook.hooks` | A17 |
 | `coding_agent_playbook.hook_policy.ADAPTER_LABELS` | `coding_agent_playbook.hooks.enforcement.ADAPTER_LABELS` | A17 |
 | `coding_agent_playbook.hook_policy.ADVISORY_RULE_PREFIX` | `coding_agent_playbook.hooks.resolution.tables.ADVISORY_RULE_PREFIX` | A17 |
@@ -243,6 +244,7 @@ out-of-tree code can import (public old or new path):
 | `coding_agent_playbook.hook_runtime.pin` | `coding_agent_playbook.hook_runtime.config.pin` | N16 |
 | `coding_agent_playbook.hook_runtime.protected` | `coding_agent_playbook.hook_runtime.config.protected` | N16 |
 | `coding_agent_playbook.hook_runtime.shell` | `coding_agent_playbook.hook_runtime.shell.parse` | N17 |
+| `coding_agent_playbook.hook_runtime.stop.coordinator.DEFAULT_MAX_BLOCKS` | `coding_agent_playbook.hook_runtime.config.guard_tables.DEFAULT_MAX_BLOCKS` | B3 |
 | `coding_agent_playbook.hook_runtime.wrapper_policy` | `coding_agent_playbook.hook_runtime.shell.wrapper_policy` | N17 |
 | `coding_agent_playbook.hooks_config` | `coding_agent_playbook.config.tables.hooks` | N2 |
 | `coding_agent_playbook.links` | `coding_agent_playbook.validation.link_check` | A4 |

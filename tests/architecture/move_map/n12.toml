@@ -1,0 +1,15 @@
+# N12 (#88, specs/prT-package-layout.md 4.6, 7.4): harness/ becomes agent_harness/,
+# the Agent Harness format round trip. Only coding_agent_playbook.harness moves:
+# hook_runtime.harness, the adapter id agent_harness and the Agent Harness evals/
+# directory name stay (5.4.3).
+
+[[module]]
+pr = "N12"
+old = "coding_agent_playbook.harness"
+new = "coding_agent_playbook.agent_harness"
+package = true
+
+[[path]]
+pr = "N12"
+old = "tests/harness/"
+new = "tests/agent_harness/"
