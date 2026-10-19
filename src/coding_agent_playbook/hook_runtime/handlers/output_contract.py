@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.caps import clean_text, clip, quote_data
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.state.active_prompt import resolve_active_prompt
 from coding_agent_playbook.hook_runtime.stop.alone import run_alone
@@ -119,7 +120,7 @@ def output_contract_stage(ev: CanonicalEvent, ctx: HandlerContext) -> OutputCont
         contract=() if prompt is None else ctx.cfg.tables.prompt_output_contract(prompt.slash),
         message=message,
         session=ctx.session,
-        block_once=ctx.config.get("block_once") is True,
+        block_once=HookConfig(ctx.config, CONFIG_SCHEMA).flag("block_once", False),
     )
 
 

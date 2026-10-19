@@ -27,6 +27,7 @@ import re
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.caps import quote_data
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.event import ToolClass
 from coding_agent_playbook.hook_runtime.judges.hosts import is_loopback
@@ -108,7 +109,9 @@ def taint_marker(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult | Non
         return None
     if ToolClass.WEB in tool.tool_classes:
         ctx.session.set_flag("taint:web")
-    elif ToolClass.MCP in tool.tool_classes and _mcp_pattern(ctx.config).search(tool.name):
+    elif ToolClass.MCP in tool.tool_classes and _mcp_pattern(
+        HookConfig(ctx.config, CONFIG_SCHEMA)
+    ).search(tool.name):
         ctx.session.set_flag("taint:mcp")
     return None
 
@@ -226,11 +229,9 @@ def _under(path: str, roots: Iterable[str]) -> bool:
     return any(path == root or path.startswith(root + os.sep) for root in roots)
 
 
-def _mcp_pattern(config: Mapping[str, object]) -> re.Pattern[str]:
-    source = config.get("mcp_taint_pattern")
+def _mcp_pattern(config: HookConfig) -> re.Pattern[str]:
+    source = config.choice("mcp_taint_pattern", "")
     try:
-        return re.compile(
-            source if isinstance(source, str) and source else DEFAULT_MCP_TAINT_PATTERN, re.I
-        )
+        return re.compile(source or DEFAULT_MCP_TAINT_PATTERN, re.I)
     except re.error:
         return re.compile(DEFAULT_MCP_TAINT_PATTERN, re.I)

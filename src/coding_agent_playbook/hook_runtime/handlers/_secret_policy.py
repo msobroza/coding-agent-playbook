@@ -21,14 +21,14 @@ import os
 import posixpath
 import re
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from coding_agent_playbook.hook_runtime.caps import quote_data
 from coding_agent_playbook.security.paths import PathPolicy
 from coding_agent_playbook.security.patterns import SECRET_GLOB_EXEMPT, SECRET_PATH_EXEMPT
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable
 
     from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
     from coding_agent_playbook.hook_runtime.config.guard_tables import SecretPattern
@@ -46,18 +46,20 @@ __all__ = [
 ]
 
 
-def path_policy(cfg: GuardConfig, config: Mapping[str, Any]) -> PathPolicy:
+def path_policy(
+    cfg: GuardConfig, *, extra_globs: Iterable[str] = (), allow_paths: Iterable[str] = ()
+) -> PathPolicy:
     """The rendered secret-path policy, extended by the hook's ``extra_globs`` / ``allow_paths``.
 
     Example::
 
-        >>> path_policy(cfg, {"allow_paths": ["tests/fixtures/**"]}).allow[-1]  # doctest: +SKIP
+        >>> path_policy(cfg, allow_paths=("tests/fixtures/**",)).allow[-1]  # doctest: +SKIP
         'tests/fixtures/**'
     """
     exempt = cfg.tables.secret_path_exempt(SECRET_PATH_EXEMPT)
     return PathPolicy(
-        deny=_unique((*cfg.secret_paths.patterns, *strings(config.get("extra_globs")))),
-        allow=_unique((*exempt, *strings(config.get("allow_paths")))),
+        deny=_unique((*cfg.secret_paths.patterns, *extra_globs)),
+        allow=_unique((*exempt, *allow_paths)),
         glob_exempt=cfg.tables.secret_glob_exempt(SECRET_GLOB_EXEMPT),
     )
 
