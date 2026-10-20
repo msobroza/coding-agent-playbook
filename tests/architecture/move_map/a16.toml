@@ -23,6 +23,14 @@ pr = "A16"
 old = "coding_agent_playbook.hook_runtime.handlers._sink_regex"
 new = "coding_agent_playbook.hook_runtime.handlers.feedback._sink_regex"
 
+# The follow-up to #161 (decided on #95 and #130): the sink judge's regex fallback
+# joins its only importer, judges.sink_scan, so no private import crosses into
+# handlers/ for it. The row above stays, so a branch on #161's layout still applies.
+[[module]]
+pr = "A16"
+old = "coding_agent_playbook.hook_runtime.handlers.feedback._sink_regex"
+new = "coding_agent_playbook.hook_runtime.judges._sink_regex"
+
 [[module]]
 pr = "A16"
 old = "coding_agent_playbook.hook_runtime.handlers._sink_writes"
