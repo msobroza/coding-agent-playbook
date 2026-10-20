@@ -196,7 +196,9 @@ def new_sink_calls(pre_text: str | None, post_text: str, table: SinkTable) -> li
     pre, post = pre_text or "", post_text
     pre_calls, post_calls = sink_calls(pre, table), sink_calls(post, table)
     if pre_calls is None or post_calls is None:
-        from coding_agent_playbook.hook_runtime.handlers._sink_regex import regex_sink_calls
+        from coding_agent_playbook.hook_runtime.handlers.feedback._sink_regex import (
+            regex_sink_calls,
+        )
 
         pre_calls, post_calls = regex_sink_calls(pre, table), regex_sink_calls(post, table)
     extra = Counter(call.key for call in post_calls) - Counter(call.key for call in pre_calls)

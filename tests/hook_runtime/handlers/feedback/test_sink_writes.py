@@ -11,7 +11,7 @@ from typing import Any, Final
 
 import pytest
 
-from coding_agent_playbook.hook_runtime.handlers._sink_writes import notebook_edit_images
+from coding_agent_playbook.hook_runtime.handlers.feedback._sink_writes import notebook_edit_images
 
 NOTEBOOK: Final = json.dumps(
     {

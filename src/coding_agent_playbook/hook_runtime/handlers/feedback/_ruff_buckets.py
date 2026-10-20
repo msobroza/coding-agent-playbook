@@ -42,7 +42,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime._ruff import selector_matches
 from coding_agent_playbook.hook_runtime.dispatch.caps import OutputCaps, quote_data
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hook_runtime.handlers._shared.ruff_pipeline import (
@@ -51,15 +50,16 @@ from coding_agent_playbook.hook_runtime.handlers._shared.ruff_pipeline import (
     file_codes,
     lint_codes_of,
 )
+from coding_agent_playbook.hook_runtime.ruff import selector_matches
 
 if TYPE_CHECKING:
     import ast  # the Python-edit branch imports it, inside _lint_ast (§D.1)
     from collections.abc import Callable, Sequence
 
-    from coding_agent_playbook.hook_runtime._ruff import RuffDiagnostic
     from coding_agent_playbook.hook_runtime.config.guard_config import HookRecord
     from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.handlers._shared.ruff_pipeline import FileReport
+    from coding_agent_playbook.hook_runtime.ruff import RuffDiagnostic
 
 __all__ = [
     "BUCKETS",
@@ -385,7 +385,7 @@ def _judge(
 
 
 def _public_lines(ctx: HandlerContext, report: FileReport) -> frozenset[int]:
-    from coding_agent_playbook.hook_runtime.handlers._lint_ast import public_def_lines
+    from coding_agent_playbook.hook_runtime.handlers.feedback._lint_ast import public_def_lines
 
     tree = _tree(ctx, report)
     return frozenset() if tree is None else public_def_lines(tree)
@@ -393,7 +393,7 @@ def _public_lines(ctx: HandlerContext, report: FileReport) -> frozenset[int]:
 
 def _tree(ctx: HandlerContext, report: FileReport) -> ast.Module | None:
     """The report's module (``None`` unparsable), parsed once per event and content."""
-    from coding_agent_playbook.hook_runtime.handlers._lint_ast import parse_module
+    from coding_agent_playbook.hook_runtime.handlers.feedback._lint_ast import parse_module
 
     key = ("ruff-ast", report.edited.path, report.sha)
     tree: ast.Module | None = ctx.memo.get_or_compute(key, lambda: parse_module(report.text))
@@ -407,7 +407,7 @@ def _heuristics(
     spec = None if record is None else record.handlers.get(EventName.POST_TOOL_USE)
     if record is None or spec is None or spec.config.get("ast_heuristics") is not True:
         return []
-    from coding_agent_playbook.hook_runtime.handlers._lint_ast import pytest_ast_heuristics
+    from coding_agent_playbook.hook_runtime.handlers.feedback._lint_ast import pytest_ast_heuristics
 
     found: list[Finding] = []
     for report in reports:

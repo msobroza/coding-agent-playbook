@@ -43,18 +43,8 @@ from collections.abc import Mapping
 from contextlib import suppress
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime._ruff import (
-    RUFF_TIMEOUT_S,
-    RuffFailure,
-    fix_args,
-    format_args,
-    format_check_args,
-    intersect_selectors,
-    rewritten,
-)
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
-from coding_agent_playbook.hook_runtime.handlers._ruff_buckets import event_lines
 from coding_agent_playbook.hook_runtime.handlers._shared.ruff_pipeline import (
     edited_python_files,
     enabled_consumers,
@@ -66,10 +56,19 @@ from coding_agent_playbook.hook_runtime.handlers._shared.ruff_pipeline import (
     ruff_runner,
     skip_note,
 )
+from coding_agent_playbook.hook_runtime.handlers.feedback._ruff_buckets import event_lines
+from coding_agent_playbook.hook_runtime.ruff import (
+    RUFF_TIMEOUT_S,
+    RuffFailure,
+    fix_args,
+    format_args,
+    format_check_args,
+    intersect_selectors,
+    rewritten,
+)
 from coding_agent_playbook.hook_runtime.state.store import StateUnavailable
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.hook_runtime._ruff import RuffRunner
     from coding_agent_playbook.hook_runtime.config.guard_config import HookRecord
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
@@ -78,6 +77,7 @@ if TYPE_CHECKING:
         FileReport,
         HeadBlob,
     )
+    from coding_agent_playbook.hook_runtime.ruff import RuffRunner
     from coding_agent_playbook.hook_runtime.state.store import StateStore
 
 __all__ = [

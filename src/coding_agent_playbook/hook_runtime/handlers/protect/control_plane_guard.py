@@ -37,10 +37,6 @@ from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.config.reader import read_small_file
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
-from coding_agent_playbook.hook_runtime.handlers._control_plane_shell import (
-    command_verdict,
-    names_state_dir,
-)
 from coding_agent_playbook.hook_runtime.handlers._shared.control_plane_paths import (
     load_plane,
     route_of,
@@ -49,6 +45,10 @@ from coding_agent_playbook.hook_runtime.handlers._shared.edit_preview import pre
 from coding_agent_playbook.hook_runtime.handlers._shared.targets import (
     file_write_paths,
     shell_target,
+)
+from coding_agent_playbook.hook_runtime.handlers.protect._control_plane_shell import (
+    command_verdict,
+    names_state_dir,
 )
 
 if TYPE_CHECKING:
@@ -194,17 +194,19 @@ def _content_verdict(
 ) -> Decision:
     """The row's own diff of ``before`` (``None``: absent) and ``after``."""
     if kind in ("config", "local_config"):
-        from coding_agent_playbook.hook_runtime.handlers._control_plane_toml import toml_verdict
+        from coding_agent_playbook.hook_runtime.handlers.protect._control_plane_toml import (
+            toml_verdict,
+        )
 
         return toml_verdict(before, after, local=kind == "local_config", keys=plane.policy_keys)
     if kind == "precommit":
-        from coding_agent_playbook.hook_runtime.handlers._control_plane_text import (
+        from coding_agent_playbook.hook_runtime.handlers.protect._control_plane_text import (
             precommit_verdict,
         )
 
         return precommit_verdict(before, after, plane.precommit_ids)
     if kind == "frontmatter_carrier":
-        from coding_agent_playbook.hook_runtime.handlers._control_plane_text import (
+        from coding_agent_playbook.hook_runtime.handlers.protect._control_plane_text import (
             frontmatter_hooks_verdict,
         )
 
@@ -215,7 +217,7 @@ def _content_verdict(
 def _json_verdict(
     kind: RouteKind, before: str | None, after: str, npath: NormalizedPath, plane: ControlPlane
 ) -> Decision:
-    from coding_agent_playbook.hook_runtime.handlers import _control_plane_json as cpj
+    from coding_agent_playbook.hook_runtime.handlers.protect import _control_plane_json as cpj
 
     jsonc = kind == "opencode_config"
     old = {} if before is None else cpj.load_json_object(before, jsonc=jsonc)

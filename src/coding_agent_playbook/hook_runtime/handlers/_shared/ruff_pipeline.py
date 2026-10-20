@@ -35,7 +35,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.hook_runtime._ruff import (
+from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName
+from coding_agent_playbook.hook_runtime.handlers._shared.targets import file_write_paths, repo_file
+from coding_agent_playbook.hook_runtime.ruff import (
     RuffFailure,
     RuffPin,
     RuffRunner,
@@ -43,18 +46,15 @@ from coding_agent_playbook.hook_runtime._ruff import (
     ruff_diagnostics_for,
     ruff_pin,
 )
-from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
-from coding_agent_playbook.hook_runtime.dispatch.event import EventName
-from coding_agent_playbook.hook_runtime.handlers._shared.targets import file_write_paths, repo_file
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
-    from coding_agent_playbook.hook_runtime._ruff import PinProblem, RuffDiagnostic
     from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, HookRecord
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
+    from coding_agent_playbook.hook_runtime.ruff import PinProblem, RuffDiagnostic
 
 __all__ = [
     "POST_EDIT_HOOK_ID",

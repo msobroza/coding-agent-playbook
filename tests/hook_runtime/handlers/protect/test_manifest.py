@@ -102,7 +102,7 @@ def test_handlers_declare_config_schema_and_no_input_mutation(hook_id: str) -> N
 
 def test_validate_matcher_paths_are_the_handler_canonical_globs() -> None:
     """The matcher selects the hook; the handler re-checks with the same globs."""
-    from coding_agent_playbook.hook_runtime.handlers.validate_then_sync_on_canonical_edit import (
+    from coding_agent_playbook.hook_runtime.handlers.protect.validate_then_sync_on_canonical_edit import (
         CANONICAL_GLOBS,
     )
 
@@ -113,7 +113,7 @@ def test_validate_matcher_paths_are_the_handler_canonical_globs() -> None:
 
 def test_source_changed_child_timeout_nests_under_the_hook_timeout() -> None:
     """OQ-27: the 8 s child timeout stays below each source-changed hook's ``timeout``."""
-    from coding_agent_playbook.hook_runtime.handlers._source_changed import CHILD_TIMEOUT_S
+    from coding_agent_playbook.hook_runtime.handlers.protect._source_changed import CHILD_TIMEOUT_S
 
     for hook_id in (
         "validate-then-sync-on-canonical-edit",

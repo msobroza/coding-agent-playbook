@@ -24,12 +24,12 @@ from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.escape import EscapeHatches
 from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, EventName, Harness
 from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
-from coding_agent_playbook.hook_runtime.handlers._drift import (
+from coding_agent_playbook.hook_runtime.handlers.protect._drift import (
     DriftFinding,
     drift_summary,
     sync_check_findings,
 )
-from coding_agent_playbook.hook_runtime.handlers.stop_drift_and_orphan_gate import (
+from coding_agent_playbook.hook_runtime.handlers.protect.stop_drift_and_orphan_gate import (
     STAGE_NAME,
     DriftStage,
 )
