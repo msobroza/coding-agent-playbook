@@ -374,7 +374,7 @@ coding-agent-playbook/
 │   │   ├── harness/                        # per-harness payload parsers and wire renderers
 │   │   ├── judges/                         # the checks a guard hook shares with its guard twin
 │   │   │   └── gate_weakening.py           # added-line suppression/loosening scan (`playbook gate-scan`)
-│   │   ├── ruff.py                         # the shared Ruff tool for handlers, Stop lint and sync-time readers
+│   │   ├── ruff.py                         # the shared Ruff tool: the edit-feedback hooks, the shared ruff pipeline and sync-time readers
 │   │   ├── state/                          # runtime state root, session, ledger, active prompt, audit log
 │   │   └── stop/                           # the Stop stage contract and coordinator
 │   ├── security/                           # secret paths/patterns, PII, trust store (stdlib)
