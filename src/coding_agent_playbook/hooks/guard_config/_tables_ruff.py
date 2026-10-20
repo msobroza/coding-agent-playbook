@@ -20,7 +20,7 @@ import tomllib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.hook_runtime._ruff import intersect_selectors, selector_matches
+from coding_agent_playbook.hook_runtime.ruff import intersect_selectors, selector_matches
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

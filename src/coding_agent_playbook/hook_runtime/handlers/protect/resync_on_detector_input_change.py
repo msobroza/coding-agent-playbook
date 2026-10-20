@@ -35,12 +35,12 @@ from typing import TYPE_CHECKING, Any, Final
 from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
 from coding_agent_playbook.hook_runtime.dispatch.proc import ProcTimeout
 from coding_agent_playbook.hook_runtime.dispatch.registry import register_hook_handler
-from coding_agent_playbook.hook_runtime.handlers._detector_inputs import (
+from coding_agent_playbook.hook_runtime.handlers.protect._detector_inputs import (
     INSTALL_PROGRAMS,
     detector_triggers,
     inputs_changed,
 )
-from coding_agent_playbook.hook_runtime.handlers._source_changed import (
+from coding_agent_playbook.hook_runtime.handlers.protect._source_changed import (
     context_result,
     run_playbook,
 )

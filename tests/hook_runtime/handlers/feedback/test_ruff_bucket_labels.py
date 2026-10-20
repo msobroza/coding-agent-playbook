@@ -13,10 +13,14 @@ from typing import Any, Final
 
 import pytest
 
-from coding_agent_playbook.hook_runtime._ruff import RuffDiagnostic
 from coding_agent_playbook.hook_runtime.config.hook_records import HandlerSpec, HookRecord
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName
-from coding_agent_playbook.hook_runtime.handlers._ruff_buckets import (
+from coding_agent_playbook.hook_runtime.handlers._shared.ruff_pipeline import (
+    POST_EDIT_HOOK_ID,
+    EditedFile,
+    FileReport,
+)
+from coding_agent_playbook.hook_runtime.handlers.feedback._ruff_buckets import (
     BUCKETS,
     ERROR_HANDLING_HOOK_ID,
     Finding,
@@ -27,11 +31,7 @@ from coding_agent_playbook.hook_runtime.handlers._ruff_buckets import (
     rule_label,
     rule_suffix,
 )
-from coding_agent_playbook.hook_runtime.handlers._shared.ruff_pipeline import (
-    POST_EDIT_HOOK_ID,
-    EditedFile,
-    FileReport,
-)
+from coding_agent_playbook.hook_runtime.ruff import RuffDiagnostic
 
 APP: Final = "src/app.py"
 _BARE: Final = RuffDiagnostic("E722", 1, "Do not use bare `except`")

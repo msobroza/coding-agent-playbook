@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Final, Literal
 from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
-from coding_agent_playbook.hook_runtime.handlers._sink_writes import SinkWrite, sink_writes
+from coding_agent_playbook.hook_runtime.handlers.feedback._sink_writes import SinkWrite, sink_writes
 from coding_agent_playbook.hook_runtime.judges.sink_scan import (
     SinkHit,
     SinkTable,

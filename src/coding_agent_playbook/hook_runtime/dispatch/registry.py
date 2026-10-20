@@ -75,24 +75,24 @@ HANDLER_ATTR: Final = "__playbook_hook_handler__"
 _BUILTIN_HANDLER_MODULES: Final[Mapping[str, str]] = MappingProxyType(
     {
         "guard_generated_outputs": (
-            "coding_agent_playbook.hook_runtime.handlers.guard_generated_outputs"
+            "coding_agent_playbook.hook_runtime.handlers.protect.guard_generated_outputs"
         ),
-        "control_plane_guard": "coding_agent_playbook.hook_runtime.handlers.control_plane_guard",
+        "control_plane_guard": "coding_agent_playbook.hook_runtime.handlers.protect.control_plane_guard",
         "validate_then_sync_on_canonical_edit": (
-            "coding_agent_playbook.hook_runtime.handlers.validate_then_sync_on_canonical_edit"
+            "coding_agent_playbook.hook_runtime.handlers.protect.validate_then_sync_on_canonical_edit"
         ),
         "resync_on_detector_input_change": (
-            "coding_agent_playbook.hook_runtime.handlers.resync_on_detector_input_change"
+            "coding_agent_playbook.hook_runtime.handlers.protect.resync_on_detector_input_change"
         ),
         "eval_task_authoring_lint": (
-            "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint"
+            "coding_agent_playbook.hook_runtime.handlers.protect.eval_task_authoring_lint"
         ),
-        "guard_eval_fixtures": "coding_agent_playbook.hook_runtime.handlers.guard_eval_fixtures",
+        "guard_eval_fixtures": "coding_agent_playbook.hook_runtime.handlers.protect.guard_eval_fixtures",
         "stop_drift_and_orphan_gate": (
-            "coding_agent_playbook.hook_runtime.handlers.stop_drift_and_orphan_gate"
+            "coding_agent_playbook.hook_runtime.handlers.protect.stop_drift_and_orphan_gate"
         ),
         "session_start_playbook_briefing": (
-            "coding_agent_playbook.hook_runtime.handlers.session_start_playbook_briefing"
+            "coding_agent_playbook.hook_runtime.handlers.protect.session_start_playbook_briefing"
         ),
         "stop_ci_parity_gate": (
             "coding_agent_playbook.hook_runtime.handlers.verify.stop_ci_parity_gate"
@@ -127,14 +127,14 @@ _BUILTIN_HANDLER_MODULES: Final[Mapping[str, str]] = MappingProxyType(
         "prompt_output_contract_on_stop": (
             "coding_agent_playbook.hook_runtime.handlers.verify.prompt_output_contract_on_stop"
         ),
-        "prompt_scope_guard": "coding_agent_playbook.hook_runtime.handlers.prompt_scope",
-        "ruff_post_edit": "coding_agent_playbook.hook_runtime.handlers.ruff_feedback",
-        "ruff_lint_feedback": "coding_agent_playbook.hook_runtime.handlers.ruff_feedback",
-        "toolchain_hint": "coding_agent_playbook.hook_runtime.handlers.toolchain",
-        "skill_nudge": "coding_agent_playbook.hook_runtime.handlers.skill_nudge",
-        "deser_sink_guard": "coding_agent_playbook.hook_runtime.handlers.deser",
-        "notebook_hygiene": "coding_agent_playbook.hook_runtime.handlers.notebooks",
-        "notebook_hygiene:stop_stage": "coding_agent_playbook.hook_runtime.handlers.notebooks",
+        "prompt_scope_guard": "coding_agent_playbook.hook_runtime.handlers.feedback.prompt_write_scope_guard",
+        "ruff_post_edit": "coding_agent_playbook.hook_runtime.handlers.feedback.ruff_feedback",
+        "ruff_lint_feedback": "coding_agent_playbook.hook_runtime.handlers.feedback.ruff_feedback",
+        "toolchain_hint": "coding_agent_playbook.hook_runtime.handlers.feedback.toolchain_missing_hint",
+        "skill_nudge": "coding_agent_playbook.hook_runtime.handlers.feedback.skill_nudge",
+        "deser_sink_guard": "coding_agent_playbook.hook_runtime.handlers.feedback.ml_unsafe_deserialization_guard",
+        "notebook_hygiene": "coding_agent_playbook.hook_runtime.handlers.feedback.notebook_output_hygiene",
+        "notebook_hygiene:stop_stage": "coding_agent_playbook.hook_runtime.handlers.feedback.notebook_output_hygiene",
         "coverage_diff_gate": (
             "coding_agent_playbook.hook_runtime.handlers.verify.coverage_diff_gate"
         ),

@@ -51,10 +51,10 @@ _SYNC_WRITTEN_READS: Final = frozenset(
         # The cut-over date sync copies from [hooks.commit_convention]; validate checks its text.
         ("commit_message_convention.py", "cutover_date"),
         # toolchain declares no schema: sync writes both install hints from the guard config.
-        ("toolchain.py", "install_hint"),
-        ("toolchain.py", "cz_install_hint"),
+        ("toolchain_missing_hint.py", "install_hint"),
+        ("toolchain_missing_hint.py", "cz_install_hint"),
         # The slash-command scope table sync compiles from the prompts.
-        ("prompt_scope.py", "scopes"),
+        ("prompt_write_scope_guard.py", "scopes"),
         # skill_nudge's CONFIG_SCHEMA is empty on purpose: sync writes the skill glob table.
         ("skill_nudge.py", "skills"),
     }

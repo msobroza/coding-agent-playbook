@@ -25,7 +25,7 @@ from coding_agent_playbook.hook_runtime.config.pin import write_machine_pins
 from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
-from coding_agent_playbook.hook_runtime.handlers._briefing_probes import (
+from coding_agent_playbook.hook_runtime.handlers.protect._briefing_probes import (
     installed_engine_version,
 )
 from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME

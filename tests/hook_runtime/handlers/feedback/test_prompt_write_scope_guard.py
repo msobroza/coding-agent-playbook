@@ -19,7 +19,7 @@ import pytest
 from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.registry import load_builtin
-from coding_agent_playbook.hook_runtime.handlers.prompt_scope import (
+from coding_agent_playbook.hook_runtime.handlers.feedback.prompt_write_scope_guard import (
     READ_ONLY_REASON,
     TESTS_ONLY_REASON,
 )

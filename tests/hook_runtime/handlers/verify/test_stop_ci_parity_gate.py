@@ -25,7 +25,9 @@ from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hook_runtime.dispatch.registry import load_builtin
 from coding_agent_playbook.hook_runtime.git.safe_git import Fingerprint
-from coding_agent_playbook.hook_runtime.handlers.stop_drift_and_orphan_gate import DriftStage
+from coding_agent_playbook.hook_runtime.handlers.protect.stop_drift_and_orphan_gate import (
+    DriftStage,
+)
 from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME, session_key
 from coding_agent_playbook.hooks.guard_config.inputs import DetectInputs
 from tests.hook_payloads import load_hook_payload

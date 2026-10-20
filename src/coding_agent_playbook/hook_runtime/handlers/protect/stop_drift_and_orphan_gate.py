@@ -36,7 +36,7 @@ from typing import TYPE_CHECKING, Final
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.proc import ProcTimeout
 from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
-from coding_agent_playbook.hook_runtime.handlers._source_changed import run_playbook
+from coding_agent_playbook.hook_runtime.handlers.protect._source_changed import run_playbook
 from coding_agent_playbook.hook_runtime.stop.stages import StageCost, StageResult, StopPlan
 
 if TYPE_CHECKING:
@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.handlers._drift import DriftFinding
+    from coding_agent_playbook.hook_runtime.handlers.protect._drift import DriftFinding
     from coding_agent_playbook.hook_runtime.stop.stages import SkipCategory
 
     type FastPath = Callable[..., list[DriftFinding]]
@@ -91,7 +91,7 @@ def touched_categories(plan: StopPlan) -> frozenset[str]:
 
 def _drift_fast_path(root: str, cfg: GuardConfig, *, platform: str) -> list[DriftFinding]:
     """``_drift.drift_fast_path``, imported only once the stage runs (lockfile, tomllib: §D.1)."""
-    from coding_agent_playbook.hook_runtime.handlers._drift import drift_fast_path
+    from coding_agent_playbook.hook_runtime.handlers.protect._drift import drift_fast_path
 
     return drift_fast_path(root, cfg, platform=platform)
 
@@ -131,7 +131,7 @@ class DriftStage:
             return _skipped("timeout")
         if not findings:
             return StageResult(STAGE_NAME, "green")
-        from coding_agent_playbook.hook_runtime.handlers._drift import drift_line
+        from coding_agent_playbook.hook_runtime.handlers.protect._drift import drift_line
 
         return StageResult(STAGE_NAME, "red", lines=(drift_line(findings),))
 
@@ -143,7 +143,7 @@ class DriftStage:
         checked = run_playbook(ctx, self.repo_root, ["sync", "--check"])
         if checked is None:
             return None  # no time left for the child: not verified
-        from coding_agent_playbook.hook_runtime.handlers._drift import sync_check_findings
+        from coding_agent_playbook.hook_runtime.handlers.protect._drift import sync_check_findings
 
         return [] if checked.returncode == 0 else sync_check_findings(checked.stdout)
 
@@ -194,7 +194,7 @@ def _standalone(ctx: HandlerContext, result: StageResult) -> HandlerResult | Non
         )
     if result.status != "red":
         return None
-    from coding_agent_playbook.hook_runtime.handlers._drift import DRIFT_ADVICE
+    from coding_agent_playbook.hook_runtime.handlers.protect._drift import DRIFT_ADVICE
 
     # Two lines: the deny reason cap (160 characters a line) would cut the advice.
     reason = "\n".join(

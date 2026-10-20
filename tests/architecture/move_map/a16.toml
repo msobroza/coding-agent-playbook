@@ -1,0 +1,154 @@
+# A16 (#130): the protect and feedback packs get their own packages; the
+# shared Ruff tool becomes public for runtime and sync-time callers.
+# GC-1 made the TOML/text control-plane readers protect-only, so A14
+# deferred those two private helpers here instead of moving them to _shared.
+
+[[module]]
+pr = "A16"
+old = "coding_agent_playbook.hook_runtime._ruff"
+new = "coding_agent_playbook.hook_runtime.ruff"
+
+[[module]]
+pr = "A16"
+old = "coding_agent_playbook.hook_runtime.handlers._lint_ast"
+new = "coding_agent_playbook.hook_runtime.handlers.feedback._lint_ast"
+
+[[module]]
+pr = "A16"
+old = "coding_agent_playbook.hook_runtime.handlers._ruff_buckets"
+new = "coding_agent_playbook.hook_runtime.handlers.feedback._ruff_buckets"
+
+[[module]]
+pr = "A16"
+old = "coding_agent_playbook.hook_runtime.handlers._sink_regex"
+new = "coding_agent_playbook.hook_runtime.handlers.feedback._sink_regex"
+
+[[module]]
+pr = "A16"
+old = "coding_agent_playbook.hook_runtime.handlers._sink_writes"
+new = "coding_agent_playbook.hook_runtime.handlers.feedback._sink_writes"
+
+[[module]]
+pr = "A16"
+old = "coding_agent_playbook.hook_runtime.handlers.deser"
+new = "coding_agent_playbook.hook_runtime.handlers.feedback.ml_unsafe_deserialization_guard"
+
+[[module]]
+pr = "A16"
+old = "coding_agent_playbook.hook_runtime.handlers.notebooks"
+new = "coding_agent_playbook.hook_runtime.handlers.feedback.notebook_output_hygiene"
+
+[[module]]
+pr = "A16"
+old = "coding_agent_playbook.hook_runtime.handlers.prompt_scope"
+new = "coding_agent_playbook.hook_runtime.handlers.feedback.prompt_write_scope_guard"
+
+[[module]]
+pr = "A16"
+old = "coding_agent_playbook.hook_runtime.handlers.ruff_feedback"
+new = "coding_agent_playbook.hook_runtime.handlers.feedback.ruff_feedback"
+
+[[module]]
+pr = "A16"
+old = "coding_agent_playbook.hook_runtime.handlers.skill_nudge"
+new = "coding_agent_playbook.hook_runtime.handlers.feedback.skill_nudge"
+
+[[module]]
+pr = "A16"
+old = "coding_agent_playbook.hook_runtime.handlers.toolchain"
+new = "coding_agent_playbook.hook_runtime.handlers.feedback.toolchain_missing_hint"
+
+[[module]]
+pr = "A16"
+old = "coding_agent_playbook.hook_runtime.handlers._briefing_probes"
+new = "coding_agent_playbook.hook_runtime.handlers.protect._briefing_probes"
+
+[[module]]
+pr = "A16"
+old = "coding_agent_playbook.hook_runtime.handlers._control_plane_json"
+new = "coding_agent_playbook.hook_runtime.handlers.protect._control_plane_json"
+
+[[module]]
+pr = "A16"
+old = "coding_agent_playbook.hook_runtime.handlers._control_plane_shell"
+new = "coding_agent_playbook.hook_runtime.handlers.protect._control_plane_shell"
+
+[[module]]
+pr = "A16"
+old = "coding_agent_playbook.hook_runtime.handlers._detector_inputs"
+new = "coding_agent_playbook.hook_runtime.handlers.protect._detector_inputs"
+
+[[module]]
+pr = "A16"
+old = "coding_agent_playbook.hook_runtime.handlers._drift"
+new = "coding_agent_playbook.hook_runtime.handlers.protect._drift"
+
+[[module]]
+pr = "A16"
+old = "coding_agent_playbook.hook_runtime.handlers._source_changed"
+new = "coding_agent_playbook.hook_runtime.handlers.protect._source_changed"
+
+[[module]]
+pr = "A16"
+old = "coding_agent_playbook.hook_runtime.handlers.control_plane_guard"
+new = "coding_agent_playbook.hook_runtime.handlers.protect.control_plane_guard"
+
+[[module]]
+pr = "A16"
+old = "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint"
+new = "coding_agent_playbook.hook_runtime.handlers.protect.eval_task_authoring_lint"
+
+[[module]]
+pr = "A16"
+old = "coding_agent_playbook.hook_runtime.handlers.guard_eval_fixtures"
+new = "coding_agent_playbook.hook_runtime.handlers.protect.guard_eval_fixtures"
+
+[[module]]
+pr = "A16"
+old = "coding_agent_playbook.hook_runtime.handlers.guard_generated_outputs"
+new = "coding_agent_playbook.hook_runtime.handlers.protect.guard_generated_outputs"
+
+[[module]]
+pr = "A16"
+old = "coding_agent_playbook.hook_runtime.handlers.resync_on_detector_input_change"
+new = "coding_agent_playbook.hook_runtime.handlers.protect.resync_on_detector_input_change"
+
+[[module]]
+pr = "A16"
+old = "coding_agent_playbook.hook_runtime.handlers.session_start_playbook_briefing"
+new = "coding_agent_playbook.hook_runtime.handlers.protect.session_start_playbook_briefing"
+
+[[module]]
+pr = "A16"
+old = "coding_agent_playbook.hook_runtime.handlers.stop_drift_and_orphan_gate"
+new = "coding_agent_playbook.hook_runtime.handlers.protect.stop_drift_and_orphan_gate"
+
+[[module]]
+pr = "A16"
+old = "coding_agent_playbook.hook_runtime.handlers.validate_then_sync_on_canonical_edit"
+new = "coding_agent_playbook.hook_runtime.handlers.protect.validate_then_sync_on_canonical_edit"
+
+[[module]]
+pr = "A16"
+old = "coding_agent_playbook.hook_runtime.handlers._control_plane_toml"
+new = "coding_agent_playbook.hook_runtime.handlers.protect._control_plane_toml"
+
+[[module]]
+pr = "A16"
+old = "coding_agent_playbook.hook_runtime.handlers._control_plane_text"
+new = "coding_agent_playbook.hook_runtime.handlers.protect._control_plane_text"
+
+[[path]]
+pr = "A16"
+old = "tests/hook_runtime/test_lint_ast.py"
+new = "tests/hook_runtime/handlers/feedback/test_lint_ast.py"
+
+[[path]]
+pr = "A16"
+old = "tests/hook_runtime/test_sink_writes.py"
+new = "tests/hook_runtime/handlers/feedback/test_sink_writes.py"
+
+[[path]]
+pr = "A16"
+old = "tests/hook_runtime/test_ruff_bucket_labels.py"
+new = "tests/hook_runtime/handlers/feedback/test_ruff_bucket_labels.py"
