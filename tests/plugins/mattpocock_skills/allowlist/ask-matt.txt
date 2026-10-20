@@ -1,0 +1,1 @@
+# ask-matt: no project-toolchain entry (A.T09); the only denylisted word, "bash" at upstream L88, left with change 23, so the gate finds no hit to allowlist.
