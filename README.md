@@ -136,6 +136,70 @@ exit 1 naming the file, and nothing is written: rename yours, then re-run. Guard
 the authoritative checks run off the workstation, as the
 [pre-commit hooks](#pre-commit-hooks) and [`playbook ci`](#playbook-ci).
 
+### Engine packages
+
+`src/coding_agent_playbook/` is a flat set of top-level packages and a few root
+modules, each named after a `CONTEXT.md` term where one exists
+([ADR 0002](docs/adr/0002-flat-concept-packages-with-an-enforced-dependency-direction.md)).
+A package imports only the packages below it, siblings joined by `|` never
+import each other, and an underscore module is imported only from inside its
+own package. A package's interface is its non-underscore modules; every
+package `__init__.py` holds only a docstring (the root's lazy `__version__`
+and `cli/`'s `main` are the two exceptions).
+
+```text
+ highest first; a package may import any package below it
+ cli                the `playbook` entry point: main, the parser, `python -m`
+  └ commands        one module per subcommand; twins/ (the guard twins: ci, gate-scan, scan-*, check-*)
+   └ sync           the sync pipeline: plan, write, check modes, machine-local hook pins
+    └ validation    the validation rule set and its findings (`playbook validate`, sync's gate)
+     └ agent_harness | evals | precommit
+                    the Agent Harness tree round trip | eval tasks: load, compile, run | the pre-commit template
+      └ adapters    one adapter per harness (base.py is the out-of-tree interface); claude_code/
+       └ rendering  the Renderer: sandboxed Jinja, output formats, RenderSession
+        └ hooks     the sync-time half of a hook: resolution/, contract/, registrations/, guard_config/
+         └ skills   skill documents, member rules, references
+          └ metrics_gate  `playbook metrics` and the Stop-stage metrics call
+           └ config       the two consumer config files and their tables
+            └ catalog     the catalog: layer roots, the artifact source, overlay resolution
+             └ detector | lockfile   detector facts and predicates | the lockfile and its drift
+              └ grading            the grading kernel: metrics, checks, rubrics, scheduler
+               └ generated_output  sentinel, atomic writes, symlinks, gitignore, write guard
+                └ artifacts        the artifact types: rule, prompt, skill, hook, path globs
+                 └ security | toml_writer | exit_two
+                                   stdlib-only secret, PII and path judges + the trust store
+                                   | the TOML writer | ExitTwoError, the CLI's exit-2 error
+
+ hook_runtime  a separate stack outside the order: it imports only itself, the stdlib and the
+               stdlib leaves (artifacts.path_classes, artifacts.path_globs, catalog.roots,
+               detector.pep503, detector.pyproject_deps, generated_output.atomic_io,
+               generated_output.sentinel, lockfile, security), so every hook event stays cheap;
+               its deferred branches are named ignore_imports lines of hook-runtime-stack.
+               Root modules cli (`playbook-hook`), __main__ and ruff (the post-edit ruff seam);
+               config/ shell/ git/ state/ diagnostics/ harness/ judges/ dispatch/ stop/ and
+               handlers/ (one subpackage per hook pack: safety, protect, verify, feedback,
+               audit, plus _shared). Only commands (the twins), sync and hooks import it,
+               and only its public modules.
+ templates/precommit/  data: the air-gapped pre-commit starter
+```
+
+The external contract never moves with the packages: committed launchers run
+`python -I -m coding_agent_playbook.hook_runtime`, the console scripts point at
+`coding_agent_playbook.cli:main` and `coding_agent_playbook.hook_runtime.cli:main`,
+out-of-tree adapters import `coding_agent_playbook.adapters.base`, child processes
+run `python -m coding_agent_playbook.cli`, and the entry-point group names
+(`coding_agent_playbook.adapters`, `.overlays`, `.runners`, `.metrics`, `.checks`,
+`.hook_handlers` and the rest) stay as they are.
+
+Seven import-linter contracts in `pyproject.toml` (`[tool.importlinter]`)
+enforce this: `engine-layers` (the order above), `stdlib-leaves`,
+`hook-runtime-stack`, `grading-kernel` (the kernel imports only the stdlib
+leaves), `command-independence` (no command imports another), `private-modules`
+and `twins-use-judges` (a guard twin reaches its guard's judge through
+`hook_runtime.judges`, never a handler). They run from pytest
+(`tests/architecture/test_import_contracts.py`), so the CI gate keeps its four
+commands. Section 6 of `specs/prT-package-layout.md` designs each contract.
+
 ## Editing content
 
 Everything the playbook ships as content lives in `catalog/`, outside the
@@ -167,8 +231,8 @@ flowchart LR
     end
     subgraph src["src/coding_agent_playbook/ (engine logic)"]
         resolver["catalog/roots.py: the only code that locates the catalog"]
-        engine["catalog source, renderer, adapters, CLI"]
-        template["templates/: the starter pre-commit config, the hook shims"]
+        engine["catalog/source.py, the renderer (rendering/), adapters/, sync/, cli/ (see Engine packages)"]
+        template["templates/precommit/ and hooks/registrations/templates/: the pre-commit starter, the hook shims"]
     end
     wheel["installed wheel: coding_agent_playbook/_catalog/"]
     consumer["consumer repo: AGENTS.md, .claude/, .opencode/, .agents/skills/, .continue/ when enabled"]
