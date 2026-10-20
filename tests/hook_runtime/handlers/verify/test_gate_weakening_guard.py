@@ -15,7 +15,7 @@ import pytest
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.policy import UNATTENDED_ENV_VAR
 from coding_agent_playbook.hook_runtime.dispatch.registry import load_builtin
-from coding_agent_playbook.hook_runtime.git.parse import AddedLine, DiffLines
+from coding_agent_playbook.hook_runtime.git.parse import AddedLine, DiffLines, RemovedLine
 from coding_agent_playbook.hook_runtime.handlers.verify.gate_weakening_guard import (
     FIX_HINT,
     scan_policy,
@@ -247,3 +247,38 @@ def test_hook_md_config_equals_gate_scan_defaults(tmp_path: Path) -> None:
     assert set(stop_handler.config) <= set(declaration.config_schema)
     assert {e.value for e in load_builtin(edit_handler.builtin).events} == {"pre_tool_use"}
     assert (fm.tier, tuple(fm.events), fm.on_error) == ("default", ("stop", "pre_tool_use"), "ask")
+
+
+# --- GitLab CI files (prF §10.3) ----------------------------------------------------------------
+
+GITLAB_CI: Final = (
+    "lint:\n  script:\n    - ruff check .\n\nplaybook-ci:\n  script:\n    - playbook ci\n"
+)
+
+
+def test_a_removed_gitlab_ci_job_blocks(
+    repo: PackRepo, deps: Callable[..., RuntimeDeps], tmp_path: Path
+) -> None:
+    after = GITLAB_CI.replace("lint:\n  script:\n    - ruff check .\n\n", "")
+    repo.write(".gitlab-ci.yml", after)
+    removed = tuple(
+        RemovedLine(".gitlab-ci.yml", n, text)
+        for n, text in enumerate(GITLAB_CI.splitlines()[:4], 1)
+    )
+    diff = DiffLines(removed=removed, paths=(".gitlab-ci.yml",))
+    git = changed_git(
+        worktree_diffs={"HEAD": diff}, head_blobs={".gitlab-ci.yml": GITLAB_CI.encode()}
+    )
+
+    report = _stop(repo, deps, git, tmp_path)
+
+    assert report.trace.combined.decision is Decision.DENY
+    assert reason_lines(report)[1] == (
+        '[gate-integrity] ".gitlab-ci.yml" gitlab-ci-job-removed: "job \'lint\' removed"'
+    )
+
+
+def test_scan_policy_reads_ci_config_globs(tmp_path: Path) -> None:
+    policy = scan_policy({"ci_config_globs": ["ci/*.gitlab-ci.yml"]}, str(tmp_path))
+
+    assert policy.ci_config_globs[-1] == "ci/*.gitlab-ci.yml"

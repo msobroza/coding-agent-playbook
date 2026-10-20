@@ -44,12 +44,14 @@ from coding_agent_playbook.hook_runtime.judges._gate_weakening_files import (
     removal_weakenings,
     toml_loosenings,
 )
+from coding_agent_playbook.hook_runtime.judges._gitlab_ci_gates import gitlab_ci_weakenings
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping, Sequence
 
 __all__ = [
     "DEFAULT_ADDED_LINE_PATTERNS",
+    "DEFAULT_CI_CONFIG_GLOBS",
     "DEFAULT_JUSTIFICATION_REGEX",
     "DEFAULT_PROTECTED_CONFIG_KEYS",
     "AddedLine",
@@ -144,6 +146,13 @@ DEFAULT_PROTECTED_CONFIG_KEYS: Final[tuple[str, ...]] = (
     "tool.commitizen.bump_pattern",
 )
 
+#: The GitLab CI files whose jobs, script items and includes are watched (prF §10.3).
+DEFAULT_CI_CONFIG_GLOBS: Final[tuple[str, ...]] = (
+    ".gitlab-ci.yml",
+    ".gitlab/ci/**/*.yml",
+    ".gitlab/ci/**/*.yaml",
+)
+
 #: A trailing comment of 3+ characters that is not itself another pragma.
 DEFAULT_JUSTIFICATION_REGEX: Final = (
     r"#\s*(?!(?i:type:|noqa|nosec|pragma\b|fmt:|playbook:))[A-Za-z][^#]{2,}"
@@ -163,6 +172,7 @@ class ScanPolicy:
     justification: str = DEFAULT_JUSTIFICATION_REGEX
     source_roots: tuple[str, ...] = ("src",)
     skip_globs: tuple[str, ...] = (*FIXTURE_GLOBS, *POLICY_FILE_GLOBS)
+    ci_config_globs: tuple[str, ...] = DEFAULT_CI_CONFIG_GLOBS
 
 
 @dataclass(frozen=True, slots=True)
@@ -256,22 +266,27 @@ def scan(
     return ScanReport(tuple(sorted(findings, key=lambda f: (f.path, f.line))))
 
 
-def is_config_path(path: str) -> bool:
-    """Whether :func:`scan` compares ``path``'s keys, so the caller must pass its :class:`ConfigPair`.
+def is_config_path(path: str, policy: ScanPolicy | None = None) -> bool:
+    """Whether :func:`scan` compares ``path`` before and after, so the caller must pass its :class:`ConfigPair`.
+
+    That is a TOML config file, or a CI file of ``policy`` (default: the engine policy).
 
     Example::
 
-        >>> is_config_path("pkg/pyproject.toml"), is_config_path("setup.cfg")
-        (True, False)
+        >>> is_config_path("pkg/pyproject.toml"), is_config_path(".gitlab-ci.yml"), is_config_path("setup.cfg")
+        (True, True, False)
     """
-    return path.rpartition("/")[2] in TOML_PREFIXES
+    if path.rpartition("/")[2] in TOML_PREFIXES:
+        return True
+    globs = DEFAULT_CI_CONFIG_GLOBS if policy is None else policy.ci_config_globs
+    return _globs(globs).matches(path)
 
 
 def policy_from_table(table: Mapping[str, object], base: ScanPolicy | None = None) -> ScanPolicy:
     """``base`` (default: the engine policy) extended by a ``[hooks.gate-weakening-guard]`` table.
 
-    ``added_line_patterns`` (rows ``{id, regex, paths?}``) and
-    ``protected_config_keys`` only add; ``justification_regex`` replaces. Other
+    ``added_line_patterns`` (rows ``{id, regex, paths?}``), ``protected_config_keys``
+    and ``ci_config_globs`` only add; ``justification_regex`` replaces. Other
     keys are left to ``playbook validate``. Raises ``ValueError`` naming the bad value.
 
     Example::
@@ -283,6 +298,7 @@ def policy_from_table(table: Mapping[str, object], base: ScanPolicy | None = Non
     start = base if base is not None else ScanPolicy()
     patterns = _pattern_rows(table.get("added_line_patterns", []))
     keys = _key_rows(table.get("protected_config_keys", []))
+    ci_globs = _glob_rows(table.get("ci_config_globs", []))
     justification = table.get("justification_regex", start.justification)
     if not isinstance(justification, str) or not justification:
         raise ValueError(
@@ -294,6 +310,7 @@ def policy_from_table(table: Mapping[str, object], base: ScanPolicy | None = Non
         patterns=_extended(start.patterns, patterns),
         protected_keys=_extended(start.protected_keys, keys),
         justification=justification,
+        ci_config_globs=_extended(start.ci_config_globs, ci_globs),
     )
 
 
@@ -310,6 +327,7 @@ class _Rules:
     tests: GlobSet
     source_roots: tuple[str, ...]
     protected_keys: tuple[str, ...]
+    ci_configs: GlobSet
 
     @classmethod
     def of(cls, policy: ScanPolicy) -> _Rules:
@@ -324,6 +342,7 @@ class _Rules:
             tests=_globs(TEST_PATH_GLOBS),
             source_roots=policy.source_roots,
             protected_keys=policy.protected_keys,
+            ci_configs=_globs(policy.ci_config_globs),
         )
 
     def applying_to(self, path: str) -> Iterator[tuple[LinePattern, re.Pattern[str]]]:
@@ -374,8 +393,10 @@ def _file_findings(
     added_texts = _texts(added)
     weakenings = removal_weakenings(added_texts, _texts(removed))
     for pair in pairs:
-        if is_config_path(pair.path):
+        if pair.path.rpartition("/")[2] in TOML_PREFIXES:
             weakenings += toml_loosenings(pair.path, pair.before, pair.after, rules.protected_keys)
+        elif rules.ci_configs.matches(pair.path):
+            weakenings += gitlab_ci_weakenings(pair.path, pair.before, pair.after)
     return [_file_finding(w, added_texts.get(w.path, ()), rules) for w in weakenings]
 
 
@@ -428,6 +449,15 @@ def _key_rows(value: object) -> tuple[str, ...]:
         raise ValueError(
             f"{CONSUMER_TABLE} protected_config_keys = {value!r}: expected a list of dotted "
             'TOML keys, e.g. ["tool.mypy.warn_unused_ignores"]'
+        )
+    return tuple(value)
+
+
+def _glob_rows(value: object) -> tuple[str, ...]:
+    if not (isinstance(value, list) and all(isinstance(g, str) and g for g in value)):
+        raise ValueError(
+            f"{CONSUMER_TABLE} ci_config_globs = {value!r}: expected a list of path globs, "
+            'e.g. ["ci/*.gitlab-ci.yml"]'
         )
     return tuple(value)
 
