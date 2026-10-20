@@ -38,7 +38,7 @@ Non-goals: rendering forge-specific text at sync time (rejected, ADR 0003); a pl
 | Q22 | `pr comment --reply-to <id>` replies inside a review thread. |
 | Q23 → Q47 | An **always-present** core skill `forge` (skills cannot carry `applies_if`; no detector fact). |
 | Q24 | Tests use fake `gh`/`glab` executables on `PATH`; a manual check before release. |
-| Q26 → Q45 | Forge tickets F1 to F7 under a new forge tracker, squashed onto `integration/skills-and-layout` with the layout protocol. |
+| Q26 → Q45 | Forge tickets F1 to F7 under a new forge tracker, squashed onto `integration/forge` (cut from `main` after `integration/skills-and-layout` merged as #162) with the layout protocol. |
 | Q28 | The vendored plugin gains a "Forge issues" tracker option that names only `playbook forge`. |
 | Q29 | No `secret set` / `variable set`; `auth status` only. Wizard keeps guiding the human. |
 | Q30 | An operation a forge or plan lacks exits 3; the skill applies its text fallback. |
@@ -332,7 +332,7 @@ README: `forge` in `## Status`, a `playbook forge` section, the GitLab CI recipe
 
 ## 12. Tickets and order (Q46, Q59)
 
-A new tracker issue "Forge adapter: implementation tracker" lists F1 to F7. Tickets are squashed onto `integration/skills-and-layout` with the layout protocol (branch `forge/<ID>-<slug>`, Conventional Commit subject, body ending `Closes #N`). Work is written against integration paths; after every rebase run `python -m tests.architecture.module_moves apply` and `check`.
+A new tracker issue "Forge adapter: implementation tracker" lists F1 to F7. Tickets are squashed onto `integration/forge` with the layout protocol (branch `forge/<ID>-<slug>`, Conventional Commit subject, body ending `Closes #N`). Work is written against integration paths; after every rebase run `python -m tests.architecture.module_moves apply` and `check`.
 
 | Ticket | Content | Waits for | Machine |
 |---|---|---|---|
@@ -346,7 +346,7 @@ A new tracker issue "Forge adapter: implementation tracker" lists F1 to F7. Tick
 | F7a | hardening without handler edits: `scanner-config-changed` gate rule, CI-detection tests (§14) | F5 (both edit `judges/_gate_weakening_files.py`) | A |
 | F7b | hardening in handlers: token-printing block, `required_index`, `taint:forge`, `mail` egress (§14) | F1, F3 | B |
 
-Status on 2026-10-21: every refactor ticket listed above is done on `integration/skills-and-layout`, which also contains `main` (#157). F1, F2 and F5 can start now in parallel; F3 and F7b follow F1; F7a follows F5; F4 follows F3; F6 follows F4 and #158. Re-check before starting: a ticket is done when integration has its `Closes #N` line (issues stay open until the final integration PR). F4 may not merge before F3: its data-sending operations would otherwise bypass exfil, git_policy, the push scan, network-egress and taint.
+Status on 2026-10-21: every refactor ticket listed above is done on `main` (`integration/skills-and-layout` merged as #162, with #157); `integration/forge` is cut from that `main`. F1, F2 and F5 can start now in parallel; F3 and F7b follow F1; F7a follows F5; F4 follows F3; F6 follows F4 and #158. Re-check before starting: a ticket is done when integration has its `Closes #N` line (issues stay open until the final integration PR). F4 may not merge before F3: its data-sending operations would otherwise bypass exfil, git_policy, the push scan, network-egress and taint.
 
 Gate per ticket, on Python 3.12 and 3.13: `ruff check --no-cache .`, `ruff format --check --no-cache .`, `mypy --cache-dir=/dev/null`, `pytest -q -p no:cacheprovider`. Modules stay near 500 lines (`commands/twins/ci.py` is at 488; `config/files.py` takes nothing).
 
