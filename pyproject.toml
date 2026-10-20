@@ -413,14 +413,14 @@ ignore_imports = [
     "coding_agent_playbook.hook_runtime.handlers.verify.coverage_diff_gate -> coding_agent_playbook.grading.**",
     "coding_agent_playbook.hook_runtime.handlers.verify.coverage_diff_gate -> coding_agent_playbook.metrics_gate.**",
     "coding_agent_playbook.hook_runtime.handlers.verify.docstring_nonregression -> coding_agent_playbook.grading.**",
-    "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.evals.**",
-    "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.catalog.source",
-    "coding_agent_playbook.hook_runtime.handlers.eval_task_authoring_lint -> coding_agent_playbook.artifacts.**",
+    "coding_agent_playbook.hook_runtime.handlers.protect.eval_task_authoring_lint -> coding_agent_playbook.evals.**",
+    "coding_agent_playbook.hook_runtime.handlers.protect.eval_task_authoring_lint -> coding_agent_playbook.catalog.source",
+    "coding_agent_playbook.hook_runtime.handlers.protect.eval_task_authoring_lint -> coding_agent_playbook.artifacts.**",
     "coding_agent_playbook.hook_runtime.handlers.verify.clean_code_metrics_nonregression -> coding_agent_playbook.grading.**",
     "coding_agent_playbook.hook_runtime.handlers.verify.clean_code_metrics_nonregression -> coding_agent_playbook.metrics_gate.**",
     # N4: detect() (detector.facts) and evaluate_predicate (detector.predicate) both load on
     # the resync branch only, so one "-> <package>.**" line covers the detector package
-    "coding_agent_playbook.hook_runtime.handlers.resync_on_detector_input_change -> coding_agent_playbook.detector.**",
+    "coding_agent_playbook.hook_runtime.handlers.protect.resync_on_detector_input_change -> coding_agent_playbook.detector.**",
     "coding_agent_playbook.hook_runtime.stop.suite -> coding_agent_playbook.grading.**",
 ]
 broken_contract_guidance = """
@@ -519,13 +519,10 @@ name = "An underscore module is imported only from inside its own package"
 type = "private_modules"
 containers = ["coding_agent_playbook"]
 ignore_imports = [
-    # A16: hook_runtime/_ruff.py becomes the public hook_runtime/ruff.py (after #62)
-    "coding_agent_playbook.hooks.guard_config._tables_quality -> coding_agent_playbook.hook_runtime._ruff",
-    "coding_agent_playbook.hooks.guard_config._tables_ruff -> coding_agent_playbook.hook_runtime._ruff",
     # N14 (R1): the sink judge's lazy regex fallback, visible since the judge left
-    # handlers/; A16 moves _sink_regex to handlers/feedback/ (apply renames this
-    # line); no scheduled PR removes it: the fallback would have to join judges/
-    "coding_agent_playbook.hook_runtime.judges.sink_scan -> coding_agent_playbook.hook_runtime.handlers._sink_regex",
+    # handlers/ (now handlers/feedback/ after A16). No scheduled PR removes it:
+    # the fallback would have to join judges/.
+    "coding_agent_playbook.hook_runtime.judges.sink_scan -> coding_agent_playbook.hook_runtime.handlers.feedback._sink_regex",
 ]
 broken_contract_guidance = """
 Import a public module of the owning package, or move the importer inside that package.
@@ -539,7 +536,7 @@ source_modules = ["coding_agent_playbook.commands.twins"]
 forbidden_modules = ["coding_agent_playbook.hook_runtime.handlers"]
 # Direct imports only: a twin still reaches handlers through modules outside
 # commands.twins. With no scheduled end: judges.sink_scan lazily imports
-# handlers._sink_regex (its regex fallback). The layer and private-modules contracts
+# handlers.feedback._sink_regex (its regex fallback). The layer and private-modules contracts
 # cover those chains (specs/prT-package-layout.md B.9.2).
 allow_indirect_imports = "true"
 broken_contract_guidance = """

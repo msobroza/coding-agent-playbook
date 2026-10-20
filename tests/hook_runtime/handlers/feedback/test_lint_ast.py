@@ -10,7 +10,7 @@ from __future__ import annotations
 import ast
 from typing import Final
 
-from coding_agent_playbook.hook_runtime.handlers._lint_ast import (
+from coding_agent_playbook.hook_runtime.handlers.feedback._lint_ast import (
     ASYNCIO_MARK,
     LOOP_ASSERT,
     UNITTEST_CLASS,

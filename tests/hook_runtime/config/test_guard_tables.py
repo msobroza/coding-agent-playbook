@@ -421,8 +421,8 @@ def test_tables_stay_a_read_only_mapping() -> None:
 #: read, left for the writer side (specs/prT-package-layout.md §8 B.13).
 _RAW_READS_LEFT: Final = frozenset(
     {
-        engine_module("coding_agent_playbook.hook_runtime.handlers.ruff_feedback"),
-        engine_module("coding_agent_playbook.hook_runtime.handlers._ruff_buckets"),
+        engine_module("coding_agent_playbook.hook_runtime.handlers.feedback.ruff_feedback"),
+        engine_module("coding_agent_playbook.hook_runtime.handlers.feedback._ruff_buckets"),
     }
 )
 

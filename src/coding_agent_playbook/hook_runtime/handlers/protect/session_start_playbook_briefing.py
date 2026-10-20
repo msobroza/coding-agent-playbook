@@ -28,13 +28,13 @@ from coding_agent_playbook.hook_runtime.diagnostics.heartbeat import degraded_li
 from coding_agent_playbook.hook_runtime.dispatch.caps import LineCap, OutputCaps, clamp_lines
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.registry import register_hook_handler
-from coding_agent_playbook.hook_runtime.handlers._briefing_probes import (
+from coding_agent_playbook.hook_runtime.handlers.protect._briefing_probes import (
     COMPACT_PROBES,
     FULL_PROBES,
     BriefingInputs,
     run_probes,
 )
-from coding_agent_playbook.hook_runtime.handlers._drift import (
+from coding_agent_playbook.hook_runtime.handlers.protect._drift import (
     hook_artifact_drift,
     lockfile_findings,
     read_lockfile,
@@ -43,7 +43,7 @@ from coding_agent_playbook.hook_runtime.handlers._drift import (
 if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, RepoInfo
     from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
-    from coding_agent_playbook.hook_runtime.handlers._drift import DriftFinding
+    from coding_agent_playbook.hook_runtime.handlers.protect._drift import DriftFinding
     from coding_agent_playbook.lockfile.model import Lockfile
 
 __all__ = ["BRIEFING_CAP", "session_start_playbook_briefing"]

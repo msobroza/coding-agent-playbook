@@ -35,7 +35,7 @@ from coding_agent_playbook.artifacts.path_classes import task_path
 from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, quote_data
 from coding_agent_playbook.hook_runtime.dispatch.proc import ProcTimeout
 from coding_agent_playbook.hook_runtime.dispatch.registry import register_hook_handler
-from coding_agent_playbook.hook_runtime.handlers._source_changed import (
+from coding_agent_playbook.hook_runtime.handlers.protect._source_changed import (
     DEBOUNCE_S,
     MAX_FAIL_LINES,
     context_result,

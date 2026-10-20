@@ -286,7 +286,7 @@ def test_protected_edit_denied_without_toml_render_or_subprocess(
 
 
 _CPG_PREFIX: Final = (
-    f"{engine_module('coding_agent_playbook.hook_runtime.handlers')}._control_plane_"
+    f"{engine_module('coding_agent_playbook.hook_runtime.handlers.protect')}._control_plane_"
 )
 _SHARED_CPG_PREFIX: Final = (
     f"{engine_module('coding_agent_playbook.hook_runtime.handlers._shared')}.control_plane_"
@@ -337,8 +337,8 @@ def test_control_plane_guard_loads_nothing_new_off_its_files(
     assert f"{_SHARED_CPG_PREFIX}paths" in imported  # the guard ran (its routing table loaded)
     assert _forbidden(imported) == []
     assert sorted(m for m in imported if m.startswith(_CPG_PREFIXES)) == [
-        f"{_CPG_PREFIX}shell",
         f"{_SHARED_CPG_PREFIX}paths",
+        f"{_CPG_PREFIX}shell",
     ]
     assert "subprocess" not in imported
 
@@ -446,7 +446,7 @@ def test_source_changed_hooks_load_nothing_new_on_a_python_edit(
 
     imported = _imports(real_proc, source_changed, EventName.POST_TOOL_USE, payload)
 
-    assert "coding_agent_playbook.hook_runtime.handlers._detector_inputs" in imported
+    assert "coding_agent_playbook.hook_runtime.handlers.protect._detector_inputs" in imported
     assert _forbidden(imported) == []
     assert "subprocess" not in imported
 
@@ -525,8 +525,12 @@ def test_evals_and_yaml_load_only_on_an_eval_task_edit(
 # --- K5 step 4: the briefing and the drift stage (§D.1 rows: lockfile + tomllib) ------
 
 _LOCKFILE_MODULE: Final = engine_module("coding_agent_playbook.lockfile.model")
-_BRIEFING: Final = engine_module("coding_agent_playbook.hook_runtime.handlers._briefing_probes")
-_DRIFT_FAST_PATH: Final = engine_module("coding_agent_playbook.hook_runtime.handlers._drift")
+_BRIEFING: Final = engine_module(
+    "coding_agent_playbook.hook_runtime.handlers.protect._briefing_probes"
+)
+_DRIFT_FAST_PATH: Final = engine_module(
+    "coding_agent_playbook.hook_runtime.handlers.protect._drift"
+)
 
 
 @pytest.fixture

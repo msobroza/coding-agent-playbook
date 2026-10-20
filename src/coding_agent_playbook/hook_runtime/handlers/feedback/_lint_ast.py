@@ -17,7 +17,7 @@ from __future__ import annotations
 import ast
 from typing import Final
 
-from coding_agent_playbook.hook_runtime._ruff import RuffDiagnostic
+from coding_agent_playbook.hook_runtime.ruff import RuffDiagnostic
 
 __all__ = [
     "ASYNCIO_MARK",

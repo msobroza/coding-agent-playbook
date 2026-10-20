@@ -13,19 +13,19 @@ from typing import Any
 import pytest
 
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
-from coding_agent_playbook.hook_runtime.handlers._control_plane_json import (
+from coding_agent_playbook.hook_runtime.handlers.protect._control_plane_json import (
     load_json_object,
     mcp_verdict,
     opencode_verdict,
     settings_verdict,
     strip_jsonc,
 )
-from coding_agent_playbook.hook_runtime.handlers._control_plane_shell import command_verdict
-from coding_agent_playbook.hook_runtime.handlers._control_plane_text import (
+from coding_agent_playbook.hook_runtime.handlers.protect._control_plane_shell import command_verdict
+from coding_agent_playbook.hook_runtime.handlers.protect._control_plane_text import (
     hooks_block,
     precommit_verdict,
 )
-from coding_agent_playbook.hook_runtime.handlers._control_plane_toml import (
+from coding_agent_playbook.hook_runtime.handlers.protect._control_plane_toml import (
     local_policy_overrides,
     metrics_loosened,
     toml_verdict,

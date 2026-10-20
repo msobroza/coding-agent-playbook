@@ -186,6 +186,6 @@ def docstring_nonregression_post_edit(
     """
     if ctx.config.get("lint_feedback") is False:
         return None  # switched off: its codes are not in D1 either
-    from coding_agent_playbook.hook_runtime.handlers.ruff_feedback import bucket_feedback
+    from coding_agent_playbook.hook_runtime.handlers.feedback.ruff_feedback import bucket_feedback
 
     return bucket_feedback(ev, ctx, rule_id=_RULE)

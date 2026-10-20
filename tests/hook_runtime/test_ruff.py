@@ -12,7 +12,10 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.hook_runtime._ruff import (
+from coding_agent_playbook.hook_runtime.config.pin import MachinePins, ToolPin, tool_signature
+from coding_agent_playbook.hook_runtime.dispatch.event_memo import EventMemo
+from coding_agent_playbook.hook_runtime.dispatch.proc import ProcResult, SubprocessProc
+from coding_agent_playbook.hook_runtime.ruff import (
     NEVER_FIX,
     RUFF_TIMEOUT_S,
     RuffDiagnostic,
@@ -31,9 +34,6 @@ from coding_agent_playbook.hook_runtime._ruff import (
     ruff_pin,
     selector_matches,
 )
-from coding_agent_playbook.hook_runtime.config.pin import MachinePins, ToolPin, tool_signature
-from coding_agent_playbook.hook_runtime.dispatch.event_memo import EventMemo
-from coding_agent_playbook.hook_runtime.dispatch.proc import ProcResult, SubprocessProc
 from tests.hook_runtime.dispatch_kit import POST, dispatch
 from tests.hook_runtime.fakes import FakeRuff, ruff_row
 from tests.hook_runtime.guard_repo import hook_record

@@ -366,12 +366,15 @@ coding-agent-playbook/
 │   │   ├── dispatch/                       # the dispatch pipeline, handler registry and selection, event and decision model
 │   │   ├── handlers/                       # builtin hook handlers (@register_hook_handler)
 │   │   │   ├── audit/                      # the audit pack: one module per hook id, plus its private helpers
+│   │   │   ├── feedback/                   # edit feedback and skill nudges, plus their private helpers
+│   │   │   ├── protect/                    # the playbook-protection handlers and their private helpers
 │   │   │   ├── safety/                     # the safety pack: one module per hook id, plus its private helpers
 │   │   │   ├── verify/                     # the verify pack: one module per hook id, plus its private helpers
 │   │   │   └── _shared/                    # helpers more than one pack imports (targets, edit_preview, ...)
 │   │   ├── harness/                        # per-harness payload parsers and wire renderers
 │   │   ├── judges/                         # the checks a guard hook shares with its guard twin
 │   │   │   └── gate_weakening.py           # added-line suppression/loosening scan (`playbook gate-scan`)
+│   │   ├── ruff.py                         # the shared Ruff tool for handlers, Stop lint and sync-time readers
 │   │   ├── state/                          # runtime state root, session, ledger, active prompt, audit log
 │   │   └── stop/                           # the Stop stage contract and coordinator
 │   ├── security/                           # secret paths/patterns, PII, trust store (stdlib)

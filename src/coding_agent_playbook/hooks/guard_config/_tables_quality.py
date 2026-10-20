@@ -20,7 +20,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.config.files import ConfigFiles
-from coding_agent_playbook.hook_runtime._ruff import selector_matches
+from coding_agent_playbook.hook_runtime.ruff import selector_matches
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

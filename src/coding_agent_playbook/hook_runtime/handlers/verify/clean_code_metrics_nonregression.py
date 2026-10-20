@@ -205,7 +205,7 @@ def clean_code_metrics_post_edit(ev: CanonicalEvent, ctx: HandlerContext) -> Han
     """
     if not HookConfig(ctx.config, POST_EDIT_CONFIG_SCHEMA).flag("lint_feedback", True):
         return None  # switched off: it adds no code to D1 and spawns nothing
-    from coding_agent_playbook.hook_runtime.handlers.ruff_feedback import bucket_feedback
+    from coding_agent_playbook.hook_runtime.handlers.feedback.ruff_feedback import bucket_feedback
 
     return bucket_feedback(ev, ctx, rule_id=FAMILY)
 
