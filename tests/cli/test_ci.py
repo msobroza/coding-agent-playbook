@@ -32,7 +32,11 @@ _COMMITTED = _DEFAULT_CONFIG + "\n[output]\ncommit = true\n"
 
 
 def _git(sha: str = "abc123") -> FakeGit:
-    return FakeGit(default_branch_name="origin/main", merge_bases={("origin/main", "HEAD"): sha})
+    return FakeGit(
+        default_branch_name="origin/main",
+        merge_bases={("origin/main", "HEAD"): sha},
+        commits={"HEAD": "head456"},
+    )
 
 
 def _clock(*ticks: float) -> Callable[[], float]:

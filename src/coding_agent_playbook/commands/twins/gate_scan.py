@@ -98,7 +98,7 @@ def load_policy(git: GitPort, base: str, repo_root: Path) -> ScanPolicy:
 
 
 def scan_range(git: GitPort, span: ScanRange, policy: ScanPolicy) -> ScanReport:
-    """Scan the diff of ``span`` and its changed TOML config files.
+    """Scan the diff of ``span``, its changed TOML config files and ``policy``'s CI files.
 
     Example::
 
@@ -109,7 +109,7 @@ def scan_range(git: GitPort, span: ScanRange, policy: ScanPolicy) -> ScanReport:
     pairs = [
         ConfigPair(path, _decoded(git.show(span.base, path)), _decoded(git.show(span.head, path)))
         for path in diff.paths
-        if is_config_path(path)
+        if is_config_path(path, policy)
     ]
     return scan(diff.added, diff.removed, pairs, policy)
 
