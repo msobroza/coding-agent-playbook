@@ -873,7 +873,7 @@ reason, at most `max_blocks` times per stop chain.
 | `stop-ci-parity-gate` | `default` | Claude Code; checked on OpenCode | The Stop coordinator: lint and verify the "done" claim; with an approved stage list, also typecheck and run the tests. |
 | `clean-code-metrics-nonregression` | `default` | Claude Code, OpenCode | Stage `quality-metrics`: touched Python must not worsen against `HEAD` under your `[metrics]`; after each edit, report ruff's complexity codes (C901, PLR0911, PLR0912, PLR0913, PLR0915) on the changed lines. |
 | `docstring-nonregression` | `default` | Claude Code, OpenCode | Stage `docstrings`: removed docstrings and new undocumented public symbols. |
-| `gate-weakening-guard` | `default` | Claude Code, OpenCode | Stage `gate-integrity`: new suppressions, skipped or deleted tests, loosened checker config. |
+| `gate-weakening-guard` | `default` | Claude Code, OpenCode | Stage `gate-integrity`: new suppressions, skipped or deleted tests, loosened checker config, removed CI steps or jobs (GitHub workflows, GitLab CI). |
 | `block-precommit-bypass` | `default` | Claude Code, OpenCode | Deny skipping the playbook pre-commit hooks (`--no-verify`, `SKIP=`, `core.hooksPath`). |
 | `tests-with-source-nudge` | `default` | Claude Code; checked on OpenCode | Stage `tests-nudge`: name each new public function, class or method no test mentions. |
 | `coverage-diff-gate` | `opt-in` | Claude Code; checked on OpenCode | Stage `coverage`: changed lines at least 80% covered, total coverage not below the last green run. |
@@ -1176,18 +1176,24 @@ playbook ci --format json                     # one {step, argv, exit, duration_
 | `validate` | `playbook validate` | always |
 | `metrics` | `playbook metrics --baseline git:<merge base> --changed --no-run-tests` | always (static, never the suite) |
 | `coverage` | `playbook metrics --run-tests --select testing --baseline git:<merge base>` | `[metrics] run_tests = true`, or `--steps coverage` |
-| `gate-scan` | `playbook gate-scan`: new suppressions, skipped tests, loosened checker config | always |
+| `gate-scan` | `playbook gate-scan`: new suppressions, skipped tests, loosened checker config, removed CI steps or jobs | always |
 | `scan-secrets` | `playbook scan-secrets` over the branch | always |
-| `commit-convention` | `cz check` on the commits after `cutover_date`, plus `$PLAYBOOK_PR_TITLE` | `[tool.commitizen]` or `[hooks.commit_convention]` is set |
+| `commit-convention` | `cz check` on the commits after `cutover_date`, plus `$PLAYBOOK_PR_TITLE` (a leading `[Draft]`, `Draft:` or `(Draft)` stripped) | `[tool.commitizen]` or `[hooks.commit_convention]` is set |
 | `commit-trailers` | `playbook check-commit-trailers` over the branch | a commit-trailer row is configured |
 | `check-deps` | `playbook check-deps`: newly declared dependencies against your policy | a dependency policy is configured |
 | `scan-sinks` | `playbook scan-sinks` over the branch | only when `--steps` names it |
 
 It exits `0` when every step that ran passed, `1` when one failed or timed out,
-and `2` on a usage error or an unresolvable base. The job needs the full history
-(`fetch-depth: 0`), and the pull-request title is attacker-controlled text: pass
-it **only through `env:`**, never inside a `run:` line, so it cannot inject shell
-commands:
+and `2` on a usage error, an unresolvable base, a blank `--base`, or an empty
+range (the base is `HEAD` or already contains it, so nothing would be checked).
+`playbook ci` never fetches and never reads a forge's variables: the CI job
+fetches the history and passes the base with `--base`.
+
+### GitHub Actions
+
+The job needs the full history (`fetch-depth: 0`), and the pull-request title is
+attacker-controlled text: pass it **only through `env:`**, never inside a `run:`
+line, so it cannot inject shell commands:
 
 ```yaml
 # .github/workflows/ci.yml
@@ -1209,6 +1215,51 @@ jobs:
         env:
           PLAYBOOK_PR_TITLE: ${{ github.event.pull_request.title }}
 ```
+
+### GitLab CI
+
+A merge request pipeline clones a shallow history (`GIT_DEPTH` 20 by default)
+and fetches only the pipeline's own ref, never the target branch, so the job
+sets `GIT_DEPTH: 0`, fetches the target branch, and passes the base explicitly.
+The title reaches `playbook ci` only through `variables:`, never inside a
+`script:` line:
+
+```yaml
+playbook-ci:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  variables:
+    GIT_DEPTH: 0
+    PLAYBOOK_PR_TITLE: $CI_MERGE_REQUEST_TITLE
+  script:
+    - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+    - playbook ci --base "${CI_MERGE_REQUEST_TARGET_BRANCH_SHA:-$CI_MERGE_REQUEST_DIFF_BASE_SHA}"
+```
+
+`CI_MERGE_REQUEST_TARGET_BRANCH_SHA` is set only in merged results pipelines;
+elsewhere it is empty and the base is `CI_MERGE_REQUEST_DIFF_BASE_SHA`, the merge
+base of the merge request's diff. The shell syntax targets Linux runners, and the
+job installs the project with its dev tools as on GitHub. A draft marker
+(`Draft:`, `[Draft]`, `(Draft)`) at the start of the title is not checked: the
+squash commit does not carry it.
+
+How far the job is a gate depends on where its definition lives. On GitLab, a
+merge request's pipeline runs the `.gitlab-ci.yml` of that merge request:
+
+1. **Free.** Add the job and turn on *Pipelines must succeed* (Settings → Merge
+   requests). On Free a merge request can otherwise edit its own pipeline: it can
+   delete the job or make it optional in the same change. gate-scan flags that
+   (a removed job, script item or `include:` entry, and `playbook-ci` gaining
+   `allow_failure: true`, `when: manual` or `when: never`), but only a reviewer
+   stops the merge.
+2. **"Pipelines must succeed" with the CI configuration in a separate protected
+   project.** Point Settings → CI/CD → General pipelines → *CI/CD configuration
+   file* at `.gitlab-ci.yml@group/ci-config`, a project the merge request's
+   authors cannot push to. The merge request then cannot change the job that
+   gates it.
+3. **Ultimate: a pipeline execution policy** that injects the `playbook-ci` job
+   into every pipeline of the projects it covers; a project's own
+   `.gitlab-ci.yml` cannot remove it.
 
 ## Running evals
 
