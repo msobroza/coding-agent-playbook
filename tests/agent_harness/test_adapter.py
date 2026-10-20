@@ -26,6 +26,7 @@ from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.rendering.prompt_rule_delivery import SkillReference
+from tests.fakes import FakeRuleRegistry
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -396,14 +397,11 @@ def test_read_only_prompt_leaf_has_no_claude_frontmatter(tmp_path):
 
 
 def test_prompt_includes_rules_inlined_via_registry(tmp_path):
-    class _StubRegistry:
-        def render_for_inclusion(self, rule_id: str, context: dict[str, object]) -> str:
-            del context
-            return f"### Rule {rule_id}\n\ninlined body.\n"
-
     repo = tmp_path / "repo"
     repo.mkdir()
-    adapter = AgentHarnessAdapter(rule_registry=_StubRegistry())
+    adapter = AgentHarnessAdapter(
+        rule_registry=FakeRuleRegistry({"foo": "### Rule foo\n\ninlined body.\n"})
+    )
     _populate(
         adapter,
         _make_prompt(slash="review", prompt_id="review", includes_rules=["foo"]),
@@ -427,25 +425,19 @@ _REFACTOR_LEAF_BEFORE_D15 = (
 )
 
 
-class _InliningRegistry:
-    """Renders every rule id as ``### Rule <id>`` and points it at skill ``s`` too.
-
-    Implements both faces of the sync's registry, so a leaf that took the
-    Claude command's pointer block would show it.
-    """
-
-    def render_for_inclusion(self, rule_id: str, context: dict[str, object]) -> str:
-        del context
-        return f"### Rule {rule_id}\n\ninlined body.\n"
-
-    def reference_for(self, rule_id: str) -> SkillReference | None:
-        return SkillReference("s", f"references/{rule_id}.md")
+#: Renders ``foo`` and ``bar`` as ``### Rule <id>`` and points them at skill ``s`` too:
+#: both faces of the sync's registry, so a leaf that took the Claude command's
+#: pointer block would show it.
+_INLINING_REGISTRY = FakeRuleRegistry(
+    {rule_id: f"### Rule {rule_id}\n\ninlined body.\n" for rule_id in ("foo", "bar")},
+    {rule_id: SkillReference("s", f"references/{rule_id}.md") for rule_id in ("foo", "bar")},
+)
 
 
 def _refactor_leaf(tmp_path: Path) -> str:
     repo = tmp_path / "repo"
     repo.mkdir()
-    adapter = AgentHarnessAdapter(rule_registry=_InliningRegistry())
+    adapter = AgentHarnessAdapter(rule_registry=_INLINING_REGISTRY)
     body = "Refactor the code without changing behaviour.\n\n## The contract\n\nKeep tests green.\n"
     prompt = _make_prompt(
         slash="refactor",

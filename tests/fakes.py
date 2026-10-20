@@ -12,6 +12,8 @@ diff base, timeout, ``--cov`` sources) would run without running a suite; its
 ``FakeGitRunner`` stands in for its working-tree reads (``SubprocessGitRunner``).
 ``FakeHandlerSchemas`` stands in for the hook-handler ``CONFIG_SCHEMA`` registry
 (K2) behind :class:`coding_agent_playbook.hooks.resolution.merge.ConfigSchemaLookup`.
+``FakeRuleRegistry`` stands in for :class:`coding_agent_playbook.rendering.rule_registry.RuleRegistryImpl`
+(rule text and skill references) in the adapter and rendering tests.
 ``FakePinWriter`` stands in for the ``hook_runtime.config.pin`` writers ``playbook sync``
 calls (the interpreter pin and ``machine.json`` under the git dir).
 ``FakeCiStepRunner`` stands in for :class:`coding_agent_playbook.commands.twins.ci.SubprocessCiStepRunner`
@@ -46,6 +48,7 @@ if TYPE_CHECKING:
     import pytest
 
     from coding_agent_playbook.hooks.resolution.merge import ConfigKeySpec
+    from coding_agent_playbook.rendering.prompt_rule_delivery import SkillReference
     from coding_agent_playbook.validation.context import SyncContext
     from coding_agent_playbook.validation.findings import ValidationError
 
@@ -271,6 +274,29 @@ class FakeHandlerSchemas:
 
     def config_domain(self, builtin: str) -> str | None:
         return self.domains.get(builtin)
+
+
+@dataclass
+class FakeRuleRegistry:
+    """In-memory :class:`~coding_agent_playbook.rendering.rule_registry.RuleRegistryImpl`.
+
+    Both faces of the sync's registry (D15): ``fragments`` maps a rule id to the
+    text ``render_for_inclusion`` returns, ``references`` to the skill reference
+    ``reference_for`` names. An id it does not hold gets ``""`` and ``None``,
+    like a rule the real registry filtered out by ``applies_if``.
+
+    Example: ``FakeRuleRegistry({"x": "### X\\n\\nbody\\n"}).render_for_inclusion("x", {})``.
+    """
+
+    fragments: Mapping[str, str] = field(default_factory=dict)
+    references: Mapping[str, SkillReference] = field(default_factory=dict)
+
+    def render_for_inclusion(self, rule_id: str, context: dict[str, object]) -> str:
+        del context
+        return self.fragments.get(rule_id, "")
+
+    def reference_for(self, rule_id: str) -> SkillReference | None:
+        return self.references.get(rule_id)
 
 
 @dataclass

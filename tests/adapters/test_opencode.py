@@ -14,6 +14,7 @@ from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.rendering.prompt_rule_delivery import SkillReference
+from tests.fakes import FakeRuleRegistry
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -282,20 +283,16 @@ def test_write_prompt_yaml_escapes_description_with_special_characters(
     assert "Body." in content
 
 
-class FakeSkillRegistry:
-    """The two faces of the sync's registry: rule text and skill references (D15)."""
-
-    def render_for_inclusion(self, rule_id: str, context: dict[str, object]) -> str:
-        del context
-        return f"### Rule {rule_id}\n\nrendered body.\n"
-
-    def reference_for(self, rule_id: str) -> SkillReference | None:
-        return SkillReference("s", f"references/{rule_id}.md")
+#: The two faces of the sync's registry: rule text and skill references (D15).
+_SKILL_REGISTRY = FakeRuleRegistry(
+    {"foo": "### Rule foo\n\nrendered body.\n"},
+    {"foo": SkillReference("s", "references/foo.md")},
+)
 
 
 def test_write_prompt_points_at_skills_when_registry_set(tmp_path: Path) -> None:
     """With the sync's registry the command names the skill reference, never the rule text."""
-    adapter = OpenCodeAdapter(rule_registry=FakeSkillRegistry())
+    adapter = OpenCodeAdapter(rule_registry=_SKILL_REGISTRY)
     prompt = _make_prompt(
         prompt_id="x",
         name="X",

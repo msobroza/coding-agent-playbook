@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import dataclasses
 from pathlib import Path
-from typing import Any
 
 from coding_agent_playbook.adapters.continue_ import ContinueAdapter
 from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
@@ -12,18 +11,9 @@ from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.rendering.formats import render_for, with_sentinel_body
+from tests.fakes import FakeRuleRegistry
 from tests.hook_samples import resolved_hook
 from tests.member_skill_samples import sample_member_reference, sample_member_skill
-
-
-class _StubRegistry:
-    """In-memory ``RuleRegistry`` used by the Continue adapter tests."""
-
-    def __init__(self, fragments: dict[str, str]) -> None:
-        self._fragments = fragments
-
-    def render_for_inclusion(self, rule_id: str, context: dict[str, Any]) -> str:
-        return self._fragments.get(rule_id, "")
 
 
 def _make_rule(
@@ -156,7 +146,7 @@ def test_continue_write_prompt_no_appendix_without_registry(tmp_path: Path) -> N
 def test_continue_write_prompt_renders_includes_rules_appendix(tmp_path: Path) -> None:
     """When constructed with a registry, the includes_rules appendix is emitted."""
     prompt = _make_prompt(includes_rules=["x"])
-    registry = _StubRegistry({"x": "### X\n\nrule body\n"})
+    registry = FakeRuleRegistry({"x": "### X\n\nrule body\n"})
     adapter = ContinueAdapter(rule_registry=registry)
     written = adapter.write_prompt(prompt, repo_root=tmp_path)
     content = written[0].read_text(encoding="utf-8")

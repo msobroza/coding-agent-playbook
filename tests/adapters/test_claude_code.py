@@ -18,6 +18,7 @@ from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.rendering.prompt_rule_delivery import SkillReference
+from tests.fakes import FakeRuleRegistry
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -174,24 +175,18 @@ def test_claude_code_write_prompt_prepends_h1_when_body_lacks_one(tmp_path):
     assert lines[1] == "# Audit"
 
 
-class FakeSkillRegistry:
-    """The two faces of the sync's registry: rule text and skill references (D15).
-
-    Every rule id renders a body and lives in skill ``s`` as
-    ``references/<id>.md``, so a command that inlined text would show both.
-    """
-
-    def render_for_inclusion(self, rule_id: str, context: dict[str, object]) -> str:
-        del context
-        return f"### Rule {rule_id}\n\nrendered body.\n"
-
-    def reference_for(self, rule_id: str) -> SkillReference | None:
-        return SkillReference("s", f"references/{rule_id}.md")
+#: The two faces of the sync's registry: rule text and skill references (D15).
+#: Rule ``foo`` renders a body and lives in skill ``s`` as ``references/foo.md``,
+#: so a command that inlined text would show both.
+_SKILL_REGISTRY = FakeRuleRegistry(
+    {"foo": "### Rule foo\n\nrendered body.\n"},
+    {"foo": SkillReference("s", "references/foo.md")},
+)
 
 
 def test_claude_code_write_prompt_points_at_skills_when_registry_set(tmp_path):
     """With the sync's registry the command names the skill reference, never the rule text."""
-    adapter = ClaudeCodeAdapter(rule_registry=FakeSkillRegistry())
+    adapter = ClaudeCodeAdapter(rule_registry=_SKILL_REGISTRY)
     prompt = _make_prompt(
         prompt_id="x",
         name="X",
