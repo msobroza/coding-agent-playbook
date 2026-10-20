@@ -16,10 +16,10 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.commands import sync as _sync
+from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.commands import validate as _validate
-from coding_agent_playbook.renderer import SENTINEL
-from coding_agent_playbook.types import split_frontmatter
+from coding_agent_playbook.generated_output.sentinel import SENTINEL
+from coding_agent_playbook.sync import pipeline as _sync
 from tests.fakes import FakeGitClient
 from tests.plugins.mattpocock_skills._expectations import (
     FINAL_IDS,

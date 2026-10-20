@@ -20,10 +20,10 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.commands._sync_preflight import bundled_plugins, unusable_overlays
-from coding_agent_playbook.commands._validate_links import check_markdown_links
-from coding_agent_playbook.links import LinksConfig
-from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
+from coding_agent_playbook.catalog.source import FileSystemArtifactSource
+from coding_agent_playbook.config.tables.links import LinksConfig
+from coding_agent_playbook.validation._links import check_markdown_links
+from coding_agent_playbook.validation.preflight import bundled_plugins, unusable_overlays
 from tests._catalog import REPO_ROOT
 from tests.integration.test_resources_self_contained import _URL_RE as _GENERIC_URL_RE
 from tests.plugins.mattpocock_skills._expectations import (

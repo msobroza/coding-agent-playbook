@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Final
 
 import pytest
 
-from coding_agent_playbook.links import _CODE_SPAN_RE
+from coding_agent_playbook.validation.link_check import _CODE_SPAN_RE
 from tests.plugins.mattpocock_skills._expectations import (
     FINAL_IDS,
     LOAD_RE,
