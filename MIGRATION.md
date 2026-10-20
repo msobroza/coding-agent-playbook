@@ -544,6 +544,7 @@ The engine's content tree that v0.19 introduced as `content/` is renamed
 nothing. Who needs to act: anyone on `main` after v0.19 who edits the engine's
 content, imports the resolver, or scripts against the old names.
 
+<!-- module-moves: keep -->
 | Before (v0.19) | After (v0.20) |
 |---|---|
 | `content/core/…`, `content/plugins/<name>/…`, `content/README.md` | `catalog/core/…`, `catalog/plugins/<name>/…`, `catalog/README.md` |
@@ -554,6 +555,7 @@ content, imports the resolver, or scripts against the old names.
 | `BundledContentMissingError` | `CatalogMissingError` |
 | `error: the engine's bundled content was not found (…)` | `error: the engine's catalog was not found (…)` |
 | pytest marker `content`; dev pre-commit hook `content-checks` | marker `catalog`; hook `catalog-checks` |
+<!-- module-moves: keep -->
 
 `is_bundled_layer`, `bundled_plugins` and `engine_layer_root` keep their names
 (the `content_root=` keyword is `catalog_dir=` everywhere). There is no
@@ -664,6 +666,7 @@ with a warning. Authoritative design: `specs/prC-content-extraction.md`.
 
 ### 1. `packs` → bundled plugins, and the deprecated alias
 
+<!-- module-moves: keep -->
 | Old | New |
 |---|---|
 | `coding_agent_playbook.packs.superpowers` | `coding_agent_playbook.plugins.superpowers` |
@@ -672,6 +675,7 @@ with a warning. Authoritative design: `specs/prC-content-extraction.md`.
 | `src/coding_agent_playbook/packs/<name>/resources/skills/…` | `content/plugins/<name>/skills/…` (now `catalog/plugins/<name>/skills/…`) |
 | `src/coding_agent_playbook/packs/<name>/{LICENSE,ATTRIBUTIONS.md}` | `content/plugins/<name>/{LICENSE,ATTRIBUTIONS.md}` (now `catalog/plugins/<name>/{LICENSE,ATTRIBUTIONS.md}`) (plus a new `README.md`) |
 | `src/coding_agent_playbook/resources/precommit/config.yaml.j2` | `src/coding_agent_playbook/templates/precommit/config.yaml.j2` |
+<!-- module-moves: keep -->
 
 ```toml
 # .coding-agent-playbook.toml — before
@@ -990,6 +994,7 @@ Drop the grading-side and value-shape fields; keep (and rename) the measurement:
 | `higher_is_worse` | **kept in v0.12; deleted in v0.13** → a `Normalizer` (see the v0.13 section above) |
 | `available(self, ctx)` | **kept** (default still gates on deps + the needed ctx slot) |
 
+<!-- module-moves: keep -->
 ```python
 # before
 from coding_agent_playbook.evaluators.registry import Evaluator, register_evaluator
@@ -1008,8 +1013,10 @@ class MyMetric(Evaluator):
 
     def evaluate(self, ctx): ...
     def to_score(self, value, policy): ...
+```
+<!-- module-moves: keep -->
 
-
+```python
 # after
 from coding_agent_playbook.evaluators.metric import Metric, register_metric
 from coding_agent_playbook.evaluators.scope import Scope
@@ -1034,11 +1041,15 @@ config override or a `ThresholdCheck(...)` you construct.
 
 ### 2. Entry-point group rename: `…​.evaluators` → `…​.metrics`
 
+<!-- module-moves: keep -->
 ```toml
 # pyproject.toml — before
 [project.entry-points."coding_agent_playbook.evaluators"]
 my_metric = "my_pkg.metrics:MyMetric"
+```
+<!-- module-moves: keep -->
 
+```toml
 # after
 [project.entry-points."coding_agent_playbook.metrics"]
 my_metric = "my_pkg.metrics:MyMetric"
@@ -1069,12 +1080,16 @@ If you called the engine's grading function directly, build a `Rubric` and call
 (metric-backed, file, judged, composed) is just an entry in the rubric's ordered
 check list:
 
+<!-- module-moves: keep -->
 ```python
 # before
 from coding_agent_playbook.evaluators.grade import grade
 
 report = grade(candidate, baseline, policy, extra_evaluators={name: inst})
+```
+<!-- module-moves: keep -->
 
+```python
 # after
 from coding_agent_playbook.evaluators.rubric import Rubric
 from coding_agent_playbook.evaluators.check import MeasurementSet
@@ -1091,11 +1106,14 @@ per-metric policy.
 
 ### 5. Deleted symbols (no compatibility shim)
 
+<!-- module-moves: keep -->
 `Evaluator`, `evaluators/registry.py`, `evaluators/grade.py` (`grade()`),
 `evaluators/expected.py`, `evaluators/judged.py` (`JudgedCriterion`),
 `ValueKind`, `to_score`, the `default_absolute`/`default_regression`/`default_weight`
-fields, and `evals/task.py::evaluators_for_task` are **removed**. Their
-replacements: the file checks live in `evaluators/checks/files.py`, the judged
+fields, and `evals/task.py::evaluators_for_task` are **removed**.
+<!-- module-moves: keep -->
+
+Their replacements: the file checks live in `evaluators/checks/files.py`, the judged
 check in `evaluators/checks/judged.py` (`JudgeCheck`), and the task compiler is
 `evals/task.py::rubric_for_task` (returns a `Rubric`).
 
