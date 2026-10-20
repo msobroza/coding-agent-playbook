@@ -111,7 +111,7 @@ src/coding_agent_playbook/forge/        F1, stdlib-only leaf
 |---|---|---|
 | The command: subprocess, JSON normalisation, exit codes | `commands/forge.py` + private `commands/_forge_*.py` (B9's `Command` shape: `NAME`, `HELP`, `configure`, `run`) | F4 |
 | `[forge]` parsing | `config/tables/forge.py` via `_table_shapes.read_table`; errors through validation | F4 |
-| Guards | `hook_runtime/handlers/safety/*` (after A14/A15), `hook_runtime/judges/*`, `shell/wrapper_policy.py` | F3 |
+| Guards | `hook_runtime/handlers/safety/{_egress,exfil_channel_guard,taint_escalation,_net_targets,network_egress_guard,git_commit_push_policy_guard,secret_content_guard,commit_message_convention}.py`, `handlers/verify/{block_precommit_bypass,_bypass_rules}.py`, `handlers/audit/_activity_record.py`, `hook_runtime/judges/{hosts,cli_words}.py`, `hook_runtime/shell/wrapper_policy.py` | F3 |
 | Token rules, credential globs | `security/patterns.py` only | F2 |
 | CI twins | `commands/twins/{_git_scope,_ci_commit_convention,ci}.py`, `hook_runtime/judges/_gate_weakening_files.py` | F5 |
 | Core skill | `catalog/core/skills/forge/` | F4 |
@@ -271,7 +271,7 @@ One push-option judge in git_policy (always on), reading `-o` / `--push-option` 
 
 ## 9. Hook-side constraints (from the layout refactor)
 
-- F3 lands after A14/A15 (handler moves) and B4a/B4b (config reads through `HookConfig`): forge behaviour never rides in a move PR (L1, L13).
+- F3 builds on A14/A15 (handler moves) and B4a/B4b (config reads through `HookConfig`); all four are done on integration as of 2026-10-21. Forge behaviour never rides in a move PR (L1, L13).
 - New handler config keys are declared in `CONFIG_SCHEMA` and read through `HookConfig`; no raw `ctx.config.get(` (B4b's AST guard).
 - Prefilters stay basename sets; no subcommand prefiltering.
 - `safety/_egress` is private to `handlers.safety`; the audit and verify packs get forge knowledge from `forge/` or `judges/`.
@@ -337,15 +337,16 @@ A new tracker issue "Forge adapter: implementation tracker" lists F1 to F7. Tick
 | Ticket | Content | Waits for | Machine |
 |---|---|---|---|
 | F0 | this spec, ADR 0003, CONTEXT terms (docs PR to `main`, like #73) | — | — |
-| F1 | `forge/` package, contracts, `tests/forge/` | F0 on integration's base | B |
+| F1 | `forge/` package, contracts, `tests/forge/` | — | B |
 | F2 | GitLab secrets (§7) | — | B |
-| F3 | guards (§8) | F1; N17–N21, A10, A11, B3, GC-1, A14, A15, B4a, B4b | B |
-| F4 | `playbook forge`, `[forge]`, core skill (§5, §6) | F1, F3, B9 | A |
-| F5 | GitLab CI (§10) | F1 if env names live there; B9 for `ci.py` lines | A |
-| F6 | plugin "Forge issues" (§11.1) | F4, #158, #157 on base, D2/D13/D14 amendment | A |
-| F7 | hardening for both forges (§14) | hook parts after F3 | B (hooks), A (rest) |
+| F3 | guards (§8) | F1 (refactor blockers N17–N21, A10, A11, B3, GC-1, A14, A15, B4a, B4b: done) | B |
+| F4 | `playbook forge`, `[forge]`, core skill (§5, §6) | F1, F3 (B9: done) | A |
+| F5 | GitLab CI (§10); GitLab CI variable names stay in `commands/twins/`, not `forge/` | — | A |
+| F6 | plugin "Forge issues" (§11.1) | F4, #158, D2/D13/D14 amendment (#157 is on integration) | A |
+| F7a | hardening without handler edits: `scanner-config-changed` gate rule, CI-detection tests (§14) | F5 (both edit `judges/_gate_weakening_files.py`) | A |
+| F7b | hardening in handlers: token-printing block, `required_index`, `taint:forge`, `mail` egress (§14) | F1, F3 | B |
 
-F1, F2 and F5 can start now. F4 may not merge before F3: its data-sending operations would otherwise bypass exfil, git_policy, the push scan, network-egress and taint.
+Status on 2026-10-21: every refactor ticket listed above is done on `integration/skills-and-layout`, which also contains `main` (#157). F1, F2 and F5 can start now in parallel; F3 and F7b follow F1; F7a follows F5; F4 follows F3; F6 follows F4 and #158. Re-check before starting: a ticket is done when integration has its `Closes #N` line (issues stay open until the final integration PR). F4 may not merge before F3: its data-sending operations would otherwise bypass exfil, git_policy, the push scan, network-egress and taint.
 
 Gate per ticket, on Python 3.12 and 3.13: `ruff check --no-cache .`, `ruff format --check --no-cache .`, `mypy --cache-dir=/dev/null`, `pytest -q -p no:cacheprovider`. Modules stay near 500 lines (`commands/twins/ci.py` is at 488; `config/files.py` takes nothing).
 
