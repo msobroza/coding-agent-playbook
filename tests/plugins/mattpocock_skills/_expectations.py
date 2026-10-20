@@ -17,8 +17,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.links import _CODE_SPAN_RE
-from coding_agent_playbook.types import split_frontmatter
+from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
+from coding_agent_playbook.validation.link_check import _CODE_SPAN_RE
 from tests._catalog import plugin_root
 
 if TYPE_CHECKING:

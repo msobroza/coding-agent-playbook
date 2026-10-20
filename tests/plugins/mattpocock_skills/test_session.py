@@ -6,7 +6,7 @@ the shared gate (``test_gates.py``) covers URLs, imposed tools, Claude-only name
 the layout, the licence copies, the guard line, the glossary fallback and the load
 targets of every skill. Upstream line numbers in the comments are lines of tag
 v1.3.1; "shipped" line numbers are the plugin source's. The sentinel is named only
-through ``coding_agent_playbook._sentinel.SENTINEL`` (D26) and never retyped here.
+through ``coding_agent_playbook.generated_output.sentinel.SENTINEL`` (D26) and never retyped here.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook._sentinel import SENTINEL, file_has_sentinel
+from coding_agent_playbook.generated_output.sentinel import SENTINEL, file_has_sentinel
 from tests.plugins.mattpocock_skills._expectations import (
     GUARD_LINE,
     LOAD_RE,

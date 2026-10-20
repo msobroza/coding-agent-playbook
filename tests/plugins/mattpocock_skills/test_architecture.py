@@ -19,7 +19,7 @@ from urllib.parse import urlsplit
 
 import pytest
 
-from coding_agent_playbook.links import extract_markdown_links
+from coding_agent_playbook.validation.link_check import extract_markdown_links
 from tests.plugins.mattpocock_skills._expectations import (
     GUARD_LINE,
     LOAD_RE,

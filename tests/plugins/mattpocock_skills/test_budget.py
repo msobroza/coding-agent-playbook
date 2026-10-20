@@ -12,19 +12,20 @@ from typing import TYPE_CHECKING, Final
 
 import pytest
 
-from coding_agent_playbook._layers import ENGINE_PACKAGE
-from coding_agent_playbook.adapters._agent_skill_rules import skill_id_of
-from coding_agent_playbook.catalog import bundled_plugins
-from coding_agent_playbook.orchestrator import OverlayResolver
-from coding_agent_playbook.skill_document import emitted_frontmatter
-from coding_agent_playbook.skill_membership import compose_skills
-from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
+from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE
+from coding_agent_playbook.catalog.resolve import OverlayResolver
+from coding_agent_playbook.catalog.roots import bundled_plugins
+from coding_agent_playbook.catalog.source import FileSystemArtifactSource
+from coding_agent_playbook.skills.document import emitted_frontmatter
+from coding_agent_playbook.skills.membership import compose_skills
+from coding_agent_playbook.skills.naming import skill_id_of
 from tests.plugins.mattpocock_skills._expectations import PLUGIN_NAME, present_skill_ids
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from coding_agent_playbook.types import Rule, Skill
+    from coding_agent_playbook.artifacts.rule import Rule
+    from coding_agent_playbook.artifacts.skill import Skill
 
 pytestmark = pytest.mark.catalog
 

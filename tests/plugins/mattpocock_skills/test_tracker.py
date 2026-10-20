@@ -15,8 +15,9 @@ from typing import TYPE_CHECKING, Final
 
 import pytest
 
-from coding_agent_playbook.sources.filesystem import FileSystemArtifactSource
-from coding_agent_playbook.types import Rule, split_frontmatter
+from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
+from coding_agent_playbook.artifacts.rule import Rule
+from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from tests.plugins.mattpocock_skills._expectations import (
     PLUGIN_NAME,
     PLUGIN_ROOT,
