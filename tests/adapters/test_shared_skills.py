@@ -26,6 +26,7 @@ from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.config.model import Config, ProjectMeta
 from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.sync._hook_outputs import _generated_locations
+from tests.fakes import FakeRuleRegistry
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -216,17 +217,12 @@ def test_discover_adapters_builds_shared_skills_without_rule_registry() -> None:
     """``discover_adapters`` passes ``rule_registry``; the adapter takes none,
     so its no-arg fallback constructs it (like ``agents_md``)."""
 
-    class _StubRegistry:
-        def render_for_inclusion(self, rule_id: str, context: dict[str, object]) -> str:
-            del context
-            return rule_id
-
     config = Config(
         schema_version=1,
         project=ProjectMeta(name="x", kind="python-library"),
         engine_version="0.1.0a0",
         adapters_enabled=["shared_skills"],
     )
-    adapters = discover_adapters(config, rule_registry=_StubRegistry())
+    adapters = discover_adapters(config, rule_registry=FakeRuleRegistry())
     assert isinstance(adapters["shared_skills"], SharedSkillsAdapter)
     assert set(adapters) == {"shared_skills", "agents_md"}
