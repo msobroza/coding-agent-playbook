@@ -161,3 +161,20 @@ _Avoid_: external tool, dependency
 
 **Project toolchain**:
 The commands a consumer repo already runs for itself, such as its test, typecheck, lint or build commands; a skill that runs them imposes no tool.
+
+### Forges
+
+**Forge**:
+A git hosting service with its own CLI and CI system, such as GitHub or GitLab.
+_Avoid_: host, provider, platform, adapter (an adapter writes a harness's files)
+
+**Forge CLI**:
+The command-line client of one forge, such as `gh` for GitHub or `glab` for GitLab.
+
+**Forge operation**:
+One action on a forge that the playbook offers in the same form for every forge, such as opening or viewing a pull request.
+_Avoid_: forge command, forge action
+
+**Pull request**:
+A proposed change from one branch into another, reviewed on the forge; GitLab calls it a merge request.
+_Avoid_: merge request, MR, change request (except when quoting GitLab itself)
