@@ -16,30 +16,20 @@ Which format gets which is decided by ``rendering.formats.render_for``;
 
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
 
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.rendering.jinja import build_environment
 from coding_agent_playbook.rendering.prompt_rule_delivery import (
     SkillReference,
+    SkillReferenceIndex,
     includes_rules_appendix,
     insert_pointer_block,
     skill_pointer_block,
 )
 from coding_agent_playbook.rendering.rule_registry import RuleRegistryImpl
+from tests.fakes import FakeRuleRegistry
 from tests.import_probe import new_modules_after
-
-
-class FakeRuleRegistry:
-    """In-memory ``RuleRegistry``: a fixed fragment per rule id, ``""`` for any other id."""
-
-    def __init__(self, fragments: dict[str, str]) -> None:
-        self._fragments = fragments
-
-    def render_for_inclusion(self, rule_id: str, context: dict[str, Any]) -> str:
-        return self._fragments.get(rule_id, "")
 
 
 def _rule(rule_id: str, name: str, text: str, *, templated: bool = False) -> Rule:
@@ -140,23 +130,11 @@ def test_includes_rules_appendix_omits_a_rule_the_real_registry_does_not_hold() 
 # --- skill_pointer_block (D15) ----------------------------------------------
 
 
-class FakeSkillReferenceIndex:
-    """In-memory ``SkillReferenceIndex``: a fixed reference per rule id, ``None`` otherwise.
-
-    ``None`` stands for every id the real registry answers ``None`` for: an
-    unknown id, a rule filtered out by ``applies_if`` and an always rule.
-    """
-
-    def __init__(self, references: dict[str, SkillReference]) -> None:
-        self._references = references
-
-    def reference_for(self, rule_id: str) -> SkillReference | None:
-        return self._references.get(rule_id)
-
-
 #: The reference probe's membership (D4): typing and error handling in python-coding.
-_PROBE_INDEX = FakeSkillReferenceIndex(
-    {
+#: Its ``None`` stands for every id the real registry answers ``None`` for: an
+#: unknown id, a rule filtered out by ``applies_if`` and an always rule.
+_PROBE_INDEX = FakeRuleRegistry(
+    references={
         "python-typing": SkillReference("python-coding", "references/python-typing.md"),
         "python-error-handling": SkillReference(
             "python-coding", "references/python-error-handling.md"
@@ -216,7 +194,7 @@ def test_pointer_block_skips_filtered_unknown_and_always_rules() -> None:
     ids=["no-active-reference", "no-ids", "no-index"],
 )
 def test_pointer_block_is_empty_without_an_active_reference(
-    includes_rules: list[str], index: FakeSkillReferenceIndex | None
+    includes_rules: list[str], index: SkillReferenceIndex | None
 ) -> None:
     assert skill_pointer_block(includes_rules, index) == ""
 

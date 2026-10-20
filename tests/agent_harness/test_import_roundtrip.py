@@ -31,6 +31,7 @@ from coding_agent_playbook.artifacts.hook import Hook
 from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill
+from tests.fakes import FakeRuleRegistry
 from tests.hook_samples import resolved_from_disk
 
 if TYPE_CHECKING:
@@ -93,7 +94,7 @@ def _make_scoped_rule() -> Rule:
 
 #: The ORIGINAL, un-inlined prompt source body. After emission WITH a registry
 #: the harness leaf interleaves the inlined ``includes_rules`` fragment (see
-#: ``_StubRegistry``), so a lossless import must recover THIS string, not the
+#: ``_HOUSE_STYLE_REGISTRY``), so a lossless import must recover THIS string, not the
 #: rendered/inlined on-disk body.
 _PROMPT_BODY = "# Review\n\nReview the diff carefully.\n"
 
@@ -123,15 +124,14 @@ def _make_prompt() -> Prompt:
     )
 
 
-class _StubRegistry:
-    """Inlines ``includes_rules`` into the harness leaf so the emitted body is
-    genuinely rendered/inlined — proving the lossless importer recovers the
-    ORIGINAL source body from the sidecar rather than the on-disk leaf.
-    """
-
-    def render_for_inclusion(self, rule_id: str, context: dict[str, Any]) -> str:
-        del context
-        return f"### Rule {rule_id}\n\ninlined rule body that is NOT in the source.\n"
+#: Inlines ``includes_rules`` into the harness leaf so the emitted body is
+#: genuinely rendered/inlined — proving the lossless importer recovers the
+#: ORIGINAL source body from the sidecar rather than the on-disk leaf.
+_HOUSE_STYLE_REGISTRY = FakeRuleRegistry(
+    {
+        "python-house-style": "### Rule python-house-style\n\ninlined rule body that is NOT in the source.\n"
+    }
+)
 
 
 def _make_skill(scripts_dir: Path, references_dir: Path) -> Skill:
@@ -177,7 +177,7 @@ def _emit_harness(tmp_path: Path) -> tuple[Path, Skill]:
     skill = _make_skill(scripts_src, refs_src)
     repo = tmp_path / "harness"
     repo.mkdir()
-    adapter = AgentHarnessAdapter(rule_registry=_StubRegistry())
+    adapter = AgentHarnessAdapter(rule_registry=_HOUSE_STYLE_REGISTRY)
     adapter.write_skill(skill, repo)
     adapter.write_prompt(_make_prompt(), repo)
     adapter.write_rule(_make_always_rule(), repo)
@@ -248,7 +248,7 @@ def test_lossless_prompt_output_contract_survives_emit_then_import(tmp_path):
     prompt.frontmatter.output_contract = list(contract)
     repo = tmp_path / "harness"
     repo.mkdir()
-    adapter = AgentHarnessAdapter(rule_registry=_StubRegistry())
+    adapter = AgentHarnessAdapter(rule_registry=_HOUSE_STYLE_REGISTRY)
     adapter.write_prompt(prompt, repo)
     adapter.finalize(repo)
 
@@ -266,7 +266,7 @@ def test_lossless_prompt_write_scope_round_trips(tmp_path):
     scoped[1].frontmatter.write_scope = {"globs": ["tests/**", "**/conftest.py"]}
     repo = tmp_path / "harness"
     repo.mkdir()
-    adapter = AgentHarnessAdapter(rule_registry=_StubRegistry())
+    adapter = AgentHarnessAdapter(rule_registry=_HOUSE_STYLE_REGISTRY)
     for prompt in scoped:
         adapter.write_prompt(prompt, repo)
     adapter.finalize(repo)
@@ -291,7 +291,7 @@ def test_lossless_rule_lint_codes_round_trip(tmp_path):
     }
     repo = tmp_path / "harness"
     repo.mkdir()
-    adapter = AgentHarnessAdapter(rule_registry=_StubRegistry())
+    adapter = AgentHarnessAdapter(rule_registry=_HOUSE_STYLE_REGISTRY)
     for rule in linked:
         adapter.write_rule(rule, repo)
     adapter.finalize(repo)

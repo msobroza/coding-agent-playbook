@@ -14,17 +14,7 @@ from coding_agent_playbook.rendering.formats import (
     with_sentinel_body,
 )
 from coding_agent_playbook.rendering.prompt_rule_delivery import SkillReference
-
-
-class StubRuleRegistry:
-    """In-memory ``RuleRegistry`` used by the renderer tests."""
-
-    def __init__(self, fragments: dict[str, str]) -> None:
-        self._fragments = fragments
-
-    def render_for_inclusion(self, rule_id: str, context: dict[str, Any]) -> str:
-        return self._fragments.get(rule_id, "")
-
+from tests.fakes import FakeRuleRegistry
 
 # --- Task B.4 step 1: continue_rule + alias resolution + unknown-format ----
 
@@ -207,7 +197,7 @@ def test_render_for_prompt_continue_with_includes_rules_appendix(tmp_path: Path)
         "includes_rules": ["x"],
     }
     body = "Review the diff.\n"
-    registry = StubRuleRegistry({"x": "### X\n\nrule body\n"})
+    registry = FakeRuleRegistry({"x": "### X\n\nrule body\n"})
     out = render_for(
         tmp_path / "prompts" / "review-code.md",
         body,
@@ -294,16 +284,6 @@ def test_render_for_prompt_claude_command_emits_title_and_body(tmp_path: Path) -
 # --- D15: Claude Code and OpenCode commands point at skills -----------------
 
 
-class FakeSkillReferenceIndex:
-    """In-memory ``SkillReferenceIndex``: one fixed reference per rule id, ``None`` otherwise."""
-
-    def __init__(self, references: dict[str, SkillReference]) -> None:
-        self._references = references
-
-    def reference_for(self, rule_id: str) -> SkillReference | None:
-        return self._references.get(rule_id)
-
-
 _TYPING_REFERENCE = SkillReference("python-coding", "references/python-typing.md")
 _POINTER_FRONTMATTER = {
     "name": "Review",
@@ -325,8 +305,8 @@ def _pointer_command(fmt: str, frontmatter: dict[str, Any] = _POINTER_FRONTMATTE
         _POINTER_BODY,
         fmt,
         frontmatter=frontmatter,
-        rule_registry=StubRuleRegistry({"python-typing": "### Typing\n\nTYPING BODY\n"}),
-        skill_references=FakeSkillReferenceIndex({"python-typing": _TYPING_REFERENCE}),
+        rule_registry=FakeRuleRegistry({"python-typing": "### Typing\n\nTYPING BODY\n"}),
+        skill_references=FakeRuleRegistry(references={"python-typing": _TYPING_REFERENCE}),
     )
 
 
@@ -368,7 +348,7 @@ def test_render_for_prompt_without_skill_references_has_no_block(fmt: str) -> No
         _POINTER_BODY,
         fmt,
         frontmatter=_POINTER_FRONTMATTER,
-        rule_registry=StubRuleRegistry({"python-typing": "### Typing\n\nTYPING BODY\n"}),
+        rule_registry=FakeRuleRegistry({"python-typing": "### Typing\n\nTYPING BODY\n"}),
     )
 
     assert "## Before you start" not in out
@@ -390,7 +370,7 @@ def test_render_inline_prompt_markdown_titles_the_body_and_appends_the_appendix(
     out = render_inline_prompt_markdown(
         "Tidy the code.\n",
         {"name": "Tidy", "includes_rules": ["x"]},
-        StubRuleRegistry({"x": "### X\n\nrule body\n"}),
+        FakeRuleRegistry({"x": "### X\n\nrule body\n"}),
     )
 
     assert out == "# Tidy\n\nTidy the code.\n\n## Reference rules\n\n### X\n\nrule body\n"
@@ -501,7 +481,7 @@ def test_render_for_prompt_continue_no_appendix_when_all_fragments_empty(
     """When includes_rules is set but every rule's applies_if evaluates false
     (registry returns ""), no Reference rules section is emitted
     (code-quality review M5)."""
-    registry = StubRuleRegistry({"foo": "", "bar": ""})
+    registry = FakeRuleRegistry({"foo": "", "bar": ""})
     out = render_for(
         tmp_path / "prompt.md.j2",
         "body",
