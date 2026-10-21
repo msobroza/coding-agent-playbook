@@ -350,7 +350,7 @@ def test_gitleaks_change_flagged() -> None:
 
     report = scan(added, (), (), POLICY)
 
-    assert _rules(report) == ["gitleaks-config-changed"]
+    assert _rules(report) == ["scanner-config-changed"]
     assert report.exit_code == 1
 
 

@@ -269,3 +269,32 @@ def test_ci_config_globs_committed_at_the_base_extend_the_watched_files(
     assert "ci/deploy.gitlab-ci.yml: gitlab-ci-job-removed: job 'lint' removed" in (
         capsys.readouterr().out
     )
+
+
+# --- scanner settings (prF §14) -----------------------------------------------------------------
+
+
+def test_a_github_secret_scanning_paths_ignore_exits_1(
+    repo: Repo, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo.commit("scanning", {".github/secret_scanning.yml": "paths-ignore:\n  - docs/\n"})
+    repo.commit("ignore", {".github/secret_scanning.yml": "paths-ignore:\n  - docs/\n  - src/\n"})
+
+    assert repo.scan("--range", "HEAD~1..HEAD") == 1
+    assert (
+        ".github/secret_scanning.yml: scanner-config-changed: .github/secret_scanning.yml changed"
+        in capsys.readouterr().out
+    )
+
+
+def test_a_gitlab_ci_file_switching_sast_off_exits_1(
+    repo: Repo, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo.commit("ci", {".gitlab-ci.yml": _GITLAB_CI})
+    disabled = _GITLAB_CI.replace("lint:", 'variables:\n  SAST_DISABLED: "true"\n\nlint:')
+    repo.commit("no sast", {".gitlab-ci.yml": disabled})
+
+    assert repo.scan("--range", "HEAD~1..HEAD") == 1
+    assert ".gitlab-ci.yml: scanner-loosened-in-ci: sets SAST_DISABLED: true" in (
+        capsys.readouterr().out
+    )

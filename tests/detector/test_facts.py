@@ -151,6 +151,22 @@ def test_detect_empty_repo(tmp_path: Path) -> None:
     assert "python_version" not in facts
     assert "dependencies" not in facts
     assert "frameworks" not in facts
+    assert facts["has_ci"] is False
+
+
+@pytest.mark.parametrize("ci_file", [".github/workflows/ci.yml", ".gitlab-ci.yml"])
+def test_detect_has_ci_on_either_forge(tmp_path: Path, ci_file: str) -> None:
+    """prF §14: a GitLab pipeline counts as CI just as a GitHub workflow does."""
+    _write(tmp_path, ci_file, "lint:\n  script: [ruff check .]\n")
+
+    assert detect(tmp_path)["has_ci"] is True
+
+
+def test_detect_gitlab_ci_include_alone_is_no_pipeline(tmp_path: Path) -> None:
+    """GitLab runs the root ``.gitlab-ci.yml``; a file it would include runs nothing alone."""
+    _write(tmp_path, ".gitlab/ci/lint.yml", "lint:\n  script: [ruff check .]\n")
+
+    assert detect(tmp_path)["has_ci"] is False
 
 
 def test_detect_ignores_venv_when_walking_notebooks(tmp_path: Path) -> None:
