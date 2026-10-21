@@ -30,7 +30,7 @@ When the run returns:
 - **`integrated`**: done. Refresh the tracker: fetch its body with `gh issue view 176 --repo msobroza/coding-agent-playbook --json body -q .body > now.md`, run `plan.py tracker-body --current now.md > new.md`, then `gh issue edit --repo msobroza/coding-agent-playbook 176 --body-file new.md`. Keep `--repo` first: the allow rules match the command's beginning. This is idempotent, so either machine can run it.
 - **`blocked`**: the ticket waits for a ticket of the other machine. Poll `plan.py status --machine B` every 15 minutes and start a new run when tickets become ready.
 - **`failed`**: read the run's journal, then fix the ticket by hand or rerun it with `plan.py args --only <id>`.
-- **Cleanup**: run `plan.py cleanup` (a dry run), then `plan.py cleanup --apply`, only when no run is active on this machine.
+- **Cleanup**: run `plan.py cleanup` (a dry run), then `plan.py cleanup --apply`, only when no run is active on this machine; right after a run ends, add `--idle-minutes 0`. Changes that already exist in a pushed commit count as nothing to lose: an implementer's worktree shows them when the fix agent pushes the ticket from elsewhere.
 
 `--parallel` is the number of tickets in flight at once. Use 2 on an 8 GB machine, and 6–8 with 32 GB of RAM and 10 or more cores. The workflow itself runs at most min(16, cores - 2) agents at once.
 

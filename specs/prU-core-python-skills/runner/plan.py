@@ -29,7 +29,6 @@ TICKETS_MD = HERE.parent / "tickets.md"
 BASE = "integration/core-python-skills"
 ID = r"(?:L0|C|D|F)-[\w-]+"
 GIT_TIMEOUT_S = 120
-RECENT_S = 3600  # a worktree touched this recently may belong to a running agent
 
 
 @dataclass
@@ -233,21 +232,45 @@ def cmd_tracker_body(args: argparse.Namespace) -> int:
     return 0
 
 
-def keep_reason(path: str, head: str) -> str | None:
+def keep_reason(path: str, head: str, idle_s: float) -> str | None:
     """Why a workflow worktree must stay, or None when removing it loses nothing."""
     gitdir = Path(git("-C", path, "rev-parse", "--absolute-git-dir").strip())
-    touched = max((gitdir / f).stat().st_mtime for f in ("HEAD", "index") if (gitdir / f).exists())
-    if time.time() - touched < RECENT_S:
-        return "used in the last hour: an agent may still be working there"
-    if git("-C", path, "status", "--porcelain").strip():
-        return "uncommitted changes"
+    marks = [gitdir / f for f in ("HEAD", "index") if (gitdir / f).exists()]
+    if marks and time.time() - max(m.stat().st_mtime for m in marks) < idle_s:
+        return "used recently: an agent may still be working there"
     if not head or not git("branch", "-r", "--contains", head).strip():
         return "HEAD not on origin"
-    return None
+    changed = [line[3:] for line in git("-C", path, "status", "--porcelain").splitlines()]
+    unsaved = [f for f in changed if not pushed_somewhere(path, f)]
+    return f"uncommitted changes not on origin: {', '.join(unsaved[:3])}" if unsaved else None
+
+
+def pushed_somewhere(path: str, rel: str) -> bool:
+    """Whether the worktree's copy of ``rel`` equals that file in a commit on an origin branch.
+
+    A worktree whose branch moved (another agent pushed from elsewhere) shows the older
+    commit's files as changes; that content is already on origin, so nothing is lost.
+    """
+    file = Path(path) / rel
+    if not file.is_file():
+        return False
+    blob = git("-C", path, "hash-object", str(file)).strip()
+    history = git("-C", path, "log", "--remotes=origin", "--format=%H", "-n", "200", "--", rel)
+    for commit in history.split():
+        shown = subprocess.run(
+            ["git", "-C", path, "rev-parse", f"{commit}:{rel}"],
+            capture_output=True,
+            text=True,
+            timeout=GIT_TIMEOUT_S,
+            check=False,
+        )
+        if shown.stdout.strip() == blob:
+            return True
+    return False
 
 
 def cmd_cleanup(args: argparse.Namespace) -> int:
-    """Remove workflow worktrees that are idle, clean and pushed; dry run unless --apply.
+    """Remove workflow worktrees that are idle and hold nothing unpushed; dry run unless --apply.
 
     Run it when no runner is active on this machine: an agent's fresh worktree is clean.
     """
@@ -257,7 +280,7 @@ def cmd_cleanup(args: argparse.Namespace) -> int:
         path, head = fields.get("worktree", ""), fields.get("HEAD", "")
         if "/.claude/worktrees/wf_" not in path:
             continue
-        reason = keep_reason(path, head)
+        reason = keep_reason(path, head, args.idle_minutes * 60)
         print(f"keep   {path} ({reason})" if reason else f"remove {path}")
         if args.apply and not reason:
             git("worktree", "remove", "--force", path)
@@ -283,6 +306,7 @@ def main(argv: list[str]) -> int:
     tracker.add_argument("--current", required=True)
     clean = sub.add_parser("cleanup")
     clean.add_argument("--apply", action="store_true")
+    clean.add_argument("--idle-minutes", type=float, default=60, help="0 right after a run ends")
     args = parser.parse_args(argv[1:])
     handlers = {"status": cmd_status, "args": cmd_args, "tracker-body": cmd_tracker_body}
     return {**handlers, "cleanup": cmd_cleanup}[args.cmd](args)

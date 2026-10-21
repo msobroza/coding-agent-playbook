@@ -125,7 +125,7 @@ ${TICKET_SOURCE(t)}
 ---- The /code-review skill, verbatim ----
 ${CODE_REVIEW_SKILL}`
 
-const fixPrompt = (t, reviews) => `Apply the /code-review results for prU ticket ${t.id} (issue #${t.issue}). In your isolated worktree: /usr/bin/git fetch origin ticket/${t.id} && /usr/bin/git checkout -B ticket/${t.id} origin/ticket/${t.id}.
+const fixPrompt = (t, reviews) => `Apply the /code-review results for prU ticket ${t.id} (issue #${t.issue}). In your isolated worktree: /usr/bin/git fetch origin ticket/${t.id} && /usr/bin/git checkout -B fix-${t.id} origin/ticket/${t.id} (a branch of its own: checking out ticket/${t.id} here would move it under the implementer's worktree). Push it with the ticket's push command below; it updates origin's ticket/${t.id}.
 ${TICKET_SOURCE(t)}
 The two axes are separate on purpose: satisfy both, and never let one excuse the other.
 ${reviews.map(r => `## ${r.axis}\n${r.report}\nFindings: ${JSON.stringify(r.findings, null, 1)}`).join('\n\n')}
@@ -141,7 +141,7 @@ const integratePrompt = (t, sha) => `You are the INTEGRATOR for prU ticket ${t.i
 2. Check that origin/ticket/${t.id} is at ${sha} (if it moved, use the newer head and say so in open_issues). Run /usr/bin/git merge --squash origin/ticket/${t.id}; resolve conflicts keeping both sides' intent (import lists: union, then ruff --fix for I and F401; tests/cli/golden/cli_surface.json: never merge by hand, re-record it with ${venvOf('integrate-' + t.id)}/bin/python -m tests.cli.cli_surface after resolving the code, and review its diff). Commit ONE commit: subject = "${t.title} (#${t.issue})", body = a short summary then the line "Closes #${t.issue}". NEVER add Co-Authored-By or any trailer, never --author, never change git config, never sign.
 3. Light gate. From your worktree root: ${TOOLS}/overlay-venv.sh <your worktree's absolute path> ${venvOf('integrate-' + t.id)} ${SV}. Then ${SV}/bin/ruff check --no-cache . ; ${SV}/bin/ruff format --no-cache --check . ; PYTHONPATH=<worktree>/src ${SV}/bin/mypy ; then ${LIGHT_TESTS(venvOf('integrate-' + t.id) + '/bin/python', 'HEAD~1 HEAD')} Fix failures with small "fix: ..." commits (body ends "Refs: #${t.issue} (prU ${t.id})"); a failure that is pre-existing on origin/${BASE} goes to open_issues.
 4. Push with exactly: /usr/bin/git push origin HEAD:refs/heads/${BASE}. If it is rejected (someone pushed first): /usr/bin/git fetch origin && /usr/bin/git rebase origin/${BASE} (your local commits only; resolve conflicts as in step 2), rerun step 3's checks, push again. At most 4 attempts; report attempts.
-5. Cleanup: remove (/usr/bin/git worktree remove --force) only the worktrees whose branch is ticket/${t.id} and whose status is clean, then delete the local branch ticket/${t.id}. If a removal is refused, leave it and say so in cleanup.
+5. Cleanup: remove (/usr/bin/git worktree remove --force) only the worktrees whose branch is ticket/${t.id} or fix-${t.id} and whose status is clean, then delete those two local branches. If a removal is refused, leave it and say so in cleanup.
 ${PYTHON('integrate-' + t.id)}
 Never write inside ${W}. Return the structured result (integrated=true only when the push succeeded or the squash commit was already there).`
 
