@@ -23,6 +23,7 @@ from coding_agent_playbook.commands._init_adapters import (
     adapters_from_flag,
     adapters_union,
 )
+from coding_agent_playbook.commands._init_answers import _preselected_adapters
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -136,6 +137,55 @@ def test_interactive_index_four_enables_continue(
 
     assert _adapters_enabled(tmp_path) == [*DEFAULT_ADAPTERS, "continue"]
     assert (tmp_path / ".continue" / "rules").is_dir()
+
+
+def test_interactive_blank_answer_takes_the_detected_adapters(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """D79: harness files in the repo pre-select their adapters in the menu."""
+    _pyproject(tmp_path)
+    (tmp_path / "CLAUDE.md").write_text("team notes\n")
+    (tmp_path / ".continue").mkdir()
+    (tmp_path / ".continue" / "config.yaml").write_text("name: x\n")
+    _answer_interactively(monkeypatch, "")
+
+    assert _init.run(_ns(tmp_path, non_interactive=False)) == 0
+
+    assert _adapters_enabled(tmp_path) == ["claude_code", "continue"]
+    out = capsys.readouterr().out
+    assert "  * 1. claude_code\n" in out
+    assert "    2. opencode\n" in out
+    assert "  * 4. continue\n" in out
+
+
+def test_preselection_survives_a_corrupt_lockfile(tmp_path: Path) -> None:
+    """An unparsable lockfile excludes nothing; the markers still pre-select."""
+    (tmp_path / ".coding-agent-playbook.lock").write_text("not = [toml\n")
+    (tmp_path / "opencode.json").write_text("{}\n")
+
+    assert _preselected_adapters(tmp_path) == ["opencode"]
+
+
+def test_preselection_skips_files_the_lockfile_records(tmp_path: Path) -> None:
+    """Re-running init in a synced repo: engine output never pre-selects its adapter."""
+    (tmp_path / ".continue").mkdir()
+    (tmp_path / ".continue" / "config.yaml").write_text("name: x\n")
+    (tmp_path / ".coding-agent-playbook.lock").write_text(
+        'schema_version = 2\nengine_version = "0"\nrendered_at = ""\n\n'
+        '[[entries]]\npath = ".continue/config.yaml"\nsha256 = "' + "0" * 64 + '"\nbytes = 1\n'
+    )
+
+    assert _preselected_adapters(tmp_path) == list(DEFAULT_ADAPTERS)
+
+
+def test_non_interactive_default_ignores_detected_harness_files(tmp_path: Path) -> None:
+    _pyproject(tmp_path)
+    (tmp_path / ".continue").mkdir()
+    (tmp_path / ".continue" / "config.yaml").write_text("name: x\n")
+
+    assert _init.run(_ns(tmp_path)) == 0
+
+    assert _adapters_enabled(tmp_path) == ["claude_code", "opencode", "shared_skills"]
 
 
 def test_adapters_flag_help_names_the_default_set(capsys: pytest.CaptureFixture[str]) -> None:

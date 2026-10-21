@@ -18,10 +18,14 @@ from coding_agent_playbook.commands._init_adapters import (
     DEFAULT_ADAPTERS,
     adapters_from_flag,
 )
+from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.config.framework import BUNDLED_FRAMEWORK_NAMES
+from coding_agent_playbook.detector.harness_markers import detected_adapters
+from coding_agent_playbook.lockfile.model import generated_paths
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
 
     from coding_agent_playbook.commands.init import InitArgs
 
@@ -184,6 +188,27 @@ def _answers_from_flags(args: InitArgs) -> Answers:
     )
 
 
+def _preselected_adapters(repo_root: Path) -> list[str]:
+    """The menu's defaults: the adapters whose harness files the repo holds (D79).
+
+    Without any, :data:`DEFAULT_ADAPTERS`. Engine output named in the lockfile
+    is not a harness file; an unreadable lockfile just means none is excluded,
+    since ``playbook sync`` reports it later anyway.
+
+    Example::
+
+        >>> _preselected_adapters(Path("fresh-repo"))  # doctest: +SKIP
+        ['claude_code', 'opencode', 'shared_skills']
+    """
+    try:
+        lockfile = FileSystemStateSource(repo_root=repo_root).load_lockfile()
+    except (OSError, ValueError):  # TOMLDecodeError and LockfileFormatError are ValueErrors
+        lockfile = None
+    generated = generated_paths(lockfile)
+    detected = [a for a in detected_adapters(repo_root, generated) if a in ADAPTER_CHOICES]
+    return detected or list(DEFAULT_ADAPTERS)
+
+
 def _answers_from_questions(args: InitArgs, ask: Ask) -> Answers:
     """The interactive answers, asked in today's order; the hooks question comes last."""
     name = _prompt("Project name", ask=ask)
@@ -195,7 +220,7 @@ def _answers_from_questions(args: InitArgs, ask: Ask) -> Answers:
         print(f"  valid kinds: {', '.join(_VALID_KINDS)}")
         kind = _prompt("Project kind", default="python-application", ask=ask)
     adapters = _prompt_multi_select(
-        ADAPTERS_QUESTION, list(ADAPTER_CHOICES), list(DEFAULT_ADAPTERS), ask=ask
+        ADAPTERS_QUESTION, list(ADAPTER_CHOICES), _preselected_adapters(args.repo_root), ask=ask
     )
     framework = _prompt(_FRAMEWORK_QUESTION, ask=ask) or None
     overlays = _prompt_multi_select("Enable overlay packages?", [], [], ask=ask)
