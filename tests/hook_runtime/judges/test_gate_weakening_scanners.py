@@ -119,8 +119,12 @@ def test_a_line_that_only_mentions_a_scanner_variable_is_clean(line: str) -> Non
         '  SAST_DISABLED: "false"',
         "  SECRET_DETECTION_DISABLED: 0",
         "  SAST_DISABLED: False",
+        "  SAST_DISABLED: no",
         '  SECRET_DETECTION_DISABLED: ""',
+        '  SECRET_DETECTION_DISABLED: "TRUE"',  # GitLab compares the string: 'true' or '1'
+        '  SAST_DISABLED: "yes"',
         '  SAST_EXCLUDED_PATHS: ""',
+        "  SAST_EXCLUDED_PATHS: ~",
     ],
 )
 def test_a_scanner_variable_left_switched_on_is_clean(line: str) -> None:
@@ -131,14 +135,34 @@ def test_a_scanner_variable_left_switched_on_is_clean(line: str) -> None:
 @pytest.mark.parametrize(
     ("line", "detail"),
     [
-        ("  SAST_DISABLED: yes", "sets SAST_DISABLED: yes"),  # any value up to GitLab 15.11
-        ('  SECRET_DETECTION_DISABLED: "TRUE"', "sets SECRET_DETECTION_DISABLED: TRUE"),
-        ("  SAST_DISABLED:", "sets SAST_DISABLED: (value on the next lines)"),  # expanded form
-        ("  SAST_EXCLUDED_PATHS:", "sets SAST_EXCLUDED_PATHS: (value on the next lines)"),
+        ("  SAST_DISABLED: TRUE", "sets SAST_DISABLED: TRUE"),  # YAML 1.1 reads it as true
+        ("  SAST_DISABLED: yes", "sets SAST_DISABLED: yes"),
+        ("  SECRET_DETECTION_DISABLED: on", "sets SECRET_DETECTION_DISABLED: on"),
+        ('  SAST_DISABLED: "1"', "sets SAST_DISABLED: 1"),
     ],
 )
-def test_an_unclear_scanner_variable_value_blocks(line: str, detail: str) -> None:
+def test_a_yaml_true_scanner_switch_blocks(line: str, detail: str) -> None:
     assert _ci_rules(GITLAB_CI, line) == [("scanner-loosened-in-ci", detail)]
+
+
+@pytest.mark.parametrize(
+    ("line", "detail"),
+    [
+        ("  SAST_DISABLED:", "sets SAST_DISABLED: (value on the next lines)"),  # expanded form
+        ("  SAST_EXCLUDED_PATHS:", "sets SAST_EXCLUDED_PATHS: (value on the next lines)"),
+        ('  SAST_DISABLED: {value: "false"}', 'sets SAST_DISABLED: {value: "false"}'),
+        ("  SECRET_DETECTION_DISABLED: $NO_SCAN", "sets SECRET_DETECTION_DISABLED: $NO_SCAN"),
+        ("  SAST_EXCLUDED_PATHS: >-", "sets SAST_EXCLUDED_PATHS: >-"),
+    ],
+)
+def test_a_scanner_variable_the_line_cannot_tell_blocks(line: str, detail: str) -> None:
+    assert _ci_rules(GITLAB_CI, line) == [("scanner-loosened-in-ci", detail)]
+
+
+def test_a_hash_inside_a_quoted_value_is_no_comment() -> None:
+    found = _ci_rules(GITLAB_CI, '  SAST_EXCLUDED_PATHS: "docs, #tmp"  # generated')
+
+    assert found == [("scanner-loosened-in-ci", "sets SAST_EXCLUDED_PATHS: docs, #tmp")]
 
 
 def test_a_scanner_variable_outside_ci_files_is_clean() -> None:
@@ -147,7 +171,7 @@ def test_a_scanner_variable_outside_ci_files_is_clean() -> None:
 
 def test_a_moved_scanner_variable_is_clean_and_a_changed_one_blocks() -> None:
     moved = _ci_rules(
-        GITLAB_CI, '    SAST_EXCLUDED_PATHS: "spec"', removed=("  SAST_EXCLUDED_PATHS: spec",)
+        GITLAB_CI, '    SAST_EXCLUDED_PATHS: "spec"', removed=("    SAST_EXCLUDED_PATHS: spec",)
     )
     grown = _ci_rules(
         GITLAB_CI, '  SAST_EXCLUDED_PATHS: "spec, src"', removed=("  SAST_EXCLUDED_PATHS: spec",)
@@ -155,6 +179,13 @@ def test_a_moved_scanner_variable_is_clean_and_a_changed_one_blocks() -> None:
 
     assert moved == []
     assert grown == [("scanner-loosened-in-ci", "sets SAST_EXCLUDED_PATHS: spec, src")]
+
+
+def test_a_job_setting_moved_to_the_global_variables_blocks() -> None:
+    """A job's switch moved to the top-level ``variables:`` turns the scanner off everywhere."""
+    found = _ci_rules(GITLAB_CI, '  SAST_DISABLED: "true"', removed=('    SAST_DISABLED: "true"',))
+
+    assert found == [("scanner-loosened-in-ci", "sets SAST_DISABLED: true")]
 
 
 def test_a_scanner_variable_with_a_reason_is_justified() -> None:
