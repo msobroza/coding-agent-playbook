@@ -67,6 +67,43 @@ def _has_dev_dependencies(wanted: list[str], facts: Facts) -> bool:
     return all(canonical_name(name) in present for name in wanted)
 
 
+def _declared_dependency_names(facts: Facts) -> frozenset[str]:
+    """The PEP 503 names of every runtime and dev dependency the detector declared (D23).
+
+    >>> sorted(_declared_dependency_names({"dependencies": {"anyio": ""},
+    ...                                    "dev_dependencies": {"Pytest_Cov": ""}}))
+    ['anyio', 'pytest-cov']
+    """
+    declared = [*facts.get("dependencies", {}), *facts.get("dev_dependencies", {})]
+    return frozenset(canonical_name(name) for name in declared)
+
+
+def _dependencies_match(value: object, key: str, facts: Facts) -> bool:
+    """Whether ``has_dependency`` (all) or ``any_dependency`` (any) holds for ``facts``.
+
+    >>> _dependencies_match(["pandera"], "any_dependency", {"dependencies": {"pandera": ""}})
+    True
+    """
+    wanted = [canonical_name(name) for name in _coerce_string_list(value, key)]
+    present = _declared_dependency_names(facts)
+    combine = all if key == "has_dependency" else any
+    return combine(name in present for name in wanted)
+
+
+def _files_exist(value: object, key: str, repo_root: Path | None) -> bool:
+    """Whether ``has_file`` (all) or ``any_file`` (any) holds under ``repo_root``.
+
+    >>> _files_exist(["mkdocs.yml"], "any_file", None)
+    Traceback (most recent call last):
+    ValueError: predicate 'any_file' requires repo_root keyword argument
+    """
+    paths = _coerce_string_list(value, key)
+    if repo_root is None:
+        raise ValueError(f"predicate {key!r} requires repo_root keyword argument")
+    combine = all if key == "has_file" else any
+    return combine((repo_root / rel).exists() for rel in paths)
+
+
 def _package_manager_names(value: object) -> frozenset[str]:
     """The managers an ``applies_if.package_manager`` value allows; ``ValueError`` when malformed.
 
@@ -111,7 +148,12 @@ def evaluate_predicate(
       - ``any_ml_stack: ["torch", "tensorflow"]`` — at least one present in facts["ml_stack"]
       - ``has_dev_dependency: ["pytest-cov"]`` — ALL declared as dev dependencies
         (facts["dev_dependencies"]; names compared PEP 503-normalized)
+      - ``has_dependency: ["pandera"]`` — ALL declared as runtime or dev dependencies
+        (facts["dependencies"] and facts["dev_dependencies"]; PEP 503-normalized)
+      - ``any_dependency: ["pandera", "pyjwt"]`` — at least one declared as a runtime
+        or dev dependency (same names and normalization as ``has_dependency``)
       - ``has_file: ["Dockerfile"]`` — file exists in repo root (relative paths)
+      - ``any_file: ["mkdocs.yml", "docs/conf.py"]`` — at least one listed path exists
       - ``package_manager: "uv"`` or ``["uv", "poetry"]`` — facts["package_manager"]
         is that name, or any of the listed names; an absent fact never matches, and
         an unknown name raises even then
@@ -120,7 +162,7 @@ def evaluate_predicate(
     Multiple keys are AND-ed together. Unknown keys raise ``ValueError`` so
     typos fail loudly at validate time.
 
-    ``repo_root`` is required when the predicate uses ``has_file`` (paths are
+    ``repo_root`` is required when the predicate uses ``has_file`` or ``any_file`` (paths are
     resolved relative to it). Other operators read only from ``facts``.
     """
     for key, value in predicate.items():
@@ -154,11 +196,11 @@ def evaluate_predicate(
         elif key == "has_dev_dependency":
             if not _has_dev_dependencies(_coerce_string_list(value, key), facts):
                 return False
-        elif key == "has_file":
-            paths = _coerce_string_list(value, key)
-            if repo_root is None:
-                raise ValueError("predicate 'has_file' requires repo_root keyword argument")
-            if not all((repo_root / rel).exists() for rel in paths):
+        elif key in ("has_dependency", "any_dependency"):
+            if not _dependencies_match(value, key, facts):
+                return False
+        elif key in ("has_file", "any_file"):
+            if not _files_exist(value, key, repo_root):
                 return False
         elif key == "package_manager":
             if not _package_manager_matches(value, facts):

@@ -82,6 +82,54 @@ def test_has_ml_dep_helper_false_when_absent(tmp_path: Path) -> None:
     assert render_string(template, {}, env=env) == ""
 
 
+_ANYIO_TEMPLATE = '{% if has_dependency("anyio") %}yes{% else %}no{% endif %}'
+
+
+@pytest.mark.parametrize(
+    ("facts", "expected"),
+    [
+        ({"dependencies": {"anyio": ">=4"}}, "yes"),
+        ({"dev_dependencies": {"anyio": ">=4"}}, "yes"),
+        ({"dependencies": {"AnyIO": ">=4"}}, "yes"),  # PEP 503-normalized
+        ({"dependencies": {"trio": ">=0.25"}}, "no"),
+        ({}, "no"),  # no dependency facts: no 'is defined' guard needed
+    ],
+    ids=["runtime", "dev", "pep503", "other", "no-facts"],
+)
+def test_has_dependency_helper_reads_runtime_and_dev_dependencies(
+    tmp_path: Path, facts: dict[str, object], expected: str
+) -> None:
+    env = build_environment([tmp_path])
+    env.globals["_facts"] = facts
+    assert render_string(_ANYIO_TEMPLATE, {}, env=env) == expected
+
+
+_AT_LEAST_311 = '{% if python_at_least("3.11") %}new{% else %}old{% endif %}'
+
+
+@pytest.mark.parametrize(
+    ("version", "expected"),
+    [("3.9", "old"), ("3.10", "old"), ("3.11", "new"), ("3.12", "new"), ("3.13", "new")],
+)
+def test_python_at_least_compares_versions_numerically(
+    tmp_path: Path, version: str, expected: str
+) -> None:
+    env = build_environment([tmp_path])
+    env.globals["_facts"] = {"python_version": version}
+    assert render_string(_AT_LEAST_311, {}, env=env) == expected
+
+
+def test_python_at_least_is_false_when_python_version_is_undefined(tmp_path: Path) -> None:
+    env = build_environment([tmp_path])
+    env.globals["_facts"] = {}
+    assert render_string(_AT_LEAST_311, {}, env=env) == "old"
+
+
+def test_python_at_least_is_false_without_any_facts(tmp_path: Path) -> None:
+    env = build_environment([tmp_path])
+    assert render_string(_AT_LEAST_311, {}, env=env) == "old"
+
+
 def test_has_ml_dep_helper_does_not_read_frameworks(tmp_path: Path) -> None:
     # has_ml_dep reads facts["ml_stack"], not facts["frameworks"].
     env = build_environment([tmp_path])

@@ -94,7 +94,15 @@ def _format_detected_section(ctx: SyncContext) -> str:
 
 #: List-valued ``applies_if`` keys the skip reason quotes as written.
 _LIST_PREDICATE_KEYS = frozenset(
-    {"has_framework", "any_framework", "has_file", "has_dev_dependency"}
+    {
+        "has_framework",
+        "any_framework",
+        "has_file",
+        "any_file",
+        "has_dev_dependency",
+        "has_dependency",
+        "any_dependency",
+    }
 )
 
 #: Value-carrying ``applies_if`` keys the skip reason quotes verbatim (a string

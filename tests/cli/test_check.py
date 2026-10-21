@@ -107,6 +107,28 @@ def test_skip_reason_names_has_dev_dependency(tmp_path, make_synthetic_repo, cap
     assert "(skipped: applies_if has_dev_dependency=['pytest-cov'])" in out
 
 
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [("has_dependency", "anyio"), ("any_dependency", "pandera"), ("any_file", "mkdocs.yml")],
+)
+def test_skip_reason_quotes_the_dependency_and_any_file_keys(
+    key, value, tmp_path, make_synthetic_repo, capsys
+):
+    """D23, D78(10): the gate as written, not a boolean fact named after the key."""
+    repo = make_synthetic_repo(tmp_path)
+    rules_dir = repo / "playbook" / "rules"
+    rules_dir.mkdir(parents=True, exist_ok=True)
+    (rules_dir / "gated.md").write_text(
+        f"---\nid: gated-rule\nname: Gated\ndescription: d\nscope: scoped\n"
+        f"skill: python-coding\npriority: 50\napplies_if:\n  {key}: [{value}]\n---\nBody\n",
+        encoding="utf-8",
+    )
+
+    assert _check.run(_ns(repo)) == 0
+
+    assert f"(skipped: applies_if {key}=['{value}'])" in capsys.readouterr().out
+
+
 def test_check_drift_section_reports_drift(tmp_path, make_synthetic_repo, capsys):
     repo = make_synthetic_repo(tmp_path, rules=[("x", "Body\n")])
     sync_args = argparse.Namespace(repo_root=str(repo), check=False)

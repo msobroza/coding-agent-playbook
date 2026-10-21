@@ -155,6 +155,93 @@ def test_has_dev_dependency_reads_the_detected_pyproject(tmp_path: Path) -> None
     assert evaluate_predicate({"has_dev_dependency": ["pytest-cov"]}, detect(tmp_path)) is True
 
 
+# --- has_dependency / any_dependency (D23): runtime OR dev, PEP 503-normalized ---
+
+_RUNTIME_PANDERA: Facts = {"dependencies": {"pandera": ">=0.20"}}
+_DEV_PANDERA: Facts = {"dev_dependencies": {"pandera": ">=0.20"}}
+_SPLIT_DEPS: Facts = {
+    "dependencies": {"pydantic-settings": ">=2", "anyio": ">=4"},
+    "dev_dependencies": {"pytest": ">=8"},
+}
+
+
+@pytest.mark.parametrize("key", ["has_dependency", "any_dependency"])
+@pytest.mark.parametrize("facts", [_RUNTIME_PANDERA, _DEV_PANDERA], ids=["runtime", "dev"])
+def test_dependency_predicates_read_runtime_and_dev_dependencies(key: str, facts: Facts) -> None:
+    assert evaluate_predicate({key: ["pandera"]}, facts) is True
+
+
+@pytest.mark.parametrize("key", ["has_dependency", "any_dependency"])
+def test_dependency_predicates_are_false_without_dependency_facts(key: str) -> None:
+    assert evaluate_predicate({key: ["pandera"]}, {}) is False
+
+
+@pytest.mark.parametrize("key", ["has_dependency", "any_dependency"])
+def test_dependency_predicates_compare_pep_503_names(key: str) -> None:
+    assert evaluate_predicate({key: ["Pydantic_Settings"]}, _SPLIT_DEPS) is True
+
+
+@pytest.mark.parametrize(
+    ("wanted", "expected"),
+    [
+        (["pydantic-settings", "pytest"], True),  # one runtime, one dev: both declared
+        (["pydantic-settings", "pandera"], False),
+        (["pandera"], False),
+    ],
+)
+def test_has_dependency_requires_every_name(wanted: list[str], expected: bool) -> None:
+    assert evaluate_predicate({"has_dependency": wanted}, _SPLIT_DEPS) is expected
+
+
+@pytest.mark.parametrize(
+    ("wanted", "expected"),
+    [
+        (["pandera", "anyio"], True),
+        (["pandera", "pyjwt"], False),
+        ([], False),
+    ],
+)
+def test_any_dependency_requires_one_name(wanted: list[str], expected: bool) -> None:
+    assert evaluate_predicate({"any_dependency": wanted}, _SPLIT_DEPS) is expected
+
+
+@pytest.mark.parametrize("key", ["has_dependency", "any_dependency"])
+def test_dependency_predicates_require_a_list_of_strings(key: str) -> None:
+    with pytest.raises(ValueError, match=f"'{key}' must be a list of strings; got 'pandera'"):
+        evaluate_predicate({key: "pandera"}, _RUNTIME_PANDERA)
+
+
+def test_any_dependency_reads_the_detected_pyproject(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\ndependencies = ["Pandera>=0.20"]\n', encoding="utf-8"
+    )
+    assert evaluate_predicate({"any_dependency": ["pandera"]}, detect(tmp_path)) is True
+
+
+# --- any_file (D78(10)): at least one listed path exists ---
+
+
+def test_any_file_true_when_one_listed_path_exists(tmp_path: Path) -> None:
+    (tmp_path / "mkdocs.yml").write_text("site_name: x\n")
+    predicate = {"any_file": ["docs/conf.py", "mkdocs.yml"]}
+    assert evaluate_predicate(predicate, {}, repo_root=tmp_path) is True
+
+
+def test_any_file_false_when_no_listed_path_exists(tmp_path: Path) -> None:
+    predicate = {"any_file": ["docs/conf.py", "mkdocs.yml"]}
+    assert evaluate_predicate(predicate, {}, repo_root=tmp_path) is False
+
+
+def test_any_file_requires_a_list_of_strings(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="'any_file' must be a list of strings"):
+        evaluate_predicate({"any_file": "mkdocs.yml"}, {}, repo_root=tmp_path)
+
+
+def test_any_file_without_repo_root_raises() -> None:
+    with pytest.raises(ValueError, match="'any_file' requires repo_root"):
+        evaluate_predicate({"any_file": ["mkdocs.yml"]}, {})
+
+
 def test_evaluate_predicate_ml_stack_requires_list() -> None:
     facts: Facts = {"ml_stack": {"torch": ""}}
     with pytest.raises(ValueError, match="list of strings"):
