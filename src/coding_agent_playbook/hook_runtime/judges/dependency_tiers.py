@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Final
 from coding_agent_playbook.detector.pep503 import canonical_name
 from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, clip, quote_data
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
-from coding_agent_playbook.hook_runtime.judges.hosts import url_host
+from coding_agent_playbook.hook_runtime.judges.hosts import normalized_url, url_host
 from coding_agent_playbook.hook_runtime.judges.install_commands import DEFAULT_INDEXES
 
 if TYPE_CHECKING:
@@ -108,7 +108,7 @@ def dependency_policy(facts: object, config: Mapping[str, object]) -> Dependency
         manager=manager if isinstance(manager, str) else None,
         declared=frozenset(canonical_name(name) for name in declared),
         allowlist=tuple(dict.fromkeys(allowlist)),
-        required_index=required.rstrip("/") if isinstance(required, str) else "",
+        required_index=normalized_url(required) if isinstance(required, str) else "",
         index_mode=Decision.DENY if strict else Decision.ASK,
     )
 
@@ -138,6 +138,8 @@ def index_finding(
 ) -> Finding | None:
     """The overlay ``required_index`` (deny), else tier (d) index mixing (``index_mode``).
 
+    The required index and each requested one compare normalized (:func:`normalized_url`).
+
     Example::
 
         >>> index_finding([("extra", "https://download.pytorch.org/whl/cu121")], policy,
@@ -145,7 +147,8 @@ def index_finding(
         'index_mixing'
     """
     if policy.required_index:
-        other = next((u for _, u in indexes if u.rstrip("/") != policy.required_index), None)
+        required = policy.required_index
+        other = next((u for _, u in indexes if normalized_url(u) != required), None)
         if other is None:
             return None
         lines = (

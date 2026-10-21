@@ -59,6 +59,7 @@ _BUILTIN_ADAPTERS = (
 )
 #: The §12 subcommands added by PR K: each documents every flag its parser declares.
 _NEW_SUBCOMMANDS = (
+    "forge",
     "ci",
     "gate-scan",
     "scan-secrets",

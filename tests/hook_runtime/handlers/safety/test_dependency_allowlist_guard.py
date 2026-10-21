@@ -252,6 +252,26 @@ def test_required_index_denies_any_other_index(pack_repo: PackRepo, deps: Deps) 
     assert _decision(internal) is Decision.NONE
 
 
+@pytest.mark.parametrize(
+    ("index", "expected"),
+    [
+        # prF §14: the URLs compare without userinfo, case-blind in scheme and host, no trailing /
+        ("https://ci:xxx@pypi.corp.example/simple", Decision.NONE),
+        ("HTTPS://PyPI.Corp.Example/simple/", Decision.NONE),
+        ("https://pypi.corp.example/simple//", Decision.NONE),
+        ("https://pypi.corp.example/Simple", Decision.DENY),  # a path stays case-sensitive
+        ("https://pypi.corp.example.evil.io/simple", Decision.DENY),
+        ("http://pypi.corp.example/simple", Decision.DENY),
+    ],
+)
+def test_required_index_compares_normalized_urls(
+    pack_repo: PackRepo, deps: Deps, index: str, expected: Decision
+) -> None:
+    repo = _install(pack_repo, required_index="https://deploy@Pypi.Corp.Example/simple/")
+
+    assert _decision(_bash(repo, deps, f"uv add --index-url {index} httpx")) is expected
+
+
 def test_unparsed_install_asks(repo: PackRepo, deps: Deps) -> None:
     assert _decision(_bash(repo, deps, "pip install 'requests")) is Decision.ASK
 

@@ -1,12 +1,17 @@
 """git-commit-push-policy-guard: identity, authorship, signing and where a commit lands (specs/prK-hook-pack.md §E.4).
 
-``pre_tool_use`` on shell calls running ``git``, ``gh`` or ``export`` (the
-argv0 prefilter); a speed bump, since a server-side push rule is the
-authoritative control. It only denies or asks, never rewrites the command, so
-it coexists with a user's own command-rewriting hook.
+``pre_tool_use`` on shell calls running ``git``, a forge CLI (``gh``,
+``glab``), ``playbook`` or ``export`` (the argv0 prefilter), and on file-tool
+writes of the repository's git config file; a speed bump, since a
+server-side push rule is the authoritative control. It only denies or asks,
+never rewrites the command, so it coexists with a user's own
+command-rewriting hook.
 
 Default rows (on): the identity and signing rows of ``_git_identity`` deny;
-before a ``git commit``, an empty or placeholder identity
+the push-option judge (``_push_options``, specs/prF-forge-adapter.md §8.4)
+denies a push option or commit marker that turns off a forge's secret push
+protection and asks on one that sets CI variables or skips CI; before a
+``git commit``, an empty or placeholder identity
 (``config.placeholder_identity``, read with a local ``git config --get``) denies
 without ever echoing the value; a commit in another worktree than the
 session's, or on the default branch (``config.ask_on_default_branch``), asks.
@@ -16,14 +21,16 @@ or an overlay fills them): ``forbid_trailers`` / ``allowed_coauthors`` /
 ``required_trailers`` judge the message through ``security.commit_trailers``
 (``CP4xx``; an unreadable message asks), ``never_commit_globs`` the staged
 paths, ``git add -f`` paths and ``commit -a`` / pathspec paths, and the
-opt-in, advisory ``push_requires_green`` asks before a push or ``gh pr
-create`` whose ``HEAD`` tree the Stop gate has not seen green.
+opt-in, advisory ``push_requires_green`` asks before a push, a pull request
+(``gh pr create``, ``glab mr create``, ``playbook forge pr create``) or a forge
+command that pushes ``HEAD``'s branch (``glab mr create --fill``, ``repo create
+--push``; ``judges.forge_calls``, §8.3) whose ``HEAD`` tree the Stop gate has
+not seen green.
 """
 
 from __future__ import annotations
 
 import os
-import posixpath
 import re
 from typing import TYPE_CHECKING, Final
 
@@ -35,12 +42,18 @@ from coding_agent_playbook.hook_runtime.handlers.safety._git_identity import (
     IDENTITY_REASON,
     identity_rule,
 )
+from coding_agent_playbook.hook_runtime.handlers.safety._push_options import (
+    config_file_verdicts,
+    marker_verdicts,
+    segment_verdicts,
+)
+from coding_agent_playbook.hook_runtime.judges.forge_calls import FORGE_ARGV0S, forge_call
 from coding_agent_playbook.hook_runtime.shell.git_options import git_args
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
 
-    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, RepoInfo
+    from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, RepoInfo, ToolCall
     from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
     from coding_agent_playbook.hook_runtime.shell.git_command import GitInvocation
     from coding_agent_playbook.hook_runtime.shell.parse import Segment
@@ -79,7 +92,7 @@ _UNPARSED: Final = re.compile(
     events=["pre_tool_use"],
     decisions=["deny", "ask", "none"],
     config_schema=CONFIG_SCHEMA,
-    argv0s=("git", "git.exe", "gh", "export"),
+    argv0s=("git", "git.exe", *FORGE_ARGV0S, "export"),
 )
 def git_policy_guard(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult | None:
     """Deny identity, authorship and signing changes; ask where a commit should not land.
@@ -89,10 +102,12 @@ def git_policy_guard(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult |
         >>> git_policy_guard(bash("git commit --author=x -m m"), ctx).rule_id  # doctest: +SKIP
         'author'
     """
-    command = ev.tool.command if ev.tool is not None else None
-    if command is None or ev.repo is None:
+    if ev.tool is None or ev.repo is None:
         return None
-    if command.parse_error is not None or command.kind != "posix":
+    command = ev.tool.command
+    if command is None:
+        found = _file_verdict(ev.tool, ev.repo, ctx)
+    elif command.parse_error is not None or command.kind != "posix":
         found = _unparsed(command.text)
     else:
         found = _strongest(_segment_verdict(s, ev.repo, ctx) for s in command.segments)
@@ -109,12 +124,15 @@ def _segment_verdict(segment: Segment, repo: RepoInfo, ctx: HandlerContext) -> V
     rule = identity_rule(segment, git)
     if rule is not None:
         return Decision.DENY, rule, IDENTITY_REASON
+    options = _strongest(segment_verdicts(segment, git))
+    if options is not None and options[0] is Decision.DENY:
+        return options
     if git is not None:
-        return _git_verdict(git, repo, ctx)
-    program = posixpath.basename(segment.argv[0]) if segment.argv else ""
-    if program == "gh" and segment.argv[1:3] == ("pr", "create"):
-        return _green_verdict(ctx)
-    return None
+        return _strongest((options, _git_verdict(git, repo, ctx)))
+    call = forge_call(segment, ctx.env)
+    if call is not None and (call.opens_pull_request or call.pushes):
+        return _strongest((options, _green_verdict(ctx)))
+    return options
 
 
 def _git_verdict(git: GitInvocation, repo: RepoInfo, ctx: HandlerContext) -> Verdict | None:
@@ -136,8 +154,10 @@ def _commit_verdict(git: GitInvocation, repo: RepoInfo, ctx: HandlerContext) -> 
         staged_paths,
     )
 
-    found = message_verdict(git, repo, ctx.config) or _never_commit(
-        lambda: staged_paths(git, ctx.git), ctx
+    found = (
+        _marker_verdict(git, repo)
+        or message_verdict(git, repo, ctx.config)
+        or _never_commit(lambda: staged_paths(git, ctx.git), ctx)
     )
     if found is not None:
         return found
@@ -148,6 +168,32 @@ def _commit_verdict(git: GitInvocation, repo: RepoInfo, ctx: HandlerContext) -> 
         )
         return Decision.ASK, "other_worktree", reason
     return _default_branch_verdict(ctx)
+
+
+def _marker_verdict(git: GitInvocation, repo: RepoInfo) -> Verdict | None:
+    """Deny a message carrying a forge's secret-skip marker; an unreadable one is not judged."""
+    from coding_agent_playbook.hook_runtime.shell.git_command import (
+        Uninspectable,
+        commit_message_sources,
+    )
+
+    sources = commit_message_sources(git, root=repo.worktree_root)
+    return None if isinstance(sources, Uninspectable) else _strongest(marker_verdicts(sources))
+
+
+def _file_verdict(tool: ToolCall, repo: RepoInfo, ctx: HandlerContext) -> Verdict | None:
+    """A ``pushOption`` line a file tool adds to the repository's git config file."""
+    from coding_agent_playbook.hook_runtime.handlers._shared.git_config_file import config_edits
+
+    return _strongest(
+        verdict
+        for edit in config_edits(tool, repo, ctx.platform)
+        for verdict in (
+            config_file_verdicts(None, edit.written)  # cannot simulate: the whole edit
+            if edit.after is None
+            else config_file_verdicts(edit.before, edit.after)
+        )
+    )
 
 
 def _placeholder_identity(ctx: HandlerContext) -> bool:
@@ -213,7 +259,7 @@ def _green_verdict(ctx: HandlerContext) -> Verdict | None:
         return None
     reason = (
         "The Stop gate has not seen this HEAD tree green (advisory).\n"
-        "Let the checks run green before you push or open a PR, or confirm."
+        "Let the checks run green before you push or open a pull request, or confirm."
     )
     return Decision.ASK, "push_not_green", reason
 

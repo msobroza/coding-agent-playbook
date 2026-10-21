@@ -30,8 +30,9 @@ Multi-harness playbook engine
   copy-paste.
 - **Enterprise-friendly.** Copies, not symlinks (cross-platform,
   banking-safe). No telemetry, ever. No outbound network by default — even the
-  pre-commit hooks run locally, so it works fully offline. Distribute via
-  internal PyPI / git.
+  pre-commit hooks run locally, so it works fully offline; only
+  [`playbook forge`](#playbook-forge) contacts a forge, and only when someone
+  runs it. Distribute via internal PyPI / git.
 - **Mistakes caught before they ship.** `playbook validate` cross-checks the
   canonical source (prompt↔rule inclusion symmetry, eval-task back-references,
   typo'd predicate keys), and a local lockfile records the engine version and
@@ -61,7 +62,8 @@ writes the shared skill root `.agents/skills/` read by Codex and OpenCode, and t
 commands (`init` / `sync` / `check` / `validate` / `render` / `eval` /
 `metrics` / `import-harness` / `validate-harness`), the off-workstation checks
 (`ci` / `gate-scan` / `scan-secrets` / `scan-sinks` / `check-deps` /
-`check-commit-trailers` / `check-notebooks`), the Tier 0 eval schema
+`check-commit-trailers` / `check-notebooks`), the forge operations on GitHub and
+GitLab ([`forge`](#playbook-forge), through `gh` or `glab`), the Tier 0 eval schema
 plus the v1.1 eval runner (`playbook eval --run`, deterministic layers live;
 judged rubric scoring live via `--judge`), and the code-quality metrics gate.
 v0.20 adds the opt-in [assistant lifecycle hooks](#assistant-lifecycle-hooks):
@@ -290,7 +292,11 @@ and `.claude/skills/`. To enable it as well:
 playbook init --adapters claude_code,opencode,shared_skills,continue
 ```
 
-Codex needs no adapter: it reads `AGENTS.md` and `.agents/skills/`.
+Codex needs no adapter: it reads `AGENTS.md` and `.agents/skills/`. GitLab Duo
+reads `AGENTS.md` too, but an agent that runs on the forge's servers (a GitLab
+Duo agent flow, a hosted coding agent) sees only what is committed: with the
+default `[output] commit = false` it finds no `AGENTS.md`, so set `commit = true`
+in repos that use one.
 
 Then install the git hooks — all three hook types, so the auto-sync runs after
 checkouts and pulls:
@@ -514,6 +520,10 @@ runs the hooks itself, so `.claude/skills/` gets it only for a hook Claude Code
 cannot run; Continue keeps its `30-guardrail-<id>.md` rule files. `AGENTS.md`
 keeps one line per guardrail, the hook's `summary`, and names the skill.
 
+Core also ships `forge`, which takes no rules and is written in every repo: it
+teaches the assistant the operations of [`playbook forge`](#playbook-forge),
+what to do on its exit codes, and the pull request template locations.
+
 Sync renders each rule that applies as `<skills root>/<skill>/references/<rule-id>.md`
 and appends a `## References` index to the skill's `SKILL.md`, one line per
 rule with its description. The skill's description gains a generated "Covers
@@ -659,8 +669,9 @@ plugin always rule. Upstream's `triage` is dropped, and three skills are renamed
 so they do not replace Claude Code's own bundled skills: `code-review` is
 `two-axis-review`, `pr` is `pr-body` and `prototype` is `throwaway-prototype`.
 The skills name no tool a consumer repo may lack (no forge CLI, `jq`, OS
-openers, CDN assets or bash scripts; wizard's and diagnosing-bugs' scripts are
-standard-library Python), and the plugin contains no URL. Enable it on its own:
+openers, CDN assets or bash scripts; forge issues go through `playbook forge`;
+wizard's and diagnosing-bugs' scripts are standard-library Python), and the
+plugin contains no URL. Enable it on its own:
 
 ```toml
 # .coding-agent-playbook.toml (top-level key, above the first [table] header)
@@ -670,8 +681,11 @@ overlays_enabled = ["coding_agent_playbook.plugins.mattpocock_skills"]
 Then, once per repo:
 
 - Run `/setup-matt-pocock-skills`. It writes `docs/agents/issue-tracker.md`,
-  `docs/agents/triage-labels.md` and `docs/agents/domain.md`; the default
-  tracker is local markdown, which needs no remote or CLI. The plugin always
+  `docs/agents/triage-labels.md` and `docs/agents/domain.md`. When the repo
+  pushes to GitHub or GitLab it proposes **Forge issues**, which you confirm
+  once: the skills then track issues through `playbook forge`, and setup checks
+  the forge CLI's login and creates the labels. Otherwise the default tracker
+  is local markdown, which needs no remote or CLI. The plugin always
   rule (`mattpocock-skills-tracker`) points the agent at these files and asks
   it to tell you to run setup when a skill needs one that is missing.
 - Add `.scratch/` to your `.gitignore`. The local tracker keeps its maps and
@@ -808,7 +822,7 @@ their off-workstation twin.
 | `playbook-validate` | Manual only (`pre-commit run --hook-stage manual playbook-validate`) | Runs `playbook validate`; surfaces canonical-source mistakes (typo'd `applies_if` keys, orphan eval tasks, etc.). Overlay-author-facing. |
 | `playbook-metrics` | Every commit (Python files) | Runs `playbook metrics --baseline git:HEAD --no-run-tests`; fails the commit when staged Python worsens vs `HEAD`. **Static only**: `--no-run-tests` keeps your test suite out even when `[metrics] run_tests = true`. |
 | `playbook-coverage` | Manual only (`pre-commit run playbook-coverage --hook-stage manual`, or move it to `pre-push`) | **Runs your test suite** with coverage: changed lines must be at least 80% executed (`diff_coverage`) and total coverage must not drop below `HEAD`. Needs `pytest-cov` in your project. |
-| `playbook-secrets` | Every commit | Runs `playbook scan-secrets --staged`; fails when staged lines add a known token format (cloud, VCS, chat and LLM API keys, PEM private keys, JWTs, URLs with inline passwords) or a credential file (`.env*`, `*.pem`, …) is staged. Output is masked. The stdlib, air-gapped stand-in for gitleaks. |
+| `playbook-secrets` | Every commit | Runs `playbook scan-secrets --staged`; fails when staged lines add a known token format (cloud keys, GitHub and GitLab tokens, chat and LLM API keys, PEM private keys, JWTs, URLs with inline passwords) or a credential file (`.env*`, `*.pem`, …) is staged. Output is masked. The stdlib, air-gapped stand-in for gitleaks. |
 | `playbook-commit-msg` | `commit-msg` | Runs commitizen's `cz check --commit-msg-file` against your [`[tool.commitizen]` convention](#commit-message-convention-commitizen). `language: system`: `cz` comes from your environment, and a machine without it fails loudly. |
 | `playbook-notebooks` | Every commit (notebooks) | Runs `playbook check-notebooks`; fails when a staged notebook keeps cell outputs (they may embed data rows). For ML / data-science repos. |
 | `playbook-scan-sinks` | Every commit (Python, notebooks) | Runs `playbook scan-sinks --staged`; fails when staged code adds an unsafe deserialization sink (`pickle.loads`, `torch.load(weights_only=False)`, …). For ML repos. |
@@ -874,6 +888,25 @@ protected_branches = ["develop"]           # extends main, master and release/*
 
 [guardrails.secrets]
 allow_paths = ["tests/fixtures/sample.env"]   # exempt paths, such as test fixtures
+extra_globs = ["~/.glab/config.yml"]          # more credential files, such as glab's GLAB_CONFIG_DIR
+```
+
+The secret guards know GitHub and GitLab tokens, the credential files of `gh`
+and `glab`, and the GitLab Runner's `config.toml`. Two GitLab setups need one
+committed row each. When `GLAB_CONFIG_DIR` (or `XDG_CONFIG_HOME`) moves `glab`'s
+config, add that directory's `config.yml` to `extra_globs`, as above; do the
+same for a Windows runner's `config.toml`, which has no fixed path, written
+with forward slashes (`"C:/GitLab-Runner/config.toml"`). When an administrator
+replaced the `glpat-` personal access token prefix, add a pattern for the new
+prefix, starting with the prefix itself so the scan stays fast.
+secret-content-guard and stop-diff-sweep both apply it; the `playbook
+scan-secrets` and `playbook ci` scans keep the built-in rules:
+
+```toml
+[hooks.secret-content-guard]
+extra_patterns = [
+  { id = "gitlab-custom-pat", label = "GitLab personal access token", regex = 'acmepat-(?<![A-Za-z0-9_].{8})(?:[0-9A-Za-z_-]{20}|[0-9A-Za-z_-]{27,300}\.(?:[0-9a-z]{2}\.)?[0-9a-z]{9})(?![0-9A-Za-z_-])' },
+]
 ```
 
 Then run `playbook sync`. With hooks on it writes `guard_config.json`, the
@@ -921,7 +954,7 @@ reason, at most `max_blocks` times per stop chain.
 | `stop-ci-parity-gate` | `default` | Claude Code; checked on OpenCode | The Stop coordinator: lint and verify the "done" claim; with an approved stage list, also typecheck and run the tests. |
 | `clean-code-metrics-nonregression` | `default` | Claude Code, OpenCode | Stage `quality-metrics`: touched Python must not worsen against `HEAD` under your `[metrics]`; after each edit, report ruff's complexity codes (C901, PLR0911, PLR0912, PLR0913, PLR0915) on the changed lines. |
 | `docstring-nonregression` | `default` | Claude Code, OpenCode | Stage `docstrings`: removed docstrings and new undocumented public symbols. |
-| `gate-weakening-guard` | `default` | Claude Code, OpenCode | Stage `gate-integrity`: new suppressions, skipped or deleted tests, loosened checker config. |
+| `gate-weakening-guard` | `default` | Claude Code, OpenCode | Stage `gate-integrity`: new suppressions, skipped or deleted tests, loosened checker config, removed CI steps or jobs (GitHub workflows, GitLab CI), secret or SAST scanners loosened. |
 | `block-precommit-bypass` | `default` | Claude Code, OpenCode | Deny skipping the playbook pre-commit hooks (`--no-verify`, `SKIP=`, `core.hooksPath`). |
 | `tests-with-source-nudge` | `default` | Claude Code; checked on OpenCode | Stage `tests-nudge`: name each new public function, class or method no test mentions. |
 | `coverage-diff-gate` | `opt-in` | Claude Code; checked on OpenCode | Stage `coverage`: changed lines at least 80% covered, total coverage not below the last green run. |
@@ -946,15 +979,15 @@ reason, at most `max_blocks` times per stop chain.
 
 | Hook | Tier | Enforced on | What it does |
 | --- | --- | --- | --- |
-| `secrets-path-guard` | `default` | Claude Code, OpenCode | Deny agent reads and writes of credential files (`.env`, keys, cloud and SSH credentials). |
+| `secrets-path-guard` | `default` | Claude Code, OpenCode | Deny agent reads and writes of credential files (`.env`, keys, cloud and SSH credentials) and commands that print a forge token. |
 | `secret-content-guard` | `default` | Claude Code, OpenCode | Deny a write that would persist a secret token, and a push whose commits add one. |
 | `stop-diff-sweep` | `default` | Claude Code; checked on OpenCode | Stage `secrets`: block when the turn's working tree adds a token or an untracked credential file. |
 | `destructive-command-guard` | `default` | Claude Code, OpenCode | Deny catastrophic shell commands; ask before one that would lose uncommitted work. |
 | `git-commit-push-policy-guard` | `default` | Claude Code, OpenCode | Deny changes to git identity, authorship or signing; ask before committing on the default branch. |
 | `commit-message-convention` | `default` | Claude Code, OpenCode | Deny an agent's commit whose message fails `cz check` (see [commitizen](#commit-message-convention-commitizen)). |
 | `dependency-allowlist-guard` | `default` | Claude Code, OpenCode | Deny the wrong package manager and lockfile hand edits; ask before a new direct dependency. |
-| `exfil-channel-guard` | `default` | Claude Code, OpenCode | Ask before repository data leaves through ordinary tools (a new remote, an upload, `scp`). |
-| `taint-escalation` | `opt-in` | Claude Code, OpenCode | After the session reads untrusted content, ask before pushes, installs and network calls. |
+| `exfil-channel-guard` | `default` | Claude Code, OpenCode | Ask before repository data leaves through ordinary tools (a new remote, an upload, `scp`, mail). |
+| `taint-escalation` | `opt-in` | Claude Code, OpenCode | After the session reads untrusted content (forge issues and pull requests included), ask before pushes, installs, network calls and text sent to a forge. |
 | `command-convention-guard` | `opt-in` | Claude Code, OpenCode | Apply your repository's Bash convention rows (the engine provides no rows of its own). |
 | `network-egress-guard` | `overlay` | Claude Code, OpenCode | Restrict agent network egress to approved hosts; an air-gapped overlay activates it. |
 | `sensitive-data-read-guard` | `overlay` | Claude Code, OpenCode | Ask before raw-data reads (data globs, large CSVs, notebook outputs); a regulated overlay activates it. |
@@ -974,7 +1007,7 @@ reason, at most `max_blocks` times per stop chain.
 | --- | --- |
 | Claude Code | Natively, on every event: one managed matcher group per event in `.claude/settings.json`, each running `.claude/hooks/playbook/launch.sh`. Your keys, your hook groups and `.claude/settings.local.json` are never touched, and a hand-edited managed group is restored with a warning. |
 | OpenCode ≥ 1.18.29 | Natively, through the one generated plugin `.opencode/plugins/playbook-hooks.js` (OpenCode's V1 plugin API): tool calls before and after, plus session start (an experimental API) and Stop (evidence only: it reports, it cannot block). Restart OpenCode after sync reports that the plugin changed. |
-| Codex, Cursor, GitHub Copilot, Gemini and other `AGENTS.md` readers | Advice only: the `## Guardrails` section at the end of `AGENTS.md`, one line per guardrail; skill `playbook-guardrails` holds the full text of each and where it is enforced. |
+| Codex, Cursor, GitHub Copilot, Gemini, GitLab Duo and other `AGENTS.md` readers | Advice only: the `## Guardrails` section at the end of `AGENTS.md`, one line per guardrail; skill `playbook-guardrails` holds the full text of each and where it is enforced. |
 | Continue | Advice only: `.continue/rules/30-guardrail-<id>.md`. |
 | Agent Harness (opt-in) | Advice only: `rules/30-guardrail-<id>.md`, plus the `.playbook/hooks/<id>/` sidecar that keeps `import-harness` lossless. |
 
@@ -1224,18 +1257,24 @@ playbook ci --format json                     # one {step, argv, exit, duration_
 | `validate` | `playbook validate` | always |
 | `metrics` | `playbook metrics --baseline git:<merge base> --changed --no-run-tests` | always (static, never the suite) |
 | `coverage` | `playbook metrics --run-tests --select testing --baseline git:<merge base>` | `[metrics] run_tests = true`, or `--steps coverage` |
-| `gate-scan` | `playbook gate-scan`: new suppressions, skipped tests, loosened checker config | always |
+| `gate-scan` | `playbook gate-scan`: new suppressions, skipped tests, loosened checker config, removed CI steps or jobs, loosened secret or SAST scanners | always |
 | `scan-secrets` | `playbook scan-secrets` over the branch | always |
-| `commit-convention` | `cz check` on the commits after `cutover_date`, plus `$PLAYBOOK_PR_TITLE` | `[tool.commitizen]` or `[hooks.commit_convention]` is set |
+| `commit-convention` | `cz check` on the commits after `cutover_date`, plus `$PLAYBOOK_PR_TITLE` (a leading `[Draft]`, `Draft:` or `(Draft)` stripped) | `[tool.commitizen]` or `[hooks.commit_convention]` is set |
 | `commit-trailers` | `playbook check-commit-trailers` over the branch | a commit-trailer row is configured |
 | `check-deps` | `playbook check-deps`: newly declared dependencies against your policy | a dependency policy is configured |
 | `scan-sinks` | `playbook scan-sinks` over the branch | only when `--steps` names it |
 
 It exits `0` when every step that ran passed, `1` when one failed or timed out,
-and `2` on a usage error or an unresolvable base. The job needs the full history
-(`fetch-depth: 0`), and the pull-request title is attacker-controlled text: pass
-it **only through `env:`**, never inside a `run:` line, so it cannot inject shell
-commands:
+and `2` on a usage error, an unresolvable base, a blank `--base`, or an empty
+range (the base is `HEAD` or already contains it, so nothing would be checked).
+`playbook ci` never fetches and never reads a forge's variables: the CI job
+fetches the history and passes the base with `--base`.
+
+### GitHub Actions
+
+The job needs the full history (`fetch-depth: 0`), and the pull-request title is
+attacker-controlled text: pass it **only through `env:`**, never inside a `run:`
+line, so it cannot inject shell commands:
 
 ```yaml
 # .github/workflows/ci.yml
@@ -1256,6 +1295,277 @@ jobs:
         run: playbook ci --base origin/main
         env:
           PLAYBOOK_PR_TITLE: ${{ github.event.pull_request.title }}
+```
+
+### GitLab CI
+
+A GitLab *merge request pipeline* clones a shallow history (`GIT_DEPTH` 20 by default)
+and fetches only the pipeline's own ref, never the target branch, so the job
+sets `GIT_DEPTH: 0`, fetches the target branch, and passes the base explicitly.
+The title reaches `playbook ci` only through `variables:`, never inside a
+`script:` line:
+
+```yaml
+playbook-ci:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  variables:
+    GIT_DEPTH: 0
+    PLAYBOOK_PR_TITLE: $CI_MERGE_REQUEST_TITLE
+  script:
+    - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+    - playbook ci --base "${CI_MERGE_REQUEST_TARGET_BRANCH_SHA:-$CI_MERGE_REQUEST_DIFF_BASE_SHA}"
+```
+
+`CI_MERGE_REQUEST_TARGET_BRANCH_SHA` is set only in merged results pipelines;
+elsewhere it is empty and the base is `CI_MERGE_REQUEST_DIFF_BASE_SHA`, the merge
+base of the pull request's diff. The shell syntax targets Linux runners, and the
+job installs the project with its dev tools as on GitHub. A draft marker
+(`Draft:`, `[Draft]`, `(Draft)`) at the start of the title is not checked: the
+squash commit does not carry it.
+
+How far the job is a gate depends on where its definition lives. On GitLab, a
+pull request's pipeline runs that pull request's own `.gitlab-ci.yml`:
+
+1. **Free.** Add the job and turn on *Pipelines must succeed* (Settings → Merge
+   requests). On Free a pull request can otherwise edit its own pipeline: it can
+   delete the job or make it optional in the same change. gate-scan flags that
+   (a removed job, script item or `include:` entry, and `playbook-ci` gaining
+   `allow_failure: true`, `when: manual` or `when: never`), but only a reviewer
+   stops the merge.
+2. **"Pipelines must succeed" with the CI configuration in a separate protected
+   project.** Point Settings → CI/CD → General pipelines → *CI/CD configuration
+   file* at `.gitlab-ci.yml@group/ci-config`, a project the pull request's
+   authors cannot push to. The pull request then cannot change the job that
+   gates it.
+3. **Ultimate: a pipeline execution policy** that injects the `playbook-ci` job
+   into every pipeline of the projects it covers; a project's own
+   `.gitlab-ci.yml` cannot remove it.
+
+## `playbook forge`
+
+`playbook forge` runs one forge operation (an issue, pull request, label or
+check operation) on GitHub or GitLab. On every call it reads the repo's git
+config, maps the current branch's push remote to its forge, and runs that
+forge's CLI, `gh` (2.94.0 or later) or `glab` (1.115.0 or later), with the CLI's
+own login and translated arguments. Skills and agents name only `playbook
+forge`, so their text is the same on both forges; the always-rendered core skill
+`forge` teaches the operations to the assistant.
+
+It is the only engine code that contacts a forge, and only when someone runs it:
+hooks, `sync`, `check`, `validate` and `playbook ci` never do. The engine never
+reads or stores a forge token: the CLI uses its own login (`gh auth login`,
+`glab auth login`, or `GH_TOKEN` / `GITLAB_TOKEN` in the environment). The
+guards judge `playbook forge` calls from the same operation tables, so a body
+file sent through it is egress like any other.
+
+```bash
+playbook forge which                                     # forge, CLI, host, API host, repo, remote
+playbook forge issue create --title "Add X" --body-file plan.md --label ready
+playbook forge issue view 12 --comments
+playbook forge pr create --title "feat: add X" --body-file pr.md --base main
+playbook forge pr checks 34
+playbook forge -C ../other-repo pr list --state merged --json
+```
+
+| Operation | GitHub (`gh`) | GitLab (`glab`) |
+| --- | --- | --- |
+| `issue create --title --body… [--label]… [--assignee @me] [--parent n] [--blocked-by n,…] [--confidential]` | `gh issue create` | `glab issue create`; `--parent` exits 3, `--blocked-by` is a blocking link (Premium, else exit 3) |
+| `issue view <n> [--comments]`, `issue list [--state] [--label]… [--no-label] [--assignee] [--search] [--limit]` | `gh issue view/list --json` | `glab issue view -F json`, `glab issue list -O json`; notes through `glab api`, every page, system notes dropped |
+| `issue comment <n> --body…` | `gh issue comment` | a note through `glab api` |
+| `issue label <n> [--add a,b] [--remove c]`, `issue assign <n> --add @me`, `issue edit <n> [--title] [--body…]` | `gh issue edit` | `glab issue update` |
+| `issue close <n> [--comment] [--reason completed\|not-planned\|duplicate]` | `gh issue close` (one call) | a note with the reason as its closing line, then `glab issue close` |
+| `issue link-child <parent> <child>`, `issue children <parent>` | sub-issues | exit 3 |
+| `issue block <child> <blocker>`, `issue blockers <n>` | blocked-by links | `is_blocked_by` issue links (Premium, else exit 3) |
+| `label list`, `label create <name> [--color] [--description]` | `gh label` | `glab label` |
+| `pr create --title --body… [--base] [--draft]` | `gh pr create --head <branch>` | `glab mr create --source-branch <branch> --push=false` |
+| `pr view <n> [--comments]`, `pr list [--state] [--label] [--external]` | `gh pr view/list --json`; `--external` keeps authors outside the repo, with `author_association` | `glab mr view/list -F json`; `--external` looks each author up in the project's members |
+| `pr diff <n>`, `pr checkout <n>`, `pr checks <n>` | `gh pr diff/checkout/checks` | `glab mr diff --raw`, `glab mr checkout`, the jobs of `glab ci get --merge-request` |
+| `pr comment <n> --body… [--reply-to <id>]`, `pr label`, `pr edit`, `pr ready`, `pr close [--comment]` | `gh pr comment/edit/ready/close`; a reply goes into the review thread | `glab mr note create`, `glab mr update`, a note then `glab mr close` |
+| `ref view <ref>` | `#n` / `n`: the pull request, else the issue | `#n` / `n`: the issue, `!n`: the merge request; a URL by its path |
+| `which` | prints `{forge, cli, host, api_host, repo, remote}` without running the CLI | the same |
+| `auth status` | `gh auth status --hostname <host> --active` | `glab auth status --hostname <host>` (never `-t`), then `glab api user` for a token kept only in the environment |
+
+A body is `--body TEXT`, `--body-file PATH` or `--body-file -` (stdin), and on
+`issue create` and `pr create` also `--template PATH`, read as a body file. It
+always reaches the CLI on stdin, never on its command line, and every body sent
+to GitLab has each line-leading `/` indented by one space, so no quick action
+runs. Read operations print one JSON vocabulary on both forges (`number`, `url`,
+`title`, `body`, `state` as `open` / `closed` / `merged`, `labels`, `assignees`,
+`author`, `created_at`, `updated_at`, `confidential`, and `draft`, `base` and
+`head` for a pull request); write operations print the URL they created or
+changed, `{"url": …}` with `--json`.
+
+`pr create` never pushes: when the branch is not on the push remote it exits 2
+with `git push -u <remote> <branch>`. On GitLab a title with `[skip ci]`,
+`[ci skip]`, `[skip pipeline]` or `[no ci]` is refused for `pr create` and `pr
+edit`, since the pipeline would not run. There is no merge, issue deletion,
+attachment upload or CI secret or variable write.
+
+| Exit | Meaning | The agent |
+| --- | --- | --- |
+| `0` | success | continues |
+| `1` | the call or the CLI failed; the CLI's stderr passes through unchanged | reads the error |
+| `2` | a human must act: unknown forge, CLI missing or older than the minimum, not logged in, detached `HEAD`, outside a repo, host mismatch, branch not pushed | stops and passes on the one-line hint |
+| `3` | the forge or its plan lacks the operation | applies the skill's text fallback |
+
+### Which forge, which host
+
+The push remote is `branch.<b>.pushRemote`, then `remote.pushDefault`, then
+`branch.<b>.remote`, then `origin` (on a detached `HEAD`: `remote.pushDefault`,
+then `origin`); its URL is `pushurl` before `url`, read raw, and `git remote
+get-url --push` (which applies `insteadOf`) only when the raw host does not
+map. An SSH alias is resolved offline with `ssh -G`. The host maps to a forge
+through the `[forge] hosts` table, then `github.com` / `gitlab.com`, then a
+host name containing `github` or `gitlab`, then a host equal to `GH_HOST` or
+`GITLAB_HOST` / `GITLAB_URI` / `GL_HOST`. Errors name the host, never the URL.
+A host none of these name needs one committed line:
+
+```toml
+[forge]
+hosts = { "git.acme.com" = "gitlab", "ssh.acme.com" = { forge = "gitlab", api_host = "gitlab.acme.com" } }
+```
+
+A value is `"github"`, `"gitlab"`, or a table with `forge` and an optional
+`api_host` (the host the CLI talks to when it is not the remote's). Only
+`playbook forge` reads the table, and `playbook validate` reports its unknown
+keys and values. Every call tells the CLI its host in the child environment
+only: `GH_HOST=<api host>`, or `GITLAB_HOST=https://<api host>` (plus
+`GITLAB_API_HOST` when the API host is not the remote's), with prompts, update
+notifiers and telemetry off (`GH_PROMPT_DISABLED`, `GLAB_NO_PROMPT`,
+`GH_NO_UPDATE_NOTIFIER`, `GH_NO_EXTENSION_UPDATE_NOTIFIER`, `GLAB_CHECK_UPDATE`,
+`GH_TELEMETRY=false`, `GLAB_SEND_TELEMETRY=false`, `DO_NOT_TRACK`). A
+`GITLAB_API_HOST`, or a `glab` `api_host` setting, that names another host
+exits 2.
+
+### Running on Domino Data Lab
+
+In a git-based Domino project the repository is at `/mnt/code`, with `origin`
+set to the URL the project was created with; in a project on Domino's own file
+system, attached repositories are at `/repos/<name>` (and imported ones at
+`/mnt/imported/code/<name>`), and `/mnt` is not a clone. Run `playbook forge`
+from the repository, or pass `-C <path>`. gitlab.com and hosts whose name
+contains `gitlab` are detected; any other host needs its `[forge] hosts` line.
+
+Domino's stored Git credential clones the repository, but `glab` cannot use it.
+Once per user:
+
+1. Add `glab` (and `gh` for GitHub) to the compute environment's Dockerfile:
+   `sudo` is usually unavailable in a workspace, and a runtime install does not
+   reach jobs.
+2. Add `GITLAB_TOKEN` (scopes `api` and `write_repository`), or `GH_TOKEN`,
+   under Account Settings → User environment variables, and start a new
+   workspace. Domino injects it into workspaces, jobs and apps. One GitLab token
+   per user environment is the limit; several GitLab instances need a persisted
+   home and `glab auth login` per host.
+3. Add `coding-agent-playbook` to `requirements.txt`.
+
+With `DOMINO_PROJECT_ID` set, the exit-2 hints name these steps. A job launched
+from a commit has a detached `HEAD`: `pr create` then asks for `git checkout -b
+<name>`. Git actions taken in Domino's UI run outside the agent, and no guard
+sees them.
+
+`domino-forge-check.sh` checks a workspace read-only and prints no secret (URLs
+lose their user and password, tokens and credential files are reported as
+present or absent, `glab` runs without `-t`). Save it and run `bash
+domino-forge-check.sh` in a workspace terminal; it covers `origin`, the branch
+state, the credential wiring, `glab` and `sudo`, and whether the API answers:
+
+```bash
+#!/usr/bin/env bash
+# domino-forge-check.sh: what `playbook forge` needs in this Domino workspace, checked read-only.
+# It changes nothing and prints no secret: URLs lose their user and password, token variables
+# and credential files are reported as present or absent only, and `glab` runs without -t.
+# Usage: bash domino-forge-check.sh [repo-dir ...]   (default: /mnt/code, /repos/*, /mnt/imported/code/*)
+set -u
+
+redact() { sed -E 's#(://)[^/@]*@#\1<redacted>@#'; }
+present() { if [ -n "${!1:-}" ]; then echo "set"; else echo "unset"; fi; }
+row() { printf '  %-30s %s\n' "$1" "$2"; }
+first_line() { "$@" 2>/dev/null | head -n 1; }
+
+echo "== Domino"
+row "DOMINO_PROJECT_ID" "$(present DOMINO_PROJECT_ID)"
+row "working directory" "$PWD"
+
+echo "== Tools"
+for tool in git glab gh ssh curl python3 playbook; do
+  row "$tool" "$(command -v "$tool" || echo missing)"
+done
+command -v glab >/dev/null && row "glab --version" "$(first_line glab --version)"
+command -v gh >/dev/null && row "gh --version" "$(first_line gh --version)"
+if command -v sudo >/dev/null && sudo -n true 2>/dev/null; then
+  row "sudo" "works without a password"
+else
+  row "sudo" "not available without a password (install tools in the compute environment)"
+fi
+
+echo "== Credentials (presence only)"
+for var in GITLAB_TOKEN GITLAB_ACCESS_TOKEN OAUTH_TOKEN GH_TOKEN GITHUB_TOKEN GIT_ASKPASS; do
+  row "$var" "$(present "$var")"
+done
+for var in GITLAB_HOST GITLAB_API_HOST GH_HOST; do
+  row "$var" "$(printf '%s' "${!var:-unset}" | redact)"
+done
+glab_config="${GLAB_CONFIG_DIR:-$HOME/.config/glab-cli}/config.yml"
+row "glab config file" "$([ -f "$glab_config" ] && echo present || echo absent)"
+row "git-credentials file" "$([ -f "$HOME/.git-credentials" ] && echo present || echo absent)"
+
+if [ "$#" -gt 0 ]; then
+  dirs=("$@")
+else
+  dirs=(/mnt/code /repos/* /mnt/imported/code/*)
+fi
+for dir in "${dirs[@]}"; do
+  [ -d "$dir" ] || continue
+  echo "== Repository $dir"
+  if ! git -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    row "git" "not a git work tree"
+    continue
+  fi
+  branch="$(git -C "$dir" symbolic-ref -q --short HEAD)"
+  row "branch" "${branch:-(detached HEAD: run git checkout -b <name> before pr create)}"
+  remote=""
+  [ -n "$branch" ] && remote="$(git -C "$dir" config "branch.$branch.pushRemote")"
+  [ -z "$remote" ] && remote="$(git -C "$dir" config remote.pushDefault)"
+  [ -z "$remote" ] && [ -n "$branch" ] && remote="$(git -C "$dir" config "branch.$branch.remote")"
+  { [ -z "$remote" ] || [ "$remote" = "." ]; } && remote="origin"
+  url="$(git -C "$dir" config "remote.$remote.pushurl" || git -C "$dir" config "remote.$remote.url")"
+  row "push remote" "$remote"
+  row "push URL" "$(printf '%s' "${url:-none}" | redact)"
+  case "$url" in
+    *://*@*) row "credentials in the URL" "yes (redacted)" ;;
+    *) row "credentials in the URL" "no" ;;
+  esac
+  helpers="$(git -C "$dir" config --get-all credential.helper | wc -l | tr -d ' ')"
+  row "git credential helpers" "$helpers"
+  if [ -n "$branch" ]; then
+    if git -C "$dir" rev-parse --verify --quiet "refs/remotes/$remote/$branch" >/dev/null; then
+      row "branch on the remote" "yes"
+    else
+      row "branch on the remote" "no (git push -u $remote $branch before pr create)"
+    fi
+  fi
+  host="$(printf '%s' "$url" | sed -E 's#^[a-z+]+://##; s#^[^@/]*@##; s#[:/].*$##')"
+  [ -n "$host" ] || continue
+  row "host" "$host"
+  if command -v curl >/dev/null; then
+    code="$(curl -sS -o /dev/null -m 10 -w '%{http_code}' "https://$host/api/v4/version" 2>/dev/null)"
+    row "API reachable (no token sent)" "HTTP ${code:-none} (401 or 200: reachable)"
+  fi
+  if command -v glab >/dev/null; then
+    if glab auth status --hostname "$host" >/dev/null 2>&1; then
+      row "glab auth status" "logged in"
+    elif GITLAB_HOST="https://$host" glab api --hostname "$host" user >/dev/null 2>&1; then
+      row "glab auth status" "a token in the environment works"
+    else
+      row "glab auth status" "not logged in (set GITLAB_TOKEN as a user environment variable)"
+    fi
+  fi
+  if command -v playbook >/dev/null; then
+    row "playbook forge which" "$(cd "$dir" && playbook forge which 2>&1 | tr -d '\n' | tr -s ' ')"
+  fi
+done
 ```
 
 ## Running evals

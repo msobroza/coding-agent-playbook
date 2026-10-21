@@ -21,6 +21,11 @@ extended by ``extra_globs`` and relaxed by ``allow_paths`` (both also from
   write that would *create* a dotenv file and for a hard link whose inode is a
   secret file's (``_secret_inodes``). Bare ``env`` / ``printenv`` get one
   context line per session.
+- **A command that prints a forge token** (specs/prF-forge-adapter.md §14, Q64):
+  ``gh auth token``, ``glab auth status -t``, ``glab config get token``,
+  ``printenv`` / ``echo`` / ``printf`` of a forge's token env var, ``env |
+  grep GH_TOKEN`` (``judges.forge_tokens``) -> ``deny``: the forge CLIs use
+  their own login.
 
 ``on_error: ask``. The Claude adapter also renders the native ``Read(...)`` /
 ``Edit(...)`` deny rows that survive a missing interpreter (``_secret_native``).
@@ -64,7 +69,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.shell.parse import Segment
     from coding_agent_playbook.security.paths import PathPolicy
 
-__all__ = ["ADVICE", "CONFIG_SCHEMA", "ENV_CONTEXT", "secret_path_guard"]
+__all__ = ["ADVICE", "CONFIG_SCHEMA", "ENV_CONTEXT", "TOKEN_ADVICE", "secret_path_guard"]
 
 CONFIG_SCHEMA: Final[Mapping[str, ConfigKey]] = {
     "extra_globs": ConfigKey("list", "extend"),
@@ -73,6 +78,9 @@ CONFIG_SCHEMA: Final[Mapping[str, ConfigKey]] = {
 ADVICE: Final = (
     "Use .env.example for variable NAMES; ask the user to supply values; "
     "read them from the environment at runtime."
+)
+TOKEN_ADVICE: Final = (
+    "gh, glab and playbook forge use their own login: never print, copy or pass a token."
 )
 ENV_CONTEXT: Final = (
     "The environment can hold credentials: print only the variable you need, by name, "
@@ -129,7 +137,7 @@ def secret_path_guard(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult 
     )
     judge = _Judge(ev, ctx, policy)
     hits = judge.shell(tool) if tool.tool_class is ToolClass.SHELL else judge.files(tool)
-    return _result(hits, ctx) or _env_context(tool, ctx)
+    return _token_print(tool, ctx) or _result(hits, ctx) or _env_context(tool, ctx)
 
 
 @dataclass(frozen=True, slots=True)
@@ -304,6 +312,22 @@ def _ask_reason(hit: _Hit) -> str:
             "Confirm with the user; commit only an .env.example with variable NAMES."
         )
     return f"{shown} is a hard link to a credentials file.\n{ADVICE}"
+
+
+def _token_print(tool: ToolCall, ctx: HandlerContext) -> HandlerResult | None:
+    """Deny a shell command that prints a forge token (``judges.forge_tokens``)."""
+    command = tool.command if tool.tool_class is ToolClass.SHELL else None
+    if command is None:
+        return None
+    from coding_agent_playbook.hook_runtime.judges.forge_tokens import token_print
+
+    shown = token_print(command.segments, degraded=command.parse_error is not None)
+    if shown is None:
+        return None
+    reason = f"Blocked: {quote_data(shown)} prints a forge token.\n{TOKEN_ADVICE}"
+    return HandlerResult(
+        decision=Decision.DENY, hook_id=ctx.hook.id, rule_id="token_print", reason=reason
+    )
 
 
 def _env_context(tool: ToolCall, ctx: HandlerContext) -> HandlerResult | None:

@@ -6,9 +6,9 @@ description: Generate an interactive Python wizard that walks a human through st
 
 # Wizard
 
-A **wizard** is a Python script that walks a human, step by step, through a manual procedure that's tedious to do by hand and tedious to re-explain to an AI every time. It opens each URL, says exactly what to click and copy, captures the values, writes them where they belong (`.env`, or GitHub secrets it walks the human through setting), confirms at every stage, and shows how many stages are left. It might configure third-party services, run a one-off migration, or move the project from one state to another.
+A **wizard** is a Python script that walks a human, step by step, through a manual procedure that's tedious to do by hand and tedious to re-explain to an AI every time. It opens each URL, says exactly what to click and copy, captures the values, writes them where they belong (`.env`, or the CI secrets and variables it walks the human through setting on GitHub or GitLab), confirms at every stage, and shows how many stages are left. It might configure third-party services, run a one-off migration, or move the project from one state to another.
 
-The delightful UX is already solved by [wizard_template.py](scripts/wizard_template.py): stage-by-stage progress, confirmation gates, cross-platform URL opening (Python's `webbrowser`, printing the URL when no browser opens), hidden secret entry, idempotent `.env` upserts, guided GitHub secret/variable steps, and a closing summary. **Your job is only to scope the procedure and author its stages.** The library above the `STAGES` marker is identical in every wizard; that consistency is the point: never hand-edit it.
+The delightful UX is already solved by [wizard_template.py](scripts/wizard_template.py): stage-by-stage progress, confirmation gates, cross-platform URL opening (Python's `webbrowser`, printing the URL when no browser opens), hidden secret entry, idempotent `.env` upserts, guided GitHub or GitLab CI secret/variable steps, and a closing summary. **Your job is only to scope the procedure and author its stages.** The library above the `STAGES` marker is identical in every wizard; that consistency is the point: never hand-edit it.
 
 A wizard is ephemeral by default: built for one run, saved to a scratch or `scripts/` path, deleted when the job's done. Commit it only when the user wants a repeatable setup path that should live in the repo.
 
@@ -18,12 +18,12 @@ A wizard is ephemeral by default: built for one run, saved to a scratch or `scri
 
 Work out every manual step the human must take and every value that gets captured along the way. Read the repo first, don't ask cold:
 
-- For setup: the `.env` templates (`.env.example`, `.env.sample`, `.env.template`, `.env.dist`; never `.env` itself or any other `.env.*`, which hold live values) and `.github/workflows/*` (every `secrets.*` / `vars.*` reference is a value the wizard must produce).
+- For setup: the `.env` templates (`.env.example`, `.env.sample`, `.env.template`, `.env.dist`; never `.env` itself or any other `.env.*`, which hold live values) and `.github/workflows/*` (every `secrets.*` / `vars.*` reference is a value the wizard must produce), or on GitLab `.gitlab-ci.yml` and the local files it `include`s (every `$NAME` / `${NAME}` is a CI/CD variable the wizard must produce, except GitLab's predefined `CI_*`, `GITLAB_*`, `RUNNER_*` and `CHAT_*` ones and the variables the CI files define themselves).
 - For a migration or transition: the current state, the target state, and the irreversible actions between them.
 
 Then show the user the ordered list of stages and the values each produces, and confirm: they may add, drop, or reorder.
 
-**Done when:** every stage is named in order, and for each captured value you know (a) where the human gets it, (b) where it's written (`.env`, a GitHub secret, both, or nowhere; some stages are pure actions), and (c) whether it's secret (hidden entry) or public.
+**Done when:** every stage is named in order, and for each captured value you know (a) where the human gets it, (b) where it's written (`.env`, a CI secret or variable, both, or nowhere; some stages are pure actions), and (c) whether it's secret (hidden entry) or public.
 
 ### 2. Map each stage's journey
 
@@ -33,7 +33,7 @@ For each stage, write the precise path a human follows: which URL to open, what 
 
 ### 3. Author the wizard
 
-Copy `scripts/wizard_template.py` to the target path. Replace the example stage with one `stage` per step, in dependency order. Use the library helpers: `stage`, `say`/`step`, `open_url`, `ask`/`ask_secret`, `write_env`, `set_secret`/`set_var`, `pause`/`confirm`. Set `TOTAL_STAGES` to the number of stages you wrote.
+Copy `scripts/wizard_template.py` to the target path. Replace the example stage with one `stage` per step, in dependency order. Use the library helpers: `stage`, `say`/`step`, `open_url`, `ask`/`ask_secret`, `write_env`, `set_secret`/`set_var`, `pause`/`confirm`. Set `TOTAL_STAGES` to the number of stages you wrote, and set `CI_FORGE` to `"gitlab"` when the repo's CI is GitLab's (`.gitlab-ci.yml`), so `set_secret` and `set_var` walk the human through GitLab CI/CD variables (Settings → CI/CD → Variables, masked or protected) instead of GitHub Actions secrets and variables.
 
 Hold the bar the template sets: open the URL before asking for its value, use `ask_secret` for anything secret, `write_env` every persisted value, `set_secret` only the values CI actually needs, and `confirm` before any irreversible action. Each `stage` clears the screen so only the current step is visible: keep a stage to one focused task so nothing the human needs scrolls away. Don't touch the library above the marker.
 
@@ -41,5 +41,5 @@ Hold the bar the template sets: open the URL before asking for its value, use `a
 
 - Check the syntax with `ast.parse`, which writes no `__pycache__/`: `python3 -c "import ast, pathlib, sys; ast.parse(pathlib.Path(sys.argv[1]).read_text(encoding='utf-8'))" <script>`; run `ruff check` or `mypy` if available.
 - Make it executable with `os.chmod` (`python3 -c "import os, sys; os.chmod(sys.argv[1], 0o755)" <script>`), or tell the user to run it as `python3 <script>`.
-- Don't run it end-to-end yourself: it opens browsers and blocks on human input. Trace it statically instead: every value from step 1 is captured and lands where step 1 said, and every `set_secret` name exactly matches a `secrets.*` reference in CI.
+- Don't run it end-to-end yourself: it opens browsers and blocks on human input. Trace it statically instead: every value from step 1 is captured and lands where step 1 said, and every `set_secret` name exactly matches a `secrets.*` reference in CI (on GitLab, a `$NAME` or `${NAME}` the CI files read).
 - Tell the user how to run it. If it's a repeatable setup path, commit it and link it from the README so the next person runs the script instead of asking an AI.

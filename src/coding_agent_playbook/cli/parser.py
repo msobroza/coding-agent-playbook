@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Final
 from coding_agent_playbook import __version__
 from coding_agent_playbook.commands import check as check_cmd
 from coding_agent_playbook.commands import eval as eval_cmd
+from coding_agent_playbook.commands import forge as forge_cmd
 from coding_agent_playbook.commands import import_harness as import_harness_cmd
 from coding_agent_playbook.commands import init as init_cmd
 from coding_agent_playbook.commands import metrics as metrics_cmd
@@ -50,6 +51,7 @@ _COMMANDS: Final[tuple[Command, ...]] = (
     metrics_cmd,
     import_harness_cmd,
     validate_harness_cmd,
+    forge_cmd,
     gate_scan_cmd,
     ci_cmd,
     scan_sinks_cmd,

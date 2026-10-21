@@ -12,12 +12,15 @@ operand: the conservative direction for a guard.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
 __all__ = ["CliWords", "split_words", "value_options"]
+
+#: A flag value that turns a boolean flag off (``--push=false``).
+_FALSE: Final = frozenset({"false", "0", "f", "no"})
 
 
 @dataclass(slots=True)
@@ -38,6 +41,23 @@ class CliWords:
     def of(self, options: frozenset[str]) -> list[str]:
         """Every value given to one of ``options``, in order."""
         return [value for option, value in self.values if option in options]
+
+    def given(self, flags: frozenset[str]) -> bool:
+        """Whether a boolean flag of ``flags`` is on: alone, ``=value`` unless false, or a
+        letter inside a short cluster (``-yf`` holds ``-f``).
+
+        Example::
+
+            >>> split_words(["--push=false", "-yf"], frozenset()).given(value_options("-f --push"))
+            True
+        """
+        if flags & self.flags:
+            return True
+        if any(value.strip().lower() not in _FALSE for value in self.of(flags)):
+            return True
+        letters = {flag[1] for flag in flags if len(flag) == 2 and flag[1] != "-"}
+        clusters = (flag[1:] for flag in self.flags if flag[:1] == "-" and flag[1:2] != "-")
+        return any(letters & set(cluster) for cluster in clusters)
 
 
 def value_options(text: str) -> frozenset[str]:

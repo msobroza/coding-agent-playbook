@@ -185,3 +185,124 @@ def test_tainted_session_escalates_risky_actions_only(
     session.fetch()
 
     assert session.run(tool, tool_input).trace.combined.decision is expected
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        # prF §8.3: forge CLI commands that push HEAD's branch are a push
+        ("glab mr create --fill", "pushing commits"),
+        ("glab mr create --push --title t", "pushing commits"),
+        ("gh repo create app --private --source . --push", "pushing commits"),
+        ("git push -o merge_request.create", "pushing commits"),
+        # prF §8.2: forge egress rows on both forges and playbook forge
+        ("glab snippet create notes.md", "sending data off the machine"),
+        ("glab issue create --description-file body.md", "sending data off the machine"),
+        ("gh api repos/o/r/issues -F body=@notes.md", "sending data off the machine"),
+        ("playbook forge pr comment 3 --body-file review.md", "sending data off the machine"),
+        ("glab repo fork --remote", "sending data off the machine"),
+        # prF §14: mail is an egress kind
+        ("git send-email --to dev@example.com -1", "sending data off the machine"),
+        ("git format-patch -1 --stdout | git imap-send", "sending data off the machine"),
+        ("msmtp dev@example.com < message.txt", "sending data off the machine"),
+        ("sendmail -t < message.txt", "sending data off the machine"),
+    ],
+)
+def test_tainted_session_asks_on_forge_pushes_and_egress(
+    session: Session, command: str, expected: str
+) -> None:
+    session.fetch()
+
+    report = session.run("Bash", {"command": command})
+
+    assert report.trace.combined.decision is Decision.ASK
+    assert report.trace.combined.reason.endswith(f"confirm before {expected}.")
+    assert session.git.calls == []
+
+
+@pytest.mark.parametrize(
+    "command", ["glab mr list", "playbook forge issue view 3", "glab mr create --push=false -t t"]
+)
+def test_tainted_session_leaves_forge_reads_alone(session: Session, command: str) -> None:
+    session.fetch()
+
+    assert session.bash(command) is Decision.NONE
+
+
+def test_a_forge_read_taints_the_session(session: Session) -> None:
+    """prF §14: issue and pull request text is untrusted content (``taint:forge``)."""
+    first = session.run("Bash", {"command": "gh issue view 3 --comments"})
+    report = session.run("Bash", {"command": PUSH})
+
+    assert first.trace.combined.decision is Decision.NONE  # marking never asks itself
+    assert report.trace.combined.decision is Decision.ASK
+    assert report.trace.combined.reason == (
+        "This session has read untrusted content (content from a forge); "
+        "confirm before pushing commits."
+    )
+
+
+@pytest.mark.parametrize(
+    ("command", "tainted"),
+    [
+        ("glab mr view 3 --comments", True),
+        ("gh pr diff 3 | head -50", True),
+        ("gh api repos/o/r/issues/3/comments", True),
+        ("glab api projects/1/merge_requests", True),
+        ("playbook forge issue view 3", True),
+        ("playbook forge pr list --state open", True),
+        ("gh auth status", False),
+        ("playbook forge which", False),
+        ("playbook forge auth status", False),
+        ("gh pr view --help", False),
+        ("gh issue create --title t --body-file body.md", False),
+        ("echo gh issue view 3", False),
+    ],
+)
+def test_forge_read_operations_mark_the_session(
+    session: Session, command: str, tainted: bool
+) -> None:
+    session.bash(command)
+
+    assert (session.bash(PUSH) is Decision.ASK) is tainted
+
+
+def test_session_start_clear_clears_a_forge_taint(session: Session) -> None:
+    session.bash("glab issue view 3")
+    session.start("clear")
+
+    assert session.bash(PUSH) is Decision.NONE
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        # owner-approved F7b addition: a body sent inline or on stdin asks like a body file
+        "gh issue comment 3 --body 'see the notes'",
+        "gh pr review 3 --comment -b nit",
+        "gh pr comment 3 -F - < review.md",
+        "glab mr note 3 -m text",
+        "glab issue create -t t --description text",
+        "gh api repos/o/r/issues/3/comments -f body=text",
+        "playbook forge issue comment 3 --body text",
+        "playbook forge pr create --title t --body-file -",
+        "playbook forge issue close 3",  # kind sends_data
+    ],
+)
+def test_tainted_session_asks_before_sending_text_to_a_forge(
+    session: Session, command: str
+) -> None:
+    session.fetch()
+
+    report = session.run("Bash", {"command": command})
+
+    assert report.trace.combined.decision is Decision.ASK
+    assert report.trace.combined.reason.endswith("confirm before sending data off the machine.")
+
+
+@pytest.mark.parametrize(
+    "command",
+    ["gh issue comment 3 --body text", "playbook forge issue comment 3 --body text"],
+)
+def test_untainted_session_sends_text_to_a_forge(session: Session, command: str) -> None:
+    assert session.bash(command) is Decision.NONE

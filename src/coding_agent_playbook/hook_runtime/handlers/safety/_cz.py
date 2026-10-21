@@ -13,8 +13,9 @@
   teach a bypass;
 - :func:`push_ranges`: the ``(tracking ref, source)`` ranges a ``git push``
   publishes, from local refs only: an explicit ``src:dst`` refspec, else the
-  upstream, else ``<remote>/<current branch>``. A ref git does not know
-  (never fetched) is left out: CI checks it.
+  upstream, else ``<remote>/<current branch>``; :func:`head_ranges` the range
+  of a forge CLI command that pushes ``HEAD``'s branch (``glab mr create --fill``).
+  A ref git does not know (never fetched) is left out: CI checks it.
 
 A private module: it registers no handler.
 """
@@ -44,6 +45,7 @@ __all__ = [
     "CzRunner",
     "cz_runner",
     "deny_reason",
+    "head_ranges",
     "missing_note",
     "push_ranges",
 ]
@@ -197,6 +199,15 @@ def push_ranges(git: GitInvocation, port: GitPort) -> list[tuple[str, str]]:
         base = port.upstream() or _branch_ref(remote, port)
         ranges = [] if base is None else [(base, "HEAD")]
     return [(base, src) for base, src in ranges if port.rev_commit(base) is not None]
+
+
+def head_ranges(port: GitPort) -> list[tuple[str, str]]:
+    """The range a push of ``HEAD``'s branch publishes: from the upstream, else ``origin/<branch>``.
+
+    Example: ``head_ranges(git) == [("refs/remotes/origin/feat", "HEAD")]`` without an upstream.
+    """
+    base = port.upstream() or _branch_ref(None, port)
+    return [] if base is None or port.rev_commit(base) is None else [(base, "HEAD")]
 
 
 def _refspec_range(remote: str | None, spec: str, port: GitPort) -> tuple[str, str] | None:

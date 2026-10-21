@@ -18,6 +18,7 @@ from coding_agent_playbook.hook_runtime.judges.hosts import (
     is_loopback,
     scp_host,
     url_host,
+    without_userinfo,
 )
 
 if TYPE_CHECKING:
@@ -123,3 +124,18 @@ def test_never_resolves_dns(no_dns: list[Any]) -> None:
     assert hosts == ["x.io", "host"]
     assert loopbacks == [False, False, True, True, True]
     assert no_dns == []
+
+
+@pytest.mark.parametrize(
+    ("url", "bare"),
+    [
+        ("https://ci:tok@gitlab.example/g/app.git", "https://gitlab.example/g/app.git"),
+        ("https://oauth2:p@ss@h.example:8443/r", "https://h.example:8443/r"),
+        ("ssh://git@host.example/r.git", "ssh://host.example/r.git"),
+        ("https://h.example/a@b", "https://h.example/a@b"),  # an @ in the path stays
+        ("git@github.com:org/repo.git", "git@github.com:org/repo.git"),  # scp-like: no URL
+        ("../mirror.git", "../mirror.git"),
+    ],
+)
+def test_without_userinfo_drops_a_urls_credentials(url: str, bare: str) -> None:
+    assert without_userinfo(url) == bare

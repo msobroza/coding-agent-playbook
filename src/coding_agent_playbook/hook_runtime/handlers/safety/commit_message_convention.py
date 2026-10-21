@@ -1,7 +1,7 @@
 """commit-message-convention: ``cz check`` on what a ``git commit`` or ``git push`` records (specs/prK-hook-pack.md §F.4.2).
 
-Default, ``pre_tool_use`` on shell calls running ``git`` (the argv0
-prefilter), on the shared parse with wrapper prefixes such as ``proxy``
+Default, ``pre_tool_use`` on shell calls running ``git`` or a forge CLI
+(``gh``, ``glab``: the argv0 prefilter), on the shared parse with wrapper prefixes such as ``proxy``
 unwrapped. The convention is the consumer's commitizen config
 (``[tool.commitizen]``, default ``cz_conventional_commits``), which ``cz``
 reads itself: the engine has no linter, only D-Q3's cut-over (``judges.commit_cutover``).
@@ -36,6 +36,7 @@ from typing import TYPE_CHECKING, Final
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
+from coding_agent_playbook.hook_runtime.judges.forge_calls import FORGE_ARGV0S, forge_call
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -52,7 +53,8 @@ __all__ = ["CONFIG_SCHEMA", "LOG_LIMIT", "commit_message_convention"]
 CONFIG_SCHEMA: Final[Mapping[str, ConfigKey]] = {"check_push": ConfigKey("boolean")}
 #: The most commits one push scan reads (§F.4.2).
 LOG_LIMIT: Final = 200
-_GIT_ARGV0S: Final = ("git", "git.exe")
+#: git, and the forge CLIs whose commands can push ``HEAD``'s branch (prF §8.3).
+_ARGV0S: Final = ("git", "git.exe", *FORGE_ARGV0S)
 
 
 @register_hook_handler(
@@ -60,7 +62,7 @@ _GIT_ARGV0S: Final = ("git", "git.exe")
     events=["pre_tool_use"],
     decisions=["deny", "none"],
     config_schema=CONFIG_SCHEMA,
-    argv0s=_GIT_ARGV0S,
+    argv0s=_ARGV0S,
 )
 def commit_message_convention(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult | None:
     """Deny a commit or push whose message breaks the repo's commitizen convention.
@@ -88,13 +90,23 @@ def _segment(segment: Segment, repo: RepoInfo, ctx: HandlerContext) -> HandlerRe
 
     git = parse_git(segment)
     if git is None:
-        return None
+        return _forge_push(segment, repo, ctx)
     if git.subcommand == "commit":
         message = _commit_message(git, segment, repo)
         return None if message is None else _check(ctx, repo, lambda cz: cz.message(message))
     if git.subcommand == "push" and HookConfig(ctx.config, CONFIG_SCHEMA).flag("check_push", False):
         return _check(ctx, repo, lambda cz: _push(git, cz, ctx))
     return None
+
+
+def _forge_push(segment: Segment, repo: RepoInfo, ctx: HandlerContext) -> HandlerResult | None:
+    """A forge CLI command that pushes ``HEAD``'s branch, under ``check_push``: its commits' messages."""
+    call = forge_call(segment, ctx.env)
+    if call is None or not call.pushes:
+        return None
+    if not HookConfig(ctx.config, CONFIG_SCHEMA).flag("check_push", False):
+        return None
+    return _check(ctx, repo, lambda cz: _push(None, cz, ctx))
 
 
 def _commit_message(git: GitInvocation, segment: Segment, repo: RepoInfo) -> str | None:
@@ -149,10 +161,13 @@ def _check(
     )
 
 
-def _push(git: GitInvocation, cz: CzRunner, ctx: HandlerContext) -> str | None:
-    """Check the commits the push publishes past the cut-over; ``None`` when they pass."""
+def _push(git: GitInvocation | None, cz: CzRunner, ctx: HandlerContext) -> str | None:
+    """Check the commits the push publishes past the cut-over; ``None`` when they pass.
+
+    ``git`` is ``None`` for a forge CLI command that pushes ``HEAD``'s branch.
+    """
     from coding_agent_playbook.hook_runtime.git.safe_git import GitError
-    from coding_agent_playbook.hook_runtime.handlers.safety._cz import push_ranges
+    from coding_agent_playbook.hook_runtime.handlers.safety._cz import head_ranges, push_ranges
     from coding_agent_playbook.hook_runtime.judges.commit_cutover import (
         parse_cutover,
         plan_cz_checks,
@@ -163,7 +178,7 @@ def _push(git: GitInvocation, cz: CzRunner, ctx: HandlerContext) -> str | None:
     except ValueError:
         cutover = None  # validate reports a bad date; meanwhile every commit is checked
     try:
-        ranges = push_ranges(git, ctx.git)
+        ranges = head_ranges(ctx.git) if git is None else push_ranges(git, ctx.git)
         logs = [
             (base, src, ctx.git.commit_log(f"{base}..{src}", limit=LOG_LIMIT))
             for base, src in ranges

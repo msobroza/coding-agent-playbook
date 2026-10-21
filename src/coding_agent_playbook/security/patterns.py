@@ -15,7 +15,10 @@ Glob grammar, as matched by :func:`coding_agent_playbook.security.paths.is_secre
 - a glob without ``/`` matches a path's final component in any directory, so
   ``*.pem`` matches ``certs/server.pem``;
 - a glob starting with ``~/`` is anchored at the user's home directory, and a
-  trailing ``/**`` matches everything below that directory.
+  trailing ``/**`` matches everything below that directory;
+- any other glob with a ``/`` is anchored at the start of the path: the
+  repository root for a relative glob (``.git/**/glab-cli/config.yml``), the
+  filesystem root for one starting with ``/``. ``**`` spans directories.
 
 A path is secret when it matches a :data:`SECRET_PATH_GLOBS` entry that is not
 cancelled for it: :data:`SECRET_PATH_EXEMPT` cancels every glob, while a
@@ -69,6 +72,19 @@ SECRET_PATH_GLOBS: "Final[tuple[str, ...]]" = (
     "~/.docker/config.json",
     "~/.m2/settings.xml",
     "~/.claude/.credentials.json",
+    # glab's config, which holds its token when no keyring is used: ~/.config/glab-cli
+    # (Linux, and the legacy path glab reads first on every OS), then the macOS and
+    # Windows defaults; the aliases.yml beside it holds no credentials. Then the
+    # repository config, ``$(git rev-parse --git-dir)/glab-cli/config.yml``, in the main
+    # checkout's, a linked worktree's or a submodule's git dir.
+    "~/.config/glab-cli/config.yml",
+    "~/Library/Application Support/glab-cli/config.yml",
+    "~/AppData/Local/glab-cli/config.yml",
+    ".git/**/glab-cli/config.yml",
+    # the GitLab Runner config with its runner authentication token: a non-root
+    # runner's, then a root one's (on Windows it has no fixed path: the working directory)
+    "~/.gitlab-runner/config.toml",
+    "/etc/gitlab-runner/config.toml",
 )
 
 #: Source-code suffixes for which ``*credentials*`` does not fire: a module that
@@ -140,7 +156,7 @@ SECRET_GLOB_EXEMPT: "Final[dict[str, tuple[str, ...]]]" = {
 #: whenever a rule is added, removed or changed, so a synced config names the
 #: ruleset its guards were reviewed against.
 SECRET_RULESET_ID: "Final[str]" = "engine-secrets"
-SECRET_RULESET_VERSION: "Final[int]" = 1
+SECRET_RULESET_VERSION: "Final[int]" = 3
 
 SECRET_CONTENT_RULES: "Final[tuple[tuple[str, str, str], ...]]" = (
     (
@@ -158,6 +174,33 @@ SECRET_CONTENT_RULES: "Final[tuple[tuple[str, str, str], ...]]" = (
         r"gh(?<![A-Za-z0-9_]gh)(?:[pousr]_[A-Za-z0-9]{36,255}|ithub_pat_[A-Za-z0-9_]{22,255})"
         r"(?![A-Za-z0-9_])",
         "GitHub token",
+    ),
+    (
+        # GitLab's documented prefixes (docs "Token overview"), each at the lengths its
+        # generator makes: a routable body (27-300 base64url, ``.``, an optional version
+        # and ``.``, 9 base36) for pat/rt/rtr/agent/wt; a 20-char friendly token; the
+        # 17.5-17.10 partitioned runner token; 50-char agent, 40-hex trigger and 64-hex
+        # OAuth secret tokens; the feed token's path-dependent form; the unpadded base36
+        # incoming-mail token; the job token's ``<partition>_<20>`` and JWT forms; the
+        # stateless access and IAM OAuth access tokens' JWT form (``glsat-``, ``gliamat-``:
+        # in GitLab's source, not in its token overview). An instance prefix
+        # (``acme-glpat-...``) matches; an admin's custom PAT prefix needs an
+        # ``extra_patterns`` row.
+        "gitlab-token",
+        r"gl(?<![A-Za-z0-9_]gl)(?:"
+        r"(?:pat|rtr?|agent|wt)-[0-9A-Za-z_-]{27,300}\.(?:[0-9a-z]{2}\.)?[0-9a-z]{9}"
+        r"|(?:pat|dt|rtr?|ptt|ft|soat|ffct)-[0-9A-Za-z_-]{20}|rt-t[1-3]_[0-9A-Za-z_-]{20}"
+        r"|agent-[0-9A-Za-z_-]{50}|ptt-[0-9a-f]{40}|oas-[0-9a-f]{64}|ft-[0-9a-f]{64}-[0-9]+"
+        r"|imt-[0-9a-z]{21,25}|cbt-[0-9A-Za-z]{1,5}_[0-9A-Za-z_-]{20}"
+        r"|(?:cbt|sat|iamat)-eyJ[0-9A-Za-z_-]{8,}\.eyJ[0-9A-Za-z_-]{8,}\.[0-9A-Za-z_-]{8,}"
+        r")(?![0-9A-Za-z_-])",
+        "GitLab token",
+    ),
+    (
+        # Project and group runner registration tokens; the instance-wide one has no prefix.
+        "gitlab-runner-registration-token",
+        r"GR1348941(?<![A-Za-z0-9_].{9})[0-9A-Za-z_-]{20}(?![0-9A-Za-z_-])",
+        "GitLab runner registration token",
     ),
     ("slack-token", r"xox[abprs]-(?<![A-Za-z0-9_].{5})[A-Za-z0-9-]{10,250}", "Slack token"),
     (

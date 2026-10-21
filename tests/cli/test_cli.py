@@ -78,6 +78,7 @@ def test_every_subcommand_is_a_command_in_help_order() -> None:
         "metrics",
         "import-harness",
         "validate-harness",
+        "forge",
         "gate-scan",
         "ci",
         "scan-sinks",

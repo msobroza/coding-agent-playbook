@@ -10,7 +10,9 @@ Default, ``pre_tool_use``; the air-gapped gitleaks replacement. The rules are
   at its head and tail and asks. Files the secret path policy covers are
   secrets-path-guard's (a new ``.env`` it lets the user approve may hold keys).
 - **``git push``** (a speed bump): the added lines of the commits it would
-  publish (``@{u}..HEAD``, else ``HEAD --not --remotes``).
+  publish (``@{u}..HEAD``, else ``HEAD --not --remotes``). A forge CLI command that
+  pushes ``HEAD``'s branch counts as one (``glab mr create --fill``, ``repo
+  create --push``; ``judges.forge_calls``, specs/prF-forge-adapter.md §8.3).
 - A token ``deny``s, naming the rule, ``<rel>:<line>`` and the match length,
   never a character of the value. ``# playbook: allow-secret <rule-id>``
   waives its line only when committed at ``HEAD`` (at the upstream, for a
@@ -68,7 +70,9 @@ CONFIG_SCHEMA: Final[Mapping[str, ConfigKey]] = {
 PRAGMA_ADVICE: Final = (
     "Only a pragma already committed at HEAD waives a finding; ask the user to confirm."
 )
-_UNPARSED_PUSH: Final = re.compile(r"\bgit\b[^;&|\n]*\bpush\b")
+_UNPARSED_PUSH: Final = re.compile(
+    r"\bgit\b[^;&|\n]*\bpush\b|\b(?:gh|glab)\s[^;&|\n]*\s(?:--push|--fill|-f)\b"
+)
 _OLD_FOR: Final = {"new_string": "old_string", "newString": "oldString"}
 _EDIT_FIELD: Final = re.compile(r"^edits\[(\d+)\]\.new_string$")
 
@@ -229,14 +233,18 @@ def _push_scan(
 
 
 def _pushes(command: ShellCommand) -> bool:
-    """Whether a segment runs ``git push`` (any ``git`` token text, when the parse failed)."""
+    """Whether a segment runs ``git push`` or a forge CLI command that pushes (text, when unparsed)."""
     if command.parse_error is not None:
         return _UNPARSED_PUSH.search(command.text) is not None
+    from coding_agent_playbook.hook_runtime.judges.forge_calls import forge_call
     from coding_agent_playbook.hook_runtime.shell.git_command import parse_git
 
     for segment in command.segments:
         invocation = parse_git(segment) if segment.argv[:1] in (("git",), ("git.exe",)) else None
         if invocation is not None and invocation.subcommand == "push":
+            return True
+        call = forge_call(segment) if invocation is None else None
+        if call is not None and call.pushes:
             return True
     return False
 

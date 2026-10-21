@@ -127,7 +127,8 @@ SKILL_NEW_TEXTS: Final[tuple[tuple[str, str], ...]] = (
     (
         "23",
         "It generates an interactive Python script that opens each URL, captures each value, writes it"
-        " into `.env`, and guides you through setting each GitHub secret or variable by hand, so the"
+        " into `.env`, and guides you through setting each CI secret or variable by hand, on GitHub or"
+        " GitLab, so the"
         " procedure stops",
     ),
     (

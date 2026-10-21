@@ -65,19 +65,19 @@ stays as he wrote it (D4), and nothing in the plugin carries a URL, attribution 
 | # | Decision (short) | Answered |
 | --- | --- | --- |
 | D1 | Goal: harness portability first (Claude Code, OpenCode, Codex through `.agents/skills`, agent_harness, Continue when enabled), plus a pinned, reviewed copy instead of the live upstream Claude Code plugin. | Q1 |
-| D2 | Allowed: stdlib, pip-installable packages, git, harness built-ins, the project toolchain. Every other executable is an imposed tool and is banned (list in section 1). | Q2, Q7 |
+| D2 | Allowed: stdlib, pip-installable packages, git, harness built-ins, the project toolchain. Every other executable is an imposed tool and is banned (list in section 1). Amended by prF F6 (section 2.2): `playbook forge` is allowed in setup and its Forge issues seed. | Q2, Q7 |
 | D3 | Opt-in bundled plugin `catalog/plugins/mattpocock_skills/`, enabled as `coding_agent_playbook.plugins.mattpocock_skills` in `overlays_enabled`. | Q3, Q11 |
 | D4 | Vendored content in the superpowers style: near-verbatim text, every change listed in `ATTRIBUTIONS.md`, upstream MIT `LICENSE` ("Copyright (c) 2026 Matt Pocock") at the plugin root and byte-identical in every skill's `references/`, provenance mattpocock/skills v1.3.1 commit `24fe0ef…`, no URL anywhere. | Q9 |
 | D5 | Pinned snapshot of tag v1.3.1; an upgrade is a reviewed PR that diffs two upstream tags and replays the `ATTRIBUTIONS.md` change list. | Q4, Q5 |
 | D6 | pr-body's "Summary visuals" menu reproduces HumanLayer's show-me skill (MIT, "Copyright (c) 2026 HumanLayer", repository humanlayer/skills, commit `653b6411c1f70c275a18e37673b042ff99f67ceb`): its notice ships as `references/LICENSE-show-me`, `CREDITS.md` moves to `references/` with link text kept and URLs removed, `metadata.credits.url` is deleted. | derived from the approved answers (no single Q) |
-| D7 | Scope: the 27 skills of `skills/engineering` and `skills/productivity`; `misc/` and `in-progress/` are out; `triage` is dropped (consumers may add it at `playbook/skills/triage/`). | Q6, Q15 |
+| D7 | Scope: the 27 skills of `skills/engineering` and `skills/productivity`; `misc/` and `in-progress/` are out; `triage` is dropped (consumers may add it at `playbook/skills/triage/`). Triage note from prF F6 (section 2.2): the Forge issues seed carries the "PRs as a request surface" flag a re-added triage reads. | Q6, Q15 |
 | D8 | Upstream ids are kept except collisions with Claude Code bundled skills, feature-gated ones included: `code-review` to `two-axis-review`, `pr` to `pr-body`, `prototype` to `throwaway-prototype`. wayfinder's `prototype` ticket type and UI.md's `/prototype/<name>` route are not skill ids and stay. The folder name equals the id. | Q11, Q18, Q19 |
 | D9 | The 26 final ids (section 4.2). Layout-only keeps: throwaway-prototype (rename and layout), domain-modeling, wait-what, to-questionnaire; domain-modeling and wait-what still get D21. All others are vendored with listed changes. | derived from the approved answers (no single Q) |
 | D10 | Only `SKILL.md`, `scripts/` and `references/` sync; every other skill-root file moves under `references/` with each link rewritten; `agents/openai.yaml` and upstream repo-level files are not shipped. | derived from the approved answers (no single Q) |
 | D11 | Frontmatter: `id:` is the first key; every other key stays verbatim except pr-body's `metadata.credits.url`; no plugin skill gets a `playbook:` block. | derived from the approved answers (no single Q) |
 | D12 | `ATTRIBUTIONS.md` names synced paths with the shared skill root, `.agents/skills/<id>/`. | derived from the approved answers (no single Q) |
-| D13 | The tracker abstraction stays ("the issue tracker" described per repo); only the local-markdown tracker ships; a consumer may describe their own ("Other"); the plugin never names `gh` or `glab` as something to run. | Q8 |
-| D14 | setup-matt-pocock-skills writes only `docs/agents/issue-tracker.md`, `docs/agents/triage-labels.md` and `docs/agents/domain.md`; local markdown is the default; "Other" fills the local seed's sections; the GitHub and GitLab templates go; `triage-labels.md` is always written; it never edits or creates `CLAUDE.md`/`AGENTS.md` and only reports an old "## Agent skills" block. | Q16, Q32.2, Q32.5, Q32.6, Q32.7 |
+| D13 | The tracker abstraction stays ("the issue tracker" described per repo); only the local-markdown tracker ships; a consumer may describe their own ("Other"); the plugin never names `gh` or `glab` as something to run. Amended by prF F6 (section 2.2): a Forge issues tracker ships too, naming only `playbook forge`. | Q8 |
+| D14 | setup-matt-pocock-skills writes only `docs/agents/issue-tracker.md`, `docs/agents/triage-labels.md` and `docs/agents/domain.md`; local markdown is the default; "Other" fills the local seed's sections; the GitHub and GitLab templates go; `triage-labels.md` is always written; it never edits or creates `CLAUDE.md`/`AGENTS.md` and only reports an old "## Agent skills" block. Amended by prF F6 (section 2.2): with a forge remote the default is Forge issues, confirmed once. | Q16, Q32.2, Q32.5, Q32.6, Q32.7 |
 | D15 | The plugin always rule `mattpocock-skills-tracker` (`rules/`, `scope: always`, no `skill:`, plain `.md`, at most 60 words) replaces upstream's "## Agent skills" block. | Q16, Q32.1 |
 | D16 | Local-tracker conventions: `.scratch/` is untracked and never staged; absolute main-checkout paths for subagents and worktrees; README gitignore advice; "closed" is `resolved` or `out-of-scope`; unblocked when every blocker is closed; implementation tickets set `resolved` on merge; `# <title>` heading per file; one writer of `map.md`; "Wayfinding operations" heading verbatim. | Q17, Q32.3, Q32.4 |
 | D17 | Harness built-ins are named as capabilities with an inline fallback; `/clear` and `/compact` become "start a fresh context"; human-facing text keeps `/name`; agent-facing prose and operative loads use plain names. | Q10, Q20 |
@@ -116,6 +116,47 @@ stays as he wrote it (D4), and nothing in the plugin carries a URL, attribution 
   Claude Code is the only harness that honours it today, and stripping it would turn the 15
   user-invoked skills into model-invoked ones there too. The D19 body line is a soft guard for
   every other harness, not a replacement for the key.
+
+### 2.2 Amendment from prF F6: the Forge issues tracker (2026-10-21)
+
+`specs/prF-forge-adapter.md` (§1 goal 2, Q28, Q32 to Q34, Q39, Q42, Q44, Q49, Q57, §11.1; ADR 0003)
+amends four decisions of this spec. The rest of the design stands; where sections 4 to 9 and the
+appendix say "only the local-markdown tracker ships", read them with this amendment.
+
+- **D2.** `playbook forge`, the engine's one forge command, is allowed alongside the standard
+  library, pip-installable packages, git, harness built-ins and the project toolchain. It reads the
+  forge from git config and runs the forge's CLI with its own login, so no skill names `gh` or
+  `glab`: both stay imposed tools, banned everywhere (gate G4 unchanged for them). Only
+  setup-matt-pocock-skills' `SKILL.md` and its Forge issues seed name `playbook forge`; G4 checks
+  that, and that every `playbook forge` command they name is an operation of the engine's forge
+  catalogue (`coding_agent_playbook.forge.operations`) with options it takes.
+- **D13.** Two tracker descriptions ship: local markdown and **Forge issues**
+  (`setup-matt-pocock-skills/references/issue-tracker-forge.md`), which names only `playbook forge`
+  operations: issue create, view, list, comment, label, close (`--reason`) and assign; one
+  `Closes #n` line per ticket in a pull request; wayfinding through `issue link-child`,
+  `issue children`, `issue block` and `issue blockers`, with the text fallbacks `Part of #map` and
+  `Blocked by: #n` on exit 3; obsolete or ruled-out tickets closed `--reason not-planned` (issues
+  are never deleted). Composite logic, such as wayfinder's frontier, stays in the skills over these
+  primitive operations (Q39). "Other" is unchanged.
+- **D14.** Setup still writes only the three `docs/agents/` files. It runs `playbook forge which`
+  while exploring; when it finds a forge remote it preselects **Forge issues** and the user confirms
+  once, otherwise local markdown stays the default ("Always local markdown" no longer holds). On
+  Forge issues it runs `playbook forge auth status`, and on exit 2 shows the user the one-line human
+  step, with no fallback to local markdown or raw API calls (Q34); after writing it creates the
+  label vocabulary and the five `wayfinder:` labels with `playbook forge label create`, on both
+  forges (Q42). The GitHub and GitLab templates stay dropped: the Forge issues seed replaces both.
+- **Triage note under D7.** `triage` stays dropped. The Forge issues seed carries upstream's
+  "PRs as a request surface" flag again (default **no**), and setup's L49 sentences about it
+  return, so a consumer who re-adds triage at `playbook/skills/triage/` can triage external pull
+  requests on a forge.
+- **Also in F6.** wizard's guided secret and variable steps cover GitLab CI/CD variables
+  (Settings, CI/CD, Variables; masked or protected) through a `CI_FORGE` setting of
+  `scripts/wizard_template.py`, and its discovery reads `$NAME` / `${NAME}` in `.gitlab-ci.yml` and
+  its local includes, except the predefined `CI_*`, `GITLAB_*`, `RUNNER_*` and `CHAT_*` (Q49,
+  Q57). ask-matt's "each GitHub secret" and to-tickets' "(GitHub, Linear, …)" become
+  forge-neutral (Q57). The pinned tests (`NEW_TEXTS`, `REPLACED_TEXTS`, `LINE_COUNTS`, the setup
+  reference inventory, G4, the ATTRIBUTIONS sentence that said "Only the local-markdown template
+  ships") change in the same commit, and `ATTRIBUTIONS.md` lists every change.
 
 ## 3. Engine and harness facts the design relies on
 
