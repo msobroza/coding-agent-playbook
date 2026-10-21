@@ -20,6 +20,7 @@ from coding_agent_playbook.commands._init_adapters import (
 )
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.detector.harness_markers import detected_adapters
+from coding_agent_playbook.lockfile.model import generated_paths
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -187,7 +188,7 @@ def _preselected_adapters(repo_root: Path) -> list[str]:
         lockfile = FileSystemStateSource(repo_root=repo_root).load_lockfile()
     except (OSError, ValueError):  # TOMLDecodeError and LockfileFormatError are ValueErrors
         lockfile = None
-    generated = lockfile.recorded_paths() if lockfile is not None else frozenset()
+    generated = generated_paths(lockfile)
     detected = [a for a in detected_adapters(repo_root, generated) if a in ADAPTER_CHOICES]
     return detected or list(DEFAULT_ADAPTERS)
 

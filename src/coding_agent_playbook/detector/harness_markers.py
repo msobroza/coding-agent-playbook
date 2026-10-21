@@ -7,8 +7,9 @@ command), and interactive ``playbook init`` pre-selects :func:`detected_adapters
 Only repo files are read, never PATH: an installed binary says nothing about
 what the team uses in this repo. A file the engine generated never counts as
 use, so a synced repo does not look like it uses every enabled harness: callers
-pass ``generated``, the paths the lockfile records (``Lockfile.recorded_paths``,
-scoped entries included, since the engine may have created that file). This
+pass ``generated``, the paths the lockfile records (``lockfile.model.generated_paths``,
+scoped entries included, since the engine may have created that file; the
+unused-adapter hint says such shared files were skipped). This
 layer sits below ``lockfile`` and ``config``, so it takes plain values.
 """
 
@@ -50,7 +51,9 @@ HARNESS_MARKERS: Final[tuple[HarnessMarker, ...]] = (
 _SYNC_AFTER: Final = "then run 'playbook sync'."
 
 
-def _user_files(repo_root: Path, marker: HarnessMarker, generated: frozenset[str]) -> bool:
+def _marker_holds_user_files(
+    repo_root: Path, marker: HarnessMarker, generated: frozenset[str]
+) -> bool:
     """Whether ``marker`` names at least one file the engine did not generate."""
     if not marker.path.endswith("/"):
         target = repo_root / marker.path
@@ -67,7 +70,7 @@ def _user_files(repo_root: Path, marker: HarnessMarker, generated: frozenset[str
 
 
 def _markers_found(repo_root: Path, generated: frozenset[str]) -> list[HarnessMarker]:
-    return [m for m in HARNESS_MARKERS if _user_files(repo_root, m, generated)]
+    return [m for m in HARNESS_MARKERS if _marker_holds_user_files(repo_root, m, generated)]
 
 
 def detected_adapters(repo_root: Path, generated: frozenset[str]) -> list[str]:
@@ -102,7 +105,8 @@ def _unused_hint(adapter: str, config_name: str) -> str:
     looked = _paths_of(m for m in HARNESS_MARKERS if m.adapter == adapter)
     return (
         f"{adapter} is enabled but the repo shows no {harness} files beyond the "
-        f"engine's own output (looked for {looked}): if no one uses {harness}, remove "
+        f"engine's own output (looked for {looked}, skipping files the engine wrote "
+        f"or merged into): if no one uses {harness}, remove "
         f'"{adapter}" from adapters_enabled in {config_name}, {_SYNC_AFTER}'
     )
 

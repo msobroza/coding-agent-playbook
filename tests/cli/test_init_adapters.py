@@ -23,6 +23,7 @@ from coding_agent_playbook.commands._init_adapters import (
     adapters_from_flag,
     adapters_union,
 )
+from coding_agent_playbook.commands._init_answers import _preselected_adapters
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -155,6 +156,26 @@ def test_interactive_blank_answer_takes_the_detected_adapters(
     assert "  * 1. claude_code\n" in out
     assert "    2. opencode\n" in out
     assert "  * 4. continue\n" in out
+
+
+def test_preselection_survives_a_corrupt_lockfile(tmp_path: Path) -> None:
+    """An unparsable lockfile excludes nothing; the markers still pre-select."""
+    (tmp_path / ".coding-agent-playbook.lock").write_text("not = [toml\n")
+    (tmp_path / "opencode.json").write_text("{}\n")
+
+    assert _preselected_adapters(tmp_path) == ["opencode"]
+
+
+def test_preselection_skips_files_the_lockfile_records(tmp_path: Path) -> None:
+    """Re-running init in a synced repo: engine output never pre-selects its adapter."""
+    (tmp_path / ".continue").mkdir()
+    (tmp_path / ".continue" / "config.yaml").write_text("name: x\n")
+    (tmp_path / ".coding-agent-playbook.lock").write_text(
+        'schema_version = 2\nengine_version = "0"\nrendered_at = ""\n\n'
+        '[[entries]]\npath = ".continue/config.yaml"\nsha256 = "' + "0" * 64 + '"\nbytes = 1\n'
+    )
+
+    assert _preselected_adapters(tmp_path) == list(DEFAULT_ADAPTERS)
 
 
 def test_non_interactive_default_ignores_detected_harness_files(tmp_path: Path) -> None:

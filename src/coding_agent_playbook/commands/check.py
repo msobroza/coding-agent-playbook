@@ -34,6 +34,7 @@ from coding_agent_playbook.detector.facts import detect
 from coding_agent_playbook.detector.harness_markers import adapter_hints
 from coding_agent_playbook.detector.predicate import evaluate_predicate
 from coding_agent_playbook.lockfile.drift import drift_entries
+from coding_agent_playbook.lockfile.model import generated_paths
 from coding_agent_playbook.validation import preflight as _sync_preflight
 from coding_agent_playbook.validation.context import SyncContext
 
@@ -188,13 +189,14 @@ def _format_artifacts_section(ctx: SyncContext) -> str:
     return "\n".join(out)
 
 
-def _format_drift_section(ctx: SyncContext, unusable: Sequence[UnusableOverlay] = ()) -> str:
-    """Compare the files on disk with the lockfile.
+def _format_drift_section(
+    ctx: SyncContext, lockfile: Lockfile | None, unusable: Sequence[UnusableOverlay] = ()
+) -> str:
+    """Compare the files on disk with ``lockfile`` (``None`` before the first sync).
 
     With an unusable overlay the state is never reported clean: a matching
     lockfile only says what the last sync wrote, and no sync can run now.
     """
-    lockfile = ctx.state_source.load_lockfile()
     lines = ["=== Drift ==="]
     if lockfile is None:
         lines.append("  No lockfile yet — run 'playbook sync' to create one.")
@@ -209,15 +211,16 @@ def _format_drift_section(ctx: SyncContext, unusable: Sequence[UnusableOverlay] 
     return "\n".join(lines)
 
 
-def _format_harness_section(ctx: SyncContext) -> str:
+def _format_harness_section(ctx: SyncContext, lockfile: Lockfile | None) -> str:
     """Advisory hints where the enabled adapters and the repo's harness files disagree (D79).
 
     Each hint names the config change that settles it; none affects the exit code.
     """
-    lockfile = ctx.state_source.load_lockfile()
-    generated = lockfile.recorded_paths() if lockfile is not None else frozenset()
     hints = adapter_hints(
-        ctx.repo_root, ctx.config.adapters_enabled, generated, config_name=CONFIG_FILENAME
+        ctx.repo_root,
+        ctx.config.adapters_enabled,
+        generated_paths(lockfile),
+        config_name=CONFIG_FILENAME,
     )
     lines = [f"  ! {hint}" for hint in hints] or [
         "  Enabled adapters match the repo's harness files."
@@ -292,8 +295,11 @@ def run(args: argparse.Namespace) -> int:
     print(_format_detected_section(ctx))
     print(_format_artifacts_section(ctx))
     print(format_hooks_section(ctx))
-    print(_format_harness_section(ctx))
-    print(_format_drift_section(ctx, unusable))
+    # Loaded once for both sections; a corrupt lockfile raises here, as the
+    # diagnostic must surface it (init, which only picks menu defaults, tolerates it).
+    lockfile = ctx.state_source.load_lockfile()
+    print(_format_harness_section(ctx, lockfile))
+    print(_format_drift_section(ctx, lockfile, unusable))
     # A diagnostic: problems are reported above, never through the exit code
     # (drift exits 0 too). `playbook validate` and `playbook sync` are the gates.
     return 0

@@ -24,6 +24,7 @@ from coding_agent_playbook.lockfile.model import (
     LockfileFormatError,
     Provenance,
     compute_hash,
+    generated_paths,
 )
 
 if TYPE_CHECKING:
@@ -444,3 +445,8 @@ def test_recorded_paths_lists_each_path_once_scoped_entries_included() -> None:
     lock = Lockfile(schema_version=2, engine_version="0", rendered_at="", entries=[whole, *scoped])
 
     assert lock.recorded_paths() == frozenset({"AGENTS.md", ".claude/settings.json"})
+    assert generated_paths(lock) == lock.recorded_paths()
+
+
+def test_generated_paths_is_empty_before_the_first_sync() -> None:
+    assert generated_paths(None) == frozenset()
