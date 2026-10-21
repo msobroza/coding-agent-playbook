@@ -35,7 +35,7 @@ def _synced_probe(tmp_path_factory: pytest.TempPathFactory, *, uv_lock: bool) ->
 
 @pytest.fixture(scope="module")
 def reference_probe_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """The D5 reference probe, synced once per module (hooks on, both bundled plugins).
+    """The D5 reference probe, synced once per module (hooks on, the superpowers plugin).
 
     Read-only for the tests: each module gets its own copy.
 

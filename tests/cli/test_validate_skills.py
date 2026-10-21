@@ -29,16 +29,16 @@ if TYPE_CHECKING:
 _PLAYBOOK_BLOCK = "playbook:\n  use_when: editing Python code\n  files: Any Python file\n"
 _PATTERN = "^[a-z0-9]+(-[a-z0-9]+)*$ (1-64 chars)"
 _REPO_LOCAL = "(<repo-local>)"
-_PYTHON_DESIGN = "coding_agent_playbook.plugins.python_design"
+_SUPERPOWERS = "coding_agent_playbook.plugins.superpowers"
 #: The skills that take members in every synthetic repo: core's four.
 _KNOWN_SKILLS = "ml-data, python-coding, python-testing, python-tooling"
 #: A repo-local skill no core rule names, for the tests that count members.
 _OWN_SKILL = "risk-models"
 
-_CONFIG_WITH_PYTHON_DESIGN = f"""\
+_CONFIG_WITH_SUPERPOWERS = f"""\
 schema_version = 1
 adapters_enabled = ["claude_code"]
-overlays_enabled = ["{_PYTHON_DESIGN}"]
+overlays_enabled = ["{_SUPERPOWERS}"]
 
 [project]
 name = "synthetic"
@@ -403,12 +403,12 @@ def _v14_line(rule: Path, skill_id: str, source: str) -> str:
 def test_rule_naming_a_skill_without_a_playbook_block_fails(
     tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """V14 over a python_design skill (D3: a bundled plugin skill owns no members) and
+    """V14 over a superpowers skill (D3: a bundled plugin skill owns no members) and
     over a repo-local plain skill."""
-    built = make_synthetic_repo(tmp_path, config_text=_CONFIG_WITH_PYTHON_DESIGN)
+    built = make_synthetic_repo(tmp_path, config_text=_CONFIG_WITH_SUPERPOWERS)
     write_skill(built, "python-coding")
     write_skill(built, "query-db", block="")
-    plugin_rule = write_rule(built, "layering", skill="python-architecture")
+    plugin_rule = write_rule(built, "tdd-cycle", skill="test-driven-development")
     local_rule = write_rule(built, "db-queries", skill="query-db")
 
     rc, out, _ = run_validate(built, capsys)
@@ -416,7 +416,7 @@ def test_rule_naming_a_skill_without_a_playbook_block_fails(
     assert rc == 1
     assert fail_lines(out) == [
         _v14_line(local_rule, "query-db", "<repo-local>"),
-        _v14_line(plugin_rule, "python-architecture", _PYTHON_DESIGN),
+        _v14_line(plugin_rule, "test-driven-development", _SUPERPOWERS),
     ]
 
 

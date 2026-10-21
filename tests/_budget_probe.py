@@ -1,8 +1,8 @@
 """The D5 reference probe: one consumer repo every context-budget and core-content test reads.
 
 The probe (specs/prS-skills-context.md 6.8.10) is a FastAPI + ML service with a
-pytest suite and one notebook, synced with hooks on, both bundled plugins enabled
-and every adapter that renders rules or skills. It is built from the inline
+pytest suite and one notebook, synced with hooks on, the superpowers bundled plugin
+enabled and every adapter that renders rules or skills. It is built from the inline
 constants below, so no nested ``pyproject.toml`` or ``.ipynb`` is committed under
 ``tests/``. ``tests/integration/conftest.py`` syncs it once per module through
 :func:`init_and_sync_reference_probe`; the context-budget, core-skill and
@@ -48,10 +48,9 @@ dev = ["pytest>=8.3", "pytest-asyncio>=0.24", "ruff>=0.8", "mypy>=1.13"]
 #: that renders rules or skills and does not depend on which PR lands first.
 REFERENCE_PROBE_ADAPTERS: Final = "claude_code,opencode,shared_skills,continue"
 
-#: Both bundled plugins: the skill-listing budget counts every one of them (D5).
-REFERENCE_PROBE_OVERLAYS: Final = (
-    "coding_agent_playbook.plugins.superpowers,coding_agent_playbook.plugins.python_design"
-)
+#: The superpowers bundled plugin: the skill-listing budget counts every enabled plugin
+#: (D5). mattpocock_skills is budgeted on its own (tests/plugins/mattpocock_skills/test_budget.py).
+REFERENCE_PROBE_OVERLAYS: Final = "coding_agent_playbook.plugins.superpowers"
 
 #: The ``[project]`` answers ``playbook init`` records, also the rule context's metadata.
 REFERENCE_PROBE_NAME: Final = "mlsvc"

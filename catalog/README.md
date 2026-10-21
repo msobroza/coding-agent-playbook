@@ -38,7 +38,7 @@ name it. A fifth, `playbook-guardrails`, takes no rules: sync appends one
 section per enabled hook's guardrail text to its authored intro, so edit the
 hook's `HOOK.md` body, not the skill, to change a section. Only a skill that
 declares a `playbook:` block takes rules, so the skills of `superpowers` and
-`python_design` own none. A bundled plugin may also hold `rules/`, `prompts/`,
+`mattpocock_skills` own none. A bundled plugin may also hold `rules/`, `prompts/`,
 `hooks/` or `eval_tasks/`, laid out exactly as in `core/`.
 
 The files at a layer root (`README.md`, `LICENSE`, `ATTRIBUTIONS.md`) sit
@@ -56,10 +56,10 @@ Two rules keep the content self-contained:
   must resolve to a file inside the same layer (`core/`, or `plugins/<name>/`).
 - **Distilled content never names its source plugin.** When rules, prompts or
   skills distill ideas from a third-party plugin (the engine's own `core/`, or a
-  distilled plugin such as `python_design`), the credit goes in the layer
-  root's `ATTRIBUTIONS.md` and nowhere else. CI scans every other file of
-  `core/` and of every bundled plugin for the names of the sources the scan
-  knows (today, `python_design`'s source and the two sources core distills).
+  distilled bundled plugin), the credit goes in the layer root's
+  `ATTRIBUTIONS.md` and nowhere else. CI scans every other file of `core/` and
+  of every bundled plugin for the names of the sources the scan knows (today,
+  the two sources core distills).
   Distilling from a new source means adding its name to `_PLUGIN_MARKER_RE` in
   `tests/integration/test_resources_self_contained.py`. A vendored plugin such
   as `superpowers` is exempt: it keeps its upstream wording, source name
@@ -228,7 +228,7 @@ with no change outside `catalog/`.
 
 - **The leaf rule.** `<name>` must be a Python identifier (`str.isidentifier()`:
   letters, digits and underscores, not starting with a digit) and must not start
-  with `_` or `.`. Use `python_design`, not `python-design`. The engine ignores
+  with `_` or `.`. Use `mattpocock_skills`, not `mattpocock-skills`. The engine ignores
   any other directory here, and a content gate fails CI on it. Consumers must
   spell the name with exactly the same case.
 - **At least one kind directory:** `skills/`, `rules/`, `prompts/`, `hooks/`
@@ -280,7 +280,7 @@ with `uv run`). CI's `ruff format --check .` also formats the Python code
 blocks inside markdown, this guide's included. The pytest suite validates the
 shipped content: link containment and self-containment for `core/` and every
 bundled plugin (see "Add a bundled plugin"), every eval task's gate, and the
-skill inventory that `python_design` and `superpowers` each pin.
+skill inventory that `mattpocock_skills` and `superpowers` each pin.
 
 With `pre-commit install`, every commit formats markdown the way CI does, and a
 commit that touches `catalog/` also runs the catalog checks (`pytest -m catalog`).

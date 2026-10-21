@@ -43,7 +43,7 @@ def bundled_plugin_dirs() -> list[Path]:
 
     Example::
 
-        [path.name for path in bundled_plugin_dirs()]  # ['python_design', 'superpowers']
+        [path.name for path in bundled_plugin_dirs()]  # ['mattpocock_skills', 'superpowers']
     """
     return sorted(entry for entry in PLUGINS_ROOT.iterdir() if entry.is_dir())
 
@@ -53,7 +53,7 @@ def plugin_root(name: str) -> Path:
 
     Example::
 
-        plugin_root("python_design") / "skills" / "python-architecture"
+        plugin_root("superpowers") / "skills" / "brainstorming"
     """
     return PLUGINS_ROOT / name
 
@@ -66,7 +66,7 @@ def plugin_files_root(name: str) -> Path:
 
     Example::
 
-        plugin_files_root("python_design") / "ATTRIBUTIONS.md"
+        plugin_files_root("superpowers") / "ATTRIBUTIONS.md"
     """
     return PLUGINS_ROOT / name
 

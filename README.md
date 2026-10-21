@@ -211,7 +211,7 @@ rule, prompt, eval task, skill or hook never means touching Python:
   runs only where `[hooks]` turns it on, and a core skill is written only where
   one of its rules applies).
 - `catalog/plugins/<name>/` holds one **bundled plugin** per directory
-  (today `superpowers` and `python_design`), off until a consumer lists
+  (today `superpowers` and `mattpocock_skills`), off until a consumer lists
   `coding_agent_playbook.plugins.<name>` in `overlays_enabled`. A new
   directory there is a new plugin, with no code change. A plugin may ship
   any kind `core/` does, `eval_tasks/` included: its tasks use its own
@@ -539,7 +539,7 @@ is left out when no enabled adapter writes a skills root.
   `.continue/rules/` file per rule, and a skill with rules is never turned into
   a Continue prompt.
 
-## Bundled plugins: superpowers, python_design, mattpocock_skills
+## Bundled plugins: superpowers, mattpocock_skills
 
 The engine wheel bundles **opt-in bundled plugins** (called *packs* before
 v0.19). They layer exactly like an overlay package but need no extra install,
@@ -578,7 +578,7 @@ or from a local file's `overlays_enabled`, which replaces it). A
 bundled-plugin name is checked against `catalog/plugins/<name>/` and never
 imported. An unknown one reads `no such bundled plugin`, and a name that looks
 like a plugin typo also lists the bundled plugins:
-`coding_agent_playbook.plugins.superpower: no such bundled plugin (bundled plugins: coding_agent_playbook.plugins.mattpocock_skills, coding_agent_playbook.plugins.python_design, coding_agent_playbook.plugins.superpowers)`.
+`coding_agent_playbook.plugins.superpower: no such bundled plugin (bundled plugins: coding_agent_playbook.plugins.mattpocock_skills, coding_agent_playbook.plugins.superpowers)`.
 The bare namespace (`coding_agent_playbook.plugins`, or the old
 `coding_agent_playbook.packs`) is refused as
 `the bundled plugin namespace, not a plugin`. Any other name is an overlay
@@ -625,31 +625,6 @@ removed. An override of `subagent-driven-development` must therefore ship
 `scripts/task-brief` and `scripts/sdd-workspace`, which executing-plans calls
 (SPEC §11.5.1). See SPEC §11.5 and §4.2 step 9.
 
-**The `python_design` bundled plugin** (`coding_agent_playbook.plugins.python_design`) adds
-two skills for Python design work: `python-design-review` (smells, principles
-and patterns; its `detect_smells.py` and `lcom4_clusters.py` scripts print JSON
-candidates) and `python-architecture` (layers, composition root, dependency
-injection, testability and persistence; its `layer_map.py` script reports
-imports that cross layers the wrong way, and import cycles). Its content is
-distilled, not vendored: written fresh, with the credit in
-`catalog/plugins/python_design/ATTRIBUTIONS.md`. Each `SKILL.md`
-works on its own, so the degraded Continue prompt keeps the decision tables, and
-the scripts are stdlib-only and run on Python 3.10+. Enable it the same way,
-alone or next to superpowers:
-`overlays_enabled = ["coding_agent_playbook.plugins.python_design"]`. See SPEC
-§11.5.2.
-
-Those three scripts are `.py` files, and sync writes them as such under
-`.claude/skills/`, `.opencode/skills/` and `.agents/skills/` (and `skills/`
-with `agent_harness`). `mypy .` skips dot-directories but ignores `.gitignore`,
-so the default adapters' copies never reach it; it type-checks only the single
-`skills/` copy of the opt-in `agent_harness` adapter, so the duplicate-module
-error of earlier releases is gone.
-`ruff check .` skips them in a git repository while they are gitignored (the
-default `commit = false`) and lints every copy under `commit = true`. If you run
-these tools over the repository root, exclude the generated skill roots (for
-example `exclude` under `[tool.mypy]`, `extend-exclude` under `[tool.ruff]`).
-
 **The `mattpocock_skills` bundled plugin**
 (`coding_agent_playbook.plugins.mattpocock_skills`) is vendored content: Matt
 Pocock's engineering and productivity skills, pinned to upstream v1.3.1 (MIT)
@@ -694,9 +669,25 @@ Do not enable it together with superpowers: several skills cover the same
 ground (`tdd` and `test-driven-development`, `diagnosing-bugs` and
 `systematic-debugging`, `grilling` and `brainstorming`, among others), and the
 two skill listings with core's come to about 6,800 characters, over the
-6,000-character budget for core plus one bundled plugin. Next to python_design
-the three listings stay within it (5,655 characters). See SPEC §11.5.3 and
+6,000-character budget for core plus one bundled plugin. See SPEC §11.5.3 and
 `catalog/plugins/mattpocock_skills/README.md`.
+
+The plugin's two scripts (wizard's and diagnosing-bugs') are `.py` files, and
+sync writes them as such under
+`.claude/skills/`, `.opencode/skills/` and `.agents/skills/` (and `skills/`
+with `agent_harness`). `mypy .` skips dot-directories but ignores `.gitignore`,
+so the default adapters' copies never reach it; it type-checks only the single
+`skills/` copy of the opt-in `agent_harness` adapter, so the duplicate-module
+error of earlier releases is gone.
+`ruff check .` skips them in a git repository while they are gitignored (the
+default `commit = false`) and lints every copy under `commit = true`. If you run
+these tools over the repository root, exclude the generated skill roots (for
+example `exclude` under `[tool.mypy]`, `extend-exclude` under `[tool.ruff]`).
+
+The `python_design` bundled plugin is gone: its guidance is being folded into
+core. A config that still lists `coding_agent_playbook.plugins.python_design`
+is refused as `no such bundled plugin`, so remove it from `overlays_enabled`
+(see MIGRATION.md).
 
 **Old names still work.** A config written before v0.19 says
 `coding_agent_playbook.packs.<name>`. That spelling is a deprecated alias:

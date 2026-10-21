@@ -254,7 +254,7 @@ DISTILLED_RULES: Final[Mapping[str, DistilledRuleRow]] = {
     ),
 }
 SKILLS_ROOT: Final = CORE_ROOT / "skills"
-#: The python_design plugin's third-person regex, extended with "use" (a "Use when" opener).
+#: A third-person description check (no "I", "you" or "we"), extended with "use" (a "Use when" opener).
 _NOT_THIRD_PERSON: Final = re.compile(r"(?i)(i|you|we|use)\b")
 _URL: Final = re.compile(r"(?i)\b[a-z][a-z0-9+.-]*://|\bwww\.")
 _TRUNCATION_TAIL: Final = re.compile(r"and \d+ more")

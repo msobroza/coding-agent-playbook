@@ -110,13 +110,13 @@ def test_bundled_plugins_is_sorted_dotted_names(
     """Re-exported from ``catalog``: identifier dirs only, sorted, never cached."""
     root = tmp_path / "catalog"
     (root / "core").mkdir(parents=True)
-    for leaf in ("superpowers", "python_design", ".hidden", "_private", "__pycache__", "bad-name"):
+    for leaf in ("superpowers", "demo_plugin", ".hidden", "_private", "__pycache__", "bad-name"):
         (root / "plugins" / leaf / "skills").mkdir(parents=True)
     (root / "plugins" / "README.md").write_text("stray file\n", encoding="utf-8")
 
     assert _sync_preflight.bundled_plugins is catalog.bundled_plugins
     assert bundled_plugins(root) == [
-        f"{PLUGIN_NAMESPACE}.python_design",
+        f"{PLUGIN_NAMESPACE}.demo_plugin",
         f"{PLUGIN_NAMESPACE}.superpowers",
     ]
     # Acceptance 5: a new plugin dir is listed and usable with no code change.

@@ -5,8 +5,7 @@ air-gapped deployment, so a rule, prompt or skill must never point outside the
 shipped bundle and must never name the third-party source some of them were
 distilled from. Credit for that source lives only in a layer root's
 ``ATTRIBUTIONS.md``: ``catalog/core/ATTRIBUTIONS.md`` for the engine's own
-artifacts and ``catalog/plugins/<name>/ATTRIBUTIONS.md`` for a bundled plugin
-(today the distilled ``python_design``).
+artifacts and ``catalog/plugins/<name>/ATTRIBUTIONS.md`` for a bundled plugin.
 The PR-L link gate (``validation/link_check.py``) cannot enforce this: it recognizes only
 markdown link syntax, masks code spans, and reads only ``.md``/``.md.j2``. This
 scan applies no masking and reads every text file.
@@ -61,9 +60,9 @@ pytestmark = pytest.mark.catalog
 
 #: Every bundled plugin's ids start here: its path relative to ``catalog/``.
 _PLUGINS_PREFIX = "plugins/"
-#: The distilled opt-in plugin (SPEC §11.5.2), whose ``ATTRIBUTIONS.md`` must credit the source.
-_PYTHON_DESIGN_ROOT = plugin_files_root("python_design")
-_PYTHON_DESIGN_PREFIX = f"{_PLUGINS_PREFIX}python_design/"
+#: A bundled plugin this scan must reach (not allowlisted below): the coverage guards
+#: check that its skills, root ``ATTRIBUTIONS.md`` and ``README.md`` are all scanned.
+_SCANNED_PLUGIN_PREFIX = f"{_PLUGINS_PREFIX}mattpocock_skills/"
 #: The one allowlist: vendored bundled plugins this scan skips, each mapped to the
 #: dedicated gate (a test file) that covers it instead. Every other directory under
 #: ``catalog/plugins/`` is scanned. Add an entry only for vendored upstream text
@@ -206,7 +205,7 @@ def scan_targets(
     unprefixed relative path. An empty or missing ``root`` fails loudly: a gate
     that scans nothing passes vacuously. Example::
 
-        scan_targets(plugin_dir, prefix="plugins/python_design/", policy=plugin_policy_for)
+        scan_targets(plugin_dir, prefix="plugins/mattpocock_skills/", policy=plugin_policy_for)
     """
     # POSIX-style ids keep the test ids and prefix checks stable on Windows too.
     rels = sorted(
@@ -276,17 +275,17 @@ def test_scan_covers_every_artifact_kind() -> None:
         "rules/",
         "prompts/",
         _PRECOMMIT_TEMPLATE_PREFIX,
-        f"{_PYTHON_DESIGN_PREFIX}skills/",
+        f"{_SCANNED_PLUGIN_PREFIX}skills/",
     ):
         assert any(r.startswith(prefix) for r in rels), f"nothing scanned under {prefix}"
     for part in ("/task.toml", "/setup/", "/solution/"):
         assert any(part in r for r in rels), f"no eval-task file matching {part} scanned"
     assert _ATTRIBUTIONS_NAME in rels
     assert f"{_EVAL_TASKS_SUBDIR}/{_ATTRIBUTIONS_NAME}" in rels
-    assert f"{_PYTHON_DESIGN_PREFIX}{_ATTRIBUTIONS_NAME}" in rels
+    assert f"{_SCANNED_PLUGIN_PREFIX}{_ATTRIBUTIONS_NAME}" in rels
     # The plugin's README ships in the wheel; its enable instructions must name
-    # neither a URL nor the source plugin.
-    assert f"{_PYTHON_DESIGN_PREFIX}README.md" in rels
+    # neither a URL nor a distilled source.
+    assert f"{_SCANNED_PLUGIN_PREFIX}README.md" in rels
 
 
 def test_scan_covers_every_bundled_plugin_but_the_allowlisted_vendored_ones() -> None:
@@ -313,16 +312,11 @@ def test_plugin_scan_exempts_only_each_plugin_root_attributions_from_the_marker_
         for path in _scanned_plugin_dirs()
         if (path / _ATTRIBUTIONS_NAME).is_file()
     }
-    assert f"{_PYTHON_DESIGN_PREFIX}{_ATTRIBUTIONS_NAME}" in exempt
+    assert f"{_SCANNED_PLUGIN_PREFIX}{_ATTRIBUTIONS_NAME}" in exempt
 
 
-@pytest.mark.parametrize(
-    "attributions",
-    [CORE_ROOT / _ATTRIBUTIONS_NAME, _PYTHON_DESIGN_ROOT / _ATTRIBUTIONS_NAME],
-    ids=["core", "python_design"],
-)
-def test_attributions_credit_the_distilled_source(attributions: Path) -> None:
-    text = attributions.read_text(encoding="utf-8")
+def test_core_attributions_credit_the_distilled_source() -> None:
+    text = (CORE_ROOT / _ATTRIBUTIONS_NAME).read_text(encoding="utf-8")
     assert "python-clean-architecture" in text
     assert "MKToronto" in text
     assert "MIT" in text

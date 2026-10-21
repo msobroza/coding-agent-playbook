@@ -133,14 +133,12 @@ line-length = 100
 src = ["src", "tests"]
 # A vendored opt-in pack (SPEC §11.5: superpowers) ships upstream text that must
 # stay byte-faithful to its source, so ruff never lints or reformats any of its
-# files. The distilled python_design pack (SPEC §11.5.2) is our own code:
-# its stdlib scripts ARE linted and formatted. Only its markdown is excluded,
-# because newer, unpinned ruff versions also reformat code blocks inside
-# markdown (CI has gone red on that before), and its fenced examples include
-# deliberate "before" code.
-# The vendored mattpocock_skills plugin (specs/prT-mattpocock-skills.md D32) gets
-# the same split: its markdown is upstream text kept near-verbatim, while its two
-# Python script rewrites stay linted and formatted.
+# files.
+# The vendored mattpocock_skills plugin (specs/prT-mattpocock-skills.md D32) is
+# split: its markdown is upstream text kept near-verbatim, and newer, unpinned
+# ruff versions also reformat code blocks inside markdown (CI has gone red on
+# that before), so only its markdown is excluded; its two Python script
+# rewrites are our own code and stay linted and formatted.
 # Eval-task fixtures under setup/ are deliberately unclean needle material (the
 # find-injected-vuln-* bugs live there), so `ruff check --fix` / `ruff format`
 # must never rewrite them either (specs/prK-lifecycle-hooks.md §P9). Eval tasks
@@ -148,7 +146,6 @@ src = ["src", "tests"]
 # mypy needs none: catalog/ is outside its `files`.
 extend-exclude = [
     "catalog/plugins/superpowers",
-    "catalog/plugins/python_design/**/*.md",
     "catalog/plugins/mattpocock_skills/**/*.md",
     "catalog/core/eval_tasks/*/setup",
     "catalog/plugins/*/eval_tasks/*/setup",

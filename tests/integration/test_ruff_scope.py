@@ -35,14 +35,12 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _FIXTURE_GLOB = "catalog/core/eval_tasks/*/setup"
 #: A bundled plugin's eval tasks live in its own layer, fixtures included.
 _PLUGIN_FIXTURE_GLOB = "catalog/plugins/*/eval_tasks/*/setup"
-#: The vendored bundled plugin stays byte-faithful; the distilled python_design
-#: plugin only keeps ruff off its markdown, because its stdlib scripts are our own
-#: code (SPEC §11.5.2).
+#: The vendored superpowers plugin stays byte-faithful as a whole; mattpocock_skills
+#: only keeps ruff off its markdown, because its Python script rewrites are our own
+#: code (SPEC §11.5.3).
 _VENDORED_PACK_GLOB = "catalog/plugins/superpowers"
-_DISTILLED_PACK_MD_GLOB = "catalog/plugins/python_design/**/*.md"
-_DISTILLED_PACK_SCRIPT = (
-    "catalog/plugins/python_design/skills/python-architecture/scripts/layer_map.py"
-)
+_SPLIT_PACK_MD_GLOB = "catalog/plugins/mattpocock_skills/**/*.md"
+_SPLIT_PACK_SCRIPT = "catalog/plugins/mattpocock_skills/skills/wizard/scripts/wizard_template.py"
 _ENGINE_MODULE = "src/coding_agent_playbook/__init__.py"
 #: Scratch-project paths: a plugin's eval fixture, and a plugin script beside it.
 _SCRATCH_PLUGIN_FIXTURE = "catalog/plugins/demo/eval_tasks/demo-task/setup/needle.py"
@@ -85,7 +83,7 @@ def test_ruff_config_excludes_fixtures_and_packs_with_force_exclude() -> None:
     assert _FIXTURE_GLOB in table["extend-exclude"]
     assert _PLUGIN_FIXTURE_GLOB in table["extend-exclude"]
     assert _VENDORED_PACK_GLOB in table["extend-exclude"]
-    assert _DISTILLED_PACK_MD_GLOB in table["extend-exclude"]
+    assert _SPLIT_PACK_MD_GLOB in table["extend-exclude"]
     assert table["force-exclude"] is True
 
 
@@ -166,4 +164,4 @@ def test_ruff_still_checks_engine_sources() -> None:
     assert _ENGINE_MODULE in listed
     assert not [path for path in listed if "/eval_tasks/" in path and "/setup/" in path]
     assert not [path for path in listed if path.startswith(f"{_VENDORED_PACK_GLOB}/")]
-    assert _DISTILLED_PACK_SCRIPT in listed
+    assert _SPLIT_PACK_SCRIPT in listed

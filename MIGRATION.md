@@ -673,6 +673,7 @@ changelog entry is v0.21.
 | Anything that cites **SPEC §3** for a term's definition (docs, overlay READMEs, tests) | Use `CONTEXT.md` at the repository root, now the project's only glossary. SPEC §3 is a one-line pointer to it, and the two facts only the old glossary carried moved to SPEC §6.6.7 and §10.2. The move alters no generated file. |
 | An overlay or repo-local rule or prompt whose `applies_if` has a typo after a key that does not hold | Run `playbook validate` and fix what it reports: validate, and so `playbook sync`, now checks each key on its own. New `applies_if: {package_manager: uv}` gating is available. See "`package_manager` and per-key validation" below. |
 | A repo that wants Matt Pocock's skills (the new `mattpocock_skills` bundled plugin) | Opt in: add `coding_agent_playbook.plugins.mattpocock_skills` to `overlays_enabled`, run `playbook sync`, then `/setup-matt-pocock-skills`, gitignore `.scratch/` and disable the upstream Claude Code plugin. Nothing changes for a repo that does not enable it. See "New opt-in bundled plugin: mattpocock_skills". |
+| A repo with `coding_agent_playbook.plugins.python_design` (or the old `coding_agent_playbook.packs.python_design`) in `overlays_enabled` | Remove it, then run `playbook sync`: the bundled plugin is gone, and until then every command refuses the name as `no such bundled plugin`. See "Removed bundled plugin: python_design". |
 | Every consumer repo (`commit = false`) | Nothing: the next `playbook sync` writes `.agents/skills/`, deletes the unchanged `shared_skills/` copies and updates the managed block. |
 | A repo with `commit = true` | Run `playbook sync`, then `git rm -r shared_skills` and commit `.agents/skills/`. |
 | Tooling that points at `shared_skills/` | Point it at `.agents/skills/`. |
@@ -713,8 +714,8 @@ Pocock's engineering and productivity skills, pinned to upstream v1.3.1, with 26
 skills and one plugin always rule (SPEC §11.5.3). It is off by default, so a repo
 that does not list it gets no new file, rule or skill and needs no action. The
 only visible change elsewhere is the hint for a mistyped bundled-plugin name,
-which now lists three plugins:
-`(bundled plugins: coding_agent_playbook.plugins.mattpocock_skills, coding_agent_playbook.plugins.python_design, coding_agent_playbook.plugins.superpowers)`.
+which now lists it (and no longer lists `python_design`, removed below):
+`(bundled plugins: coding_agent_playbook.plugins.mattpocock_skills, coding_agent_playbook.plugins.superpowers)`.
 
 To opt in:
 
@@ -746,6 +747,42 @@ plus both listings exceed the 6,000-character skill-listing budget, which now
 reads core plus **each** bundled plugin. To opt out, remove it from
 `overlays_enabled` and run `playbook sync`; its skills are settled as leftovers
 like any bundled plugin's (SPEC §11.5).
+
+### Removed bundled plugin: python_design
+
+The opt-in `coding_agent_playbook.plugins.python_design` bundled plugin (the
+`python-design-review` and `python-architecture` skills) no longer ships: its
+guidance is being folded into core in a later change
+(`specs/prU-core-python-skills.md`). A repo that does not list it needs no
+action.
+
+A repo that lists it, under either spelling, must remove it from
+`overlays_enabled` (in `.coding-agent-playbook.toml`, or in
+`.coding-agent-playbook.local.toml` when that file sets the key) and from any
+`playbook init --overlays` argument. Until then every command reports it as an
+unknown bundled plugin: `playbook sync` writes nothing and exits 1,
+`playbook validate` fails, `playbook check` flags it under `Overlays:`, and
+`playbook init` refuses it and exits 2.
+
+```text
+error: overlay package(s) or bundled plugin(s) in overlays_enabled are not usable here:
+  coding_agent_playbook.plugins.python_design: no such bundled plugin (bundled plugins: coding_agent_playbook.plugins.mattpocock_skills, coding_agent_playbook.plugins.superpowers)
+```
+
+```toml
+# .coding-agent-playbook.toml — before
+overlays_enabled = ["coding_agent_playbook.plugins.superpowers", "coding_agent_playbook.plugins.python_design"]
+
+# after
+overlays_enabled = ["coding_agent_playbook.plugins.superpowers"]
+```
+
+The next `playbook sync` then settles the plugin's two skill directories as
+leftovers, like any bundled plugin you opt out of (SPEC §11.5): the unedited,
+untracked copies are deleted from every skill root, an edited copy is kept
+until you delete it, and under `commit = true` committed copies stay and are
+listed on stderr until you `git rm` them. To keep using one of its skills, add
+it as a repo-local skill under `playbook/skills/<id>/`.
 
 ### The shared_skills adapter writes .agents/skills/
 

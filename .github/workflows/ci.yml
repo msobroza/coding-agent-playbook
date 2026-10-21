@@ -135,7 +135,7 @@ jobs:
           echo "$RUNNER_TEMP/smoke-venv/bin" >> "$GITHUB_PATH"
           timeout 120 "$RUNNER_TEMP/smoke-venv/bin/playbook" --version </dev/null
 
-      - name: init with both bundled plugins in an empty scratch git repo
+      - name: init with the superpowers bundled plugin in an empty scratch git repo
         run: |
           mkdir "$RUNNER_TEMP/smoke-repo"
           cd "$RUNNER_TEMP/smoke-repo"
@@ -143,13 +143,13 @@ jobs:
           # so outside one sync warns and the no-warning check below would fail.
           git init -q
           timeout 120 playbook init --non-interactive --name smoke --kind python-library \
-            --overlays coding_agent_playbook.plugins.superpowers,coding_agent_playbook.plugins.python_design \
+            --overlays coding_agent_playbook.plugins.superpowers \
             </dev/null 2>&1 | tee "$RUNNER_TEMP/init.log"
           if grep -n '^warning:' "$RUNNER_TEMP/init.log"; then
             echo "init printed a warning line" >&2
             exit 1
           fi
-          for skill in brainstorming python-design-review; do
+          for skill in brainstorming; do
             test -f ".claude/skills/$skill/SKILL.md" || { echo "missing .claude/skills/$skill/SKILL.md" >&2; exit 1; }
           done
 

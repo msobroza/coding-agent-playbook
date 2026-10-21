@@ -105,7 +105,7 @@ def bundled_plugins(catalog_dir: Path | None = None) -> list[str]:
     Example::
 
         >>> bundled_plugins()  # doctest: +SKIP
-        ['coding_agent_playbook.plugins.python_design', 'coding_agent_playbook.plugins.superpowers']
+        ['coding_agent_playbook.plugins.mattpocock_skills', 'coding_agent_playbook.plugins.superpowers']
     """
     root = catalog_root() if catalog_dir is None else catalog_dir
     plugins_dir = root / _PLUGINS_DIRNAME

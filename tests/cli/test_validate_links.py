@@ -234,7 +234,7 @@ def _plugins_with_link_checked_markdown() -> set[str]:
     Read from the checkout, not from the code under test, so a plugin the gate
     fails to walk shows up as missing. Example::
 
-        _plugins_with_link_checked_markdown()  # {'python_design', 'superpowers'}
+        _plugins_with_link_checked_markdown()  # {'mattpocock_skills', 'superpowers'}
     """
     kind_dirs = [
         (plugin_dir.name, plugin_dir / kind)

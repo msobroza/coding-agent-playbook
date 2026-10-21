@@ -34,7 +34,7 @@ from coding_agent_playbook.sync import pipeline as _sync
 from tests._catalog import core_skill_ids
 from tests.cli.test_sync_skills import _lock_paths, _skill_tree, _write_repo_local_skill
 from tests.fakes import FakeGitClient
-from tests.plugins.superpowers_expectations import consumer_config
+from tests.plugins.superpowers_expectations import EXPECTED_SKILL_IDS, PLUGIN_NAME, consumer_config
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -44,7 +44,6 @@ if TYPE_CHECKING:
 _OLD_ROOT = "shared_skills"
 _NEW_ROOT = ".agents/skills"
 _SKILL_ROOTS = (".claude/skills", ".opencode/skills", _NEW_ROOT)
-_PYTHON_DESIGN = "coding_agent_playbook.plugins.python_design"
 #: The python-coding members active on the synthetic repo (requires-python >=3.12, no
 #: dependencies): every member but python-retries-and-timeouts, which needs an HTTP client.
 _SYNTHETIC_PYTHON_CODING_MEMBERS = (
@@ -226,7 +225,7 @@ def test_sync_writes_no_loose_file_at_any_skill_root(
 ) -> None:
     """OpenCode v2 loads any root-level ``*.md`` in a skill root as a skill (section 5.4.5)."""
     adapters = ("claude_code", "opencode", "shared_skills", "continue")
-    config = _config(adapters=adapters, overlays=(_PYTHON_DESIGN,))
+    config = _config(adapters=adapters, overlays=(PLUGIN_NAME,))
     repo = make_synthetic_repo(tmp_path, config_text=config)
     _write_repo_local_skill(repo, "query-db")
 
@@ -235,8 +234,9 @@ def test_sync_writes_no_loose_file_at_any_skill_root(
     for root in _SKILL_ROOTS:
         children = sorted((repo / root).iterdir())
         assert all(child.is_dir() for child in children), root
-        # query-db + the two python_design skills, next to the core skills that apply here.
-        assert len([c for c in children if c.name not in core_skill_ids()]) == 3, root
+        # query-db + the superpowers skills, next to the core skills that apply here.
+        not_core = {c.name for c in children if c.name not in core_skill_ids()}
+        assert not_core == {"query-db", *EXPECTED_SKILL_IDS}, root
     for path in _lock_paths(repo):
         for root in _SKILL_ROOTS:
             below = Path(path).relative_to(root).parts if path.startswith(f"{root}/") else ()
