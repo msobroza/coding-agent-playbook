@@ -135,11 +135,9 @@ def test_includes_rules_appendix_omits_a_rule_the_real_registry_does_not_hold() 
 #: unknown id, a rule filtered out by ``applies_if`` and an always rule.
 _PROBE_INDEX = FakeRuleRegistry(
     references={
-        "python-typing": SkillReference("python-coding", "references/python-typing.md"),
-        "python-error-handling": SkillReference(
-            "python-coding", "references/python-error-handling.md"
-        ),
-        "pytest": SkillReference("python-testing", "references/pytest.md"),
+        "python-typing": SkillReference("python-coding", "rules/python-typing.md"),
+        "python-error-handling": SkillReference("python-coding", "rules/python-error-handling.md"),
+        "pytest": SkillReference("python-testing", "rules/pytest.md"),
     }
 )
 
@@ -150,22 +148,22 @@ def test_pointer_block_groups_references_by_owning_skill_in_includes_rules_order
     assert block == (
         "## Before you start\n"
         "\n"
-        "1. Load skill `python-coding` and read its references "
-        "`references/python-typing.md`, `references/python-error-handling.md`.\n"
-        "2. Load skill `python-testing` and read its reference `references/pytest.md`.\n"
+        "1. Load skill `python-coding` and read its rules "
+        "`rules/python-typing.md`, `rules/python-error-handling.md`.\n"
+        "2. Load skill `python-testing` and read its rule `rules/pytest.md`.\n"
         "3. For each file in scope, also load any other listed skill whose description "
         "matches it.\n"
     )
 
 
-def test_pointer_block_says_reference_for_one_file_and_references_for_several() -> None:
+def test_pointer_block_says_rule_for_one_file_and_rules_for_several() -> None:
     one = skill_pointer_block(["pytest"], _PROBE_INDEX)
     several = skill_pointer_block(["python-typing", "python-error-handling"], _PROBE_INDEX)
 
-    assert "1. Load skill `python-testing` and read its reference `references/pytest.md`." in one
+    assert "1. Load skill `python-testing` and read its rule `rules/pytest.md`." in one
     assert (
-        "1. Load skill `python-coding` and read its references "
-        "`references/python-typing.md`, `references/python-error-handling.md`." in several
+        "1. Load skill `python-coding` and read its rules "
+        "`rules/python-typing.md`, `rules/python-error-handling.md`." in several
     )
 
 
@@ -178,7 +176,7 @@ def test_pointer_block_skips_filtered_unknown_and_always_rules() -> None:
     assert block == (
         "## Before you start\n"
         "\n"
-        "1. Load skill `python-testing` and read its reference `references/pytest.md`.\n"
+        "1. Load skill `python-testing` and read its rule `rules/pytest.md`.\n"
         "2. For each file in scope, also load any other listed skill whose description "
         "matches it.\n"
     )
@@ -202,14 +200,14 @@ def test_pointer_block_is_empty_without_an_active_reference(
 def test_pointer_block_lists_a_repeated_id_once() -> None:
     block = skill_pointer_block(["pytest", "python-typing", "pytest"], _PROBE_INDEX)
 
-    assert block.count("references/pytest.md") == 1
+    assert block.count("rules/pytest.md") == 1
     assert "1. Load skill `python-testing`" in block
     assert "2. Load skill `python-coding`" in block
 
 
 # --- insert_pointer_block ---------------------------------------------------
 
-_BLOCK = "## Before you start\n\n1. Load skill `s` and read its reference `references/r.md`.\n"
+_BLOCK = "## Before you start\n\n1. Load skill `s` and read its rule `rules/r.md`.\n"
 
 
 def test_insert_pointer_block_goes_before_the_first_level_two_heading() -> None:

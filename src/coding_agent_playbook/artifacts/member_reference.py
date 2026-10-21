@@ -1,4 +1,4 @@
-"""A member rule as its skill delivers it: one ``references/<rule-id>.md`` file.
+"""A member rule as its skill delivers it: one ``rules/<rule-id>.md`` file.
 
 A scoped rule that names a skill in ``skill:`` is a member rule of that skill
 (ADR 0001). At sync, ``skills.membership.compose_skills`` renders each active
@@ -14,13 +14,16 @@ A stdlib-only leaf: ``artifacts.skill`` imports it at run time for
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-#: The directory inside a skill that holds its references (Agent Skills layout).
-_REFERENCES_DIR = "references"
+#: The directory inside a skill that holds its member rules, as in the source
+#: (prU D5, ADR 0005); ``references/`` stays free for hand-written documents.
+#: Generated wording that names the directory (skills.document, validation V6)
+#: is built from it too, so a rename touches this one line.
+RULES_DIR: Final = "rules"
 
 
 def member_reference_path(rule_id: str) -> str:
@@ -28,18 +31,18 @@ def member_reference_path(rule_id: str) -> str:
 
     The one spelling the writer, the lockfile split and prompt pointer lines share.
 
-    Example: ``member_reference_path("pytest")`` -> ``"references/pytest.md"``.
+    Example: ``member_reference_path("pytest")`` -> ``"rules/pytest.md"``.
     """
-    return f"{_REFERENCES_DIR}/{rule_id}.md"
+    return f"{RULES_DIR}/{rule_id}.md"
 
 
 @dataclass(frozen=True)
 class MemberReference:
-    """One active member rule of a skill, rendered as ``references/<rule_id>.md``.
+    """One active member rule of a skill, rendered as ``rules/<rule_id>.md``.
 
     ``text`` is the whole file, identical in every skill root. ``name`` labels the
     member in its skill's Covers clause and index, ``description`` is its index
-    line, ``globs`` feed the reference's first line and ``source_package`` its
+    line, ``globs`` feed the rule file's first line and ``source_package`` its
     lockfile provenance.
 
     Example: ``MemberReference("python-typing", ...).filename`` -> ``"python-typing.md"``.
@@ -55,7 +58,7 @@ class MemberReference:
 
     @property
     def filename(self) -> str:
-        """The file name under ``references/``: ``<rule_id>.md``.
+        """The file name under ``rules/``: ``<rule_id>.md``.
 
         Example: ``member.filename`` -> ``"pytest.md"`` for rule ``pytest``.
         """

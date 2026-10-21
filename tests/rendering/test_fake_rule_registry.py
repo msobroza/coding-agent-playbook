@@ -23,7 +23,7 @@ def test_fake_rule_registry_renders_its_fragment_and_empty_text_for_other_ids() 
 
 
 def test_fake_rule_registry_names_its_reference_and_none_for_other_ids() -> None:
-    reference = SkillReference("python-coding", "references/x.md")
+    reference = SkillReference("python-coding", "rules/x.md")
     registry = FakeRuleRegistry(references={"x": reference})
 
     assert registry.reference_for("x") == reference
@@ -38,11 +38,7 @@ def test_fake_rule_registry_with_no_arguments_holds_no_rule() -> None:
 
 
 def test_fake_rule_registry_serves_both_prompt_rule_deliveries() -> None:
-    registry = FakeRuleRegistry(
-        {"x": "### X\n\nbody\n"}, {"x": SkillReference("s", "references/x.md")}
-    )
+    registry = FakeRuleRegistry({"x": "### X\n\nbody\n"}, {"x": SkillReference("s", "rules/x.md")})
 
     assert includes_rules_appendix(["x"], registry) == "\n## Reference rules\n\n### X\n\nbody\n"
-    assert "Load skill `s` and read its reference `references/x.md`." in skill_pointer_block(
-        ["x"], registry
-    )
+    assert "Load skill `s` and read its rule `rules/x.md`." in skill_pointer_block(["x"], registry)

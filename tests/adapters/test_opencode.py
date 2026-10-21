@@ -286,7 +286,7 @@ def test_write_prompt_yaml_escapes_description_with_special_characters(
 #: The two faces of the sync's registry: rule text and skill references (D15).
 _SKILL_REGISTRY = FakeRuleRegistry(
     {"foo": "### Rule foo\n\nrendered body.\n"},
-    {"foo": SkillReference("s", "references/foo.md")},
+    {"foo": SkillReference("s", "rules/foo.md")},
 )
 
 
@@ -305,7 +305,7 @@ def test_write_prompt_points_at_skills_when_registry_set(tmp_path: Path) -> None
     content = written_path.read_text(encoding="utf-8")
     assert content == (
         f"---\ndescription: d\n---\n<!-- {SENTINEL} -->\n\n# X\n\n## Before you start\n\n"
-        "1. Load skill `s` and read its reference `references/foo.md`.\n"
+        "1. Load skill `s` and read its rule `rules/foo.md`.\n"
         "2. For each file in scope, also load any other listed skill whose description "
         "matches it.\n\nbody line\n"
     )

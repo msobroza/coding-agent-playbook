@@ -131,9 +131,9 @@ def test_repo_local_rule_may_join_a_core_skill(
 
     assert _sync.run(argparse.Namespace(repo_root=str(repo), check=False)) == 0
     skill_dir = repo / ".claude" / "skills" / "python-coding"
-    assert (skill_dir / "references" / "risk-naming.md").is_file()
+    assert (skill_dir / "rules" / "risk-naming.md").is_file()
     skill_md = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
-    assert "- [risk-naming](references/risk-naming.md) — Risk naming: One line." in skill_md
+    assert "- [risk-naming](rules/risk-naming.md) — Risk naming: One line." in skill_md
     assert "Risk naming" in skill_md.partition("\n---\n")[0], "the Covers clause names it"
 
 
@@ -223,7 +223,7 @@ def test_member_rule_id_must_be_a_skill_safe_name(
     assert rc == 1
     assert fail_lines(out) == [
         f"FAIL {rule}: rule id 'Py_Typing' cannot be a member of skill 'python-coding': its "
-        f"reference is written as references/<id>.md, so the id must match {_PATTERN}"
+        f"rule file is written as rules/<id>.md, so the id must match {_PATTERN}"
     ]
 
 
@@ -352,9 +352,10 @@ def test_description_that_cannot_fit_one_member_name_fails_with_length_and_text(
     ]
 
 
-def test_handwritten_reference_colliding_with_a_member_fails(
+def test_handwritten_reference_named_like_a_member_is_allowed(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """V12 is retired (prU D5): members render to rules/, so references/ cannot collide."""
     references = repo / "playbook" / "skills" / "python-coding" / "references"
     references.mkdir()
     (references / "python-typing.md").write_text("# Notes\n", encoding="utf-8")
@@ -362,33 +363,41 @@ def test_handwritten_reference_colliding_with_a_member_fails(
 
     rc, out, _ = run_validate(repo, capsys)
 
-    assert rc == 1
-    assert fail_lines(out) == [
-        f"FAIL skills/python-coding {_REPO_LOCAL}: references/python-typing.md is hand-written "
-        "in this skill but is also the rendered reference of member rule 'python-typing'; "
-        "rename the hand-written file"
-    ]
+    assert rc == 0, out
+    assert fail_lines(out) == []
 
 
-def test_authored_references_heading_fails(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    write_skill(repo, "python-coding", body="# Python coding\n\n## References\n\n- notes\n")
+def test_authored_rules_heading_fails(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    write_skill(repo, "python-coding", body="# Python coding\n\n## Rules\n\n- notes\n")
     write_rule(repo, "python-typing")
 
     rc, out, _ = run_validate(repo, capsys)
 
     assert rc == 1
     assert fail_lines(out) == [
-        f"FAIL skills/python-coding {_REPO_LOCAL}: the body has its own '## References' "
+        f"FAIL skills/python-coding {_REPO_LOCAL}: the body has its own '## Rules' "
         "heading; the engine appends that section for member rules, so rename yours "
-        "(e.g. '## Further reading')"
+        "(e.g. '## Conventions')"
     ]
 
 
-def test_references_heading_in_a_plain_skill_is_allowed(
+def test_rules_heading_in_a_plain_skill_is_allowed(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """V13 guards only a skill that takes members: nothing is appended to a plain one."""
-    write_skill(repo, "query-db", block="", body="# Query\n\n## References\n")
+    write_skill(repo, "query-db", block="", body="# Query\n\n## Rules\n")
+
+    rc, out, _ = run_validate(repo, capsys)
+
+    assert rc == 0, out
+
+
+def test_references_heading_in_a_member_skill_is_allowed(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """prU D5: the engine appends '## Rules', so an authored '## References' is free."""
+    write_skill(repo, "python-coding", body="# Python coding\n\n## References\n\n- notes\n")
+    write_rule(repo, "python-typing")
 
     rc, out, _ = run_validate(repo, capsys)
 

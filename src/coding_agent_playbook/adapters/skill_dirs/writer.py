@@ -12,10 +12,10 @@ every root. Each directory holds ``SKILL.md`` plus byte-copies (copies, not
 symlinks) of the canonical ``scripts/`` and ``references/`` subtrees, minus
 Python bytecode caches (:mod:`coding_agent_playbook.generated_output.source_files`).
 
-A skill with member rules (ADR 0001) also gets one ``references/<rule-id>.md``
+A skill with member rules (ADR 0001, ADR 0005) also gets one ``rules/<rule-id>.md``
 per active member, written from ``MemberReference.text`` after the copies and
 guarded like them; its ``SKILL.md`` carries the composed description and the
-generated ``## References`` index (:mod:`coding_agent_playbook.skills.document`).
+generated ``## Rules`` index (:mod:`coding_agent_playbook.skills.document`).
 The catalog-only ``playbook:`` block is never emitted, so a skill without
 members (a bundled plugin's) is written exactly as authored.
 
@@ -140,7 +140,7 @@ def render_skill_md(skill: Skill) -> str:
     sentinel HTML comment is the first body line. Frontmatter and body come
     from :mod:`~coding_agent_playbook.skills.document`: the catalog-only
     ``playbook`` block is never emitted, and a skill with member rules gets its
-    composed description and the ``## References`` index. A plain skill (a
+    composed description and the ``## Rules`` index. A plain skill (a
     bundled plugin's) is rendered exactly as authored.
 
     Example: ``render_skill_md(skill).splitlines()[0]`` -> ``"---"``.
@@ -162,7 +162,7 @@ class SkillWriter:
     Example::
 
         writer = SkillWriter(Path(".claude") / "skills")
-        written = writer.write(skill, repo_root)  # SKILL.md + scripts/ + references/
+        written = writer.write(skill, repo_root)  # SKILL.md + scripts/ + references/ + rules/
     """
 
     root: Path
@@ -355,7 +355,7 @@ def _is_same_file(first: Path, second: Path) -> bool:
 def _write_skill_files(
     skill: Skill, skill_md_text: str, skill_dir: Path, prior: PriorOutput
 ) -> list[Path]:
-    """Write ``SKILL.md``, the copied subtrees, then the member references into ``skill_dir``."""
+    """Write ``SKILL.md``, the copied subtrees, then the member rules into ``skill_dir``."""
     skill_dir.mkdir(parents=True, exist_ok=True)
     skill_md = skill_dir / SKILL_FILENAME
     if not _prepare_destination(skill_md, skill_dir, prior):
@@ -369,7 +369,7 @@ def _write_skill_files(
 
 
 def _write_member_references(skill: Skill, skill_dir: Path, prior: PriorOutput) -> list[Path]:
-    """Write ``references/<rule-id>.md`` for every member, as UTF-8 LF bytes.
+    """Write ``rules/<rule-id>.md`` for every member, as UTF-8 LF bytes.
 
     The same ``_prepare_destination`` guard as copied files: inside this
     engine-owned skill dir a regular file at the destination is replaced, as a

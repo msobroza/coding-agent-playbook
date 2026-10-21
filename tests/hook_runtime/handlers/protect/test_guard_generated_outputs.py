@@ -203,6 +203,29 @@ def test_other_claude_rules_files_are_the_users(
     assert _decision(_edit(repo, deps(), rel)) is Decision.NONE
 
 
+_MEMBER_RULE = ".claude/skills/python-coding/rules/python-typing.md"
+
+
+def test_member_rule_in_a_skill_rules_dir_is_guarded_as_a_rule(
+    pack_repo: PackRepo, deps: Callable[..., RuntimeDeps]
+) -> None:
+    """prU D5: ``<skill>/rules/<id>.md`` is a generated member rule (lockfile kind = rule),
+    never confused with Claude Code's own ``.claude/rules/`` (a user file there passes)."""
+    for rel, text in _FILES.items():
+        pack_repo.write(rel, text)
+    pack_repo.write(_MEMBER_RULE, "*Rule `python-typing`.*\n\n# Typing\n")
+    member_row = rows_of((_MEMBER_RULE, "rule", "python-typing", "coding_agent_playbook"))
+    pack_repo.install_pack([HOOK_ID], rows=[*_ROWS, *member_row])
+
+    member = _edit(pack_repo, deps(), _MEMBER_RULE)
+    users = _edit(pack_repo, deps(), ".claude/rules/team.md")
+
+    assert _decision(member) is Decision.DENY
+    assert member.trace.combined.reason.startswith(f'"{_MEMBER_RULE}" is generated')
+    assert member.trace.combined.reason != _composite_reason(_MEMBER_RULE)
+    assert _decision(users) is Decision.NONE
+
+
 def test_new_command_file_passes(
     repo: PackRepo, deps: Callable[..., RuntimeDeps], hook_payload: Payload
 ) -> None:

@@ -10,6 +10,8 @@ treated as static YAML — only the body was rendered through Jinja.
 from __future__ import annotations
 
 import json
+import re
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
 import yaml
@@ -31,6 +33,10 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.rendering.prompt_rule_delivery import SkillReferenceIndex
     from coding_agent_playbook.rendering.rule_registry import RuleRegistry
+
+#: A markdown link from a member rule (``rules/<id>.md``) to a file of its skill's
+#: ``references/``; group 1 is the path below ``references/``, fragment excluded.
+_SKILL_REFERENCE_LINK = re.compile(r"\[[^\]\n]*\]\(\.\./references/([^)#\s]+)(?:#[^)\s]*)?\)")
 
 # Aliases the CLI accepts as a short-form for --format. Resolved to the full
 # internal name before render_for() dispatches.
@@ -145,6 +151,8 @@ def _render_continue_rule(body: str, frontmatter: dict[str, Any]) -> str:
     Continue's semantics: ``globs`` is meaningful only when
     ``alwaysApply: false``. When ``scope == "always"`` we drop any globs
     from the projected frontmatter so the output matches Continue's contract.
+    Links to the rule's skill ``references/`` become plain file names, because
+    Continue receives no skill files (prU D46(9)).
     """
     scope = frontmatter.get("scope", "scoped")
     continue_frontmatter: dict[str, Any] = {
@@ -159,7 +167,19 @@ def _render_continue_rule(body: str, frontmatter: dict[str, Any]) -> str:
         if globs:
             continue_frontmatter["globs"] = list(globs)
     fenced = yaml.safe_dump(continue_frontmatter, sort_keys=False, allow_unicode=True).rstrip("\n")
-    return f"{sentinel_line('html')}\n---\n{fenced}\n---\n{body}"
+    return f"{sentinel_line('html')}\n---\n{fenced}\n---\n{unlink_skill_references(body)}"
+
+
+def unlink_skill_references(body: str) -> str:
+    """``body`` with each ``[label](../references/<path>)`` link replaced by the file name.
+
+    A member rule links its skill's free-form documents relative to ``rules/``;
+    a harness that gets the rule without the skill (Continue) would show a dead
+    link, so the reader gets the file name to look for instead (prU D46(9)).
+
+    Example: ``unlink_skill_references("[ex](../references/a/ex.md)")`` -> ``"ex.md"``.
+    """
+    return _SKILL_REFERENCE_LINK.sub(lambda match: PurePosixPath(match.group(1)).name, body)
 
 
 def _render_markdown_rule_section(body: str, frontmatter: dict[str, Any]) -> str:

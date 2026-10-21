@@ -2,7 +2,7 @@
 
 A synthetic repo holds a repo-local skill with a ``playbook:`` block and two
 repo-local scoped rules naming it, one gated on the ``click`` framework. Sync
-writes each active member as ``references/<rule-id>.md`` in every skill root,
+writes each active member as ``rules/<rule-id>.md`` in every skill root,
 records it in the lockfile as ``kind = "rule"``, and settles the references of
 members that turn off (and the whole skill once none is on) by the lockfile
 leftover policy. Assertions stay on the test's own skill: core skills may sit
@@ -102,8 +102,8 @@ def test_sync_writes_member_references_to_every_skill_root_byte_identically(
 
     trees = [skill_tree_bytes(repo / root / _SKILL) for root in NATIVE_SKILL_ROOTS]
     assert all(tree == trees[0] for tree in trees[1:])
-    assert set(trees[0]) == {"SKILL.md", f"references/{_GATED}.md", f"references/{_UNGATED}.md"}
-    reference = trees[0][f"references/{_UNGATED}.md"].decode("utf-8")
+    assert set(trees[0]) == {"SKILL.md", f"rules/{_GATED}.md", f"rules/{_UNGATED}.md"}
+    reference = trees[0][f"rules/{_UNGATED}.md"].decode("utf-8")
     assert reference == (
         f"*Rule `{_UNGATED}`; applies to `src/risk/**/*.py`.*\n\n"
         f"# {_UNGATED}\n\nApplies in synthetic.\n"
@@ -114,7 +114,7 @@ def test_sync_writes_member_references_to_every_skill_root_byte_identically(
         "Use when changing a risk model."
     )
     assert "playbook" not in frontmatter
-    assert f"- [{_GATED}](references/{_GATED}.md) — Risk click:" in body
+    assert f"- [{_GATED}](rules/{_GATED}.md) — Risk click:" in body
     # Continue gets the members as rule files, never the skill as a prompt (E4).
     assert not (repo / ".continue" / "prompts" / f"{_SKILL}.md").exists()
     assert (repo / ".continue" / "rules" / f"60-{_UNGATED}.md").is_file()
@@ -203,7 +203,7 @@ def test_sync_removes_the_reference_of_a_deactivated_member(
 
     for root in NATIVE_SKILL_ROOTS:
         tree = skill_tree_bytes(repo / root / _SKILL)
-        assert set(tree) == {"SKILL.md", f"references/{_UNGATED}.md"}, root
+        assert set(tree) == {"SKILL.md", f"rules/{_UNGATED}.md"}, root
         assert _GATED not in tree["SKILL.md"].decode("utf-8")
     assert not any(path.endswith(f"/{_GATED}.md") for path in _lock_entries(repo))
 
@@ -220,7 +220,7 @@ def test_lockfile_records_member_references_with_rule_provenance(
     for root, adapter in zip(
         NATIVE_SKILL_ROOTS, ("claude_code", "opencode", "shared_skills"), strict=True
     ):
-        reference = entries[f"{root}/{_SKILL}/references/{_UNGATED}.md"]
+        reference = entries[f"{root}/{_SKILL}/rules/{_UNGATED}.md"]
         assert (reference.kind, reference.artifact_id) == ("rule", _UNGATED)
         assert (reference.source, reference.adapter) == ("<repo-local>", adapter)
         skill_md = entries[f"{root}/{_SKILL}/SKILL.md"]
@@ -237,10 +237,10 @@ def test_sync_check_is_clean_after_sync(
     assert sync_cmd.run(_ns(repo, check=True)) == 0
     assert "No drift" in capsys.readouterr().out
 
-    reference = repo / NATIVE_SKILL_ROOTS[0] / _SKILL / "references" / f"{_UNGATED}.md"
+    reference = repo / NATIVE_SKILL_ROOTS[0] / _SKILL / "rules" / f"{_UNGATED}.md"
     reference.write_text("edited by hand\n", encoding="utf-8")
     assert sync_cmd.run(_ns(repo, check=True)) == 1
-    assert f"{NATIVE_SKILL_ROOTS[0]}/{_SKILL}/references/{_UNGATED}.md" in capsys.readouterr().out
+    assert f"{NATIVE_SKILL_ROOTS[0]}/{_SKILL}/rules/{_UNGATED}.md" in capsys.readouterr().out
 
 
 def test_gitignore_covers_member_references_through_their_skill_directory(
@@ -254,7 +254,7 @@ def test_gitignore_covers_member_references_through_their_skill_directory(
     lines = (repo / ".gitignore").read_text(encoding="utf-8").splitlines()
     for root in NATIVE_SKILL_ROOTS:
         assert f"/{root}/{_SKILL}/" in lines, root
-    assert not any("/references/" in line for line in lines)
+    assert not any(f"/{_SKILL}/rules/" in line for line in lines)
 
 
 # 283 chars: with one Covers name and the Use-when tail the description is 345 (over 300).

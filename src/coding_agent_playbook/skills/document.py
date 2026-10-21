@@ -2,8 +2,8 @@
 
 A skill with member rules (ADR 0001) is emitted with text the engine generates:
 a composed description (capability sentence, a "Covers ..." clause naming the
-active members, then "Use when ..."), a ``## References`` index appended to the
-authored body, one ``references/<rule-id>.md`` file per member, and the
+active members, then "Use when ..."), a ``## Rules`` index appended to the
+authored body, one ``rules/<rule-id>.md`` file per member (ADR 0005), and the
 ``## Where guidance lives`` section of the always-loaded files. One module
 renders all of it, so the skill roots and the two composite files cannot drift.
 
@@ -19,7 +19,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.artifacts.member_reference import member_reference_path
+from coding_agent_playbook.artifacts.member_reference import RULES_DIR, member_reference_path
 from coding_agent_playbook.skills.capabilities import CAPABILITIES_KEY
 from coding_agent_playbook.skills.naming import skill_id_of
 
@@ -40,16 +40,18 @@ _ENGINE_OWNED_KEYS: Final = frozenset({PLAYBOOK_BLOCK_KEY, CAPABILITIES_KEY})
 
 _SENTENCE_ENDINGS: Final = (".", "!", "?")
 
-_REFERENCES_HEADING: Final = "## References"
-_REFERENCES_LEAD: Final = "Each reference is one rule. Open only the ones the current task needs."
+_RULES_HEADING: Final = "## Rules"
+_RULES_LEAD: Final = (
+    f"Each file under {RULES_DIR}/ is one rule. Open only the ones the current task needs."
+)
 
 _WHERE_HEADING: Final = "## Where guidance lives"
 _WHERE_LEAD: Final = (
     "Detailed conventions live in skills. Before you edit one of these files, load its "
-    "skill and open the references its index lists."
+    "skill and open the rules its index lists."
 )
 _WHERE_LINT_LINE: Final = (
-    "Lint feedback names a rule id; that rule's reference in the skill has the fix."
+    f"Lint feedback names a rule id; that rule's file in the skill's {RULES_DIR}/ has the fix."
 )
 #: The separator that ends every section of the composite files (rendering/formats.py rule sections).
 _SECTION_END: Final = "---"
@@ -216,34 +218,34 @@ def emitted_frontmatter(skill: Skill) -> dict[str, Any]:
 
 
 def emitted_body(skill: Skill) -> str:
-    """Authored body, plus the ``## References`` index when members exist.
+    """Authored body, plus the ``## Rules`` index when members exist.
 
     Example: ``emitted_body(python_coding).endswith("Typing: Prefer ...\\n")`` -> ``True``.
     """
     if not skill.member_references:
         return skill.body
     authored = skill.body.rstrip()
-    index = references_index(skill.member_references)
+    index = rules_index(skill.member_references)
     return f"{authored}\n\n{index}" if authored else index
 
 
-def references_index(members: Sequence[MemberReference]) -> str:
-    """The ``## References`` section: one line per member, in the order given.
+def rules_index(members: Sequence[MemberReference]) -> str:
+    """The ``## Rules`` section: one line per member, in the order given.
 
-    Each line is ``- [<rule-id>](references/<rule-id>.md) — <name>: <description>``:
+    Each line is ``- [<rule-id>](rules/<rule-id>.md) — <name>: <description>``:
     the link text is the rule id because lint feedback names rule ids (D16).
     ``""`` without members.
 
-    Example: ``references_index(members).splitlines()[0]`` -> ``"## References"``.
+    Example: ``rules_index(members).splitlines()[0]`` -> ``"## Rules"``.
     """
     if not members:
         return ""
     lines = [_index_line(member) for member in members]
-    return "\n".join([_REFERENCES_HEADING, "", _REFERENCES_LEAD, "", *lines, ""])
+    return "\n".join([_RULES_HEADING, "", _RULES_LEAD, "", *lines, ""])
 
 
 def render_member_reference(rule_id: str, globs: Sequence[str], body: str) -> str:
-    """The text of ``references/<rule_id>.md``: one italic rule line, a blank line, the body.
+    """The text of ``rules/<rule_id>.md``: one italic rule line, a blank line, the body.
 
     The body is the rule's rendered body unchanged, minus the blank lines that
     separate it from its frontmatter; the file ends with one newline. The globs

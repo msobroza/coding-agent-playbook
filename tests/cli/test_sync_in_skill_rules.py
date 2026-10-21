@@ -50,13 +50,17 @@ def test_in_skill_rule_without_skill_key_is_synced_into_its_skill(
     assert _sync.run(argparse.Namespace(repo_root=str(repo), check=False)) == 0
 
     skill_dir = repo / ".claude" / "skills" / "risk-models"
-    assert (skill_dir / "references" / "risk-naming.md").is_file()
-    assert not (skill_dir / "rules").exists(), "rules/ is loaded as rules, never byte-copied"
+    rendered = skill_dir / "rules" / "risk-naming.md"
+    assert sorted(p.name for p in (skill_dir / "rules").iterdir()) == ["risk-naming.md"]
+    assert "scope: scoped" not in rendered.read_text(encoding="utf-8"), (
+        "rules/ holds the rendered member, never a byte copy of the source rule"
+    )
+    assert not (skill_dir / "references").exists()
     lockfile = FileSystemStateSource(repo_root=repo).load_lockfile()
     assert isinstance(lockfile, Lockfile)
     entries = {(e.path, e.kind, e.artifact_id) for e in lockfile.entries}
     assert (
-        ".claude/skills/risk-models/references/risk-naming.md",
+        ".claude/skills/risk-models/rules/risk-naming.md",
         "rule",
         "risk-naming",
     ) in entries

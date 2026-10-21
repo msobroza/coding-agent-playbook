@@ -176,11 +176,11 @@ def test_claude_code_write_prompt_prepends_h1_when_body_lacks_one(tmp_path):
 
 
 #: The two faces of the sync's registry: rule text and skill references (D15).
-#: Rule ``foo`` renders a body and lives in skill ``s`` as ``references/foo.md``,
+#: Rule ``foo`` renders a body and lives in skill ``s`` as ``rules/foo.md``,
 #: so a command that inlined text would show both.
 _SKILL_REGISTRY = FakeRuleRegistry(
     {"foo": "### Rule foo\n\nrendered body.\n"},
-    {"foo": SkillReference("s", "references/foo.md")},
+    {"foo": SkillReference("s", "rules/foo.md")},
 )
 
 
@@ -199,7 +199,7 @@ def test_claude_code_write_prompt_points_at_skills_when_registry_set(tmp_path):
     content = written_path.read_text(encoding="utf-8")
     assert content == (
         f"<!-- {SENTINEL} -->\n# X\n\n## Before you start\n\n"
-        "1. Load skill `s` and read its reference `references/foo.md`.\n"
+        "1. Load skill `s` and read its rule `rules/foo.md`.\n"
         "2. For each file in scope, also load any other listed skill whose description "
         "matches it.\n\nbody line\n"
     )

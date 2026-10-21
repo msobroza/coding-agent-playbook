@@ -4,7 +4,7 @@ A scoped rule is a member rule of one skill (ADR 0001, ADR 0005): of the skill
 whose ``skills/<skill>/rules/`` directory holds it, or, for a rule from another
 layer, of the skill it names in ``skill:``. The loader fills ``skill`` from the
 location (``Rule.home_skill``), so every check below reads ``skill`` alone. The
-engine writes a member as one of the skill's references. Two checks guard that
+engine writes a member as one of the skill's rule files. Two checks guard that
 composition before ``playbook sync`` writes anything:
 
 - :func:`check_skill_membership`, per rule: a skill is required on a scoped
@@ -15,9 +15,10 @@ composition before ``playbook sync`` writes anything:
   E14).
 - :func:`check_rule_skills`, per skill with a ``playbook:`` block: the block's
   shape (V7-V10, E15), the worst-case composed description within 300 chars
-  (V11, E7), no hand-written reference named like a member (V12), no authored
-  ``## References`` heading (V13); warnings for a block without members, in its
-  ``rules/`` directory or naming it (W1),
+  (V11, E7), no authored ``## Rules`` heading (V13; V12 was retired by prU D5:
+  members render to ``rules/``, so a hand-written ``references/`` file cannot
+  collide with one); warnings for a block without members, in its ``rules/``
+  directory or naming it (W1),
   members without ``files`` (W2) and a truncated Covers clause (W3).
 
 Every check runs over the merged sets and ignores ``applies_if``, so overlay
@@ -81,7 +82,7 @@ _PHRASE_SHAPES: Final = {
 }
 # E15: the engine adds the prefix, so an authored one would read "Use when Use when".
 _USE_WHEN_PREFIX: Final = re.compile(r"use when\b", re.IGNORECASE)
-_REFERENCES_HEADING: Final = "## References"
+_RULES_HEADING: Final = "## Rules"
 #: V1's message; MIGRATION.md quotes it with ``{known}`` filled for core, and a docs
 #: test imports it so the quote cannot drift (prS §6.4.12).
 SCOPED_RULE_NEEDS_SKILL_MESSAGE: Final = (
@@ -201,10 +202,11 @@ def _membership_problems(rule: Rule, skills_by_id: Mapping[str, Skill]) -> list[
 
 
 def _unsafe_id_problem(rule: Rule, skill_id: str) -> str:
-    """V6: the member's id becomes ``references/<id>.md`` in every skill root."""
+    """V6: the member's id becomes ``rules/<id>.md`` in every skill root."""
     return (
         f"rule id {rule.frontmatter.id!r} cannot be a member of skill {skill_id!r}: its "
-        f"reference is written as references/<id>.md, so the id must match {_NAME_SHAPE}"
+        f"rule file is written as {member_reference_path('<id>')}, so the id must match "
+        f"{_NAME_SHAPE}"
     )
 
 
@@ -233,15 +235,14 @@ def _known_rule_skills(skills_by_id: Mapping[str, Skill]) -> str:
 
 
 def _rule_skill_errors(skill: Skill, members: Sequence[Rule]) -> list[str]:
-    """V7-V10 on the block, V11 when the block is sound, then V12 and V13."""
+    """V7-V10 on the block, V11 when the block is sound, then V13."""
     errors = _block_problems(skill.frontmatter[PLAYBOOK_BLOCK_KEY])
     if not errors and members:
         errors.extend(_overflow_problems(skill, members))
-    errors.extend(_collision_problems(skill, members))
-    if any(line.strip() == _REFERENCES_HEADING for line in skill.body.splitlines()):
+    if any(line.strip() == _RULES_HEADING for line in skill.body.splitlines()):
         errors.append(
-            f"the body has its own {_REFERENCES_HEADING!r} heading; the engine appends that "
-            "section for member rules, so rename yours (e.g. '## Further reading')"
+            f"the body has its own {_RULES_HEADING!r} heading; the engine appends that "
+            "section for member rules, so rename yours (e.g. '## Conventions')"
         )
     return errors
 
@@ -342,19 +343,6 @@ def _shorten_hint(parts: _ComposedParts, longest: Rule) -> str:
         hints.append(f"'{PLAYBOOK_BLOCK_KEY}.use_when' ({len(parts.use_when)} chars)")
     fm = longest.frontmatter
     return f"{', '.join(hints)} or the longest member name ({fm.id}: '{fm.name}')"
-
-
-def _collision_problems(skill: Skill, members: Sequence[Rule]) -> list[str]:
-    """V12: a hand-written ``references/<member-id>.md`` would be overwritten by the member."""
-    if skill.references_dir is None:
-        return []
-    return [
-        f"{member_reference_path(rule.frontmatter.id)} is hand-written in this skill but is "
-        f"also the rendered reference of member rule {rule.frontmatter.id!r}; rename the "
-        "hand-written file"
-        for rule in members
-        if (skill.references_dir.parent / member_reference_path(rule.frontmatter.id)).exists()
-    ]
 
 
 def _rule_skill_warnings(skill: Skill, members: Sequence[Rule]) -> list[str]:

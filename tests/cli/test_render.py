@@ -116,7 +116,7 @@ def test_render_show_rules_names_the_owning_skill(tmp_path, make_synthetic_repo,
         "Prompt:    with-includes\n"
         "includes_rules:\n"
         "  - python-typing  (coding_agent_playbook, applies_if=True -> skill python-coding, "
-        "references/python-typing.md)\n"
+        "rules/python-typing.md)\n"
         "  - included-rule  (<repo-local>, applies_if=True -> always loaded)\n"
         "  - missing-rule  (UNKNOWN)\n"
     )
@@ -130,7 +130,7 @@ def test_render_prompt_claude_command_shows_the_pointer_block(
     assert _render.run(_ns(repo, "review", fmt="prompt_claude_command")) == 0
     out = capsys.readouterr().out
     assert "## Before you start" in out
-    assert "1. Load skill `python-coding` and read its references" in out
+    assert "1. Load skill `python-coding` and read its rules" in out
     assert not [line for line in out.splitlines() if line.startswith("### ")]
 
 

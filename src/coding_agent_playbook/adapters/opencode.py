@@ -17,7 +17,7 @@ adapter writes OpenCode's own native outputs:
   :class:`~coding_agent_playbook.adapters.skill_dirs.writer.SkillWriter`, so OpenCode
   no longer depends on the ``claude_code`` adapter being enabled for skills. A
   scoped rule that names a skill (a member rule, ADR 0001) reaches OpenCode
-  here, as ``references/<rule-id>.md`` of that skill;
+  here, as ``rules/<rule-id>.md`` of that skill;
 - hooks   -> exactly one generated V1 plugin, ``.opencode/plugins/playbook-hooks.js``
   (specs/prK-lifecycle-hooks.md §C.3), which forwards the events OpenCode can
   enforce to ``playbook-hook``. It is the one exception to SPEC §10.6.4's "never
@@ -77,12 +77,12 @@ class OpenCodeAdapter(Adapter):
 
     Rules are an intentional no-op on this adapter: OpenCode picks up always
     rules from the AGENTS.md adapter's output (``AGENTS.md`` at repo root), and
-    member rules as references of the skills :meth:`write_skill` writes. See
+    member rules as rule files of the skills :meth:`write_skill` writes. See
     SPEC.md §10.6 and §10.6.4 for the OpenCode-touches/does-not-touch matrix.
 
     The optional ``rule_registry`` (the sync's ``RuleRegistryImpl``) is used
     only as a ``SkillReferenceIndex``: :func:`render_for` builds each command's
-    ``## Before you start`` block from it, naming the skill references of the
+    ``## Before you start`` block from it, naming the skill rule files of the
     prompt's ``includes_rules``; a command never carries rule text (D15). When
     callers (or tests) omit it, prompts render with no block —
     ``includes_rules:`` becomes purely declarative.
@@ -138,7 +138,7 @@ class OpenCodeAdapter(Adapter):
           entry with ``$ARGUMENTS`` (single variable) or ``$1`` / ``$2`` / …
           (multiple variables), and
         * inserts the ``## Before you start`` block naming the skill
-          references of ``includes_rules`` (D15), when any is active.
+          rule files of ``includes_rules`` (D15), when any is active.
 
         See SPEC §10.6.1 for the canonical OpenCode command layout and
         SPEC §9.7 for the renderer contract.
