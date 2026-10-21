@@ -42,6 +42,18 @@ def test_skips_co_owned_files_and_binary_files(tmp_path: Path) -> None:
     assert image.read_bytes() == b"\xff\xfe docs/specs/"
 
 
+def test_file_rewrite_lines_name_the_file_prefixes_and_occurrences() -> None:
+    rewrite = FileRewrite(
+        "AGENTS.md",
+        (RewriteCount("docs/adr", "adr", 1), RewriteCount("docs/specs", "specs", 2)),
+    )
+
+    assert rewrite.lines() == [
+        "layout: AGENTS.md: docs/adr -> adr (1)",
+        "layout: AGENTS.md: docs/specs -> specs (2)",
+    ]
+
+
 def test_the_default_layout_touches_nothing(tmp_path: Path) -> None:
     rule = _write(tmp_path, "AGENTS.md", b"see docs/specs/x.md\n")
 

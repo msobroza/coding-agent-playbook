@@ -53,6 +53,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
     from coding_agent_playbook.lockfile.model import ProvenanceKind
     from coding_agent_playbook.sync._hook_outputs import SyncHooks
+    from coding_agent_playbook.sync._layout_outputs import FileRewrite
 
 #: 2 = provenance on every entry (specs/prK-lifecycle-hooks.md §P P4, §B.6).
 LOCKFILE_SCHEMA = 2
@@ -101,6 +102,8 @@ class ProvenanceRecorder:
     written: list[Path] = field(default_factory=list)
     provenance: dict[Path, Provenance] = field(default_factory=dict)
     managed: list[LockEntry] = field(default_factory=list)
+    # What the layout adapter rewrote in ``written`` (D71), for validate's report.
+    layout_rewrites: list[FileRewrite] = field(default_factory=list)
 
     def record(self, paths: Iterable[Path], provenance: Provenance) -> None:
         """Append ``paths`` and tag each (resolved) path with ``provenance``."""

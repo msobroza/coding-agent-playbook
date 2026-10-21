@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Final
 
 # The rule set through its module, so this command binds none of its names: the
 # move map (tests/architecture/move_map/a04.toml) keeps seeing them as moved.
+from coding_agent_playbook.sync.layout_preview import LayoutPreviewError, preview_layout_rewrites
 from coding_agent_playbook.validation import checks
 from coding_agent_playbook.validation.context import (
     SyncContext,
@@ -24,7 +25,6 @@ from coding_agent_playbook.validation.findings import (
     report_validation_errors,
     report_validation_warnings,
 )
-from coding_agent_playbook.validation.layout_report import layout_source_rewrites
 
 if TYPE_CHECKING:
     import argparse
@@ -46,9 +46,9 @@ def configure(parser: argparse.ArgumentParser) -> None:
 def run(args: argparse.Namespace) -> int:
     """``playbook validate``: exit 0 printing ``OK <n> artifacts validated``, else 1.
 
-    Before the verdict it prints one ``layout: <file>: <from> -> <to> (<count>)``
-    line per path prefix the layout adapter rewrites (D71; nothing for the default
-    layout).
+    When nothing fails, it first prints one ``layout: <file>: <from> -> <to> (<count>)``
+    line per generated file and path prefix the layout adapter rewrites, from a scratch
+    render of the sync output (D71; nothing for the default layout without aliases).
 
     Without a ``.coding-agent-playbook.toml`` (an engine or overlay checkout)
     it validates a config-less context and first prints which consumer-config
@@ -65,12 +65,23 @@ def run(args: argparse.Namespace) -> int:
     )
     findings = checks.collect_validation_findings(ctx, config_less=config_less)
     checks.warn_refused_skill_files(ctx.skills_resolved)
-    for rewrite in layout_source_rewrites(ctx.artifact_source, ctx.config.layout_rewriter()):
-        print(rewrite.line())
     report_validation_warnings(findings.warnings, sys.stderr)
     if findings.errors:
         report_validation_errors(findings.errors, sys.stdout)
         return 1
+    if not config_less:
+        _print_layout_rewrites(ctx)
     artifact_count = len(ctx.rules_resolved) + len(ctx.prompts_resolved) + len(ctx.hooks_resolved)
     print(f"OK {artifact_count} artifacts validated")
     return 0
+
+
+def _print_layout_rewrites(ctx: SyncContext) -> None:
+    """Print what sync's layout adapter rewrites; a failed render is a warning, not a verdict."""
+    try:
+        rewrites = preview_layout_rewrites(ctx)
+    except LayoutPreviewError as exc:
+        print(f"warning: {exc}", file=sys.stderr)
+        return
+    for rewrite in rewrites:
+        print("\n".join(rewrite.lines()))

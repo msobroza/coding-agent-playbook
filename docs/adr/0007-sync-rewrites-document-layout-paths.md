@@ -4,7 +4,7 @@ status: accepted
 
 # Sync rewrites document-layout paths to the repo's configured layout
 
-Consumer repos keep their specs, plans, decision records and research in a document layout with defaults (`docs/specs/`, `docs/plans/`, `docs/adr/`, ...), but some repos already use other directories, and frameworks shipped by organizations use their own paths. A `[layout]` table in the committed config sets any directory of the layout. Every framework keeps writing the default paths in its text; when a repo's layout differs, `sync` rewrites exactly those default path prefixes, plus the prefixes a framework declares as `layout_aliases` in its metadata, in the synced files of core, bundled plugins and overlays, before they are hashed into the lockfile. `validate` lists every rewrite per file. A repo that sets nothing gets byte-identical output.
+Consumer repos keep their specs, plans, decision records and research in a document layout with defaults (`docs/specs/`, `docs/plans/`, `docs/adr/`, ...), but some repos already use other directories, and frameworks shipped by organizations use their own paths. A `[layout]` table in the committed config sets any directory of the layout. Every framework keeps writing the default paths in its text; when a repo's layout differs, `sync` rewrites exactly those default path prefixes, plus the prefixes a framework declares as `layout_aliases` in its metadata, in the synced files of core, bundled plugins and overlays, before they are hashed into the lockfile. `validate` lists every rewrite per file. A framework's aliases map its own paths even under the default layout, so a repo that sets nothing gets byte-identical output unless its framework declares aliases.
 
 ## Considered Options
 

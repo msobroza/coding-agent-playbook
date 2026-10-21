@@ -586,7 +586,9 @@ specs = "specs"
 (rule globs and hook path tables included), templates read the result as
 `layout.specs`, and `playbook validate` prints each rewrite as
 `layout: <file>: docs/specs -> specs (<count>)`. A framework whose text uses
-other paths maps them with `[layout_aliases]` in its `framework.toml`.
+other paths maps them with `[layout_aliases]` in its `framework.toml`; sync
+applies those under the default layout too (superpowers maps its
+`docs/superpowers/specs/` and `plans/` this way).
 
 Use these top-level keys: they are the only ones the engine reads. Put them
 at the top of the file, above the first `[table]` header: the file

@@ -155,7 +155,7 @@ def layout_aliases(layers: Iterable[str]) -> dict[str, str]:
 
     Example::
 
-        >>> layout_aliases(["coding_agent_playbook.plugins.superpowers"])
+        >>> layout_aliases(["coding_agent_playbook.plugins.mattpocock_skills"])
         {}
     """
     aliases: dict[str, str] = {}

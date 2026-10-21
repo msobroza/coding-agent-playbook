@@ -144,6 +144,9 @@ The engine part that turns catalog templates and detector facts into final text.
 **Adapter**:
 The engine part that writes rendered content in one harness's native format and locations.
 
+**Layout adapter**:
+The sync step that rewrites the document layout's default path prefixes, and the prefixes a framework maps onto it, in the generated outputs to the repo's configured document layout. It writes no harness format, so it is not an Adapter.
+
 **Harness**:
 A coding-agent runtime the engine writes files for, such as Claude Code, OpenCode, Codex, Continue or Cursor.
 

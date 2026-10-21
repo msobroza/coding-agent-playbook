@@ -18,6 +18,7 @@ from coding_agent_playbook.config.framework import (
     framework_layers,
     framework_package,
     layers_with_framework,
+    layout_aliases,
     metadata_problems,
     read_framework_metadata,
 )
@@ -259,3 +260,41 @@ def test_framework_choice_problems_accepts_an_overlay_shipping_framework_toml(
     package = _overlay_with_framework_toml(make_package, 'name = "acme"\ndescription = "A"\n')
 
     assert framework_choice_problems(package) == []
+
+
+def test_layout_aliases_merge_the_framework_layers_aliases() -> None:
+    aliases = layout_aliases(["coding_agent_playbook", _SUPERPOWERS, _MATTPOCOCK])
+
+    assert aliases == {
+        "docs/superpowers/specs/": "specs",
+        "docs/superpowers/plans/": "plans",
+    }
+
+
+def test_layout_aliases_skip_a_framework_toml_that_does_not_parse(
+    make_package: Callable[..., str],
+) -> None:
+    """validate names the broken file (FrameworkMetadataError); the rewriter skips it."""
+    broken = _overlay_with_framework_toml(
+        make_package, 'name = "acme"\n[layout_aliases]\n"docs/acme/" = "nope"\n'
+    )
+
+    assert layout_aliases([broken, _MATTPOCOCK]) == {}
+
+
+def test_config_layout_rewriter_joins_the_layout_and_the_framework_aliases() -> None:
+    config = Config.from_dict(_config_data(framework="superpowers", layout={"plans": "plans"}))
+
+    rewriter = config.layout_rewriter()
+
+    assert dict(rewriter.targets) == {
+        "docs/plans": "plans",
+        "docs/superpowers/specs": "docs/specs",
+        "docs/superpowers/plans": "plans",
+    }
+
+
+def test_config_layout_rewriter_is_falsy_for_the_default_layout_without_aliases() -> None:
+    config = Config.from_dict(_config_data(framework="mattpocock", layout={"specs": "docs/specs"}))
+
+    assert not config.layout_rewriter()

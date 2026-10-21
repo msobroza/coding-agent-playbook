@@ -2,8 +2,9 @@
 
 When a ``[layout]`` key differs from its D60 default, sync rewrites that default
 path prefix (and every ``layout_aliases`` prefix the enabled framework declares) in
-every synced file, before the lockfile hashes it; with no ``[layout]`` table the
-output is byte-identical to the output without the adapter.
+every synced file, before the lockfile hashes it. With no ``[layout]`` table and no
+framework aliases the output is byte-identical to the output without the adapter;
+a declared alias maps onto the default layout too.
 """
 
 from __future__ import annotations
@@ -33,6 +34,30 @@ _LOCKFILE = ".coding-agent-playbook.lock"
 _SKILLS = ".claude/skills"
 _GUARD_CONFIG = ".coding-agent-playbook/hooks/guard_config.json"
 _TEXT = "Write specs to `docs/specs/YYYY-MM-DD-<slug>.md` and plans to `docs/acme/plans/x.md`.\n"
+# An overlay hook whose matcher path table names the specs directory.
+_SPEC_HOOK = """---
+id: acme-spec-format
+name: Acme spec format
+description: Report formatting findings after a spec is edited.
+summary: After editing a spec, fix what the formatter reports.
+version: 1
+tier: default
+priority: 50
+events: [post_tool_use]
+matcher:
+  post_tool_use:
+    tools: [edit, write]
+    paths: ["docs/specs/**/*.md"]
+handler:
+  builtin: ruff_post_edit
+decisions: [context, none]
+timeout: 10
+on_error: open
+supports: [claude_code, opencode]
+tags: [feedback]
+---
+After editing a spec, fix what the formatter reports.
+"""
 
 
 def _init_repo(repo: Path, **flags: object) -> None:
@@ -197,6 +222,56 @@ def test_a_framework_alias_maps_its_own_prefix(
     skill = tmp_path / _SKILLS / "acme-framework-notes" / "SKILL.md"
     assert "`plans/x.md`" in skill.read_text(encoding="utf-8")
     assert _texts_mentioning(tmp_path, "docs/acme/plans/") == []
+    _sync_ok(tmp_path, check=True)
+
+
+def test_a_framework_alias_maps_onto_the_default_layout_too(
+    tmp_path: Path, make_package: Callable[..., str]
+) -> None:
+    framework = _overlay(make_package, "acme_default", framework=True)
+    _init_repo(tmp_path)
+    _set_config(tmp_path, head=f'framework = "{framework}"')
+
+    _sync_ok(tmp_path)
+
+    skill = (tmp_path / _SKILLS / "acme-default-notes" / "SKILL.md").read_text(encoding="utf-8")
+    assert "`docs/plans/x.md`" in skill
+    assert "`docs/specs/YYYY-MM-DD-<slug>.md`" in skill
+    _sync_ok(tmp_path, check=True)
+
+
+@pytest.mark.parametrize("layout", ["", 'specs = "specs"\nplans = "plans"'])
+def test_superpowers_specs_and_plans_follow_the_layout(tmp_path: Path, layout: str) -> None:
+    _init_repo(tmp_path, framework="superpowers")
+    _set_config(tmp_path, head='framework = "superpowers"', layout=layout)
+    specs, plans = ("specs", "plans") if layout else ("docs/specs", "docs/plans")
+
+    _sync_ok(tmp_path)
+
+    assert _texts_mentioning(tmp_path, "docs/superpowers/") == []
+    brainstorming = tmp_path / _SKILLS / "brainstorming" / "SKILL.md"
+    assert f"{specs}/YYYY-MM-DD-" in brainstorming.read_text(encoding="utf-8")
+    writing_plans = tmp_path / _SKILLS / "writing-plans" / "SKILL.md"
+    assert f"{plans}/YYYY-MM-DD-" in writing_plans.read_text(encoding="utf-8")
+    _sync_ok(tmp_path, check=True)
+
+
+def test_hook_path_tables_follow_a_custom_layout(
+    tmp_path: Path, make_package: Callable[..., str]
+) -> None:
+    overlay = _overlay(make_package, "acme_hooks")
+    resources = Path(importlib.import_module(overlay).__path__[0]) / "resources"
+    hook = resources / "hooks" / "feedback" / "acme-spec-format"
+    hook.mkdir(parents=True)
+    (hook / "HOOK.md").write_text(_SPEC_HOOK, encoding="utf-8")
+    _init_repo(tmp_path)
+    _set_config(tmp_path, head=f'overlays_enabled = ["{overlay}"]', layout='specs = "specs"')
+
+    _sync_ok(tmp_path)
+
+    guard_config = (tmp_path / _GUARD_CONFIG).read_text(encoding="utf-8")
+    assert '"specs/**/*.md"' in guard_config
+    assert "docs/specs" not in guard_config
     _sync_ok(tmp_path, check=True)
 
 

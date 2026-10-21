@@ -146,7 +146,7 @@ def _render_into(
         ctx, rendered.hooks, output_root, recorder, prompts=rendered.prompts, rules=rendered.rules
     )
     # D71: the layout adapter, after every write and before anything hashes the output.
-    rewrite_layout_outputs(
+    recorder.layout_rewrites = rewrite_layout_outputs(
         recorder.written,
         output_root,
         ctx.config.layout_rewriter(),

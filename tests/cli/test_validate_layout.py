@@ -1,7 +1,9 @@
 """``playbook validate`` reports every layout rewrite per file, and refuses a bad ``[layout]`` (D71).
 
 prU L0-23: with a ``[layout]`` key off its D60 default, validate prints one line
-per synced source file and prefix: ``layout: <file>: <from> -> <to> (<count>)``.
+per generated file and prefix: ``layout: <file>: <from> -> <to> (<count>)``. The
+lines come from the sync step's own rewrite list on a scratch render, so they name
+exactly what ``playbook sync`` rewrites.
 An absolute path, a ``..`` segment or an unknown key stops every command with an
 ``error:`` naming the key (exit 2), before anything is written.
 """
@@ -9,24 +11,28 @@ An absolute path, a ``..`` segment or an unknown key stops every command with an
 from __future__ import annotations
 
 import argparse
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
 from coding_agent_playbook.cli import main
 from coding_agent_playbook.commands import init as _init
 from coding_agent_playbook.commands import validate as _validate
+from coding_agent_playbook.sync import pipeline as _sync
+from coding_agent_playbook.sync._layout_outputs import rewrite_layout_outputs
+from tests.fakes import FakeGitClient
 
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from coding_agent_playbook.sync._layout_outputs import FileRewrite
+
 pytestmark = [pytest.mark.usefixtures("hermetic_git_env"), pytest.mark.catalog]
 
 _CONFIG = ".coding-agent-playbook.toml"
-_TRACKER_RULE = "coding_agent_playbook.plugins.mattpocock_skills/rules/mattpocock-skills-tracker.md"
 
 
-def _init_repo(repo: Path) -> None:
+def _init_repo(repo: Path, framework: str = "mattpocock") -> None:
     (repo / "pyproject.toml").write_text(
         '[project]\nname = "probe"\nrequires-python = ">=3.12"\ndependencies = []\n',
         encoding="utf-8",
@@ -37,7 +43,7 @@ def _init_repo(repo: Path) -> None:
         name="probe",
         kind="python-library",
         adapters="claude_code",
-        framework="mattpocock",
+        framework=framework,
     )
     assert _init.run(args) == 0
 
@@ -62,8 +68,44 @@ def test_validate_lists_each_rewrite_with_file_from_to_and_count(
 
     lines = _layout_lines(tmp_path, capsys)
 
-    assert f"layout: {_TRACKER_RULE}: docs/agents -> notes/agents (3)" in lines
+    assert "layout: AGENTS.md: docs/agents -> notes/agents (3)" in lines
     assert all(" -> notes/agents (" in line for line in lines)
+    assert "notes/agents" not in (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
+
+
+def test_validate_reports_exactly_what_sync_rewrites(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _init_repo(tmp_path)
+    _append_layout(tmp_path, 'agents = "notes/agents"\nspecs = "specs"')
+    reported = _layout_lines(tmp_path, capsys)
+    synced: list[FileRewrite] = []
+
+    def _spy(*args: Any, **kwargs: Any) -> list[FileRewrite]:
+        done = rewrite_layout_outputs(*args, **kwargs)
+        synced.extend(done)
+        return done
+
+    monkeypatch.setattr(_sync, "rewrite_layout_outputs", _spy)
+
+    assert _sync.execute(tmp_path, git=FakeGitClient()) == 0
+    assert sorted(reported) == sorted(line for done in synced for line in done.lines())
+    # The engine-assembled AGENTS.md has no source file of its own; it is reported too.
+    assert any(line.startswith("layout: AGENTS.md: ") for line in reported)
+
+
+def test_validate_reports_a_framework_alias_under_the_default_layout(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _init_repo(tmp_path, framework="superpowers")
+
+    lines = _layout_lines(tmp_path, capsys)
+
+    assert any(
+        line.startswith("layout: .claude/skills/writing-plans/SKILL.md: docs/superpowers/plans ")
+        and " -> docs/plans (" in line
+        for line in lines
+    )
 
 
 def test_validate_prints_no_rewrite_for_the_default_layout(

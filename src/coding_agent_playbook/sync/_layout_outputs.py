@@ -8,7 +8,9 @@ Working on the written files, not on the artifacts, reaches every place a path c
 land: rule and prompt bodies, skill files and their copied references, rule globs in
 frontmatter and in skill-nudge's table, and the hook path tables of
 ``guard_config.json`` (D78(12)). It runs before the lockfile hashes the output, in
-write mode and in both check modes alike, so ``sync --check`` stays clean.
+write mode and in both check modes alike, so ``sync --check`` stays clean; ``playbook
+validate`` prints the :class:`FileRewrite` list of a scratch render
+(``sync.layout_preview``), so it reports exactly what sync rewrites.
 
 Co-owned files (``.claude/settings.json``) and the files owned element-wise by scoped
 lock entries hold user content and are never touched; a file that is not UTF-8 text
@@ -41,6 +43,16 @@ class FileRewrite:
 
     path: str
     counts: tuple[RewriteCount, ...]
+
+    def lines(self) -> list[str]:
+        """One ``layout: <file>: <from> -> <to> (<count>)`` line per prefix, as validate prints.
+
+        Example: ``["layout: AGENTS.md: docs/specs -> specs (2)"]``.
+        """
+        return [
+            f"layout: {self.path}: {count.source} -> {count.target} ({count.occurrences})"
+            for count in self.counts
+        ]
 
 
 def rewrite_layout_outputs(

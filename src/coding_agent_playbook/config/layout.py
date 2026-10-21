@@ -123,7 +123,7 @@ class RewriteCount:
 
     source: str
     target: str
-    count: int
+    occurrences: int
 
 
 @dataclass(frozen=True)
@@ -150,7 +150,9 @@ class LayoutRewriter:
 
         A key rewrites its default only when its configured path differs; an alias
         (``"docs/superpowers/plans/" = "plans"``) always maps to the configured path
-        of its key, whatever the layout.
+        of its key, the D60 default included: a framework that declares aliases
+        writes into the document layout even when the repo sets no ``[layout]``
+        (D71; the layout guard blocks the framework's own paths either way).
 
         Example::
 
@@ -181,7 +183,7 @@ class LayoutRewriter:
         Example::
 
             >>> LayoutRewriter.for_layout({"adr": "adr"}).rewrite("docs/adr/0001-x.md")
-            ('adr/0001-x.md', (RewriteCount(source='docs/adr', target='adr', count=1),))
+            ('adr/0001-x.md', (RewriteCount(source='docs/adr', target='adr', occurrences=1),))
         """
         if not self.targets:
             return text, ()
