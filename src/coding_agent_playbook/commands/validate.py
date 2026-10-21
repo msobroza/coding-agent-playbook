@@ -56,7 +56,7 @@ def run(args: argparse.Namespace) -> int:
     ctx = (
         config_less_context(repo_root)
         if config_less
-        else SyncContext.from_repo(repo_root, tolerate_hook_errors=True)
+        else SyncContext.from_repo(repo_root, tolerate_load_errors=True)
     )
     findings = checks.collect_validation_findings(ctx, config_less=config_less)
     checks.warn_refused_skill_files(ctx.skills_resolved)

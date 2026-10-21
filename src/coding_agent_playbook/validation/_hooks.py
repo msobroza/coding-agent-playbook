@@ -4,7 +4,7 @@
 :class:`~coding_agent_playbook.validation.findings.ValidationError` lines:
 
 - H1 (and H2's layout half): each ``HOOK.md`` that did not load, which a
-  context built with ``tolerate_hook_errors=True`` records (P8c);
+  context built with ``tolerate_load_errors=True`` records (P8c);
 - H2, H14, H15: the layer overrides the merge refused (``hook_violations``);
 - per hook, every layer's definition: ``hooks.contract.contract.classify_hook`` (with the
   handler registry, so H6 checks each builtin's declaration) and the
@@ -60,7 +60,7 @@ def check_hooks(
 
     Example::
 
-        >>> errors, warnings = check_hooks(SyncContext.from_repo(repo, tolerate_hook_errors=True))
+        >>> errors, warnings = check_hooks(SyncContext.from_repo(repo, tolerate_load_errors=True))
         ... # doctest: +SKIP
     """
     errors = [_load_error(exc) for exc in ctx.hook_load_errors]

@@ -19,7 +19,7 @@ from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 # A stdlib-only package module, so this stays a light import.
 from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
 from coding_agent_playbook.artifacts.prompt import Prompt
-from coding_agent_playbook.artifacts.rule import Rule
+from coding_agent_playbook.artifacts.rule import Rule, RuleLoadError
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.catalog._hook_walk import walk_hook_layer
 from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE, REPO_LOCAL_SOURCE
@@ -46,6 +46,23 @@ class ArtifactSource(ABC):
 
     @abstractmethod
     def list_rules(self) -> list[Rule]: ...
+
+    def collect_rules(self) -> tuple[list[Rule], list[RuleLoadError]]:
+        """Every well-formed rule plus the errors of malformed ones, never raising.
+
+        What ``playbook validate`` reads, so it can report every malformed rule
+        file (prU D21), mirroring :meth:`collect_hooks`. This default can only
+        record the one error a failing :meth:`list_rules` raises; a source that
+        sees each file overrides it.
+
+        Example::
+
+            >>> rules, errors = source.collect_rules()  # doctest: +SKIP
+        """
+        try:
+            return self.list_rules(), []
+        except RuleLoadError as exc:
+            return [], [exc]
 
     @abstractmethod
     def list_prompts(self) -> list[Prompt]: ...
@@ -186,6 +203,14 @@ def _iter_skills(skills_root: Path, source_package: str) -> Iterator[Skill]:
         )
 
 
+def _load_rule_or_error(path: Path, source_package: str) -> Rule | RuleLoadError:
+    """The rule at ``path``, or the :class:`RuleLoadError` it raised (for collect_rules)."""
+    try:
+        return Rule.from_markdown(path, source_package)
+    except RuleLoadError as exc:
+        return exc
+
+
 def _find_skill_md(skill_dir: Path) -> Path | None:
     """Return ``SKILL.md`` or ``SKILL.md.j2`` inside ``skill_dir`` if it exists."""
     for candidate_name in ("SKILL.md", "SKILL.md.j2"):
@@ -275,10 +300,27 @@ class FileSystemArtifactSource(ArtifactSource):
         return (self._engine_package, *self._overlay_packages)
 
     def list_rules(self) -> list[Rule]:
-        return self._walk_artifacts(
-            subdir="rules",
-            builder=Rule.from_markdown,
-        )
+        """Every rule of every layer, raising the first :class:`RuleLoadError` found."""
+        rules, errors = self.collect_rules()
+        if errors:
+            raise errors[0]
+        return rules
+
+    def collect_rules(self) -> tuple[list[Rule], list[RuleLoadError]]:
+        """Every well-formed rule plus one error per malformed rule file, never raising.
+
+        Example::
+
+            >>> FileSystemArtifactSource(repo_root=Path("/no/such/repo")).collect_rules()[1]
+            []
+        """
+        loaded = [
+            _load_rule_or_error(md, label)
+            for label, root in self.layer_roots("rules")
+            for md in _iter_md_files(root)
+        ]
+        rules = [item for item in loaded if isinstance(item, Rule)]
+        return rules, [item for item in loaded if isinstance(item, RuleLoadError)]
 
     def list_prompts(self) -> list[Prompt]:
         return self._walk_artifacts(
@@ -308,7 +350,7 @@ class FileSystemArtifactSource(ArtifactSource):
     def collect_hooks(self) -> tuple[list[Hook], list[HookSchemaError]]:
         """Every well-formed hook plus every malformed one's error, never raising.
 
-        What ``SyncContext.from_repo(..., tolerate_hook_errors=True)`` reads, so
+        What ``SyncContext.from_repo(..., tolerate_load_errors=True)`` reads, so
         ``playbook validate`` reports each malformed hook (prK §P P8c).
 
         Example::

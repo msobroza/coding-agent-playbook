@@ -70,6 +70,7 @@ from coding_agent_playbook.skills.naming import agent_skill_issues, has_declared
 from coding_agent_playbook.validation import preflight as _sync_preflight
 from coding_agent_playbook.validation._frontmatter import (
     check_lint_codes,
+    check_rule_shape,
     check_write_scope,
 )
 from coding_agent_playbook.validation._hooks import check_hooks
@@ -363,6 +364,10 @@ def _artifact_errors(ctx: SyncContext, *, config_less: bool) -> list[ValidationE
     """The rule, prompt, eval-sample, link and skill checks (everything but hooks)."""
     rules, prompts = ctx.rules_resolved, ctx.prompts_resolved
     errors = [] if config_less else _check_overlays_usable(ctx.config.overlays_enabled)
+    errors.extend(
+        ValidationError(path=str(e.path), message=e.problem) for e in ctx.rule_load_errors
+    )
+    errors.extend(check_rule_shape(rules))
     errors.extend(_check_applies_if(rules, prompts, ctx.facts, ctx.repo_root))
     errors.extend(check_prompt_rule_references(prompts, {r.frontmatter.id for r in rules}))
     errors.extend(_check_output_contracts(prompts))
@@ -384,7 +389,7 @@ def _artifact_errors(ctx: SyncContext, *, config_less: bool) -> list[ValidationE
     errors.extend(_check_agent_skills(ctx.skills_resolved, ctx.artifact_source.list_skills()))
     errors.extend(
         check_skill_membership(
-            rules, ctx.skills_resolved, all_rules=ctx.artifact_source.list_rules()
+            rules, ctx.skills_resolved, all_rules=ctx.artifact_source.collect_rules()[0]
         )
     )
     return errors

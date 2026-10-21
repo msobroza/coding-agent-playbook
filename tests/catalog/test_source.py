@@ -4,17 +4,23 @@ from __future__ import annotations
 
 import importlib
 import sys
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.artifacts.rule import Rule, RuleLoadError
 from coding_agent_playbook.catalog.source import (
+    ArtifactSource,
     FileSystemArtifactSource,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
-    from pathlib import Path
+
+    from coding_agent_playbook.artifacts.prompt import Prompt
+    from coding_agent_playbook.artifacts.skill import Skill
+    from coding_agent_playbook.evals.sample import EvalSample
 
 
 RULE_MD_TEMPLATE = """\
@@ -341,3 +347,67 @@ def test_entry_point_registers_filesystem_artifact_source() -> None:
     assert "filesystem" in by_name
     loaded = by_name["filesystem"].load()
     assert loaded is FileSystemArtifactSource
+
+
+def _repo_local_rules(tmp_path: Path, files: dict[str, str]) -> dict[str, Path]:
+    rules_dir = tmp_path / "playbook" / "rules"
+    rules_dir.mkdir(parents=True)
+    paths = {name: rules_dir / name for name in files}
+    for name, text in files.items():
+        paths[name].write_text(text, encoding="utf-8")
+    return paths
+
+
+_GOOD_RULE = RULE_MD_TEMPLATE.format(id="good-rule", name="Good", description="ok")
+_UNKNOWN_KEY_RULE = "---\nid: a\nname: A\ndescription: d\nscope: always\nimpact: HIGH\n---\nB\n"
+
+
+def test_collect_rules_returns_every_good_rule_and_one_error_per_bad_file(
+    tmp_path: Path,
+) -> None:
+    paths = _repo_local_rules(
+        tmp_path,
+        {"a-bad.md": _UNKNOWN_KEY_RULE, "b-good.md": _GOOD_RULE, "c-bad.md": "no fence\n"},
+    )
+    source = FileSystemArtifactSource(repo_root=tmp_path)
+
+    rules, errors = source.collect_rules()
+
+    repo_local = [r.frontmatter.id for r in rules if r.source_package == "<repo-local>"]
+    assert repo_local == ["good-rule"]
+    assert [error.path for error in errors] == [paths["a-bad.md"], paths["c-bad.md"]]
+
+
+def test_list_rules_raises_the_first_rule_load_error(tmp_path: Path) -> None:
+    paths = _repo_local_rules(tmp_path, {"a-bad.md": _UNKNOWN_KEY_RULE, "b-good.md": _GOOD_RULE})
+    source = FileSystemArtifactSource(repo_root=tmp_path)
+
+    with pytest.raises(RuleLoadError) as excinfo:
+        source.list_rules()
+
+    assert excinfo.value.path == paths["a-bad.md"]
+
+
+class _RaisingRuleSource(ArtifactSource):
+    """A third-party source that only implements ``list_rules`` (the ABC default path)."""
+
+    name = "raising"
+
+    def list_rules(self) -> list[Rule]:
+        raise RuleLoadError(Path("rules/x.md"), "unknown frontmatter key 'impact'")
+
+    def list_prompts(self) -> list[Prompt]:
+        return []
+
+    def list_skills(self) -> list[Skill]:
+        return []
+
+    def list_eval_samples(self) -> list[EvalSample]:
+        return []
+
+
+def test_abc_collect_rules_default_records_the_error_list_rules_raises() -> None:
+    rules, errors = _RaisingRuleSource().collect_rules()
+
+    assert rules == []
+    assert [str(error) for error in errors] == ["rules/x.md: unknown frontmatter key 'impact'"]

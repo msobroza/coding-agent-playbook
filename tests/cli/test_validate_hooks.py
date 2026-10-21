@@ -1,6 +1,6 @@
 """``playbook validate`` enforces the hook trust contract H1-H21 (specs/prK-lifecycle-hooks.md §B.5).
 
-Validate builds its context with ``tolerate_hook_errors=True`` (P8c), so every
+Validate builds its context with ``tolerate_load_errors=True`` (P8c), so every
 malformed ``HOOK.md`` is a ``FAIL`` line rather than a traceback, next to the
 per-hook rules (``classify_hook``), the refused layer overrides (H2, H14, H15),
 the body checks (H19) and the rules across hooks and config

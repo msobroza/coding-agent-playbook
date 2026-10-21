@@ -137,7 +137,7 @@ def _scan_source_bodies(
     bodies = [
         *(
             (str(r.source_path or r.frontmatter.id), r.template_body)
-            for r in artifact_source.list_rules()
+            for r in artifact_source.collect_rules()[0]
         ),
         *(
             (str(p.source_path or p.frontmatter.id), p.template_body)
