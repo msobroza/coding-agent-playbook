@@ -50,6 +50,9 @@ if TYPE_CHECKING:
 
 pytestmark = pytest.mark.catalog
 
+#: The core skill that teaches the forge operations of ``playbook forge``.
+FORGE_SKILL_ID: Final = "forge"
+
 #: Scoped rule in core -> the core skill whose references deliver it.
 EXPECTED_MEMBERSHIP: Final[Mapping[str, str]] = {
     "python-dependency-injection": "python-coding",
@@ -90,7 +93,8 @@ CORE_SKILLS: Final = sorted(EXPECTED_WHERE)
 #: Core members whose gate the reference probe fails: it has no uv.lock (spec 9.6.2).
 PROBE_INACTIVE_MEMBERS: Final = frozenset({"python-uv-workflow"})
 #: Core skills that take no member rules: no ``playbook:`` block, an authored "Use when".
-EXPECTED_PLAIN_CORE_SKILLS: Final = frozenset({GUARDRAILS_SKILL_ID})
+#: ``forge`` is always rendered (specs/prF-forge-adapter.md §6.4, Q47).
+EXPECTED_PLAIN_CORE_SKILLS: Final = frozenset({GUARDRAILS_SKILL_ID, FORGE_SKILL_ID})
 EVERY_CORE_SKILL: Final = sorted({*CORE_SKILLS, *EXPECTED_PLAIN_CORE_SKILLS})
 #: python-coding's member count after the python-best-practices distillation (spec 9.6.2, H13).
 PYTHON_CODING_MEMBER_COUNT: Final = 12

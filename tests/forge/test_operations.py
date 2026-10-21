@@ -60,14 +60,14 @@ _CATALOGUE = [
     ("issue create", "sends_data", (), ("issue", "create"), ("issue", "create")),
     ("issue view", "read", ("n",), ("issue", "view"), ("issue", "view")),
     ("issue list", "read", (), ("issue", "list"), ("issue", "list")),
-    ("issue comment", "sends_data", ("n",), ("issue", "comment"), ("issue", "note")),
+    ("issue comment", "sends_data", ("n",), ("issue", "comment"), ("api",)),
     ("issue label", "write", ("n",), ("issue", "edit"), ("issue", "update")),
     ("issue close", "sends_data", ("n",), ("issue", "close"), ("issue", "close")),
     ("issue assign", "write", ("n",), ("issue", "edit"), ("issue", "update")),
     ("issue edit", "sends_data", ("n",), ("issue", "edit"), ("issue", "update")),
     ("issue link-child", "write", ("parent", "child"), ("issue", "edit"), None),
     ("issue children", "read", ("parent",), ("issue", "view"), None),
-    ("issue block", "write", ("child", "blocker"), ("issue", "edit"), ("issue", "note")),
+    ("issue block", "write", ("child", "blocker"), ("issue", "edit"), ("api",)),
     ("issue blockers", "read", ("n",), ("issue", "view"), ("api",)),
     ("label list", "read", (), ("label", "list"), ("label", "list")),
     ("label create", "write", ("name",), ("label", "create"), ("label", "create")),
@@ -81,7 +81,7 @@ _CATALOGUE = [
     ("pr close", "sends_data", ("n",), ("pr", "close"), ("mr", "close")),
     ("pr ready", "write", ("n",), ("pr", "ready"), ("mr", "update")),
     ("pr edit", "sends_data", ("n",), ("pr", "edit"), ("mr", "update")),
-    ("pr checks", "read", ("n",), ("pr", "checks"), ("ci", "status")),
+    ("pr checks", "read", ("n",), ("pr", "checks"), ("ci", "get")),
     ("ref view", "read", ("ref",), ("pr", "view"), ("issue", "view")),
     ("which", "read", (), (), ()),
     ("auth status", "read", (), ("auth", "status"), ("auth", "status")),
@@ -119,6 +119,7 @@ def test_each_operation_kind_arguments_and_forge_cli_words(
                 "--title",
                 "--body",
                 "--body-file",
+                "--template",
                 "--label",
                 "--assignee",
                 "--parent",
@@ -134,7 +135,7 @@ def test_each_operation_kind_arguments_and_forge_cli_words(
         ("issue assign", {"--add"}, set()),
         ("issue edit", {"--title", "--body", "--body-file"}, set()),
         ("label create", {"--color", "--description"}, set()),
-        ("pr create", {"--title", "--body", "--body-file", "--base"}, {"--draft"}),
+        ("pr create", {"--title", "--body", "--body-file", "--template", "--base"}, {"--draft"}),
         ("pr view", set(), {"--comments"}),
         ("pr list", {"--state", "--label"}, {"--external"}),
         ("pr comment", {"--body", "--body-file", "--reply-to"}, set()),
@@ -153,13 +154,15 @@ def test_each_operation_takes_its_spec_options(
     assert operation.flags == flags
 
 
-def test_only_labels_repeat_and_only_a_close_reason_is_a_choice() -> None:
+def test_only_labels_repeat_and_only_states_and_a_close_reason_are_choices() -> None:
     assert {op.name: op.repeatable for op in OPERATIONS if op.repeatable} == {
         "issue create": {"--label"},
         "issue list": {"--label"},
     }
     assert {op.name: op.choices for op in OPERATIONS if op.choices} == {
-        "issue close": (("--reason", ("completed", "not-planned", "duplicate")),)
+        "issue list": (("--state", ("open", "closed", "all")),),
+        "issue close": (("--reason", ("completed", "not-planned", "duplicate")),),
+        "pr list": (("--state", ("open", "closed", "merged", "all")),),
     }
 
 
@@ -305,7 +308,7 @@ def test_what_a_forge_or_its_plan_lacks_exits_3(
         ("label list", ("--json",), ("-F", "json")),
         ("pr view", ("--json",), ("-F", "json")),
         ("pr list", ("--json",), ("-F", "json")),
-        ("pr diff", ("--color", "never"), ("--color", "never")),
+        ("pr diff", ("--color", "never"), ("--color", "never", "--raw")),
         ("pr ready", (), ("--ready",)),
         ("issue children", ("--json", "subIssues"), None),
         ("issue blockers", ("--json", "blockedBy"), ()),

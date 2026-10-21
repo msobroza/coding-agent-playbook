@@ -4,13 +4,13 @@
 :class:`Operation` from :data:`OPERATIONS`. Each names its words, its
 arguments, its :data:`Kind` and, per forge, a :class:`Translation` (``None``:
 the forge lacks it, exit 3, Q30). The guards read the same rows (§8.1): an
-operation of kind ``sends_data`` given ``--body-file PATH`` sends that file,
+operation of kind ``sends_data`` given a :data:`BODY_FILES` path sends that file,
 and one that ``opens_pull_request`` asks ``push_requires_green`` first;
 :func:`operation_call` reads a ``playbook forge`` command line for them.
 
 Bodies (Q36) come as ``--body TEXT``, ``--body-file PATH`` or ``--body-file -``
-(stdin); ``playbook forge`` passes every body to the forge CLI on stdin, never
-on argv (:attr:`Translation.body`).
+(stdin), or ``--template PATH`` (Q56); the forge CLI reads each on stdin
+(:attr:`Translation.body`).
 """
 
 from __future__ import annotations
@@ -25,8 +25,10 @@ if TYPE_CHECKING:
 
 __all__ = [
     "BODY_FILE",
+    "BODY_FILES",
     "BODY_OPTIONS",
     "OPERATIONS",
+    "TEMPLATE",
     "Kind",
     "Operation",
     "OperationCall",
@@ -41,8 +43,12 @@ type Kind = Literal["read", "write", "sends_data", "pushes"]
 
 #: The option whose value is a local file sent as the body (``-`` is stdin).
 BODY_FILE: Final = "--body-file"
+#: A template file the operation sends as its body: a body file by another name (Q56).
+TEMPLATE: Final = "--template"
+#: The options whose value is a local file sent as the body.
+BODY_FILES: Final = frozenset({BODY_FILE, TEMPLATE})
 #: The options that carry a body; the forge CLI always reads it from stdin.
-BODY_OPTIONS: Final = frozenset({"--body", BODY_FILE})
+BODY_OPTIONS: Final = frozenset({"--body", *BODY_FILES})
 #: ``-C <path>``: run as if started in ``<path>``; given before the operation's words.
 _DIRECTORY: Final = "-C"
 #: ``--json`` (§6.1): a flag, given before or after the operation's words.
@@ -219,22 +225,23 @@ _SKIP_CI: Final = "a title holding a skip-CI marker exits 1 (Q55)"
 _ADD_REMOVE_LABEL: Final = (("--add", "--add-label"), ("--remove", "--remove-label"))
 _LABEL_UNLABEL: Final = (("--add", "--label"), ("--remove", "--unlabel"))
 _WHICH: Final = Translation((), note="prints {forge, cli, host, api_host, repo, remote}")
+_NOTES: Final = "--comments: every page of `glab api …/notes`, system notes dropped"
+_LINKS: Final = "`glab api …/issues/<n>/links`, `is_blocked_by` (never a `/blocked_by` note)"
+_GH_PR_COMMENTS: Final = "--comments as a field, plus review comments (`gh api …/comments`)"
 
 #: Every forge operation (spec §6.3), in the spec's order.
 OPERATIONS: Final = (
     _op(
         "issue create",
         "sends_data",
-        values=f"--title {_BODY} --label --assignee --parent --blocked-by",
+        values=f"--title {_BODY} {TEMPLATE} --label --assignee --parent --blocked-by",
         flags="--confidential",
         repeatable="--label",
         github=Translation(
             ("issue", "create"),
-            options=_same("--title --label --assignee"),
+            options=_same("--title --label --assignee --parent --blocked-by"),
             body=_GH_STDIN,
             unsupported=_flags("--confidential"),
-            note="--parent and --blocked-by run as `issue link-child` and `issue block` "
-            "once the issue exists",
         ),
         gitlab=Translation(
             ("issue", "create"),
@@ -242,21 +249,16 @@ OPERATIONS: Final = (
             fixed=("--yes",),
             body=_GLAB_STDIN,
             unsupported=_flags("--parent"),
-            note="--parent exits 3 (the skill writes `Part of #n`); --blocked-by via a link "
-            "(Premium, else exit 3)",
+            note="--parent exits 3 (the skill writes `Part of #n`); --blocked-by: "
+            f"{_LINKS} once the issue exists (Premium, else exit 3)",
         ),
     ),
     _op(
         "issue view <n>",
         "read",
         flags="--comments",
-        github=Translation(("issue", "view"), options=_same("--comments"), fixed=_GH_JSON),
-        gitlab=Translation(
-            ("issue", "view"),
-            options=_same("--comments"),
-            fixed=_GLAB_JSON,
-            note="notes paginated, system notes dropped",
-        ),
+        github=Translation(("issue", "view"), fixed=_GH_JSON, note="--comments as a field"),
+        gitlab=Translation(("issue", "view"), fixed=_GLAB_JSON, note=_NOTES),
     ),
     _op(
         "issue list",
@@ -264,6 +266,7 @@ OPERATIONS: Final = (
         values="--state --label --assignee --search --limit",
         flags="--no-label",
         repeatable="--label",
+        choices=(("--state", ("open", "closed", "all")),),
         github=Translation(
             ("issue", "list"),
             options=_same("--state --label --assignee --search --limit"),
@@ -274,8 +277,7 @@ OPERATIONS: Final = (
             ("issue", "list"),
             options=(*_same("--label --assignee --search"), ("--limit", "--per-page")),
             fixed=("-O", "json"),
-            note="--state closed or all as `--closed` or `--all`; --no-label keeps the issues "
-            "without labels",
+            note="--state closed or all as `--closed` or `--all`; --no-label as `--label None`",
         ),
     ),
     _op(
@@ -283,7 +285,7 @@ OPERATIONS: Final = (
         "sends_data",
         values=_BODY,
         github=Translation(("issue", "comment"), body=_GH_STDIN),
-        gitlab=Translation(("issue", "note"), note="the body on stdin"),
+        gitlab=Translation(("api",), note="`glab issue note` reads no stdin: `-F body=@-`"),
     ),
     _op(
         "issue label <n>",
@@ -304,8 +306,8 @@ OPERATIONS: Final = (
         ),
         gitlab=Translation(
             ("issue", "close"),
-            note="--comment and --reason (as a closing line) go in a note first, then "
-            "`glab issue close`; a failed second call exits 1 naming the posted note (Q41)",
+            note="--comment and --reason (a closing line) go in a `glab api` note first, then "
+            "`glab issue close`; a failed close exits 1 naming the note (Q41)",
         ),
     ),
     _op(
@@ -346,17 +348,13 @@ OPERATIONS: Final = (
         github=Translation(
             ("issue", "edit"), note="`gh issue edit <child> --add-blocked-by <blocker>`"
         ),
-        gitlab=Translation(("issue", "note"), paid=True, note="a `/blocked_by` quick-action note"),
+        gitlab=Translation(("api",), paid=True, note=_LINKS),
     ),
     _op(
         "issue blockers <n>",
         "read",
         github=Translation(("issue", "view"), fixed=("--json", "blockedBy")),
-        gitlab=Translation(
-            ("api",),
-            paid=True,
-            note="`projects/:id/issues/<iid>/links`, the `is_blocked_by` links",
-        ),
+        gitlab=Translation(("api",), paid=True, note=_LINKS),
     ),
     _op(
         "label list",
@@ -378,7 +376,7 @@ OPERATIONS: Final = (
     _op(
         "pr create",
         "sends_data",
-        values=f"--title {_BODY} --base",
+        values=f"--title {_BODY} {TEMPLATE} --base",
         flags="--draft",
         opens_pull_request=True,
         github=Translation(
@@ -399,14 +397,15 @@ OPERATIONS: Final = (
         "pr view <n>",
         "read",
         flags="--comments",
-        github=Translation(("pr", "view"), options=_same("--comments"), fixed=_GH_JSON),
-        gitlab=Translation(("mr", "view"), options=_same("--comments"), fixed=_GLAB_JSON),
+        github=Translation(("pr", "view"), fixed=_GH_JSON, note=_GH_PR_COMMENTS),
+        gitlab=Translation(("mr", "view"), fixed=_GLAB_JSON, note=_NOTES),
     ),
     _op(
         "pr list",
         "read",
         values="--state --label",
         flags="--external",
+        choices=(("--state", ("open", "closed", "merged", "all")),),
         github=Translation(
             ("pr", "list"),
             options=_same("--state --label"),
@@ -425,7 +424,7 @@ OPERATIONS: Final = (
         "pr diff <n>",
         "read",
         github=Translation(("pr", "diff"), fixed=("--color", "never")),
-        gitlab=Translation(("mr", "diff"), fixed=("--color", "never")),
+        gitlab=Translation(("mr", "diff"), fixed=("--color", "never", "--raw")),
     ),
     _op(
         "pr checkout <n>",
@@ -444,6 +443,7 @@ OPERATIONS: Final = (
         ),
         gitlab=Translation(
             ("mr", "note", "create"),
+            fixed=("--resolvable=false",),
             note="the body on stdin; --reply-to via `glab api …/discussions/<id>/notes` (Q22)",
         ),
     ),
@@ -460,7 +460,7 @@ OPERATIONS: Final = (
         values="--comment",
         github=Translation(("pr", "close"), options=_same("--comment")),
         gitlab=Translation(
-            ("mr", "close"), note="--comment goes in a note first, then `glab mr close`"
+            ("mr", "close"), note="--comment goes in a note first (stdin), then `glab mr close`"
         ),
     ),
     _op(
@@ -482,7 +482,7 @@ OPERATIONS: Final = (
         "pr checks <n>",
         "read",
         github=Translation(("pr", "checks"), fixed=_GH_JSON),
-        gitlab=Translation(("ci", "status"), fixed=_GLAB_JSON, note="the pull request's pipeline"),
+        gitlab=Translation(("ci", "get"), fixed=_GLAB_JSON, note="`--merge-request <n>`: its jobs"),
     ),
     _op(
         "ref view <ref>",
@@ -502,7 +502,7 @@ OPERATIONS: Final = (
     _op(
         "auth status",
         "read",
-        github=Translation(("auth", "status"), note="`--hostname <host>`"),
+        github=Translation(("auth", "status"), note="`--hostname <host> --active`"),
         gitlab=Translation(("auth", "status"), note="`--hostname <host>`, never `-t`"),
     ),
 )

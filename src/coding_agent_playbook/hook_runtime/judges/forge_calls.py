@@ -286,7 +286,7 @@ def _host(word: str) -> str | None:
 
 def _playbook(words: Sequence[str]) -> ForgeCall | None:
     from coding_agent_playbook.forge.dialects import by_name
-    from coding_agent_playbook.forge.operations import BODY_FILE, operation_call
+    from coding_agent_playbook.forge.operations import BODY_FILES, operation_call
 
     call = operation_call(words)
     if call is None:
@@ -296,7 +296,7 @@ def _playbook(words: Sequence[str]) -> ForgeCall | None:
     files: tuple[str, ...] = ()
     if operation.kind == "sends_data":
         parsed = split_words(call.args, operation.values)
-        found = parsed.of(frozenset({BODY_FILE}))
+        found = parsed.of(BODY_FILES)
         files = tuple(dict.fromkeys(f for f in found if f and f not in _STDIN))
     reaches = any(t is not None and t.argv for _, t in operation.translations)
     reads = operation.kind == "read" and any(

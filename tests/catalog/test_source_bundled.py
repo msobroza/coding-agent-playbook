@@ -40,8 +40,9 @@ _SHIPPED_PROMPT_ID = "explain"
 _DEMO_TASK_ID = "demo-plugin-eval-task"
 #: Two always rules and 26 scoped rules, each scoped one a member of a core skill.
 _ENGINE_RULE_COUNT = 28
-#: python-coding, python-testing, python-tooling, ml-data and playbook-guardrails (spec D4).
-_ENGINE_SKILL_COUNT = 5
+#: python-coding, python-testing, python-tooling, ml-data and playbook-guardrails (spec D4),
+#: and the always-rendered forge skill (specs/prF-forge-adapter.md §6.4).
+_ENGINE_SKILL_COUNT = 6
 _SUPERPOWERS_SKILL_COUNT = 15
 
 

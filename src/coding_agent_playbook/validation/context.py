@@ -73,6 +73,7 @@ CONSUMER_CONFIG_CHECKS: Final = (
     "[links] allowed_domains (no allowlist to read; external links fail the strict default)",
     "[hooks] / [guardrails] policy: H15 switches, H16 allow_code_from, H21 tables "
     "(no consumer config to read)",
+    "[forge] hosts (no consumer config to read)",
 )
 
 # The stand-in project kind: the detector's own fallback for an unknown project.

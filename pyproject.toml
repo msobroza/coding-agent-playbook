@@ -494,6 +494,7 @@ type = "independence"
 modules = [
     "coding_agent_playbook.commands.check",
     "coding_agent_playbook.commands.eval",
+    "coding_agent_playbook.commands.forge",
     "coding_agent_playbook.commands.import_harness",
     "coding_agent_playbook.commands.init",
     "coding_agent_playbook.commands.metrics",

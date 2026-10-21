@@ -49,6 +49,7 @@ def _read(command: str, env: dict[str, str] | None = None) -> ForgeCall:
         ("glab snippet create a.md b.md", ("a.md", "b.md")),
         ("gh gist create -", ()),
         ("playbook forge issue create --title t --body-file b.md", ("b.md",)),
+        ("playbook forge pr create --title t --template .github/pr.md", (".github/pr.md",)),
         ("playbook forge issue view 3", ()),
     ],
 )
@@ -163,6 +164,7 @@ def test_contacts_forge(command: str, contacts: bool) -> None:
         ("glab issue show 3", True),
         ("glab mr list", True),
         ("glab ci status", True),
+        ("glab ci get --merge-request 3 -F json", True),  # playbook forge pr checks
         ("glab api projects/1/issues", True),
         ("playbook forge issue view 3", True),
         ("playbook forge -C ../app pr list --state open", True),

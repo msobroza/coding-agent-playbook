@@ -504,7 +504,7 @@ GITLAB: Final = Forge(
     reads=(
         *_verbs("issue", "view show list ls"),
         *_verbs("mr", "view show list ls diff checkout"),
-        *_verbs("ci", "status stats"),
+        *_verbs("ci", "status get stats"),
         *_verbs("label", "list ls"),
         ("api",),
     ),
