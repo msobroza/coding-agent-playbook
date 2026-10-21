@@ -30,7 +30,7 @@ from coding_agent_playbook.config.committed import (
 )
 from coding_agent_playbook.config.files import CONFIG_FILENAME, ConfigFiles
 from coding_agent_playbook.detector.facts import detect
-from coding_agent_playbook.detector.predicate import evaluate_predicate
+from coding_agent_playbook.detector.predicate import LIST_PREDICATE_KEYS, evaluate_predicate
 from coding_agent_playbook.lockfile.drift import drift_entries
 from coding_agent_playbook.validation import preflight as _sync_preflight
 from coding_agent_playbook.validation.context import SyncContext
@@ -92,11 +92,6 @@ def _format_detected_section(ctx: SyncContext) -> str:
     return "\n".join(lines)
 
 
-#: List-valued ``applies_if`` keys the skip reason quotes as written.
-_LIST_PREDICATE_KEYS = frozenset(
-    {"has_framework", "any_framework", "has_file", "has_dev_dependency"}
-)
-
 #: Value-carrying ``applies_if`` keys the skip reason quotes verbatim (a string
 #: or a list). Without this, ``package_manager`` fell through to the boolean
 #: branch and printed the detected fact (``package_manager=False`` when none was
@@ -118,7 +113,8 @@ def _format_skip_reason(predicate: dict[str, object], facts: dict[str, object]) 
     that's what the example shows and it's the most actionable for the user.
     """
     for key, value in predicate.items():
-        if key in _LIST_PREDICATE_KEYS:
+        # The list-valued keys (has_framework, any_dependency, ...) are quoted as written.
+        if key in LIST_PREDICATE_KEYS:
             wanted = value if isinstance(value, list) else [value]
             return f"(skipped: applies_if {key}={wanted!r})"
         if key in _VERBATIM_PREDICATE_KEYS:

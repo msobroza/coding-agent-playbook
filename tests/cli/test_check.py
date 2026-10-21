@@ -22,6 +22,7 @@ from tests.plugins.superpowers_expectations import PLUGIN_NAME
 from tests.toml_equality import assert_toml_identical
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
 
@@ -105,6 +106,40 @@ def test_skip_reason_names_has_dev_dependency(tmp_path, make_synthetic_repo, cap
 
     out = capsys.readouterr().out
     assert "(skipped: applies_if has_dev_dependency=['pytest-cov'])" in out
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("has_dependency", "anyio"),
+        ("any_dependency", "pandera"),
+        ("any_file", "mkdocs.yml"),
+        # Regression: check kept its own copy of the list keys, which lacked these two
+        # and printed ``(skipped: has_ml_stack=False)``.
+        ("has_ml_stack", "torch"),
+        ("any_ml_stack", "tensorflow"),
+    ],
+)
+def test_skip_reason_quotes_the_dependency_and_any_file_keys(
+    key: str,
+    value: str,
+    tmp_path: Path,
+    make_synthetic_repo: Callable[..., Path],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """D23, D78(10): the gate as written, not a boolean fact named after the key."""
+    repo = make_synthetic_repo(tmp_path)
+    rules_dir = repo / "playbook" / "rules"
+    rules_dir.mkdir(parents=True, exist_ok=True)
+    (rules_dir / "gated.md").write_text(
+        f"---\nid: gated-rule\nname: Gated\ndescription: d\nscope: scoped\n"
+        f"skill: python-coding\npriority: 50\napplies_if:\n  {key}: [{value}]\n---\nBody\n",
+        encoding="utf-8",
+    )
+
+    assert _check.run(_ns(repo)) == 0
+
+    assert f"(skipped: applies_if {key}=['{value}'])" in capsys.readouterr().out
 
 
 def test_check_drift_section_reports_drift(tmp_path, make_synthetic_repo, capsys):

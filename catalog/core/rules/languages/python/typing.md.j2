@@ -24,7 +24,7 @@ Type hints aren't decoration — they're the cheapest documentation you can ship
 
 ## Generics
 
-{% if python_version is defined and python_version >= "3.12" %}
+{% if python_at_least("3.12") %}
 This project targets Python {{ python_version }}, so use **PEP 695** generic syntax. It is concise, scoped to the function/class that needs it, and removes the boilerplate `TypeVar` declarations.
 
 ```python
