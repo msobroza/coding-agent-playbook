@@ -1152,6 +1152,7 @@ class RuleFrontmatter:
     tags: list[str] = field(default_factory=list)
     lint_codes: dict[str, Any] = field(default_factory=dict)  # {warn, when}; §6.1.1
     skill: str | None = None  # owning skill; required for scoped, forbidden for always; §6.1.1
+    section: str | None = None  # kebab-case section of the skill's rule index (prU D21)
 
 
 @dataclass
