@@ -572,6 +572,24 @@ enabled together, naming both. Switching is a config change plus
 prints the enabled framework's roles, such as
 `framework mattpocock: clarify -> grill-me, debug -> diagnosing-bugs, …`.
 
+Every framework writes its document paths in one default layout: `CONTEXT.md`,
+`docs/adr`, `docs/specs`, `docs/plans` and so on. A `[layout]` table moves any of
+them (keys `glossary`, `context_map`, `adr`, `architecture`, `specs`, `plans`,
+`research`, `agents`, `scratch`; relative paths, no trailing `/`):
+
+```toml
+[layout]
+specs = "specs"
+```
+
+`playbook sync` then rewrites that default path prefix in every synced file
+(rule globs and hook path tables included), templates read the result as
+`layout.specs`, and `playbook validate` prints each rewrite as
+`layout: <file>: docs/specs -> specs (<count>)`. A framework whose text uses
+other paths maps them with `[layout_aliases]` in its `framework.toml`; sync
+applies those under the default layout too (superpowers maps its
+`docs/superpowers/specs/` and `plans/` this way).
+
 Use these top-level keys: they are the only ones the engine reads. Put them
 at the top of the file, above the first `[table]` header: the file
 `playbook init` writes ends with a `[detector_cache.frameworks]` table, so a

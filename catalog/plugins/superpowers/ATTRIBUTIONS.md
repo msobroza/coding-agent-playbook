@@ -59,7 +59,10 @@ plugin, marketplace, repository, or network access is needed at run time):
   (`verify`). The engine reads it to map the framework's roles and never writes
   it to the synced copies.
 - **Framework metadata added.** `framework.toml` at the pack root is new: it
-  marks the pack as a spec-driven framework named `superpowers`.
+  marks the pack as a spec-driven framework named `superpowers`, and its
+  `[layout_aliases]` map the skills' `docs/superpowers/specs/` and
+  `docs/superpowers/plans/` onto the repo's document layout when the engine
+  syncs them; the skill text is unchanged.
 - **Cross-skill references.** Namespaced `superpowers:<skill>` references were
   rewritten to the plain skill name (`<skill>`); all referenced skills ship in
   this pack.

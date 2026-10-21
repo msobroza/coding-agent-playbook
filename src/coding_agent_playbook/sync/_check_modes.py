@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
 
     from coding_agent_playbook.lockfile.model import Lockfile
+    from coding_agent_playbook.sync._dispatch import ProvenanceRecorder
     from coding_agent_playbook.sync.git_client import GitClient
     from coding_agent_playbook.validation.context import SyncContext
 
@@ -46,8 +47,11 @@ if TYPE_CHECKING:
 @contextlib.contextmanager
 def _rendered_scratch(
     ctx: SyncContext, prior: Lockfile | None
-) -> Iterator[tuple[Path, list[Path]]]:
-    """Render into an empty throwaway directory; yield ``(scratch_root, written)``.
+) -> Iterator[tuple[Path, ProvenanceRecorder]]:
+    """Render into an empty throwaway directory; yield ``(scratch_root, recorder)``.
+
+    ``recorder.written`` holds the rendered paths under ``scratch_root``;
+    ``recorder.layout_rewrites`` what the layout adapter rewrote in them (D71).
 
     Nothing from the working tree is copied (inputs are read in place through
     ``ctx``), so a dangling symlink, an unreadable data directory, a socket, a
@@ -66,8 +70,8 @@ def _rendered_scratch(
         # Skill-dir ownership is a property of the real tree, not the empty
         # scratch: skip exactly the dirs write mode would skip (SPEC §12.3).
         with deciding_ownership_against(ctx.repo_root):
-            written = _render_into(ctx, scratch, prior)[0].written
-        yield scratch, written
+            recorder = _render_into(ctx, scratch, prior)[0]
+        yield scratch, recorder
     finally:
         shutil.rmtree(scratch_dir, ignore_errors=True)
 
@@ -92,15 +96,15 @@ def _run_check(ctx: SyncContext, git: GitClient) -> int:
     missing or malformed managed ``.gitignore`` block. Never writes to the repo.
     """
     previous, lockfile_drift = _check_lockfile(ctx)
-    with _rendered_scratch(ctx, previous) as (scratch, written):
+    with _rendered_scratch(ctx, previous) as (scratch, recorder):
         drift = _sync_output.file_drift(
-            written,
+            recorder.written,
             scratch,
             ctx.repo_root,
             shared=_sync_output.shared_outputs(ctx.adapters),
             skill_roots=_sync_output.native_skill_roots(ctx.adapters),
         )
-        real_written = _on_real_tree(written, scratch, ctx.repo_root)
+        real_written = _on_real_tree(recorder.written, scratch, ctx.repo_root)
     stale = _stale_outputs(ctx, real_written)
     # Settled as in write mode, where cleanup_stale has already deleted ``stale``.
     plan = _leftover_policy(ctx, git, previous).plan([*real_written, *stale])
@@ -203,8 +207,8 @@ def _run_check_staged(ctx: SyncContext, git: GitClient) -> int:
     if not _passes_validation(ctx, lambda c: check_prompt_rule_calls(c.prompts_resolved)):
         return 1
     previous = _previous_lockfile(ctx)
-    with _rendered_scratch(ctx, previous) as (scratch, written):
-        real_written = _on_real_tree(written, scratch, ctx.repo_root)
+    with _rendered_scratch(ctx, previous) as (scratch, recorder):
+        real_written = _on_real_tree(recorder.written, scratch, ctx.repo_root)
     orphans = _sync_orphans.find_orphans(previous, real_written, ctx.repo_root)
     owned = [*real_written, *_sync_orphans.entry_paths(orphans, ctx.repo_root)]
     offenders = _sync_output.staged_generated_paths(staged, _ignore_entries(ctx, owned))

@@ -518,15 +518,16 @@ D71: a [layout] table in the committed config (glossary, context_map, adr, archi
 
 - `src/coding_agent_playbook/config (schema, model)`: [layout] table with defaults and validation (relative paths inside the repo, no '..', directories end without a slash)
 - `src/coding_agent_playbook/sync (render or writer step)`: prefix rewrite of synced text for changed layout keys and declared aliases
-- `src/coding_agent_playbook/rendering/jinja.py`: expose the resolved layout to templates
-- `src/coding_agent_playbook/validation`: per-file rewrite report
+- `src/coding_agent_playbook/rendering/session.py`: expose the resolved layout to templates (`TemplateContext`, which every template render goes through)
+- `src/coding_agent_playbook/sync/layout_preview.py` and `commands/validate.py`: per-file rewrite report, from the sync step's own rewrite list on a scratch render
+- `catalog/plugins/superpowers/framework.toml`: `[layout_aliases]` for `docs/superpowers/specs/` and `docs/superpowers/plans/` (C-frameworks-layout drops them once the text uses the default paths)
 - test `tests/sync (layout adapter)`: default layout changes nothing byte-for-byte; specs = 'specs' rewrites docs/specs/ in core, superpowers and mattpocock_skills files; an overlay alias maps its own prefix; sync --check stays clean after a rewrite
 
 Acceptance:
-- With no [layout] table, every synced file is byte-identical to the output without the adapter.
+- With no [layout] table and no enabled framework declaring [layout_aliases], every synced file is byte-identical to the output without the adapter; a declared alias maps to its key's default path too, so a framework's own paths land in the document layout whatever the repo sets (D71).
 - validate lists every rewrite with file, from, to and count.
 - An absolute path, a '..' segment or an unknown key in [layout] is a validation error naming the key.
-- The layout adapter also rewrites default path prefixes in rule globs and in hook path tables, so skill nudges and the layout guard follow a custom [layout] (D78(12)).
+- The layout adapter also rewrites default path prefixes in rule globs and in hook path tables, so skill nudges and the layout guard follow a custom [layout] (D78(12)). The layout guard itself lands in L0-22, which depends on this ticket; L0-22's tests check that the guard follows a custom [layout].
 
 ### L0-24: feat(prompts): select a prompt set per repo with the prompts config key
 
