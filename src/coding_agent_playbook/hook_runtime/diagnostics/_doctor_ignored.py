@@ -1,7 +1,7 @@
 """``playbook-hook doctor``'s ignored-call rows (specs/prU-core-python-skills.md D79).
 
 The dispatcher stays inert on a foreign payload and on an event outside git,
-and leaves one ``ignored`` decision line for it (``dispatch._ignored``). Doctor
+and leaves one ``ignored`` decision line for it (``dispatch.ignored_calls``). Doctor
 shows one ``ignored:<reason>`` row per reason seen in the last ``--since``
 days, most recent first: the count, the last time, the harnesses and events.
 It reads the worktree's log and the user-level one (calls outside git).
@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.hook_runtime.diagnostics._doctor_checks import Check
-from coding_agent_playbook.hook_runtime.dispatch._ignored import (
+from coding_agent_playbook.hook_runtime.dispatch.ignored_calls import (
     IGNORED,
     NOT_A_REPO,
     ignored_state_roots,

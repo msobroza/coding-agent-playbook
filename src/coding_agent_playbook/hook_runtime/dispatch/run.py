@@ -6,7 +6,7 @@
 2. stdin, capped at 16 MiB (the rest drained unread), parsed by the
    harness's parser: a foreign payload is inert, a ``ContractFault`` goes to
    the failure policy, an event outside git is inert (K-12); an inert call
-   still leaves one ``ignored`` decision line (D79, ``_ignored``);
+   still leaves one ``ignored`` decision line (D79, ``ignored_calls``);
 3. ``guard_config.json``, trusted only through its lockfile digest
    (a ``ConfigFault`` asks once per session);
 4. selection (event, harness, ``PLAYBOOK_HOOKS_DISABLE``, matcher), ordered
@@ -38,12 +38,6 @@ from coding_agent_playbook.hook_runtime.dispatch._faults import (
     degraded_lines,
     fault_event,
 )
-from coding_agent_playbook.hook_runtime.dispatch._ignored import (
-    NOT_A_REPO,
-    ignored_line,
-    ignored_store,
-    worktree_store,
-)
 from coding_agent_playbook.hook_runtime.dispatch._pipeline import Shared, run_configured
 from coding_agent_playbook.hook_runtime.dispatch.escape import (
     HOOKS_VAR,
@@ -51,6 +45,12 @@ from coding_agent_playbook.hook_runtime.dispatch.escape import (
     settings_files,
 )
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
+from coding_agent_playbook.hook_runtime.dispatch.ignored_calls import (
+    NOT_A_REPO,
+    ignored_line,
+    ignored_store,
+    worktree_store,
+)
 from coding_agent_playbook.hook_runtime.dispatch.paths import find_repo
 from coding_agent_playbook.hook_runtime.dispatch.tail import DispatchTrace, Responder
 from coding_agent_playbook.hook_runtime.dispatch.watchdog import OutputGate
