@@ -87,7 +87,7 @@ def test_eval_context_static_fields_and_reserved() -> None:
     assert ctx.project is None
     assert ctx.judge is None
     assert ctx.artifact is None
-    assert ctx.samples == 1
+    assert ctx.judge_samples == 1
 
 
 def test_measure_setup_defaults_to_no_tools_and_a_one_megabyte_cap() -> None:

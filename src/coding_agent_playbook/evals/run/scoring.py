@@ -81,7 +81,7 @@ def score(
     candidate: Candidate,
     *,
     judge: JudgeLike | None = None,
-    samples: int = 1,
+    judge_samples: int = 1,
     fail_fast: bool = False,
 ) -> EvaluationReport:
     """Grade ``candidate`` for ``sample`` into one report + derive the trial verdict.
@@ -130,7 +130,7 @@ def score(
             tree=candidate.tree,
             baseline_tree=baseline.setup_snapshot,
             artifact=_graded_artifact(candidate),
-            samples=samples,
+            judge_samples=judge_samples,
             judge=judge,
             candidate_measurements=measured.candidate,
             baseline_measurements=measured.baseline,

@@ -681,8 +681,8 @@ def test_no_judge_preserves_deterministic_only_behaviour(tmp_path: Path) -> None
     assert result.passed is True
 
 
-def test_samples_threaded_through_to_the_judge(tmp_path: Path) -> None:
-    """``run_sample(samples=N)`` reaches the judge as the per-criterion ``n``."""
+def test_judge_samples_threaded_through_to_the_judge(tmp_path: Path) -> None:
+    """``run_sample(judge_samples=N)`` reaches the judge as the per-criterion ``n``."""
     from coding_agent_playbook.evals.judge import StubJudge
 
     sample_dir = tmp_path / "sample"
@@ -691,7 +691,7 @@ def test_samples_threaded_through_to_the_judge(tmp_path: Path) -> None:
 
     judge = StubJudge({"clarity": 0.8})
     FakeRunner(write_files({"mod.py": _REFACTORED})).run_sample(
-        sample, tmp_path / "scratch", judge=judge, samples=5
+        sample, tmp_path / "scratch", judge=judge, judge_samples=5
     )
     assert judge.calls == [("clarity", judge.calls[0][1], 5)]
 

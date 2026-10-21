@@ -675,6 +675,7 @@ changelog entry is v0.21.
 | A repo that wants Matt Pocock's skills (the new `mattpocock_skills` bundled plugin) | Opt in: add `coding_agent_playbook.plugins.mattpocock_skills` to `overlays_enabled`, run `playbook sync`, then `/setup-matt-pocock-skills`, gitignore `.scratch/` and disable the upstream Claude Code plugin. Nothing changes for a repo that does not enable it. See "New opt-in bundled plugin: mattpocock_skills". |
 | A repo with `coding_agent_playbook.plugins.python_design` (or the old `coding_agent_playbook.packs.python_design`) in `overlays_enabled` | Remove it, then run `playbook sync`: the bundled plugin is gone, and until then every command refuses the name as `no such bundled plugin`. See "Removed bundled plugin: python_design". |
 | A repo, overlay or bundled plugin that ships eval tasks, or code that imports the eval API | Rename them to eval samples: `eval_tasks/` to `eval_samples/`, each `task.toml` to `sample.toml` and the prompts' `eval_tasks:` key to `eval_samples:`; rename the Python names too. There is no alias. See "Eval tasks are now eval samples". |
+| Scripts or CI that run `playbook eval --run --samples N` | Use `--judge-samples N`. `--samples` still works in this release, prints a deprecation line on stderr and is removed in the next one. See "Eval tasks are now eval samples". |
 | Every consumer repo (`commit = false`) | Nothing: the next `playbook sync` writes `.agents/skills/`, deletes the unchanged `shared_skills/` copies and updates the managed block. |
 | A repo with `commit = true` | Run `playbook sync`, then `git rm -r shared_skills` and commit `.agents/skills/`. |
 | Tooling that points at `shared_skills/` | Point it at `.agents/skills/`. |
@@ -816,8 +817,15 @@ Until you rename them, an old `eval_tasks/` directory is ignored (its samples
 silently drop out of `playbook eval --list`), and a prompt that still declares
 `eval_tasks:` stops every command that loads prompts with
 `PromptFrontmatter.__init__() got an unexpected keyword argument 'eval_tasks'`.
-The flag `playbook eval --run --samples N` keeps its name: it is the number of
-judge samples averaged per rubric criterion, not a count of eval samples.
+The flag `playbook eval --run --samples N` is renamed `--judge-samples N`
+(D80): it is how many times the judge scores each rubric criterion before
+averaging, not a count of eval samples. `--samples` stays for this release as a
+deprecated alias hidden from `--help`: it still works, prints one stderr line
+naming `--judge-samples`, and passing both flags exits 2. It is removed in the
+next release. In Python, the matching keyword is renamed too:
+`EvalContext(samples=...)`, `HarnessRunner.run_sample(..., samples=...)` and
+`evals.run.scoring.score(..., samples=...)` now take `judge_samples=`, with no
+alias.
 
 ```bash
 # in each layer that ships eval tasks

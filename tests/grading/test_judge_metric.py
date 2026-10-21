@@ -9,7 +9,7 @@ it presents the structural :class:`JudgeLike` on the context as a
 path (``JudgeCheck`` via ``Rubric.of``) is untouched and unrelated to this.
 
 These tests are hermetic: ``StubJudge`` (unregistered) supplies deterministic
-scores and records its calls so the ``n=ctx.samples`` wiring is asserted.
+scores and records its calls so the ``n=ctx.judge_samples`` wiring is asserted.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from coding_agent_playbook.grading.types import EvalContext
 
 
 def _ctx(
-    *, judge: StubJudge | None, artifact: object = "ARTIFACT", samples: int = 1
+    *, judge: StubJudge | None, artifact: object = "ARTIFACT", judge_samples: int = 1
 ) -> EvalContext:
     """A minimal :class:`EvalContext` carrying just the judged fields."""
     return EvalContext(
@@ -31,7 +31,7 @@ def _ctx(
         label="",
         judge=judge,
         artifact=artifact,
-        samples=samples,
+        judge_samples=judge_samples,
     )
 
 
@@ -65,15 +65,15 @@ def test_measure_returns_one_measurement_with_stub_score() -> None:
     assert m.value == 0.75
 
 
-def test_measure_passes_samples_as_n() -> None:
+def test_measure_passes_judge_samples_as_n() -> None:
     judge = StubJudge({"clear naming": 1.0})
     metric = JudgeMetric("clear naming")
-    metric.measure(_ctx(judge=judge, artifact="THE-DIFF", samples=3))
+    metric.measure(_ctx(judge=judge, artifact="THE-DIFF", judge_samples=3))
     assert judge.calls == [("clear naming", "THE-DIFF", 3)]
 
 
-def test_measure_floors_samples_at_one() -> None:
+def test_measure_floors_judge_samples_at_one() -> None:
     judge = StubJudge({"clear naming": 1.0})
     metric = JudgeMetric("clear naming")
-    metric.measure(_ctx(judge=judge, samples=0))
+    metric.measure(_ctx(judge=judge, judge_samples=0))
     assert judge.calls[0][2] == 1

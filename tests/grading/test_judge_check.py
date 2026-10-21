@@ -5,7 +5,7 @@
 :class:`~coding_agent_playbook.grading.types.CheckResult`. These drive it with
 a :class:`~coding_agent_playbook.evals.judge.StubJudge` so no LLM/CLI is touched,
 asserting the score/pass/status/id shape, the ``available`` gate (a judge must be
-present), that ``score_criterion`` is called with ``n = ctx.samples``, and the
+present), that ``score_criterion`` is called with ``n = ctx.judge_samples``, and the
 ``score == threshold`` boundary (a tie passes).
 """
 
@@ -18,14 +18,16 @@ from coding_agent_playbook.grading.scope import CostTier, Determinism
 from coding_agent_playbook.grading.types import EvalContext, ScopeDetail
 
 
-def _ctx(judge: StubJudge | None, *, samples: int = 1, artifact: object = "ART") -> EvalContext:
+def _ctx(
+    judge: StubJudge | None, *, judge_samples: int = 1, artifact: object = "ART"
+) -> EvalContext:
     return EvalContext(
         module=None,
         source="",
         label="judge",
         judge=judge,
         artifact=artifact,
-        samples=samples,
+        judge_samples=judge_samples,
     )
 
 
@@ -99,19 +101,19 @@ def test_threshold_boundary_is_inclusive() -> None:
     assert detail.level == "ok"
 
 
-def test_score_criterion_called_with_ctx_samples() -> None:
+def test_score_criterion_called_with_ctx_judge_samples() -> None:
     judge = StubJudge({"c": 0.7})
     check = JudgeCheck("c")
-    ctx = _ctx(judge, samples=4, artifact="THE-ARTIFACT")
+    ctx = _ctx(judge, judge_samples=4, artifact="THE-ARTIFACT")
     check.grade(ctx, _empty())
 
     assert judge.calls == [("c", "THE-ARTIFACT", 4)]
 
 
-def test_samples_floored_at_one() -> None:
+def test_judge_samples_floored_at_one() -> None:
     judge = StubJudge({"c": 0.7})
     check = JudgeCheck("c")
-    ctx = _ctx(judge, samples=0)
+    ctx = _ctx(judge, judge_samples=0)
     check.grade(ctx, _empty())
-    # max(1, ctx.samples) ⇒ n is at least 1.
+    # max(1, ctx.judge_samples) ⇒ n is at least 1.
     assert judge.calls == [("c", "ART", 1)]

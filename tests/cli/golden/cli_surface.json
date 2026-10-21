@@ -625,16 +625,31 @@
         {
           "action": "_StoreAction",
           "option_strings": [
-            "--samples"
+            "--judge-samples"
           ],
-          "dest": "samples",
+          "dest": "judge_samples",
           "nargs": null,
           "const": null,
           "default": null,
           "type": "int",
           "choices": null,
           "required": false,
-          "help": "per-criterion judge samples to average (default: 1)",
+          "help": "how many times the judge scores each rubric criterion before averaging (default: 1)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--samples"
+          ],
+          "dest": "deprecated_samples",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": "int",
+          "choices": null,
+          "required": false,
+          "help": "==SUPPRESS==",
           "metavar": null
         },
         {

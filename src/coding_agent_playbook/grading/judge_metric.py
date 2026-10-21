@@ -66,11 +66,11 @@ class JudgeMetric(Metric):
 
         ``available`` guarantees a judge is present, so the call is unconditional;
         the artifact graded is ``ctx.artifact`` and the sample count is
-        ``max(1, ctx.samples)`` (mirroring
+        ``max(1, ctx.judge_samples)`` (mirroring
         :class:`~coding_agent_playbook.grading.judged.JudgeCheck`).
         """
         assert ctx.judge is not None  # guaranteed by available(); narrows for mypy
-        value = ctx.judge.score_criterion(self.criterion, ctx.artifact, n=max(1, ctx.samples))
+        value = ctx.judge.score_criterion(self.criterion, ctx.artifact, n=max(1, ctx.judge_samples))
         return [Measurement(evaluator=self.name, scope_key="judge", value=value)]
 
 

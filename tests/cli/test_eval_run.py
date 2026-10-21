@@ -18,6 +18,8 @@ import argparse
 import json
 from typing import TYPE_CHECKING, Any
 
+import pytest
+
 from coding_agent_playbook.commands import eval as _eval
 from coding_agent_playbook.evals import registry as _registry
 
@@ -40,7 +42,7 @@ def _ns(
     runner: str | None = None,
     fmt: str | None = None,
     judge: str | None = None,
-    samples: int | None = None,
+    judge_samples: int | None = None,
     full_scoring: bool = False,
 ) -> argparse.Namespace:
     return argparse.Namespace(
@@ -52,7 +54,7 @@ def _ns(
         runner=runner,
         format=fmt,
         judge=judge,
-        samples=samples,
+        judge_samples=judge_samples,
         full_scoring=full_scoring,
     )
 
@@ -251,24 +253,24 @@ def test_run_judge_available_is_passed_to_runner(
         scratch: Any,
         *,
         judge: Any = None,
-        samples: int = 1,
+        judge_samples: int = 1,
         fail_fast: bool = True,
     ) -> Any:
         captured["judge"] = judge
-        captured["samples"] = samples
+        captured["judge_samples"] = judge_samples
         captured["fail_fast"] = fail_fast
         return real_run_sample(
-            self, sample, scratch, judge=judge, samples=samples, fail_fast=fail_fast
+            self, sample, scratch, judge=judge, judge_samples=judge_samples, fail_fast=fail_fast
         )
 
     monkeypatch.setattr(_registry, "load_judge_class", lambda name: _AvailableStub)
     monkeypatch.setattr(HarnessRunner, "run_sample", _spy)
 
-    args = _ns(tmp_path, id_=_SHIPPED_SAMPLE, run=True, runner="fake", judge="llm", samples=4)
+    args = _ns(tmp_path, id_=_SHIPPED_SAMPLE, run=True, runner="fake", judge="llm", judge_samples=4)
     _eval.run(args)
 
     assert isinstance(captured["judge"], _AvailableStub)
-    assert captured["samples"] == 4
+    assert captured["judge_samples"] == 4
 
 
 # --------------------------------------------------------------------------- #
@@ -513,3 +515,106 @@ def test_run_json_reports_whether_judged_scores_are_uncalibrated(
     monkeypatch.setattr(_registry, "load_judge_class", lambda name: _available_judge(0.9))
     _eval.run(_ns(tmp_path, id_=_REVIEW_SAMPLE, run=True, runner="fake", fmt="json", judge="llm"))
     assert json.loads(capsys.readouterr().out)["uncalibrated_judge"] is True
+
+
+# --------------------------------------------------------------------------- #
+# --judge-samples and its deprecated --samples alias (D80)
+# --------------------------------------------------------------------------- #
+
+
+def _counting_judge(calls: list[int]) -> type:
+    """A judge class the CLI loads as ``--judge llm`` that records each ``n``."""
+    from coding_agent_playbook.evals.judge import StubJudge
+
+    class _Judge(StubJudge):
+        @classmethod
+        def available(cls) -> bool:
+            return True
+
+        def score_criterion(self, criterion: str, artifact: Any, n: int = 1) -> float:
+            calls.append(n)
+            return 0.9
+
+    return _Judge
+
+
+def _run_argv(repo: Path, *flags: str) -> int:
+    """Parse ``playbook eval`` argv through the real parser and run it."""
+    from coding_agent_playbook.cli.parser import build_parser
+
+    argv = ["eval", _REVIEW_SAMPLE, "--run", "--runner", "fake", "--judge", "llm"]
+    args = build_parser().parse_args([*argv, "--repo-root", str(repo), *flags])
+    return int(_eval.run(args))
+
+
+def test_judge_samples_reaches_the_judge_as_n(
+    tmp_path: Path, make_synthetic_repo: Any, capsys: Any, monkeypatch: Any
+) -> None:
+    """``--judge-samples 3`` scores each rubric criterion with ``n=3``."""
+    _seed(tmp_path, make_synthetic_repo)
+    calls: list[int] = []
+    monkeypatch.setattr(_registry, "load_judge_class", lambda name: _counting_judge(calls))
+    assert _run_argv(tmp_path, "--judge-samples", "3") == 0
+    assert calls and set(calls) == {3}
+    assert "--samples" not in capsys.readouterr().err
+
+
+def test_deprecated_samples_alias_still_works_and_warns_once(
+    tmp_path: Path, make_synthetic_repo: Any, capsys: Any, monkeypatch: Any
+) -> None:
+    """``--samples 3`` scores like ``--judge-samples 3`` and names the new flag once."""
+    _seed(tmp_path, make_synthetic_repo)
+    calls: list[int] = []
+    monkeypatch.setattr(_registry, "load_judge_class", lambda name: _counting_judge(calls))
+    assert _run_argv(tmp_path, "--samples", "3", "--format", "json") == 0
+    assert calls and set(calls) == {3}
+    alias = capsys.readouterr()
+    err_lines = [line for line in alias.err.splitlines() if line]
+    assert len(err_lines) == 1
+    assert "--judge-samples" in err_lines[0]
+    # Same report as the new spelling, so the alias cannot drift after resolution.
+    assert _run_argv(tmp_path, "--judge-samples", "3", "--format", "json") == 0
+    assert _timeless(alias.out) == _timeless(capsys.readouterr().out)
+
+
+def _timeless(report_json: str) -> dict[str, Any]:
+    """A parsed ``--format json`` report without its wall-clock duration."""
+    report: dict[str, Any] = json.loads(report_json)
+    report.pop("duration_seconds", None)
+    return report
+
+
+@pytest.mark.parametrize("flag", ["--judge-samples", "--samples"])
+@pytest.mark.parametrize("value", ["0", "-3"])
+def test_non_positive_judge_samples_is_a_usage_error(
+    tmp_path: Path, make_synthetic_repo: Any, capsys: Any, monkeypatch: Any, flag: str, value: str
+) -> None:
+    """A non-positive count is rejected with the offending value, never floored to 1."""
+    _seed(tmp_path, make_synthetic_repo)
+    calls: list[int] = []
+    monkeypatch.setattr(_registry, "load_judge_class", lambda name: _counting_judge(calls))
+    assert _run_argv(tmp_path, flag, value) == 2
+    assert f"--judge-samples must be >= 1, got {value}" in capsys.readouterr().err
+    assert calls == []
+
+
+def test_both_sample_flags_is_a_usage_error(
+    tmp_path: Path, make_synthetic_repo: Any, capsys: Any, monkeypatch: Any
+) -> None:
+    _seed(tmp_path, make_synthetic_repo)
+    calls: list[int] = []
+    monkeypatch.setattr(_registry, "load_judge_class", lambda name: _counting_judge(calls))
+    assert _run_argv(tmp_path, "--samples", "2", "--judge-samples", "3") == 2
+    err = capsys.readouterr().err
+    assert "--samples" in err and "--judge-samples" in err
+    assert calls == []
+
+
+def test_help_lists_judge_samples_but_not_samples(capsys: Any) -> None:
+    from coding_agent_playbook.cli.parser import build_parser
+
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["eval", "--help"])
+    help_text = capsys.readouterr().out
+    assert "--judge-samples" in help_text
+    assert "--samples" not in help_text

@@ -367,7 +367,7 @@ class HarnessRunner(ABC):
         scratch_dir: Path,
         *,
         judge: JudgeLike | None = None,
-        samples: int = 1,
+        judge_samples: int = 1,
         fail_fast: bool = True,
     ) -> SampleResult:
         """Run ``sample`` over ``N`` trials in ``scratch_dir`` and grade a :class:`SampleResult`.
@@ -396,7 +396,7 @@ class HarnessRunner(ABC):
         the trial pass rate (see :func:`_grade_aggregate`). Without one the sample
         verdict is the single trial's verdict.
 
-        ``judge``/``samples`` are keyword-only with R1-compatible defaults: with no
+        ``judge``/``judge_samples`` are keyword-only with R1-compatible defaults: with no
         ``judge`` each trial's report is deterministic-only (judged evaluators are
         skipped). ``fail_fast`` defaults to ``True`` — the per-trial scheduler's
         cost-saving short-circuit; ``--full-scoring`` flips it off, and
@@ -422,7 +422,12 @@ class HarnessRunner(ABC):
             # so the single-trial on-disk layout is unchanged).
             trial_dir = scratch_dir if n == 1 else scratch_dir / f"trial-{i}"
             trial = self._run_trial(
-                sample, prompt, trial_dir, judge=judge, samples=samples, fail_fast=fail_fast
+                sample,
+                prompt,
+                trial_dir,
+                judge=judge,
+                judge_samples=judge_samples,
+                fail_fast=fail_fast,
             )
             trials.append(trial.result)
             if i == 0:
@@ -437,7 +442,7 @@ class HarnessRunner(ABC):
         trial_dir: Path,
         *,
         judge: JudgeLike | None,
-        samples: int,
+        judge_samples: int,
         fail_fast: bool,
     ) -> _Trial:
         """Run one trial's fixed pipeline and grade it into a :class:`_Trial`.
@@ -454,7 +459,12 @@ class HarnessRunner(ABC):
         run = self._invoke_agent(prompt, trial_dir)
         candidate = capture(trial_dir, baseline, run.transcript)
         report = score(
-            sample, baseline, candidate, judge=judge, samples=samples, fail_fast=fail_fast
+            sample,
+            baseline,
+            candidate,
+            judge=judge,
+            judge_samples=judge_samples,
+            fail_fast=fail_fast,
         )
         return _Trial(
             result=TrialResult(report=report, verdict=report.passed),
