@@ -32,6 +32,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.judges._gate_weakening_files import FileWeakening
+from coding_agent_playbook.hook_runtime.judges._yaml_lines import unquoted, without_comment
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Sequence
@@ -65,7 +66,6 @@ _LOOSENING = re.compile(
     r"^[ \t]*(?:-[ \t]+)?(?:allow_failure[ \t]*:(?![ \t]*(?i:false|no|off)\b)"
     r"|when[ \t]*:[ \t]*[\"']?(?:manual|never|on_failure)\b)"
 )
-_COMMENT_START = re.compile(r"(?<![^ \t])#")
 _BLOCK_SCALAR = re.compile(r"^[|>][+-]?[0-9]?$")
 
 
@@ -114,7 +114,7 @@ def _blocks(text: str) -> list[_Block]:
     for start, end in pairwise([*starts, len(lines)]):
         top = _TOP_KEY.match(lines[start])
         if top is not None:
-            blocks.append(_Block(_unquoted(top[1]), top[2], tuple(lines[start + 1 : end])))
+            blocks.append(_Block(unquoted(top[1]), top[2], tuple(lines[start + 1 : end])))
     return blocks
 
 
@@ -157,7 +157,7 @@ def _section_items(inline: str, rest: Sequence[str], indent: int) -> list[str]:
     """The items of a ``script:`` key at ``indent``: inline, a block scalar, or ``- `` lines."""
     value = _normalized(inline)
     if value.startswith("[") and value.endswith("]"):
-        return [_unquoted(item.strip()) for item in value[1:-1].split(",") if item.strip()]
+        return [unquoted(item.strip()) for item in value[1:-1].split(",") if item.strip()]
     if value and not _BLOCK_SCALAR.match(value):
         return [value]
     body = list(_section_body(rest, indent))
@@ -267,19 +267,10 @@ def _weakening(path: str, what: str, name: str) -> FileWeakening:
 
 def _normalized(text: str) -> str:
     """One line as compared: no list dash, trailing comment or outer quotes."""
-    value = _without_comment(text.strip())
+    value = without_comment(text.strip())
     item = _ITEM.match(value)
     value = (item[2] if item is not None else value).strip()
-    return _unquoted(value)
-
-
-def _without_comment(text: str) -> str:
-    """``text`` up to its first `` #`` that sits outside quotes (``echo "a # b"`` keeps it)."""
-    for match in _COMMENT_START.finditer(text):
-        head = text[: match.start()]
-        if head.count('"') % 2 == 0 and head.count("'") % 2 == 0:
-            return head.rstrip()
-    return text
+    return unquoted(value)
 
 
 def _content(line: str) -> bool:
@@ -289,12 +280,6 @@ def _content(line: str) -> bool:
 
 def _indent(line: str) -> int:
     return len(line) - len(line.lstrip())
-
-
-def _unquoted(text: str) -> str:
-    if len(text) >= 2 and text[0] == text[-1] and text[0] in "\"'":
-        return text[1:-1]
-    return text
 
 
 def _joined(parts: Iterable[str]) -> str:

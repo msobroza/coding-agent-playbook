@@ -50,6 +50,10 @@ _DOCKER_RULE: Final = (
     "---\nid: docker-hygiene\nname: Docker hygiene\ndescription: Pin base images.\n"
     "scope: always\napplies_if:\n  has_dockerfile: true\n---\nPin base images.\n"
 )
+_CI_RULE: Final = (
+    "---\nid: ci-hygiene\nname: CI hygiene\ndescription: Pin CI images.\n"
+    "scope: always\napplies_if:\n  has_ci: true\n---\nPin CI images.\n"
+)
 
 
 class DetectSpy:
@@ -93,9 +97,12 @@ def detect_spy(monkeypatch: pytest.MonkeyPatch) -> DetectSpy:
 def _synced(repo: PackRepo, pyproject: str = _BASE, *, auto_sync: bool = False) -> PackRepo:
     """Write ``pyproject`` and render facts + rows exactly as sync would from it."""
     repo.write("pyproject.toml", pyproject)
-    docker_rule = repo.write("playbook/rules/docker-hygiene.md", _DOCKER_RULE)
+    local_rules = [
+        repo.write("playbook/rules/docker-hygiene.md", _DOCKER_RULE),
+        repo.write("playbook/rules/ci-hygiene.md", _CI_RULE),
+    ]
     source = FileSystemArtifactSource(repo_root=repo.root)
-    rules = [*source.list_rules(), Rule.from_markdown(docker_rule, "<repo-local>")]
+    rules = [*source.list_rules(), *(Rule.from_markdown(r, "<repo-local>") for r in local_rules)]
     facts = detector.detect(repo.root)
     rows = applicability_rows(
         rules=rules,
@@ -284,6 +291,22 @@ def test_new_dockerfile_flips_the_presence_flag(
     [item] = report.trace.combined.context
     assert 'rule "docker-hygiene" (source "<repo-local>")' in item
     assert ML_RULE not in item
+
+
+@pytest.mark.parametrize("ci_file", [".github/workflows/ci.yml", ".gitlab-ci.yml"])
+def test_new_ci_file_flips_has_ci_on_either_forge(
+    repo: PackRepo, deps: Callable[..., RuntimeDeps], ci_file: str
+) -> None:
+    """prF §14: a new GitLab pipeline activates the has_ci rules as a GitHub workflow does."""
+    content = "lint:\n  script: [ruff check .]\n"
+    repo.write(ci_file, content)
+    tool_input = {"file_path": str(repo.root / ci_file), "content": content}
+
+    report = _post(repo, deps(), "Write", tool_input)
+
+    [item] = report.trace.combined.context
+    assert 'rule "ci-hygiene" (source "<repo-local>")' in item
+    assert "docker-hygiene" not in item
 
 
 def test_requirements_edit_is_inert(

@@ -15,10 +15,11 @@ What it flags:
   escape pragmas of §E.4. A trailing reason (:data:`DEFAULT_JUSTIFICATION_REGEX`)
   after the match exempts a suppression, e.g.
   ``# type: ignore[attr-defined]  # stub gap``.
-- **Loosened config** (``_gate_weakening_files``): the protected TOML keys of
-  :data:`DEFAULT_PROTECTED_CONFIG_KEYS`, removed pre-commit hooks and workflow
-  steps, and any ``.gitleaks.toml`` change. These and the escape pragmas always
-  reach the user as notes (:attr:`ScanReport.notes`), justified or not.
+- **Loosened config** (``_gate_weakening_files``, ``_gitlab_ci_gates``,
+  ``_scanner_config_gates``): the protected TOML keys of
+  :data:`DEFAULT_PROTECTED_CONFIG_KEYS`, removed pre-commit hooks, workflow
+  steps and GitLab CI jobs, and secret or SAST scanners loosened. These and the
+  escape pragmas always reach the user as notes (:attr:`ScanReport.notes`).
 
 Eval fixtures and the playbook policy files (control-plane-guard's, so nothing
 is flagged twice) are skipped. A consumer's ``[hooks.gate-weakening-guard]``
@@ -47,6 +48,7 @@ from coding_agent_playbook.hook_runtime.judges._gate_weakening_files import (
     toml_loosenings,
 )
 from coding_agent_playbook.hook_runtime.judges._gitlab_ci_gates import gitlab_ci_weakenings
+from coding_agent_playbook.hook_runtime.judges._scanner_config_gates import scanner_weakenings
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping, Sequence
@@ -402,8 +404,9 @@ def _file_findings(
     pairs: Sequence[ConfigPair],
     rules: _Rules,
 ) -> list[Finding]:
-    added_texts = _texts(added)
-    weakenings = removal_weakenings(added_texts, _texts(removed))
+    added_texts, removed_texts = _texts(added), _texts(removed)
+    weakenings = removal_weakenings(added_texts, removed_texts)
+    weakenings += scanner_weakenings(added_texts, removed_texts, rules.ci_configs.matches)
     for pair in pairs:
         if _is_toml_config(pair.path):
             weakenings += toml_loosenings(pair.path, pair.before, pair.after, rules.protected_keys)

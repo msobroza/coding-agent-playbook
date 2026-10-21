@@ -282,3 +282,34 @@ def test_scan_policy_reads_ci_config_globs(tmp_path: Path) -> None:
     policy = scan_policy({"ci_config_globs": ["ci/*.gitlab-ci.yml"]}, str(tmp_path))
 
     assert policy.ci_config_globs[-1] == "ci/*.gitlab-ci.yml"
+
+
+# --- scanner settings (prF §14) -----------------------------------------------------------------
+
+
+def test_a_changed_gitlab_sast_ruleset_blocks(
+    repo: PackRepo, deps: Callable[..., RuntimeDeps], tmp_path: Path
+) -> None:
+    git = _diff((".gitlab/sast-ruleset.toml", 2, "  [[semgrep.ruleset]]"))
+
+    report = _stop(repo, deps, git, tmp_path)
+
+    assert report.trace.combined.decision is Decision.DENY
+    assert reason_lines(report)[1] == (
+        '[gate-integrity] ".gitlab/sast-ruleset.toml" scanner-config-changed: '
+        '".gitlab/sast-ruleset.toml changed"'
+    )
+
+
+def test_a_workflow_excluding_paths_from_secret_detection_blocks(
+    repo: PackRepo, deps: Callable[..., RuntimeDeps], tmp_path: Path
+) -> None:
+    git = _diff((".github/workflows/ci.yml", 4, "  SECRET_DETECTION_EXCLUDED_PATHS: src/"))
+
+    report = _stop(repo, deps, git, tmp_path)
+
+    assert report.trace.combined.decision is Decision.DENY
+    assert reason_lines(report)[1] == (
+        '[gate-integrity] ".github/workflows/ci.yml" scanner-loosened-in-ci: '
+        '"sets SECRET_DETECTION_EXCLUDED_PATHS: src/"'
+    )
