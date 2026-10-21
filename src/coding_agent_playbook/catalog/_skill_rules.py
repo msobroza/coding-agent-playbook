@@ -68,6 +68,19 @@ def iter_skill_dirs(skills_root: Path) -> Iterator[tuple[Path, Path]]:
             yield skill_dir, skill_md
 
 
+def read_skill_md(skill_md: Path) -> Skill:
+    """The frontmatter and body of ``skill_md`` as a bare ``Skill`` (no scripts, no layer).
+
+    The one parse that :func:`declared_skill_id` and the R4 layout check share.
+    Raises ``ValueError`` or ``yaml.YAMLError`` when its frontmatter cannot be read.
+
+    Example: ``read_skill_md(Path("catalog/core/skills/python-coding/SKILL.md")).frontmatter["id"]``
+    -> ``"python-coding"``.
+    """
+    frontmatter, body = split_frontmatter(skill_md.read_text(encoding="utf-8"))
+    return Skill(frontmatter, body, None, None, "")
+
+
 def declared_skill_id(skill_md: Path) -> str:
     """The id the skill at ``skill_md`` merges under (``skills.naming.skill_id_of``).
 
@@ -75,8 +88,7 @@ def declared_skill_id(skill_md: Path) -> str:
 
     Example: ``declared_skill_id(Path("catalog/core/skills/python-coding/SKILL.md"))`` -> ``"python-coding"``.
     """
-    frontmatter, body = split_frontmatter(skill_md.read_text(encoding="utf-8"))
-    return skill_id_of(Skill(frontmatter, body, None, None, ""))
+    return skill_id_of(read_skill_md(skill_md))
 
 
 def iter_skill_rule_files(skills_root: Path) -> Iterator[tuple[str, Path]]:

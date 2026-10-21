@@ -7,34 +7,36 @@ each finding naming the file, the offending value and the fix:
 - R2: a rule's file name minus ``.md``/``.md.j2`` is its id, for every rule in
   a skill's ``rules/`` (all layers) and every engine-layer always rule, which
   may carry a two-digit priority prefix (``10-python-house-style.md``). Overlay
-  and repo-local ``<layer>/rules/`` files keep free names. An engine scoped
-  rule still in ``<engine>/rules/`` is left to R5 (L0-07, D36), whose move hint
-  names ``<id>.md``, so the engine validates clean before the move.
+  and local-layer ``<layer>/rules/`` files keep free names. An engine scoped
+  rule still in ``<engine>/rules/`` is left to R5 (L0-07, D36), which rejects
+  it outright with a move hint naming ``<id>.md``; once it sits in a skill, R2
+  checks its name, so every engine-layer rule ends up covered.
 - R3: two files of one layer with one id (the later silently wins the merge);
   one id in two layers is an override.
 - R4: a ``skills/<dir>/rules/`` whose ``<dir>`` has no ``SKILL.md`` or whose
   ``SKILL.md`` has no ``playbook:`` block (discovery would skip it silently).
 - R6: an always rule inside a skill's ``rules/`` gets a move hint (instead of
-  V3's "remove 'skill'", which ``validation._skills`` skips for it).
+  V3's "remove 'skill'", which ``validation._skills`` skips for it). It is that
+  file's only finding: R1's and R2's hints would contradict the move.
 """
 
 from __future__ import annotations
 
 import re
 from collections import defaultdict
-from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 import yaml
 
-from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
-from coding_agent_playbook.catalog._skill_rules import find_skill_md
+from coding_agent_playbook.catalog._skill_rules import find_skill_md, read_skill_md
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource, engine_package_of
 from coding_agent_playbook.skills.document import PLAYBOOK_BLOCK_KEY
+from coding_agent_playbook.skills.naming import skill_id_of
 from coding_agent_playbook.validation.findings import ValidationError
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from pathlib import Path
 
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.catalog.source import ArtifactSource
@@ -57,13 +59,10 @@ def check_rule_layout(rules: Sequence[Rule], source: ArtifactSource) -> list[Val
     """
     engine = engine_package_of(source)
     per_file = [
-        ValidationError(path=_where(rule), message=message)
+        ValidationError(path=str(path), message=message)
         for rule in rules
-        for message in [
-            *_foreign_skill_problem(rule),
-            *_file_name_problem(rule, engine),
-            *_always_in_skill_problem(rule),
-        ]
+        if (path := rule.source_path) is not None
+        for message in _file_problems(rule, path, engine)
     ]
     return [*per_file, *_duplicate_id_errors(rules), *_skill_rules_dir_errors(source)]
 
@@ -72,31 +71,35 @@ def _where(rule: Rule) -> str:
     return str(rule.source_path or rule.frontmatter.id)
 
 
-def _foreign_skill_problem(rule: Rule) -> list[str]:
+def _file_problems(rule: Rule, path: Path, engine: str) -> list[str]:
+    """R6 alone when it applies (its move makes R1 and R2 moot), else R1 and R2."""
+    move = _always_in_skill_problem(rule, path)
+    if move:
+        return move
+    return [*_foreign_skill_problem(rule, path), *_file_name_problem(rule, path, engine)]
+
+
+def _foreign_skill_problem(rule: Rule, path: Path) -> list[str]:
     """R1: an in-skill rule's ``skill:`` names another skill than its directory's."""
     home, declared = rule.home_skill, rule.frontmatter.skill
     if home is None or rule.skill_from_location or declared == home:
         return []
+    target = _layer_root(path) / "skills" / str(declared) / "rules" / path.name
     return [
         f"declares 'skill: {declared}' but lies in the rules/ directory of skill {home!r}, "
-        "which sets its membership; remove the 'skill:' line, or move the file to "
-        f"skills/{declared}/rules/{_file_name(rule)}"
+        f"which sets its membership; remove the 'skill:' line, or move the file to {target}"
     ]
 
 
-def _file_name(rule: Rule) -> str:
-    return rule.source_path.name if rule.source_path is not None else f"{rule.frontmatter.id}.md"
-
-
-def _file_name_problem(rule: Rule, engine: str) -> list[str]:
+def _file_name_problem(rule: Rule, path: Path, engine: str) -> list[str]:
     """R2: an in-skill or engine-layer rule's file name minus its suffix is its id.
 
     An engine scoped rule still under ``<engine>/rules/`` is left alone: R5
     (L0-07, D36) rejects it with a hint that already names ``<id>.md``.
     """
-    if rule.source_path is None or not _name_is_checked(rule, engine):
+    if not _name_is_checked(rule, engine):
         return []
-    name, rule_id = rule.source_path.name, rule.frontmatter.id
+    name, rule_id = path.name, rule.frontmatter.id
     suffix = next((s for s in _SUFFIXES if name.endswith(s)), "")
     stem = name.removesuffix(suffix)
     always = rule.frontmatter.scope == "always"
@@ -173,30 +176,30 @@ def _skill_dir_problem(skill_dir: Path, layer_rules: Path) -> list[str]:
             f"{layer_rules}/ with 'skill: <skill-id>'"
         ]
     try:
-        frontmatter, _ = split_frontmatter(skill_md.read_text(encoding="utf-8"))
+        skill = read_skill_md(skill_md)
     except (ValueError, yaml.YAMLError):
         return []  # list_skills raises on this SKILL.md itself, so it is reported there
-    if PLAYBOOK_BLOCK_KEY in frontmatter:
+    if PLAYBOOK_BLOCK_KEY in skill.frontmatter:
         return []
-    skill_id = frontmatter.get("id", skill_dir.name)
     return [
-        f"skill {skill_id!r} has a rules/ directory but its SKILL.md declares no "
+        f"skill {skill_id_of(skill)!r} has a rules/ directory but its SKILL.md declares no "
         f"'{PLAYBOOK_BLOCK_KEY}:' block, so it cannot take member rules; add a "
-        f"'{PLAYBOOK_BLOCK_KEY}:' block (e.g. '{PLAYBOOK_BLOCK_KEY}: {{files: Any Python file}}') "
+        f"'{PLAYBOOK_BLOCK_KEY}:' block (e.g. "
+        f"'{PLAYBOOK_BLOCK_KEY}: {{files: <which files this skill covers>}}') "
         f"to {skill_md}, or move the rules out"
     ]
 
 
-def _always_in_skill_problem(rule: Rule) -> list[str]:
+def _always_in_skill_problem(rule: Rule, path: Path) -> list[str]:
     """R6: an always rule in a skill's ``rules/`` belongs in its layer's ``rules/``.
 
     Replaces V3's "remove 'skill'" for this case: the directory, not a key, made
     it a member (``validation._skills`` skips V3 for it).
     """
     home = rule.home_skill
-    if home is None or rule.source_path is None or rule.frontmatter.scope != "always":
+    if home is None or rule.frontmatter.scope != "always":
         return []
-    target = _layer_rules_dir(rule.source_path) / rule.source_path.name
+    target = _layer_root(path) / "rules" / path.name
     return [
         f"always rule {rule.frontmatter.id!r} lies in the rules/ directory of skill {home!r}, "
         f"but always rules are never skill members; move it to {target}, or set "
@@ -204,14 +207,16 @@ def _always_in_skill_problem(rule: Rule) -> list[str]:
     ]
 
 
-def _layer_rules_dir(path: Path) -> Path:
-    """``<layer>/rules`` for a file under ``<layer>/skills/<dir>/rules/**``.
+def _layer_root(path: Path) -> Path:
+    """``<layer>`` for a file under ``<layer>/skills/<dir>/rules/**``, the only place a
+    rule with a ``home_skill`` comes from (``catalog._skill_rules``).
 
-    A path of another shape (an in-memory rule) gets the literal ``<layer>/rules``.
-
-    Example: ``_layer_rules_dir(Path("playbook/skills/s/rules/a/x.md"))`` -> ``Path("playbook/rules")``.
+    Example: ``_layer_root(Path("playbook/skills/s/rules/a/x.md"))`` -> ``Path("playbook")``.
     """
     for parent in path.parents:
         if parent.name == "rules" and parent.parent.parent.name == "skills":
-            return parent.parent.parent.parent / "rules"
-    return Path("<layer>") / "rules"
+            return parent.parent.parent.parent
+    raise ValueError(
+        f"in-skill rule {path} is not under <layer>/skills/<dir>/rules/; "
+        "a rule with a home skill must come from a skill's rules/ directory"
+    )

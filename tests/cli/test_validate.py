@@ -566,7 +566,9 @@ def test_config_less_context_in_the_engine_checkout_walks_the_engine_once(tmp_pa
     assert f"OK {_engine_artifact_count(tmp_path)} artifacts validated" in capsys.readouterr().out
 
 
-def test_config_less_validate_of_the_engine_checkout_has_no_layout_finding(capsys):
+def test_config_less_validate_of_the_engine_checkout_has_no_layout_finding(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     """prU L0-06: the layout checks add no finding to the engine's own catalog.
 
     Core scoped rules still sit in ``catalog/core/rules/`` under their old file
@@ -580,8 +582,10 @@ def test_config_less_validate_of_the_engine_checkout_has_no_layout_finding(capsy
 
 
 def test_validate_reports_an_in_skill_always_rule_once_with_a_move_hint(
-    tmp_path, make_synthetic_repo, capsys
-):
+    tmp_path: Path,
+    make_synthetic_repo: Callable[..., Path],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     """R6 replaces V3's "remove 'skill'" for an always rule a skill's rules/ holds."""
     repo = make_synthetic_repo(tmp_path)
     skill_dir = repo / "playbook" / "skills" / "mine"

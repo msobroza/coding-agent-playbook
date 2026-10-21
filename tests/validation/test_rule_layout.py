@@ -7,13 +7,14 @@ the fix, asserted verbatim.
 
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
 
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
-from coding_agent_playbook.validation._rule_layout import check_rule_layout
+from coding_agent_playbook.validation._rule_layout import _layer_root, check_rule_layout
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -48,8 +49,6 @@ def engine(make_package: Callable[..., str]) -> str:
 
 
 def _engine_layer(engine: str) -> Path:
-    import importlib
-
     module = importlib.import_module(engine)
     assert module.__file__ is not None
     return Path(module.__file__).parent / "resources"
@@ -82,7 +81,7 @@ def test_r1_an_in_skill_rule_naming_another_skill_fails(tmp_path: Path, engine: 
             str(path),
             "declares 'skill: t' but lies in the rules/ directory of skill 's', which sets "
             "its membership; remove the 'skill:' line, or move the file to "
-            "skills/t/rules/r.md",
+            f"{tmp_path / 'playbook' / 'skills' / 't' / 'rules' / 'r.md'}",
         )
     ]
 
@@ -100,7 +99,7 @@ def test_r2_in_skill_and_engine_names_equal_to_the_id_pass(tmp_path: Path, engin
     assert _check(tmp_path, engine) == []
 
 
-def test_r2_overlay_and_repo_local_rules_dirs_keep_free_names(tmp_path: Path, engine: str) -> None:
+def test_r2_overlay_and_local_layer_rules_dirs_keep_free_names(tmp_path: Path, engine: str) -> None:
     _rule(tmp_path / "playbook" / "rules" / "anything.md", "r", extra="skill: s\n")
     _skill(tmp_path / "playbook", "s")
 
@@ -196,7 +195,7 @@ def test_r4_a_rules_dir_in_a_skill_without_a_playbook_block_fails(
             str(rules_dir),
             "skill 'plain' has a rules/ directory but its SKILL.md declares no 'playbook:' "
             "block, so it cannot take member rules; add a 'playbook:' block (e.g. "
-            "'playbook: {files: Any Python file}') to "
+            "'playbook: {files: <which files this skill covers>}') to "
             f"{skill_dir / 'SKILL.md'}, or move the rules out",
         )
     ]
@@ -234,3 +233,27 @@ def test_r6_an_always_rule_in_a_skill_rules_dir_gets_a_move_hint(
             "it in the skill",
         )
     ]
+
+
+def test_r6_is_the_only_finding_for_a_misnamed_foreign_always_rule_in_a_skill(
+    tmp_path: Path, engine: str
+) -> None:
+    """R1's "move to skills/t" and R2's "rename" would contradict R6's move hint."""
+    rules_dir = _skill(tmp_path / "playbook", "s") / "rules"
+    path = _rule(rules_dir / "1-house.md", "house", scope="always", extra="skill: t\n")
+
+    assert _messages(_check(tmp_path, engine)) == [
+        (
+            str(path),
+            "always rule 'house' lies in the rules/ directory of skill 's', but always rules "
+            "are never skill members; move it to "
+            f"{tmp_path / 'playbook' / 'rules' / '1-house.md'}, or set 'scope: scoped' to "
+            "keep it in the skill",
+        )
+    ]
+
+
+def test_the_layer_of_an_in_skill_rule_outside_a_skill_rules_dir_is_an_error() -> None:
+    """A home skill only comes from <layer>/skills/<dir>/rules/; any other path is a bug."""
+    with pytest.raises(ValueError, match=r"x\.md is not under <layer>/skills/<dir>/rules/"):
+        _layer_root(Path("playbook/rules/x.md"))
