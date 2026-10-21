@@ -16,8 +16,9 @@ import coding_agent_playbook
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.validation import context as _validate_context
+from coding_agent_playbook.validation._rule_layout import check_rule_layout
 from coding_agent_playbook.validation.checks import _check_output_contracts
-from tests._catalog import CORE_ROOT
+from tests._catalog import CORE_ROOT, REPO_ROOT
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -563,3 +564,45 @@ def test_config_less_context_in_the_engine_checkout_walks_the_engine_once(tmp_pa
     assert ctx.overlay_collisions == []
     assert _validate.run(_ns(tmp_path)) == 0
     assert f"OK {_engine_artifact_count(tmp_path)} artifacts validated" in capsys.readouterr().out
+
+
+def test_config_less_validate_of_the_engine_checkout_has_no_layout_finding(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """prU L0-06: the layout checks add no finding to the engine's own catalog.
+
+    Core scoped rules still sit in ``catalog/core/rules/`` under their old file
+    names until L0-07 moves them; R2 leaves those to R5.
+    """
+    ctx = _validate_context.config_less_context(REPO_ROOT)
+
+    assert check_rule_layout(ctx.rule_definitions, ctx.artifact_source) == []
+    assert _validate.run(_ns(REPO_ROOT)) == 0
+    assert "FAIL" not in capsys.readouterr().out
+
+
+def test_validate_reports_an_in_skill_always_rule_once_with_a_move_hint(
+    tmp_path: Path,
+    make_synthetic_repo: Callable[..., Path],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """R6 replaces V3's "remove 'skill'" for an always rule a skill's rules/ holds."""
+    repo = make_synthetic_repo(tmp_path)
+    skill_dir = repo / "playbook" / "skills" / "mine"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nid: mine\ndescription: Mine.\nplaybook:\n  files: Any file\n---\nBody\n",
+        encoding="utf-8",
+    )
+    (skill_dir / "rules").mkdir()
+    (skill_dir / "rules" / "house.md").write_text(
+        "---\nid: house\nname: House\ndescription: d\nscope: always\n---\nBody\n",
+        encoding="utf-8",
+    )
+
+    assert _validate.run(_ns(repo)) == 1
+
+    fails = [line for line in capsys.readouterr().out.splitlines() if line.startswith("FAIL")]
+    assert len(fails) == 1
+    assert "always rule 'house' lies in the rules/ directory of skill 'mine'" in fails[0]
+    assert str(repo / "playbook" / "rules" / "house.md") in fails[0]

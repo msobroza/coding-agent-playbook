@@ -9,7 +9,8 @@ composition before ``playbook sync`` writes anything:
 
 - :func:`check_skill_membership`, per rule: a skill is required on a scoped
   rule (V1, with V2's hint when the rule overrides one that named a skill) and
-  forbidden on an always rule (V3), must be a skill id string (V4) naming a
+  forbidden on an always rule (V3; R6 in ``validation._rule_layout`` covers an
+  always rule inside a skill's ``rules/``), must be a skill id string (V4) naming a
   skill that exists after the layer merge (V5) and declares a ``playbook:``
   block (V14, E6); a member rule's own id must be a skill-safe file name (V6,
   E14).
@@ -186,6 +187,8 @@ def _overridden_skill_hint(rule: Rule, all_rules: Sequence[Rule]) -> str:
 def _membership_problems(rule: Rule, skills_by_id: Mapping[str, Skill]) -> list[str]:
     """V3, then V4, then V6 and V5/V14 for one rule that sets ``skill``."""
     value: object = rule.frontmatter.skill
+    if rule.frontmatter.scope == "always" and rule.home_skill is not None:
+        return []  # R6 (validation._rule_layout) gives the move hint for its location
     if rule.frontmatter.scope == "always":
         return [
             f"'skill: {value}' is not allowed on an always rule (always rules stay in "
