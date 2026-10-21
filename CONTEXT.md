@@ -54,6 +54,10 @@ _Avoid_: command, template
 One complete version of the core prompts, chosen per consumer repo; the same prompt names render from whichever set the repo selects.
 _Avoid_: prompt variant, v2 prompts
 
+**Twin**:
+The prompt of another prompt set with the same id as a v1 prompt; it replaces that prompt's text only, keeping its name, slash command and included rules. Not a **Guard twin**.
+_Avoid_: prompt copy, prompt override
+
 **Hook**:
 An assistant lifecycle handler that runs on agent events (before a tool, after an edit, at stop) and can block, warn or feed back to the agent.
 _Avoid_: bare "hook" for the git kind; say **pre-commit hook**

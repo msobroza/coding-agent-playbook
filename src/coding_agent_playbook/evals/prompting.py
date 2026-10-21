@@ -35,7 +35,12 @@ from jinja2 import TemplateError
 
 from coding_agent_playbook import __version__ as _engine_version
 from coding_agent_playbook.artifacts.prompt import Prompt
-from coding_agent_playbook.catalog.prompt_sets import DEFAULT_PROMPT_SET, prompt_set_dir
+from coding_agent_playbook.catalog.prompt_sets import (
+    DEFAULT_PROMPT_SET,
+    PromptSet,
+    prompt_set_dir,
+    require_prompt_set,
+)
 from coding_agent_playbook.catalog.resolve import OverlayResolver
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.detector.facts import detect
@@ -94,13 +99,14 @@ class PromptResolutionError(RuntimeError):
 
 
 def render_prompt(
-    sample: EvalSample, *, strict: bool = False, prompt_set: str = DEFAULT_PROMPT_SET
+    sample: EvalSample, *, strict: bool = False, prompt_set: PromptSet = DEFAULT_PROMPT_SET
 ) -> str:
     """Resolve ``sample.prompt_id`` to its :class:`Prompt` and render it like sync.
 
     ``prompt_set`` picks the prompt set (D76): samples grade v1, and the opt-in
     eval comparison (D37) can render another set. As in sync, a prompt with no
     twin in that set keeps its v1 text; the repo's ``prompts`` key is never read.
+    An unknown ``prompt_set`` raises :class:`ValueError` rather than rendering v1.
     The rendered body and its ``## Reference rules`` appendix are followed by
     ``sample.invocation.prompt_args``. When the prompt cannot be resolved at all
     (e.g. an out-of-tree test sample) ``strict`` decides: ``False`` (the
@@ -113,7 +119,7 @@ def render_prompt(
 
         render_prompt(sample, strict=True)  # "You are reviewing…\\n\\nreview src/x.py"
     """
-    prompt = _resolve_prompt(sample, prompt_set)
+    prompt = _resolve_prompt(sample, require_prompt_set(prompt_set))
     if prompt is None:
         return _placeholder(sample, strict=strict)
     body = _render_with_references(sample, prompt)
@@ -255,7 +261,9 @@ def _resolved_rules(sample: EvalSample) -> list[Rule]:
 # --------------------------------------------------------------------------- #
 
 
-def _resolve_prompt(sample: EvalSample, prompt_set: str = DEFAULT_PROMPT_SET) -> Prompt | None:
+def _resolve_prompt(
+    sample: EvalSample, prompt_set: PromptSet = DEFAULT_PROMPT_SET
+) -> Prompt | None:
     """Best-effort lookup of the :class:`Prompt` for ``sample.prompt_id`` in ``prompt_set``.
 
     Scans the ``prompts/`` directory of the layer the sample belongs to (engine,

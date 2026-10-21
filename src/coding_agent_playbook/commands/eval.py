@@ -126,6 +126,7 @@ def configure(parser: argparse.ArgumentParser) -> None:
         "--prompt-set",
         choices=PROMPT_SETS,
         dest="prompt_set",
+        default=DEFAULT_PROMPT_SET,
         help="prompt set to render the sample's prompt from (default: v1; "
         "the repo's prompts key is not read)",
     )
@@ -274,7 +275,7 @@ def _run_sample_cli(args: argparse.Namespace, repo_root: Path) -> int:
                 judge=judge,
                 judge_samples=judge_samples,
                 fail_fast=fail_fast,
-                prompt_set=getattr(args, "prompt_set", None) or DEFAULT_PROMPT_SET,
+                prompt_set=args.prompt_set,
             )
     except (PromptResolutionError, JudgeError) as exc:
         # Neither a pass nor a fail: no verdict exists, so never exit 0/1 here.

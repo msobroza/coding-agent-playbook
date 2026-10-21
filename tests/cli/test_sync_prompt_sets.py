@@ -112,3 +112,23 @@ def test_validate_refuses_a_v2_prompt_without_a_v1_twin(
 
     assert validate_cmd.run(argparse.Namespace(repo_root=str(repo))) == 1
     assert f"{orphan}: v2 prompt 'orphan' has no v1 twin" in capsys.readouterr().out
+
+
+def test_validate_checks_the_unrendered_v2_set_like_the_rendered_one(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Under the default v1 the v2 twins are not rendered, yet a broken one still fails."""
+    repo = _repo(tmp_path / "broken", make_synthetic_repo, with_v2=False)
+    twin = repo / "playbook" / "prompts" / "v2" / "tidy-up.md"
+    twin.parent.mkdir(parents=True)
+    twin.write_text(
+        "---\nid: tidy-up\nname: Tidy Up\ndescription: A repo-local prompt\nslash: tidy-up\n"
+        "output_contract: ['(']\n---\n{{ rule('pytest') }}\n",
+        encoding="utf-8",
+    )
+
+    assert validate_cmd.run(argparse.Namespace(repo_root=str(repo))) == 1
+    out = capsys.readouterr().out
+    assert f'{twin}: body calls {{{{ rule("pytest") }}}}' in out
+    assert f"{twin}: output_contract pattern '('" in out
+    assert "validation failed with 2 error(s)" in out

@@ -16,6 +16,9 @@ prompt in ``prompts/v2/`` has a v1 twin of the same id, keeping its name, slash
 command and ``includes_rules``, and once a layer has a v2 set every v1 prompt of
 the layer has a twin there.
 
+``unrendered_prompts`` lists the prompts of those sets that the sync leaves
+out, so ``checks`` can run its per-prompt checks on every set.
+
 ``check_prompt_rule_calls`` is the first check alone, for ``playbook sync
 --check-staged``, which is not validate-gated; sync imports it from outside the
 package, so it is public, unlike the other check modules beside ``checks``.
@@ -25,26 +28,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final, TypeGuard
 
-from coding_agent_playbook.catalog.prompt_sets import (
-    DEFAULT_PROMPT_SET,
-    PROMPT_SETS,
-    prompt_set_dir,
-)
-from coding_agent_playbook.catalog.source import (
-    FileSystemArtifactSource,
-    layer_prompts,
-    prompt_set_prompts,
-)
 from coding_agent_playbook.hooks.contract.findings import did_you_mean
 from coding_agent_playbook.rendering.jinja import RULE_CALL_RE
 from coding_agent_playbook.validation.findings import ValidationError
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Sequence
-    from pathlib import Path
 
     from coding_agent_playbook.artifacts.prompt import Prompt
-    from coding_agent_playbook.catalog.source import ArtifactSource
+    from coding_agent_playbook.catalog.source import ArtifactSource, PromptSetLayer
 
 #: How a well-formed ``includes_rules`` looks, quoted in the shape error.
 _INCLUDES_RULES_SHAPE: Final = "expected a list of rule ids, e.g. ['python-typing', 'pytest']"
@@ -99,33 +91,33 @@ def check_prompt_rule_calls(prompts: Sequence[Prompt]) -> list[ValidationError]:
 def check_prompt_set_twins(artifact_source: ArtifactSource) -> list[ValidationError]:
     """D76: every layer's later prompt sets are complete twins of its v1 prompts.
 
-    Only a filesystem source has prompt sets; any other source passes.
+    A source without prompt sets (:meth:`ArtifactSource.prompt_set_layers` is
+    empty) passes.
 
     Example::
 
         check_prompt_set_twins(ctx.artifact_source)
     """
-    if not isinstance(artifact_source, FileSystemArtifactSource):
-        return []
-    return [
-        error
-        for label, root in artifact_source.layer_roots("prompts")
-        for prompt_set in PROMPT_SETS[1:]
-        for error in _twin_errors(
-            layer_prompts(root, label, DEFAULT_PROMPT_SET),
-            prompt_set_prompts(root, label, prompt_set),
-            prompt_set=prompt_set,
-            set_dir=prompt_set_dir(root, prompt_set),
-        )
-    ]
+    return [error for layer in artifact_source.prompt_set_layers() for error in _twin_errors(layer)]
 
 
-def _twin_errors(
-    v1: Sequence[Prompt], twins: Sequence[Prompt], *, prompt_set: str, set_dir: Path
-) -> list[ValidationError]:
-    """One layer's twin findings for ``prompt_set``; none when the layer has no such set."""
-    if not twins:
-        return []
+def unrendered_prompts(artifact_source: ArtifactSource) -> list[Prompt]:
+    """The prompts of every layer's prompt sets that this sync does not render (D76).
+
+    Under the default v1 they are the v2 twins; under v2, the v1 prompts the twins
+    replace. ``playbook validate`` runs its per-prompt checks on them too, so a
+    broken prompt fails before a repo switches sets, not after.
+
+    Example::
+
+        unrendered_prompts(ctx.artifact_source)  # [] without a prompts/v2/ anywhere
+    """
+    return [prompt for layer in artifact_source.prompt_set_layers() for prompt in layer.unrendered]
+
+
+def _twin_errors(layer: PromptSetLayer) -> list[ValidationError]:
+    """One layer's twin findings for its prompt set."""
+    v1, twins, prompt_set, set_dir = layer.v1, layer.twins, layer.prompt_set, layer.set_dir
     by_id = {prompt.frontmatter.id: prompt for prompt in v1}
     twin_ids = {twin.frontmatter.id for twin in twins}
     errors = [

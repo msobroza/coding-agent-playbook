@@ -615,7 +615,7 @@
           "dest": "prompt_set",
           "nargs": null,
           "const": null,
-          "default": null,
+          "default": "v1",
           "type": null,
           "choices": [
             "v1",

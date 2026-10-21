@@ -294,7 +294,7 @@ Codex needs no adapter: it reads `AGENTS.md` and `.agents/skills/`.
 
 Choose the spec-driven framework with `playbook init --framework superpowers | mattpocock | none` (default `none`; it writes the committed `framework` key).
 
-Choose the prompt set with the top-level key `prompts = "v1"` or `prompts = "v2"` (default `v1`). The v2 prompts keep the v1 names and `includes_rules` and also tell the agent which skills to load and how to check its work; switching changes only the prompt text, so the command list stays the same, and a prompt with no v2 twin in `prompts/v2/` keeps its v1 text. Eval samples keep grading v1; `playbook eval <id> --run --prompt-set v2` grades v2.
+Choose the prompt set with the top-level key `prompts = "v1"` or `prompts = "v2"` (default `v1`). The v2 prompt set keeps the v1 names and `includes_rules` and also tells the agent which skills to load and how to check its work; switching changes only the prompt text, so the command list stays the same, and a prompt with no v2 twin in `prompts/v2/` keeps its v1 text. Eval samples keep grading v1; `playbook eval <id> --run --prompt-set v2` grades v2.
 
 Then install the git hooks — all three hook types, so the auto-sync runs after
 checkouts and pulls:

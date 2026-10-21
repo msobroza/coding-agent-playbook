@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import pytest
+
 from coding_agent_playbook.evals.prompting import render_prompt
 from coding_agent_playbook.evals.sample import EvalSample, SampleInvocation, SampleSetup
 
@@ -54,3 +56,8 @@ def test_a_run_can_render_the_v2_twin(tmp_path: Path) -> None:
 def test_a_prompt_without_a_twin_keeps_its_v1_text_in_v2(tmp_path: Path) -> None:
     sample = _sample(tmp_path, with_v2=False)
     assert render_prompt(sample, strict=True, prompt_set="v2") == "Version one.\n\n\ngo"
+
+
+def test_an_unknown_prompt_set_is_refused_rather_than_rendering_v1(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="unknown prompt set 'v3'"):
+        render_prompt(_sample(tmp_path), strict=True, prompt_set="v3")  # type: ignore[arg-type]  # the runtime guard

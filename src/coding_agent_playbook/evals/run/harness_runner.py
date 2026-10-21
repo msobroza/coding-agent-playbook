@@ -39,7 +39,7 @@ from pathlib import Path
 from time import monotonic
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.catalog.prompt_sets import DEFAULT_PROMPT_SET
+from coding_agent_playbook.catalog.prompt_sets import DEFAULT_PROMPT_SET, PromptSet
 from coding_agent_playbook.evals.prompting import render_prompt
 from coding_agent_playbook.evals.run.git_env import without_repo_location
 from coding_agent_playbook.evals.run.scoring import score
@@ -370,7 +370,7 @@ class HarnessRunner(ABC):
         judge: JudgeLike | None = None,
         judge_samples: int = 1,
         fail_fast: bool = True,
-        prompt_set: str = DEFAULT_PROMPT_SET,
+        prompt_set: PromptSet = DEFAULT_PROMPT_SET,
     ) -> SampleResult:
         """Run ``sample`` over ``N`` trials in ``scratch_dir`` and grade a :class:`SampleResult`.
 

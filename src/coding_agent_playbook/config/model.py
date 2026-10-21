@@ -17,7 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from coding_agent_playbook.catalog.prompt_sets import DEFAULT_PROMPT_SET
+from coding_agent_playbook.catalog.prompt_sets import DEFAULT_PROMPT_SET, PromptSet
 from coding_agent_playbook.catalog.roots import canonical_overlay_list
 from coding_agent_playbook.config.entries import (
     copy_toml_value,
@@ -112,9 +112,10 @@ class Config:
     # The committed ``framework`` (D57): a bundled short name, an overlay module or
     # "none". ``None`` = no key in the TOML (no framework), so ``to_dict`` stays sparse.
     framework: str | None = None
-    # The committed ``prompts`` key (D76): the prompt set sync renders. ``None`` = no
-    # key in the TOML (the default set, see ``prompt_set``), so ``to_dict`` stays sparse.
-    prompts: str | None = None
+    # The committed ``prompts`` key (D76) as written, named after the TOML key like
+    # ``framework``. ``None`` = no key, so ``to_dict`` stays sparse. Consumers read
+    # ``prompt_set``, the resolved set (the default when the key is absent).
+    prompts: PromptSet | None = None
     storage: StorageConfig = field(default_factory=StorageConfig)
     detector_cache: dict[str, Any] = field(default_factory=dict)
     user_choices: dict[str, Any] = field(default_factory=dict)
@@ -175,8 +176,10 @@ class Config:
         return layers_with_framework(self.overlays_enabled, self.framework)
 
     @property
-    def prompt_set(self) -> str:
+    def prompt_set(self) -> PromptSet:
         """The prompt set a sync renders: the ``prompts`` key, else ``"v1"`` (D76).
+
+        What consumers read; :attr:`prompts` is the raw key, kept for ``to_dict``.
 
         Example::
 
