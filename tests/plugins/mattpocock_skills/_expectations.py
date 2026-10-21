@@ -149,6 +149,16 @@ IMPOSED_TOOL_RE: Final = re.compile(
     + "|".join(re.escape(name) for name in _IMPOSED_NAMES.split())
     + r")(?![\w-])|jsdelivr|unpkg|cdnjs|via CDN"
 )
+#: G4 and the D2 amendment (prF F6): ``playbook forge``, the engine's one forge
+#: command (ADR 0003), is allowed where G4 bans ``gh`` and ``glab``, but only in
+#: these files (paths relative to ``skills/``): setup and its Forge issues seed.
+FORGE_COMMAND: Final = "playbook forge"
+FORGE_COMMAND_FILES: Final = frozenset(
+    {
+        "setup-matt-pocock-skills/SKILL.md",
+        "setup-matt-pocock-skills/references/issue-tracker-forge.md",
+    }
+)
 #: G5: words legal in prose and denied only in command position (section 7.3).
 AMBIGUOUS_WORDS: Final = frozenset({"open", "start", "bash", "sh", "node", "bun", "pnpm"})
 #: G7: Claude Code-only names (D17).
@@ -272,6 +282,16 @@ def regex_hits(path: Path, pattern: re.Pattern[str]) -> list[Hit]:
 def imposed_tool_hits(path: Path) -> list[Hit]:
     """G4: unambiguous imposed-tool names, CDN hosts and "via CDN" anywhere in ``path``."""
     return regex_hits(path, IMPOSED_TOOL_RE)
+
+
+def forge_command_spans(path: Path) -> list[tuple[int, str]]:
+    """``(line, text)`` of every code span of ``path`` that starts with ``playbook forge``."""
+    text = path.read_text(encoding="utf-8")
+    return [
+        (text.count("\n", 0, match.start(2)) + 1, match.group(2))
+        for match in _CODE_SPAN_RE.finditer(text)
+        if match.group(2).startswith(FORGE_COMMAND + " ")
+    ]
 
 
 def command_position_hits(path: Path) -> list[Hit]:

@@ -669,8 +669,9 @@ plugin always rule. Upstream's `triage` is dropped, and three skills are renamed
 so they do not replace Claude Code's own bundled skills: `code-review` is
 `two-axis-review`, `pr` is `pr-body` and `prototype` is `throwaway-prototype`.
 The skills name no tool a consumer repo may lack (no forge CLI, `jq`, OS
-openers, CDN assets or bash scripts; wizard's and diagnosing-bugs' scripts are
-standard-library Python), and the plugin contains no URL. Enable it on its own:
+openers, CDN assets or bash scripts; forge issues go through `playbook forge`;
+wizard's and diagnosing-bugs' scripts are standard-library Python), and the
+plugin contains no URL. Enable it on its own:
 
 ```toml
 # .coding-agent-playbook.toml (top-level key, above the first [table] header)
@@ -680,8 +681,11 @@ overlays_enabled = ["coding_agent_playbook.plugins.mattpocock_skills"]
 Then, once per repo:
 
 - Run `/setup-matt-pocock-skills`. It writes `docs/agents/issue-tracker.md`,
-  `docs/agents/triage-labels.md` and `docs/agents/domain.md`; the default
-  tracker is local markdown, which needs no remote or CLI. The plugin always
+  `docs/agents/triage-labels.md` and `docs/agents/domain.md`. When the repo
+  pushes to GitHub or GitLab it proposes **Forge issues**, which you confirm
+  once: the skills then track issues through `playbook forge`, and setup checks
+  the forge CLI's login and creates the labels. Otherwise the default tracker
+  is local markdown, which needs no remote or CLI. The plugin always
   rule (`mattpocock-skills-tracker`) points the agent at these files and asks
   it to tell you to run setup when a skill needs one that is missing.
 - Add `.scratch/` to your `.gitignore`. The local tracker keeps its maps and

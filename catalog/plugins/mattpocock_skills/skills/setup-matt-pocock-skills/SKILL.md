@@ -11,7 +11,7 @@ Run this only when the user asked for it by name; otherwise stop.
 
 Scaffold the per-repo configuration that the engineering skills assume:
 
-- **Issue tracker**: where issues live (local markdown by default; any other tracker works once the user describes it)
+- **Issue tracker**: where issues live (the forge's issues when the repo pushes to GitHub or GitLab, local markdown otherwise; any other tracker works once the user describes it)
 - **Triage labels**: the strings used for the five canonical triage roles
 - **Domain docs**: where `GLOSSARY.md` (or `CONTEXT.md` if the repo already has one) and ADRs live, and the consumer rules for reading them
 
@@ -23,7 +23,7 @@ This is a prompt-driven skill, not a deterministic script. Explore, present what
 
 Look at the current repo to understand its starting state. Read whatever exists; don't assume:
 
-- `git remote -v` and `.git/config`: is this a GitHub repo? Which one?
+- `git remote -v` and `.git/config`, then `playbook forge which`: does the current branch push to GitHub or GitLab? Which repository? Exit 0 prints the forge and the repository; exit 2 means it found no forge it can use, so Section A proposes local markdown.
 - `AGENTS.md` and `CLAUDE.md` at the repo root: is there an old `## Agent skills` section in either? Read them only to answer that: this skill never edits or creates either file (step 5 says what to tell the user).
 - `GLOSSARY.md` (or `CONTEXT.md` if the repo already has one) and `GLOSSARY-MAP.md` (or `CONTEXT-MAP.md` if the repo already has one) at the repo root
 - `docs/adr/` and any `src/*/docs/adr/` directories
@@ -39,14 +39,17 @@ Lead each section with the recommended answer so the user can accept it in a wor
 
 **Section A: Issue tracker.**
 
-> Explainer: The "issue tracker" is where issues live for this repo. Skills like `to-tickets` and `to-spec` read from and write to it. They need to know whether to write a markdown file under `.scratch/` or follow some other workflow you describe. Pick the place you actually track work for this repo.
+> Explainer: The "issue tracker" is where issues live for this repo. Skills like `to-tickets` and `to-spec` read from and write to it. They need to know whether to open issues on the repo's forge, write a markdown file under `.scratch/`, or follow some other workflow you describe. Pick the place you actually track work for this repo.
 
-Default posture: propose local markdown, even when a `git remote` points at a forge; a user who tracks work in that forge's issues, or anywhere else, picks **Other**. Offer:
+Default posture: when `playbook forge which` found a forge, preselect **Forge issues**, so the user confirms it once; otherwise propose local markdown. A user who tracks work anywhere else picks **Other**. Offer:
 
-- **Local markdown**: issues live as files under `.scratch/<feature>/` in this repo (the default; needs no remote or CLI)
+- **Forge issues**: issues live in the repo's GitHub or GitLab issues, reached through `playbook forge`, which runs the forge's own CLI with its own login (offered when `playbook forge which` found a forge, and then the default)
+- **Local markdown**: issues live as files under `.scratch/<feature>/` in this repo (the default without a forge; needs no remote or CLI)
 - **Other** (Jira, Linear, etc.): ask the user to describe the workflow for each section of [issue-tracker-local.md](./references/issue-tracker-local.md) after its Conventions: publish, fetch, close, blocking (default: a plain `Blocked by:` line near the top of each ticket) and the Wayfinding operations; the skill will record each answer under that section's heading
 
-Record the choice in `docs/agents/issue-tracker.md`.
+Record the choice in `docs/agents/issue-tracker.md`. The Forge issues seed carries a "PRs as a request surface" flag, defaulted **off**. Leave it off and don't raise it: a user who wants external PRs in the triage queue can flip the flag in the file later.
+
+On **Forge issues**, run `playbook forge auth status` once the user confirms. Exit 0: the forge CLI is logged in; go on. Exit 2: show the user the one-line hint it printed, the step only they can take (install the CLI, or log in), wait until they say it's done, and run it again. Don't fall back to local markdown, and never call a forge CLI or API yourself.
 
 **Section B: Triage label vocabulary.** Always written, without asking: `to-spec` and `to-tickets` apply these labels.
 
@@ -70,11 +73,14 @@ Write only `docs/agents/issue-tracker.md`, `docs/agents/triage-labels.md` and `d
 
 Write the docs files using the seed templates in this skill folder as a starting point:
 
+- [issue-tracker-forge.md](./references/issue-tracker-forge.md): Forge issues (GitHub or GitLab, through `playbook forge`)
 - [issue-tracker-local.md](./references/issue-tracker-local.md): local-markdown issue tracker
 - [triage-labels.md](./references/triage-labels.md): label mapping
 - [domain.md](./references/domain.md): domain doc consumer rules + layout
 
 For "other" issue trackers, write `docs/agents/issue-tracker.md` from scratch using the user's description, under the same `##` headings as [issue-tracker-local.md](./references/issue-tracker-local.md) after its Conventions; keep the `## Wayfinding operations` heading verbatim, since `wayfinder` looks it up by name.
+
+On **Forge issues**, then create the labels the skills apply, on GitHub and GitLab alike: every label in the right-hand column of `docs/agents/triage-labels.md`, plus `wayfinder:map`, `wayfinder:research`, `wayfinder:prototype`, `wayfinder:grilling` and `wayfinder:task`. `playbook forge label list` shows the ones that exist; create each missing one with `playbook forge label create <name> --color <RRGGBB> --description "<meaning>"`, the meaning taken from the label table (for a `wayfinder:` label, its ticket type).
 
 ### 5. Done
 
