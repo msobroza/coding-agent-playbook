@@ -184,6 +184,10 @@ The checks `playbook validate` and the sync gate run over canonical artifacts be
 **Guard twin**:
 A CLI command that runs the same judge as a guard hook, so the check also runs outside an agent session, in CI or pre-commit.
 
+**Judge sample**:
+One of the N times the judge scores a rubric criterion; the scores are averaged to damp the judge's noise.
+_Avoid_: bare "samples" (an **Eval sample** is the test case)
+
 **Grading kernel**:
 The engine's shared machinery for scoring work (metrics, checks, rubrics and how they compose), used by eval samples and the metrics gate.
 _Avoid_: evaluators

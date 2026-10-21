@@ -1,12 +1,12 @@
 # prU: tickets
 
-Generated from the verified mapping data; do not edit by hand. Decisions: [../prU-core-python-skills.md](../prU-core-python-skills.md).
+Generated from the verified mapping data during design; since implementation started it is edited by hand (see [implementation-runbook.md](implementation-runbook.md)). Decisions: [../prU-core-python-skills.md](../prU-core-python-skills.md).
 
 | Wave | Tickets | Note |
 | --- | --- | --- |
 | 0 | L0-00 | bootstrap the integration branch |
 | 0b | L0-00b | eval sample rename before any other ticket (D68) |
-| 1 | L0-01, L0-02, L0-03, L0-04, L0-19, L0-21, L0-25, L0-26 | independent engine pieces and test-pin restructuring; parallel; framework choice (D57); inert-hook logging and harness hints (D79) |
+| 1 | L0-01, L0-02, L0-03, L0-04, L0-19, L0-21, L0-25, L0-26, L0-27 | independent engine pieces and test-pin restructuring; parallel; framework choice (D57); inert-hook logging and harness hints (D79); the --judge-samples flag (D80) |
 | 2 | L0-05, L0-08, L0-20, L0-23 | in-skill discovery and rendered rules/ path; parallel (both touch validation/_skills.py in different functions); Domino detection (D51); layout adapter (D71) |
 | 3 | L0-06, L0-09, L0-10, L0-22, L0-24 | layout checks, section schema, agent_harness; parallel; layout guard and always rule (D61, D71); prompt sets (D76) |
 | 4 | L0-07, L0-11, L0-12 | mechanical move + D36 check, sectioned index, impact tag; parallel |
@@ -591,6 +591,25 @@ Acceptance:
 - Files the engine generated (per the lockfile) never count as harness use.
 - playbook check exits 0 when only these warnings fire.
 - Non-interactive init still defaults to claude_code, opencode, shared_skills.
+
+### L0-27: feat(cli): rename the judge's --samples flag to --judge-samples
+
+Lane lane0, size S, depends on L0-00b; decisions D80.
+
+D80: `playbook eval <id> --run --samples N` is how many times the judge scores each rubric criterion, not a count of eval samples. The flag becomes --judge-samples N (default 1) and the grading context field samples becomes judge_samples. --samples stays for one release as a deprecated alias hidden from --help: it still works, prints one stderr line naming --judge-samples, and passing both flags is a usage error (exit 2). No warnings.warn: pytest runs with filterwarnings = error.
+
+- `src/coding_agent_playbook/commands/eval.py`: --judge-samples (dest judge_samples); the hidden --samples alias, its stderr line and the both-flags error; module docstring and help text
+- `src/coding_agent_playbook/grading/types.py`: the context field samples -> judge_samples, and every reader (grading/judged.py, grading/judge_metric.py, commands/eval.py, evals/**)
+- `README.md, SPEC.md`: the eval CLI lines and the JudgeCheck/JudgeMetric paragraphs; older changelog entries stay as written
+- `MIGRATION.md`: in v0.21, replace "The flag `playbook eval --run --samples N` keeps its name" with the rename, the alias and its removal in the next release
+- `tests/cli/golden/cli_surface.json`: re-record with `python -m tests.cli.cli_surface` and review the diff; when L0-19 or L0-26 also changed the golden, re-record it after merging instead of merging the JSON by hand
+- test `tests/cli/test_eval_run.py, tests/grading/`: --judge-samples reaches the judge as n; --samples still works and prints the deprecation line once; both flags exit 2; --help does not list --samples
+
+Acceptance:
+- `playbook eval <id> --run --runner fake --judge <fake> --judge-samples 3` scores each criterion 3 times.
+- `--samples 3` gives the same scores plus one stderr line naming --judge-samples; `--samples` is absent from --help.
+- `git grep -n -E 'ctx\.samples|--samples' -- src README.md SPEC.md` finds only the alias, its message and changelog entries older than v0.21.
+- The CLI surface golden test passes.
 
 ### D-01: docs(spec): describe rules inside skills, sections and the priority policy
 

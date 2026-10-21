@@ -6,11 +6,11 @@ How prU is implemented, and how to resume after any interruption (a lost session
 
 | What | Where |
 | --- | --- |
-| Decisions D1-D79, defaults, follow-ups | `specs/prU-core-python-skills.md` |
+| Decisions D1-D80, defaults, follow-ups | `specs/prU-core-python-skills.md` |
 | What to build, per skill | `specs/prU-core-python-skills/mapping-<skill>.md` |
 | Every ticket, its waves and the content-ticket template | `specs/prU-core-python-skills/tickets.md` |
 | Glossary and decision records | `CONTEXT.md`, `docs/adr/0001`-`0008` |
-| Progress | GitHub tracker issue #176 (one checkbox per ticket), ticket issues #177-#263 |
+| Progress | GitHub tracker issue #176 (one checkbox per ticket), ticket issues #177-#263 and #264 (L0-27, D80) |
 | Integrated work | branch `integration/core-python-skills` |
 | One ticket's work before integration | branch `ticket/<id>` (for example `ticket/L0-01`) |
 
@@ -20,19 +20,38 @@ The mapping and ticket files were generated from verified mapping data during de
 
 Waves run in the order of the wave table in `tickets.md` (0, 0b, 1-9). Wave N+1 starts only after wave N is integrated and its gate is green.
 
-1. **Implement.** Each ticket runs in its own fresh-context agent, in an isolated git worktree, at medium effort, with the text of the `/mattpocock-skills:implement` skill plus the ticket's issue body. At most three tickets run at once, because the machine has about 8 GB of RAM and little free disk. The agent:
+1. **Implement.** Each ticket runs in its own fresh-context agent, in an isolated git worktree, at medium effort, with the text of the `/mattpocock-skills:implement` skill plus the ticket's section of `tickets.md`. At most three tickets run at once, because the machine has about 8 GB of RAM and little free disk. The agent:
    - starts from the integration tip: `git fetch origin integration/core-python-skills && git checkout -B ticket/<id> origin/integration/core-python-skills`;
-   - works test-first at the seams (`/tdd`), runs type checks and single test files regularly, and runs the test directories it touches plus `pytest -m catalog`;
-   - runs `/code-review` (its Standards and Spec review agents) and fixes every real finding;
+   - creates its test interpreter (see "Test interpreters" below);
+   - works test-first at the seams (`/tdd`), runs type checks and single test files regularly, and runs the test directories it touches plus `pytest -m catalog`; it never runs the full suite;
    - commits with a Conventional Commits subject equal to the ticket title, the body ending `Refs: #<issue> (prU <id>)`;
    - pushes with `git push origin HEAD:refs/heads/ticket/<id>`.
-2. **Integrate.** One integrator agent, also isolated, then:
+2. **Review.** Two more fresh-context agents read the pushed diff (`git diff origin/integration/core-python-skills...origin/ticket/<id>`), read-only. They are the two axes of `/code-review`: *Standards* (the repo's conventions, `CONTEXT.md`, the ADRs, the clean-code rules) and *Spec* (every acceptance criterion and decision). They run as separate agents because an agent inside a workflow cannot start agents of its own.
+3. **Fix.** When the reviewers report findings, one more agent applies the real ones (or says why it rejects one), reruns the touched tests and pushes the ticket branch again.
+4. **Integrate.** One integrator agent, also isolated, then:
    - squash-merges each pushed ticket branch into `integration/core-python-skills` as one commit `<ticket title> (#<issue>)` whose body ends `Closes #<issue>`;
-   - runs the full CI-parity gate once for the wave: `ruff check .`, `ruff format --check .`, `mypy`, the full `pytest` with CI's coverage options, and the commit-convention check;
+   - runs the full CI-parity gate once for the wave: `ruff check .`, `ruff format --check .`, `mypy`, the full `pytest` in chunks (see "The full suite in chunks" below), and the commit-convention check;
    - fixes failures with small `fix:` commits, or records pre-existing ones;
    - pushes fast-forward only: `git push origin HEAD:refs/heads/integration/core-python-skills`;
    - removes the merged tickets' local worktrees to free disk.
-3. **Record.** The orchestrator ticks the wave's boxes in tracker #176 and comments with the integration head and the gate result.
+5. **Record.** The orchestrator ticks the wave's boxes in tracker #176 and comments with the integration head and the gate result.
+
+### Test interpreters
+
+All worktrees share one virtual environment, and its editable install points at one checkout's `src`. Setting `PYTHONPATH=$PWD/src` is not enough: hook tests start `python -I -m coding_agent_playbook.hook_runtime`, and `-I` ignores `PYTHONPATH`, so those subprocesses would import the other checkout's code. Each worktree therefore gets a pip-less overlay (about 44 KB) whose own `site-packages` holds three path files, read in this order:
+
+```bash
+python3.13 -m venv --without-pip <overlay>
+echo "$PWD/src" > <overlay>/lib/python3.13/site-packages/00_src.pth
+echo "<shared venv>/lib/python3.13/site-packages" > <overlay>/lib/python3.13/site-packages/01_shared.pth
+cp <shared venv>/lib/python3.13/site-packages/a1_coverage.pth <overlay>/lib/python3.13/site-packages/
+```
+
+Run pytest with `<overlay>/bin/python -m pytest`; `mypy` and `ruff` keep using the shared environment with `PYTHONPATH=$PWD/src`. Check that `<overlay>/bin/python -I -c "import coding_agent_playbook; print(coding_agent_playbook.__file__)"` prints a path inside the worktree.
+
+### The full suite in chunks
+
+The full suite takes about 21 minutes, longer than the 10 minutes one agent command may run. The integrator runs it as directory groups, one command each. The first group erases the coverage data and every later one appends to it (`--cov-append`, report and `fail-under` off), with `COVERAGE_FILE` outside the worktree. A last `coverage report --fail-under=80` on the combined data applies CI's threshold. Every directory under `tests/` belongs to exactly one group, so a new test directory must be added to a group.
 
 The `Closes #N` lines close each issue only when the final PR merges into `main`; until then, the tracker's checkboxes are the progress record.
 
@@ -42,7 +61,7 @@ The `Closes #N` lines close each issue only when the final PR merges into `main`
 - Conventional Commits subjects; the repo's commitizen check enforces them.
 - Never commit harness files: `CLAUDE.md`, `.claude/`, `AGENTS.md`, `.opencode/`, `.agents/`, `shared_skills/`, `.mcp.json`.
 - No push to `main`, no force-push. CI runs only on the final PR into `main`.
-- Tests and probes use a shared virtual environment with the worktree's own sources first (`PYTHONPATH=$PWD/src`); never create one virtual environment per ticket.
+- Tests and probes use the shared virtual environment through the worktree's pip-less overlay (see "Test interpreters"); never install packages into a new environment per ticket.
 
 ## Resuming after an interruption
 
@@ -53,6 +72,7 @@ The `Closes #N` lines close each issue only when the final PR merges into `main`
 2. **Classify each ticket of the lowest unfinished wave.**
    - *Integrated*: its squash commit is on the integration branch. Tick its box if it is not ticked.
    - *Pushed, not integrated*: its `ticket/<id>` branch exists. Rerun only the integrate step for it.
+   - *Committed locally, not pushed*: its commits sit in a leftover worktree. Each session may write only inside its own worktree, so to finish such a ticket by hand, check that the leftover worktree is clean, remove it (`git worktree remove <path>`; the commits stay on `ticket/<id>`), check the branch out in your own worktree, finish it, and push.
    - *Lost or never started*: nothing pushed. Discard any local leftover (`git worktree list`, then `git worktree remove --force <path>`; delete the local `ticket/<id>` branch) and rerun its implement step from the integration tip.
 3. **Never skip a wave.** Finish and integrate the lowest unfinished wave, gate green, before starting the next.
 4. **On a new machine,** first:
