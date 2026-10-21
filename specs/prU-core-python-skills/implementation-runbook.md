@@ -28,13 +28,14 @@ Waves run in the order of the wave table in `tickets.md` (0, 0b, 1-9). Wave N+1 
    - pushes with `git push origin HEAD:refs/heads/ticket/<id>`.
 2. **Review.** Two more fresh-context agents read the pushed diff (`git diff origin/integration/core-python-skills...origin/ticket/<id>`), read-only. They are the two axes of `/code-review`: *Standards* (the repo's conventions, `CONTEXT.md`, the ADRs, the clean-code rules) and *Spec* (every acceptance criterion and decision). They run as separate agents because an agent inside a workflow cannot start agents of its own.
 3. **Fix.** When the reviewers report findings, one more agent applies the real ones (or says why it rejects one), reruns the touched tests and pushes the ticket branch again.
-4. **Integrate.** One integrator agent, also isolated, then:
-   - squash-merges each pushed ticket branch into `integration/core-python-skills` as one commit `<ticket title> (#<issue>)` whose body ends `Closes #<issue>`;
+4. **Verify.** A fresh agent checks out the pushed branch, decides every acceptance criterion with evidence (the command it names, the test that proves it, or the code line), checks the listed files, the scope and the commit rules, and runs ruff, mypy and the touched test directories. When something is unmet, a fix agent repairs it and the verifier runs again, for at most two repair rounds. A ticket that is still unverified stays out of the integration and goes back to the orchestrator.
+5. **Integrate.** One integrator agent, also isolated, then:
+   - squash-merges each verified ticket branch (still at the verified commit) into `integration/core-python-skills` as one commit `<ticket title> (#<issue>)` whose body ends `Closes #<issue>`;
    - runs the full CI-parity gate once for the wave: `ruff check .`, `ruff format --check .`, `mypy`, the full `pytest` in chunks (see "The full suite in chunks" below), and the commit-convention check;
    - fixes failures with small `fix:` commits, or records pre-existing ones;
    - pushes fast-forward only: `git push origin HEAD:refs/heads/integration/core-python-skills`;
    - removes the merged tickets' local worktrees to free disk.
-5. **Record.** The orchestrator ticks the wave's boxes in tracker #176 and comments with the integration head and the gate result.
+6. **Record.** The orchestrator ticks the wave's boxes in tracker #176 and comments with the integration head and the gate result.
 
 ### Test interpreters
 
@@ -51,7 +52,24 @@ Run pytest with `<overlay>/bin/python -m pytest`; `mypy` and `ruff` keep using t
 
 ### The full suite in chunks
 
-The full suite takes about 21 minutes, longer than the 10 minutes one agent command may run. The integrator runs it as directory groups, one command each. The first group erases the coverage data and every later one appends to it (`--cov-append`, report and `fail-under` off), with `COVERAGE_FILE` outside the worktree. A last `coverage report --fail-under=80` on the combined data applies CI's threshold. Every directory under `tests/` belongs to exactly one group, so a new test directory must be added to a group.
+The full suite takes about 21 minutes, longer than the 10 minutes one agent command may run. The integrator runs it as directory groups, one command each. The first group erases the coverage data and every later one appends to it (`--cov-append`, report and `fail-under` off), with `COVERAGE_FILE` outside the worktree. A last `coverage report --fail-under=80` on the combined data applies CI's threshold. Every directory under `tests/` belongs to exactly one group, so a new test directory must be added to a group. The groups, which cover all 11,510 tests once (counted at 45af894c):
+
+| Chunk | Paths | Tests |
+| --- | --- | --- |
+| 1 | `tests/adapters tests/agent_harness tests/architecture tests/artifacts tests/catalog` | 1,149 |
+| 2 | `tests/cli/test_[a-r]*.py` | 488 |
+| 3 | `tests/cli/test_[s-z]*.py` | 509 |
+| 4 | `tests/config tests/detector tests/evals tests/generated_output` | 995 |
+| 5 | `tests/grading tests/hooks` | 934 |
+| 6 | `tests/hook_runtime/handlers` | 1,175 |
+| 7 | `tests/hook_runtime/dispatch tests/hook_runtime/harness tests/hook_runtime/config` | 819 |
+| 8 | `tests/hook_runtime/{shell,judges,state,diagnostics,stop,git} tests/hook_runtime/test_*.py` | 896 |
+| 9 | `tests/integration` | 703 |
+| 10 | `tests/lockfile tests/metrics_gate tests/rendering tests/security tests/skills tests/sync tests/validation` | 923 |
+| 11 | `tests/plugins` | 1,928 |
+| 12 | `tests/unit` | 991 |
+
+The CLI tests are the slowest per test, which is why they get two small chunks. When the machine swaps heavily, everything runs several times slower; a chunk that hits the limit is split further and only its parts are rerun.
 
 The `Closes #N` lines close each issue only when the final PR merges into `main`; until then, the tracker's checkboxes are the progress record.
 
