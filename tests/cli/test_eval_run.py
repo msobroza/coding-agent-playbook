@@ -18,6 +18,8 @@ import argparse
 import json
 from typing import TYPE_CHECKING, Any
 
+import pytest
+
 from coding_agent_playbook.commands import eval as _eval
 from coding_agent_playbook.evals import registry as _registry
 
@@ -564,11 +566,36 @@ def test_deprecated_samples_alias_still_works_and_warns_once(
     _seed(tmp_path, make_synthetic_repo)
     calls: list[int] = []
     monkeypatch.setattr(_registry, "load_judge_class", lambda name: _counting_judge(calls))
-    assert _run_argv(tmp_path, "--samples", "3") == 0
+    assert _run_argv(tmp_path, "--samples", "3", "--format", "json") == 0
     assert calls and set(calls) == {3}
-    err_lines = [line for line in capsys.readouterr().err.splitlines() if line]
+    alias = capsys.readouterr()
+    err_lines = [line for line in alias.err.splitlines() if line]
     assert len(err_lines) == 1
     assert "--judge-samples" in err_lines[0]
+    # Same report as the new spelling, so the alias cannot drift after resolution.
+    assert _run_argv(tmp_path, "--judge-samples", "3", "--format", "json") == 0
+    assert _timeless(alias.out) == _timeless(capsys.readouterr().out)
+
+
+def _timeless(report_json: str) -> dict[str, Any]:
+    """A parsed ``--format json`` report without its wall-clock duration."""
+    report: dict[str, Any] = json.loads(report_json)
+    report.pop("duration_seconds", None)
+    return report
+
+
+@pytest.mark.parametrize("flag", ["--judge-samples", "--samples"])
+@pytest.mark.parametrize("value", ["0", "-3"])
+def test_non_positive_judge_samples_is_a_usage_error(
+    tmp_path: Path, make_synthetic_repo: Any, capsys: Any, monkeypatch: Any, flag: str, value: str
+) -> None:
+    """A non-positive count is rejected with the offending value, never floored to 1."""
+    _seed(tmp_path, make_synthetic_repo)
+    calls: list[int] = []
+    monkeypatch.setattr(_registry, "load_judge_class", lambda name: _counting_judge(calls))
+    assert _run_argv(tmp_path, flag, value) == 2
+    assert f"--judge-samples must be >= 1, got {value}" in capsys.readouterr().err
+    assert calls == []
 
 
 def test_both_sample_flags_is_a_usage_error(
@@ -583,11 +610,11 @@ def test_both_sample_flags_is_a_usage_error(
     assert calls == []
 
 
-def test_help_lists_judge_samples_but_not_samples() -> None:
+def test_help_lists_judge_samples_but_not_samples(capsys: Any) -> None:
     from coding_agent_playbook.cli.parser import build_parser
 
-    parser = build_parser()
-    subparsers = next(a for a in parser._actions if isinstance(a, argparse._SubParsersAction))
-    help_text = subparsers.choices["eval"].format_help()
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["eval", "--help"])
+    help_text = capsys.readouterr().out
     assert "--judge-samples" in help_text
     assert "--samples" not in help_text

@@ -65,14 +65,14 @@ def test_measure_returns_one_measurement_with_stub_score() -> None:
     assert m.value == 0.75
 
 
-def test_measure_passes_samples_as_n() -> None:
+def test_measure_passes_judge_samples_as_n() -> None:
     judge = StubJudge({"clear naming": 1.0})
     metric = JudgeMetric("clear naming")
     metric.measure(_ctx(judge=judge, artifact="THE-DIFF", judge_samples=3))
     assert judge.calls == [("clear naming", "THE-DIFF", 3)]
 
 
-def test_measure_floors_samples_at_one() -> None:
+def test_measure_floors_judge_samples_at_one() -> None:
     judge = StubJudge({"clear naming": 1.0})
     metric = JudgeMetric("clear naming")
     metric.measure(_ctx(judge=judge, judge_samples=0))

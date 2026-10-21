@@ -28,7 +28,8 @@ Sub-modes:
   ``coding_agent_playbook.judges`` group (``llm`` ships, opt-in/CLI-gated) so the
   sample's ``[rubric]`` criteria are scored too; omitted ⇒ deterministic-only (no
   judge). ``--judge-samples N`` (default 1) is how many times the judge scores each
-  rubric criterion before averaging; it is not a count of eval samples. The old
+  rubric criterion before averaging; it is not a count of eval samples, and a
+  count below 1 is a usage error (exit ``2``). The old
   ``--samples N`` spelling is a deprecated alias for one release (D80): hidden
   from ``--help``, it still works, prints one stderr line naming
   ``--judge-samples``, and passing both flags is a usage error (exit ``2``).
@@ -283,8 +284,10 @@ def _judge_samples(args: argparse.Namespace) -> int | None:
     """The per-criterion judge sample count, or ``None`` on a usage error.
 
     Reads ``--judge-samples`` and its deprecated ``--samples`` alias (D80): the
-    alias prints one stderr line naming ``--judge-samples``; both flags at once
-    print an error and return ``None`` (the caller exits ``2``).
+    alias prints one stderr line naming ``--judge-samples``; both flags at once, or
+    a count below 1, print an error and return ``None`` (the caller exits ``2``).
+    A non-positive count is rejected rather than floored so a typo never silently
+    changes what gets graded.
 
     Example::
 
@@ -298,8 +301,11 @@ def _judge_samples(args: argparse.Namespace) -> int | None:
         return None
     if old is not None:
         print(_SAMPLES_DEPRECATION, file=sys.stderr)
-        return int(old) or 1
-    return int(new or 1)
+    count: int | None = old if old is not None else new
+    if count is not None and count < 1:
+        print(f"error: --judge-samples must be >= 1, got {count}", file=sys.stderr)
+        return None
+    return count or 1
 
 
 def _load_sample(sample_id: str, repo_root: Path) -> EvalSample | None:

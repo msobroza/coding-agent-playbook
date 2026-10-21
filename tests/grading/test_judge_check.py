@@ -101,7 +101,7 @@ def test_threshold_boundary_is_inclusive() -> None:
     assert detail.level == "ok"
 
 
-def test_score_criterion_called_with_ctx_samples() -> None:
+def test_score_criterion_called_with_ctx_judge_samples() -> None:
     judge = StubJudge({"c": 0.7})
     check = JudgeCheck("c")
     ctx = _ctx(judge, judge_samples=4, artifact="THE-ARTIFACT")
@@ -110,7 +110,7 @@ def test_score_criterion_called_with_ctx_samples() -> None:
     assert judge.calls == [("c", "THE-ARTIFACT", 4)]
 
 
-def test_samples_floored_at_one() -> None:
+def test_judge_samples_floored_at_one() -> None:
     judge = StubJudge({"c": 0.7})
     check = JudgeCheck("c")
     ctx = _ctx(judge, judge_samples=0)
