@@ -5,7 +5,8 @@
 1. the ``PLAYBOOK_HOOKS=off`` gate (read only from the hook process env);
 2. stdin, capped at 16 MiB (the rest drained unread), parsed by the
    harness's parser: a foreign payload is inert, a ``ContractFault`` goes to
-   the failure policy, an event outside git is inert (K-12);
+   the failure policy, an event outside git is inert (K-12); an inert call
+   still leaves one ``ignored`` decision line (D79, ``_ignored``);
 3. ``guard_config.json``, trusted only through its lockfile digest
    (a ``ConfigFault`` asks once per session);
 4. selection (event, harness, ``PLAYBOOK_HOOKS_DISABLE``, matcher), ordered
@@ -37,6 +38,12 @@ from coding_agent_playbook.hook_runtime.dispatch._faults import (
     degraded_lines,
     fault_event,
 )
+from coding_agent_playbook.hook_runtime.dispatch._ignored import (
+    NOT_A_REPO,
+    ignored_line,
+    ignored_store,
+    worktree_store,
+)
 from coding_agent_playbook.hook_runtime.dispatch._pipeline import Shared, run_configured
 from coding_agent_playbook.hook_runtime.dispatch.escape import (
     HOOKS_VAR,
@@ -55,7 +62,7 @@ from coding_agent_playbook.hook_runtime.harness.wire import (
     WireOutput,
 )
 from coding_agent_playbook.hook_runtime.state.session import SessionState
-from coding_agent_playbook.hook_runtime.state.store import StateStore
+from coding_agent_playbook.hook_runtime.state.store import iso_utc
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -64,6 +71,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.harness.wire import ParseOutcome
+    from coding_agent_playbook.hook_runtime.state.store import StateStore
 
 __all__ = ["DispatchTrace", "dispatch_event", "read_stdin", "run_event"]
 
@@ -191,12 +199,14 @@ class _Dispatch:
             return DispatchTrace(wire=WireOutput())
         outcome = self._parse(payload, truncated, argv_problem)
         if isinstance(outcome, ForeignPayload):
+            self._log_ignored(outcome.marker, outcome.session_id)
             return DispatchTrace(wire=WireOutput())
         if isinstance(outcome, ContractFault):
             if self.asynchronous:
                 return DispatchTrace(wire=WireOutput())  # the synchronous dispatch reports it
             return self._contract_fault(outcome)
         if outcome.repo is None:
+            self._log_ignored(NOT_A_REPO, outcome.session_id)
             return DispatchTrace(wire=WireOutput())  # hooks are git-only in v1 (K-12)
         shared = Shared(
             deps=self.deps,
@@ -260,6 +270,20 @@ class _Dispatch:
             self._bare_event(session_id or ""), [line], once_key=f"escape:{HOOKS_VAR}"
         )
 
+    def _log_ignored(self, reason: str, session_id: str) -> None:
+        """One ``ignored`` line for an inert call (D79), once per session, event and reason.
+
+        The async dispatch leaves the line to its synchronous twin.
+        """
+        if self.asynchronous:
+            return
+        self._log_unconfigured(
+            self._bare_event(session_id),
+            [ignored_line(reason)],
+            once_key=f"ignored:{self.event.value}:{reason}",
+            ignored=True,
+        )
+
     def _bare_event(self, session_id: str) -> CanonicalEvent:
         return fault_event(
             self.event,
@@ -270,15 +294,37 @@ class _Dispatch:
         )
 
     def _log_unconfigured(
-        self, ev: CanonicalEvent, lines: list[LogLine], *, once_key: str | None = None
+        self,
+        ev: CanonicalEvent,
+        lines: list[LogLine],
+        *,
+        once_key: str | None = None,
+        ignored: bool = False,
     ) -> None:
-        """Lines decided before a config loaded are always logged: they mark an unguarded event."""
-        repo = find_repo(self.root_guess)
-        if repo is None or not ev.session_id:
+        """Lines decided before a config loaded are always logged: they mark an unguarded event.
+
+        ``ignored`` (D79) also logs outside git, in the user-level store, and
+        without a session id, deduping such calls per UTC day instead of per
+        session so a misconfigured session cannot write one line per tool call.
+        """
+        store = self._unconfigured_store(ignored=ignored)
+        if store is None or not (ev.session_id or ignored):
             return
-        store = self.deps.state or StateStore.for_repo(repo, clock=self.deps.clock)
-        if once_key is not None and not SessionState(store, ev.session_id).once(once_key):
+        if once_key is not None and not self._first_time(store, ev.session_id, once_key):
             return
         DecisionLog(store, ev, now=self.deps.clock.time, enabled=True, canary=self.canary).write(
             lines
         )
+
+    def _unconfigured_store(self, *, ignored: bool) -> StateStore | None:
+        """The store of the root guess's worktree; ``ignored`` falls back to the user level."""
+        repo = find_repo(self.root_guess)
+        if ignored:
+            return ignored_store(repo, self.deps)
+        return worktree_store(repo, self.deps) if repo is not None else None
+
+    def _first_time(self, store: StateStore, session_id: str, once_key: str) -> bool:
+        """``once`` per session; without a session id, once per UTC day (``YYYY-MM-DD``)."""
+        if not session_id:
+            once_key = f"{once_key}:{iso_utc(self.deps.clock.time())[:10]}"
+        return SessionState(store, session_id).once(once_key)

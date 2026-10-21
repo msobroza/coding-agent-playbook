@@ -11,7 +11,9 @@ tool signatures, the external handlers' trust approvals and, when set, the
 ``OPENCODE_DISABLE_PROJECT_CONFIG`` and the shim's lockfile digest and
 registrations. A shim that does not match its lockfile entry is never read.
 Last, the guard-decision-log summary (``_doctor_decisions``): per guard, the
-deny/ask/override/degraded counts of the last ``--since`` days (default 30).
+deny/ask/override/degraded counts of the last ``--since`` days (default 30),
+and the hook calls the dispatcher ignored as foreign or outside git
+(``_doctor_ignored``, D79), most recent first; outside git only those.
 
 ``--repin [PYTHON]`` is the one write: it overwrites the interpreter pin
 (default: this interpreter, unresolved) before checking. Exit codes: 0
@@ -35,6 +37,7 @@ from coding_agent_playbook.hook_runtime.diagnostics._doctor_decisions import (
     DEFAULT_SINCE_DAYS,
     decision_log_checks,
 )
+from coding_agent_playbook.hook_runtime.diagnostics._doctor_ignored import ignored_call_checks
 from coding_agent_playbook.hook_runtime.diagnostics._doctor_opencode import opencode_checks
 from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
 from coding_agent_playbook.hook_runtime.dispatch.paths import find_repo
@@ -66,7 +69,8 @@ def run_doctor(
     repo = find_repo(repo_dir)
     if repo is None:
         return [
-            Check("repo", "broken", f"{repo_dir} is not in a git repository; hooks are git-only")
+            Check("repo", "broken", f"{repo_dir} is not in a git repository; hooks are git-only"),
+            *ignored_call_checks(None, deps, since_days=since_days),
         ]
     checks: list[Check] = []
     if repin is not None:
@@ -76,6 +80,7 @@ def run_doctor(
         *environment_checks(repo, deps),
         *opencode_checks(repo, deps),
         *decision_log_checks(repo, deps, since_days=since_days),
+        *ignored_call_checks(repo, deps, since_days=since_days),
     ]
 
 

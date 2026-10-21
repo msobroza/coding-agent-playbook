@@ -21,7 +21,12 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, supported_decision
-from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, EventName, Harness
+from coding_agent_playbook.hook_runtime.dispatch.event import (
+    CanonicalEvent,
+    EventName,
+    Harness,
+    sanitize_session_id,
+)
 from coding_agent_playbook.hook_runtime.harness._render import (
     context_items,
     dump,
@@ -114,7 +119,8 @@ def parse_opencode(payload: bytes, ctx: ParseContext) -> ParseOutcome:
     if isinstance(decoded, str):
         return fault(ctx, decoded)
     if decoded.get("hook_event_name") != CLAUDE_EVENT_NAMES[ctx.argv_event]:
-        return ForeignPayload(event=ctx.argv_event, marker="event_mismatch")
+        session = sanitize_session_id(opt_str(decoded, "session_id"))
+        return ForeignPayload(event=ctx.argv_event, marker="event_mismatch", session_id=session)
     project_dir = ctx.project_dir or opt_str(decoded, "cwd")
     if not project_dir:
         return fault(ctx, "no project dir: --project-dir is missing and so is cwd", decoded)
