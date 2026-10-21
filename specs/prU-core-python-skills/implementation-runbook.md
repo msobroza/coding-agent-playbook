@@ -54,7 +54,13 @@ Run pytest with `<overlay>/bin/python -m pytest`; `mypy` and `ruff` keep using t
 
 ### The full suite in chunks
 
-The full suite takes about 21 minutes, longer than the 10 minutes one agent command may run. The integrator runs it as directory groups, one command each. The first group erases the coverage data and every later one appends to it (`--cov-append`, report and `fail-under` off), with `COVERAGE_FILE` outside the worktree. A last `coverage report --fail-under=80` on the combined data applies CI's threshold. Every directory under `tests/` belongs to exactly one group, so a new test directory must be added to a group. The groups, which cover all 11,510 tests once (counted at 45af894c):
+The full suite takes about 21 minutes, longer than the 10 minutes one agent command may run. The integrator runs it as numbered directory groups, one command each, through a small script that holds the group table (so commands carry no globs or shell variables, which the worktree guard rejects):
+
+- `check` collects the suite and fails when a test file is in no group or in several, so a new test directory must be added to a group;
+- group 1 erases the coverage data and every later group appends to it (`--cov-append`, report and `fail-under` off);
+- `report` applies CI's `--fail-under=80` to the combined data, counting only `src/`.
+
+The data stays in `./.coverage` at the worktree root, as in CI. Exporting `COVERAGE_FILE` to keep it elsewhere broke wave 1's first run: the nested pytest runs some tests start inherit it and overwrite the combined data. The groups, which covered all 11,510 tests once at 45af894c (443 test files after wave 1):
 
 | Chunk | Paths | Tests |
 | --- | --- | --- |
