@@ -180,6 +180,8 @@ _STATE_SOURCE_USERS = frozenset(
         engine_module_file("coding_agent_playbook.validation.context"),
         # reads the lockfile through it
         engine_module_file("coding_agent_playbook.adapters.skill_dirs.ownership"),
+        # reads the lockfile to pre-select detected adapters in interactive init (D79)
+        engine_module_file("coding_agent_playbook.commands._init_answers"),
     }
 )
 
