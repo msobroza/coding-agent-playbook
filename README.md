@@ -1218,7 +1218,7 @@ jobs:
 
 ### GitLab CI
 
-A merge request pipeline clones a shallow history (`GIT_DEPTH` 20 by default)
+A GitLab *merge request pipeline* clones a shallow history (`GIT_DEPTH` 20 by default)
 and fetches only the pipeline's own ref, never the target branch, so the job
 sets `GIT_DEPTH: 0`, fetches the target branch, and passes the base explicitly.
 The title reaches `playbook ci` only through `variables:`, never inside a
@@ -1238,24 +1238,24 @@ playbook-ci:
 
 `CI_MERGE_REQUEST_TARGET_BRANCH_SHA` is set only in merged results pipelines;
 elsewhere it is empty and the base is `CI_MERGE_REQUEST_DIFF_BASE_SHA`, the merge
-base of the merge request's diff. The shell syntax targets Linux runners, and the
+base of the pull request's diff. The shell syntax targets Linux runners, and the
 job installs the project with its dev tools as on GitHub. A draft marker
 (`Draft:`, `[Draft]`, `(Draft)`) at the start of the title is not checked: the
 squash commit does not carry it.
 
 How far the job is a gate depends on where its definition lives. On GitLab, a
-merge request's pipeline runs the `.gitlab-ci.yml` of that merge request:
+pull request's pipeline runs that pull request's own `.gitlab-ci.yml`:
 
 1. **Free.** Add the job and turn on *Pipelines must succeed* (Settings → Merge
-   requests). On Free a merge request can otherwise edit its own pipeline: it can
+   requests). On Free a pull request can otherwise edit its own pipeline: it can
    delete the job or make it optional in the same change. gate-scan flags that
    (a removed job, script item or `include:` entry, and `playbook-ci` gaining
    `allow_failure: true`, `when: manual` or `when: never`), but only a reviewer
    stops the merge.
 2. **"Pipelines must succeed" with the CI configuration in a separate protected
    project.** Point Settings → CI/CD → General pipelines → *CI/CD configuration
-   file* at `.gitlab-ci.yml@group/ci-config`, a project the merge request's
-   authors cannot push to. The merge request then cannot change the job that
+   file* at `.gitlab-ci.yml@group/ci-config`, a project the pull request's
+   authors cannot push to. The pull request then cannot change the job that
    gates it.
 3. **Ultimate: a pipeline execution policy** that injects the `playbook-ci` job
    into every pipeline of the projects it covers; a project's own

@@ -19,7 +19,7 @@ from coding_agent_playbook.commands.twins._git_scope import (
     MergeBase,
     resolve_merge_base,
 )
-from coding_agent_playbook.hook_runtime import git as git_layer
+from coding_agent_playbook.hook_runtime.git import safe_git
 from tests.hook_runtime.fakes import FakeGit
 
 HEAD_SHA = "c0ffee00" * 5
@@ -94,8 +94,8 @@ def test_a_blank_base_fails_closed_instead_of_falling_back(blank: str) -> None:
 def _twin_and_git_strings() -> list[tuple[str, str]]:
     """Every string literal of the CI twins and the git layer they call, with its file."""
     found: list[tuple[str, str]] = []
-    for package in (twins, git_layer):
-        for module in sorted(Path(str(package.__file__)).parent.glob("*.py")):
+    for directory in (Path(str(twins.__file__)).parent, Path(safe_git.__file__).parent):
+        for module in sorted(directory.glob("*.py")):
             tree = ast.parse(module.read_text(encoding="utf-8"))
             found += [
                 (module.name, node.value)

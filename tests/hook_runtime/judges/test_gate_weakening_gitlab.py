@@ -294,3 +294,77 @@ def test_ci_config_globs_extend_the_watched_files() -> None:
 def test_malformed_ci_config_globs_name_the_value(value: object) -> None:
     with pytest.raises(ValueError, match="ci_config_globs"):
         policy_from_table({"ci_config_globs": value})
+
+
+# --- review regressions --------------------------------------------------------------------------
+
+
+def test_a_job_name_with_a_colon_is_a_job() -> None:
+    before = "test:unit:\n  script:\n    - pytest -q\n    - mypy\nbuild:linux:\n  script: [make]\n"
+    after = "test:unit:\n  script:\n    - pytest -q\n"
+
+    assert _found(_scan_ci(before, after)) == [
+        ("gitlab-ci-job-removed", "job 'build:linux' removed"),
+        ("gitlab-ci-script-removed", "script item 'mypy' removed"),
+    ]
+
+
+def test_a_flow_list_script_compares_item_by_item() -> None:
+    before = "lint:\n  script: [ruff check ., 'mypy']\n"
+
+    assert _scan_ci(before, "lint:\n  script:\n    - ruff check .\n    - mypy\n").findings == ()
+    assert _found(_scan_ci(before, "lint:\n  script: [ruff check .]\n")) == [
+        ("gitlab-ci-script-removed", "script item 'mypy' removed")
+    ]
+
+
+def test_a_hash_inside_quotes_is_not_a_comment() -> None:
+    before = 'lint:\n  script:\n    - echo "run # 1"\n'
+    after = 'lint:\n  script:\n    - echo "run # 2"\n'
+
+    assert _found(_scan_ci(before, after)) == [
+        ("gitlab-ci-script-removed", "script item 'echo \"run # 1\"' removed")
+    ]
+
+
+def test_include_rules_and_inputs_are_not_entries() -> None:
+    before = (
+        "include:\n"
+        "  - local: docker.yml\n"
+        "    rules:\n"
+        "      - exists:\n"
+        "          - Dockerfile\n"
+        "    inputs:\n"
+        "      stage: build\n"
+    )
+
+    assert _scan_ci(before, "include:\n  - local: docker.yml\n").findings == ()
+
+
+def test_a_variable_named_script_is_not_a_script_section() -> None:
+    before = "lint:\n  variables:\n    script: tox\n  script:\n    - ruff check .\n"
+    after = "lint:\n  script:\n    - ruff check .\n"
+
+    assert _scan_ci(before, after).findings == ()
+
+
+@pytest.mark.parametrize("value", ["False", "FALSE", "no"])
+def test_allow_failure_false_in_any_yaml_spelling_is_no_loosening(value: str) -> None:
+    after = PIPELINE.replace("playbook-ci:\n", f"playbook-ci:\n  allow_failure: {value}\n")
+
+    assert _scan_ci(PIPELINE, after).findings == ()
+
+
+def test_when_on_failure_skips_the_playbook_ci_job_on_success() -> None:
+    after = PIPELINE.replace("playbook-ci:\n", "playbook-ci:\n  when: on_failure\n")
+
+    assert _found(_scan_ci(PIPELINE, after)) == [
+        ("playbook-ci-job-loosened", "job 'playbook-ci' gains when: on_failure")
+    ]
+
+
+def test_adding_a_manual_playbook_ci_job_loosens_nothing() -> None:
+    before = "lint:\n  script: [ruff]\n"
+    after = before + "playbook-ci:\n  when: manual\n  script: [playbook ci]\n"
+
+    assert _scan_ci(before, after).findings == ()

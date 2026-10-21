@@ -30,8 +30,10 @@ Import-light: ``re`` and the runtime's own stdlib helpers at module level;
 
 from __future__ import annotations
 
+import functools
 import re
 from dataclasses import dataclass, replace
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Final, Literal
 
 from coding_agent_playbook.artifacts.path_classes import FIXTURE_GLOBS, TEST_PATH_GLOBS
@@ -276,10 +278,20 @@ def is_config_path(path: str, policy: ScanPolicy | None = None) -> bool:
         >>> is_config_path("pkg/pyproject.toml"), is_config_path(".gitlab-ci.yml"), is_config_path("setup.cfg")
         (True, True, False)
     """
-    if path.rpartition("/")[2] in TOML_PREFIXES:
+    if _is_toml_config(path):
         return True
     globs = DEFAULT_CI_CONFIG_GLOBS if policy is None else policy.ci_config_globs
-    return _globs(globs).matches(path)
+    return _ci_config_globset(globs).matches(path)
+
+
+def _is_toml_config(path: str) -> bool:
+    return path.rpartition("/")[2] in TOML_PREFIXES
+
+
+@functools.lru_cache(maxsize=8)
+def _ci_config_globset(globs: tuple[str, ...]) -> GlobSet:
+    # The callers ask once per changed path, before a scan compiles its _Rules.
+    return _globs(globs)
 
 
 def policy_from_table(table: Mapping[str, object], base: ScanPolicy | None = None) -> ScanPolicy:
@@ -297,8 +309,8 @@ def policy_from_table(table: Mapping[str, object], base: ScanPolicy | None = Non
     """
     start = base if base is not None else ScanPolicy()
     patterns = _pattern_rows(table.get("added_line_patterns", []))
-    keys = _key_rows(table.get("protected_config_keys", []))
-    ci_globs = _glob_rows(table.get("ci_config_globs", []))
+    keys = _string_rows("protected_config_keys", table.get("protected_config_keys", []))
+    ci_globs = _string_rows("ci_config_globs", table.get("ci_config_globs", []))
     justification = table.get("justification_regex", start.justification)
     if not isinstance(justification, str) or not justification:
         raise ValueError(
@@ -393,7 +405,7 @@ def _file_findings(
     added_texts = _texts(added)
     weakenings = removal_weakenings(added_texts, _texts(removed))
     for pair in pairs:
-        if pair.path.rpartition("/")[2] in TOML_PREFIXES:
+        if _is_toml_config(pair.path):
             weakenings += toml_loosenings(pair.path, pair.before, pair.after, rules.protected_keys)
         elif rules.ci_configs.matches(pair.path):
             weakenings += gitlab_ci_weakenings(pair.path, pair.before, pair.after)
@@ -444,20 +456,19 @@ def _pattern_row(index: int, row: object) -> LinePattern:
     return LinePattern(rule, regex, tuple(paths))
 
 
-def _key_rows(value: object) -> tuple[str, ...]:
-    if not (isinstance(value, list) and all(isinstance(k, str) and k for k in value)):
-        raise ValueError(
-            f"{CONSUMER_TABLE} protected_config_keys = {value!r}: expected a list of dotted "
-            'TOML keys, e.g. ["tool.mypy.warn_unused_ignores"]'
-        )
-    return tuple(value)
+#: What each list-of-strings key holds, for its error message.
+_STRING_ROW_SHAPES: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "protected_config_keys": 'dotted TOML keys, e.g. ["tool.mypy.warn_unused_ignores"]',
+        "ci_config_globs": 'path globs, e.g. ["ci/*.gitlab-ci.yml"]',
+    }
+)
 
 
-def _glob_rows(value: object) -> tuple[str, ...]:
-    if not (isinstance(value, list) and all(isinstance(g, str) and g for g in value)):
+def _string_rows(key: str, value: object) -> tuple[str, ...]:
+    if not (isinstance(value, list) and all(isinstance(item, str) and item for item in value)):
         raise ValueError(
-            f"{CONSUMER_TABLE} ci_config_globs = {value!r}: expected a list of path globs, "
-            'e.g. ["ci/*.gitlab-ci.yml"]'
+            f"{CONSUMER_TABLE} {key} = {value!r}: expected a list of {_STRING_ROW_SHAPES[key]}"
         )
     return tuple(value)
 

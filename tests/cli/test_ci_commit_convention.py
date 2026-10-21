@@ -172,7 +172,7 @@ def test_commit_convention_strips_a_leading_draft_prefix_from_the_title(
     title: str,
     checked: str,
 ) -> None:
-    """GitLab marks a draft merge request in its title; the squash commit loses the prefix.
+    """GitLab marks a draft pull request in its title; the squash commit loses the prefix.
 
     A title that is nothing but the prefix is checked as is, so it still fails.
     """

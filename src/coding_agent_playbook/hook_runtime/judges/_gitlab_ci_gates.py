@@ -11,11 +11,15 @@ as removed when it is not re-added anywhere in the same file (a move is fine):
 - ``gitlab-ci-script-removed``: a script item is gone;
 - ``gitlab-ci-include-removed``: a ``local`` / ``template`` / ``component`` /
   ``project`` / ``remote`` / ``file`` entry, or a plain string entry, is gone;
-- ``playbook-ci-job-loosened``: the ``playbook-ci`` job gains ``allow_failure``
-  (other than ``false``), ``when: manual`` or ``when: never`` (Q52).
+- ``playbook-ci-job-loosened``: an existing ``playbook-ci`` job gains
+  ``allow_failure`` (other than false), ``when: manual``, ``when: never`` or
+  ``when: on_failure`` (Q52; ``on_failure`` skips it whenever the pipeline passes).
 
-Items compare without a trailing `` # comment`` and outer quotes, so adding a
-reason comment to an item is no removal.
+Items compare without a trailing `` # comment`` (outside quotes) and outer
+quotes, and a flow list ``[a, b]`` as its items, so adding a reason comment or
+reformatting a list is no removal. Known limits of line patterns: a job written
+on one line (``lint: {script: [ruff]}``) shows no items, and a ``playbook-ci``
+job made optional through ``extends:`` or a YAML anchor is not seen.
 """
 
 from __future__ import annotations
@@ -24,6 +28,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 from itertools import pairwise
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.judges._gate_weakening_files import FileWeakening
@@ -45,17 +50,22 @@ _NOT_JOBS: Final = frozenset(
 _NO_SCRIPTS: Final = _NOT_JOBS - {"default", "before_script", "after_script"}
 _TOP_SCRIPTS: Final = frozenset({"before_script", "after_script"})
 _INCLUDE: Final = "include"
-_TOP_KEY = re.compile(r"""^("[^"]*"|'[^']*'|[^\s#'"\-][^:#]*?)[ \t]*:(?:[ \t]|$)(.*)""")
+#: A column-0 key ends at the first ``:`` followed by a blank, so ``test:unit:`` is one key.
+_TOP_KEY = re.compile(r"""^("[^"]*"|'[^']*'|[^\s#'"\-][^#]*?)[ \t]*:(?:[ \t]|$)(.*)""")
 _SCRIPT_KEY = re.compile(r"^([ \t]+)(?:before_|after_)?script[ \t]*:(.*)$")
 _ITEM = re.compile(r"^([ \t]*)-[ \t]+(.*)$")
 _INCLUDE_KEY = re.compile(
     r"^[ \t]*(?:-[ \t]+)?(local|template|component|project|remote|file)[ \t]*:[ \t]*(.*)$"
 )
 _MAPPING = re.compile(r"""^[^\s"'][^:]*:(?:[ \t]|$)""")
+#: Include sub-keys whose nested lines are conditions or values, never entries.
+_INCLUDE_NESTED = re.compile(r"^[ \t]*(?:-[ \t]+)?(?:rules|inputs)[ \t]*:")
+#: YAML 1.1, which GitLab reads, also spells false ``False``, ``no`` or ``off``.
 _LOOSENING = re.compile(
-    r"^[ \t]*(?:-[ \t]+)?(?:allow_failure[ \t]*:(?![ \t]*false\b)|when[ \t]*:[ \t]*[\"']?(?:manual|never)\b)"
+    r"^[ \t]*(?:-[ \t]+)?(?:allow_failure[ \t]*:(?![ \t]*(?i:false|no|off)\b)"
+    r"|when[ \t]*:[ \t]*[\"']?(?:manual|never|on_failure)\b)"
 )
-_COMMENT = re.compile(r"(?:^|[ \t]+)#.*$")
+_COMMENT_START = re.compile(r"(?<![^ \t])#")
 _BLOCK_SCALAR = re.compile(r"^[|>][+-]?[0-9]?$")
 
 
@@ -135,15 +145,19 @@ def _scripts(blocks: Iterable[_Block]) -> Counter[str]:
 
 
 def _block_scripts(lines: Sequence[str]) -> Iterator[str]:
+    """The script sections that are direct keys of the block (not ``variables: script:``)."""
+    child = min((_indent(line) for line in lines if _content(line)), default=-1)
     for index, line in enumerate(lines):
         section = _SCRIPT_KEY.match(line)
-        if section is not None:
-            yield from _section_items(section[2], lines[index + 1 :], len(section[1]))
+        if section is not None and len(section[1]) == child:
+            yield from _section_items(section[2], lines[index + 1 :], child)
 
 
 def _section_items(inline: str, rest: Sequence[str], indent: int) -> list[str]:
     """The items of a ``script:`` key at ``indent``: inline, a block scalar, or ``- `` lines."""
     value = _normalized(inline)
+    if value.startswith("[") and value.endswith("]"):
+        return [_unquoted(item.strip()) for item in value[1:-1].split(",") if item.strip()]
     if value and not _BLOCK_SCALAR.match(value):
         return [value]
     body = list(_section_body(rest, indent))
@@ -154,9 +168,9 @@ def _section_items(inline: str, rest: Sequence[str], indent: int) -> list[str]:
 
 def _section_body(lines: Iterable[str], indent: int) -> Iterator[str]:
     for line in lines:
-        if not line.strip() or line.lstrip().startswith("#"):
+        if not _content(line):
             continue
-        depth = len(line) - len(line.lstrip())
+        depth = _indent(line)
         if depth < indent or (depth == indent and _ITEM.match(line) is None):
             return
         yield line
@@ -185,9 +199,21 @@ def _includes(blocks: Iterable[_Block]) -> Counter[str]:
     for block in blocks:
         if block.key != _INCLUDE:
             continue
-        found = [_normalized(block.inline), *(_include_entry(line) for line in block.lines)]
+        lines = _outside_nested(block.lines)
+        found = [_normalized(block.inline), *(_include_entry(line) for line in lines)]
         entries.update(entry for entry in found if entry)
     return entries
+
+
+def _outside_nested(lines: Iterable[str]) -> Iterator[str]:
+    """The include lines that are not under an entry's ``rules:`` or ``inputs:``."""
+    nested_at = -1
+    for line in lines:
+        depth = _indent(line)
+        if nested_at >= 0 and (depth > nested_at or (depth == nested_at and _ITEM.match(line))):
+            continue
+        nested_at = depth if _INCLUDE_NESTED.match(line) else -1
+        yield line
 
 
 def _include_entry(line: str) -> str:
@@ -205,7 +231,9 @@ def _include_entry(line: str) -> str:
 # --- playbook-ci -----------------------------------------------------------------------------------
 
 
-def _loosened(path: str, before: Iterable[_Block], after: Iterable[_Block]) -> list[FileWeakening]:
+def _loosened(path: str, before: Sequence[_Block], after: Iterable[_Block]) -> list[FileWeakening]:
+    if not any(block.key == PLAYBOOK_CI_JOB for block in before):
+        return []  # a new job starts however it starts; only an existing gate can loosen
     gained = _loosening_marks(after) - _loosening_marks(before)
     return [
         FileWeakening(
@@ -226,17 +254,41 @@ def _loosening_marks(blocks: Iterable[_Block]) -> Counter[str]:
 # --- shared ----------------------------------------------------------------------------------------
 
 
+#: What each ``gitlab-ci-<what>-removed`` rule calls its removed thing.
+_REMOVED_NOUNS: Final = MappingProxyType(
+    {"job": "job", "script": "script item", "include": "include"}
+)
+
+
 def _weakening(path: str, what: str, name: str) -> FileWeakening:
-    noun = {"job": "job", "script": "script item", "include": "include"}[what]
+    noun = _REMOVED_NOUNS[what]
     return FileWeakening(path, f"gitlab-ci-{what}-removed", f"{noun} {name!r} removed", (name,))
 
 
 def _normalized(text: str) -> str:
     """One line as compared: no list dash, trailing comment or outer quotes."""
-    value = _COMMENT.sub("", text.strip())
+    value = _without_comment(text.strip())
     item = _ITEM.match(value)
     value = (item[2] if item is not None else value).strip()
     return _unquoted(value)
+
+
+def _without_comment(text: str) -> str:
+    """``text`` up to its first `` #`` that sits outside quotes (``echo "a # b"`` keeps it)."""
+    for match in _COMMENT_START.finditer(text):
+        head = text[: match.start()]
+        if head.count('"') % 2 == 0 and head.count("'") % 2 == 0:
+            return head.rstrip()
+    return text
+
+
+def _content(line: str) -> bool:
+    stripped = line.strip()
+    return bool(stripped) and not stripped.startswith("#")
+
+
+def _indent(line: str) -> int:
+    return len(line) - len(line.lstrip())
 
 
 def _unquoted(text: str) -> str:

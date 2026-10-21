@@ -293,7 +293,7 @@ def test_readme_gitlab_ci_documents_the_three_gate_levels() -> None:
     section = _section("### GitLab CI")
     for level in ("Free", "Pipelines must succeed", ".gitlab-ci.yml@", "pipeline execution policy"):
         assert level in section
-    assert "On Free a merge request can otherwise edit its own pipeline" in section
+    assert "On Free a pull request can otherwise edit its own pipeline" in section
 
 
 def test_spec_ci_section_mirrors_the_gitlab_recipe() -> None:
