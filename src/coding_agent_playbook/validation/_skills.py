@@ -67,7 +67,10 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.skill import Skill
 
 _NAME_SHAPE: Final = f"{AGENT_SKILL_NAME_PATTERN.pattern} (1-{AGENT_SKILL_NAME_MAX_CHARS} chars)"
-_BLOCK_KEYS: Final = ("files", "use_when")
+#: The phrase keys V9 checks; ``sections`` and ``references`` are lists that
+#: ``validation._sections`` and ``validation._skill_references`` check (prU D17, D47).
+_PHRASE_KEYS: Final = ("files", "use_when")
+_BLOCK_KEYS: Final = (*_PHRASE_KEYS, "sections", "references")
 #: ``playbook.files`` becomes one line of ``## Where guidance lives`` (prS §6.4.2).
 _FILES_MAX_CHARS: Final = 80
 _PHRASE_SHAPES: Final = {
@@ -252,14 +255,14 @@ def _block_problems(block: object) -> list[str]:
     if not isinstance(block, Mapping):
         return [
             f"'{PLAYBOOK_BLOCK_KEY}' must be a mapping with optional keys "
-            f"{' and '.join(_BLOCK_KEYS)}, got {type(block).__name__} {block!r}"
+            f"{', '.join(_BLOCK_KEYS)}, got {type(block).__name__} {block!r}"
         ]
     unknown = sorted(str(key) for key in block if key not in _BLOCK_KEYS)
     problems = [
         f"'{PLAYBOOK_BLOCK_KEY}' has unknown key {key!r}; allowed keys: {', '.join(_BLOCK_KEYS)}"
         for key in unknown
     ]
-    for key in _BLOCK_KEYS:
+    for key in _PHRASE_KEYS:
         problem = _phrase_problem(key, block.get(key))
         if problem is not None:
             problems.append(f"'{PLAYBOOK_BLOCK_KEY}.{key}' {problem}; {_PHRASE_SHAPES[key]}")

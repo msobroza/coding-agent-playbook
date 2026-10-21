@@ -26,6 +26,10 @@ class Skill:
     source_package: str
     # Set by compose_skills at sync: the active member rules, rendered.
     member_references: tuple[MemberReference, ...] = ()
+    # The skill's source directory, when it was loaded from one: ``playbook
+    # validate`` lists its references/ and examples/ files against
+    # ``playbook.references`` (prU D47). None for a skill built in memory.
+    source_dir: Path | None = None
 
     def to_prompt(self) -> Prompt:
         """Degrade this Skill to a Prompt.
@@ -64,6 +68,7 @@ class Skill:
             "references_dir": None if self.references_dir is None else str(self.references_dir),
             "source_package": self.source_package,
             "member_references": [member.to_dict() for member in self.member_references],
+            "source_dir": None if self.source_dir is None else str(self.source_dir),
         }
 
     @classmethod
@@ -72,6 +77,7 @@ class Skill:
         references_dir = data["references_dir"]
         # A dict written before member references existed has no such key.
         members = data.get("member_references", ())
+        source_dir = data.get("source_dir")
         return cls(
             dict(data["frontmatter"]),
             data["body"],
@@ -79,4 +85,5 @@ class Skill:
             None if references_dir is None else Path(references_dir),
             data["source_package"],
             tuple(MemberReference.from_dict(member) for member in members),
+            None if source_dir is None else Path(source_dir),
         )
