@@ -69,6 +69,11 @@ def test_collect_hooks_default_records_a_raised_hook_schema_error():
     assert _FailingSource().collect_hooks() == ([], [error])
 
 
+def test_prompt_set_layers_default_is_empty():
+    """``prompt_set_layers`` is concrete (D76): a source without prompt sets has no twins."""
+    assert _DummyArtifactSource().prompt_set_layers() == []
+
+
 def test_engine_package_of_reads_a_filesystem_source_and_assumes_the_engine_otherwise(
     tmp_path,
 ):

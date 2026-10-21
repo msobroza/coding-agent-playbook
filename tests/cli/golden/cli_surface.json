@@ -610,6 +610,24 @@
         {
           "action": "_StoreAction",
           "option_strings": [
+            "--prompt-set"
+          ],
+          "dest": "prompt_set",
+          "nargs": null,
+          "const": null,
+          "default": "v1",
+          "type": null,
+          "choices": [
+            "v1",
+            "v2"
+          ],
+          "required": false,
+          "help": "prompt set to render the sample's prompt from (default: v1; the repo's prompts key is not read)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
             "--judge"
           ],
           "dest": "judge",

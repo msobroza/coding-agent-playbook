@@ -1407,6 +1407,10 @@ overlays_enabled = ["playbook_rules_bnp"]
 # The playbook init default; add "continue" to opt in. shared_skills writes the shared
 # skill root .agents/skills/ (Section 10.8); drop it to opt out.
 adapters_enabled = ["claude_code", "opencode", "shared_skills"]
+# The prompt set sync renders: "v1" (the default when the key is absent) or "v2",
+# the core prompts that also point to skills (catalog/core/prompts/v2/, same names).
+# Eval samples keep grading v1; `playbook validate` requires each v2 prompt's v1 twin.
+prompts = "v1"
 [project]
 name = "risk-models"
 kind = "python-application"          # or "python-library", "ml-research", "notebook"
@@ -2870,6 +2874,7 @@ $ playbook eval refactor-extract-helper --run --runner fake [--judge llm] [--jud
 - **`--judge NAME`** selects a judge from the `coding_agent_playbook.judges` group to score the sample's `[rubric]` layer too. The shipped judge is **`llm`** (`LLMJudge`, shells out to the `claude` CLI, `available()`-gated, never in CI). **Omitting `--judge` is deterministic-only** — no `ProgrammaticOnlyJudge`, just no judge configured ⇒ the `[rubric]` layer skips (a skipped layer is neutral in the derived verdict). **`--judge-samples N`** (default 1) is how many times the judge scores each rubric criterion before averaging; it is not a count of eval samples, and a count below 1 exits `2`. The old `samples` spelling of the flag is a deprecated alias for one release (hidden from `--help`; it prints one stderr line naming `--judge-samples`, and passing both flags exits `2`) and is removed in the release after v0.21.
 - The sample's `[gate]` layer (file checks + static/execution metric checks, 0–1 normalized non-regression) is scored deterministically into one `EvaluationReport`, rendered with the same text/json renderer as `playbook metrics`. With `--judge` set, the `[rubric]` layer's judged scores fold into the same report; the per-trial verdict is then derived from the two layers' results via `[verdict].trial`.
 - **`--full-scoring`** forces every check to run (no short-circuit), for a complete report even when a cheap gate check has already failed.
+- **`--prompt-set v1|v2`** renders the sample's prompt from that prompt set (default `v1`, the set every sample grades; a prompt with no twin in the set keeps its v1 text). The repo's `prompts` key (Section 7.1) is never read, so the opt-in eval comparison names the set of each side explicitly.
 - **There is no `--run-tests` flag.** Unlike `playbook metrics`, execution intent is *inferred*: a sample runs the suite iff its `[gate]` references an execution metric (`coverage` / `test_pass_rate`), so the sample — not a CLI flag — decides whether the execution checks run.
 - **Exit codes:** `0` on a passing report (the sample verdict holds), `1` on a failing report, `2` on usage errors — unknown sample id, unknown `--runner`, a runner that is unavailable in this environment (e.g. `claude_code` with no `claude` CLI on `PATH` — the error suggests `--runner fake`), an unknown or unavailable `--judge` (e.g. `llm` with no `claude` CLI), or a bad `--format` — and when the sample **cannot be scored at all**: its prompt fails to render (`PromptResolutionError`), or the judge gives no score after its bounded retries (`JudgeError`: the CLI exited non-zero, timed out, or did not answer with exactly one number in `[0, 1]`). An unscored sample is neither a pass nor a fail, so it never exits `0`/`1`.
 - **Judged scores are labelled uncalibrated.** Whenever a judged check ran, the text report adds a note and the JSON carries `"uncalibrated_judge": true`, until judge calibration (§19 Q12) exists.
