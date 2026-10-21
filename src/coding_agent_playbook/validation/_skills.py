@@ -35,6 +35,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, TypeGuard
 
+from coding_agent_playbook.artifacts.member_reference import member_reference_path
 from coding_agent_playbook.skills.document import (
     DESCRIPTION_MAX_CHARS,
     PLAYBOOK_BLOCK_KEY,
@@ -199,7 +200,8 @@ def _unsafe_id_problem(rule: Rule, skill_id: str) -> str:
     """V6: the member's id becomes ``rules/<id>.md`` in every skill root."""
     return (
         f"rule id {rule.frontmatter.id!r} cannot be a member of skill {skill_id!r}: its "
-        f"rule file is written as rules/<id>.md, so the id must match {_NAME_SHAPE}"
+        f"rule file is written as {member_reference_path('<id>')}, so the id must match "
+        f"{_NAME_SHAPE}"
     )
 
 

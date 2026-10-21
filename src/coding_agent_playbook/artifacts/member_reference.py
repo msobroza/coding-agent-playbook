@@ -14,14 +14,16 @@ A stdlib-only leaf: ``artifacts.skill`` imports it at run time for
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
 #: The directory inside a skill that holds its member rules, as in the source
 #: (prU D5, ADR 0005); ``references/`` stays free for hand-written documents.
-_RULES_DIR = "rules"
+#: Generated wording that names the directory (skills.document, validation V6)
+#: is built from it too, so a rename touches this one line.
+RULES_DIR: Final = "rules"
 
 
 def member_reference_path(rule_id: str) -> str:
@@ -31,7 +33,7 @@ def member_reference_path(rule_id: str) -> str:
 
     Example: ``member_reference_path("pytest")`` -> ``"rules/pytest.md"``.
     """
-    return f"{_RULES_DIR}/{rule_id}.md"
+    return f"{RULES_DIR}/{rule_id}.md"
 
 
 @dataclass(frozen=True)

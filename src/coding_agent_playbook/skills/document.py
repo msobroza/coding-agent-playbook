@@ -19,7 +19,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.artifacts.member_reference import member_reference_path
+from coding_agent_playbook.artifacts.member_reference import RULES_DIR, member_reference_path
 from coding_agent_playbook.skills.capabilities import CAPABILITIES_KEY
 from coding_agent_playbook.skills.naming import skill_id_of
 
@@ -42,7 +42,7 @@ _SENTENCE_ENDINGS: Final = (".", "!", "?")
 
 _RULES_HEADING: Final = "## Rules"
 _RULES_LEAD: Final = (
-    "Each file under rules/ is one rule. Open only the ones the current task needs."
+    f"Each file under {RULES_DIR}/ is one rule. Open only the ones the current task needs."
 )
 
 _WHERE_HEADING: Final = "## Where guidance lives"
@@ -51,7 +51,7 @@ _WHERE_LEAD: Final = (
     "skill and open the rules its index lists."
 )
 _WHERE_LINT_LINE: Final = (
-    "Lint feedback names a rule id; that rule's file in the skill's rules/ has the fix."
+    f"Lint feedback names a rule id; that rule's file in the skill's {RULES_DIR}/ has the fix."
 )
 #: The separator that ends every section of the composite files (rendering/formats.py rule sections).
 _SECTION_END: Final = "---"

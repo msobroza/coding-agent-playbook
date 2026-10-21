@@ -56,15 +56,20 @@ def _old_spelling(path: str) -> str:
     return path.replace("/rules/", "/references/", 1)
 
 
+def _move_rules_dir_back(rules_dir: Path) -> None:
+    """Move every file of a skill's ``rules/`` into its ``references/``, then drop ``rules/``."""
+    old_dir = rules_dir.parent / "references"
+    old_dir.mkdir(exist_ok=True)
+    for member in sorted(rules_dir.iterdir()):
+        shutil.move(member, old_dir / member.name)
+    rules_dir.rmdir()
+
+
 def _rewind_to_references_layout(repo: Path) -> None:
     """Leave ``repo`` as an engine before prU synced it: members under ``references/``."""
     for root in _SKILL_ROOTS:
         for rules_dir in sorted((repo / root).glob("*/rules")):
-            old_dir = rules_dir.parent / "references"
-            old_dir.mkdir(exist_ok=True)
-            for member in sorted(rules_dir.iterdir()):
-                shutil.move(member, old_dir / member.name)
-            rules_dir.rmdir()
+            _move_rules_dir_back(rules_dir)
     state = FileSystemStateSource(repo_root=repo)
     lockfile = state.load_lockfile()
     assert lockfile is not None

@@ -179,7 +179,7 @@ def unlink_skill_references(body: str) -> str:
 
     Example: ``unlink_skill_references("[ex](../references/a/ex.md)")`` -> ``"ex.md"``.
     """
-    return _SKILL_REFERENCE_LINK.sub(lambda m: PurePosixPath(m.group(1)).name, body)
+    return _SKILL_REFERENCE_LINK.sub(lambda match: PurePosixPath(match.group(1)).name, body)
 
 
 def _render_markdown_rule_section(body: str, frontmatter: dict[str, Any]) -> str:
