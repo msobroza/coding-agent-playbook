@@ -58,7 +58,7 @@ def test_collect_hooks_default_wraps_list_hooks():
 
 
 def test_collect_hooks_default_records_a_raised_hook_schema_error():
-    """``tolerate_hook_errors`` (prK §P P8c) must not crash on a third-party
+    """``tolerate_load_errors`` (prK §P P8c) must not crash on a third-party
     source whose ``list_hooks`` fails loudly; its error is recorded instead."""
     error = HookSchemaError("remote:guard-x", "timeout", "2s", "a number of seconds")
 

@@ -3,7 +3,7 @@
 :meth:`SyncContext.from_repo` loads the config, detects facts and resolves the
 overlays; :meth:`SyncContext.from_config` is the same minus the config load. Its
 hook step splits a source's flat hook list into real layers and either fails
-loudly on a malformed hook or, with ``tolerate_hook_errors``, records it. It also
+loudly on a malformed hook or, with ``tolerate_load_errors``, records it. It also
 carries the committed ``[hooks]`` / ``[guardrails]`` tables raw (§B.1). The
 config-less context of ``playbook validate`` is tested in ``tests/cli/test_validate.py``.
 """
@@ -18,6 +18,7 @@ import pytest
 
 from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
 from coding_agent_playbook.artifacts.identity import artifact_id_of
+from coding_agent_playbook.artifacts.rule import RuleLoadError
 from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE
 from coding_agent_playbook.catalog.resolve import Collision
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
@@ -131,17 +132,53 @@ def test_from_repo_without_hooks_has_only_the_engine_pack(tmp_path, make_synthet
     assert (ctx.hook_load_errors, ctx.hook_violations) == ([], [])
 
 
-def test_from_repo_tolerate_hook_errors_records_load_errors(
+def test_from_repo_tolerate_load_errors_records_load_errors(
     tmp_path, make_synthetic_repo, make_hook
 ):
     repo = make_synthetic_repo(tmp_path)
     bad = make_hook(repo / "playbook" / "hooks", "bad", timeout="2s")
     make_hook(repo / "playbook" / "hooks", "good")
 
-    ctx = SyncContext.from_repo(repo, tolerate_hook_errors=True)
+    ctx = SyncContext.from_repo(repo, tolerate_load_errors=True)
 
     assert [hook.frontmatter.id for hook in _local(ctx.hooks_resolved)] == ["good"]
     assert [error.where for error in ctx.hook_load_errors] == [str(bad)]
+
+
+def _write_rule(repo: Path, name: str, extra_yaml: str = "") -> Path:
+    path = repo / "playbook" / "rules" / f"{name}.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        f"---\nid: {name}\nname: R\ndescription: d\nscope: always\n{extra_yaml}---\nBody\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_from_repo_tolerate_load_errors_records_rule_load_errors(tmp_path, make_synthetic_repo):
+    repo = make_synthetic_repo(tmp_path)
+    _write_rule(repo, "good")
+    bad = _write_rule(repo, "bad", "impact: HIGH\n")
+
+    ctx = SyncContext.from_repo(repo, tolerate_load_errors=True)
+
+    assert [error.path for error in ctx.rule_load_errors] == [bad]
+    local = [r.frontmatter.id for r in ctx.rules_resolved if r.source_package == "<repo-local>"]
+    assert local == ["good"]
+    assert "bad" not in {r.frontmatter.id for r in ctx.rule_definitions}
+    assert {r.frontmatter.id for r in ctx.rules_resolved} <= {
+        r.frontmatter.id for r in ctx.rule_definitions
+    }
+
+
+def test_from_repo_default_raises_rule_load_error(tmp_path, make_synthetic_repo):
+    repo = make_synthetic_repo(tmp_path)
+    bad = _write_rule(repo, "bad", "impact: HIGH\n")
+
+    with pytest.raises(RuleLoadError) as caught:
+        SyncContext.from_repo(repo)
+
+    assert caught.value.path == bad
 
 
 def test_from_repo_default_raises_hook_schema_error(tmp_path, make_synthetic_repo, make_hook):

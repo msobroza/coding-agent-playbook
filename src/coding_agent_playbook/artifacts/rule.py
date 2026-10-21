@@ -10,11 +10,36 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
+import yaml
+
 from coding_agent_playbook.artifacts.frontmatter import (
     _read_markdown,
     _without_empty,
     format_frontmatter,
 )
+
+
+class RuleLoadError(ValueError):
+    """A rule file that cannot become a :class:`Rule`; ``str`` is ``<path>: <problem>``.
+
+    Raised for an unknown or missing frontmatter key, a missing ``---`` fence,
+    invalid YAML or a non-mapping frontmatter (prU D21). ``playbook validate``
+    reports each one as a finding; sync, check and render exit 2 on it. A
+    ``ValueError``, like ``HookSchemaError``: the fence errors it replaces were
+    one, and callers such as the eval prompt renderer catch ``ValueError``. So
+    does ``evals/validator.py``'s ``_validate_schema``: a malformed rule file
+    reached while compiling an eval sample is reported against that sample.
+
+    Example::
+
+        >>> str(RuleLoadError(Path("rules/x.md"), "unknown frontmatter key 'impact'"))
+        "rules/x.md: unknown frontmatter key 'impact'"
+    """
+
+    def __init__(self, path: Path, problem: str) -> None:
+        self.path = path
+        self.problem = problem
+        super().__init__(f"{path}: {problem}")
 
 
 @dataclass
@@ -36,6 +61,10 @@ class RuleFrontmatter:
     # scoped rule, forbidden for an always rule; ``_without_empty`` drops None,
     # so a rule without it keeps byte-identical markdown.
     skill: str | None = None
+    # The section of its skill's rule index this rule files under (prU D21);
+    # rendered nowhere yet. ``_without_empty`` drops None, so a rule without it
+    # keeps byte-identical markdown.
+    section: str | None = None
 
     def __post_init__(self) -> None:
         # YAML parses 'key:' (blank value) as None; the dataclass default does
@@ -69,7 +98,21 @@ class Rule:
 
     @classmethod
     def from_markdown(cls, path: Path, source_package: str) -> Rule:
-        data, body, is_templated = _read_markdown(path)
+        """Load the rule at ``path``, raising :class:`RuleLoadError` when it is malformed.
+
+        Example::
+
+            >>> Rule.from_markdown(Path("playbook/rules/x.md"), "<repo-local>")  # doctest: +SKIP
+        """
+        try:
+            data, body, is_templated = _read_markdown(path)
+        except yaml.YAMLError as exc:
+            raise RuleLoadError(path, f"invalid YAML frontmatter: {exc}") from exc
+        except ValueError as exc:  # a missing fence or a non-mapping frontmatter
+            raise RuleLoadError(path, str(exc)) from exc
+        problem = _frontmatter_keys_problem(data)
+        if problem is not None:
+            raise RuleLoadError(path, problem)
         return cls(RuleFrontmatter(**data), body, body, is_templated, path, source_package)
 
     def to_markdown(self) -> str:
@@ -98,3 +141,35 @@ class Rule:
             None if source_path is None else Path(source_path),
             data["source_package"],
         )
+
+
+def _frontmatter_keys_problem(data: dict[Any, Any]) -> str | None:
+    """Why ``data``'s keys cannot build a :class:`RuleFrontmatter`, or ``None`` when they can.
+
+    Checked before construction: the dataclass would raise a ``TypeError`` that
+    names neither the file nor the keys a rule may set.
+    """
+    fields = dataclasses.fields(RuleFrontmatter)
+    allowed = "allowed keys: " + ", ".join(f.name for f in fields)
+    known = {f.name for f in fields}
+    unknown = [str(key) for key in data if key not in known]
+    if unknown:
+        return _keys_message("unknown frontmatter", unknown, allowed)
+    required = [f.name for f in fields if _is_required(f)]
+    missing = [name for name in required if name not in data]
+    if missing:
+        return _keys_message("missing required frontmatter", missing, allowed)
+    return None
+
+
+def _keys_message(kind: str, names: list[str], allowed: str) -> str:
+    noun = "key" if len(names) == 1 else "keys"
+    return f"{kind} {noun} {_quoted(names)}; {allowed}"
+
+
+def _is_required(field_: dataclasses.Field[Any]) -> bool:
+    return field_.default is dataclasses.MISSING and field_.default_factory is dataclasses.MISSING
+
+
+def _quoted(names: list[str]) -> str:
+    return ", ".join(repr(name) for name in names)
