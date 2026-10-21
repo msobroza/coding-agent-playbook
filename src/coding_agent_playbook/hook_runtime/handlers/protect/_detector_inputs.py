@@ -4,16 +4,26 @@ The cheap half of resync-on-detector-input-change, about 5 ms:
 
 - which inputs the call touched: ``pyproject.toml`` and ``requirements*``
   (dependencies), ``Dockerfile`` / ``docker/`` (``has_dockerfile``), CI files
-  (``has_ci``), a notebook (``has_notebooks``), or a successful ``uv
-  add|remove``, ``poetry add|remove`` or ``pip install`` segment;
+  (``has_ci``), a notebook (``has_notebooks``), a root Domino marker or the
+  committed config (``domino_project``, prU D63: the config may now hold
+  ``platforms = ["domino"]``), a file under ``catalog/``, ``playbook/`` or a
+  package's ``resources/<kind>/`` (``playbook_layer``, D70), or a successful
+  ``uv add|remove``, ``poetry add|remove`` or ``pip install`` segment;
 - whether they changed: one ``tomllib`` read of ``pyproject.toml`` whose
   dependency names (``detector.pyproject_deps``, the detector's own parser) are
   compared with the names sync baked, and the presence of a file whose flag
   was false at sync. An ordinary ``[tool.*]`` edit stays silent.
 
-``requirements*`` files trigger the comparison but never change it: the
-detector reads only ``pyproject.toml``. A private module: it registers no
-handler, and ``tomllib`` loads only once a dependency input was touched.
+The runtime names compared include those of the root ``requirements*.txt``
+files, which the detector adds to ``dependencies`` (prU D78(2);
+``detector.requirements_files``, the detector's own reader). A
+``requirements*.in`` file triggers the comparison but never changes it. A
+presence flag only turns on here (a deleted marker waits for the next sync),
+and a written config or untracked ``dominostats.json`` over-matches: that
+costs one ``detect()``, never a wrong report. A shell ``mkdir playbook``
+carries no write path, so it waits for the next sync too. A private module: it
+registers no handler, and ``tomllib`` loads only once a dependency input was
+touched.
 """
 
 from __future__ import annotations
@@ -28,10 +38,17 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.dispatch.event import ToolCall
     from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath
 
-__all__ = ["DEPENDENCIES", "FLAGS", "INSTALL_PROGRAMS", "detector_triggers", "inputs_changed"]
+__all__ = [
+    "DEPENDENCIES",
+    "FLAGS",
+    "INSTALL_PROGRAMS",
+    "detector_triggers",
+    "input_kinds",
+    "inputs_changed",
+]
 
 DEPENDENCIES: Final = "dependencies"
-FLAGS: Final = ("has_dockerfile", "has_ci", "has_notebooks")
+FLAGS: Final = ("has_dockerfile", "has_ci", "has_notebooks", "domino_project", "playbook_layer")
 #: Dependency-changing commands, by ``(program, subcommand)`` (``uv pip install`` too).
 _INSTALLS: Final = frozenset(
     {
@@ -48,7 +65,16 @@ _INSTALLS: Final = frozenset(
 INSTALL_PROGRAMS: Final = frozenset(program for program, _ in _INSTALLS)
 #: The detector's ignored dirs: a notebook there never sets ``has_notebooks``.
 _IGNORED: Final = frozenset({".venv", "venv", "node_modules", ".git", "__pycache__", ".tox"})
-_PYPROJECT_MAX_BYTES: Final = 1024 * 1024
+#: The root files that can turn ``domino_project`` on (``detector.platform_facts``, D63),
+#: folded; the committed config is spelled here as the hook runtime spells it (spec B.5.4).
+_DOMINO_INPUTS: Final = (
+    ".dominoignore",
+    ".dominoresults",
+    "dominostats.json",
+    ".coding-agent-playbook.toml",
+)
+#: The catalog kinds an overlay package ships under ``resources/`` (D70).
+_LAYER_KINDS: Final = frozenset({"rules", "skills", "prompts", "hooks", "eval_samples"})
 
 
 def _is_requirements(rel: str) -> bool:
@@ -60,6 +86,16 @@ def _is_notebook(rel: str) -> bool:
     return rel.endswith(".ipynb") and not _IGNORED.intersection(rel.split("/")[:-1])
 
 
+def _is_layer_path(rel: str) -> bool:
+    """``catalog/…``, ``playbook/…``, or ``[src/]<pkg>/resources/<kind>/…`` (an overlay's catalog)."""
+    if rel.startswith(("catalog/", "playbook/")):
+        return True
+    parts = rel.split("/")
+    if parts[0] == "src":
+        parts = parts[1:]
+    return len(parts) >= 4 and parts[1] == "resources" and parts[2] in _LAYER_KINDS
+
+
 #: Which input a repo-relative (folded) path is, in the detector's own terms.
 _PATH_INPUTS: Final[Mapping[str, Callable[[str], bool]]] = {
     DEPENDENCIES: lambda rel: rel == "pyproject.toml" or _is_requirements(rel),
@@ -69,7 +105,21 @@ _PATH_INPUTS: Final[Mapping[str, Callable[[str], bool]]] = {
         or rel in (".gitlab-ci.yml", "jenkinsfile")
     ),
     "has_notebooks": _is_notebook,
+    "domino_project": lambda rel: rel in _DOMINO_INPUTS,
+    "playbook_layer": _is_layer_path,
 }
+
+
+def input_kinds(repo_rel: str) -> frozenset[str]:
+    """The detector inputs a repo-relative path is (``DEPENDENCIES`` or a flag name), folded.
+
+    Example::
+
+        >>> sorted(input_kinds("playbook/rules/x.md"))
+        ['playbook_layer']
+    """
+    rel = repo_rel.lower()
+    return frozenset(name for name, matches in _PATH_INPUTS.items() if matches(rel))
 
 
 def detector_triggers(tool: ToolCall) -> frozenset[str]:
@@ -87,8 +137,7 @@ def detector_triggers(tool: ToolCall) -> frozenset[str]:
         name
         for path in tool.write_paths
         if path.repo_rel is not None
-        for name, matches in _PATH_INPUTS.items()
-        if matches(path.repo_rel.lower())
+        for name in input_kinds(path.repo_rel)
     }
     command = tool.command
     if command is not None and any(_is_install(s.argv) for s in command.segments):
@@ -132,34 +181,39 @@ def _written_now(flag: str, written: Sequence[NormalizedPath]) -> bool:
 
 
 def _dependencies_changed(facts: Mapping[str, Any], repo_root: str) -> bool:
-    """Whether ``pyproject.toml``'s dependency names differ from the baked ones.
+    """Whether the declared dependency names differ from the baked ones.
 
-    A pyproject that does not parse (an edit in progress) counts as unchanged.
+    Runtime names are ``pyproject.toml``'s plus the root ``requirements*.txt``
+    files', as ``detect()`` records them. A pyproject that does not parse (an
+    edit in progress) counts as unchanged.
     """
-    names = _current_names(repo_root)
+    names = _pyproject_names(repo_root)
     if names is None:
         return False
+    from pathlib import Path  # branch-local (§D.1), like tomllib
+
+    from coding_agent_playbook.detector.requirements_files import root_requirement_names
+
     runtime, dev = names
+    runtime |= root_requirement_names(Path(repo_root))
     return runtime != _baked(facts, "dependencies") or dev != _baked(facts, "dev_dependencies")
 
 
-def _current_names(repo_root: str) -> tuple[frozenset[str], frozenset[str]] | None:
+def _pyproject_names(repo_root: str) -> tuple[frozenset[str], frozenset[str]] | None:
     import tomllib  # branch-local (§D.1): only after a dependency input was touched
 
+    from coding_agent_playbook.detector.bounded_read import read_bounded_utf8
     from coding_agent_playbook.detector.pyproject_deps import dependency_names
 
-    try:
-        with open(os.path.join(repo_root, "pyproject.toml"), "rb") as handle:
-            data = handle.read(_PYPROJECT_MAX_BYTES + 1)
-    except FileNotFoundError:
+    path = os.path.join(repo_root, "pyproject.toml")
+    if not os.path.exists(path):  # absent (or a dangling link): no dependencies
         return frozenset(), frozenset()
-    except OSError:
-        return None
-    if len(data) > _PYPROJECT_MAX_BYTES:
+    text = read_bounded_utf8(path)
+    if text is None:
         return None
     try:
-        return dependency_names(tomllib.loads(data.decode("utf-8")))
-    except (tomllib.TOMLDecodeError, UnicodeDecodeError):
+        return dependency_names(tomllib.loads(text))
+    except tomllib.TOMLDecodeError:
         return None
 
 

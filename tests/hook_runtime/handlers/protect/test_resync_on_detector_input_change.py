@@ -22,7 +22,10 @@ from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.handlers.protect import (
     resync_on_detector_input_change as resync,
 )
-from coding_agent_playbook.hook_runtime.handlers.protect._detector_inputs import detector_triggers
+from coding_agent_playbook.hook_runtime.handlers.protect._detector_inputs import (
+    detector_triggers,
+    input_kinds,
+)
 from coding_agent_playbook.hooks.guard_config.inputs import DetectInputs, applicability_rows
 from coding_agent_playbook.hooks.resolution.resolved import EffectiveHooks
 from tests.hook_runtime.fakes import FakeProc
@@ -49,6 +52,10 @@ _WITH_TORCH: Final = '[project]\nname = "demo"\ndependencies = ["fastapi>=0.110"
 _DOCKER_RULE: Final = (
     "---\nid: docker-hygiene\nname: Docker hygiene\ndescription: Pin base images.\n"
     "scope: always\napplies_if:\n  has_dockerfile: true\n---\nPin base images.\n"
+)
+_DOMINO_RULE: Final = (
+    "---\nid: domino-runs\nname: Domino runs\ndescription: Write run outputs.\n"
+    "scope: always\napplies_if:\n  domino_project: true\n---\nWrite run outputs.\n"
 )
 
 
@@ -93,9 +100,12 @@ def detect_spy(monkeypatch: pytest.MonkeyPatch) -> DetectSpy:
 def _synced(repo: PackRepo, pyproject: str = _BASE, *, auto_sync: bool = False) -> PackRepo:
     """Write ``pyproject`` and render facts + rows exactly as sync would from it."""
     repo.write("pyproject.toml", pyproject)
-    docker_rule = repo.write("playbook/rules/docker-hygiene.md", _DOCKER_RULE)
+    local = [
+        repo.write("playbook/rules/docker-hygiene.md", _DOCKER_RULE),
+        repo.write("playbook/rules/domino-runs.md", _DOMINO_RULE),
+    ]
     source = FileSystemArtifactSource(repo_root=repo.root)
-    rules = [*source.list_rules(), Rule.from_markdown(docker_rule, "<repo-local>")]
+    rules = [*source.list_rules(), *(Rule.from_markdown(p, "<repo-local>") for p in local)]
     facts = detector.detect(repo.root)
     rows = applicability_rows(
         rules=rules,
@@ -286,17 +296,67 @@ def test_new_dockerfile_flips_the_presence_flag(
     assert ML_RULE not in item
 
 
-def test_requirements_edit_is_inert(
+def test_root_requirements_edit_names_the_newly_active_rule(
     repo: PackRepo, deps: Callable[..., RuntimeDeps], detect_spy: DetectSpy
 ) -> None:
-    """The detector reads no requirements file, so the comparison stays on pyproject."""
+    """The detector reads root requirements files (prU D78(2)), so the comparison does too."""
     repo.write("requirements.txt", "torch>=2\n")
     tool_input = {"file_path": str(repo.root / "requirements.txt"), "content": "torch>=2\n"}
 
     report = _post(repo, deps(), "Write", tool_input)
 
+    assert ML_RULE in report.trace.combined.context[0]
+    assert detect_spy.calls == 1
+
+
+def test_requirements_edit_naming_only_known_dependencies_is_silent(
+    repo: PackRepo, deps: Callable[..., RuntimeDeps], detect_spy: DetectSpy
+) -> None:
+    """``fastapi`` is already a baked dependency: the cheap comparison decides alone."""
+    repo.write("requirements.txt", "fastapi\n")
+    tool_input = {"file_path": str(repo.root / "requirements.txt"), "content": "fastapi\n"}
+
+    report = _post(repo, deps(), "Write", tool_input)
+
     assert report.trace.combined.decision is Decision.NONE
     assert detect_spy.calls == 0
+
+
+@pytest.mark.parametrize(
+    ("rel", "text"),
+    [(".dominoignore", "results/\n"), (".coding-agent-playbook.toml", 'platforms = ["domino"]\n')],
+    ids=["domino-marker", "platforms-key"],
+)
+def test_a_new_domino_input_names_the_domino_gated_rule(
+    repo: PackRepo, deps: Callable[..., RuntimeDeps], rel: str, text: str
+) -> None:
+    """``domino_project`` was baked false; a marker or the committed key turns it on (D63)."""
+    repo.write(rel, text)
+    tool_input = {"file_path": str(repo.root / rel), "content": text}
+
+    report = _post(repo, deps(), "Write", tool_input)
+
+    [item] = report.trace.combined.context
+    assert 'rule "domino-runs" (source "<repo-local>")' in item
+
+
+@pytest.mark.parametrize(
+    ("rel", "kinds"),
+    [
+        (".dominoignore", {"domino_project"}),
+        ("dominostats.json", {"domino_project"}),
+        (".coding-agent-playbook.toml", {"domino_project"}),
+        ("playbook/rules/x.md", {"playbook_layer"}),
+        ("catalog/core/rules/x.md", {"playbook_layer"}),
+        ("src/acme/resources/rules/x.md", {"playbook_layer"}),
+        ("acme/resources/skills/s/SKILL.md", {"playbook_layer"}),
+        ("acme/resources/data/x.csv", set()),
+        ("docs/.dominoignore", set()),
+        ("requirements-dev.txt", {"dependencies"}),
+    ],
+)
+def test_input_kinds_classifies_each_detector_input(rel: str, kinds: set[str]) -> None:
+    assert input_kinds(rel) == kinds
 
 
 def test_malformed_pyproject_mid_edit_is_silent(
