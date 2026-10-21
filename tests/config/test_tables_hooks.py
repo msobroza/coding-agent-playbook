@@ -235,6 +235,7 @@ def test_guardrails_domains_parse_with_defaults() -> None:
     assert absent.git.protected_branches == ("main", "master", "release/*")
     assert absent.network == NetworkGuardrails(mode="off", allowed_hosts=())
     assert absent.stop_sweep.mode == "block"
+    assert absent.docs.mode == "block"
     assert (absent.dependencies.mode, absent.audit.retain_days) == (None, None)
 
 
@@ -247,6 +248,7 @@ def test_guardrails_explicit_values_replace_the_defaults() -> None:
             "dependencies": {"mode": "allowlist", "allowlist": ["requests"]},
             "audit": {"retain_days": 30},
             "stop_sweep": {"mode": "warn"},
+            "docs": {"mode": "off"},
         }
     )
 
@@ -255,6 +257,7 @@ def test_guardrails_explicit_values_replace_the_defaults() -> None:
     assert parsed.network == NetworkGuardrails("enforce", ("artifactory.corp",))
     assert (parsed.dependencies.mode, parsed.dependencies.allowlist) == ("allowlist", ("requests",))
     assert (parsed.audit.retain_days, parsed.stop_sweep.mode) == (30, "warn")
+    assert parsed.docs.mode == "off"
 
 
 @pytest.mark.parametrize(
@@ -267,6 +270,10 @@ def test_guardrails_explicit_values_replace_the_defaults() -> None:
         (
             {"stop_sweep": {"mode": "deny"}},
             "[guardrails.stop_sweep] mode: must be one of 'block', 'warn', 'off', got 'deny'",
+        ),
+        (
+            {"docs": {"mode": "skip"}},
+            "[guardrails.docs] mode: must be one of 'block', 'warn', 'off', got 'skip'",
         ),
         (
             {"audit": {"retain_days": "30"}},
@@ -290,8 +297,8 @@ def test_guardrails_unknown_domain_and_key_are_refused() -> None:
         parse_guardrails_config({"metrics": {}, "git": {"branches": ["main"]}})
 
     assert str(caught.value).splitlines() == [
-        "[guardrails] unknown domain 'metrics'; allowed: audit, dependencies, git, network, "
-        "secrets, stop_sweep",
+        "[guardrails] unknown domain 'metrics'; allowed: audit, dependencies, docs, git, "
+        "network, secrets, stop_sweep",
         "[guardrails.git] unknown key 'branches'; allowed: protected_branches",
     ]
 

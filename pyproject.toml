@@ -499,6 +499,7 @@ modules = [
     "coding_agent_playbook.commands.twins.check_deps",
     "coding_agent_playbook.commands.twins.check_notebooks",
     "coding_agent_playbook.commands.twins.ci",
+    "coding_agent_playbook.commands.twins.docs_check",
     "coding_agent_playbook.commands.twins.gate_scan",
     "coding_agent_playbook.commands.twins.scan_secrets",
     "coding_agent_playbook.commands.twins.scan_sinks",

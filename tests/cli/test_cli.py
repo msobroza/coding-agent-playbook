@@ -85,6 +85,7 @@ def test_every_subcommand_is_a_command_in_help_order() -> None:
         "scan-secrets",
         "check-commit-trailers",
         "check-deps",
+        "docs-check",
     )
 
     assert tuple(command.NAME for command in _COMMANDS) == help_order
@@ -332,8 +333,8 @@ def test_metrics_run_tests_is_tristate_default_none(argv, expected):
 
 
 def test_twin_subcommands_close_the_canonical_list():
-    """prK K6-K8: the off-workstation twins are registered, and no argument is required."""
-    assert _SUBCOMMANDS[-7:] == (
+    """prK K6-K8 and prU D69: the off-workstation twins are registered, no argument required."""
+    assert _SUBCOMMANDS[-8:] == (
         "gate-scan",
         "ci",
         "scan-sinks",
@@ -341,6 +342,7 @@ def test_twin_subcommands_close_the_canonical_list():
         "scan-secrets",
         "check-commit-trailers",
         "check-deps",
+        "docs-check",
     )
 
 
