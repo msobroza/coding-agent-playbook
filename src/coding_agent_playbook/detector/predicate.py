@@ -7,7 +7,7 @@ every render (``sync``, ``render``, the eval runner).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
@@ -16,6 +16,7 @@ from coding_agent_playbook.detector.facts import KNOWN_PACKAGE_MANAGERS
 from coding_agent_playbook.detector.pep503 import canonical_name
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, Mapping
     from pathlib import Path
 
     from coding_agent_playbook.artifacts.prompt import Prompt
@@ -32,6 +33,25 @@ _SUPPORTED_OPERATORS = (">=", "<=", "==", "~=", ">", "<")
 _KNOWN_BOOL_FACT_KEYS: frozenset[str] = frozenset(
     {"has_notebooks", "has_dockerfile", "has_ci", "banking_mode"}
 )
+
+#: How each list-valued ``applies_if`` key combines its names: ``all`` or ``any``.
+#: An explicit map rather than a key-name test, so a lookup that misses raises
+#: ``KeyError`` instead of silently falling into any-semantics.
+_LIST_COMBINERS: dict[str, Callable[[Iterable[object]], bool]] = {
+    "has_framework": all,
+    "any_framework": any,
+    "has_ml_stack": all,
+    "any_ml_stack": any,
+    "has_dev_dependency": all,
+    "has_dependency": all,
+    "any_dependency": any,
+    "has_file": all,
+    "any_file": any,
+}
+
+#: Every ``applies_if`` key whose value is a list of strings. The one home of
+#: that fact: ``playbook check`` quotes these keys as written in its skip reason.
+LIST_PREDICATE_KEYS: frozenset[str] = frozenset(_LIST_COMBINERS)
 
 
 def _coerce_string_list(value: Any, key: str) -> list[str]:
@@ -58,36 +78,49 @@ def _check_python_version(constraint: str, facts: Facts) -> bool:
         raise ValueError(f"invalid python_version constraint or value: {exc}") from exc
 
 
-def _has_dev_dependencies(wanted: list[str], facts: Facts) -> bool:
-    """Whether every name in ``wanted`` is a declared dev dependency (prK §F.1.2).
-
-    The fact's keys are PEP 503-normalized, so ``pytest_cov`` matches ``pytest-cov``.
-    """
-    present = set(facts.get("dev_dependencies", {}))
-    return all(canonical_name(name) in present for name in wanted)
+def _fact_keys(facts: Facts, field: str) -> Mapping[str, object]:
+    """The mapping fact ``field`` (``frameworks``, ``ml_stack``, a dependency table); empty if absent."""
+    return cast("Mapping[str, Mapping[str, object]]", facts).get(field, {})
 
 
-def _declared_dependency_names(facts: Facts) -> frozenset[str]:
-    """The PEP 503 names of every runtime and dev dependency the detector declared (D23).
+def _canonical_keys(facts: Facts, *fields: str) -> frozenset[str]:
+    """The PEP 503 names of the keys of the dependency facts ``fields`` (D23).
 
-    >>> sorted(_declared_dependency_names({"dependencies": {"anyio": ""},
-    ...                                    "dev_dependencies": {"Pytest_Cov": ""}}))
+    The one place dependency fact keys are normalized: the detector already
+    normalizes them, but an eval sample's mock facts are written by hand.
+
+    >>> sorted(_canonical_keys({"dependencies": {"anyio": ""},
+    ...                         "dev_dependencies": {"Pytest_Cov": ""}},
+    ...                        "dependencies", "dev_dependencies"))
     ['anyio', 'pytest-cov']
     """
-    declared = [*facts.get("dependencies", {}), *facts.get("dev_dependencies", {})]
-    return frozenset(canonical_name(name) for name in declared)
+    return frozenset(canonical_name(name) for field in fields for name in _fact_keys(facts, field))
 
 
-def _dependencies_match(value: object, key: str, facts: Facts) -> bool:
-    """Whether ``has_dependency`` (all) or ``any_dependency`` (any) holds for ``facts``.
+def _dependencies_match(value: object, key: str, facts: Facts, *fields: str) -> bool:
+    """Whether the dependency predicate ``key`` holds over the dependency facts ``fields``.
 
-    >>> _dependencies_match(["pandera"], "any_dependency", {"dependencies": {"pandera": ""}})
+    ``has_dev_dependency`` reads ``dev_dependencies`` (prK §F.1.2); ``has_dependency``
+    and ``any_dependency`` read runtime and dev dependencies alike (D23).
+
+    >>> _dependencies_match(["pandera"], "any_dependency", {"dependencies": {"pandera": ""}},
+    ...                     "dependencies")
     True
     """
     wanted = [canonical_name(name) for name in _coerce_string_list(value, key)]
-    present = _declared_dependency_names(facts)
-    combine = all if key == "has_dependency" else any
-    return combine(name in present for name in wanted)
+    present = _canonical_keys(facts, *fields)
+    return _LIST_COMBINERS[key](name in present for name in wanted)
+
+
+def _names_present(value: object, key: str, facts: Facts, field: str) -> bool:
+    """Whether the names predicate ``key`` holds over the keys of ``facts[field]`` (exact names).
+
+    >>> _names_present(["torch"], "has_ml_stack", {"ml_stack": {"torch": "2"}}, "ml_stack")
+    True
+    """
+    wanted = _coerce_string_list(value, key)
+    present = _fact_keys(facts, field)
+    return _LIST_COMBINERS[key](name in present for name in wanted)
 
 
 def _files_exist(value: object, key: str, repo_root: Path | None) -> bool:
@@ -100,8 +133,7 @@ def _files_exist(value: object, key: str, repo_root: Path | None) -> bool:
     paths = _coerce_string_list(value, key)
     if repo_root is None:
         raise ValueError(f"predicate {key!r} requires repo_root keyword argument")
-    combine = all if key == "has_file" else any
-    return combine((repo_root / rel).exists() for rel in paths)
+    return _LIST_COMBINERS[key]((repo_root / rel).exists() for rel in paths)
 
 
 def _package_manager_names(value: object) -> frozenset[str]:
@@ -173,31 +205,17 @@ def evaluate_predicate(
                 )
             if not _check_python_version(value, facts):
                 return False
-        elif key == "has_framework":
-            wanted = _coerce_string_list(value, key)
-            present = set(facts.get("frameworks", {}).keys())
-            if not all(name in present for name in wanted):
+        elif key in ("has_framework", "any_framework"):
+            if not _names_present(value, key, facts, "frameworks"):
                 return False
-        elif key == "any_framework":
-            wanted = _coerce_string_list(value, key)
-            present = set(facts.get("frameworks", {}).keys())
-            if not any(name in present for name in wanted):
-                return False
-        elif key == "has_ml_stack":
-            wanted = _coerce_string_list(value, key)
-            present = set(facts.get("ml_stack", {}).keys())
-            if not all(name in present for name in wanted):
-                return False
-        elif key == "any_ml_stack":
-            wanted = _coerce_string_list(value, key)
-            present = set(facts.get("ml_stack", {}).keys())
-            if not any(name in present for name in wanted):
+        elif key in ("has_ml_stack", "any_ml_stack"):
+            if not _names_present(value, key, facts, "ml_stack"):
                 return False
         elif key == "has_dev_dependency":
-            if not _has_dev_dependencies(_coerce_string_list(value, key), facts):
+            if not _dependencies_match(value, key, facts, "dev_dependencies"):
                 return False
         elif key in ("has_dependency", "any_dependency"):
-            if not _dependencies_match(value, key, facts):
+            if not _dependencies_match(value, key, facts, "dependencies", "dev_dependencies"):
                 return False
         elif key in ("has_file", "any_file"):
             if not _files_exist(value, key, repo_root):

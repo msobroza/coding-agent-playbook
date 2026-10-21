@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, cast
 from jinja2 import FileSystemLoader, StrictUndefined, TemplateSyntaxError
 from jinja2.exceptions import SecurityError
 from jinja2.sandbox import SandboxedEnvironment
+from packaging.version import InvalidVersion, Version
 
 from coding_agent_playbook.detector.predicate import evaluate_predicate
 
@@ -94,10 +95,27 @@ def build_environment(template_search_paths: Sequence[Path]) -> Environment:
     env.globals["has_dependency"] = _has_dependency
 
     def _python_at_least(minimum: str) -> bool:
+        _require_version(minimum)
         return evaluate_predicate({"python_version": f">={minimum}"}, cast("Facts", _facts()))
 
     env.globals["python_at_least"] = _python_at_least
     return env
+
+
+def _require_version(minimum: object) -> None:
+    """Raise unless ``minimum`` is a version string ``python_at_least`` can compare against.
+
+    Without it a malformed argument surfaces as the predicate's specifier error,
+    which names neither the helper nor the expected shape.
+
+    >>> _require_version("3.x")
+    Traceback (most recent call last):
+    ValueError: python_at_least expects a version like '3.11'; got '3.x'
+    """
+    try:
+        Version(cast("str", minimum))
+    except (InvalidVersion, TypeError) as exc:
+        raise ValueError(f"python_at_least expects a version like '3.11'; got {minimum!r}") from exc
 
 
 def render_artifact_body(

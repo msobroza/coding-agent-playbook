@@ -87,8 +87,10 @@ Lane lane0, size S, depends on L0-00, L0-00b; decisions D23, D8, D40, D78.
 
 D23 gates rules on libraries that are neither frameworks nor ML stack (pydantic-settings, pandera, pyjwt, anyio, argon2-cffi): today they are reachable only through has_dev_dependency, and runtime ones not at all (detector/predicate.py:61-67, :101-176). Add applies_if keys has_dependency (all) and any_dependency (any) over runtime and dev dependency names, PEP 503-normalized, in the single seam evaluate_predicate that validate, sync, guard-config applicability rows, the resync hook and the coverage gate share; add the Jinja global has_dependency(name) next to has_framework and has_ml_dep (rendering/jinja.py:73-84) so templates need no 'dependencies is defined' guard. Document both in SPEC 6.4 and 9.4 in this ticket (docs pin precedent: tests/unit/test_docs_lifecycle_hooks_spec.py:267-269); D-01 does not touch those rows again.
 
-- `src/coding_agent_playbook/detector/predicate.py`: two branches using one helper _declared_dependency_names(facts) = canonical names of facts['dependencies'] and facts['dev_dependencies']; value shape via _coerce_string_list; docstring list of keys
-- `src/coding_agent_playbook/rendering/jinja.py`: env.globals['has_dependency']
+- `src/coding_agent_playbook/detector/predicate.py`: two branches using one helper _canonical_keys(facts, *fields) = canonical names of facts['dependencies'] and facts['dev_dependencies'] (has_dev_dependency shares it); value shape via _coerce_string_list; all/any per key from one explicit _LIST_COMBINERS map; public LIST_PREDICATE_KEYS; docstring list of keys
+- `src/coding_agent_playbook/rendering/jinja.py`: env.globals['has_dependency'] and env.globals['python_at_least'] (a malformed version names the helper)
+- `src/coding_agent_playbook/commands/check.py`: the skip reason imports LIST_PREDICATE_KEYS instead of keeping its own copy, so has_dependency, any_dependency, any_file (and has_ml_stack, any_ml_stack) are quoted as written (D23, D78(10)); D-01 does not touch it again
+- test `tests/cli/test_check.py`: the skip reason quotes each new list key as written
 - `SPEC.md`: 6.4 operator list and 9.4 helper list gain the two keys and the helper (only these rows)
 - test `tests/detector/test_predicate.py`: runtime-only, dev-only, both, absent facts, PEP 503 spelling (Pydantic_Settings vs pydantic-settings), all vs any, a non-list value raises ValueError
 - test `tests/rendering/test_jinja.py`: has_dependency true/false with and without the dependency facts, under StrictUndefined

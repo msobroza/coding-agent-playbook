@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import re
 import tomllib
 from importlib import metadata
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 from jinja2 import StrictUndefined, UndefinedError
@@ -13,6 +15,7 @@ from jinja2.sandbox import ImmutableSandboxedEnvironment, SandboxedEnvironment
 from packaging.requirements import Requirement
 from packaging.version import Version
 
+from coding_agent_playbook.artifacts.rule import Rule
 from coding_agent_playbook.rendering.jinja import (
     TemplateSecurityError,
     build_environment,
@@ -21,8 +24,12 @@ from coding_agent_playbook.rendering.jinja import (
     render_sandboxed,
     render_string,
 )
+from coding_agent_playbook.rendering.session import RenderSession, TemplateContext
 from tests.engine_modules import engine_module
 from tests.import_probe import new_modules_after
+
+if TYPE_CHECKING:
+    from coding_agent_playbook.detector.facts import Facts
 
 # --- Task B.2: build_environment + extension dispatch ---------------------
 
@@ -123,6 +130,40 @@ def test_python_at_least_is_false_when_python_version_is_undefined(tmp_path: Pat
     env = build_environment([tmp_path])
     env.globals["_facts"] = {}
     assert render_string(_AT_LEAST_311, {}, env=env) == "old"
+
+
+@pytest.mark.parametrize("minimum", ["3.x", "", "latest"])
+def test_python_at_least_names_itself_on_a_malformed_version(tmp_path: Path, minimum: str) -> None:
+    env = build_environment([tmp_path])
+    env.globals["_facts"] = {"python_version": "3.12"}
+    expected = f"python_at_least expects a version like '3.11'; got {minimum!r}"
+    with pytest.raises(ValueError, match=re.escape(expected)):
+        render_string(f'{{% if python_at_least("{minimum}") %}}x{{% endif %}}', {}, env=env)
+
+
+_ANYIO_RULE = (
+    "---\nid: anyio-rule\nname: AnyIO\ndescription: d\nscope: always\n---\n"
+    "{% if has_dependency('anyio') %}use anyio{% else %}use asyncio{% endif %}\n"
+)
+
+
+@pytest.mark.parametrize(
+    ("facts", "expected"),
+    [({"dependencies": {"anyio": ">=4"}}, "use anyio"), ({}, "use asyncio")],
+    ids=["anyio-runtime-dependency", "no-facts"],
+)
+def test_has_dependency_renders_unguarded_in_a_rule_file(
+    tmp_path: Path, facts: Facts, expected: str
+) -> None:
+    """The rule render path sync takes: a .md.j2 file, its frontmatter, a RenderSession."""
+    path = tmp_path / "anyio.md.j2"
+    path.write_text(_ANYIO_RULE, encoding="utf-8")
+    rule = Rule.from_markdown(path, "<repo-local>")
+    context = TemplateContext(facts=facts, project_name="demo", engine_version="1.0")
+
+    session = RenderSession.open((rule,), context, repo_root=tmp_path)
+
+    assert session.render_rule(rule).body.strip() == expected
 
 
 def test_python_at_least_is_false_without_any_facts(tmp_path: Path) -> None:

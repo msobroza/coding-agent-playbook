@@ -8,7 +8,11 @@ import pytest
 
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.detector.facts import Facts, detect
-from coding_agent_playbook.detector.predicate import evaluate_predicate, filter_applies_if
+from coding_agent_playbook.detector.predicate import (
+    LIST_PREDICATE_KEYS,
+    evaluate_predicate,
+    filter_applies_if,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -389,3 +393,44 @@ def test_filter_applies_if_keeps_empty_and_true_predicates_in_order(tmp_path: Pa
 def test_filter_applies_if_raises_on_an_unknown_predicate_key(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="unknown predicate key: 'has_dokerfile'"):
         filter_applies_if([_rule("typo", {"has_dokerfile": True})], {}, tmp_path)
+
+
+#: Every key ``evaluate_predicate`` accepts (SPEC §6.4). A new key goes here too.
+_EVERY_PREDICATE_KEY = (
+    "python_version",
+    "has_framework",
+    "any_framework",
+    "has_ml_stack",
+    "any_ml_stack",
+    "has_dev_dependency",
+    "has_dependency",
+    "any_dependency",
+    "has_file",
+    "any_file",
+    "package_manager",
+    "has_notebooks",
+    "has_dockerfile",
+    "has_ci",
+    "banking_mode",
+)
+
+
+def _rejects_as_non_list(key: str, tmp_path: Path) -> bool:
+    """Whether ``key`` with a non-list value fails the list-of-strings check."""
+    try:
+        evaluate_predicate({key: 5}, {}, repo_root=tmp_path)
+    except ValueError as exc:
+        return "must be a list of strings" in str(exc)
+    return False
+
+
+def test_list_predicate_keys_are_exactly_the_keys_that_take_a_list(tmp_path: Path) -> None:
+    """One home for the list-valued keys: ``playbook check`` imports this set."""
+    takes_a_list = {key for key in _EVERY_PREDICATE_KEY if _rejects_as_non_list(key, tmp_path)}
+    assert takes_a_list == LIST_PREDICATE_KEYS
+
+
+def test_has_dev_dependency_normalizes_the_fact_keys_too() -> None:
+    """Hand-written facts (an eval sample's) match like detected ones: both sides are PEP 503."""
+    facts: Facts = {"dev_dependencies": {"Pytest_Cov": ">=5"}}
+    assert evaluate_predicate({"has_dev_dependency": ["pytest-cov"]}, facts)

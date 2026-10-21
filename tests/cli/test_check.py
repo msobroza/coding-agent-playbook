@@ -109,7 +109,15 @@ def test_skip_reason_names_has_dev_dependency(tmp_path, make_synthetic_repo, cap
 
 @pytest.mark.parametrize(
     ("key", "value"),
-    [("has_dependency", "anyio"), ("any_dependency", "pandera"), ("any_file", "mkdocs.yml")],
+    [
+        ("has_dependency", "anyio"),
+        ("any_dependency", "pandera"),
+        ("any_file", "mkdocs.yml"),
+        # Regression: check kept its own copy of the list keys, which lacked these two
+        # and printed ``(skipped: has_ml_stack=False)``.
+        ("has_ml_stack", "torch"),
+        ("any_ml_stack", "tensorflow"),
+    ],
 )
 def test_skip_reason_quotes_the_dependency_and_any_file_keys(
     key, value, tmp_path, make_synthetic_repo, capsys
