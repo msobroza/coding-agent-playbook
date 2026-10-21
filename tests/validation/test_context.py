@@ -18,6 +18,7 @@ import pytest
 
 from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
 from coding_agent_playbook.artifacts.identity import artifact_id_of
+from coding_agent_playbook.artifacts.rule import RuleLoadError
 from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE
 from coding_agent_playbook.catalog.resolve import Collision
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
@@ -142,6 +143,42 @@ def test_from_repo_tolerate_load_errors_records_load_errors(
 
     assert [hook.frontmatter.id for hook in _local(ctx.hooks_resolved)] == ["good"]
     assert [error.where for error in ctx.hook_load_errors] == [str(bad)]
+
+
+def _write_rule(repo: Path, name: str, extra_yaml: str = "") -> Path:
+    path = repo / "playbook" / "rules" / f"{name}.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        f"---\nid: {name}\nname: R\ndescription: d\nscope: always\n{extra_yaml}---\nBody\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_from_repo_tolerate_load_errors_records_rule_load_errors(tmp_path, make_synthetic_repo):
+    repo = make_synthetic_repo(tmp_path)
+    _write_rule(repo, "good")
+    bad = _write_rule(repo, "bad", "impact: HIGH\n")
+
+    ctx = SyncContext.from_repo(repo, tolerate_load_errors=True)
+
+    assert [error.path for error in ctx.rule_load_errors] == [bad]
+    local = [r.frontmatter.id for r in ctx.rules_resolved if r.source_package == "<repo-local>"]
+    assert local == ["good"]
+    assert "bad" not in {r.frontmatter.id for r in ctx.rule_definitions}
+    assert {r.frontmatter.id for r in ctx.rules_resolved} <= {
+        r.frontmatter.id for r in ctx.rule_definitions
+    }
+
+
+def test_from_repo_default_raises_rule_load_error(tmp_path, make_synthetic_repo):
+    repo = make_synthetic_repo(tmp_path)
+    bad = _write_rule(repo, "bad", "impact: HIGH\n")
+
+    with pytest.raises(RuleLoadError) as caught:
+        SyncContext.from_repo(repo)
+
+    assert caught.value.path == bad
 
 
 def test_from_repo_default_raises_hook_schema_error(tmp_path, make_synthetic_repo, make_hook):

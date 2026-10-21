@@ -93,13 +93,14 @@ def check_skill_membership(
 
     ``resolved_rules`` and ``skills`` are the merged sets (``ctx.rules_resolved``,
     ``ctx.skills_resolved``); ``all_rules`` is every layer's definition
-    (``ctx.artifact_source.list_rules()``), read only for V2's hint. An always
+    (``ctx.rule_definitions``, loaded tolerantly so validate never raises on a
+    malformed rule file), read only for V2's hint. An always
     rule without ``skill`` passes here.
 
     Example::
 
         errors = check_skill_membership(
-            ctx.rules_resolved, ctx.skills_resolved, all_rules=ctx.artifact_source.list_rules()
+            ctx.rules_resolved, ctx.skills_resolved, all_rules=ctx.rule_definitions
         )
     """
     skills_by_id = {skill_id_of(skill): skill for skill in skills}

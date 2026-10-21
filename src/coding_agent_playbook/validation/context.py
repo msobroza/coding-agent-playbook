@@ -202,6 +202,8 @@ class SyncContext:
     ``rules_resolved``, ``prompts_resolved``, ``skills_resolved`` and
     ``hooks_resolved`` are post-overlay-merge but pre-applies_if-filter —
     filtering is the command's responsibility (sync filters; render does not).
+    ``rule_definitions`` is every layer's well-formed rule, pre-merge (read it,
+    never ``artifact_source.list_rules()``, which raises on a malformed file).
     ``hook_load_errors`` and ``rule_load_errors`` hold the malformed hooks and
     rule files that ``tolerate_load_errors`` set aside (prU D21);
     ``hook_violations`` the refused layer overrides (prK §A.5, §A.6).
@@ -223,6 +225,7 @@ class SyncContext:
     hooks_resolved: list[Hook] = field(default_factory=list)
     hook_definitions: dict[str, tuple[Hook, ...]] = field(default_factory=dict)
     hook_load_errors: list[HookSchemaError] = field(default_factory=list)
+    rule_definitions: list[Rule] = field(default_factory=list)
     rule_load_errors: list[RuleLoadError] = field(default_factory=list)
     hook_violations: list[HookViolation] = field(default_factory=list)
     policy_tables: PolicyTables = field(default_factory=PolicyTables)
@@ -344,6 +347,7 @@ class SyncContext:
             hooks_resolved=hooks_resolved,
             hook_definitions=resolver.hook_definitions,
             hook_load_errors=hook_load_errors,
+            rule_definitions=all_rules,
             rule_load_errors=rule_load_errors,
             hook_violations=resolver.hook_violations,
             policy_tables=PolicyTables() if policy_tables is None else policy_tables,
