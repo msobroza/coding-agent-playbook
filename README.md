@@ -874,6 +874,25 @@ protected_branches = ["develop"]           # extends main, master and release/*
 
 [guardrails.secrets]
 allow_paths = ["tests/fixtures/sample.env"]   # exempt paths, such as test fixtures
+extra_globs = ["~/.glab/config.yml"]          # more credential files, such as glab's GLAB_CONFIG_DIR
+```
+
+The secret guards know GitHub and GitLab tokens, the credential files of `gh`
+and `glab`, and the GitLab Runner's `config.toml`. Two GitLab setups need one
+committed row each. When `GLAB_CONFIG_DIR` (or `XDG_CONFIG_HOME`) moves `glab`'s
+config, add that directory's `config.yml` to `extra_globs`, as above; do the
+same for a Windows runner's `config.toml`, which has no fixed path, written
+with forward slashes (`"C:/GitLab-Runner/config.toml"`). When an administrator
+replaced the `glpat-` personal access token prefix, add a pattern for the new
+prefix, starting with the prefix itself so the scan stays fast.
+secret-content-guard and stop-diff-sweep both apply it; the `playbook
+scan-secrets` and `playbook ci` scans keep the built-in rules:
+
+```toml
+[hooks.secret-content-guard]
+extra_patterns = [
+  { id = "gitlab-custom-pat", label = "GitLab personal access token", regex = 'acmepat-(?<![A-Za-z0-9_].{8})(?:[0-9A-Za-z_-]{20}|[0-9A-Za-z_-]{27,300}\.(?:[0-9a-z]{2}\.)?[0-9a-z]{9})(?![0-9A-Za-z_-])' },
+]
 ```
 
 Then run `playbook sync`. With hooks on it writes `guard_config.json`, the
