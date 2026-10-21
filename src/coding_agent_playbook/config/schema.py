@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, TypeGuard
 from coding_agent_playbook import toml_writer as _toml
 from coding_agent_playbook.catalog.roots import canonical_overlay_name
 from coding_agent_playbook.config.framework import BUNDLED_FRAMEWORK_NAMES
+from coding_agent_playbook.config.layout import layout_table_problems
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
@@ -361,6 +362,25 @@ def _framework_value_problem(value: object) -> str:
         f"framework must be a framework name such as {bundled}, "
         f'an overlay module name or "none", got {value!r}'
     )
+
+
+def check_layout_table(data: Mapping[str, object], *, source: str) -> None:
+    """Refuse a ``[layout]`` the layout adapter cannot use, naming ``source`` and each key (D71).
+
+    An unknown key, an absolute path, a ``..`` segment or a trailing ``/`` would make
+    ``playbook sync`` rewrite paths to somewhere outside the repo or to nothing, so
+    the config does not load (``config.layout.layout_table_problems`` says why).
+
+    Example::
+
+        >>> check_layout_table({"layout": {"specs": "/s"}}, source="c.toml")  # doctest: +ELLIPSIS
+        Traceback (most recent call last):
+        ...
+        coding_agent_playbook.config.schema.ConfigError: c.toml: [layout] specs must be a relative ...
+    """
+    problems = layout_table_problems(data)
+    if problems:
+        raise ConfigError("\n".join(f"{source}: {problem}" for problem in problems))
 
 
 def _is_name(value: object) -> TypeGuard[str]:

@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Literal
 
 import coding_agent_playbook as _engine
 from coding_agent_playbook.artifacts.identity import template_source
+from coding_agent_playbook.config.layout import resolve_layout
 from coding_agent_playbook.detector.predicate import filter_applies_if
 from coding_agent_playbook.rendering.jinja import build_environment, render_sandboxed
 from coding_agent_playbook.rendering.prompt_rule_delivery import includes_rules_appendix
@@ -56,6 +57,8 @@ class TemplateContext:
     engine_version: str
     user_choices: Mapping[str, object] = field(default_factory=dict)
     overrides: Mapping[str, object] = field(default_factory=dict)
+    # The resolved document layout (D71): every key, its configured path or D60 default.
+    layout: Mapping[str, str] = field(default_factory=lambda: resolve_layout({}))
 
     @classmethod
     def for_config(cls, config: Config, facts: Facts) -> TemplateContext:
@@ -71,10 +74,13 @@ class TemplateContext:
             # importlib.metadata lookup (the root package resolves it lazily).
             engine_version=config.engine_version or _engine.__version__,
             user_choices=config.user_choices,
+            layout=resolve_layout(config.layout),
         )
 
     def as_dict(self) -> dict[str, object]:
-        """facts, then project, then user_choices, then engine_version, then overrides (later wins).
+        """facts, then project, then user_choices, then engine_version and layout, then overrides.
+
+        Later wins, so a fact or a user choice cannot shadow ``layout`` (D71).
 
         Example: ``TemplateContext(facts={}, project_name="demo", engine_version="1").as_dict()``.
         """
@@ -84,6 +90,7 @@ class TemplateContext:
             "project_description": self.project_description,
             **self.user_choices,
             "engine_version": self.engine_version,
+            "layout": dict(self.layout),
             **self.overrides,
         }
 

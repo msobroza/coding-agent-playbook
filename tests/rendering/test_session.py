@@ -63,15 +63,28 @@ _CONTEXT = TemplateContext(facts={"frameworks": {}}, project_name="demo", engine
 
 
 def test_template_context_precedence() -> None:
-    """facts < project < user_choices < engine_version < overrides (RS-D6)."""
-    every_key = ("kind", "project_name", "project_description", "engine_version", "target")
+    """facts < project < user_choices < engine_version and layout < overrides (RS-D6, D71)."""
+    every_key = (
+        "kind",
+        "project_name",
+        "project_description",
+        "engine_version",
+        "layout",
+        "target",
+    )
     context = TemplateContext(
         facts=_facts(**dict.fromkeys(every_key, "F")),
         project_name="P",
         project_description="P",
         engine_version="E",
-        user_choices={"project_description": "C", "engine_version": "C", "target": "C"},
+        user_choices={
+            "project_description": "C",
+            "engine_version": "C",
+            "layout": "C",
+            "target": "C",
+        },
         overrides={"target": "O"},
+        layout={"specs": "L"},
     )
 
     assert context.as_dict() == {
@@ -79,6 +92,7 @@ def test_template_context_precedence() -> None:
         "project_name": "P",
         "project_description": "C",
         "engine_version": "E",
+        "layout": {"specs": "L"},
         "target": "O",
     }
     overridden = dataclasses.replace(context, overrides={"engine_version": "O"})

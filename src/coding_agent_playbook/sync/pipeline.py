@@ -76,6 +76,7 @@ from coding_agent_playbook.sync._dispatch import (
     build_lockfile,
     dispatch_to_adapters,
 )
+from coding_agent_playbook.sync._layout_outputs import rewrite_layout_outputs
 from coding_agent_playbook.sync._leftovers import OutputLocations
 from coding_agent_playbook.sync._machine_local import SyncHookDeps
 from coding_agent_playbook.sync.git_client import SubprocessGitClient
@@ -143,6 +144,16 @@ def _render_into(
     )
     _sync_hooks.write_runtime_outputs(
         ctx, rendered.hooks, output_root, recorder, prompts=rendered.prompts, rules=rendered.rules
+    )
+    # D71: the layout adapter, after every write and before anything hashes the output.
+    rewrite_layout_outputs(
+        recorder.written,
+        output_root,
+        ctx.config.layout_rewriter(),
+        skip={
+            *(entry.path for entry in recorder.managed),
+            *_sync_output.shared_outputs(adapters),
+        },
     )
     return recorder, rendered.hooks
 

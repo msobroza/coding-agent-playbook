@@ -36,6 +36,7 @@ CONFIG_MANAGED_KEYS: frozenset[str] = frozenset(
         "overlays_enabled",
         "adapters_enabled",
         "framework",
+        "layout",
         "storage",
         "detector_cache",
         "user_choices",
@@ -48,7 +49,8 @@ CONFIG_MANAGED_KEYS: frozenset[str] = frozenset(
 #: fields by ``tests/config/test_model.py``). Any other key in them
 #: (``[project] homepage``) is not ``Config``'s, so a rewrite keeps it. Not listed:
 #: ``[detector_cache]`` is regenerated whole (a stale entry must go) and
-#: ``[user_choices]`` travels whole inside ``Config``, so each is owned outright.
+#: ``[user_choices]`` travels whole inside ``Config``, so each is owned outright, and so
+#: is ``[layout]``, whose unknown keys fail loading (D71).
 CONFIG_MANAGED_TABLE_KEYS: Mapping[str, frozenset[str]] = MappingProxyType(
     {
         "project": frozenset({"name", "kind", "description"}),

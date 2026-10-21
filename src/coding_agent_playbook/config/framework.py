@@ -30,6 +30,7 @@ from coding_agent_playbook.catalog.roots import (
     catalog_layer_root,
     is_bundled_layer,
 )
+from coding_agent_playbook.config.layout import LAYOUT_KEYS
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -42,18 +43,6 @@ FRAMEWORK_FILENAME: Final = "framework.toml"
 BUNDLED_FRAMEWORK_NAMES: Final = ("superpowers", "mattpocock")
 #: The ``framework`` value (and init answer) that enables no framework; the default.
 NO_FRAMEWORK: Final = "none"
-#: The document layout keys of D71, in the spec's order; a layout alias maps to one.
-LAYOUT_KEYS: Final = (
-    "glossary",
-    "context_map",
-    "adr",
-    "architecture",
-    "specs",
-    "plans",
-    "research",
-    "agents",
-    "scratch",
-)
 _METADATA_KEYS: Final = ("name", "description", "layout_aliases")
 
 
@@ -157,6 +146,27 @@ def enabled_framework(layers: Iterable[str]) -> str | None:
         'coding_agent_playbook.plugins.superpowers'
     """
     return next(iter(framework_layers(layers)), None)
+
+
+def layout_aliases(layers: Iterable[str]) -> dict[str, str]:
+    """The ``[layout_aliases]`` of every framework among ``layers``, merged in order (D71).
+
+    A ``framework.toml`` that does not parse adds nothing here; validate names it.
+
+    Example::
+
+        >>> layout_aliases(["coding_agent_playbook.plugins.superpowers"])
+        {}
+    """
+    aliases: dict[str, str] = {}
+    for package in framework_layers(layers):
+        try:
+            metadata = read_framework_metadata(package)
+        except FrameworkMetadataError:
+            continue
+        if metadata is not None:
+            aliases.update(metadata.layout_aliases)
+    return aliases
 
 
 def read_framework_metadata(package: str) -> FrameworkMetadata | None:

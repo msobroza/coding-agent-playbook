@@ -23,12 +23,14 @@ from coding_agent_playbook.config.entries import (
     unmanaged_config_entries,
     with_unmanaged_entries,
 )
-from coding_agent_playbook.config.framework import layers_with_framework
+from coding_agent_playbook.config.framework import layers_with_framework, layout_aliases
+from coding_agent_playbook.config.layout import LayoutRewriter
 from coding_agent_playbook.config.schema import (
     ConfigError,
     check_config_tables,
     check_enabled_keys,
     check_framework_key,
+    check_layout_table,
     required_value,
 )
 
@@ -54,6 +56,7 @@ def check_config_file(data: Mapping[str, object], *, source: str) -> None:
     check_enabled_keys(data, source=source)
     check_config_tables(data, source=source)
     check_framework_key(data, source=source)
+    check_layout_table(data, source=source)
     if "output" in data:
         parse_output_config(data["output"], source=source)
 
@@ -109,6 +112,9 @@ class Config:
     # The committed ``framework`` (D57): a bundled short name, an overlay module or
     # "none". ``None`` = no key in the TOML (no framework), so ``to_dict`` stays sparse.
     framework: str | None = None
+    # The ``[layout]`` keys the file sets (D71), sparse: a key left out keeps its D60
+    # default (``config.layout.resolve_layout``); empty = no table, none written.
+    layout: dict[str, str] = field(default_factory=dict)
     storage: StorageConfig = field(default_factory=StorageConfig)
     detector_cache: dict[str, Any] = field(default_factory=dict)
     user_choices: dict[str, Any] = field(default_factory=dict)
@@ -168,6 +174,21 @@ class Config:
         """
         return layers_with_framework(self.overlays_enabled, self.framework)
 
+    def layout_rewriter(self) -> LayoutRewriter:
+        """The D71 layout adapter for this config: ``[layout]`` plus the framework's aliases.
+
+        Falsy (rewrites nothing) for the default layout when no enabled framework
+        declares ``[layout_aliases]``. ``playbook sync`` applies it to every synced
+        file; ``playbook validate`` reports what it rewrites.
+
+        Example::
+
+            >>> bool(Config(1, ProjectMeta("x", "python-library"), "0.1",
+            ...             layout={"specs": "specs"}).layout_rewriter())
+            True
+        """
+        return LayoutRewriter.for_layout(self.layout, aliases=layout_aliases(self.layers_enabled))
+
     @classmethod
     def from_dict(cls, data: dict[str, Any], *, source: str = "config") -> Config:
         """Build a :class:`Config` from decoded TOML, refusing misread shapes.
@@ -198,6 +219,7 @@ class Config:
             overlays_enabled=list(data.get("overlays_enabled", [])),
             adapters_enabled=list(data.get("adapters_enabled", [])),
             framework=data["framework"].strip() if "framework" in data else None,
+            layout=dict(data.get("layout", {})),
             storage=StorageConfig(
                 artifact_source=storage.get("artifact_source", "filesystem"),
                 state_source=storage.get("state_source", "filesystem"),
@@ -239,6 +261,8 @@ class Config:
             result["adapters_enabled"] = list(self.adapters_enabled)
         if self.framework is not None:
             result["framework"] = self.framework
+        if self.layout:
+            result["layout"] = dict(self.layout)
         result["storage"] = {
             "artifact_source": self.storage.artifact_source,
             "state_source": self.storage.state_source,
