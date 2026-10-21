@@ -2,9 +2,10 @@
 
 Core ships one skill per topic, and every scoped rule in core names the one that
 owns it (ADR 0001). Each core skill's pins live in its own module under
-``tests/core_skill_pins/`` (prU L0-03), so content lanes extend them in parallel. Core also ships one plain skill, ``playbook-guardrails``, which takes no
-member rules: sync composes it from the on hooks' guardrail text (D6), so it has
-no ``playbook:`` block and its authored description carries its own "Use when".
+``tests/core_skill_pins/`` (prU L0-03), so content lanes extend them in
+parallel. Core also ships one plain skill, ``playbook-guardrails``, which takes
+no member rules: sync composes it from the on hooks' guardrail text (D6), so it
+has no ``playbook:`` block and its authored description carries its own "Use when".
 The D13 static checks (description shape, 500 lines, references one level deep,
 plain markdown) cover the core skills only: bundled plugin skills are exempt
 (D24) because their vendored or distilled descriptions and bodies fail them as
@@ -54,11 +55,11 @@ pytestmark = pytest.mark.catalog
 #: Every core skill with member rules, one pins module each under ``tests/core_skill_pins/``.
 PINS_BY_SKILL: Final[Mapping[str, CoreSkillPins]] = {pins.skill_id: pins for pins in ALL_PINS}
 #: Scoped rule in core -> the core skill whose references deliver it, from the pins modules.
-EXPECTED_MEMBERSHIP: Final[Mapping[str, str]] = {
+MEMBERSHIP_FROM_PINS: Final[Mapping[str, str]] = {
     rule_id: pins.skill_id for pins in ALL_PINS for rule_id in pins.members
 }
 #: Core skill with member rules -> its ``playbook.files`` phrase in "Where guidance lives".
-EXPECTED_WHERE: Final[Mapping[str, str]] = {pins.skill_id: pins.where for pins in ALL_PINS}
+WHERE_FROM_PINS: Final[Mapping[str, str]] = {pins.skill_id: pins.where for pins in ALL_PINS}
 CORE_SKILLS: Final = sorted(PINS_BY_SKILL)
 #: Core members whose gate the reference probe fails (spec 9.6.2).
 PROBE_INACTIVE_MEMBERS: Final = frozenset().union(*(pins.probe_inactive for pins in ALL_PINS))
@@ -106,7 +107,7 @@ def _probe_members(skill_id: str) -> list[Rule]:
 def _is_core_member_reference(path: str) -> bool:
     """Whether repo-relative ``path`` is ``<root>/<core skill>/references/<file>``."""
     parts = path.split("/")
-    return len(parts) >= 3 and parts[-2] == "references" and parts[-3] in EXPECTED_WHERE
+    return len(parts) >= 3 and parts[-2] == "references" and parts[-3] in WHERE_FROM_PINS
 
 
 def _probe_skill_md(repo: Path, skill_id: str) -> str:
@@ -175,8 +176,8 @@ def test_plain_core_skill_identity_and_description_shape(skill_id: str) -> None:
 def test_core_skill_declares_where_phrase(skill_id: str) -> None:
     block = _authored(skill_id)[0].get("playbook")
     files = block.get("files") if isinstance(block, dict) else None
-    assert files == EXPECTED_WHERE[skill_id], (
-        f"core skill {skill_id!r} needs playbook.files {EXPECTED_WHERE[skill_id]!r}, got {files!r}"
+    assert files == WHERE_FROM_PINS[skill_id], (
+        f"core skill {skill_id!r} needs playbook.files {WHERE_FROM_PINS[skill_id]!r}, got {files!r}"
     )
     assert 1 <= len(files) <= 80 and not files.endswith(".")
 
@@ -264,12 +265,12 @@ def test_core_skills_pass_agent_skill_issues(skill_id: str, tmp_path: Path) -> N
     assert agent_skill_issues(_loaded_skill(skill_id, tmp_path)) == []
 
 
-@pytest.mark.parametrize("rule_id", sorted(EXPECTED_MEMBERSHIP))
+@pytest.mark.parametrize("rule_id", sorted(MEMBERSHIP_FROM_PINS))
 def test_scoped_core_rule_names_its_skill(rule_id: str) -> None:
     skill = core_rules()[rule_id].frontmatter.skill
-    assert skill == EXPECTED_MEMBERSHIP[rule_id], (
+    assert skill == MEMBERSHIP_FROM_PINS[rule_id], (
         f"core rule {rule_id!r} names skill {skill!r}; tests/core_skill_pins expects "
-        f"{EXPECTED_MEMBERSHIP[rule_id]!r} (scoped rules in core must name one of: "
+        f"{MEMBERSHIP_FROM_PINS[rule_id]!r} (scoped rules in core must name one of: "
         f"{', '.join(CORE_SKILLS)})"
     )
 
@@ -285,7 +286,10 @@ def test_each_scoped_core_rule_is_pinned_by_exactly_its_skill() -> None:
             f"module of its skill {rules[rule_id].frontmatter.skill!r}"
         )
     pinned = [rule_id for pins in ALL_PINS for rule_id in pins.members]
-    assert sorted(pinned) == scoped, f"pins name rules that are not scoped core rules: {pinned}"
+    extra = sorted(set(pinned) - set(scoped))
+    assert not extra, f"pins name rules that are not scoped core rules: {extra}"
+    dupes = sorted({rule_id for rule_id in pinned if pinned.count(rule_id) > 1})
+    assert not dupes, f"pins list these member rules more than once: {dupes}"
 
 
 @pytest.mark.parametrize("pins", ALL_PINS, ids=lambda pins: pins.skill_id)
@@ -325,7 +329,7 @@ def test_always_core_rules_name_no_skill() -> None:
 
 
 def test_every_core_member_skill_has_a_core_member() -> None:
-    assert set(EXPECTED_MEMBERSHIP.values()) == set(EXPECTED_WHERE)
+    assert set(MEMBERSHIP_FROM_PINS.values()) == set(WHERE_FROM_PINS)
 
 
 def test_pins_modules_cover_exactly_the_core_skills_with_a_playbook_block() -> None:
@@ -361,7 +365,7 @@ def test_reference_probe_where_section_lists_every_core_skill(reference_probe_re
     for relative in ("AGENTS.md", CLAUDE_RULES_PATH):
         text = (reference_probe_repo / relative).read_text(encoding="utf-8")
         assert text.count("## Where guidance lives") == 1, relative
-        for skill_id, files in EXPECTED_WHERE.items():
+        for skill_id, files in WHERE_FROM_PINS.items():
             assert f"- {files}: skill `{skill_id}`" in text, f"{relative} lacks {skill_id}"
         assert "Lint feedback names a rule id" in text, relative
 
@@ -410,7 +414,7 @@ def test_reference_probe_lockfile_records_member_references_as_rules(
     expected = {
         f"{root}/{skill_id}/references/{rule_id}.md": ("rule", rule_id)
         for root in NATIVE_SKILL_ROOTS
-        for rule_id, skill_id in EXPECTED_MEMBERSHIP.items()
+        for rule_id, skill_id in MEMBERSHIP_FROM_PINS.items()
         if rule_id not in PROBE_INACTIVE_MEMBERS
     }
     assert rows == expected

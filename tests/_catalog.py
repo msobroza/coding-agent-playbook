@@ -10,14 +10,16 @@ their roots from here, so a change to the catalog layout edits this one module.
 
 from __future__ import annotations
 
+import tempfile
 from importlib import resources
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.artifacts.rule import Rule
 from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE
-from coding_agent_playbook.skills.document import PLAYBOOK_BLOCK_KEY
+from coding_agent_playbook.catalog.source import FileSystemArtifactSource
+from coding_agent_playbook.skills.membership import is_rule_skill
+from coding_agent_playbook.skills.naming import skill_id_of
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -148,13 +150,17 @@ def core_rule_skill_ids() -> list[str]:
     """The sorted ids of the core skills that take member rules: a ``playbook:`` block (E6).
 
     Validation's V1 and V5 messages list exactly these as the known skills, so
-    tests build those strings here instead of spelling the skills out.
+    tests build those strings here instead of spelling the skills out. The list
+    goes through the engine's own discovery (``list_skills``, ``is_rule_skill``,
+    ``skill_id_of``) so the expectation cannot drift from what the engine lists;
+    the throwaway repo root holds no repo-local skills, so only core's count.
 
     Example: ``", ".join(core_rule_skill_ids())`` -> ``"ml-data, python-coding, ..."``.
     """
-    ids = []
-    for skill_md in sorted((CORE_ROOT / "skills").glob("*/SKILL.md")):
-        frontmatter, _ = split_frontmatter(skill_md.read_text(encoding="utf-8"))
-        if PLAYBOOK_BLOCK_KEY in frontmatter:
-            ids.append(str(frontmatter.get("id", skill_md.parent.name)))
-    return sorted(ids)
+    with tempfile.TemporaryDirectory() as repo_root:
+        skills = FileSystemArtifactSource(repo_root=Path(repo_root)).list_skills()
+        return sorted(
+            skill_id_of(skill)
+            for skill in skills
+            if skill.source_package == ENGINE_PACKAGE and is_rule_skill(skill)
+        )
