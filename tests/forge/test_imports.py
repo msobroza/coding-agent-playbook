@@ -53,14 +53,14 @@ def test_forge_modules_import_only_the_allowed_stdlib_and_their_package() -> Non
         for path in sorted(_PACKAGE.glob("*.py"))
     }
 
-    assert set(found) == {"__init__.py", "dialects.py", "hosts.py", "operations.py"}
+    assert set(found) == {"__init__.py", "dialects.py", "hosts.py", "operations.py", "tokens.py"}
     assert {name: names for name, names in found.items() if names} == {}
 
 
 def test_importing_forge_loads_no_forbidden_module() -> None:
     loaded = new_modules_after(
         "import coding_agent_playbook.forge.hosts, coding_agent_playbook.forge.dialects, "
-        "coding_agent_playbook.forge.operations"
+        "coding_agent_playbook.forge.operations, coding_agent_playbook.forge.tokens"
     )
 
     assert sorted(set(loaded) & _NEVER) == []
@@ -69,4 +69,5 @@ def test_importing_forge_loads_no_forbidden_module() -> None:
         "coding_agent_playbook.forge.dialects",
         "coding_agent_playbook.forge.hosts",
         "coding_agent_playbook.forge.operations",
+        "coding_agent_playbook.forge.tokens",
     ]

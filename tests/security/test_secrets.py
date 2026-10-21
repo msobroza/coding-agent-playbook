@@ -124,6 +124,9 @@ _GITLAB_HITS = [
     pytest.param(_gitlab_sample("ft-", _tok("0f1e" * 16, "-", "42")), id="glft_path_dependent"),
     pytest.param(_gitlab_sample("cbt-", _tok("6a", "_", _FRIENDLY20)), id="glcbt_legacy"),
     pytest.param(_gitlab_sample("cbt-", _JWT_BODY), id="glcbt_jwt"),
+    # GitLab's source makes these two JWT tokens; its token overview does not list them
+    pytest.param(_gitlab_sample("sat-", _JWT_BODY), id="glsat_jwt"),
+    pytest.param(_gitlab_sample("iamat-", _JWT_BODY), id="gliamat_jwt"),
     pytest.param(_gitlab_sample("soat-", _FRIENDLY20), id="glsoat_20"),
     pytest.param(_gitlab_sample("imt-", "z9y8x" * 5), id="glimt_25"),
     pytest.param(_gitlab_sample("imt-", "z9y8x" * 4 + "w"), id="glimt_unpadded_21"),
@@ -149,6 +152,10 @@ _GITLAB_MISSES = [
         _gitlab_sample("cbt-", _tok("6a7b8c", "_", _FRIENDLY20)), id="glcbt_6_char_partition"
     ),
     pytest.param(_gitlab_sample("cbt-", "eyJhbGciOiJSUzI1NiJ9"), id="glcbt_jwt_header_only"),
+    pytest.param(_gitlab_sample("sat-", "eyJhbGciOiJSUzI1NiJ9"), id="glsat_jwt_header_only"),
+    pytest.param(_gitlab_sample("sat-", _FRIENDLY20), id="glsat_20_no_jwt"),
+    pytest.param(_gitlab_sample("iamat-", _FRIENDLY20), id="gliamat_20_no_jwt"),
+    pytest.param(_gitlab_sample("iamat_", _JWT_BODY), id="gliamat_underscore"),
     pytest.param(_gitlab_sample("soat-", _FRIENDLY20[:19]), id="glsoat_19"),
     pytest.param(_gitlab_sample("imt-", "z9y8x" * 5 + "w"), id="glimt_26"),
     pytest.param(_gitlab_sample("agent-", "Ab1-Cd2_e" * 5 + "F3g4"), id="glagent_49"),
@@ -166,11 +173,18 @@ def test_gitlab_token_rule_matches_every_documented_prefix_and_length(token: str
     assert [(f.rule_id, f.length) for f in findings] == [("gitlab-token", len(token))]
 
 
-def test_gitlab_token_rule_matches_after_an_instance_prefix() -> None:
+@pytest.mark.parametrize(
+    "token",
+    [
+        pytest.param(GITLAB_TOKEN, id="glpat"),
+        pytest.param(_gitlab_sample("sat-", _JWT_BODY), id="glsat_jwt"),
+    ],
+)
+def test_gitlab_token_rule_matches_after_an_instance_prefix(token: str) -> None:
     """An admin's instance prefix (``<prefix>-glpat-...``) leaves the GitLab prefix in place."""
-    findings = scan_text(f"PRIVATE-TOKEN: acme-{GITLAB_TOKEN}\n", "notes.md")
+    findings = scan_text(f"PRIVATE-TOKEN: acme-{token}\n", "notes.md")
 
-    assert [(f.rule_id, f.length) for f in findings] == [("gitlab-token", len(GITLAB_TOKEN))]
+    assert [(f.rule_id, f.length) for f in findings] == [("gitlab-token", len(token))]
 
 
 @pytest.mark.parametrize("text", _GITLAB_MISSES)

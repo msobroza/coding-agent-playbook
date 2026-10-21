@@ -253,3 +253,73 @@ def test_redirect_creating_a_dotenv_asks(repo: PackRepo, deps: Deps) -> None:
 
     assert created.trace.combined.decision is Decision.ASK
     assert appended.trace.combined.decision is Decision.DENY
+
+
+#: prF §14 (Q64): commands that print a forge token are blocked; the others pass.
+TOKEN_PRINT_GOLDEN: Final[list[tuple[str, Decision]]] = [
+    ("gh auth token", Decision.DENY),
+    ("gh auth token --hostname github.example.com", Decision.DENY),
+    ("/usr/local/bin/gh auth token -u octocat", Decision.DENY),
+    ("glab auth status -t", Decision.DENY),
+    ("glab auth status --hostname gitlab.example.com --show-token", Decision.DENY),
+    ("glab auth status -at", Decision.DENY),  # -a -t
+    ("glab config get token", Decision.DENY),  # $GITLAB_TOKEN first, then the config
+    ("glab config get --host gitlab.example.com job_token", Decision.DENY),
+    ("glab config get Gitlab_Token", Decision.DENY),  # an alias, in any case
+    ("gh auth status -t", Decision.DENY),
+    ("gh auth status --json hosts --show-token", Decision.DENY),
+    ("gh config get oauth_token -h github.com", Decision.DENY),
+    ("gh auth git-credential get", Decision.DENY),  # password=<token>
+    ("glab auth git-credential get", Decision.DENY),
+    ("glab auth credential-helper", Decision.DENY),
+    ("glab auth docker-helper get", Decision.DENY),
+    ("printenv GITLAB_TOKEN", Decision.DENY),
+    ("printenv HOME GH_TOKEN", Decision.DENY),
+    ("echo $GH_TOKEN", Decision.DENY),
+    ('echo "token: ${GITLAB_ACCESS_TOKEN}"', Decision.DENY),
+    ("echo $OAUTH_TOKEN | base64", Decision.DENY),
+    ('printf %s "$GITHUB_TOKEN"', Decision.DENY),
+    ("TOKEN=$(gh auth token) make deploy", Decision.DENY),
+    ("printenv | grep GH_TOKEN", Decision.DENY),
+    ("env | sort | grep -i token", Decision.DENY),
+    ("env | grep -E 'GITLAB|PATH'", Decision.DENY),
+    ("gh auth status", Decision.NONE),
+    ("glab auth status --hostname gitlab.example.com", Decision.NONE),
+    ("glab auth status --show-token=false", Decision.NONE),
+    ("glab config get editor", Decision.NONE),
+    ("glab config get -h", Decision.NONE),  # glab's -h is help
+    ("gh config get editor -h github.com", Decision.NONE),
+    ("gh auth git-credential store", Decision.NONE),
+    ("glab auth docker-helper store", Decision.NONE),
+    ("printenv HOME", Decision.NONE),
+    ("echo '$GH_TOKEN'", Decision.NONE),  # a literal: nothing expands
+    ("echo GH_TOKEN is unset", Decision.NONE),
+    ("echo ${#GH_TOKEN}", Decision.NONE),  # the length, not the value
+    ("echo $PATH", Decision.NONE),
+    ('echo "${GH_TOKEN:+set}"', Decision.NONE),  # prints "set" when it is set
+    ("env | grep PATH", Decision.CONTEXT),  # the env-dump line, no token named
+    ("env GIT_TRACE=1 git status | grep token", Decision.NONE),  # env runs a command
+]
+
+
+@pytest.mark.parametrize(("command", "expected"), TOKEN_PRINT_GOLDEN)
+def test_commands_that_print_a_forge_token_are_blocked(
+    repo: PackRepo, deps: Deps, command: str, expected: Decision
+) -> None:
+    assert _run(repo, deps, *_bash(command)).trace.combined.decision is expected
+
+
+def test_token_print_reason_names_the_command_and_the_cli_login(repo: PackRepo, deps: Deps) -> None:
+    report = _run(repo, deps, *_bash("glab config get token"))
+
+    assert [r.result.rule_id for r in report.trace.ran if r.result.rule_id] == ["token_print"]
+    assert report.trace.combined.reason == (
+        'Blocked: "glab config get token" prints a forge token.\n'
+        "gh, glab and playbook forge use their own login: never print, copy or pass a token."
+    )
+
+
+def test_degraded_parse_still_blocks_a_token_print(repo: PackRepo, deps: Deps) -> None:
+    report = _run(repo, deps, *_bash("echo \"$GH_TOKEN 'unterminated"))
+
+    assert report.trace.combined.decision is Decision.DENY

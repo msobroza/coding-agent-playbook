@@ -331,6 +331,7 @@ _IDS = [f"{forge.cli} {' '.join(row.paths[0])}" for forge, row in _ROWS]
 @pytest.mark.parametrize(("forge", "row"), _ROWS, ids=_IDS)
 def test_values_hold_every_value_taking_flag(forge: Forge, row: CliCommand) -> None:
     carried = row.files | row.field_files | row.keyed_files | row.templates | row.secrets
+    carried |= row.texts
 
     assert carried | row.options == row.values
     assert not row.options & carried
@@ -354,3 +355,17 @@ def test_every_flag_is_spelled_as_a_flag(forge: Forge) -> None:
     flags = {flag for row in forge.commands for flag in (*row.values, *row.pushes, *row.remotes)}
 
     assert sorted(flag for flag in flags if not flag.startswith("-") or " " in flag) == []
+
+
+@pytest.mark.parametrize("forge", FORGES, ids=[forge.cli for forge in FORGES])
+def test_every_token_env_name_holds_token(forge: Forge) -> None:
+    """The token-print judge loads the tables only for a word holding ``TOKEN`` (prF §14)."""
+    assert forge.token_env
+    assert all("TOKEN" in name for name in forge.token_env)
+
+
+@pytest.mark.parametrize("forge", FORGES, ids=[forge.cli for forge in FORGES])
+def test_token_printers_take_no_flag_as_a_value(forge: Forge) -> None:
+    # split_words would read a value-taking --show-token's next word as its value
+    assert forge.token_printers
+    assert all(not printer.flags & printer.values for printer in forge.token_printers)

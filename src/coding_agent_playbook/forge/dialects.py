@@ -5,9 +5,11 @@ Forges are a fixed in-tree list (Q3): :data:`GITHUB` and :data:`GITLAB`, in
 its public host, its forge CLI's argv0, the env vars that name its host or
 hold its token, the git push options it reads, and the forge CLI commands the
 guards judge (:class:`CliCommand`): their value-taking flags, the flags and
-operands that carry a local file to the forge, the flags that push ``HEAD``'s
-branch, add a git remote or hold a credential. Every table is a tuple or a
-frozenset of flag names: the hook runtime builds its own ``value_options()`` /
+operands that carry a local file or text to the forge, the flags that push
+``HEAD``'s branch, add a git remote or hold a credential; the forge CLI
+commands that print forge-hosted content (``reads``) and the ones that print
+the forge's token (``token_printers``, from ``tokens``). Every table is a
+tuple or a frozenset of words: the hook runtime builds its own ``value_options()`` /
 ``CliWords`` from them and ``playbook forge`` reads the same forge, so the
 guards and the command never disagree about a forge CLI.
 
@@ -21,8 +23,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final, Literal
 
+from coding_agent_playbook.forge.tokens import GITHUB_TOKEN_PRINTERS, GITLAB_TOKEN_PRINTERS
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+    from coding_agent_playbook.forge.tokens import TokenPrinter
 
 __all__ = [
     "FORGES",
@@ -55,8 +61,8 @@ _NONE: Final[frozenset[str]] = frozenset()
 class CliCommand:
     """One forge CLI command a guard judges: which of its words carry what (spec §8.2, §8.3).
 
-    A flag in ``files``, ``field_files``, ``keyed_files``, ``templates`` or
-    ``secrets`` takes a value; :attr:`values` is every value-taking flag. A
+    A flag in ``files``, ``field_files``, ``keyed_files``, ``templates``,
+    ``secrets`` or ``texts`` takes a value; :attr:`values` is every value-taking flag. A
     value of ``-`` (or ``@-``) is stdin, not a file. ``pushes``, ``remotes``
     and ``creates_repository`` describe the command's effect, not its words.
 
@@ -81,6 +87,11 @@ class CliCommand:
     templates: frozenset[str] = _NONE
     #: Flags whose value is a credential, redacted wherever a command line is recorded.
     secrets: frozenset[str] = _NONE
+    #: Flags whose value is text the command sends to the forge: a body, description,
+    #: message, comment, notes or API field given inline (``--body TEXT``), or ``-`` for
+    #: stdin. In a tainted session taint-escalation asks before one (specs/prK-hook-pack.md
+    #: taint-escalation, F7b).
+    texts: frozenset[str] = _NONE
     #: The operands from this index on are local files sent to the forge; ``None``: none are.
     file_operands: int | None = None
     #: The command publishes its file operands as a gist or a snippet.
@@ -107,6 +118,7 @@ class CliCommand:
             | self.keyed_files
             | self.templates
             | self.secrets
+            | self.texts
         )
 
 
@@ -128,7 +140,8 @@ class Forge:
     host_env: tuple[str, ...]
     #: The env vars naming the API host when it differs from the host (§5.3, §8.2).
     api_host_env: tuple[str, ...]
-    #: The env vars the forge CLI reads a token from, in its precedence order.
+    #: The env vars the forge CLI reads a token from, in its precedence order; printing
+    #: one (``printenv``, ``echo $NAME``) is blocked (spec §14). Each name holds ``TOKEN``.
     token_env: tuple[str, ...]
     #: Flags naming the repository as ``[HOST/]OWNER/REPO`` or a URL, on most commands.
     repo_flags: frozenset[str]
@@ -158,6 +171,12 @@ class Forge:
     #: Title markers that make the forge skip CI: ``playbook forge`` refuses such a
     #: pull request title (Q55). Compared case-insensitively.
     skip_ci_markers: tuple[str, ...] = ()
+    #: The forge CLI commands that print forge-hosted content (issue and pull request
+    #: text, diffs, checks, API responses), aliases included: spec §14's forge reads,
+    #: which mark a session as having read untrusted content (``taint:forge``).
+    reads: tuple[CommandPath, ...] = ()
+    #: The forge CLI commands that print the forge's token (spec §14, Q64; ``tokens``).
+    token_printers: tuple[TokenPrinter, ...] = ()
     _paths: tuple[tuple[CommandPath, CliCommand], ...] = field(
         init=False, repr=False, compare=False
     )
@@ -223,10 +242,17 @@ def _flags(text: str) -> frozenset[str]:
     return frozenset(text.split())
 
 
+def _verbs(noun: str, verbs: str) -> tuple[CommandPath, ...]:
+    """``(noun, verb)`` for each verb: ``_verbs("pr", "view diff")``."""
+    return tuple((noun, verb) for verb in verbs.split())
+
+
 _REPO: Final = _flags("-R --repo")
 _GH_BODY: Final = _flags("-F --body-file")
+_GH_TEXT: Final = _flags("-b --body")
 _GH_NOTES: Final = _flags("-F --notes-file")
 _GLAB_BODY: Final = _flags("--description-file --attach")
+_GLAB_TEXT: Final = _flags("-d --description")
 _GLAB_NOTES: Final = _flags("-F --notes-file")
 
 GITHUB: Final = Forge(
@@ -253,55 +279,67 @@ GITHUB: Final = Forge(
         CliCommand(
             paths=(("issue", "create"), ("issue", "new")),
             options=_REPO
-            | _flags("-a --assignee -b --body -l --label -m --milestone -p --project --recover")
+            | _flags("-a --assignee -l --label -m --milestone -p --project --recover")
             | _flags("-t --title -T --template"),
             files=_GH_BODY,
+            texts=_GH_TEXT,
         ),
-        CliCommand(
-            paths=(("issue", "comment"),), options=_REPO | _flags("-b --body"), files=_GH_BODY
+        CliCommand(paths=(("issue", "comment"),), options=_REPO, files=_GH_BODY, texts=_GH_TEXT),
+        CliCommand(  # the noun row's body-file flags stay, as for every issue verb
+            paths=(("issue", "close"),),
+            options=_REPO | _flags("-r --reason --duplicate-of"),
+            files=_GH_BODY,
+            texts=_flags("-c --comment"),
         ),
         CliCommand(
             paths=(("issue", "edit"),),
             options=_REPO
             | _flags("--add-assignee --add-label --add-project --add-sub-issue --add-blocked-by")
-            | _flags("--remove-assignee --remove-label --remove-project -b --body")
+            | _flags("--remove-assignee --remove-label --remove-project")
             | _flags("-m --milestone -t --title"),
             files=_GH_BODY,
+            texts=_GH_TEXT,
         ),
         CliCommand(paths=(("pr",),), options=_REPO, files=_GH_BODY),
         CliCommand(
             paths=(("pr", "create"), ("pr", "new")),
             options=_REPO
-            | _flags("-a --assignee -B --base -b --body -H --head -l --label -m --milestone")
+            | _flags("-a --assignee -B --base -H --head -l --label -m --milestone")
             | _flags("-p --project --recover -r --reviewer -t --title -T --template"),
             files=_GH_BODY,
+            texts=_GH_TEXT,
             opens_pull_request=True,
         ),
-        CliCommand(paths=(("pr", "comment"),), options=_REPO | _flags("-b --body"), files=_GH_BODY),
+        CliCommand(paths=(("pr", "comment"),), options=_REPO, files=_GH_BODY, texts=_GH_TEXT),
+        CliCommand(
+            paths=(("pr", "close"),), options=_REPO, files=_GH_BODY, texts=_flags("-c --comment")
+        ),
         CliCommand(
             paths=(("pr", "edit"),),
             options=_REPO
-            | _flags("--add-assignee --add-label --add-project --add-reviewer -B --base -b --body")
+            | _flags("--add-assignee --add-label --add-project --add-reviewer -B --base")
             | _flags("--remove-assignee --remove-label --remove-project --remove-reviewer")
             | _flags("-m --milestone -t --title"),
             files=_GH_BODY,
+            texts=_GH_TEXT,
         ),
-        CliCommand(paths=(("pr", "review"),), options=_REPO | _flags("-b --body"), files=_GH_BODY),
+        CliCommand(paths=(("pr", "review"),), options=_REPO, files=_GH_BODY, texts=_GH_TEXT),
         CliCommand(paths=(("release",),), options=_REPO, files=_GH_NOTES),
         CliCommand(
             paths=(("release", "create"), ("release", "new")),
-            options=_REPO
-            | _flags("--discussion-category -n --notes --notes-start-tag --target -t --title"),
+            options=_REPO | _flags("--discussion-category --notes-start-tag --target -t --title"),
             files=_GH_NOTES,
+            texts=_flags("-n --notes"),
             file_operands=1,
         ),
         CliCommand(paths=(("release", "upload"),), options=_REPO, file_operands=1),
         CliCommand(
             paths=(("api",),),
             options=_flags("--cache -H --header --hostname -q --jq -X --method -p --preview")
-            | _flags("-f --raw-field -t --template"),
+            | _flags("-t --template"),
             files=_flags("--input"),
             field_files=_flags("-F --field"),
+            texts=_flags("-f --raw-field -F --field"),  # a field makes the method POST
         ),
         CliCommand(
             paths=(("repo", "create"), ("repo", "new")),
@@ -322,6 +360,13 @@ GITHUB: Final = Forge(
             field_files=_flags("-F --field"),
         ),
     ),
+    reads=(
+        *_verbs("issue", "view list ls"),
+        *_verbs("pr", "view list ls diff checkout co checks"),
+        *_verbs("label", "list ls"),
+        ("api",),
+    ),
+    token_printers=GITHUB_TOKEN_PRINTERS,
 )
 
 GITLAB: Final = Forge(
@@ -345,33 +390,37 @@ GITLAB: Final = Forge(
         CliCommand(
             paths=(("issue", "create"), ("issue", "new")),
             options=_REPO
-            | _flags("-a --assignee -d --description --due-date --epic -l --label --link-type")
+            | _flags("-a --assignee --due-date --epic -l --label --link-type")
             | _flags("--linked-issues --linked-mr -m --milestone -e --time-estimate")
             | _flags("-s --time-spent -t --title -w --weight"),
             files=_GLAB_BODY,
             templates=_flags("--template"),
+            texts=_GLAB_TEXT,
         ),
         CliCommand(
             paths=(("issue", "update"),),
             options=_REPO
-            | _flags("-a --assignee -d --description --due-date --estimate -l --label")
+            | _flags("-a --assignee --due-date --estimate -l --label")
             | _flags("-m --milestone --spend -t --title -u --unlabel -w --weight"),
             files=_GLAB_BODY,
+            texts=_GLAB_TEXT,
         ),
         CliCommand(
             paths=(("issue", "note"), ("issue", "comment")),
-            options=_REPO | _flags("-m --message"),
+            options=_REPO,
             files=_flags("--attach"),
+            texts=_flags("-m --message"),
         ),
         CliCommand(paths=(("mr",),), options=_REPO, files=_GLAB_BODY),
         CliCommand(
             paths=(("mr", "create"), ("mr", "new")),
             options=_REPO
-            | _flags("-a --assignee -d --description -H --head -l --label -m --milestone")
+            | _flags("-a --assignee -H --head -l --label -m --milestone")
             | _flags("-i --related-issue --reviewer -s --source-branch -b --target-branch")
             | _flags("-t --title"),
             files=_GLAB_BODY,
             templates=_flags("--template"),
+            texts=_GLAB_TEXT,
             # --recover restores a saved push or fill setting (glab 1.115 mr_create.go)
             pushes=_flags("-f --fill --push --recover"),
             opens_pull_request=True,
@@ -379,22 +428,25 @@ GITLAB: Final = Forge(
         CliCommand(
             paths=(("mr", "update"),),
             options=_REPO
-            | _flags("-a --assignee -d --description -l --label -m --milestone --reviewer")
+            | _flags("-a --assignee -l --label -m --milestone --reviewer")
             | _flags("--state --target-branch -t --title -u --unlabel"),
             files=_GLAB_BODY,
+            texts=_GLAB_TEXT,
         ),
         CliCommand(
             paths=(("mr", "note"), ("mr", "comment"), ("mr", "note", "create")),
-            options=_REPO | _flags("--file --line -m --message --old-line --reply"),
+            options=_REPO | _flags("--file --line --old-line --reply"),
             files=_flags("--attach"),
+            texts=_flags("-m --message"),
         ),
         CliCommand(paths=(("release",),), options=_REPO, files=_GLAB_NOTES),
         CliCommand(
             paths=(("release", "create"),),
             options=_REPO
-            | _flags("-a --assets-links -m --milestone -n --name -N --notes --package-name")
+            | _flags("-a --assets-links -m --milestone -n --name --package-name")
             | _flags("-r --ref -D --released-at -T --tag-message"),
             files=_GLAB_NOTES | _flags("--experimental-notes-text-or-file"),
+            texts=_flags("-N --notes"),
             file_operands=1,
         ),
         CliCommand(
@@ -404,10 +456,10 @@ GITLAB: Final = Forge(
         ),
         CliCommand(
             paths=(("api",),),
-            options=_flags("-H --header --hostname -X --method --output --placeholder")
-            | _flags("-f --raw-field"),
+            options=_flags("-H --header --hostname -X --method --output --placeholder"),
             files=_flags("--input"),
             field_files=_flags("-F --field --form"),
+            texts=_flags("-f --raw-field -F --field --form"),  # a field makes the method POST
         ),
         CliCommand(
             paths=(("repo", "create"),),
@@ -449,6 +501,14 @@ GITLAB: Final = Forge(
     push_option_aliases=(("mr", "merge_request"),),
     secret_skip_markers=("[skip secret push protection]", "[skip secret detection]"),
     skip_ci_markers=("[skip ci]", "[ci skip]", "[skip pipeline]", "[no ci]"),
+    reads=(
+        *_verbs("issue", "view show list ls"),
+        *_verbs("mr", "view show list ls diff checkout"),
+        *_verbs("ci", "status stats"),
+        *_verbs("label", "list ls"),
+        ("api",),
+    ),
+    token_printers=GITLAB_TOKEN_PRINTERS,
 )
 
 FORGES: Final = (GITHUB, GITLAB)

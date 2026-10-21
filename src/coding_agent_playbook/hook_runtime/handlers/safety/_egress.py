@@ -19,7 +19,11 @@ caller supplies (``remotes``, called only for a push).
   ``forge_hosts`` (the session's remotes snapshot), else the forge's host;
 - curl / wget uploads (``-d @f``, ``--data-binary @f``, ``-T f``, ``-F x=@f``,
   ``--upload-file``, ``--post-file``, ``--body-file``) -> ``upload``;
-- ``scp`` / ``rsync`` to a remote destination, ``sftp host`` -> ``copy``.
+- ``scp`` / ``rsync`` to a remote destination, ``sftp host`` -> ``copy``;
+- ``git send-email``, ``git imap-send``, ``sendmail`` and ``msmtp`` -> ``mail``
+  (specs/prF-forge-adapter.md §14): no host (a relay is not the recipient);
+  the files are ``send-email``'s operands (patches, or revisions git formats)
+  and a ``< file`` the message is read from.
 """
 
 from __future__ import annotations
@@ -51,13 +55,33 @@ if TYPE_CHECKING:
 
 __all__ = ["EGRESS_ARGV0S", "Egress", "EgressKind", "network_hosts", "segment_egress"]
 
-type EgressKind = Literal["remote", "push", "gist", "snippet", "body_file", "upload", "copy"]
+type EgressKind = Literal[
+    "remote", "push", "gist", "snippet", "body_file", "upload", "copy", "mail"
+]
 #: Configured remotes: name -> its fetch and push URLs.
 type Remotes = Mapping[str, tuple[str, ...]]
 
 
+#: The mail transfer agents :func:`segment_egress` reads; git's mailers are subcommands.
+_MAILERS: Final = ("msmtp", "sendmail")
 #: The commands :func:`segment_egress` reads (the exfil guard's prefilter).
-EGRESS_ARGV0S: Final = ("git", "git.exe", *FORGE_ARGV0S, "curl", "wget", "scp", "rsync", "sftp")
+EGRESS_ARGV0S: Final = (
+    "git",
+    "git.exe",
+    *FORGE_ARGV0S,
+    *("curl", "wget", "scp", "rsync", "sftp"),
+    *_MAILERS,
+)
+_GIT_MAIL: Final = frozenset({"send-email", "imap-send"})
+#: ``git send-email``'s value-taking options, so an address is never read as a patch file.
+_SEND_EMAIL_VALUES: Final = value_options(
+    "--identity --from --sender --in-reply-to --reply-to --subject --to --cc --bcc --to-cmd "
+    "--cc-cmd --header-cmd --sendmail-cmd --smtp-server --smtp-server-option "
+    "--smtp-server-port --smtp-user --smtp-encryption --smtp-ssl-cert-path "
+    "--smtp-ssl-client-cert --smtp-ssl-client-key --smtp-auth --imap-sent-folder "
+    "--suppress-cc --confirm --envelope-sender --transfer-encoding --8bit-encoding "
+    "--compose-encoding --batch-size --relogin-delay -v"
+)
 _CLIENTS: Final = frozenset({"curl", "wget", "http", "https", "xh", "httpie"})
 _SHELL_CLIENTS: Final = frozenset({"ssh", "sftp", "telnet", "nc", "ncat", "netcat", "ftp"})
 _CURL_VALUES: Final = value_options(
@@ -126,6 +150,8 @@ def segment_egress(
         return _upload(program, argv[1:])
     if program in ("scp", "rsync", "sftp"):
         return _copy(program, argv[1:])
+    if program in _MAILERS:
+        return _mail(program, segment)
     return None
 
 
@@ -153,6 +179,10 @@ def network_hosts(segment: Segment) -> tuple[str, ...]:
 
 def _git(segment: Segment, remotes: Callable[[], Remotes]) -> Egress | None:
     invocation = parse_git(segment)
+    if invocation is not None and invocation.subcommand in _GIT_MAIL:
+        patches = split_words(invocation.args, _SEND_EMAIL_VALUES).operands
+        sent = patches if invocation.subcommand == "send-email" else ()
+        return _mail(f"git {invocation.subcommand}", segment, sent)
     if invocation is None or invocation.subcommand not in ("remote", "push"):
         return None
     if invocation.subcommand == "remote":
@@ -245,6 +275,12 @@ def _copy(program: str, words: Sequence[str]) -> Egress | None:
         return None  # a download or a local copy
     local = [word for word in operands[:-1] if not extract_hosts([word])]
     return Egress("copy", program, tuple(hosts), tuple(local))
+
+
+def _mail(command: str, segment: Segment, operands: Sequence[str] = ()) -> Egress:
+    """A ``mail`` egress: what it may send is ``operands`` and the file on its stdin."""
+    stdin = [r.target for r in segment.redirects if r.op == "<" and r.target and not r.dynamic]
+    return Egress("mail", command, (), tuple(dict.fromkeys([*operands, *stdin])))
 
 
 def _plain_host(word: str) -> str:

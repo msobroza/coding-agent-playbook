@@ -10,6 +10,11 @@ host name.
 A :class:`ForgeCall` says which local files the command sends to the forge
 (body, description, attachment, release-asset, template, ``api`` and
 CI-trigger file inputs), whether it publishes them as a gist or snippet,
+whether it sends data at all (those files, or a body, description, message,
+comment, notes or API field given inline or on stdin; for ``playbook forge``,
+an operation of kind ``sends_data``), whether it reads forge-hosted content
+(a forge CLI command that prints it, or a ``playbook forge`` read operation
+that runs one; untrusted: §14's ``taint:forge``), whether it
 pushes ``HEAD``'s branch (§8.3), opens a pull request, adds or repoints a git
 remote, and which hosts its words or environment name: ``-R/--repo
 HOST/OWNER/REPO`` or a URL, ``--hostname``, the forge's host env vars and
@@ -46,8 +51,6 @@ FORGE_ARGV0S: Final = ("gh", "glab", *_PLAYBOOK)
 _FORGE_SUBCOMMAND: Final = "forge"
 #: A value that names stdin, not a file.
 _STDIN: Final = frozenset({"-", "@-"})
-#: A flag value that cancels a pushing flag (``--push=false``).
-_FALSE: Final = frozenset({"false", "0", "f", "no"})
 #: First words that never reach the forge: help, version and local config.
 _LOCAL: Final = frozenset({"help", "version", "completion", "config", "alias", "--version"})
 _HELP: Final = frozenset({"-h", "--help"})
@@ -61,7 +64,11 @@ class ForgeCall:
 
     ``forge`` is ``None`` for ``playbook forge``, whose forge is the push
     remote's; ``changes_remote``: it adds or repoints a git remote. ``hosts`` are the hosts the command or its environment names
-    (empty: the caller falls back to the session's remotes).
+    (empty: the caller falls back to the session's remotes). ``reads``: it prints
+    forge-hosted content, one of the forge's ``reads`` commands (for ``playbook
+    forge``, a read operation some forge runs as one of them). ``sends_data``:
+    it sends ``files``, a ``texts`` flag's value (inline or ``-``) or a body
+    file on stdin; for ``playbook forge``, its operation's kind is ``sends_data``.
 
     Example: ``ForgeCall("glab snippet create", GITLAB, files=("notes.md",), snippet=True)``.
     """
@@ -76,6 +83,8 @@ class ForgeCall:
     creates_repository: bool = False
     hosts: tuple[str, ...] = ()
     contacts_forge: bool = True
+    reads: bool = False
+    sends_data: bool = False
 
 
 def forge_call(segment: Segment, env: Mapping[str, str] | None = None) -> ForgeCall | None:
@@ -136,19 +145,35 @@ def _cli(forge: Forge, words: Sequence[str], env: Mapping[str, str]) -> ForgeCal
     del parsed.operands[: len(path)]
     if not lead or lead[0] in _LOCAL or _HELP & parsed.flags:
         return ForgeCall(shown, forge, contacts_forge=False)  # help, version, local config
+    reads = _reads(forge, lead)
     if row is None:
-        return ForgeCall(shown, forge, hosts=_hosts(forge, parsed, env))
+        return ForgeCall(shown, forge, hosts=_hosts(forge, parsed, env), reads=reads)
+    files = _files(row, parsed)
     return ForgeCall(
         command=shown,
         forge=forge,
-        files=_files(row, parsed),
+        files=files,
         snippet=row.snippet,
         pushes=_pushes(row, parsed),
         opens_pull_request=row.opens_pull_request,
         changes_remote=row.adds_remote or _given(row.remotes, parsed),
         creates_repository=row.creates_repository,
         hosts=_hosts(forge, parsed, env),
+        reads=reads,
+        sends_data=bool(files) or _sends_text(row, parsed),
     )
+
+
+def _sends_text(row: CliCommand, parsed: CliWords) -> bool:
+    """A text flag given (inline or ``-``), or a body file read from stdin (``--body-file -``)."""
+    if parsed.of(row.texts):
+        return True
+    return any(value in _STDIN for value in parsed.of(row.files))
+
+
+def _reads(forge: Forge, words: Sequence[str]) -> bool:
+    """Whether ``words`` (argv after argv0, flags dropped) run one of ``forge``'s read commands."""
+    return any(tuple(words[: len(path)]) == path for path in forge.reads)
 
 
 def _all_values(forge: Forge) -> frozenset[str]:
@@ -200,15 +225,7 @@ def _pushes(row: CliCommand, parsed: CliWords) -> bool:
 
     A short one counts inside a cluster of short flags too (``-yf``).
     """
-    if not row.pushes:
-        return False
-    if any(value.strip().lower() not in _FALSE for value in parsed.of(row.pushes)):
-        return True
-    if row.pushes & parsed.flags:
-        return True
-    letters = {flag[1] for flag in row.pushes if len(flag) == 2 and flag[1] != "-"}
-    clusters = (flag[1:] for flag in parsed.flags if flag[:1] == "-" and flag[1:2] != "-")
-    return any(letters & set(cluster) for cluster in clusters)
+    return bool(row.pushes) and parsed.given(row.pushes)
 
 
 def _given(flags: frozenset[str], parsed: CliWords) -> bool:
@@ -268,6 +285,7 @@ def _host(word: str) -> str | None:
 
 
 def _playbook(words: Sequence[str]) -> ForgeCall | None:
+    from coding_agent_playbook.forge.dialects import by_name
     from coding_agent_playbook.forge.operations import BODY_FILE, operation_call
 
     call = operation_call(words)
@@ -281,10 +299,16 @@ def _playbook(words: Sequence[str]) -> ForgeCall | None:
         found = parsed.of(frozenset({BODY_FILE}))
         files = tuple(dict.fromkeys(f for f in found if f and f not in _STDIN))
     reaches = any(t is not None and t.argv for _, t in operation.translations)
+    reads = operation.kind == "read" and any(
+        t is not None and (forge := by_name(name)) is not None and _reads(forge, t.argv)
+        for name, t in operation.translations
+    )
     return ForgeCall(
         command=shown,
         forge=None,
         files=files,
         opens_pull_request=operation.opens_pull_request,
         contacts_forge=reaches,
+        reads=reads,
+        sends_data=operation.kind == "sends_data",
     )

@@ -5,10 +5,12 @@ layer: a sandbox allowlist or an egress proxy). ``_egress`` reads each
 segment; hosts are strings only, never resolved (a lookup is itself egress):
 
 - a new remote, a push to a target not configured at session start, a gist or
-  snippet (``gh gist create``, ``glab snippet create``; ``allowed_hosts`` never
-  relaxes these), and an upload or copy to a host neither loopback nor in
-  ``allowed_hosts`` (empty by default: any remote host) -> ask, naming the host;
-- an upload, gist, snippet or a file a forge CLI or ``playbook forge`` sends (``--body-file``,
+  snippet (``gh gist create``, ``glab snippet create``), mail (``git
+  send-email``, ``git imap-send``, ``sendmail``, ``msmtp``; specs/prF-forge-adapter.md
+  §14; ``allowed_hosts`` never relaxes a gist, a snippet or mail), and an upload
+  or copy to a host neither loopback nor in ``allowed_hosts`` (empty by default:
+  any remote host) -> ask, naming the host;
+- an upload, gist, snippet, mailed file or a file a forge CLI or ``playbook forge`` sends (``--body-file``,
   ``--description-file``, ``--attach``, release assets, ``api -F k=@F``, ...;
   ``gh``, ``glab`` and ``playbook forge`` alike) of a secret path (the rendered
   ``_secret_policy``) -> deny, unless every host is loopback;
@@ -74,6 +76,7 @@ _RAW_EGRESS: Final = re.compile(
     r"|--push|--fill|\s-f\b|--remote|\brelease\s+(?:create|upload))"
     r"|\b(?:curl|wget)\b[^\n;|&]{0,256}?\s(?:-d\s*@|--data[a-z-]*[=\s]@|-T|--upload-file"
     r"|-F|--form|--post-file|--body-file)|\b(?:scp|rsync|sftp)\b"
+    r"|\bgit\b[^\n;|&]{0,64}?\b(?:send-email|imap-send)\b|\b(?:sendmail|msmtp)\b"
 )
 
 
@@ -168,6 +171,8 @@ def _judge(
         where = egress.hosts[0] if egress.hosts else "the forge"
         reason = f"`{egress.command}` publishes files on {where}.\n{_CONFIRM}"
         return Decision.ASK, egress.kind, reason
+    if egress.kind == "mail":  # a relay is not the recipient: never relaxed by a host row
+        return Decision.ASK, "mail", f"`{egress.command}` sends mail off the machine.\n{_CONFIRM}"
     allowed = HookConfig(ctx.config, CONFIG_SCHEMA).strings("allowed_hosts", blanks="keep")
     outside = [host for host in off if not host_matches(host, allowed)]
     if egress.hosts and not outside:

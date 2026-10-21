@@ -156,7 +156,7 @@ SECRET_GLOB_EXEMPT: "Final[dict[str, tuple[str, ...]]]" = {
 #: whenever a rule is added, removed or changed, so a synced config names the
 #: ruleset its guards were reviewed against.
 SECRET_RULESET_ID: "Final[str]" = "engine-secrets"
-SECRET_RULESET_VERSION: "Final[int]" = 2
+SECRET_RULESET_VERSION: "Final[int]" = 3
 
 SECRET_CONTENT_RULES: "Final[tuple[tuple[str, str, str], ...]]" = (
     (
@@ -181,16 +181,18 @@ SECRET_CONTENT_RULES: "Final[tuple[tuple[str, str, str], ...]]" = (
         # and ``.``, 9 base36) for pat/rt/rtr/agent/wt; a 20-char friendly token; the
         # 17.5-17.10 partitioned runner token; 50-char agent, 40-hex trigger and 64-hex
         # OAuth secret tokens; the feed token's path-dependent form; the unpadded base36
-        # incoming-mail token; the job token's ``<partition>_<20>`` and JWT forms. An
-        # instance prefix (``acme-glpat-...``) matches; an admin's custom PAT prefix needs
-        # an ``extra_patterns`` row.
+        # incoming-mail token; the job token's ``<partition>_<20>`` and JWT forms; the
+        # stateless access and IAM OAuth access tokens' JWT form (``glsat-``, ``gliamat-``:
+        # in GitLab's source, not in its token overview). An instance prefix
+        # (``acme-glpat-...``) matches; an admin's custom PAT prefix needs an
+        # ``extra_patterns`` row.
         "gitlab-token",
         r"gl(?<![A-Za-z0-9_]gl)(?:"
         r"(?:pat|rtr?|agent|wt)-[0-9A-Za-z_-]{27,300}\.(?:[0-9a-z]{2}\.)?[0-9a-z]{9}"
         r"|(?:pat|dt|rtr?|ptt|ft|soat|ffct)-[0-9A-Za-z_-]{20}|rt-t[1-3]_[0-9A-Za-z_-]{20}"
         r"|agent-[0-9A-Za-z_-]{50}|ptt-[0-9a-f]{40}|oas-[0-9a-f]{64}|ft-[0-9a-f]{64}-[0-9]+"
-        r"|imt-[0-9a-z]{21,25}|cbt-(?:[0-9A-Za-z]{1,5}_[0-9A-Za-z_-]{20}"
-        r"|eyJ[0-9A-Za-z_-]{8,}\.eyJ[0-9A-Za-z_-]{8,}\.[0-9A-Za-z_-]{8,})"
+        r"|imt-[0-9a-z]{21,25}|cbt-[0-9A-Za-z]{1,5}_[0-9A-Za-z_-]{20}"
+        r"|(?:cbt|sat|iamat)-eyJ[0-9A-Za-z_-]{8,}\.eyJ[0-9A-Za-z_-]{8,}\.[0-9A-Za-z_-]{8,}"
         r")(?![0-9A-Za-z_-])",
         "GitLab token",
     ),

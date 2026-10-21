@@ -150,6 +150,81 @@ def test_contacts_forge(command: str, contacts: bool) -> None:
 
 
 @pytest.mark.parametrize(
+    ("command", "reads"),
+    [
+        # prF §14: forge read operations print forge-hosted content (taint:forge)
+        ("gh issue view 3", True),
+        ("gh -R o/r pr view 3 --comments", True),
+        ("gh pr diff 3", True),
+        ("gh pr co 3", True),  # gh's alias of pr checkout
+        ("gh issue ls --label bug", True),
+        ("gh api repos/o/r/issues/3/comments", True),
+        ("glab mr view 3", True),
+        ("glab issue show 3", True),
+        ("glab mr list", True),
+        ("glab ci status", True),
+        ("glab api projects/1/issues", True),
+        ("playbook forge issue view 3", True),
+        ("playbook forge -C ../app pr list --state open", True),
+        ("playbook forge ref view '#3'", True),
+        ("playbook forge pr checks 3", True),
+        ("playbook forge issue blockers 3", True),  # gh issue view; glab api
+        ("gh issue create --title t --body b", False),
+        ("glab mr create --fill", False),
+        ("gh auth status", False),  # the user's own login, no forge-hosted content
+        ("playbook forge auth status", False),
+        ("playbook forge which", False),
+        ("playbook forge pr create --title t", False),
+        ("gh issue view --help", False),
+        ("glab mr view -h", False),
+    ],
+)
+def test_reads_marks_forge_read_operations(command: str, reads: bool) -> None:
+    assert _read(command).reads is reads
+
+
+@pytest.mark.parametrize(
+    ("command", "sends"),
+    [
+        # inline text, stdin or a file: a body, description, message, comment, notes or API field
+        ("gh issue comment 3 --body 'looks good'", True),
+        ("gh issue comment 3 -b ok", True),
+        ("gh pr comment 3 -F -", True),  # the body on stdin
+        ("gh pr comment 3 --body-file review.md", True),
+        ("gh -R o/r pr review 3 --comment -b nit", True),
+        ("gh issue close 3 --comment done", True),
+        ("gh pr close 3 -c superseded", True),
+        ("gh issue create -t t -b text", True),
+        ("gh issue edit 3 --body=text", True),
+        ("gh pr create -t t --body text", True),
+        ("gh release create v1 --notes text", True),
+        ("gh api repos/o/r/issues/3/comments -f body=text", True),
+        ("gh api repos/o/r/issues --input -", True),
+        ("glab issue note 3 -m text", True),
+        ("glab mr note 3 --message=text", True),
+        ("glab mr create -t t -d text", True),
+        ("glab issue update 3 --description text", True),
+        ("glab release create v1 -N text", True),
+        ("glab api projects/1/issues -F title=x", True),
+        ("playbook forge issue comment 3 --body text", True),
+        ("playbook forge pr create --title t --body-file -", True),
+        ("playbook forge issue close 3", True),  # kind sends_data
+        ("gh issue view 3", False),
+        ("gh issue edit 3 --add-label bug", False),
+        ("gh pr review 3 --approve", False),
+        ("glab mr create --push=false -t t", False),  # a title alone
+        ("glab issue update 3 --label bug", False),
+        ("gh api repos/o/r/issues", False),
+        ("playbook forge issue label 3 --add bug", False),
+        ("playbook forge pr view 3", False),
+        ("gh issue comment 3 --help", False),
+    ],
+)
+def test_sends_data_marks_text_and_files_sent_to_the_forge(command: str, sends: bool) -> None:
+    assert _read(command).sends_data is sends
+
+
+@pytest.mark.parametrize(
     "command",
     ["gh pr create --help", "glab mr create --fill -h", "gh help repo create", "glab version"],
 )

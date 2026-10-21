@@ -23,6 +23,7 @@ from coding_agent_playbook.hook_runtime.handlers.safety._destructive_paths impor
     PATH_ARGV0S,
 )
 from coding_agent_playbook.hook_runtime.handlers.safety._egress import EGRESS_ARGV0S
+from coding_agent_playbook.hook_runtime.judges.forge_tokens import TOKEN_PRINT_ARGV0S
 from coding_agent_playbook.hook_runtime.judges.install_commands import _READERS
 from coding_agent_playbook.hook_runtime.shell.parse import ShellConfig, parse_shell
 from coding_agent_playbook.hook_runtime.shell.wrapper_policy import (
@@ -99,6 +100,7 @@ def _read_by_name() -> set[str]:
         *INTERPRETERS,
         *(name.replace("*", ".x") for name in PATH_ARGV0S),
         *EGRESS_ARGV0S,
+        *TOKEN_PRINT_ARGV0S,
         *_READERS,
         "pip",
         "pip3",
