@@ -87,7 +87,8 @@ def run(args: argparse.Namespace, *, git: GitPort | None = None) -> int:
 def _outcome(base_ref: str | None, repo_root: Path, git: GitPort | None) -> TwinOutcome:
     policy = dependency_policy({}, dependency_twin_config(repo_root))
     port = git if git is not None else open_git(repo_root)
-    base = resolve_merge_base(port, base_ref).sha
+    # It diffs the working tree, so uncommitted edits count even when HEAD is the base.
+    base = resolve_merge_base(port, base_ref, includes_worktree=True).sha
     found = manifest_findings(port, repo_root, base, policy)
     denied = any(finding.decision is Decision.DENY for _, finding in found)
     return TwinOutcome(1 if denied else 0, "\n".join(finding_lines(found)))

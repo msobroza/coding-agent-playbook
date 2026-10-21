@@ -5,7 +5,12 @@ so they use a **stateless** ``SafeGit`` (no hook state directory exists there)
 with a CLI-sized per-call timeout. The base is ``--base`` or the default branch
 (``SafeGit.default_branch``: ``origin/HEAD``, then ``main``, then ``master``),
 and the compared range starts at its merge base with ``HEAD``. A shallow CI
-checkout has neither, hence :data:`FETCH_DEPTH_HINT` in every such error.
+checkout has neither, hence :data:`FETCH_DEPTH_HINT` in every such error. A
+merge base that is ``HEAD`` itself (the base is ``HEAD``, or already contains
+it) leaves an empty range, and a twin that checks nothing would pass: that is
+an error too (specs/prF-forge-adapter.md §10.2, fail closed on either forge).
+The CI job passes ``--base`` and fetches what it needs; no twin reads a forge's
+variables or fetches (Q53).
 
 A twin's ``--range A..B`` / ``A...B`` resolves to a :class:`ScanRange` here
 (:func:`resolve_range`), so no twin imports the gate-scan command for it.
@@ -41,7 +46,10 @@ __all__ = [
 
 #: Per git call; a range diff of a large PR can outlive the hooks' 2-5 s bounds.
 CLI_GIT_TIMEOUT_S: Final = 30.0
-FETCH_DEPTH_HINT: Final = "in CI, check out the full history (actions/checkout with fetch-depth: 0)"
+FETCH_DEPTH_HINT: Final = (
+    "in CI, check out the full history (GitHub: actions/checkout with fetch-depth: 0; "
+    'GitLab: GIT_DEPTH: 0 and git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME")'
+)
 #: The ``--base`` help of the twins that compare against a base (:func:`resolve_merge_base`).
 BASE_FLAG_HELP: Final = "base ref (default: the default branch, origin/HEAD first)"
 #: The ``--range`` help of the twins that scan a range (:func:`resolve_range`).
@@ -79,27 +87,54 @@ def open_git(repo_root: Path) -> SafeGit:
     return SafeGit(repo, proc=SubprocessProc(), env=dict(os.environ), timeout_s=CLI_GIT_TIMEOUT_S)
 
 
-def resolve_merge_base(git: GitPort, base: str | None) -> MergeBase:
+def resolve_merge_base(
+    git: GitPort, base: str | None, *, includes_worktree: bool = False
+) -> MergeBase:
     """``base`` (default: the default branch) and its merge base with ``HEAD``.
 
-    Raises :class:`GitBaseError` when no default branch exists or the two share
-    no history; ``GitError`` when git rejects ``base``.
+    Raises :class:`GitBaseError` for a blank ``base``, when no default branch
+    exists, when the two share no history, or when the merge base is ``HEAD``
+    (an empty range) unless the twin ``includes_worktree`` (it also checks
+    uncommitted changes); ``GitError`` when git rejects ``base``.
 
     Example::
 
         >>> resolve_merge_base(git, None)  # doctest: +SKIP
         MergeBase(ref='origin/main', sha='9f2c41...')
     """
+    ref = _base_ref(git, base)
+    sha = git.merge_base(ref, "HEAD")
+    if sha is None:
+        raise GitBaseError(f"{ref} and HEAD share no history; {FETCH_DEPTH_HINT}")
+    if not includes_worktree:
+        _require_commits_after(git, ref, sha)
+    return MergeBase(ref, sha)
+
+
+def _base_ref(git: GitPort, base: str | None) -> str:
+    # A CI variable that is unset expands to `--base ""`; falling back to the
+    # default branch there would compare against the wrong base without a word.
+    if base is not None and not base.strip():
+        raise GitBaseError(f"--base is empty ({base!r}): pass a ref or a commit SHA")
     ref = base or git.default_branch()
     if ref is None:
         raise GitBaseError(
             "cannot find the default branch (refs/remotes/origin/HEAD, main or master); "
             f"pass --base REF, or {FETCH_DEPTH_HINT}"
         )
-    sha = git.merge_base(ref, "HEAD")
-    if sha is None:
-        raise GitBaseError(f"{ref} and HEAD share no history; {FETCH_DEPTH_HINT}")
-    return MergeBase(ref, sha)
+    return ref
+
+
+def _require_commits_after(git: GitPort, ref: str, merge_base: str) -> None:
+    """Fail closed when ``<merge_base>..HEAD`` is empty: every check would pass vacuously."""
+    head = git.rev_commit("HEAD")
+    if head is None:
+        raise GitBaseError(f"cannot resolve HEAD to a commit to compare with {ref}")
+    if merge_base == head:
+        raise GitBaseError(
+            f"the range {ref}..HEAD is empty: {ref} is HEAD ({head}) or already contains it; "
+            f"pass the pull request's target branch as --base, or {FETCH_DEPTH_HINT}"
+        )
 
 
 @dataclass(frozen=True, slots=True)

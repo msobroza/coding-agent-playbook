@@ -228,3 +228,44 @@ def test_a_base_hooks_value_that_is_not_a_table_exits_2_naming_it(
     assert capsys.readouterr().err.startswith(
         f"error: .coding-agent-playbook.toml at HEAD~1: {message}"
     )
+
+
+_GITLAB_CI = """\
+lint:
+  script:
+    - ruff check .
+
+playbook-ci:
+  script:
+    - playbook ci --base "$CI_MERGE_REQUEST_DIFF_BASE_SHA"
+"""
+
+
+def test_a_gitlab_ci_job_made_optional_or_removed_exits_1(
+    repo: Repo, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """prF §10.3: the twin hands GitLab CI files to the scanner as before/after pairs."""
+    repo.commit("ci", {".gitlab-ci.yml": _GITLAB_CI})
+    weakened = _GITLAB_CI.replace("lint:\n  script:\n    - ruff check .\n\n", "")
+    repo.commit(
+        "drop lint", {".gitlab-ci.yml": weakened.replace("  script:", "  when: manual\n  script:")}
+    )
+
+    assert repo.scan("--range", "HEAD~1..HEAD") == 1
+
+    out = capsys.readouterr().out
+    assert ".gitlab-ci.yml: gitlab-ci-job-removed: job 'lint' removed" in out
+    assert ".gitlab-ci.yml: playbook-ci-job-loosened: job 'playbook-ci' gains when: manual" in out
+
+
+def test_ci_config_globs_committed_at_the_base_extend_the_watched_files(
+    repo: Repo, capsys: pytest.CaptureFixture[str]
+) -> None:
+    table = '[hooks.gate-weakening-guard]\nci_config_globs = ["ci/*.gitlab-ci.yml"]\n'
+    repo.commit("ci", {".coding-agent-playbook.toml": table, "ci/deploy.gitlab-ci.yml": _GITLAB_CI})
+    repo.commit("drop", {"ci/deploy.gitlab-ci.yml": "stages: [test]\n"})
+
+    assert repo.scan("--range", "HEAD~1..HEAD") == 1
+    assert "ci/deploy.gitlab-ci.yml: gitlab-ci-job-removed: job 'lint' removed" in (
+        capsys.readouterr().out
+    )
