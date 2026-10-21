@@ -539,7 +539,7 @@ is left out when no enabled adapter writes a skills root.
   `.continue/rules/` file per rule, and a skill with rules is never turned into
   a Continue prompt.
 
-## Bundled plugins: superpowers, python_design
+## Bundled plugins: superpowers, python_design, mattpocock_skills
 
 The engine wheel bundles **opt-in bundled plugins** (called *packs* before
 v0.19). They layer exactly like an overlay package but need no extra install,
@@ -578,7 +578,7 @@ or from a local file's `overlays_enabled`, which replaces it). A
 bundled-plugin name is checked against `catalog/plugins/<name>/` and never
 imported. An unknown one reads `no such bundled plugin`, and a name that looks
 like a plugin typo also lists the bundled plugins:
-`coding_agent_playbook.plugins.superpower: no such bundled plugin (bundled plugins: coding_agent_playbook.plugins.python_design, coding_agent_playbook.plugins.superpowers)`.
+`coding_agent_playbook.plugins.superpower: no such bundled plugin (bundled plugins: coding_agent_playbook.plugins.mattpocock_skills, coding_agent_playbook.plugins.python_design, coding_agent_playbook.plugins.superpowers)`.
 The bare namespace (`coding_agent_playbook.plugins`, or the old
 `coding_agent_playbook.packs`) is refused as
 `the bundled plugin namespace, not a plugin`. Any other name is an overlay
@@ -649,6 +649,54 @@ error of earlier releases is gone.
 default `commit = false`) and lints every copy under `commit = true`. If you run
 these tools over the repository root, exclude the generated skill roots (for
 example `exclude` under `[tool.mypy]`, `extend-exclude` under `[tool.ruff]`).
+
+**The `mattpocock_skills` bundled plugin**
+(`coding_agent_playbook.plugins.mattpocock_skills`) is vendored content: Matt
+Pocock's engineering and productivity skills, pinned to upstream v1.3.1 (MIT)
+and kept near-verbatim, with every change listed in
+`catalog/plugins/mattpocock_skills/ATTRIBUTIONS.md`. It ships 26 skills and one
+plugin always rule. Upstream's `triage` is dropped, and three skills are renamed
+so they do not replace Claude Code's own bundled skills: `code-review` is
+`two-axis-review`, `pr` is `pr-body` and `prototype` is `throwaway-prototype`.
+The skills name no tool a consumer repo may lack (no forge CLI, `jq`, OS
+openers, CDN assets or bash scripts; wizard's and diagnosing-bugs' scripts are
+standard-library Python), and the plugin contains no URL. Enable it on its own:
+
+```toml
+# .coding-agent-playbook.toml (top-level key, above the first [table] header)
+overlays_enabled = ["coding_agent_playbook.plugins.mattpocock_skills"]
+```
+
+Then, once per repo:
+
+- Run `/setup-matt-pocock-skills`. It writes `docs/agents/issue-tracker.md`,
+  `docs/agents/triage-labels.md` and `docs/agents/domain.md`; the default
+  tracker is local markdown, which needs no remote or CLI. The plugin always
+  rule (`mattpocock-skills-tracker`) points the agent at these files and asks
+  it to tell you to run setup when a skill needs one that is missing.
+- Add `.scratch/` to your `.gitignore`. The local tracker keeps its maps and
+  tickets in `.scratch/<slug>/`, working state that is never staged or
+  committed.
+- If you use the upstream Claude Code plugin of these skills, disable it in
+  this repo, or each skill appears twice.
+
+Fifteen skills run only when you ask for them by name: `/ask-matt`,
+`/grill-me`, `/grill-with-docs`, `/handoff`, `/implement`, `/implement-spec`,
+`/improve-codebase-architecture`, `/retro`, `/setup-matt-pocock-skills`,
+`/teach`, `/to-questionnaire`, `/to-spec`, `/to-tickets`, `/wait-what` and
+`/wayfinder`. Only Claude Code honours their `disable-model-invocation: true`;
+in every other harness each one starts with a line asking the model to stop
+unless you asked for it. The other eleven load when a task calls for them.
+Continue, when listed, gets each skill as a body-only prompt without its
+`references/` or scripts.
+
+Do not enable it together with superpowers: several skills cover the same
+ground (`tdd` and `test-driven-development`, `diagnosing-bugs` and
+`systematic-debugging`, `grilling` and `brainstorming`, among others), and the
+two skill listings with core's come to about 6,800 characters, over the
+6,000-character budget for core plus one bundled plugin. Next to python_design
+the three listings stay within it (5,655 characters). See SPEC §11.5.3 and
+`catalog/plugins/mattpocock_skills/README.md`.
 
 **Old names still work.** A config written before v0.19 says
 `coding_agent_playbook.packs.<name>`. That spelling is a deprecated alias:

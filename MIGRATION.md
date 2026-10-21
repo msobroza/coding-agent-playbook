@@ -672,6 +672,7 @@ changelog entry is v0.21.
 |---|---|
 | Anything that cites **SPEC §3** for a term's definition (docs, overlay READMEs, tests) | Use `CONTEXT.md` at the repository root, now the project's only glossary. SPEC §3 is a one-line pointer to it, and the two facts only the old glossary carried moved to SPEC §6.6.7 and §10.2. The move alters no generated file. |
 | An overlay or repo-local rule or prompt whose `applies_if` has a typo after a key that does not hold | Run `playbook validate` and fix what it reports: validate, and so `playbook sync`, now checks each key on its own. New `applies_if: {package_manager: uv}` gating is available. See "`package_manager` and per-key validation" below. |
+| A repo that wants Matt Pocock's skills (the new `mattpocock_skills` bundled plugin) | Opt in: add `coding_agent_playbook.plugins.mattpocock_skills` to `overlays_enabled`, run `playbook sync`, then `/setup-matt-pocock-skills`, gitignore `.scratch/` and disable the upstream Claude Code plugin. Nothing changes for a repo that does not enable it. See "New opt-in bundled plugin: mattpocock_skills". |
 | Every consumer repo (`commit = false`) | Nothing: the next `playbook sync` writes `.agents/skills/`, deletes the unchanged `shared_skills/` copies and updates the managed block. |
 | A repo with `commit = true` | Run `playbook sync`, then `git rm -r shared_skills` and commit `.agents/skills/`. |
 | Tooling that points at `shared_skills/` | Point it at `.agents/skills/`. |
@@ -703,6 +704,48 @@ changelog entry is v0.21.
   and `lint_codes.when` already were, so an overlay or repo-local artifact with such a
   hidden typo now fails `playbook validate`, and therefore the validate-gated
   `playbook sync`. Fix the key it names; nothing else changes.
+
+### New opt-in bundled plugin: mattpocock_skills
+
+The engine wheel gains a third bundled plugin,
+`coding_agent_playbook.plugins.mattpocock_skills`: vendored content of Matt
+Pocock's engineering and productivity skills, pinned to upstream v1.3.1, with 26
+skills and one plugin always rule (SPEC §11.5.3). It is off by default, so a repo
+that does not list it gets no new file, rule or skill and needs no action. The
+only visible change elsewhere is the hint for a mistyped bundled-plugin name,
+which now lists three plugins:
+`(bundled plugins: coding_agent_playbook.plugins.mattpocock_skills, coding_agent_playbook.plugins.python_design, coding_agent_playbook.plugins.superpowers)`.
+
+To opt in:
+
+1. Add the plugin to the top-level `overlays_enabled` key, above the first
+   `[table]` header, and run `playbook sync`:
+
+   ```toml
+   overlays_enabled = ["coding_agent_playbook.plugins.mattpocock_skills"]
+   ```
+
+   Sync writes the 26 skills to every enabled skills root and adds the plugin
+   always rule `mattpocock-skills-tracker` to `AGENTS.md` and
+   `.claude/rules/coding-agent-playbook.md`.
+2. Run `/setup-matt-pocock-skills` once. It writes `docs/agents/issue-tracker.md`,
+   `docs/agents/triage-labels.md` and `docs/agents/domain.md` (local markdown is
+   the default tracker) and never edits `CLAUDE.md` or `AGENTS.md`. If an older
+   setup wrote an "## Agent skills" block there, the plugin always rule replaces
+   it, and you may delete the block.
+3. Add `.scratch/` to `.gitignore`: the local tracker keeps its maps and tickets
+   there, and they are never committed.
+4. Disable the upstream Claude Code plugin of these skills in that repo, or each
+   skill appears twice. Three ids differ from upstream: `code-review` is
+   `two-axis-review`, `pr` is `pr-body` and `prototype` is
+   `throwaway-prototype`. `triage` is not shipped; add it back at
+   `playbook/skills/triage/` if you need it.
+
+Do not enable it together with `superpowers`: several skills overlap, and core
+plus both listings exceed the 6,000-character skill-listing budget, which now
+reads core plus **each** bundled plugin. To opt out, remove it from
+`overlays_enabled` and run `playbook sync`; its skills are settled as leftovers
+like any bundled plugin's (SPEC §11.5).
 
 ### The shared_skills adapter writes .agents/skills/
 
