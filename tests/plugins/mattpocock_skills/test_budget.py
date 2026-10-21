@@ -1,4 +1,4 @@
-"""Skill-listing budget: core plus EACH bundled plugin within 6,000 characters.
+"""Skill-listing budget: core plus EACH bundled plugin within 7,000 characters (prU D18, D54).
 
 specs/prT-mattpocock-skills.md section 7.5: prS D5 as amended by D31. The test
 measures what the engine itself would list, per layer, with the engine's own
@@ -29,7 +29,9 @@ if TYPE_CHECKING:
 
 pytestmark = pytest.mark.catalog
 
-LISTING_BUDGET_CHARS: Final = 6_000  # prS D5, as amended by D31: core plus EACH bundled plugin
+LISTING_BUDGET_CHARS: Final = (
+    7_000  # prU D18 as amended by D54 (was prS D5/D31): core plus EACH bundled plugin
+)
 
 
 def _of_layer[Artifact: (Rule, Skill)](items: list[Artifact], label: str) -> list[Artifact]:
@@ -57,7 +59,7 @@ def listing_chars(plugin: str, repo_root: Path) -> dict[str, int]:
 
 
 @pytest.mark.parametrize("plugin", bundled_plugins())
-def test_core_plus_each_bundled_plugin_listing_within_6000_chars(
+def test_core_plus_each_bundled_plugin_listing_within_7000_chars_d18(
     plugin: str, tmp_path: Path
 ) -> None:
     chars = listing_chars(plugin, tmp_path)

@@ -20,10 +20,15 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 import coding_agent_playbook
+from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
+from coding_agent_playbook.artifacts.skill import Skill
+from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE
 from coding_agent_playbook.commands import init as _init
 from coding_agent_playbook.detector.facts import detect
 from coding_agent_playbook.rendering.session import RenderSession, TemplateContext
-from tests._catalog import core_rules
+from coding_agent_playbook.skills.document import WhereEntry, skill_catalog_block
+from coding_agent_playbook.skills.naming import skill_id_of
+from tests._catalog import CORE_ROOT, core_rules
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -115,6 +120,33 @@ def write_reference_probe(repo: Path) -> None:
         target.write_text(text, encoding="utf-8")
 
 
+#: prU D63's reliable Domino markers, every kind at once: the D54/D59 worst-case probe.
+_DOMINO_MARKERS: Final = {
+    ".dominoignore": "results/\n",
+    "dominostats.json": "{}\n",
+}
+_DOMINO_DEPENDENCY: Final = '"dominodatalab>=1.4", '
+
+
+def write_domino_probe(repo: Path) -> None:
+    """The reference probe plus reliable Domino markers (prU D54, D59, D63).
+
+    Adds ``.dominoignore``, a ``dominostats.json`` and the ``dominodatalab``
+    dependency, so the Domino skills apply once they ship and the budget tests
+    measure the worst case with the D59 caps.
+
+    Example: ``write_domino_probe(tmp_path)`` then ``init_and_sync_reference_probe(tmp_path)``.
+    """
+    write_reference_probe(repo)
+    pyproject = REFERENCE_PROBE_PYPROJECT.replace(
+        '"fastapi>=0.115", ', f'{_DOMINO_DEPENDENCY}"fastapi>=0.115", ', 1
+    )
+    assert pyproject != REFERENCE_PROBE_PYPROJECT, "the probe pyproject lost its fastapi pin"
+    (repo / "pyproject.toml").write_text(pyproject, encoding="utf-8")
+    for relative, text in _DOMINO_MARKERS.items():
+        (repo / relative).write_text(text, encoding="utf-8")
+
+
 def reference_probe_facts(repo: Path) -> Facts:
     """The detector facts of a freshly written probe (rule renders in PR 5-8 size tests).
 
@@ -150,6 +182,26 @@ def render_core_rule(
     # No rule to filter, so no has_file path to anchor: the session renders one rule.
     session = RenderSession.open((), context, repo_root=Path())
     return session.render_rule(rules[rule_id]).body
+
+
+def every_core_where_entry() -> list[WhereEntry]:
+    """A ``Where guidance lives`` row for every core skill declaring ``playbook.files``, by id.
+
+    The worst case of prU D35: sync lists a skill only when one of its members
+    is active, so the probe's own map shrinks with its facts; this one does not.
+    Read from the checkout's ``SKILL.md`` files, so a new core skill joins without
+    an edit here.
+
+    Example: ``where_guidance_section(every_core_where_entry())``.
+    """
+    entries: list[WhereEntry] = []
+    for skill_md in sorted((CORE_ROOT / "skills").glob("*/SKILL.md")):
+        frontmatter, body = split_frontmatter(skill_md.read_text(encoding="utf-8"))
+        skill = Skill(dict(frontmatter), body, None, None, ENGINE_PACKAGE)
+        files = skill_catalog_block(skill).files
+        if files is not None:
+            entries.append(WhereEntry(skill_id=skill_id_of(skill), files=files))
+    return entries
 
 
 def init_and_sync_reference_probe(repo: Path) -> None:
