@@ -1,5 +1,9 @@
 """The D5 context budget, enforced on the reference probe (specs/prS-skills-context.md 6.8.11).
 
+prU raises the description caps (D18 as amended by D54), gives the Domino probe
+of ``tests/_budget_probe.py`` its own caps (D59) and measures the worst-case
+"Where guidance lives" map with every core skill (D35).
+
 Always-loaded context costs tokens on every turn, so CI caps it on the probe of
 ``tests/_budget_probe.py``: the rendered always rules plus the generated
 "Where guidance lives" map, the whole ``AGENTS.md``, each core skill description
@@ -23,6 +27,7 @@ from coding_agent_playbook.rendering.formats import render_for
 from coding_agent_playbook.skills.document import where_entry, where_guidance_section
 from coding_agent_playbook.sync.render import render_artifacts
 from coding_agent_playbook.validation.context import SyncContext
+from tests._budget_probe import LISTING_MAX_CHARS, every_core_where_entry
 from tests._catalog import core_rules, core_skill_ids
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
 
@@ -33,8 +38,11 @@ ALWAYS_RULES_MAX_WORDS: Final = 800
 ALWAYS_SECTIONS_MAX_WORDS: Final = 240
 AGENTS_MD_MAX_WORDS: Final = 1500
 CORE_DESCRIPTION_MAX_CHARS: Final = 300
-CORE_DESCRIPTIONS_MAX_CHARS: Final = 2000
-LISTING_MAX_CHARS: Final = 6000
+#: prU D18 as amended by D54 (2,000 -> 2,400 -> 2,800); the per-skill cap above stays.
+CORE_DESCRIPTIONS_MAX_CHARS: Final = 2800
+#: prU D59: the Domino probe's own caps, the worst case once the Domino skills apply.
+DOMINO_CORE_DESCRIPTIONS_MAX_CHARS: Final = 3400
+DOMINO_LISTING_MAX_CHARS: Final = 7500
 _GUARDRAILS_HEADING: Final = "## Guardrails"
 
 
@@ -88,6 +96,39 @@ def test_always_rules_within_800_words(reference_probe_repo: Path) -> None:
     assert total <= ALWAYS_RULES_MAX_WORDS, (
         f"always rules plus the Where section are {total} words; D5 allows {ALWAYS_RULES_MAX_WORDS}"
     )
+
+
+def test_where_map_with_every_core_skill_within_800_words(reference_probe_repo: Path) -> None:
+    """prU D35 worst case: the always sections plus a map line for EVERY core skill.
+
+    The map is composed from every core skill that declares ``playbook.files``,
+    whichever members the probe activates, so it keeps measuring as lanes add skills.
+    """
+    sections, _ = _always_text(reference_probe_repo, "agents_md_section")
+    entries = every_core_where_entry()
+    assert len(entries) >= 4, f"expected a map line per core skill, got {entries}"
+    total = sum(map(_words, sections)) + _words(where_guidance_section(entries))
+    assert total <= ALWAYS_RULES_MAX_WORDS, (
+        f"always sections plus the {len(entries)}-line worst-case map are {total} words; "
+        f"prU D35 keeps the cap at {ALWAYS_RULES_MAX_WORDS}: shorten the playbook.files phrases"
+    )
+
+
+def test_every_core_where_entry_reads_templated_skill_md(tmp_path: Path) -> None:
+    """A skill shipped as ``SKILL.md.j2`` joins the worst-case map, as sync would list it."""
+    for name, filename in (("plain", "SKILL.md"), ("templated", "SKILL.md.j2")):
+        skill_dir = tmp_path / name
+        skill_dir.mkdir()
+        (skill_dir / filename).write_text(
+            f"---\nid: {name}\nname: {name}\ndescription: d\n"
+            f'playbook:\n  use_when: "w"\n  files: "{name} files"\n---\n\n# {name}\n',
+            encoding="utf-8",
+        )
+    entries = every_core_where_entry(tmp_path)
+    assert [(e.skill_id, e.files) for e in entries] == [
+        ("plain", "plain files"),
+        ("templated", "templated files"),
+    ]
 
 
 def test_always_sections_within_240_words(reference_probe_repo: Path) -> None:
@@ -149,22 +190,62 @@ def test_agents_md_guardrails_are_one_line_per_hook_with_an_advisory(
         assert check in ci_line, ci_line
 
 
+def _over_per_skill_cap(repo: Path) -> dict[str, int]:
+    """The core skills of ``repo`` whose description exceeds the per-skill cap, with lengths."""
+    lengths = {sid: len(text) for sid, text in _core_descriptions(repo).items()}
+    return {sid: n for sid, n in lengths.items() if n > CORE_DESCRIPTION_MAX_CHARS}
+
+
 def test_each_core_description_within_300_chars(reference_probe_repo: Path) -> None:
-    lengths = {sid: len(text) for sid, text in _core_descriptions(reference_probe_repo).items()}
-    over = {sid: n for sid, n in lengths.items() if n > CORE_DESCRIPTION_MAX_CHARS}
+    over = _over_per_skill_cap(reference_probe_repo)
     assert not over, f"core descriptions over {CORE_DESCRIPTION_MAX_CHARS} chars: {over}"
 
 
-def test_core_descriptions_total_within_2000_chars(reference_probe_repo: Path) -> None:
+def test_core_descriptions_total_within_2800_chars_d18(reference_probe_repo: Path) -> None:
+    """prU D18 as amended by D54, on the standard probe."""
     total = sum(map(len, _core_descriptions(reference_probe_repo).values()))
-    assert total <= CORE_DESCRIPTIONS_MAX_CHARS, f"core descriptions total {total} chars"
+    assert total <= CORE_DESCRIPTIONS_MAX_CHARS, (
+        f"core descriptions total {total} chars; prU D18/D54 allows {CORE_DESCRIPTIONS_MAX_CHARS}"
+    )
 
 
-def test_core_and_plugin_descriptions_total_within_6000_chars(reference_probe_repo: Path) -> None:
+def test_core_and_plugin_descriptions_total_within_7000_chars_d18(
+    reference_probe_repo: Path,
+) -> None:
     """Every bundled plugin counts: the D24 lint exemption does not shrink the listing."""
     descriptions = _emitted_descriptions(reference_probe_repo)
     total = sum(map(len, descriptions.values()))
-    assert total <= LISTING_MAX_CHARS, f"{len(descriptions)} skill descriptions total {total}"
+    assert total <= LISTING_MAX_CHARS, (
+        f"{len(descriptions)} skill descriptions total {total}; prU D18/D54 allows "
+        f"{LISTING_MAX_CHARS}"
+    )
+
+
+def test_domino_probe_each_core_description_within_300_chars(domino_probe_repo: Path) -> None:
+    over = _over_per_skill_cap(domino_probe_repo)
+    assert not over, f"core descriptions over {CORE_DESCRIPTION_MAX_CHARS} chars: {over}"
+
+
+def test_domino_probe_core_descriptions_total_within_3400_chars_d59(
+    domino_probe_repo: Path,
+) -> None:
+    """prU D59: the Domino descriptions stay full length, so this probe has its own cap."""
+    total = sum(map(len, _core_descriptions(domino_probe_repo).values()))
+    assert total <= DOMINO_CORE_DESCRIPTIONS_MAX_CHARS, (
+        f"core descriptions total {total} chars on the Domino probe; prU D59 allows "
+        f"{DOMINO_CORE_DESCRIPTIONS_MAX_CHARS}"
+    )
+
+
+def test_domino_probe_core_and_plugin_descriptions_within_7500_chars_d59(
+    domino_probe_repo: Path,
+) -> None:
+    descriptions = _emitted_descriptions(domino_probe_repo)
+    total = sum(map(len, descriptions.values()))
+    assert total <= DOMINO_LISTING_MAX_CHARS, (
+        f"{len(descriptions)} skill descriptions total {total} on the Domino probe; prU D59 "
+        f"allows {DOMINO_LISTING_MAX_CHARS}"
+    )
 
 
 def test_rules_file_and_agents_md_carry_no_member_rule_heading(reference_probe_repo: Path) -> None:

@@ -1,4 +1,4 @@
-"""Skill-listing budget: core plus EACH bundled plugin within 6,000 characters.
+"""Skill-listing budget: core plus EACH bundled plugin within 7,000 characters (prU D18, D54).
 
 specs/prT-mattpocock-skills.md section 7.5: prS D5 as amended by D31. The test
 measures what the engine itself would list, per layer, with the engine's own
@@ -8,7 +8,7 @@ longest description sync composes for them, every plugin skill at its authored o
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -19,6 +19,7 @@ from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.skills.document import emitted_frontmatter
 from coding_agent_playbook.skills.membership import compose_skills
 from coding_agent_playbook.skills.naming import skill_id_of
+from tests._budget_probe import LISTING_MAX_CHARS
 from tests.plugins.mattpocock_skills._expectations import PLUGIN_NAME, present_skill_ids
 
 if TYPE_CHECKING:
@@ -28,8 +29,6 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.skill import Skill
 
 pytestmark = pytest.mark.catalog
-
-LISTING_BUDGET_CHARS: Final = 6_000  # prS D5, as amended by D31: core plus EACH bundled plugin
 
 
 def _of_layer[Artifact: (Rule, Skill)](items: list[Artifact], label: str) -> list[Artifact]:
@@ -57,11 +56,11 @@ def listing_chars(plugin: str, repo_root: Path) -> dict[str, int]:
 
 
 @pytest.mark.parametrize("plugin", bundled_plugins())
-def test_core_plus_each_bundled_plugin_listing_within_6000_chars(
+def test_core_plus_each_bundled_plugin_listing_within_7000_chars_d18(
     plugin: str, tmp_path: Path
 ) -> None:
     chars = listing_chars(plugin, tmp_path)
-    assert sum(chars.values()) <= LISTING_BUDGET_CHARS, sorted(chars.items(), key=lambda kv: -kv[1])
+    assert sum(chars.values()) <= LISTING_MAX_CHARS, sorted(chars.items(), key=lambda kv: -kv[1])
 
 
 def test_budget_counts_every_present_plugin_skill(tmp_path: Path) -> None:
