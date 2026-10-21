@@ -82,10 +82,20 @@ _SECRET = [
     f"{_HOME}/.config/gcloud/application_default_credentials.json",
     f"{_HOME}/.config/gcloud/configurations/config_default",
     f"{_HOME}/.config/gh/hosts.yml",
+    f"{_HOME}/.config/glab-cli/config.yml",
+    f"{_HOME}/Library/Application Support/glab-cli/config.yml",
+    f"{_HOME}/AppData/Local/glab-cli/config.yml",
+    f"{_HOME}/.gitlab-runner/config.toml",
     f"{_HOME}/.docker/config.json",
     f"{_HOME}/.m2/settings.xml",
     f"{_HOME}/.claude/.credentials.json",
     "~/.aws/config",
+    # repo-anchored and absolute: glab's repository config (in every git dir of the
+    # repository: a linked worktree's or a submodule's) and the root GitLab Runner's
+    ".git/glab-cli/config.yml",
+    ".git/worktrees/feature/glab-cli/config.yml",
+    ".git/modules/vendor/glab-cli/config.yml",
+    "/etc/gitlab-runner/config.toml",
 ]
 
 _NOT_SECRET = [
@@ -122,6 +132,10 @@ _NOT_SECRET = [
     f"{_HOME}/.kube/cache/discovery.json",
     f"{_HOME}/.docker/daemon.json",
     f"{_HOME}/.config/gh/config.yml",
+    f"{_HOME}/.config/glab-cli/aliases.yml",  # glab's command aliases, no credentials
+    "docs/glab-cli/config.yml",
+    f"{_HOME}/.cargo/config.toml",
+    "/etc/gitlab-runner/config.toml.example",
     f"{_HOME}/project/src/main.py",
 ]
 
@@ -143,6 +157,7 @@ def test_non_secret_paths_do_not_match(path: str) -> None:
         (".ENV", True),
         ("CREDENTIALS.json", True),
         ("Server.PEM", True),
+        (f"{_HOME}/Library/Application Support/GLAB-CLI/config.yml", True),
         (".Env.Example", False),
         ("Credentials.PY", False),
         ("ID_RSA.PUB", False),
@@ -166,6 +181,7 @@ def test_darwin_folds_the_home_prefix() -> None:
     [
         ("C:\\Users\\Dev\\.AWS\\credentials", True),
         ("C:\\Users\\dev\\.kube\\config", True),
+        ("C:\\Users\\Dev\\AppData\\Local\\glab-cli\\config.yml", True),
         ("C:\\proj\\.env", True),
         ("C:\\proj\\.env.example", False),
         ("C:\\proj\\src\\credentials.py", False),
@@ -187,10 +203,13 @@ def test_catalog_entries_are_unique_tuples() -> None:
 
 
 @pytest.mark.parametrize("glob", SECRET_PATH_GLOBS)
-def test_glob_grammar_is_basename_or_home_anchored(glob: str) -> None:
-    # is_secret_path understands exactly two glob shapes (security/patterns.py).
-    is_home_anchored = glob.startswith("~/") and "~" not in glob[2:]
-    assert is_home_anchored or ("/" not in glob and "~" not in glob), glob
+def test_catalog_globs_use_only_spellings_the_matchers_read(glob: str) -> None:
+    # A basename glob, a ``~/`` glob, or one anchored at the key's start (repo-relative,
+    # or absolute with a leading ``/``): never ``~user``, ``\\``, ``.``, ``..`` or ``//``.
+    body = glob.removeprefix("~/")
+    segments = body.removeprefix("/").split("/")
+    assert "~" not in body and "\\" not in body, glob
+    assert not {"", ".", ".."} & set(segments), glob
 
 
 @pytest.mark.parametrize(
