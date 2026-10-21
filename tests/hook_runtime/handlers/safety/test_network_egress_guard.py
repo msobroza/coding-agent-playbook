@@ -22,7 +22,7 @@ from coding_agent_playbook.adapters.claude_code._overlay_native import network_n
 from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.dispatch.combine import ASK_DENIED_PREFIX
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
-from coding_agent_playbook.hook_runtime.dispatch.event import Harness
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.dispatch.policy import UNATTENDED_ENV_VAR
 from coding_agent_playbook.hook_runtime.dispatch.registry import load_builtin
 from tests.hook_payloads import load_hook_payload
@@ -31,6 +31,7 @@ from tests.hook_samples import resolved_hook
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
 
     from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
     from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
@@ -136,9 +137,41 @@ GOLDEN: Final[list[tuple[str, Decision]]] = [
         Decision.NONE,
     ),
     ("huggingface-cli env", Decision.NONE),  # local
+    # prF §8.2: the forge CLIs and playbook forge reach their forge's host
+    ("gh -R github.com/org/repo pr view 3", Decision.DENY),
+    ("gh pr view 3 --repo git.bank.example/org/repo", Decision.NONE),
+    ("glab -R https://gitlab.com/g/r mr list", Decision.DENY),
+    ("glab api --hostname git.bank.example projects", Decision.NONE),
+    ("GITLAB_HOST=https://git.bank.example glab mr list", Decision.NONE),
+    ("GH_HOST=github.com gh issue list", Decision.DENY),
+    ("GH_REPO=github.com/o/r gh pr checks 3", Decision.DENY),
+    ("glab mr list", Decision.ASK),  # no host named and no remotes snapshot: unreadable
+    ("playbook forge pr view 3", Decision.ASK),
+    ("playbook forge which", Decision.NONE),  # reads git config only
+    ("glab version", Decision.NONE),
+    ("gh help", Decision.NONE),
     ("echo curl https://pypi.org", Decision.NONE),
     ("ls -la && git status", Decision.NONE),
 ]
+
+
+def test_forge_commands_fall_back_to_the_remotes_snapshot_on_their_forge(
+    pack_repo: PackRepo, regulated_overlay: str, deps: Deps, tmp_path: Path
+) -> None:
+    """With exfil's session-start snapshot, a forge CLI reaches the remotes on its forge."""
+    pack_repo.install_pack([HOOK_ID, "exfil-channel-guard"], overlays=(regulated_overlay,))
+    state = tmp_path / "state"
+    env = {"GITLAB_HOST": "git.bank.example"}  # names the internal GitLab: its remote maps
+    start = pack_repo.payload(EventName.SESSION_START, source="startup")
+    pack_repo.simulate(start, deps(git=_git(), env=env), event=EventName.SESSION_START, state=state)
+
+    def run(command: str) -> Decision:
+        payload = pack_repo.tool_payload("Bash", {"command": command})
+        return _decision(pack_repo.simulate(payload, deps(git=_git(), env=env), state=state))
+
+    assert run("glab mr list") is Decision.NONE  # origin: git.bank.example
+    assert run("gh pr list") is Decision.DENY  # upstream: github.com
+    assert run("playbook forge pr view 3") is Decision.DENY  # every remote: github.com too
 
 
 @pytest.mark.parametrize(("command", "expected"), GOLDEN)
@@ -253,7 +286,9 @@ def test_git_remotes_read_only_for_a_remote_name(repo: PackRepo, deps: Deps) -> 
 
 def test_unparsed_network_command_asks(repo: PackRepo, deps: Deps) -> None:
     assert _decision(_bash(repo, deps, "curl 'https://pypi.org")) is Decision.ASK
+    assert _decision(_bash(repo, deps, "glab mr list 'x")) is Decision.ASK
     assert _decision(_bash(repo, deps, "echo 'unterminated")) is Decision.NONE
+    assert _decision(_bash(repo, deps, "echo gh-pages 'x")) is Decision.NONE
 
 
 def test_ask_mode_asks_and_degrades_to_deny_unattended(

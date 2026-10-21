@@ -99,7 +99,7 @@ def test_a_gist_or_snippet_publishes_its_file_operands(
         (("issue", "comment"), {"--attach"}),
         (("mr", "note"), {"--attach"}),
         (("mr", "note", "create"), {"--attach"}),
-        (("release", "create"), {"-F", "--notes-file"}),
+        (("release", "create"), {"-F", "--notes-file", "--experimental-notes-text-or-file"}),
         (("release", "edit"), {"-F", "--notes-file"}),
         (("api",), {"--input"}),
         (("ci", "run"), {"-f", "--variables-from"}),
@@ -133,7 +133,7 @@ def test_gh_sends_the_file_of_a_body_file_flag(words: tuple[str, ...], flags: se
 @pytest.mark.parametrize(
     ("forge", "words", "flags"),
     [
-        (GITHUB, ("api",), {"-F", "--field", "--form"}),
+        (GITHUB, ("api",), {"-F", "--field"}),  # gh 2.94 has no --form
         (GITLAB, ("api",), {"-F", "--field", "--form"}),
         (GITHUB, ("workflow", "run"), {"-F", "--field"}),
     ],
@@ -149,8 +149,9 @@ def test_a_glab_pipeline_file_variable_sends_its_file() -> None:
 @pytest.mark.parametrize(
     ("forge", "words", "flags"),
     [
-        (GITHUB, ("issue", "create"), {"-T", "--template"}),
-        (GITHUB, ("pr", "create"), {"-T", "--template"}),
+        # gh 2.94 matches -T against its template list by name: never a local path
+        (GITHUB, ("issue", "create"), set()),
+        (GITHUB, ("pr", "create"), set()),
         (GITLAB, ("issue", "create"), {"--template"}),
         (GITLAB, ("mr", "create"), {"--template"}),
         (GITHUB, ("api",), set()),
@@ -229,10 +230,10 @@ def test_each_forge_cli_reads_its_token_from_its_env_vars() -> None:
 @pytest.mark.parametrize(
     ("forge", "words", "flags"),
     [
-        (GITLAB, ("mr", "create"), {"-f", "--fill", "--push"}),
-        (GITLAB, ("mr", "new"), {"-f", "--fill", "--push"}),
+        (GITLAB, ("mr", "create"), {"-f", "--fill", "--push", "--recover"}),
+        (GITLAB, ("mr", "new"), {"-f", "--fill", "--push", "--recover"}),
         (GITHUB, ("repo", "create"), {"--push"}),
-        (GITLAB, ("repo", "create"), {"--push"}),
+        (GITLAB, ("repo", "create"), set()),  # glab 1.115 has no repo create --push
         (GITHUB, ("pr", "create"), set()),
         (GITLAB, ("mr", "update"), set()),
     ],
@@ -241,6 +242,12 @@ def test_a_pushing_flag_pushes_heads_branch(
     forge: Forge, words: tuple[str, ...], flags: set[str]
 ) -> None:
     assert _row(forge, *words).pushes == flags
+
+
+def test_glab_repo_create_adds_a_remote_whatever_its_flags() -> None:
+    glab, gh = _row(GITLAB, "repo", "create"), _row(GITHUB, "repo", "create")
+
+    assert (glab.adds_remote, gh.adds_remote) == (True, False)
 
 
 @pytest.mark.parametrize(
@@ -265,6 +272,8 @@ def test_opening_a_pull_request(forge: Forge, words: tuple[str, ...], opens: boo
     ("option", "effect"),
     [
         ("secret_push_protection.skip_all", "skips_secret_detection"),
+        ("secret_detection.skip_all", "skips_secret_detection"),
+        ("security_policy.bypass_reason=hotfix", "bypasses_security_policy"),
         ("ci.variable=DEPLOY=1", "sets_ci_input"),
         ("ci.input=env=prod", "sets_ci_input"),
         ("ci.skip", "skips_ci"),
@@ -273,6 +282,11 @@ def test_opening_a_pull_request(forge: Forge, words: tuple[str, ...], opens: boo
         ("merge_request.create", "opens_pull_request"),
         ("merge_request.description=see notes", "sends_text"),
         ("merge_request.target=main", None),
+        ("mr.create", "opens_pull_request"),  # the server's alias of merge_request
+        ("mr.description=x", "sends_text"),
+        ("secret_push_protection .skip_all", "skips_secret_detection"),  # parts are stripped
+        (" mr . create", "opens_pull_request"),
+        ("mr", None),
         ("CI.SKIP", None),
         ("", None),
     ],
@@ -281,13 +295,21 @@ def test_gitlab_push_options(option: str, effect: str | None) -> None:
     assert GITLAB.push_option(option) == effect
 
 
+def test_a_gist_lands_on_its_own_host_and_a_snippet_on_the_repos() -> None:
+    assert (GITHUB.snippet_name, GITHUB.snippet_host) == ("gist", "gist.github.com")
+    assert (GITLAB.snippet_name, GITLAB.snippet_host) == ("snippet", "")
+
+
 def test_github_reads_no_push_option() -> None:
     assert GITHUB.push_options == ()
     assert GITHUB.push_option("ci.skip") is None
 
 
 def test_gitlab_markers_skip_secret_detection_or_ci() -> None:
-    assert GITLAB.secret_skip_markers == ("[skip secret push protection]",)
+    assert GITLAB.secret_skip_markers == (
+        "[skip secret push protection]",
+        "[skip secret detection]",  # legacy: GitGuardian still reads it
+    )
     assert GITLAB.skip_ci_markers == ("[skip ci]", "[ci skip]", "[skip pipeline]", "[no ci]")
     assert (GITHUB.secret_skip_markers, GITHUB.skip_ci_markers) == ((), ())
 

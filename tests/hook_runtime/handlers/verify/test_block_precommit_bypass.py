@@ -92,6 +92,15 @@ E2_TABLE: Final = [
     ("proxy git commit --no-verify", Decision.DENY),
     ("echo git commit --no-verify", Decision.NONE),
     ("git status && git commit -m done", Decision.NONE),
+    # prF §8.1: a forge CLI that pushes runs git's pre-push hooks under its own env prefix
+    ("SKIP=playbook-validate glab mr create --fill", Decision.DENY),
+    (
+        "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null "
+        "glab mr create --fill",
+        Decision.DENY,
+    ),
+    ("SKIP=playbook-metrics gh repo create app --source . --push", Decision.DENY),
+    ("glab mr create --fill", Decision.NONE),
 ]
 
 

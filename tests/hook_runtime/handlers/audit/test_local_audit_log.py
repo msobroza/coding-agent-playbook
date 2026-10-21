@@ -263,6 +263,43 @@ def test_full_commands_text_is_redacted(pack_repo: PackRepo, deps: Deps, tmp_pat
         assert leaked not in audit.log.read_text(encoding="ascii")
 
 
+@pytest.mark.parametrize(
+    "command",
+    [
+        "glab auth login -t glpat-s3cr3t-value",
+        "glab auth login --token glpat-s3cr3t-value --hostname gitlab.example",
+        "glab auth login -j glpat-s3cr3t-value",
+        "glab auth login --job-token glpat-s3cr3t-value",
+        "glab auth login --token=glpat-s3cr3t-value",
+    ],
+)
+def test_glab_auth_login_token_values_are_redacted(
+    pack_repo: PackRepo, deps: Deps, tmp_path: Path, command: str
+) -> None:
+    """prF Q56: the activity record never holds a forge token, whichever flag spells it."""
+    audit = _audit(pack_repo, deps, tmp_path, full_commands=True)
+
+    audit.tool("Bash", {"command": command})
+
+    (line,) = audit.lines()
+    assert line["commands"][0]["argv0"] == "glab"
+    assert line["commands"][0]["sub"] == "auth"
+    assert "s3cr3t" not in audit.log.read_text(encoding="ascii")
+    assert "<redacted>" in line["command_text"]
+
+
+def test_a_short_t_elsewhere_keeps_its_value(
+    pack_repo: PackRepo, deps: Deps, tmp_path: Path
+) -> None:
+    audit = _audit(pack_repo, deps, tmp_path, full_commands=True)
+
+    audit.tool("Bash", {"command": "glab mr create -t Title"})
+
+    (line,) = audit.lines()
+    assert line["command_text"] == "glab mr create -t Title"
+    assert line["commands"][0]["sub"] == "mr"
+
+
 def test_chain_config_links_lines(pack_repo: PackRepo, deps: Deps, tmp_path: Path) -> None:
     audit = _audit(pack_repo, deps, tmp_path, chain=True)
 

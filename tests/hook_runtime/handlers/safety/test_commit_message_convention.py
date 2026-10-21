@@ -320,6 +320,39 @@ def test_push_noncontiguous_kept_set_per_commit_messages(repo: PackRepo, deps: D
     )
 
 
+@pytest.mark.parametrize(
+    "command",
+    [
+        "glab mr create --fill",
+        "glab mr new --push --title t",
+        "gh repo create app --private --source . --push",
+        "glab mr create -f --target-branch main",
+    ],
+)
+def test_forge_commands_that_push_are_checked_like_a_push(
+    repo: PackRepo, deps: Deps, command: str
+) -> None:
+    """prF §8.3: the commits a forge CLI command pushes are ``HEAD``'s, past the upstream."""
+    _checking_push(repo)
+    cz = FakeCz(rejected_ranges=frozenset({f"{TRACKING}..HEAD"}))
+    git = _pushed(_commit("c0", NEW, "Old style subject\n"))
+
+    report = _bash(repo, deps, command, cz=cz, git=git)
+
+    assert report.trace.combined.decision is Decision.DENY
+    assert cz.ranges == [f"{TRACKING}..HEAD"]
+
+
+def test_forge_commands_that_do_not_push_run_no_cz(repo: PackRepo, deps: Deps) -> None:
+    _checking_push(repo)
+    cz = FakeCz(rejected_ranges=frozenset({f"{TRACKING}..HEAD"}))
+    git = _pushed(_commit("c0", NEW, "Old style subject\n"))
+
+    report = _bash(repo, deps, "glab mr create --push=false -t t && gh pr create", cz=cz, git=git)
+
+    assert (report.trace.combined.decision, cz.calls) == (Decision.NONE, [])
+
+
 def test_push_explicit_refspec_names_the_tracking_ref(repo: PackRepo, deps: Deps) -> None:
     _checking_push(repo)
     cz = FakeCz()

@@ -185,3 +185,40 @@ def test_tainted_session_escalates_risky_actions_only(
     session.fetch()
 
     assert session.run(tool, tool_input).trace.combined.decision is expected
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        # prF §8.3: forge CLI commands that push HEAD's branch are a push
+        ("glab mr create --fill", "pushing commits"),
+        ("glab mr create --push --title t", "pushing commits"),
+        ("gh repo create app --private --source . --push", "pushing commits"),
+        ("git push -o merge_request.create", "pushing commits"),
+        # prF §8.2: forge egress rows on both forges and playbook forge
+        ("glab snippet create notes.md", "sending data off the machine"),
+        ("glab issue create --description-file body.md", "sending data off the machine"),
+        ("gh api repos/o/r/issues -F body=@notes.md", "sending data off the machine"),
+        ("playbook forge pr comment 3 --body-file review.md", "sending data off the machine"),
+        ("glab repo fork --remote", "sending data off the machine"),
+    ],
+)
+def test_tainted_session_asks_on_forge_pushes_and_egress(
+    session: Session, command: str, expected: str
+) -> None:
+    session.fetch()
+
+    report = session.run("Bash", {"command": command})
+
+    assert report.trace.combined.decision is Decision.ASK
+    assert report.trace.combined.reason.endswith(f"confirm before {expected}.")
+    assert session.git.calls == []
+
+
+@pytest.mark.parametrize(
+    "command", ["glab mr list", "playbook forge issue view 3", "glab mr create --push=false -t t"]
+)
+def test_tainted_session_leaves_forge_reads_alone(session: Session, command: str) -> None:
+    session.fetch()
+
+    assert session.bash(command) is Decision.NONE
