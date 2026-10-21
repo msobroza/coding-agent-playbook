@@ -695,9 +695,11 @@ Final-state tests, then the full CI-parity gate and one PR from integration/core
 - `tests/integration/test_core_final_state.py`: new: the final-state checks above
 - `tests/fixtures/upstream_inventory/pbp-fa0d3f58.txt, pca-9d627ca.txt`: new: upstream file paths at the pins
 - `tests/integration/test_core_move_is_output_neutral.py`: deleted
+- `specs/prU-core-python-skills/runner/`: deleted (the temporary implementation tooling)
 - test `tests/integration/test_core_final_state.py`: as above
 
 Acceptance:
+- specs/prU-core-python-skills/runner/ no longer exists.
 - ruff check ., ruff format --check ., mypy and pytest -q pass on Python 3.12 and 3.13 in fresh environments without the metrics extra.
 - The wheel's _catalog/ equals git ls-files catalog and init in an empty scratch repo prints no warning line.
 - Final-state tests pass: no empty declared section, no retired id, every upstream file has one row, every core skill active on the probe.
