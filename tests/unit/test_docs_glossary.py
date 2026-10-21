@@ -117,6 +117,15 @@ def test_catalog_readme_add_a_rule_documents_skill() -> None:
     assert not missing, f"'Add a rule' must name every core skill a rule may name: {missing}"
 
 
+def test_catalog_readme_add_a_rule_lists_the_shared_test_file_globs() -> None:
+    """D41 (specs/prU-core-python-skills.md): one glob set for every test-related rule."""
+    text = (CATALOG_ROOT / "README.md").read_text(encoding="utf-8")
+    add_a_rule = text[text.index("## Add a rule") : text.index("## Add a prompt")]
+    globs = ("**/test_*.py", "**/*_test.py", "**/tests/**/*.py", "**/conftest.py", "**/fakes.py")
+    missing = [g for g in globs if f"`{g}`" not in add_a_rule]
+    assert not missing, f"'Add a rule' must list the shared test-file globs: {missing}"
+
+
 @pytest.mark.parametrize("doc", _CORE_DOCS)
 def test_no_doc_says_core_ships_no_skills(doc: str) -> None:
     lines = (REPO_ROOT / doc).read_text(encoding="utf-8").splitlines()

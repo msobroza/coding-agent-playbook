@@ -49,13 +49,13 @@
   "result": {
     "decision": "context",
     "context": [
+      "Conventions for this file: skill python-tooling.",
       "Conventions for this file: skill ml-data.",
-      "Conventions for this file: skill python-coding.",
-      "Conventions for this file: skill python-tooling."
+      "Conventions for this file: skill python-coding."
     ]
   },
   "wire": {
-    "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"Conventions for this file: skill ml-data.\\nConventions for this file: skill python-coding.\\nConventions for this file: skill python-tooling.\"}}\n",
+    "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"Conventions for this file: skill python-tooling.\\nConventions for this file: skill ml-data.\\nConventions for this file: skill python-coding.\"}}\n",
     "stderr": "",
     "exit_code": 0
   }
