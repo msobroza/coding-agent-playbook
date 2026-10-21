@@ -9,19 +9,12 @@ tests read markdown, never engine behaviour.
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE
-from coding_agent_playbook.catalog.source import FileSystemArtifactSource
-from coding_agent_playbook.skills.membership import is_rule_skill
-from coding_agent_playbook.skills.naming import skill_id_of
 from coding_agent_playbook.validation._skills import SCOPED_RULE_NEEDS_SKILL_MESSAGE
+from tests._catalog import core_rule_skill_ids
 from tests.unit.test_docs_migration_hooks import _migration
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 _V021_HEADING = re.compile(r"^## v0\.21\b.*$", re.MULTILINE)
 _TLDR_HEADING = "### TL;DR — who needs to do anything"
@@ -90,19 +83,9 @@ def test_migration_v0_21_covers_topic(phrase: str) -> None:
     assert phrase in _v021_section(), f"the v0.21 MIGRATION section never mentions {phrase!r}"
 
 
-def _core_rule_skill_ids(repo_root: Path) -> list[str]:
-    """The sorted ids of the skills in core that take member rules, as V1 lists them."""
-    skills = FileSystemArtifactSource(repo_root=repo_root).list_skills()
-    return sorted(
-        skill_id_of(skill)
-        for skill in skills
-        if skill.source_package == ENGINE_PACKAGE and is_rule_skill(skill)
-    )
-
-
-def test_migration_quotes_the_engine_skill_required_message(tmp_path: Path) -> None:
+def test_migration_quotes_the_engine_skill_required_message() -> None:
     """V1's text, ``{known}`` filled for core, is quoted verbatim (prS §6.9.4)."""
-    known = _core_rule_skill_ids(tmp_path)
+    known = core_rule_skill_ids()
     assert known, "core ships no skill that takes member rules"
     quote = SCOPED_RULE_NEEDS_SKILL_MESSAGE.format(known=", ".join(known))
     section = _v021_section()

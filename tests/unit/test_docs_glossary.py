@@ -16,18 +16,13 @@ engine behaviour.
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING
 
 import pytest
 
-from tests._catalog import CATALOG_ROOT, REPO_ROOT
+from tests._catalog import CATALOG_ROOT, REPO_ROOT, core_rule_skill_ids
 from tests.unit.test_docs_lifecycle_hooks_spec import _spec_section
-from tests.unit.test_docs_migration_skills import _core_rule_skill_ids
 from tests.unit.test_docs_readme_hooks import _blocks
 from tests.unit.test_docs_readme_hooks import _section as _readme_section
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 _CONTEXT_MD = REPO_ROOT / "CONTEXT.md"
 
@@ -114,11 +109,11 @@ def test_spec_section_6_3_says_core_ships_skills() -> None:
     assert "#### 6.3.3 Skills with member rules" in section
 
 
-def test_catalog_readme_add_a_rule_documents_skill(tmp_path: Path) -> None:
+def test_catalog_readme_add_a_rule_documents_skill() -> None:
     text = (CATALOG_ROOT / "README.md").read_text(encoding="utf-8")
     add_a_rule = text[text.index("## Add a rule") : text.index("## Add a prompt")]
     assert "`skill:`" in add_a_rule, "catalog/README.md 'Add a rule' must document 'skill:'"
-    missing = [i for i in _core_rule_skill_ids(tmp_path) if f"`{i}`" not in add_a_rule]
+    missing = [i for i in core_rule_skill_ids() if f"`{i}`" not in add_a_rule]
     assert not missing, f"'Add a rule' must name every core skill a rule may name: {missing}"
 
 

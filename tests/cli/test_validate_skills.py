@@ -19,6 +19,7 @@ import pytest
 
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.commands import validate as _validate
+from tests._catalog import core_rule_skill_ids
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -30,8 +31,8 @@ _PLAYBOOK_BLOCK = "playbook:\n  use_when: editing Python code\n  files: Any Pyth
 _PATTERN = "^[a-z0-9]+(-[a-z0-9]+)*$ (1-64 chars)"
 _REPO_LOCAL = "(<repo-local>)"
 _SUPERPOWERS = "coding_agent_playbook.plugins.superpowers"
-#: The skills that take members in every synthetic repo: core's four.
-_KNOWN_SKILLS = "ml-data, python-coding, python-testing, python-tooling"
+#: The skills that take members in every synthetic repo: core's, as V1 and V5 list them.
+_KNOWN_SKILLS = ", ".join(core_rule_skill_ids())
 #: A repo-local skill no core rule names, for the tests that count members.
 _OWN_SKILL = "risk-models"
 

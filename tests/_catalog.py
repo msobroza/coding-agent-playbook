@@ -12,9 +12,15 @@ from __future__ import annotations
 
 from importlib import resources
 from pathlib import Path
+from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.artifacts.rule import Rule
 from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE
+from coding_agent_playbook.skills.document import PLAYBOOK_BLOCK_KEY
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 #: The repository checkout this test suite runs from.
 REPO_ROOT: Path = Path(__file__).resolve().parents[1]
@@ -31,6 +37,24 @@ PLUGINS_ROOT: Path = CATALOG_ROOT / "plugins"
 PRECOMMIT_TEMPLATE_DIR: Path = Path(
     str(resources.files("coding_agent_playbook") / "templates" / "precommit")
 )
+#: Rule id -> its core skill, for the ids hooks (``linked_rule``) and prompts
+#: (``includes_rules``) depend on: a split keeps them on the piece with the old topic (prU D21).
+KEPT_RULE_IDS: Final[Mapping[str, str]] = {
+    "python-typing": "python-coding",
+    "python-error-handling": "python-coding",
+    "python-docstrings": "python-coding",
+    "python-dependency-injection": "python-coding",
+    "python-pure-core": "python-coding",
+    "pytest": "python-testing",
+    "ml-serialization-security": "ml-data",
+}
+#: Rule id -> the core skill it belonged to, for the ids prU retires (D21).
+RETIRED_RULE_IDS: Final[Mapping[str, str]] = {
+    "python-performance-idioms": "python-coding",
+    "python-classes-and-protocols": "python-coding",
+    "ml-dtypes-and-typing": "ml-data",
+    "ml-reproducibility-and-testing": "ml-data",
+}
 
 
 def bundled_plugin_dirs() -> list[Path]:
@@ -118,3 +142,19 @@ def core_skill_ids() -> frozenset[str]:
     Example: ``"python-coding" in core_skill_ids()`` -> ``True``.
     """
     return frozenset(path.name for path in (CORE_ROOT / "skills").iterdir() if path.is_dir())
+
+
+def core_rule_skill_ids() -> list[str]:
+    """The sorted ids of the core skills that take member rules: a ``playbook:`` block (E6).
+
+    Validation's V1 and V5 messages list exactly these as the known skills, so
+    tests build those strings here instead of spelling the skills out.
+
+    Example: ``", ".join(core_rule_skill_ids())`` -> ``"ml-data, python-coding, ..."``.
+    """
+    ids = []
+    for skill_md in sorted((CORE_ROOT / "skills").glob("*/SKILL.md")):
+        frontmatter, _ = split_frontmatter(skill_md.read_text(encoding="utf-8"))
+        if PLAYBOOK_BLOCK_KEY in frontmatter:
+            ids.append(str(frontmatter.get("id", skill_md.parent.name)))
+    return sorted(ids)
