@@ -22,7 +22,11 @@ from coding_agent_playbook.artifacts.prompt import Prompt
 from coding_agent_playbook.artifacts.rule import Rule, RuleLoadError
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.catalog._hook_walk import walk_hook_layer
-from coding_agent_playbook.catalog._skill_rules import find_skill_md, iter_skill_rule_files
+from coding_agent_playbook.catalog._skill_rules import (
+    iter_md_files,
+    iter_skill_dirs,
+    iter_skill_rule_files,
+)
 from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE, REPO_LOCAL_SOURCE
 from coding_agent_playbook.catalog.roots import catalog_layer_root, is_bundled_layer
 from coding_agent_playbook.evals.loader import (
@@ -166,20 +170,6 @@ def _bundled_subdir(layer: str, subdir: str) -> Path | None:
     return candidate if candidate.is_dir() else None
 
 
-def _iter_md_files(root: Path) -> Iterator[Path]:
-    """Yield ``*.md`` and ``*.md.j2`` files under ``root`` in deterministic order."""
-    for path in sorted(root.rglob("*.md*")):
-        # Skip dotted directories (.git, .venv, node_modules-of-vendored-skills,
-        # etc.) for hygiene — these never legitimately contain canonical
-        # artifacts, and walking them silently inflates source listings.
-        if any(part.startswith(".") for part in path.relative_to(root).parts):
-            continue
-        # Note: case-sensitive on Linux/macOS APFS (lowercase .md convention).
-        # Banking deployments on case-insensitive volumes may need to revisit.
-        if path.name.endswith(".md") or path.name.endswith(".md.j2"):
-            yield path
-
-
 def _iter_skills(skills_root: Path, source_package: str) -> Iterator[Skill]:
     """Yield one ``Skill`` per subdirectory of ``skills_root`` (SPEC §6.3.1).
 
@@ -189,10 +179,7 @@ def _iter_skills(skills_root: Path, source_package: str) -> Iterator[Skill]:
     rules, which :meth:`FileSystemArtifactSource.collect_rules` loads as
     members of this skill (prU D5), never byte-copied.
     """
-    for skill_dir in sorted(p for p in skills_root.iterdir() if p.is_dir()):
-        skill_md = find_skill_md(skill_dir)
-        if skill_md is None:
-            continue
+    for skill_dir, skill_md in iter_skill_dirs(skills_root):
         text = skill_md.read_text(encoding="utf-8")
         frontmatter, body = split_frontmatter(text)
         scripts_dir = skill_dir / "scripts"
@@ -207,29 +194,27 @@ def _iter_skills(skills_root: Path, source_package: str) -> Iterator[Skill]:
 
 
 def _load_rule_or_error(
-    path: Path, source_package: str, home: str | RuleLoadError | None = None
+    path: Path, source_package: str, home_skill: str | None
 ) -> Rule | RuleLoadError:
     """The rule at ``path``, or the :class:`RuleLoadError` it raised (for collect_rules).
 
-    ``home`` is the skill whose ``rules/`` holds the file (``None`` for a
-    ``<layer>/rules/`` file), or the error that skill's ``SKILL.md`` gave.
+    ``home_skill`` is the skill whose ``rules/`` holds the file, or ``None``
+    for a ``<layer>/rules/`` file.
     """
-    if isinstance(home, RuleLoadError):
-        return home
     try:
-        return Rule.from_markdown(path, source_package, home_skill=home)
+        return Rule.from_markdown(path, source_package, home_skill=home_skill)
     except RuleLoadError as exc:
         return exc
 
 
 def _layer_rule_files(
     rules_root: Path | None, skills_root: Path | None
-) -> Iterator[tuple[str | RuleLoadError | None, Path]]:
+) -> Iterator[tuple[str | None, Path]]:
     """One layer's rule files: ``rules/`` first, then ``skills/*/rules/`` with each home skill."""
     if rules_root is not None and rules_root.is_dir():
-        yield from ((None, path) for path in _iter_md_files(rules_root))
+        yield from ((None, path) for path in iter_md_files(rules_root))
     if skills_root is not None and skills_root.is_dir():
-        yield from iter_skill_rule_files(skills_root, _iter_md_files)
+        yield from iter_skill_rule_files(skills_root)
 
 
 class FileSystemArtifactSource(ArtifactSource):
@@ -302,20 +287,29 @@ class FileSystemArtifactSource(ArtifactSource):
         """
         return [
             (label, root)
-            for label, root in self._layer_candidates(subdir)
+            for label, (root,) in self._layer_candidates(subdir)
             if root is not None and root.is_dir()
         ]
 
-    def _layer_candidates(self, subdir: str) -> list[tuple[str, Path | None]]:
-        """Every layer's ``(label, <layer>/<subdir> or None)``, one row per layer whatever ``subdir``.
+    def _layer_candidates(self, *subdirs: str) -> list[tuple[str, tuple[Path | None, ...]]]:
+        """Every layer's ``(label, (<layer>/<subdir> or None for each of subdirs))``.
 
-        Same length and order for every ``subdir``, so two kinds of one layer
-        line up by position (:meth:`collect_rules` pairs ``rules`` with ``skills``).
+        One row per layer, so several kinds of one layer travel together
+        (:meth:`collect_rules` reads ``rules`` and ``skills`` from one row).
+
+        Example: ``source._layer_candidates("rules", "skills")[-1][0]`` -> ``"<repo-local>"``.
         """
+        repo_local = self._repo_root / "playbook"
         return [
-            *((package, _resource_subdir(package, subdir)) for package in self._packages()),
-            *((root.parent.name, root / subdir) for root in self._extra_resource_roots),
-            (REPO_LOCAL_SOURCE, self._repo_root / "playbook" / subdir),
+            *(
+                (package, tuple(_resource_subdir(package, subdir) for subdir in subdirs))
+                for package in self._packages()
+            ),
+            *(
+                (root.parent.name, tuple(root / subdir for subdir in subdirs))
+                for root in self._extra_resource_roots
+            ),
+            (REPO_LOCAL_SOURCE, tuple(repo_local / subdir for subdir in subdirs)),
         ]
 
     def _packages(self) -> tuple[str, ...]:
@@ -343,10 +337,9 @@ class FileSystemArtifactSource(ArtifactSource):
             >>> FileSystemArtifactSource(repo_root=Path("/no/such/repo")).collect_rules()[1]
             []
         """
-        layers = zip(self._layer_candidates("rules"), self._layer_candidates("skills"), strict=True)
         loaded = [
             _load_rule_or_error(path, label, home)
-            for (label, rules_root), (_, skills_root) in layers
+            for label, (rules_root, skills_root) in self._layer_candidates("rules", "skills")
             for home, path in _layer_rule_files(rules_root, skills_root)
         ]
         rules = [item for item in loaded if isinstance(item, Rule)]
@@ -400,7 +393,7 @@ class FileSystemArtifactSource(ArtifactSource):
         return [
             builder(md, label)
             for label, root in self.layer_roots(subdir)
-            for md in _iter_md_files(root)
+            for md in iter_md_files(root)
         ]
 
     def list_eval_samples(self) -> list[EvalSample]:

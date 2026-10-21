@@ -100,6 +100,10 @@ class Rule:
     # the loader copies it into ``frontmatter.skill`` when the file sets none,
     # so every consumer of ``skill`` sees in-skill rules as members unchanged.
     home_skill: str | None = None
+    # True when ``frontmatter.skill`` was filled from ``home_skill`` because the
+    # file sets no ``skill:``, so ``to_markdown`` drops only that injected value
+    # and keeps a ``skill:`` the author wrote, even a redundant one.
+    skill_from_location: bool = False
 
     @classmethod
     def from_markdown(
@@ -126,19 +130,31 @@ class Rule:
         problem = _frontmatter_keys_problem(data)
         if problem is not None:
             raise RuleLoadError(path, problem)
-        frontmatter = RuleFrontmatter(**data)
-        if frontmatter.skill is None:
-            frontmatter.skill = home_skill
-        return cls(frontmatter, body, body, is_templated, path, source_package, home_skill)
+        injected = home_skill is not None and data.get("skill") is None
+        if injected:
+            data = {**data, "skill": home_skill}
+        return cls(
+            RuleFrontmatter(**data),
+            body,
+            body,
+            is_templated,
+            path,
+            source_package,
+            home_skill,
+            injected,
+        )
 
     def to_markdown(self) -> str:
-        """The rule as a markdown file; a ``skill`` equal to ``home_skill`` is left out.
+        """The rule as a markdown file, without a ``skill`` the loader injected.
 
         The location carries that membership, so writing it back would add a
-        ``skill:`` line the author never wrote (prU D5).
+        ``skill:`` line the author never wrote (prU D5); an authored ``skill:``
+        is written as it was.
+
+        Example: ``rule.to_markdown().startswith("---\n")`` -> ``True``.
         """
         data = dataclasses.asdict(self.frontmatter)
-        if self.home_skill is not None and data["skill"] == self.home_skill:
+        if self.skill_from_location:
             data["skill"] = None
         return format_frontmatter(_without_empty(data), self.template_body)
 
@@ -151,6 +167,7 @@ class Rule:
             "source_path": None if self.source_path is None else str(self.source_path),
             "source_package": self.source_package,
             "home_skill": self.home_skill,
+            "skill_from_location": self.skill_from_location,
         }
 
     @classmethod
@@ -164,6 +181,7 @@ class Rule:
             None if source_path is None else Path(source_path),
             data["source_package"],
             data.get("home_skill"),
+            data.get("skill_from_location", False),
         )
 
 

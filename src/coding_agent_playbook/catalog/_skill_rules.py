@@ -1,11 +1,13 @@
-"""Member rule files inside a layer's skill directories (prU D5, ADR 0005).
+"""Skill directories of a layer and the member rule files inside them (prU D5, ADR 0005).
 
 A rule at ``<layer>/skills/<dir>/rules/**/<id>.md[.j2]`` is a member of the
 skill that ``<dir>/SKILL.md`` declares: the directory sets membership, so the
 file needs no ``skill:`` key. Only a directory holding ``SKILL.md`` (or
-``SKILL.md.j2``) counts, as for :func:`catalog.source._iter_skills`; a
-``rules/`` directory without one contributes nothing here (R4 reports it).
-Split out of ``catalog/source.py`` for its file-size budget.
+``SKILL.md.j2``) counts; :func:`iter_skill_dirs` is the one walk that both
+``catalog.source._iter_skills`` and :func:`iter_skill_rule_files` use, so the
+two never disagree on which directories are skills. A ``rules/`` directory
+without a ``SKILL.md`` contributes nothing here (R4 reports it). Split out of
+``catalog/source.py`` for its file-size budget.
 """
 
 from __future__ import annotations
@@ -15,45 +17,32 @@ from typing import TYPE_CHECKING
 import yaml
 
 from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
-from coding_agent_playbook.artifacts.rule import RuleLoadError
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.skills.naming import skill_id_of
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Iterator
     from pathlib import Path
 
 #: ``SKILL.md`` names a skill directory may hold, in lookup order.
 SKILL_MD_NAMES = ("SKILL.md", "SKILL.md.j2")
 
 
-def iter_skill_rule_files(
-    skills_root: Path, iter_md_files: Callable[[Path], Iterator[Path]]
-) -> Iterator[tuple[str | RuleLoadError, Path]]:
-    """Yield ``(home skill id, rule path)`` for each rule file under ``skills_root/*/rules/``.
+def iter_md_files(root: Path) -> Iterator[Path]:
+    """Yield ``*.md`` and ``*.md.j2`` files under ``root`` in deterministic order.
 
-    When the skill's ``SKILL.md`` cannot be parsed, the first item is instead a
-    :class:`RuleLoadError` naming the rule file, so ``collect_rules`` can report
-    it without raising (``list_skills`` fails on that ``SKILL.md`` itself).
-
-    Skill directories come in sorted order and ``iter_md_files`` (the source's
-    own walker, which skips dot directories) orders the files inside each, so
-    the result is deterministic. The id is the one the merge files the skill
-    under (``skills.naming.skill_id_of``), not the directory name.
-
-    Example::
-
-        >>> list(iter_skill_rule_files(Path("playbook/skills"), _iter_md_files))  # doctest: +SKIP
-        [('python-coding', PosixPath('playbook/skills/python-coding/rules/x.md'))]
+    Example: ``list(iter_md_files(Path("playbook/rules")))`` -> ``[PosixPath('playbook/rules/x.md')]``.
     """
-    for skill_dir in sorted(p for p in skills_root.iterdir() if p.is_dir()):
-        rules_dir = skill_dir / "rules"
-        skill_md = find_skill_md(skill_dir)
-        if skill_md is None or not rules_dir.is_dir():
+    for path in sorted(root.rglob("*.md*")):
+        # Skip dotted directories (.git, .venv, node_modules-of-vendored-skills,
+        # etc.) for hygiene — these never legitimately contain canonical
+        # artifacts, and walking them silently inflates source listings.
+        if any(part.startswith(".") for part in path.relative_to(root).parts):
             continue
-        home = _declared_skill_id(skill_md)
-        for path in iter_md_files(rules_dir):
-            yield (_home_error(home, path) if isinstance(home, Exception) else home), path
+        # Note: case-sensitive on Linux/macOS APFS (lowercase .md convention).
+        # Banking deployments on case-insensitive volumes may need to revisit.
+        if path.name.endswith(".md") or path.name.endswith(".md.j2"):
+            yield path
 
 
 def find_skill_md(skill_dir: Path) -> Path | None:
@@ -68,14 +57,48 @@ def find_skill_md(skill_dir: Path) -> Path | None:
     return None
 
 
-def _declared_skill_id(skill_md: Path) -> str | ValueError:
-    """The id the skill at ``skill_md`` merges under, or why its frontmatter cannot be read."""
-    try:
-        frontmatter, body = split_frontmatter(skill_md.read_text(encoding="utf-8"))
-    except (ValueError, yaml.YAMLError) as exc:
-        return ValueError(f"{skill_md.name}: {exc}")
+def iter_skill_dirs(skills_root: Path) -> Iterator[tuple[Path, Path]]:
+    """Yield ``(skill dir, its SKILL.md)`` for each subdirectory of ``skills_root`` that is a skill.
+
+    Example: ``next(iter_skill_dirs(Path("playbook/skills")))[1].name`` -> ``"SKILL.md"``.
+    """
+    for skill_dir in sorted(p for p in skills_root.iterdir() if p.is_dir()):
+        skill_md = find_skill_md(skill_dir)
+        if skill_md is not None:
+            yield skill_dir, skill_md
+
+
+def declared_skill_id(skill_md: Path) -> str:
+    """The id the skill at ``skill_md`` merges under (``skills.naming.skill_id_of``).
+
+    Raises ``ValueError`` or ``yaml.YAMLError`` when its frontmatter cannot be read.
+
+    Example: ``declared_skill_id(Path("catalog/core/skills/python-coding/SKILL.md"))`` -> ``"python-coding"``.
+    """
+    frontmatter, body = split_frontmatter(skill_md.read_text(encoding="utf-8"))
     return skill_id_of(Skill(frontmatter, body, None, None, ""))
 
 
-def _home_error(problem: ValueError, rule_path: Path) -> RuleLoadError:
-    return RuleLoadError(rule_path, f"its skill's {problem} (the rule has no skill to join)")
+def iter_skill_rule_files(skills_root: Path) -> Iterator[tuple[str, Path]]:
+    """Yield ``(home skill id, rule path)`` for each rule file under ``skills_root/*/rules/``.
+
+    Skill directories come in sorted order and :func:`iter_md_files` (which
+    skips dot directories) orders the files inside each, so the result is
+    deterministic. The id is the one the merge files the skill under, not the
+    directory name. A skill whose ``SKILL.md`` cannot be parsed contributes no
+    rule: ``list_skills`` raises on that ``SKILL.md`` itself, so it is reported.
+
+    Example::
+
+        >>> list(iter_skill_rule_files(Path("playbook/skills")))  # doctest: +SKIP
+        [('python-coding', PosixPath('playbook/skills/python-coding/rules/x.md'))]
+    """
+    for skill_dir, skill_md in iter_skill_dirs(skills_root):
+        rules_dir = skill_dir / "rules"
+        if not rules_dir.is_dir():
+            continue
+        try:
+            home = declared_skill_id(skill_md)
+        except (ValueError, yaml.YAMLError):
+            continue
+        yield from ((home, path) for path in iter_md_files(rules_dir))

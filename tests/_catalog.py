@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.artifacts.rule import Rule
+from coding_agent_playbook.catalog._skill_rules import declared_skill_id, find_skill_md
 from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource, _iter_skills
 from coding_agent_playbook.skills.membership import is_rule_skill
@@ -129,19 +130,22 @@ def core_rule_paths() -> list[tuple[str | None, Path]]:
     """``(home skill, path)`` for every core rule source, ``rules/`` first, then each skill's.
 
     Walks ``CORE_ROOT / "rules"`` (home ``None``) and ``CORE_ROOT / "skills/<dir>/rules"``
-    for each skill dir holding ``SKILL.md`` (home ``<dir>``: core names each
-    skill directory by its id), the layout the loader reads (prU D5). One walker,
-    so a rule moved into its skill stays visible to every catalog gate.
+    for each skill dir holding ``SKILL.md`` or ``SKILL.md.j2`` (home: the id that
+    file declares), the layout the loader reads (prU D5). The file walk is this
+    module's own, so a loader bug cannot hide a rule; only the skill-file names
+    and the id lookup are shared. One walker, so a rule moved into its skill
+    stays visible to every catalog gate.
 
     Example: ``core_rule_paths()[0]`` -> ``(None, CORE_ROOT / "rules/always/00-....md.j2")``.
     """
     rules: list[tuple[str | None, Path]] = [(None, p) for p in core_markdown_sources("rules")]
     for skill_dir in sorted(p for p in (CORE_ROOT / "skills").iterdir() if p.is_dir()):
         rules_dir = skill_dir / "rules"
-        if not rules_dir.is_dir() or not (skill_dir / "SKILL.md").is_file():
+        skill_md = find_skill_md(skill_dir)
+        if not rules_dir.is_dir() or skill_md is None:
             continue
         found = sorted(p for p in rules_dir.rglob("*") if p.name.endswith((".md", ".md.j2")))
-        rules.extend((skill_dir.name, path) for path in found)
+        rules.extend((declared_skill_id(skill_md), path) for path in found)
     return rules
 
 

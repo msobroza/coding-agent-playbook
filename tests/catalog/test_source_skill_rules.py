@@ -8,16 +8,20 @@ that skill without ``skill:``. Layer order stays engine, overlays, extra
 
 from __future__ import annotations
 
+import importlib
+from pathlib import Path
 from typing import TYPE_CHECKING
+
+import pytest
 
 from coding_agent_playbook.artifacts.rule import Rule
 from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE, REPO_LOCAL_SOURCE
 from coding_agent_playbook.catalog.resolve import Collision, OverlayResolver
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
-from tests._catalog import KEPT_RULE_IDS
+from tests._catalog import KEPT_RULE_IDS, core_rule_paths
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    from collections.abc import Callable
 
 _RULE = "---\nid: {id}\nname: {id}\ndescription: d\nscope: scoped\n{extra}---\nBody of {id}\n"
 _SKILL = "---\nid: {id}\nname: {id}\ndescription: d\nplaybook:\n  files: f\n---\nBody\n"
@@ -37,6 +41,13 @@ def _skill(layer: Path, dir_name: str, skill_id: str | None = None) -> Path:
 
 def _rule_file(path: Path, rule_id: str, extra: str = "") -> None:
     _write(path, _RULE.format(id=rule_id, extra=extra))
+
+
+def _package_resources(name: str) -> Path:
+    """The ``resources/`` dir of an importable package built by ``make_package``."""
+    module = importlib.import_module(name)
+    assert module.__file__ is not None
+    return Path(module.__file__).parent / "resources"
 
 
 def _by_label(rules: list[Rule], label: str) -> dict[str, Rule]:
@@ -153,17 +164,67 @@ def test_to_markdown_does_not_write_the_injected_skill(tmp_path: Path) -> None:
         "r"
     ]
 
+    assert rule.skill_from_location
     assert "skill:" not in rule.to_markdown()
     assert Rule.from_dict(rule.to_dict()) == rule
 
 
-def test_a_malformed_skill_md_is_reported_against_each_of_its_rules(tmp_path: Path) -> None:
+def test_an_authored_skill_equal_to_the_home_skill_is_written_back(tmp_path: Path) -> None:
+    """Only an injected ``skill`` is dropped; a redundant authored one round-trips."""
+    skill_dir = _skill(tmp_path / "playbook", "s")
+    _rule_file(skill_dir / "rules" / "r.md", "r", extra="skill: s\n")
+    rule = _by_label(FileSystemArtifactSource(repo_root=tmp_path).list_rules(), REPO_LOCAL_SOURCE)[
+        "r"
+    ]
+
+    assert (rule.home_skill, rule.skill_from_location) == ("s", False)
+    assert "skill: s" in rule.to_markdown()
+
+
+def test_a_malformed_skill_md_contributes_no_rule_and_list_skills_reports_it(
+    tmp_path: Path,
+) -> None:
     skill_dir = tmp_path / "playbook" / "skills" / "s"
     _write(skill_dir / "SKILL.md", "no frontmatter\n")
     _rule_file(skill_dir / "rules" / "r.md", "r")
+    source = FileSystemArtifactSource(repo_root=tmp_path)
 
-    rules, errors = FileSystemArtifactSource(repo_root=tmp_path).collect_rules()
+    rules, errors = source.collect_rules()
 
     assert "r" not in _by_label(rules, REPO_LOCAL_SOURCE)
-    assert [error.path for error in errors] == [skill_dir / "rules" / "r.md"]
-    assert "its skill's SKILL.md:" in errors[0].problem
+    assert errors == []
+    with pytest.raises(ValueError):
+        source.list_skills()
+
+
+def test_overlay_in_skill_rule_sits_between_engine_and_repo_local(
+    tmp_path: Path, make_package: Callable[..., str]
+) -> None:
+    """Engine, then overlay, then repo-local for one id: each later in-skill rule wins."""
+    core_id = next(iter(KEPT_RULE_IDS))
+    overlay = make_package("skill_rules_overlay", resources=True)
+    _rule_file(_skill(_package_resources(overlay), "ov") / "rules" / f"{core_id}.md", core_id)
+    source = FileSystemArtifactSource(repo_root=tmp_path, overlay_packages=[overlay])
+
+    def winner() -> Rule:
+        resolved = OverlayResolver().resolve_rules(source.list_rules(), [], [])
+        return next(r for r in resolved if r.frontmatter.id == core_id)
+
+    assert (winner().source_package, winner().home_skill) == (overlay, "ov")
+    _rule_file(_skill(tmp_path / "playbook", "mine") / "rules" / f"{core_id}.md", core_id)
+
+    order = [r.source_package for r in source.list_rules() if r.frontmatter.id == core_id]
+
+    assert order == [ENGINE_PACKAGE, overlay, REPO_LOCAL_SOURCE]
+    assert (winner().source_package, winner().home_skill) == (REPO_LOCAL_SOURCE, "mine")
+
+
+def test_core_rule_paths_matches_the_loader_for_the_engine_layer() -> None:
+    """The catalog gates' own walker finds the engine's rules with the loader's home skills."""
+    engine = [
+        r
+        for r in FileSystemArtifactSource(repo_root=Path("/no/such/repo")).list_rules()
+        if r.source_package == ENGINE_PACKAGE
+    ]
+
+    assert {(r.home_skill, r.source_path) for r in engine} == set(core_rule_paths())
