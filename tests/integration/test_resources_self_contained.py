@@ -462,10 +462,10 @@ def test_scan_targets_on_a_synthetic_tree(tmp_path: Path) -> None:
     violations = [v.render() for t in scan_targets(tmp_path) for v in scan_file(t)]
 
     assert violations == [
+        "eval_samples/t/sample.toml:1: url: 'www.example.org\"'",
         "eval_samples/t/setup/ATTRIBUTIONS.md:1: url: 'https://example.org'",
         "eval_samples/t/setup/app.py:1: url: 'https://api.example.org\"'",
         "eval_samples/t/solution/transcript.md:1: plugin-marker: 'Arjan'",
-        "eval_samples/t/sample.toml:1: url: 'www.example.org\"'",
         "rules/a.md:1: url: 'https://example.org'",
         "skills/s/scripts/run.py:1: plugin-marker: 'mktoronto'",
     ]
