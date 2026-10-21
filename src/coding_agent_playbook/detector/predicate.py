@@ -32,7 +32,14 @@ _SUPPORTED_OPERATORS = (">=", "<=", "==", "~=", ">", "<")
 # boolean dispatch branch on this set means a typo'd key (e.g. ``has_dokerfile``)
 # raises ``ValueError`` instead of silently matching by value-type alone.
 _KNOWN_BOOL_FACT_KEYS: frozenset[str] = frozenset(
-    {"has_notebooks", "has_dockerfile", "has_ci", "banking_mode"}
+    {
+        "has_notebooks",
+        "has_dockerfile",
+        "has_ci",
+        "banking_mode",
+        "domino_project",
+        "playbook_layer",
+    }
 )
 
 #: ``all`` or ``any``: how a list-valued key combines its per-name results.
@@ -231,7 +238,9 @@ def evaluate_predicate(
       - ``package_manager: "uv"`` or ``["uv", "poetry"]`` — facts["package_manager"]
         is that name, or any of the listed names; an absent fact never matches, and
         an unknown name raises even then
-      - ``banking_mode: true`` — boolean facts compared by equality
+      - ``banking_mode: true`` — boolean facts compared by equality (also
+        ``has_notebooks``, ``has_dockerfile``, ``has_ci``, ``domino_project``,
+        ``playbook_layer``)
 
     Multiple keys are AND-ed together. Unknown keys raise ``ValueError`` so
     typos fail loudly at validate time.

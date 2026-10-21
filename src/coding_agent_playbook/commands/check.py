@@ -93,6 +93,8 @@ def _format_detected_section(ctx: SyncContext) -> str:
         f"  has_notebooks: {facts.get('has_notebooks', False)}",
         f"  has_dockerfile: {facts.get('has_dockerfile', False)}",
         f"  has_ci: {facts.get('has_ci', False)}",
+        f"  domino_project: {facts.get('domino_project', False)}",
+        f"  playbook_layer: {facts.get('playbook_layer', False)}",
     ]
     return "\n".join(lines)
 
@@ -124,7 +126,7 @@ def _format_skip_reason(predicate: dict[str, object], facts: dict[str, object]) 
             return f"(skipped: applies_if {key}={wanted!r})"
         if key in _VERBATIM_PREDICATE_KEYS:
             return f"(skipped: applies_if {key}={value!r})"
-        # Boolean facts (has_notebooks, has_dockerfile, has_ci, banking_mode).
+        # Boolean facts (has_notebooks, has_ci, domino_project, playbook_layer...).
         actual = facts.get(key, False)
         return f"(skipped: {key}={actual})"
     return "(skipped)"

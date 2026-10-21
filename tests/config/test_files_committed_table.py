@@ -31,8 +31,10 @@ _COMMITTED = ".coding-agent-playbook.toml"
 _LOCAL = ".coding-agent-playbook.local.toml"
 
 #: The one module that spells the two names (as ``CONFIG_FILENAME``/``CONFIG_LOCAL_FILENAME``).
-#: The pin names it dotted, so ``module_moves apply`` follows a move.
-_HOME = engine_module_file("coding_agent_playbook.config.files")
+#: ``config.files`` re-exports them; they live below it because the detector reads the
+#: committed file's ``platforms`` key (prU D63). The pin names it dotted, so
+#: ``module_moves apply`` follows a move.
+_HOME = engine_module_file("coding_agent_playbook.detector.config_filenames")
 #: The hook runtime keeps its own spellings: it must not import the sync-side config/
 #: package (spec B.5.4); GC-1 gives them a home in its stdlib-only schema module, and
 #: the guard_config writer takes them from there (GC-3: its control-plane path class).

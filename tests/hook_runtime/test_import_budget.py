@@ -474,7 +474,9 @@ def test_detector_loads_only_after_the_dependency_comparison_found_a_change(
             allowed=(
                 "tomllib",
                 "packaging",
+                "coding_agent_playbook.detector.config_filenames",
                 "coding_agent_playbook.detector.facts",
+                "coding_agent_playbook.detector.platform_facts",
                 "coding_agent_playbook.detector.predicate",
             ),
         )

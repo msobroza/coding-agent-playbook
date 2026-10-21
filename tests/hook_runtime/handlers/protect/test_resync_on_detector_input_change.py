@@ -286,12 +286,25 @@ def test_new_dockerfile_flips_the_presence_flag(
     assert ML_RULE not in item
 
 
-def test_requirements_edit_is_inert(
+def test_root_requirements_edit_names_the_newly_active_rule(
     repo: PackRepo, deps: Callable[..., RuntimeDeps], detect_spy: DetectSpy
 ) -> None:
-    """The detector reads no requirements file, so the comparison stays on pyproject."""
+    """The detector reads root requirements files (prU D78(2)), so the comparison does too."""
     repo.write("requirements.txt", "torch>=2\n")
     tool_input = {"file_path": str(repo.root / "requirements.txt"), "content": "torch>=2\n"}
+
+    report = _post(repo, deps(), "Write", tool_input)
+
+    assert ML_RULE in report.trace.combined.context[0]
+    assert detect_spy.calls == 1
+
+
+def test_requirements_edit_naming_only_known_dependencies_is_silent(
+    repo: PackRepo, deps: Callable[..., RuntimeDeps], detect_spy: DetectSpy
+) -> None:
+    """``fastapi`` is already a baked dependency: the cheap comparison decides alone."""
+    repo.write("requirements.txt", "fastapi\n")
+    tool_input = {"file_path": str(repo.root / "requirements.txt"), "content": "fastapi\n"}
 
     report = _post(repo, deps(), "Write", tool_input)
 

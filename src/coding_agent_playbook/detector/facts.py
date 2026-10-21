@@ -5,8 +5,9 @@ See SPEC.md §8. The Facts dict feeds the renderer's context (SPEC §9.4) and th
 is cached in ``.coding-agent-playbook.toml``, and refreshes on ``pyproject.toml``
 mtime change or ``playbook check --refresh``.
 
-The detector never opens a secret path (SPEC §17.3): its only file read is
-``pyproject.toml``, and its filesystem walks skip every
+The detector never opens a secret path (SPEC §17.3): it reads only
+``pyproject.toml``, the root ``requirements*.txt`` files (prU D78(2)) and the
+committed config's ``platforms`` key (D63), and its filesystem walks skip every
 ``security.paths.is_secret_path`` match.
 """
 
@@ -15,7 +16,16 @@ from __future__ import annotations
 import tomllib
 from typing import TYPE_CHECKING, Any, Final, Literal, TypedDict, get_args
 
-from coding_agent_playbook.detector.pyproject_deps import dependency_specs
+from coding_agent_playbook.detector.platform_facts import (
+    committed_platforms,
+    has_playbook_layer,
+    is_domino_project,
+)
+from coding_agent_playbook.detector.pyproject_deps import (
+    dependency_specs,
+    manifest_dependency_names,
+)
+from coding_agent_playbook.detector.requirements_files import root_requirement_names
 from coding_agent_playbook.security.files import user_home
 from coding_agent_playbook.security.paths import is_secret_path
 from coding_agent_playbook.security.patterns import WALK_SKIP_DIRS
@@ -53,6 +63,8 @@ class Facts(TypedDict, total=False):
     has_dockerfile: bool
     has_ci: bool
     dev_tools: set[str]
+    domino_project: bool
+    playbook_layer: bool
 
 
 # Frameworks the detector recognises (subset of dependencies treated as frameworks).
@@ -240,12 +252,66 @@ def _infer_kind(
     return "python-unknown"
 
 
+def _add_dependency_facts(
+    facts: Facts, pyproject: dict[str, Any] | None, requirement_names: frozenset[str]
+) -> None:
+    """Set the dependency, framework, ML-stack and dev-tool facts the repo declares.
+
+    Root ``requirements*.txt`` names join ``dependencies`` with no constraint
+    (prU D78(2)); a ``pyproject.toml`` entry of the same name keeps its own.
+    """
+    # One parser with the resync hook's cheap comparison (detector.pyproject_deps).
+    runtime, dev_dependencies = dependency_specs(pyproject or {})
+    dependencies = {**dict.fromkeys(sorted(requirement_names), ""), **runtime}
+    if dependencies:
+        facts["dependencies"] = dependencies
+    if dev_dependencies:
+        facts["dev_dependencies"] = dev_dependencies
+
+    # Frameworks include testing frameworks declared as dev deps.
+    framework_pool: dict[str, str] = {**dependencies, **dev_dependencies}
+    frameworks = {n: v for n, v in framework_pool.items() if n in KNOWN_FRAMEWORKS}
+    if frameworks:
+        facts["frameworks"] = frameworks
+
+    # ml_stack is runtime deps only.
+    ml_stack = {n: v for n, v in dependencies.items() if n in KNOWN_ML_STACK}
+    if ml_stack:
+        facts["ml_stack"] = ml_stack
+
+    dev_tools = {n for n in dev_dependencies if n in KNOWN_DEV_TOOLS}
+    if pyproject is not None:
+        dev_tools |= _dev_tools_from_config_sections(pyproject)
+    if dev_tools:
+        facts["dev_tools"] = dev_tools
+
+
+def _add_marker_facts(
+    facts: Facts,
+    repo_root: Path,
+    pyproject: dict[str, Any] | None,
+    requirement_names: frozenset[str],
+) -> None:
+    """Set ``domino_project`` (prU D63) and ``playbook_layer`` (D70), always, true or false."""
+    declared = {*facts.get("dependencies", {}), *facts.get("dev_dependencies", {})}
+    platforms = committed_platforms(repo_root)
+    facts["domino_project"] = is_domino_project(repo_root, declared, platforms)
+    manifest = manifest_dependency_names(pyproject or {}) | requirement_names
+    facts["playbook_layer"] = has_playbook_layer(repo_root, manifest)
+
+
 def detect(repo_root: Path) -> Facts:
     """Run all detector passes against ``repo_root`` and return Facts.
 
-    Reads ``pyproject.toml`` if present, walks for lockfiles and config files,
-    and only sets dict keys it can determine. Never raises — a repo with no
-    ``pyproject.toml`` returns ``Facts(project_kind="python-unknown")``.
+    Reads ``pyproject.toml`` and the root ``requirements*.txt`` files if
+    present, walks for lockfiles and config files, and only sets dict keys it
+    can determine (the presence flags and the marker facts are always set).
+    Never raises — an empty directory gets ``project_kind="python-unknown"``.
+
+    Example::
+
+        >>> detect(repo)["domino_project"]  # doctest: +SKIP
+        False
     """
     facts: Facts = {}
     pyproject = _read_pyproject(repo_root)
@@ -255,35 +321,12 @@ def detect(repo_root: Path) -> Facts:
         facts["package_manager"] = package_manager
 
     if pyproject is not None:
-        project = pyproject.get("project", {})
-
-        python_version = _parse_python_version(project.get("requires-python"))
+        python_version = _parse_python_version(pyproject.get("project", {}).get("requires-python"))
         if python_version is not None:
             facts["python_version"] = python_version
 
-        # One parser with the resync hook's cheap comparison (detector.pyproject_deps).
-        dependencies, dev_dependencies = dependency_specs(pyproject)
-        if dependencies:
-            facts["dependencies"] = dependencies
-
-        if dev_dependencies:
-            facts["dev_dependencies"] = dev_dependencies
-
-        # Frameworks include testing frameworks declared as dev deps.
-        framework_pool: dict[str, str] = {**dependencies, **dev_dependencies}
-        frameworks = {n: v for n, v in framework_pool.items() if n in KNOWN_FRAMEWORKS}
-        if frameworks:
-            facts["frameworks"] = frameworks
-
-        # ml_stack is runtime deps only.
-        ml_stack = {n: v for n, v in dependencies.items() if n in KNOWN_ML_STACK}
-        if ml_stack:
-            facts["ml_stack"] = ml_stack
-
-        dev_tools = {n for n in dev_dependencies if n in KNOWN_DEV_TOOLS}
-        dev_tools |= _dev_tools_from_config_sections(pyproject)
-        if dev_tools:
-            facts["dev_tools"] = dev_tools
+    requirement_names = root_requirement_names(repo_root)
+    _add_dependency_facts(facts, pyproject, requirement_names)
 
     has_notebooks = _has_notebooks(repo_root)
     if has_notebooks:
@@ -291,6 +334,7 @@ def detect(repo_root: Path) -> Facts:
 
     facts["has_dockerfile"] = _has_dockerfile(repo_root)
     facts["has_ci"] = _has_ci(repo_root)
+    _add_marker_facts(facts, repo_root, pyproject, requirement_names)
 
     facts["project_kind"] = _infer_kind(facts, repo_root)
 

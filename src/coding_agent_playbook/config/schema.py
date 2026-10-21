@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, TypeGuard
 from coding_agent_playbook import toml_writer as _toml
 from coding_agent_playbook.catalog.roots import canonical_overlay_name
 from coding_agent_playbook.config.framework import BUNDLED_FRAMEWORK_NAMES
+from coding_agent_playbook.detector.platform_facts import KNOWN_PLATFORMS, PLATFORMS_KEY
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
@@ -361,6 +362,62 @@ def _framework_value_problem(value: object) -> str:
         f"framework must be a framework name such as {bundled}, "
         f'an overlay module name or "none", got {value!r}'
     )
+
+
+def check_platforms_key(data: Mapping[str, object], *, source: str) -> None:
+    """Refuse a ``platforms`` key the detector would ignore (prU D63).
+
+    Only a top-level list of :data:`KNOWN_PLATFORMS` names is read
+    (``detector.platform_facts.committed_platforms``); ``platforms = ["domino"]``
+    turns the Domino skills on in a repo with no Domino marker yet. A string, an
+    unknown name, or a ``platforms`` value nested in a table (written after a
+    ``[table]`` header) is refused with the line to write instead.
+
+    Example::
+
+        >>> check_platforms_key({"platforms": "domino"}, source="c.toml")  # doctest: +ELLIPSIS
+        Traceback (most recent call last):
+        ...
+        coding_agent_playbook.config.schema.ConfigError: c.toml: platforms must be a list ...
+    """
+    problems = [
+        problem
+        for path, table in _iter_tables(data)
+        if PLATFORMS_KEY in table
+        and (problem := _platforms_problem(path, table[PLATFORMS_KEY])) is not None
+    ]
+    if problems:
+        raise ConfigError("\n".join(f"{source}: {problem}" for problem in problems))
+
+
+def _platforms_problem(path: _TablePath, value: object) -> str | None:
+    """Why ``platforms`` (in the table at ``path``) is not read as written, else ``None``."""
+    if isinstance(value, dict):
+        return None  # a table of that name is someone else's (``[detector_cache.platforms]``)
+    if path:
+        return (
+            f"{_describe_key(path, PLATFORMS_KEY, value)} is not read (found {value!r}) "
+            f"({_NESTED_NOTE}); use the top-level key instead, {_PLACEMENT}: "
+            f"{PLATFORMS_KEY} = {_platforms_value(value)}"
+        )
+    if not _is_str_list(value):
+        return (
+            f"{PLATFORMS_KEY} must be a list of platform names, got {value!r}; "
+            f"write {PLATFORMS_KEY} = {_platforms_value(value)}"
+        )
+    unknown = sorted(set(value) - KNOWN_PLATFORMS)
+    if unknown:
+        return (
+            f"{PLATFORMS_KEY} names unknown platform(s) {unknown}; "
+            f"known platforms: {sorted(KNOWN_PLATFORMS)}"
+        )
+    return None
+
+
+def _platforms_value(value: object) -> str:
+    """The list to show in ``platforms = …``: ``value`` when usable (a lone string listed), else an example."""
+    names = [value] if isinstance(value, str) else value
+    return _toml.format_scalar(names) if _is_str_list(names) else '["domino"]'
 
 
 def _is_name(value: object) -> TypeGuard[str]:

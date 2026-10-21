@@ -29,6 +29,7 @@ from coding_agent_playbook.config.schema import (
     check_config_tables,
     check_enabled_keys,
     check_framework_key,
+    check_platforms_key,
     required_value,
 )
 
@@ -54,6 +55,7 @@ def check_config_file(data: Mapping[str, object], *, source: str) -> None:
     check_enabled_keys(data, source=source)
     check_config_tables(data, source=source)
     check_framework_key(data, source=source)
+    check_platforms_key(data, source=source)
     if "output" in data:
         parse_output_config(data["output"], source=source)
 

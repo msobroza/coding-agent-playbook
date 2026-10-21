@@ -987,6 +987,7 @@ applies_if:
   any_file: ["mkdocs.yml", "docs/conf.py"]  # at least one of these paths must exist (v0.21)
   package_manager: "uv"              # facts["package_manager"] is this name (a list: any of them) (v0.21)
   banking_mode: true                 # boolean facts
+  domino_project: true               # boolean facts: also has_notebooks, has_dockerfile, has_ci, playbook_layer (§8.2)
 ```
 Multiple keys are ANDed together. The evaluator lives in `coding_agent_playbook.detector.predicate.evaluate_predicate(predicate, facts) -> bool`. `playbook validate` checks each key on its own, so a malformed key is reported even when an earlier key does not hold (v0.21; hooks and `lint_codes.when` were already checked this way).
 The framework operators (`has_framework`, `any_framework`) read `facts["frameworks"]`; the ML-stack operators (`has_ml_stack`, `any_ml_stack`) read the separate `facts["ml_stack"]` fact (torch, tensorflow, scikit-learn, … — see Section 8.2). Use the ML-stack operators to gate ML-specific rules and prompts, since ML libraries never appear in `frameworks`.
@@ -1586,7 +1587,7 @@ Inspect the consumer repo and produce a `facts` dictionary used as the rendering
 | --- | --- | --- |
 | `python_version` | `str` (e.g. `"3.12"`) | `pyproject.toml [project] requires-python`, then `python --version` |
 | `package_manager` | `Literal["uv", "poetry", "pip-tools", "pip"]` | presence of `uv.lock`, `poetry.lock`, `requirements.txt`, `[tool.poetry]`; usable in `applies_if` (§6.4) |
-| `dependencies` | `dict[str, str]` (name → version) | `pyproject.toml` + resolved from lockfile |
+| `dependencies` | `dict[str, str]` (name → version) | `pyproject.toml`, plus the names in the root `requirements*.txt` files (constraint `""`; a pyproject entry of the same name keeps its own) |
 | `dev_dependencies` | `dict[str, str]` | same, dev group |
 | `frameworks` | `dict[str, str]` | subset of dependencies matching a known list (fastapi, pydantic, sqlalchemy, pytest, etc.) |
 | `ml_stack` | `dict[str, str]` | subset matching ML deps (torch, transformers, scikit-learn, etc.) |
@@ -1594,6 +1595,8 @@ Inspect the consumer repo and produce a `facts` dictionary used as the rendering
 | `has_dockerfile` | `bool` | `Dockerfile` exists at root or `./docker/` |
 | `has_ci` | `bool` | `.github/workflows/`, `Jenkinsfile`, `.gitlab-ci.yml`, etc. |
 | `dev_tools` | `set[str]` | `ruff`, `black`, `flake8`, `mypy`, `pyright` from dev deps + config presence |
+| `domino_project` | `bool` (always set) | a reliable Domino marker: `.dominoignore`, `.dominoresults` or `dominostats.json` at the root, or a `dominodatalab` / `dominodatalab-data` dependency; or the committed config's top-level `platforms = ["domino"]` (validated against the known platforms). Weak markers (`app.sh`, `/mnt/...` paths) never count |
+| `playbook_layer` | `bool` (always set) | a `catalog/` or `playbook/` directory at the root (even empty), or an overlay: a `coding-agent-playbook` dependency and a `src/<pkg>/resources/<kind>/` or `<pkg>/resources/<kind>/` catalog directory |
 | `project_kind` | `Literal[...]` | inferred from layout: presence of `src/`, notebooks, etc. (see 8.3) |
 ### 8.3 Project-kind inference rule
 ```
@@ -1660,6 +1663,8 @@ class Facts(TypedDict, total=False):
     has_dockerfile: bool
     has_ci: bool
     dev_tools: set[str]
+    domino_project: bool
+    playbook_layer: bool
 
 
 def detect(repo_root: Path) -> Facts: ...

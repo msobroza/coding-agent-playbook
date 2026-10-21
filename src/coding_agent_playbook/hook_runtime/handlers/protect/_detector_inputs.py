@@ -11,9 +11,12 @@ The cheap half of resync-on-detector-input-change, about 5 ms:
   compared with the names sync baked, and the presence of a file whose flag
   was false at sync. An ordinary ``[tool.*]`` edit stays silent.
 
-``requirements*`` files trigger the comparison but never change it: the
-detector reads only ``pyproject.toml``. A private module: it registers no
-handler, and ``tomllib`` loads only once a dependency input was touched.
+The runtime names compared include those of the root ``requirements*.txt``
+files, which the detector adds to ``dependencies`` (prU D78(2);
+``detector.requirements_files``, the detector's own reader). A
+``requirements*.in`` file triggers the comparison but never changes it. A
+private module: it registers no handler, and ``tomllib`` loads only once a
+dependency input was touched.
 """
 
 from __future__ import annotations
@@ -132,18 +135,25 @@ def _written_now(flag: str, written: Sequence[NormalizedPath]) -> bool:
 
 
 def _dependencies_changed(facts: Mapping[str, Any], repo_root: str) -> bool:
-    """Whether ``pyproject.toml``'s dependency names differ from the baked ones.
+    """Whether the declared dependency names differ from the baked ones.
 
-    A pyproject that does not parse (an edit in progress) counts as unchanged.
+    Runtime names are ``pyproject.toml``'s plus the root ``requirements*.txt``
+    files', as ``detect()`` records them. A pyproject that does not parse (an
+    edit in progress) counts as unchanged.
     """
-    names = _current_names(repo_root)
+    names = _pyproject_names(repo_root)
     if names is None:
         return False
+    from pathlib import Path  # branch-local (§D.1), like tomllib
+
+    from coding_agent_playbook.detector.requirements_files import root_requirement_names
+
     runtime, dev = names
+    runtime |= root_requirement_names(Path(repo_root))
     return runtime != _baked(facts, "dependencies") or dev != _baked(facts, "dev_dependencies")
 
 
-def _current_names(repo_root: str) -> tuple[frozenset[str], frozenset[str]] | None:
+def _pyproject_names(repo_root: str) -> tuple[frozenset[str], frozenset[str]] | None:
     import tomllib  # branch-local (§D.1): only after a dependency input was touched
 
     from coding_agent_playbook.detector.pyproject_deps import dependency_names
