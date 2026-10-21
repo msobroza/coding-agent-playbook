@@ -84,8 +84,8 @@ _BUILTIN_HANDLER_MODULES: Final[Mapping[str, str]] = MappingProxyType(
         "resync_on_detector_input_change": (
             "coding_agent_playbook.hook_runtime.handlers.protect.resync_on_detector_input_change"
         ),
-        "eval_task_authoring_lint": (
-            "coding_agent_playbook.hook_runtime.handlers.protect.eval_task_authoring_lint"
+        "eval_sample_authoring_lint": (
+            "coding_agent_playbook.hook_runtime.handlers.protect.eval_sample_authoring_lint"
         ),
         "guard_eval_fixtures": "coding_agent_playbook.hook_runtime.handlers.protect.guard_eval_fixtures",
         "stop_drift_and_orphan_gate": (

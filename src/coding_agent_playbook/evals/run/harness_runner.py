@@ -1,7 +1,7 @@
-"""``HarnessRunner`` — execute one eval task end-to-end and score it (PR R1).
+"""``HarnessRunner`` — execute one eval sample end-to-end and score it (PR R1).
 
 This is the v1.1 activation of the former v2 placeholder (SPEC §15.3). A
-:class:`HarnessRunner` runs a single :class:`~coding_agent_playbook.evals.task.EvalTask`
+:class:`HarnessRunner` runs a single :class:`~coding_agent_playbook.evals.sample.EvalSample`
 against an agent and grades the result through the
 :class:`~coding_agent_playbook.grading.metric.Metric` /
 :class:`~coding_agent_playbook.grading.check.Check` /
@@ -12,9 +12,9 @@ are live. **Judged/rubric scoring is deferred to R2**: the runner sets no
 ``Judge`` on the :class:`EvalContext`, so judged checks report ``available() is
 False`` and are skipped.
 
-The class is a **template method**: :meth:`HarnessRunner.run_task` owns the fixed
+The class is a **template method**: :meth:`HarnessRunner.run_sample` owns the fixed
 pipeline (materialize → render prompt → invoke agent → capture → score → assemble
-a :class:`TaskResult`) and the only per-assistant step is the abstract
+a :class:`SampleResult`) and the only per-assistant step is the abstract
 :meth:`_invoke_agent` hook. The hermetic default + unit-test driver is
 :class:`~coding_agent_playbook.evals.run.fake_runner.FakeRunner`; the thin
 ``ClaudeCodeRunner`` ships in R1c. Discovery is via the
@@ -22,7 +22,7 @@ a :class:`TaskResult`) and the only per-assistant step is the abstract
 directly.
 
 The result model is **Option B** (SPEC §15.3, revised by the R1 brainstorm):
-:class:`TaskResult` carries one :class:`EvaluationReport` rather than the inert
+:class:`SampleResult` carries one :class:`EvaluationReport` rather than the inert
 ``programmatic_checks``/``rubric_scores`` placeholder fields, which had no
 consumers. The old per-check placeholder is retired — a programmatic check is now
 a BOOL :class:`~coding_agent_playbook.grading.types.ScopeDetail` row.
@@ -44,7 +44,7 @@ from coding_agent_playbook.evals.run.git_env import without_repo_location
 from coding_agent_playbook.evals.run.scoring import score
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.evals.task import EvalTask
+    from coding_agent_playbook.evals.sample import EvalSample
     from coding_agent_playbook.grading.check import Check
     from coding_agent_playbook.grading.types import (
         CheckResult,
@@ -76,7 +76,7 @@ class _Trial:
     """One trial's graded :class:`TrialResult` + its raw transcript (internal).
 
     The runner collects these per trial; only the first trial's ``transcript``
-    surfaces on the assembled :class:`TaskResult` (a representative log).
+    surfaces on the assembled :class:`SampleResult` (a representative log).
     """
 
     result: TrialResult
@@ -84,26 +84,26 @@ class _Trial:
 
 
 @dataclass
-class TaskResult:
-    """Per-task outcome: the unified evaluation report + convenience aggregates.
+class SampleResult:
+    """Per-sample outcome: the unified evaluation report + convenience aggregates.
 
     ``report`` is a **representative** :class:`EvaluationReport` (the first trial's)
-    covering the ``[gate]`` / ``[rubric]`` layers. ``passed`` is the **task**
-    verdict: the single trial's verdict for a non-aggregate task (``N=1``), or the
-    ``[aggregate]`` layer's pass/fail when the task aggregates across trials —
+    covering the ``[gate]`` / ``[rubric]`` layers. ``passed`` is the **sample**
+    verdict: the single trial's verdict for a non-aggregate sample (``N=1``), or the
+    ``[aggregate]`` layer's pass/fail when the sample aggregates across trials —
     unless that layer is skipped (its ``over`` axis never ran, e.g. ``over =
     "rubric"`` with no judge), when it passes only if every trial passed.
-    ``aggregate_score`` mirrors ``report.composite`` for a single-trial task, the
+    ``aggregate_score`` mirrors ``report.composite`` for a single-trial sample, the
     aggregate check's ``0-1`` reliability score when aggregating, and the trial
     pass rate when the aggregate is skipped.
 
     ``trials`` carries every per-trial
     :class:`~coding_agent_playbook.grading.types.TrialResult` (one for ``N=1``);
     ``aggregate`` is the graded ``[aggregate]`` :class:`CheckResult` (``None`` when
-    the task has no ``[aggregate]`` block).
+    the sample has no ``[aggregate]`` block).
     """
 
-    task_id: str
+    sample_id: str
     harness: str
     report: EvaluationReport
     passed: bool
@@ -116,24 +116,24 @@ class TaskResult:
 
 @dataclass
 class EvalReport:
-    """Aggregate over several :class:`TaskResult`\\ s for one harness.
+    """Aggregate over several :class:`SampleResult`\\ s for one harness.
 
-    ``aggregate_pass_rate`` is the mean of ``tr.passed`` across ``task_results``
+    ``aggregate_pass_rate`` is the mean of ``result.passed`` across ``sample_results``
     (``0.0`` for an empty run).
     """
 
     engine_version: str
     harness: str
-    task_results: list[TaskResult]
+    sample_results: list[SampleResult]
     aggregate_pass_rate: float
     timestamp: str
 
     @staticmethod
-    def pass_rate(task_results: list[TaskResult]) -> float:
-        """Mean of ``tr.passed`` over ``task_results`` (``0.0`` when empty)."""
-        if not task_results:
+    def pass_rate(sample_results: list[SampleResult]) -> float:
+        """Mean of ``result.passed`` over ``sample_results`` (``0.0`` when empty)."""
+        if not sample_results:
             return 0.0
-        return sum(1 for tr in task_results if tr.passed) / len(task_results)
+        return sum(1 for result in sample_results if result.passed) / len(sample_results)
 
 
 # --------------------------------------------------------------------------- #
@@ -210,22 +210,22 @@ def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
 # --------------------------------------------------------------------------- #
 
 
-def materialize(task: EvalTask, scratch_dir: Path) -> Baseline:
-    """Copy the task's ``setup/`` into ``scratch_dir``, install deps, commit baseline.
+def materialize(sample: EvalSample, scratch_dir: Path) -> Baseline:
+    """Copy the sample's ``setup/`` into ``scratch_dir``, install deps, commit baseline.
 
-    The ``setup/`` tree (sibling of the task's ``task.toml``) is byte-copied into
+    The ``setup/`` tree (sibling of the sample's ``sample.toml``) is byte-copied into
     ``scratch_dir`` (which becomes the agent's working tree). When that tree
     carries a ``pyproject.toml`` :func:`_uv_sync_scratch` shells out to ``uv
     sync`` (``--frozen`` if a ``uv.lock`` is present) so the agent and the
     execution evaluators see a real installed environment — the canonical Python
-    project metadata lives in ``setup/pyproject.toml``, not in ``task.toml``.
+    project metadata lives in ``setup/pyproject.toml``, not in ``sample.toml``.
     The scratch repo is then ``git init``'d and the initial state committed so
     :func:`capture` can ``git diff`` against it and the ``file_unchanged`` check
     has a reference. A *second*, pristine copy of ``setup/`` is kept alongside
     the scratch repo as the execution-evaluator baseline (also ``uv sync``'d, so
     the baseline suite runs against the same installed deps as the candidate).
 
-    A task whose ``setup/`` directory is missing yields an empty baseline repo —
+    A sample whose ``setup/`` directory is missing yields an empty baseline repo —
     the runner still works, the static/execution layers simply have nothing to
     measure. A ``setup/`` with no ``pyproject.toml`` (a deps-less fixture) skips
     the ``uv sync`` step entirely; ``uv`` is only required when a pyproject is
@@ -234,7 +234,7 @@ def materialize(task: EvalTask, scratch_dir: Path) -> Baseline:
     scratch_dir = Path(scratch_dir)
     scratch_dir.mkdir(parents=True, exist_ok=True)
 
-    setup_dir = task.source_path.parent / "setup"
+    setup_dir = sample.source_path.parent / "setup"
     if setup_dir.is_dir():
         shutil.copytree(setup_dir, scratch_dir, dirs_exist_ok=True)
 
@@ -314,12 +314,12 @@ def capture(scratch_dir: Path, baseline: Baseline, transcript: str) -> Candidate
 def _grade_aggregate(
     aggregate: Check, trials: list[TrialResult]
 ) -> tuple[CheckResult, bool, float]:
-    """Grade the ``[aggregate]`` layer: ``(result, task verdict, task score)``.
+    """Grade the ``[aggregate]`` layer: ``(result, sample verdict, sample score)``.
 
     The compiled check grades over an :class:`EvalContext` carrying the trials,
-    and its ``passed``/``score`` become the task verdict / score. When the axis it
+    and its ``passed``/``score`` become the sample verdict / score. When the axis it
     reduces never ran in any trial (``over = "rubric"`` with no judge) the layer
-    is skipped — neutral — so the task falls back to the trials' own verdicts:
+    is skipped — neutral — so the sample falls back to the trials' own verdicts:
     it passes only if every trial passed, scored by the trial pass rate.
     """
     from coding_agent_playbook.grading.check import MeasurementSet
@@ -341,39 +341,39 @@ def _grade_aggregate(
 
 
 class HarnessRunner(ABC):
-    """Invoke an agent for one task and grade the result (template method).
+    """Invoke an agent for one sample and grade the result (template method).
 
     Subclasses set the class attribute :attr:`name` (the
     ``coding_agent_playbook.runners`` entry-point key) and implement the single
-    abstract hook :meth:`_invoke_agent`. :meth:`run_task` is concrete and fixed.
+    abstract hook :meth:`_invoke_agent`. :meth:`run_sample` is concrete and fixed.
 
     :attr:`requires_resolved_prompt` controls prompt strictness in
     :func:`render_prompt`: the hermetic
     :class:`~coding_agent_playbook.evals.run.fake_runner.FakeRunner` leaves it ``False``
-    (it tolerates the placeholder a synthetic test task yields), while a real
+    (it tolerates the placeholder a synthetic test sample yields), while a real
     runner like ``ClaudeCodeRunner`` sets it ``True`` so an unresolvable prompt
     raises :class:`PromptResolutionError` rather than driving a live agent with a
     placeholder.
     """
 
     name: str
-    #: When True, ``run_task`` resolves the prompt strictly (raises on an
+    #: When True, ``run_sample`` resolves the prompt strictly (raises on an
     #: unresolvable ``prompt_id``). Real runners set this; the FakeRunner does not.
     requires_resolved_prompt: bool = False
 
-    def run_task(
+    def run_sample(
         self,
-        task: EvalTask,
+        sample: EvalSample,
         scratch_dir: Path,
         *,
         judge: JudgeLike | None = None,
         samples: int = 1,
         fail_fast: bool = True,
-    ) -> TaskResult:
-        """Run ``task`` over ``N`` trials in ``scratch_dir`` and grade a :class:`TaskResult`.
+    ) -> SampleResult:
+        """Run ``sample`` over ``N`` trials in ``scratch_dir`` and grade a :class:`SampleResult`.
 
-        ``N`` is :attr:`~coding_agent_playbook.evals.compile.compiler.CompiledTask.trials_needed`
-        — **1** for a task with no ``[aggregate]`` block (the single-trial default;
+        ``N`` is :attr:`~coding_agent_playbook.evals.compile.compiler.CompiledSample.trials_needed`
+        — **1** for a sample with no ``[aggregate]`` block (the single-trial default;
         this path is one ``materialize → render → invoke → capture → score``), and
         ``max(k)`` over the aggregate handles otherwise.
 
@@ -388,30 +388,30 @@ class HarnessRunner(ABC):
         strict resolution still raises :class:`PromptResolutionError` before any
         trial runs.
 
-        With an ``[aggregate]`` layer the task verdict is that layer's pass/fail —
+        With an ``[aggregate]`` layer the sample verdict is that layer's pass/fail —
         the :class:`~coding_agent_playbook.evals.checks.aggregate.AggregateCheck`\\ s
         reduce the trials' selected ``over`` axis (``gate`` / ``rubric`` /
         ``verdict``) into a ``pass@k`` / ``pass^k`` reliability score; if that layer
-        is skipped, the task verdict falls back to every trial passing, scored by
-        the trial pass rate (see :func:`_grade_aggregate`). Without one the task
+        is skipped, the sample verdict falls back to every trial passing, scored by
+        the trial pass rate (see :func:`_grade_aggregate`). Without one the sample
         verdict is the single trial's verdict.
 
         ``judge``/``samples`` are keyword-only with R1-compatible defaults: with no
         ``judge`` each trial's report is deterministic-only (judged evaluators are
         skipped). ``fail_fast`` defaults to ``True`` — the per-trial scheduler's
         cost-saving short-circuit; ``--full-scoring`` flips it off, and
-        :func:`~coding_agent_playbook.evals.run.scoring.score` ignores it for a task
+        :func:`~coding_agent_playbook.evals.run.scoring.score` ignores it for a sample
         whose result it could change
-        (:attr:`~coding_agent_playbook.evals.compile.compiler.CompiledTask.short_circuit_safe`).
+        (:attr:`~coding_agent_playbook.evals.compile.compiler.CompiledSample.short_circuit_safe`).
         """
-        from coding_agent_playbook.evals.task import compile_eval_task
+        from coding_agent_playbook.evals.sample import compile_eval_sample
 
         scratch_dir = Path(scratch_dir)
         started = monotonic()
         # Resolve the prompt first (identical across trials) so a real runner's
         # strict resolution raises before any trial.
-        prompt = render_prompt(task, strict=self.requires_resolved_prompt)
-        compiled = compile_eval_task(task)
+        prompt = render_prompt(sample, strict=self.requires_resolved_prompt)
+        compiled = compile_eval_sample(sample)
         n = compiled.trials_needed
 
         trials: list[TrialResult] = []
@@ -422,17 +422,17 @@ class HarnessRunner(ABC):
             # so the single-trial on-disk layout is unchanged).
             trial_dir = scratch_dir if n == 1 else scratch_dir / f"trial-{i}"
             trial = self._run_trial(
-                task, prompt, trial_dir, judge=judge, samples=samples, fail_fast=fail_fast
+                sample, prompt, trial_dir, judge=judge, samples=samples, fail_fast=fail_fast
             )
             trials.append(trial.result)
             if i == 0:
                 first_transcript = trial.transcript
 
-        return self._assemble(task, compiled.aggregate, trials, first_transcript, started)
+        return self._assemble(sample, compiled.aggregate, trials, first_transcript, started)
 
     def _run_trial(
         self,
-        task: EvalTask,
+        sample: EvalSample,
         prompt: str,
         trial_dir: Path,
         *,
@@ -450,10 +450,12 @@ class HarnessRunner(ABC):
         """
         from coding_agent_playbook.grading.types import TrialResult
 
-        baseline = materialize(task, trial_dir)
+        baseline = materialize(sample, trial_dir)
         run = self._invoke_agent(prompt, trial_dir)
         candidate = capture(trial_dir, baseline, run.transcript)
-        report = score(task, baseline, candidate, judge=judge, samples=samples, fail_fast=fail_fast)
+        report = score(
+            sample, baseline, candidate, judge=judge, samples=samples, fail_fast=fail_fast
+        )
         return _Trial(
             result=TrialResult(report=report, verdict=report.passed),
             transcript=run.transcript,
@@ -461,15 +463,15 @@ class HarnessRunner(ABC):
 
     def _assemble(
         self,
-        task: EvalTask,
+        sample: EvalSample,
         aggregate: Check | None,
         trials: list[TrialResult],
         transcript: str,
         started: float,
-    ) -> TaskResult:
-        """Fold the trials (+ optional aggregate) into one :class:`TaskResult`.
+    ) -> SampleResult:
+        """Fold the trials (+ optional aggregate) into one :class:`SampleResult`.
 
-        With ``aggregate is None`` (the single-trial default) the task verdict
+        With ``aggregate is None`` (the single-trial default) the sample verdict
         is ``trials[0].verdict`` and the score is the representative report's
         composite (falling back to ``0.0``/``1.0``). With an ``[aggregate]`` layer
         see :func:`_grade_aggregate`.
@@ -482,8 +484,8 @@ class HarnessRunner(ABC):
         else:
             agg_result, passed, aggregate_score = _grade_aggregate(aggregate, trials)
 
-        return TaskResult(
-            task_id=task.id,
+        return SampleResult(
+            sample_id=sample.id,
             harness=self.name,
             report=report,
             passed=passed,

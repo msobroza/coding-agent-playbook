@@ -674,6 +674,7 @@ changelog entry is v0.21.
 | An overlay or repo-local rule or prompt whose `applies_if` has a typo after a key that does not hold | Run `playbook validate` and fix what it reports: validate, and so `playbook sync`, now checks each key on its own. New `applies_if: {package_manager: uv}` gating is available. See "`package_manager` and per-key validation" below. |
 | A repo that wants Matt Pocock's skills (the new `mattpocock_skills` bundled plugin) | Opt in: add `coding_agent_playbook.plugins.mattpocock_skills` to `overlays_enabled`, run `playbook sync`, then `/setup-matt-pocock-skills`, gitignore `.scratch/` and disable the upstream Claude Code plugin. Nothing changes for a repo that does not enable it. See "New opt-in bundled plugin: mattpocock_skills". |
 | A repo with `coding_agent_playbook.plugins.python_design` (or the old `coding_agent_playbook.packs.python_design`) in `overlays_enabled` | Remove it, then run `playbook sync`: the bundled plugin is gone, and until then every command refuses the name as `no such bundled plugin`. See "Removed bundled plugin: python_design". |
+| A repo, overlay or bundled plugin that ships eval tasks, or code that imports the eval API | Rename them to eval samples: `eval_tasks/` to `eval_samples/`, each `task.toml` to `sample.toml` and the prompts' `eval_tasks:` key to `eval_samples:`; rename the Python names too. There is no alias. See "Eval tasks are now eval samples". |
 | Every consumer repo (`commit = false`) | Nothing: the next `playbook sync` writes `.agents/skills/`, deletes the unchanged `shared_skills/` copies and updates the managed block. |
 | A repo with `commit = true` | Run `playbook sync`, then `git rm -r shared_skills` and commit `.agents/skills/`. |
 | Tooling that points at `shared_skills/` | Point it at `.agents/skills/`. |
@@ -783,6 +784,47 @@ untracked copies are deleted from every skill root, an edited copy is kept
 until you delete it, and under `commit = true` committed copies stay and are
 listed on stderr until you `git rm` them. To keep using one of its skills, add
 it as a repo-local skill under `playbook/skills/<id>/`.
+
+### Eval tasks are now eval samples
+
+The reproducible test case for a prompt is now called an **eval sample**
+(`CONTEXT.md`; `specs/prU-core-python-skills.md` D68). Every spelling of the
+old name changed at once, with no compatibility alias. Grading does not change:
+the 23 engine samples are the same, and so are their verdicts. A repo, overlay
+or bundled plugin that ships no eval tasks and imports no eval code needs no
+action.
+
+| Old | New |
+|---|---|
+| `eval_tasks/<id>/` (in `catalog/core/`, `catalog/plugins/<name>/`, `<pkg>/resources/` and `playbook/`) | `eval_samples/<id>/` |
+| `<id>/task.toml` | `<id>/sample.toml` (the keys inside do not change) |
+| Prompt frontmatter `eval_tasks: [...]` | `eval_samples: [...]` |
+| Hook id `eval-task-authoring-lint` (in `[hooks] disable`, for example) | `eval-sample-authoring-lint` |
+| `[metrics] exclude` and `guard_config.eval.fixture_globs` default `**/eval_tasks/*/setup/**` | `**/eval_samples/*/setup/**` |
+| `playbook eval --run --format json`: `task_id` | `sample_id` |
+| `coding_agent_playbook.evals.task` (`EvalTask`, `TaskSetup`, `TaskInvocation`) | `coding_agent_playbook.evals.sample` (`EvalSample`, `SampleSetup`, `SampleInvocation`) |
+| `evals.loader.load_eval_task_from_dir`, `discover_eval_task_dirs` | `load_eval_sample_from_dir`, `discover_eval_sample_dirs` |
+| `evals.validator.validate_tasks` | `validate_samples` |
+| `evals.compile.compiler.CompiledTask`, `compile_task`; `evals.sample.compile_eval_task` | `CompiledSample`, `compile_sample`; `compile_eval_sample` |
+| `evals.run.harness_runner.HarnessRunner.run_task`, `TaskResult`, `EvalReport.task_results` | `run_sample`, `SampleResult`, `EvalReport.sample_results` |
+| `evals.report_format.task_result_to_dict`, `format_task_result_text` | `sample_result_to_dict`, `format_sample_result_text` |
+| `ArtifactSource.list_eval_tasks` (an out-of-tree artifact source overrides it) | `list_eval_samples` |
+| `hook_runtime.handlers.protect.eval_task_authoring_lint` | `hook_runtime.handlers.protect.eval_sample_authoring_lint` |
+| `artifacts.path_classes.TaskPath`, `task_path` | `SamplePath`, `sample_path` |
+
+Until you rename them, an old `eval_tasks/` directory is ignored (its samples
+silently drop out of `playbook eval --list`), and a prompt that still declares
+`eval_tasks:` stops every command that loads prompts with
+`PromptFrontmatter.__init__() got an unexpected keyword argument 'eval_tasks'`.
+The flag `playbook eval --run --samples N` keeps its name: it is the number of
+judge samples averaged per rubric criterion, not a count of eval samples.
+
+```bash
+# in each layer that ships eval tasks
+git mv eval_tasks eval_samples
+for f in eval_samples/*/task.toml; do git mv "$f" "${f%task.toml}sample.toml"; done
+# then replace `eval_tasks:` with `eval_samples:` in that layer's prompts
+```
 
 ### The shared_skills adapter writes .agents/skills/
 

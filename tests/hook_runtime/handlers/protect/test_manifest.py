@@ -45,7 +45,9 @@ PROTECT_PACK: dict[str, PackRow] = {
     "resync-on-detector-input-change": PackRow(
         "default", ("post_tool_use",), ("context", "none"), "open"
     ),
-    "eval-task-authoring-lint": PackRow("default", ("post_tool_use",), ("context", "none"), "open"),
+    "eval-sample-authoring-lint": PackRow(
+        "default", ("post_tool_use",), ("context", "none"), "open"
+    ),
     "guard-eval-fixtures": PackRow("opt-in", ("pre_tool_use",), ("ask", "none"), "open"),
     "stop-drift-and-orphan-gate": PackRow("default", ("stop",), ("deny", "none"), "open"),
     "session-start-playbook-briefing": PackRow(
@@ -118,7 +120,7 @@ def test_source_changed_child_timeout_nests_under_the_hook_timeout() -> None:
     for hook_id in (
         "validate-then-sync-on-canonical-edit",
         "resync-on-detector-input-change",
-        "eval-task-authoring-lint",
+        "eval-sample-authoring-lint",
     ):
         assert engine_hook(hook_id).frontmatter.timeout > CHILD_TIMEOUT_S
 

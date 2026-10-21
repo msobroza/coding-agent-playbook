@@ -131,7 +131,7 @@ def _prompt_entry(prompt: Prompt, path: str) -> manifest.ManifestEntry:
         applies_if=dict(fm.applies_if),
         input_variables=[dict(v) for v in fm.input_variables],
         includes_rules=list(fm.includes_rules),
-        eval_tasks=list(fm.eval_tasks),
+        eval_samples=list(fm.eval_samples),
         output_contract=list(fm.output_contract),
         write_scope=dict(fm.write_scope),
     )

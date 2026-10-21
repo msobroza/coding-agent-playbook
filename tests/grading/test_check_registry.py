@@ -9,7 +9,7 @@ caller's kwargs. The metric-backed factories route through
 registered :class:`Metric` name) or ``judge=`` (a criterion wrapped in a
 :class:`JudgeMetric`).
 
-This track is additive — nothing in the eval/task pipeline consumes the registry
+This track is additive — nothing in the eval/sample pipeline consumes the registry
 yet, so these tests exercise it directly.
 """
 

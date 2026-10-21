@@ -189,14 +189,14 @@ def test_eval_subparser_accepts_list_and_show():
     assert args.command == "eval"
     assert args.list is True
 
-    args2 = parser.parse_args(["eval", "--show", "task-x"])
-    assert args2.show == "task-x"
+    args2 = parser.parse_args(["eval", "--show", "sample-x"])
+    assert args2.show == "sample-x"
 
 
 def test_eval_subparser_accepts_bare_id():
     parser = build_parser()
-    args = parser.parse_args(["eval", "task-y"])
-    assert args.id == "task-y"
+    args = parser.parse_args(["eval", "sample-y"])
+    assert args.id == "sample-y"
 
 
 def test_eval_subparser_accepts_repo_root():
@@ -211,8 +211,8 @@ def test_eval_subparser_accepts_repo_root():
     assert args.repo_root == "/tmp/somewhere"
 
     # Combined with --show.
-    args2 = parser.parse_args(["eval", "--show", "task-x", "--repo-root", "/tmp/elsewhere"])
-    assert args2.show == "task-x"
+    args2 = parser.parse_args(["eval", "--show", "sample-x", "--repo-root", "/tmp/elsewhere"])
+    assert args2.show == "sample-x"
     assert args2.repo_root == "/tmp/elsewhere"
 
 
@@ -221,7 +221,7 @@ def test_eval_main_uses_repo_root_without_chdir(monkeypatch, tmp_path, make_synt
     enumerate the *given* repo, not the process's cwd. The original
     process cwd must be unchanged after the call (no covert ``os.chdir``).
 
-    Seeded with a single repo-local prompt + task so the listing is
+    Seeded with a single repo-local prompt + sample so the listing is
     non-trivial — confirms the flag actually plumbs through to
     ``commands.eval.run``."""
     import os
@@ -235,16 +235,16 @@ def test_eval_main_uses_repo_root_without_chdir(monkeypatch, tmp_path, make_synt
         "name: Demo\n"
         "description: demo\n"
         "slash: demo\n"
-        "eval_tasks:\n"
-        "  - demo-task\n"
+        "eval_samples:\n"
+        "  - demo-sample\n"
         "---\n"
         "Body.\n",
         encoding="utf-8",
     )
-    task_dir = tmp_path / "playbook" / "eval_tasks" / "demo-task"
-    task_dir.mkdir(parents=True, exist_ok=True)
-    (task_dir / "task.toml").write_text(
-        'id = "demo-task"\nprompt_id = "demo"\ndescription = "Demo task"\n',
+    sample_dir = tmp_path / "playbook" / "eval_samples" / "demo-sample"
+    sample_dir.mkdir(parents=True, exist_ok=True)
+    (sample_dir / "sample.toml").write_text(
+        'id = "demo-sample"\nprompt_id = "demo"\ndescription = "Demo sample"\n',
         encoding="utf-8",
     )
 

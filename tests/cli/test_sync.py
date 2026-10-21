@@ -47,7 +47,7 @@ def test_sync_writes_continue_rules_and_agents_md(tmp_path, make_synthetic_repo)
         tmp_path,
         rules=[("style-guide", "Use spaces, not tabs.\n")],
         # Not an engine prompt id: overriding one (``refactor``) without its
-        # eval_tasks fails validate, so sync would refuse to write (prK §P P8).
+        # eval_samples fails validate, so sync would refuse to write (prK §P P8).
         prompts=[("tidy-up", {"slash": "tidy-up", "body": "Tidy up the code.\n"})],
     )
     rc = sync_cmd.run(_ns(repo))
@@ -628,7 +628,7 @@ def test_sync_migrates_legacy_opencode_commands_to_frontmatter_first(tmp_path, m
     """Commands written with the sentinel on line 1 (older engines) are rewritten
     in place with the envelope first, and a stale legacy command is still cleaned.
 
-    A new prompt id: overriding the engine's ``refactor`` without its ``eval_tasks``
+    A new prompt id: overriding the engine's ``refactor`` without its ``eval_samples``
     fails the validate gate ``playbook sync`` runs first (prK §P P8b)."""
     repo = make_synthetic_repo(
         tmp_path, prompts=[("tidy-up", {"slash": "tidy-up", "body": "Tidy the code.\n"})]

@@ -1,0 +1,60 @@
+{
+  "parsed": {
+    "name": "post_tool_use",
+    "harness": "claude_code",
+    "session_id": "9b2c4e1a-7f3d-4a8e-b1c2-3d4e5f6a7b8c",
+    "cwd": "/playbook-fixture/proj",
+    "project_dir": "/playbook-fixture/proj",
+    "repo_root": "/playbook-fixture/proj",
+    "permission_mode": "acceptEdits",
+    "transcript_path": "/playbook-fixture/home/.claude/projects/proj/5f1c.jsonl",
+    "unattended": false,
+    "truncated": false,
+    "raw_event_name": "PostToolUse",
+    "tool": {
+      "name": "Edit",
+      "native_name": "Edit",
+      "tool_class": "edit",
+      "tool_classes": [
+        "edit"
+      ],
+      "use_id": "toolu_01EtlEscape",
+      "paths": [
+        {
+          "path": "/playbook-fixture/proj/playbook/eval_samples/demo-sample/sample.toml",
+          "repo_rel": "playbook/eval_samples/demo-sample/sample.toml",
+          "key": "playbook/eval_samples/demo-sample/sample.toml"
+        }
+      ],
+      "write_paths": [
+        {
+          "path": "/playbook-fixture/proj/playbook/eval_samples/demo-sample/sample.toml",
+          "repo_rel": "playbook/eval_samples/demo-sample/sample.toml",
+          "key": "playbook/eval_samples/demo-sample/sample.toml"
+        }
+      ],
+      "content": [
+        [
+          "/playbook-fixture/proj/playbook/eval_samples/demo-sample/sample.toml",
+          "new_string",
+          "expr = \"untouched\"\npattern = \"\\s+\"\n"
+        ]
+      ],
+      "response": {
+        "ok": true,
+        "is_interrupt": false
+      }
+    }
+  },
+  "result": {
+    "decision": "context",
+    "context": [
+      "Eval sample \"demo-sample\" does not compile; resolve before finishing:\n\"sample.toml: malformed TOML: Unescaped '\\\\' in a string (at line 16, column 14)\"\nauthor regex patterns as TOML literal strings (single quotes); \\s is an invalid escape in a basic string"
+    ]
+  },
+  "wire": {
+    "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"Eval sample \\\"demo-sample\\\" does not compile; resolve before finishing:\\n\\\"sample.toml: malformed TOML: Unescaped '\\\\\\\\' in a string (at line 16, column 14)\\\"\\nauthor regex patterns as TOML literal strings (single quotes); \\\\s is an invalid escape in a basic string\"}}\n",
+    "stderr": "",
+    "exit_code": 0
+  }
+}

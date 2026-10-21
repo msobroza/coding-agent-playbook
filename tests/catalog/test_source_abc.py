@@ -27,7 +27,7 @@ class _DummyArtifactSource(ArtifactSource):
     def list_skills(self):
         return []
 
-    def list_eval_tasks(self):
+    def list_eval_samples(self):
         return []
 
 

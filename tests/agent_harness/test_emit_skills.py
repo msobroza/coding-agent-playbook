@@ -54,7 +54,7 @@ def _prompt(slash: str) -> Prompt:
         applies_if={"language": "python"},
         input_variables=[{"name": "target"}],
         includes_rules=["style"],
-        eval_tasks=["task-1"],
+        eval_samples=["sample-1"],
         output_contract=["^DONE$"],
         write_scope={"read_only": True},
     )
@@ -163,7 +163,7 @@ def test_emit_prompt_leaves_records_the_template_body_not_the_leaf(tmp_path: Pat
             applies_if={"language": "python"},
             input_variables=[{"name": "target"}],
             includes_rules=["style"],
-            eval_tasks=["task-1"],
+            eval_samples=["sample-1"],
             output_contract=["^DONE$"],
             write_scope={"read_only": True},
         )

@@ -1,8 +1,8 @@
 """Focused unit checks on the find-injected-vulnerability prompt resource.
 
 Runs BEFORE all ten fixtures exist, so it parses the prompt frontmatter and
-body directly rather than going through validate_tasks (which needs every
-eval_tasks: entry to resolve on-disk — that whole-suite green lands in C4).
+body directly rather than going through validate_samples (which needs every
+eval_samples: entry to resolve on-disk — that whole-suite green lands in C4).
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ pytestmark = pytest.mark.catalog
 
 _PROMPT = CORE_ROOT / "prompts" / "find-injected-vulnerability.md.j2"
 
-_EXPECTED_EVAL_TASKS = [
+_EXPECTED_EVAL_SAMPLES = [
     "find-injected-vuln-modoboa-cmdi",
     "find-injected-vuln-ormar-sqli",
     "find-injected-vuln-changedetection-ssrf",
@@ -63,7 +63,7 @@ def test_prompt_id_is_find_injected_vulnerability() -> None:
 
 
 def test_prompt_lists_every_fixture_id() -> None:
-    assert _prompt().frontmatter.eval_tasks == _EXPECTED_EVAL_TASKS
+    assert _prompt().frontmatter.eval_samples == _EXPECTED_EVAL_SAMPLES
 
 
 def test_prompt_body_has_no_commit_or_temporal_framing() -> None:

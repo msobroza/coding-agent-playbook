@@ -1,15 +1,15 @@
 """Runner-level tests for the C8 across-trial aggregate layer (hermetic).
 
 These exercise the N-trial loop in
-:meth:`~coding_agent_playbook.evals.run.harness_runner.HarnessRunner.run_task`: a task with an
+:meth:`~coding_agent_playbook.evals.run.harness_runner.HarnessRunner.run_sample`: a sample with an
 ``[aggregate]`` block runs ``N = max(k)`` trials, collects one
 :class:`~coding_agent_playbook.grading.types.TrialResult` per trial, and grades
 the compiled aggregate layer over them. The two headline guarantees:
 
-* **degeneracy** — a task with *no* ``[aggregate]`` block runs **exactly one**
-  trial and ``TaskResult.passed`` is that single trial's verdict (byte-identical
+* **degeneracy** — a sample with *no* ``[aggregate]`` block runs **exactly one**
+  trial and ``SampleResult.passed`` is that single trial's verdict (byte-identical
   to C7), and
-* **aggregation** — a task with an ``[aggregate]`` block runs ``N`` trials whose
+* **aggregation** — a sample with an ``[aggregate]`` block runs ``N`` trials whose
   verdict sequence is driven by a per-trial mutation, and the aggregate score
   matches the hand-computed ``pass@k`` / ``pass^k`` estimator.
 
@@ -27,7 +27,7 @@ import pytest
 
 from coding_agent_playbook.evals.run.fake_runner import FakeRunner, write_files
 from coding_agent_playbook.evals.run.harness_runner import AgentRun, HarnessRunner
-from coding_agent_playbook.evals.task import EvalTask
+from coding_agent_playbook.evals.sample import EvalSample
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -72,13 +72,13 @@ def _aggregate(metric: str, *, k: int, over: str, fail: float) -> dict[str, Any]
     }
 
 
-def _make_task(
-    task_dir: Path,
+def _make_sample(
+    sample_dir: Path,
     *,
     gate: dict[str, Any] | None = None,
     aggregate: dict[str, Any] | None = None,
     verdict: str = "gate",
-) -> EvalTask:
+) -> EvalSample:
     data: dict[str, Any] = {
         "id": "t-agg",
         "prompt_id": "refactor",
@@ -89,7 +89,9 @@ def _make_task(
         data["gate"] = gate
     if aggregate is not None:
         data["aggregate"] = aggregate
-    return EvalTask.from_dict(data, source_path=task_dir / "task.toml", source_package="<test>")
+    return EvalSample.from_dict(
+        data, source_path=sample_dir / "sample.toml", source_package="<test>"
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -98,11 +100,11 @@ def _make_task(
 
 
 def test_no_aggregate_runs_exactly_one_trial(tmp_path: Path) -> None:
-    """A task with no ``[aggregate]`` block runs a single trial (C7 behaviour)."""
-    task = _make_task(tmp_path / "task", gate=_gate())
+    """A sample with no ``[aggregate]`` block runs a single trial (C7 behaviour)."""
+    sample = _make_sample(tmp_path / "sample", gate=_gate())
 
     runner = FakeRunner(write_files({_TARGET: "x = 1\n"}))
-    result = runner.run_task(task, tmp_path / "scratch")
+    result = runner.run_sample(sample, tmp_path / "scratch")
 
     assert len(result.trials) == 1
     assert result.aggregate is None
@@ -112,12 +114,12 @@ def test_no_aggregate_runs_exactly_one_trial(tmp_path: Path) -> None:
     assert result.passed == result.report.passed
 
 
-def test_no_aggregate_failing_trial_fails_the_task(tmp_path: Path) -> None:
-    """Single-trial degeneracy: a failing gate fails the task, one trial only."""
-    task = _make_task(tmp_path / "task", gate=_gate())
+def test_no_aggregate_failing_trial_fails_the_sample(tmp_path: Path) -> None:
+    """Single-trial degeneracy: a failing gate fails the sample, one trial only."""
+    sample = _make_sample(tmp_path / "sample", gate=_gate())
 
     # No-op agent => _TARGET never created => gate fails.
-    result = FakeRunner().run_task(task, tmp_path / "scratch")
+    result = FakeRunner().run_sample(sample, tmp_path / "scratch")
 
     assert len(result.trials) == 1
     assert result.aggregate is None
@@ -132,13 +134,13 @@ def test_no_aggregate_failing_trial_fails_the_task(tmp_path: Path) -> None:
 
 def test_pass_at_k_over_verdict_4_of_5(tmp_path: Path) -> None:
     """4 pass / 1 fail of 5 trials ⇒ pass@5 over verdict = 1.0 (PASS)."""
-    task = _make_task(
-        tmp_path / "task",
+    sample = _make_sample(
+        tmp_path / "sample",
         gate=_gate(),
         aggregate=_aggregate("pass_at_k", k=5, over="verdict", fail=0.9),
     )
     runner = _SequenceRunner([True, True, True, True, False])
-    result = runner.run_task(task, tmp_path / "scratch")
+    result = runner.run_sample(sample, tmp_path / "scratch")
 
     assert len(result.trials) == 5  # ran N = max(k) = 5 trials
     assert [t.verdict for t in result.trials] == [True, True, True, True, False]
@@ -151,13 +153,13 @@ def test_pass_at_k_over_verdict_4_of_5(tmp_path: Path) -> None:
 
 def test_pass_pow_k_over_verdict_below_floor_fails(tmp_path: Path) -> None:
     """3 pass / 2 fail of 5 ⇒ pass^3 over verdict = C(3,3)/C(5,3) = 0.1 < 0.5 (FAIL)."""
-    task = _make_task(
-        tmp_path / "task",
+    sample = _make_sample(
+        tmp_path / "sample",
         gate=_gate(),
         aggregate=_aggregate("pass_pow_k", k=3, over="verdict", fail=0.5),
     )
     runner = _SequenceRunner([True, True, True, False, False])
-    result = runner.run_task(task, tmp_path / "scratch")
+    result = runner.run_sample(sample, tmp_path / "scratch")
 
     assert len(result.trials) == 3  # N = max(k) = 3
     assert result.aggregate is not None
@@ -169,14 +171,14 @@ def test_pass_pow_k_over_verdict_below_floor_fails(tmp_path: Path) -> None:
 
 def test_pass_pow_k_with_a_failing_trial_in_window(tmp_path: Path) -> None:
     """A fail inside the N-trial window drops pass^k below the floor."""
-    task = _make_task(
-        tmp_path / "task",
+    sample = _make_sample(
+        tmp_path / "sample",
         gate=_gate(),
         aggregate=_aggregate("pass_pow_k", k=3, over="verdict", fail=0.5),
     )
     # N=3: pass, fail, pass => c=2 < k=3 => pass^3 = 0.0 < 0.5 => FAIL.
     runner = _SequenceRunner([True, False, True])
-    result = runner.run_task(task, tmp_path / "scratch")
+    result = runner.run_sample(sample, tmp_path / "scratch")
 
     assert len(result.trials) == 3
     assert [t.verdict for t in result.trials] == [True, False, True]
@@ -192,13 +194,13 @@ def test_each_trial_gets_a_fresh_setup(tmp_path: Path) -> None:
     scratch tree were shared, trial 1 would still see trial 0's file and pass —
     so a [False] second verdict proves each trial got a clean tree.
     """
-    task = _make_task(
-        tmp_path / "task",
+    sample = _make_sample(
+        tmp_path / "sample",
         gate=_gate(),
         aggregate=_aggregate("pass_at_k", k=2, over="verdict", fail=0.4),
     )
     runner = _SequenceRunner([True, False])
-    result = runner.run_task(task, tmp_path / "scratch")
+    result = runner.run_sample(sample, tmp_path / "scratch")
 
     assert [t.verdict for t in result.trials] == [True, False]
 
@@ -209,7 +211,7 @@ def test_each_trial_gets_a_fresh_setup(tmp_path: Path) -> None:
 
 
 def test_composed_aggregate_and_gates_both(tmp_path: Path) -> None:
-    """Two aggregate checks composed with ``and`` both gate the task verdict."""
+    """Two aggregate checks composed with ``and`` both gate the sample verdict."""
     aggregate = {
         "expr": "reliable and consistent",
         "bind": {
@@ -217,23 +219,23 @@ def test_composed_aggregate_and_gates_both(tmp_path: Path) -> None:
             "consistent": {"metric": "pass_pow_k", "k": 2, "over": "verdict", "fail": 0.5},
         },
     }
-    task = _make_task(tmp_path / "task", gate=_gate(), aggregate=aggregate)
+    sample = _make_sample(tmp_path / "sample", gate=_gate(), aggregate=aggregate)
 
     # N = max(4, 2) = 4. Sequence: 3 pass / 1 fail.
     runner = _SequenceRunner([True, True, True, False])
-    result = runner.run_task(task, tmp_path / "scratch")
+    result = runner.run_sample(sample, tmp_path / "scratch")
 
     assert len(result.trials) == 4
     # reliable: pass@4 over verdict, n=4 c=3 k=4 => (n-c)=1 < 4 => 1.0 >= 0.9 (PASS)
     # consistent: pass^2 over verdict, n=4 c=3 k=2 => C(3,2)/C(4,2) = 3/6 = 0.5 >= 0.5 (PASS)
-    # AllOf => both pass => task passes.
+    # AllOf => both pass => sample passes.
     assert result.passed is True
     assert result.aggregate is not None
     assert result.aggregate.passed is True
 
 
 def test_composed_aggregate_fails_when_one_check_fails(tmp_path: Path) -> None:
-    """A composed ``and`` aggregate fails the task when either check fails."""
+    """A composed ``and`` aggregate fails the sample when either check fails."""
     aggregate = {
         "expr": "reliable and consistent",
         "bind": {
@@ -241,14 +243,14 @@ def test_composed_aggregate_fails_when_one_check_fails(tmp_path: Path) -> None:
             "consistent": {"metric": "pass_pow_k", "k": 4, "over": "verdict", "fail": 0.9},
         },
     }
-    task = _make_task(tmp_path / "task", gate=_gate(), aggregate=aggregate)
+    sample = _make_sample(tmp_path / "sample", gate=_gate(), aggregate=aggregate)
 
     # N=4, sequence 2 pass / 2 fail.
     runner = _SequenceRunner([True, True, False, False])
-    result = runner.run_task(task, tmp_path / "scratch")
+    result = runner.run_sample(sample, tmp_path / "scratch")
 
     # reliable: pass@4, n=4 c=2 k=4 => (n-c)=2 < 4 => 1.0 (PASS)
-    # consistent: pass^4, n=4 c=2 k=4 => c < k => 0.0 < 0.9 (FAIL) => task fails.
+    # consistent: pass^4, n=4 c=2 k=4 => c < k => 0.0 < 0.9 (FAIL) => sample fails.
     assert result.passed is False
     assert result.aggregate is not None
     assert result.aggregate.passed is False
@@ -283,11 +285,11 @@ def test_aggregate_over_skipped_rubric_falls_back_to_every_trial_verdict(
         "rubric": _judged_rubric(),
         "aggregate": _aggregate("pass_at_k", k=2, over="rubric", fail=0.5),
     }
-    task = EvalTask.from_dict(
-        data, source_path=tmp_path / "task" / "task.toml", source_package="<test>"
+    sample = EvalSample.from_dict(
+        data, source_path=tmp_path / "sample" / "sample.toml", source_package="<test>"
     )
 
-    result = _SequenceRunner(passes).run_task(task, tmp_path / "scratch")
+    result = _SequenceRunner(passes).run_sample(sample, tmp_path / "scratch")
 
     assert len(result.trials) == 2
     assert result.aggregate is not None
@@ -320,7 +322,7 @@ def test_aggregate_over_a_layer_does_not_depend_on_the_short_circuit(
 
     Regression: with the default short-circuit, the two trials whose gate failed
     skipped their rubric; those trials then did not vote, ``k`` clamped from 3 to
-    1, and the task *passed* although 2 of 3 trials failed (``--full-scoring``
+    1, and the sample *passed* although 2 of 3 trials failed (``--full-scoring``
     failed it). An aggregate over a layer now forces full scoring per trial.
     """
     data: dict[str, Any] = {
@@ -331,13 +333,13 @@ def test_aggregate_over_a_layer_does_not_depend_on_the_short_circuit(
         "rubric": _judged_rubric(),
         "aggregate": _aggregate("pass_pow_k", k=3, over="rubric", fail=1.0),
     }
-    task = EvalTask.from_dict(
-        data, source_path=tmp_path / "task" / "task.toml", source_package="<test>"
+    sample = EvalSample.from_dict(
+        data, source_path=tmp_path / "sample" / "sample.toml", source_package="<test>"
     )
     judge = _MadeFileJudge()
 
-    result = _SequenceRunner([True, False, False]).run_task(
-        task, tmp_path / "scratch", judge=judge, fail_fast=fail_fast
+    result = _SequenceRunner([True, False, False]).run_sample(
+        sample, tmp_path / "scratch", judge=judge, fail_fast=fail_fast
     )
 
     assert [t.verdict for t in result.trials] == [True, False, False]
@@ -359,12 +361,14 @@ def test_aggregate_over_the_verdict_keeps_the_short_circuit(tmp_path: Path) -> N
         "verdict": {"trial": "gate and rubric"},
         "aggregate": _aggregate("pass_at_k", k=3, over="verdict", fail=0.5),
     }
-    task = EvalTask.from_dict(
-        data, source_path=tmp_path / "task" / "task.toml", source_package="<test>"
+    sample = EvalSample.from_dict(
+        data, source_path=tmp_path / "sample" / "sample.toml", source_package="<test>"
     )
     judge = _MadeFileJudge()
 
-    result = _SequenceRunner([True, False, False]).run_task(task, tmp_path / "scratch", judge=judge)
+    result = _SequenceRunner([True, False, False]).run_sample(
+        sample, tmp_path / "scratch", judge=judge
+    )
 
     assert judge.calls == 1  # the failing trials' rubric was short-circuited
     assert result.passed is True  # pass@3 with one success
@@ -381,13 +385,13 @@ def test_aggregate_over_a_cheapest_tier_gate_keeps_sparing_the_judge(tmp_path: P
         "rubric": _judged_rubric(),
         "aggregate": _aggregate("pass_at_k", k=3, over="gate", fail=0.5),
     }
-    task = EvalTask.from_dict(
-        data, source_path=tmp_path / "task" / "task.toml", source_package="<test>"
+    sample = EvalSample.from_dict(
+        data, source_path=tmp_path / "sample" / "sample.toml", source_package="<test>"
     )
     judge = _MadeFileJudge()
 
-    result = _SequenceRunner([False, False, False]).run_task(
-        task, tmp_path / "scratch", judge=judge
+    result = _SequenceRunner([False, False, False]).run_sample(
+        sample, tmp_path / "scratch", judge=judge
     )
 
     assert judge.calls == 0
@@ -414,13 +418,13 @@ def test_aggregate_over_a_costlier_gate_is_graded_in_every_trial(
         "rubric": {"expr": "made", "bind": {"made": {"check": "file_exists", "path": _TARGET}}},
         "aggregate": _aggregate("pass_at_k", k=2, over="gate", fail=0.5),
     }
-    task = EvalTask.from_dict(
-        data, source_path=tmp_path / "task" / "task.toml", source_package="<test>"
+    sample = EvalSample.from_dict(
+        data, source_path=tmp_path / "sample" / "sample.toml", source_package="<test>"
     )
     judge = _MadeFileJudge()
 
-    result = _SequenceRunner([True, False]).run_task(
-        task, tmp_path / "scratch", judge=judge, fail_fast=fail_fast
+    result = _SequenceRunner([True, False]).run_sample(
+        sample, tmp_path / "scratch", judge=judge, fail_fast=fail_fast
     )
 
     assert judge.calls == 2
@@ -447,7 +451,7 @@ def test_short_circuit_never_changes_a_non_conjunctive_verdict(
     """
     from coding_agent_playbook.evals.judge import StubJudge
 
-    task = EvalTask.from_dict(
+    sample = EvalSample.from_dict(
         {
             "id": "t-verdict",
             "prompt_id": "refactor",
@@ -456,12 +460,12 @@ def test_short_circuit_never_changes_a_non_conjunctive_verdict(
             "rubric": _judged_rubric(),
             "verdict": {"trial": verdict},
         },
-        source_path=tmp_path / "task" / "task.toml",
+        source_path=tmp_path / "sample" / "sample.toml",
         source_package="<test>",
     )
 
-    result = FakeRunner().run_task(
-        task, tmp_path / "scratch", judge=StubJudge(default=judge_score), fail_fast=fail_fast
+    result = FakeRunner().run_sample(
+        sample, tmp_path / "scratch", judge=StubJudge(default=judge_score), fail_fast=fail_fast
     )
 
     assert result.passed is expected

@@ -20,7 +20,7 @@ from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE
 REPO_ROOT: Path = Path(__file__).resolve().parents[1]
 #: The checkout's catalog: ``README.md``, ``core/`` and ``plugins/``.
 CATALOG_ROOT: Path = REPO_ROOT / "catalog"
-#: The engine's core layer: ``ATTRIBUTIONS.md``, ``eval_tasks/``, ``hooks/``, ``prompts/``,
+#: The engine's core layer: ``ATTRIBUTIONS.md``, ``eval_samples/``, ``hooks/``, ``prompts/``,
 #: ``rules/`` and ``skills/``.
 CORE_ROOT: Path = CATALOG_ROOT / "core"
 #: The parent of every bundled plugin's directory.
@@ -71,16 +71,16 @@ def plugin_files_root(name: str) -> Path:
     return PLUGINS_ROOT / name
 
 
-def bundled_eval_task_roots() -> list[Path]:
-    """Every bundled layer's ``eval_tasks/`` dir: core first, then each plugin that ships one.
+def bundled_eval_sample_roots() -> list[Path]:
+    """Every bundled layer's ``eval_samples/`` dir: core first, then each plugin that ships one.
 
-    Eval tasks are a per-layer artifact kind, so a plugin may ship its own;
-    the shipped-task gates walk all of them.
+    Eval samples are a per-layer artifact kind, so a plugin may ship its own;
+    the shipped-sample gates walk all of them.
 
-    Example: ``bundled_eval_task_roots()[0] == CORE_ROOT / "eval_tasks"``.
+    Example: ``bundled_eval_sample_roots()[0] == CORE_ROOT / "eval_samples"``.
     """
-    plugin_roots = [d / "eval_tasks" for d in bundled_plugin_dirs()]
-    return [CORE_ROOT / "eval_tasks", *(r for r in plugin_roots if r.is_dir())]
+    plugin_roots = [d / "eval_samples" for d in bundled_plugin_dirs()]
+    return [CORE_ROOT / "eval_samples", *(r for r in plugin_roots if r.is_dir())]
 
 
 def core_markdown_sources(kind: str) -> list[Path]:

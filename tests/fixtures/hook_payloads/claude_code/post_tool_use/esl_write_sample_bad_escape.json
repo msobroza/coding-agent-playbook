@@ -1,0 +1,22 @@
+{
+  "_fixture": {
+    "harness_version": "2.1.296",
+    "source": "k5-eval-sample-authoring-lint"
+  },
+  "session_id": "9b2c4e1a-7f3d-4a8e-b1c2-3d4e5f6a7b8c",
+  "transcript_path": "/playbook-fixture/home/.claude/projects/proj/5f1c.jsonl",
+  "cwd": "/playbook-fixture/proj",
+  "permission_mode": "acceptEdits",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Edit",
+  "tool_input": {
+    "file_path": "/playbook-fixture/proj/playbook/eval_samples/demo-sample/sample.toml",
+    "old_string": "expr = \"untouched\"\n",
+    "new_string": "expr = \"untouched\"\npattern = \"\\s+\"\n"
+  },
+  "tool_response": {
+    "filePath": "/playbook-fixture/proj/playbook/eval_samples/demo-sample/sample.toml",
+    "success": true
+  },
+  "tool_use_id": "toolu_01EtlEscape"
+}

@@ -153,11 +153,11 @@ jobs:
             test -f ".claude/skills/$skill/SKILL.md" || { echo "missing .claude/skills/$skill/SKILL.md" >&2; exit 1; }
           done
 
-      - name: eval --list finds the 23 core eval tasks
+      - name: eval --list finds the 23 core eval samples
         run: |
           cd "$RUNNER_TEMP/smoke-repo"
           timeout 120 playbook eval --list </dev/null | tee "$RUNNER_TEMP/eval-list.log"
-          grep -Fw '23 eval tasks' "$RUNNER_TEMP/eval-list.log"
+          grep -Fw '23 eval samples' "$RUNNER_TEMP/eval-list.log"
 
       # The engine's hooks ship as catalog/core/hooks/ in the wheel's _catalog/:
       # the synced destructive-command-guard must deny rm -rf / (exit code 2).

@@ -212,7 +212,7 @@ class EvaluationReport:
     read); ``checks`` carries the structured :class:`CheckResult` rows.
 
     ``verdict_score`` (C10) is the per-trial weighted-composite verdict score
-    over the gate/rubric layers when the task authored a weighted ``[verdict]``
+    over the gate/rubric layers when the sample authored a weighted ``[verdict]``
     (``weights``/``fail``); ``None`` for a boolean-mode verdict (the legacy
     ``[verdict].trial`` form), and ``None`` for a weighted verdict whose
     referenced layers were *all* skipped (vacuously passing). ``passed`` still

@@ -12,7 +12,7 @@ input_variables:
     required: false
 includes_rules:
   - pytest
-eval_tasks:
+eval_samples:
   - characterize-legacy-pricing
 ---
 

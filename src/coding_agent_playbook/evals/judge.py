@@ -77,7 +77,7 @@ class Judge(ABC):
         ``n`` (``>= 1``) is the number of independent samples to draw and average
         (LLM judges are stochastic). An implementation that cannot produce a real
         score — its backend failed, timed out, or answered off-format — must
-        raise :class:`JudgeError` (``playbook eval --run`` reports the task as
+        raise :class:`JudgeError` (``playbook eval --run`` reports the sample as
         unscorable, exit 2), never clamp or default the answer into a number.
         """
 

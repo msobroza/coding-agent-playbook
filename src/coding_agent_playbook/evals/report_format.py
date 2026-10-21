@@ -1,4 +1,4 @@
-"""Text and JSON views of an eval task result (``playbook eval --run``, SPEC §15).
+"""Text and JSON views of an eval sample result (``playbook eval --run``, SPEC §15).
 
 The report is iterated as Metric, Check and Rubric rows: ``report.checks`` and
 their per-scope ``subresults``.
@@ -14,7 +14,7 @@ from coding_agent_playbook.grading.types import CheckResult, ScopeDetail
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from coding_agent_playbook.evals.run.harness_runner import TaskResult
+    from coding_agent_playbook.evals.run.harness_runner import SampleResult
     from coding_agent_playbook.grading.types import TrialResult
 
 #: Printed under a report whose scores include an LLM judge's (SPEC §19 Q12).
@@ -24,8 +24,8 @@ _UNCALIBRATED_NOTE = (
 )
 
 
-def task_result_to_dict(result: TaskResult) -> dict[str, object]:
-    """Stable JSON view of a :class:`TaskResult` (task envelope + the report).
+def sample_result_to_dict(result: SampleResult) -> dict[str, object]:
+    """Stable JSON view of a :class:`SampleResult` (sample envelope + the report).
 
     The report is rendered as the list of :class:`CheckResult` rows the
     :class:`~coding_agent_playbook.grading.rubric.Rubric` produced, each with
@@ -35,7 +35,7 @@ def task_result_to_dict(result: TaskResult) -> dict[str, object]:
     """
     report = result.report
     out: dict[str, object] = {
-        "task_id": result.task_id,
+        "sample_id": result.sample_id,
         "harness": result.harness,
         "passed": result.passed,
         "aggregate_score": result.aggregate_score,
@@ -49,7 +49,7 @@ def task_result_to_dict(result: TaskResult) -> dict[str, object]:
             "findings": [_finding_to_dict(f) for f in report.findings],
         },
     }
-    # Across-trial aggregate: present only when the task authored an
+    # Across-trial aggregate: present only when the sample authored an
     # [aggregate] block. ``trials`` is the per-trial pass/fail sequence.
     out["uncalibrated_judge"] = _any_trial_judge_scored(result)
     if result.aggregate is not None:
@@ -88,7 +88,7 @@ def _finding_to_dict(finding: ScopeDetail) -> dict[str, object]:
     }
 
 
-def format_task_result_text(result: TaskResult) -> str:
+def format_sample_result_text(result: SampleResult) -> str:
     """Human view: per-check blocks (each with its scope leaves) + a footer."""
     report = result.report
     lines: list[str] = ["=== Eval scoring ==="]
@@ -128,7 +128,7 @@ def format_task_result_text(result: TaskResult) -> str:
         lines.append(_UNCALIBRATED_NOTE)
 
     footer = (
-        f"  task: {result.task_id} via {result.harness} — {verdict} "
+        f"  sample: {result.sample_id} via {result.harness} — {verdict} "
         f"(score={result.aggregate_score:.3f}, {result.duration_seconds:.2f}s)"
     )
     return "\n".join([*lines, footer])
@@ -138,7 +138,7 @@ def _aggregate_line(agg: CheckResult, trials: list[TrialResult]) -> str:
     """The text-report line for the ``[aggregate]`` layer's result.
 
     A skipped aggregate (its ``over`` axis never ran, e.g. ``over = "rubric"``
-    with no judge) has no verdict of its own: the task verdict fell back to the
+    with no judge) has no verdict of its own: the sample verdict fell back to the
     trials' verdicts, so say that rather than print a misleading ``FAIL``.
     """
     n_pass = sum(1 for t in trials if t.verdict)
@@ -155,7 +155,7 @@ def _aggregate_line(agg: CheckResult, trials: list[TrialResult]) -> str:
     )
 
 
-def _any_trial_judge_scored(result: TaskResult) -> bool:
+def _any_trial_judge_scored(result: SampleResult) -> bool:
     """Whether a judge scored anything in *any* trial (not just the reported one)."""
     reports = [t.report for t in result.trials] or [result.report]
     return any(_judge_scored(report.checks) for report in reports)

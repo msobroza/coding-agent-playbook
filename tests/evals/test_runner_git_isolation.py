@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.evals.run.harness_runner import capture, materialize
-from coding_agent_playbook.evals.task import EvalTask
+from coding_agent_playbook.evals.sample import EvalSample
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -61,10 +61,10 @@ def _head_and_index(worktree: Path) -> tuple[str, str]:
     return _git(worktree, "rev-parse", "HEAD"), _git(worktree, "ls-files", "--stage")
 
 
-def _task(task_dir: Path) -> EvalTask:
-    """A task whose ``setup/`` holds one file and no ``pyproject.toml`` (no ``uv``)."""
-    (task_dir / "setup").mkdir(parents=True)
-    (task_dir / "setup" / "app.py").write_text("x = 1\n", encoding="utf-8")
+def _sample(sample_dir: Path) -> EvalSample:
+    """A sample whose ``setup/`` holds one file and no ``pyproject.toml`` (no ``uv``)."""
+    (sample_dir / "setup").mkdir(parents=True)
+    (sample_dir / "setup" / "app.py").write_text("x = 1\n", encoding="utf-8")
     data = {
         "id": "t-git-isolation",
         "prompt_id": "refactor",
@@ -72,7 +72,9 @@ def _task(task_dir: Path) -> EvalTask:
         "gate": {"expr": "app", "bind": {"app": {"check": "file_exists", "path": "app.py"}}},
         "verdict": {"trial": "gate"},
     }
-    return EvalTask.from_dict(data, source_path=task_dir / "task.toml", source_package="<test>")
+    return EvalSample.from_dict(
+        data, source_path=sample_dir / "sample.toml", source_package="<test>"
+    )
 
 
 def test_hook_git_env_does_not_redirect_the_scratch_repo(
@@ -81,12 +83,12 @@ def test_hook_git_env_does_not_redirect_the_scratch_repo(
     worktree = _linked_worktree(tmp_path)
     before = _head_and_index(worktree)
     gitdir = _git(worktree, "rev-parse", "--absolute-git-dir").strip()
-    task = _task(tmp_path / "task")
+    sample = _sample(tmp_path / "sample")
     # What git exports to a hook running inside a linked worktree.
     monkeypatch.setenv("GIT_DIR", gitdir)
     monkeypatch.setenv("GIT_INDEX_FILE", f"{gitdir}/index")
 
-    baseline = materialize(task, tmp_path / "scratch")
+    baseline = materialize(sample, tmp_path / "scratch")
     (baseline.repo_root / "new.py").write_text("y = 2\n", encoding="utf-8")
     candidate = capture(baseline.repo_root, baseline, "transcript")
 

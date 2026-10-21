@@ -10,7 +10,7 @@ actually names the right one.
 * :data:`CORRECT_ANSWER` — the minimal *correct* answer per fixture, standing in
   for a real agent's analysis.
 * :data:`ALL_CLASSES_ANSWER` — every correct answer concatenated, for suite-wide
-  runs that parametrize over all shipped tasks rather than the CCV ten.
+  runs that parametrize over all shipped samples rather than the CCV ten.
 * :data:`WRONG_CLASS_ANSWER` — a well-formed answer for a class **no** fixture
   uses, so it must lose every fixture's gate. It is what proves the gate
   discriminates rather than always passing.
@@ -62,7 +62,7 @@ CORRECT_ANSWER: dict[str, str] = {
 }
 
 #: Every correct answer at once — satisfies any fixture's class gate. Used by the
-#: suite-wide run that parametrizes over all shipped tasks, not just the CCV ten.
+#: suite-wide run that parametrizes over all shipped samples, not just the CCV ten.
 ALL_CLASSES_ANSWER = "\n".join(CORRECT_ANSWER.values())
 
 #: A well-formed answer for a class no fixture uses, so every class gate rejects it.

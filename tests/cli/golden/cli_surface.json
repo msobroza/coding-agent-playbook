@@ -483,7 +483,7 @@
     },
     {
       "name": "eval",
-      "help": "eval enumeration + `--run` a task (SPEC §12.8, §15)",
+      "help": "eval enumeration + `--run` a sample (SPEC §12.8, §15)",
       "func": "coding_agent_playbook.commands.eval.run",
       "description": null,
       "actions": [
@@ -515,7 +515,7 @@
           "type": null,
           "choices": null,
           "required": false,
-          "help": "repo to enumerate eval tasks against (defaults to cwd)",
+          "help": "repo to enumerate eval samples against (defaults to cwd)",
           "metavar": null
         },
         {
@@ -545,7 +545,7 @@
           "type": null,
           "choices": null,
           "required": false,
-          "help": "show one task by id",
+          "help": "show one sample by id",
           "metavar": null
         },
         {
@@ -558,7 +558,7 @@
           "type": null,
           "choices": null,
           "required": false,
-          "help": "task id (enumerate, or run with --run)",
+          "help": "sample id (enumerate, or run with --run)",
           "metavar": null
         },
         {
@@ -573,7 +573,7 @@
           "type": null,
           "choices": null,
           "required": false,
-          "help": "execute the task <id> through a runner and grade it (SPEC §15)",
+          "help": "execute the sample <id> through a runner and grade it (SPEC §15)",
           "metavar": null
         },
         {

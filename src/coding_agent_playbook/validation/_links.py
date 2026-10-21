@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 # Artifact kinds whose markdown bodies (and, for skills, references/) are
 # link-checked; a hook body degrades into advisory text, so it is too (H19,
-# specs/prK-lifecycle-hooks.md §B.5). Eval-task setup/ trees are task *inputs*,
+# specs/prK-lifecycle-hooks.md §B.5). Eval-sample setup/ trees are sample *inputs*,
 # not rendered artifacts, so they stay out of scope (specs/prL-markdown-links.md).
 _LINK_CHECKED_SUBDIRS = ("rules", "prompts", "skills", "hooks")
 

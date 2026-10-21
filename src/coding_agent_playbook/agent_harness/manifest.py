@@ -38,7 +38,7 @@ MANIFEST_FILENAME = "manifest.toml"
 #: Current manifest schema version.
 SCHEMA_VERSION = 1
 
-ArtifactKind = Literal["rule", "prompt", "skill", "eval_task", "hook"]
+ArtifactKind = Literal["rule", "prompt", "skill", "eval_sample", "hook"]
 
 
 @dataclass
@@ -91,7 +91,7 @@ class ManifestEntry:
     slash: str | None = None
     input_variables: list[dict[str, Any]] = field(default_factory=list)
     includes_rules: list[str] = field(default_factory=list)
-    eval_tasks: list[str] = field(default_factory=list)
+    eval_samples: list[str] = field(default_factory=list)
     # Emitted only when non-empty, so manifests of contract-free prompts stay byte-identical.
     output_contract: list[str] = field(default_factory=list)
     # Prompt-only, emitted only when non-empty so existing sidecars stay byte-identical.
@@ -135,10 +135,10 @@ _KIND_FIELDS: dict[str, tuple[str, ...]] = {
         "version",
         "input_variables",
         "includes_rules",
-        "eval_tasks",
+        "eval_samples",
     ),
     "skill": ("name", "body"),
-    "eval_task": (),
+    "eval_sample": (),
     "hook": ("name", "body", "is_templated"),
 }
 
@@ -192,7 +192,7 @@ def _entry_from_table(table: dict[str, Any]) -> ManifestEntry:
         slash=table.get("slash"),
         input_variables=list(table.get("input_variables", [])),
         includes_rules=list(table.get("includes_rules", [])),
-        eval_tasks=list(table.get("eval_tasks", [])),
+        eval_samples=list(table.get("eval_samples", [])),
         output_contract=list(table.get("output_contract", [])),
         write_scope=dict(table.get("write_scope", {})),
         extra_frontmatter=dict(table.get("extra_frontmatter", {})),

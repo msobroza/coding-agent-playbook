@@ -7,7 +7,7 @@ module. ``metric`` is the "measure" layer (``Metric`` and the metric registry),
 with its registry in ``check_registry``, and ``rubric`` the "aggregate" layer
 (``Rubric``), which runs its checks through ``scheduler``. ``compose``, ``judged``,
 ``judge_metric`` and ``execution_checks`` hold the kernel's other checks, and
-``static_metrics/`` and ``execution_metrics/`` the in-tree metrics. Eval tasks and
+``static_metrics/`` and ``execution_metrics/`` the in-tree metrics. Eval samples and
 the metrics gate both measure through ``measuring`` (the one measuring pass) and
 grade through this kernel, which imports neither.
 """

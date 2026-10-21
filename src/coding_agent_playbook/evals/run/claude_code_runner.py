@@ -2,11 +2,11 @@
 
 The single non-hermetic :class:`~coding_agent_playbook.evals.run.harness_runner.HarnessRunner`
 shipped in v1.1: its :meth:`_invoke_agent` drives the **Claude Code CLI** bound to
-the task's scratch repo via a plain ``subprocess`` arg-list (no shell), captures
+the sample's scratch repo via a plain ``subprocess`` arg-list (no shell), captures
 the combined stdout/stderr as the :class:`~coding_agent_playbook.evals.run.harness_runner.AgentRun`
 transcript, and records the process return code. Everything before/after the
 invocation (materialize → render → capture → score) is the fixed
-:meth:`~coding_agent_playbook.evals.run.harness_runner.HarnessRunner.run_task` template.
+:meth:`~coding_agent_playbook.evals.run.harness_runner.HarnessRunner.run_sample` template.
 
 This runner is **opt-in and never exercised in CI**. There is no import of the
 CLI at module top — the only dependency is ``shutil``/``subprocess`` from the

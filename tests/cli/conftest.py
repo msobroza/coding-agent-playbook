@@ -1,7 +1,7 @@
 """Shared fixtures for the ``tests/cli/`` suite.
 
 CLI tests drive subcommands like ``playbook eval <id> --run`` end-to-end against
-the shipped eval tasks. C11 wired :func:`materialize` to ``uv sync`` the scratch
+the shipped eval samples. C11 wired :func:`materialize` to ``uv sync`` the scratch
 tree when a ``setup/pyproject.toml`` is present (every shipped fixture has one),
 so without a stub these tests would either shell out to the real ``uv`` binary
 (non-hermetic; may be absent on the runner) or raise the documented "uv binary

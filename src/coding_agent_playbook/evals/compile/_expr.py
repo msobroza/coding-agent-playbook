@@ -1,6 +1,6 @@
 """A tiny boolean-expression interpreter over check *handle names*.
 
-The task config expresses a few wiring decisions as miniature boolean
+The sample config expresses a few wiring decisions as miniature boolean
 expressions over *handle names* - ``[gate].expr``, ``[rubric].expr``,
 ``[aggregate].expr``, and ``[verdict].trial`` are strings like
 ``"build and (fast or sec)"`` or ``"gate and rubric"``. This module compiles such
@@ -34,7 +34,7 @@ any checks.
 
 The interpreter is deliberately self-contained: it does **not** use ``eval`` /
 ``exec`` / ``ast``, and it pulls in no third-party dependency. The handle builder
-(:mod:`coding_agent_playbook.evals.compile._handles`) and the task compiler
+(:mod:`coding_agent_playbook.evals.compile._handles`) and the sample compiler
 (:mod:`coding_agent_playbook.evals.compile.compiler`) consume it: the compiler builds each
 layer's ``name -> Check`` map, then folds the layer ``expr`` over it via
 :func:`compile_expr` (and derives the verdict via :func:`eval_bool`).
@@ -328,7 +328,7 @@ def eval_bool(node: Node, env: Mapping[str, bool]) -> bool:
     ``bool`` over an already-decided environment - a :class:`Name` resolves to
     ``env[name]`` (an absent name raises :class:`ExprError`), :class:`And` is
     ``all(...)``, :class:`Or` is ``any(...)``, :class:`Not` is ``not ...``. The
-    task compiler uses it to derive the per-trial verdict from the two layers'
+    sample compiler uses it to derive the per-trial verdict from the two layers'
     ``passed`` results without re-running them.
     """
     if isinstance(node, Name):

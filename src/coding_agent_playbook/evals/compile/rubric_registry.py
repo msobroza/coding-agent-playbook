@@ -4,7 +4,7 @@ This module is to :class:`~coding_agent_playbook.grading.rubric.Rubric` what
 :mod:`coding_agent_playbook.grading.metric` is to ``Metric``: a registry that
 lets an out-of-tree package ship a code-defined rubric (a :class:`Rubric`
 subclass declaring its :attr:`~coding_agent_playbook.grading.rubric.Rubric.CRITERIA`)
-and reference it from an eval ``task.toml`` via ``[rubric] ref = "<name>"``. It is
+and reference it from an eval ``sample.toml`` via ``[rubric] ref = "<name>"``. It is
 the bridge between a Python-defined rubric and the TOML authoring surface.
 
 The registry mirrors the metric idiom with one deliberate difference:

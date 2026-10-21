@@ -1,8 +1,8 @@
 ---
 id: guard-eval-fixtures
 name: Guard eval fixtures
-description: Ask before editing or reformatting a committed eval task's frozen setup/ fixtures.
-summary: Do not edit, reformat or lint-fix an eval task's frozen `setup/` files unless you are authoring that task.
+description: Ask before editing or reformatting a committed eval sample's frozen setup/ fixtures.
+summary: Do not edit, reformat or lint-fix an eval sample's frozen `setup/` files unless you are authoring that sample.
 version: 1
 tier: opt-in
 priority: 60
@@ -18,7 +18,7 @@ on_error: open
 supports: [claude_code, opencode]
 tags: [protect, evals]
 ---
-Files under an eval task's `setup/` directory (`eval_tasks/<id>/setup/`) are the frozen
-starting state of that task: find-injected-vuln fixtures are intentionally vulnerable and
+Files under an eval sample's `setup/` directory (`eval_samples/<id>/setup/`) are the frozen
+starting state of that sample: find-injected-vuln fixtures are intentionally vulnerable and
 `file_unchanged` gates compare against them. Do not edit, reformat or lint-fix them
-(`ruff format`, `ruff --fix`, `black`, `isort`, `sed -i`) unless you are authoring that task.
+(`ruff format`, `ruff --fix`, `black`, `isort`, `sed -i`) unless you are authoring that sample.

@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.artifacts.skill import Skill
-    from coding_agent_playbook.evals.task import EvalTask
+    from coding_agent_playbook.evals.sample import EvalSample
     from coding_agent_playbook.validation.findings import ValidationError
 
 pytestmark = pytest.mark.catalog
@@ -163,7 +163,7 @@ class _InMemorySource(ArtifactSource):
     def list_skills(self) -> list[Skill]:
         return []
 
-    def list_eval_tasks(self) -> list[EvalTask]:
+    def list_eval_samples(self) -> list[EvalSample]:
         return []
 
 

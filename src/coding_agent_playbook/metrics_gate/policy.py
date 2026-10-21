@@ -69,7 +69,7 @@ def metric_check(name: str, config: MetricConfig) -> Check | None:
 
     Resolves the metric via
     :func:`~coding_agent_playbook.grading.metric.get_metric` (``None`` when the
-    name is unknown, so the caller skips it the way the eval-task compiler does).
+    name is unknown, so the caller skips it the way the eval-sample compiler does).
     The absolute warn/fail bounds and regression tolerance come from ``config``'s
     per-metric override when present, else the metric's ported default
     (:data:`METRIC_DEFAULTS`) so the resulting check grades exactly as the retired
@@ -90,7 +90,7 @@ def metric_check(name: str, config: MetricConfig) -> Check | None:
         metric = get_metric(name)
     except KeyError:
         # Unknown names are surfaced by the validator; skip here so the compiler
-        # never raises on an otherwise-loadable task.
+        # never raises on an otherwise-loadable sample.
         return None
 
     default_warn, default_fail, default_worsening = METRIC_DEFAULTS.get(name, (None, None, 0.0))

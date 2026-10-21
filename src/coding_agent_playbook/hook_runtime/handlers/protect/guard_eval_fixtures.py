@@ -1,15 +1,15 @@
 """guard-eval-fixtures: protect frozen eval ``setup/`` fixtures from agent "fixes" (specs/prK-hook-pack.md §E.1).
 
 Opt-in, ``pre_tool_use``. A target is a fixture when it matches
-``guard_config.eval.fixture_globs`` (default ``**/eval_tasks/*/setup/**``):
+``guard_config.eval.fixture_globs`` (default ``**/eval_samples/*/setup/**``):
 the file tool's write paths, every Bash write target (``sed -i``, redirects,
 ``cp`` destinations) and the path operands of a formatter (``ruff format``,
 ``ruff [check] --fix``, ``black``, ``isort``). It passes when:
 
-- the task is being authored: its ``task.toml`` is absent at ``HEAD``
+- the sample is being authored: its ``sample.toml`` is absent at ``HEAD``
   (``SafeGit.cat_head``), or the session ledger shows this session wrote it;
 - the user already approved: the ledger shows an earlier successful write
-  under the same task's ``setup/`` (an ask the user answered yes).
+  under the same sample's ``setup/`` (an ask the user answered yes).
 
 Otherwise it asks: ``setup/`` is the frozen starting state, find-injected-vuln
 fixtures are intentionally vulnerable and ``file_unchanged`` gates compare
@@ -24,7 +24,7 @@ from __future__ import annotations
 import posixpath
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.artifacts.path_classes import FIXTURE_GLOBS, task_path
+from coding_agent_playbook.artifacts.path_classes import FIXTURE_GLOBS, sample_path
 from coding_agent_playbook.artifacts.path_globs import compile_globs
 from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
@@ -37,7 +37,7 @@ from coding_agent_playbook.hook_runtime.handlers._shared.targets import (
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from coding_agent_playbook.artifacts.path_classes import TaskPath
+    from coding_agent_playbook.artifacts.path_classes import SamplePath
     from coding_agent_playbook.artifacts.path_globs import GlobSet
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath
@@ -58,7 +58,7 @@ _PATH_CHARS: Final = 60
 
 @register_hook_handler("guard_eval_fixtures", events=["pre_tool_use"], decisions=["ask", "none"])
 def guard_eval_fixtures(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult | None:
-    """Ask before a write into a committed eval task's ``setup/``; ``None`` (pass) otherwise.
+    """Ask before a write into a committed eval sample's ``setup/``; ``None`` (pass) otherwise.
 
     Example::
 
@@ -116,23 +116,25 @@ def _fixture_globs(ctx: HandlerContext) -> GlobSet:
     return compile_globs(globs, platform=ctx.platform)
 
 
-def _fixture(path: NormalizedPath, globs: GlobSet) -> TaskPath | None:
-    """The task whose ``setup/`` holds ``path`` (or is ``path``), else ``None``."""
+def _fixture(path: NormalizedPath, globs: GlobSet) -> SamplePath | None:
+    """The sample whose ``setup/`` holds ``path`` (or is ``path``), else ``None``."""
     if path.repo_rel is None or not (globs.matches(path.key) or globs.matches(f"{path.key}/")):
         return None
-    where = task_path(path.repo_rel)
+    where = sample_path(path.repo_rel)
     return where if where is not None and where.in_setup else None
 
 
-def _authoring(ctx: HandlerContext, where: TaskPath, records: Sequence[Mapping[str, Any]]) -> bool:
-    """The task's ``task.toml`` is not at ``HEAD``, or this session wrote it."""
-    toml = f"{where.task_dir}/task.toml"
+def _authoring(
+    ctx: HandlerContext, where: SamplePath, records: Sequence[Mapping[str, Any]]
+) -> bool:
+    """The sample's ``sample.toml`` is not at ``HEAD``, or this session wrote it."""
+    toml = f"{where.sample_dir}/sample.toml"
     return ctx.git.cat_head(toml) is None or any(toml in _writes(r) for r in records)
 
 
-def _approved(where: TaskPath, records: Sequence[Mapping[str, Any]]) -> bool:
+def _approved(where: SamplePath, records: Sequence[Mapping[str, Any]]) -> bool:
     """An earlier successful write under the same ``setup/`` this session (the user said yes)."""
-    prefix = f"{where.task_dir}/setup/"
+    prefix = f"{where.sample_dir}/setup/"
     return any(
         record.get("ev") == "post_tool_use" and any(w.startswith(prefix) for w in _writes(record))
         for record in records
@@ -146,11 +148,11 @@ def _writes(record: Mapping[str, Any]) -> list[str]:
     return [w for w in writes if isinstance(w, str)] if isinstance(writes, list) else []
 
 
-def _ask(ctx: HandlerContext, where: TaskPath) -> HandlerResult:
-    """The ask: the path within its task (so the line fits the 160-character cap), then why."""
+def _ask(ctx: HandlerContext, where: SamplePath) -> HandlerResult:
+    """The ask: the path within its sample (so the line fits the 160-character cap), then why."""
     head = (
-        f"{quote_data(where.rest, _PATH_CHARS)} is a frozen fixture of eval task "
-        f"{quote_data(where.task_id, _PATH_CHARS)}."
+        f"{quote_data(where.rest, _PATH_CHARS)} is a frozen fixture of eval sample "
+        f"{quote_data(where.sample_id, _PATH_CHARS)}."
     )
     return HandlerResult(
         decision=Decision.ASK,

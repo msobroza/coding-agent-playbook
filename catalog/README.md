@@ -1,7 +1,7 @@
 # Contributing content
 
 Everything the engine ships as playbook content lives here: rules, prompts,
-eval tasks, lifecycle hooks and skills. You never need to touch the Python
+eval samples, lifecycle hooks and skills. You never need to touch the Python
 package (`src/coding_agent_playbook/`) to add or change content. The build
 copies this whole tree into the wheel, so what you commit here is what
 `pip install coding-agent-playbook` ships.
@@ -23,7 +23,7 @@ catalog/
 │   ├── hooks/                one <category>/<id>/HOOK.md per lifecycle hook
 │   ├── skills/               one <id>/SKILL.md per core skill; its
 │   │                         references come from the rules that name it
-│   └── eval_tasks/           one <task-id>/ per task, plus ATTRIBUTIONS.md
+│   └── eval_samples/         one <sample-id>/ per sample, plus ATTRIBUTIONS.md
 └── plugins/                  bundled plugins: off until a consumer enables one
     └── <name>/
         ├── README.md         what the plugin is and how to enable it
@@ -39,7 +39,7 @@ section per enabled hook's guardrail text to its authored intro, so edit the
 hook's `HOOK.md` body, not the skill, to change a section. Only a skill that
 declares a `playbook:` block takes rules, so the skills of `superpowers` and
 `mattpocock_skills` own none. A bundled plugin may also hold `rules/`, `prompts/`,
-`hooks/` or `eval_tasks/`, laid out exactly as in `core/`.
+`hooks/` or `eval_samples/`, laid out exactly as in `core/`.
 
 The files at a layer root (`README.md`, `LICENSE`, `ATTRIBUTIONS.md`) sit
 outside every kind directory, so sync never copies them into a consumer repo.
@@ -51,7 +51,7 @@ Two rules keep the content self-contained:
 - **No URLs, and links stay in their layer.** No file in this tree holds a
   URL: no `scheme://`, `www.`, `mailto:` or `git@host:` form, and no bare domain
   followed by a path. The exceptions are the license URI in
-  `core/eval_tasks/ATTRIBUTIONS.md` and a vendored plugin's upstream text (see
+  `core/eval_samples/ATTRIBUTIONS.md` and a vendored plugin's upstream text (see
   "Add a bundled plugin"). A markdown link in a rule, prompt, skill or hook
   must resolve to a file inside the same layer (`core/`, or `plugins/<name>/`).
 - **Distilled content never names its source plugin.** When rules, prompts or
@@ -99,8 +99,8 @@ the consumer's `playbook/`) replaces an artifact with the same `id`.
 1. Create `core/prompts/<id>.md`.
 2. Give it frontmatter with `id`, `name`, `description`, `version` and `slash`
    (the slash-command name). Optional keys: `applies_if`, `input_variables`,
-   `includes_rules` (the ids of the rules the task needs) and `eval_tasks` (the
-   ids of the tasks that test it). SPEC §6.2 has the full schema.
+   `includes_rules` (the ids of the rules the sample needs) and `eval_samples` (the
+   ids of the samples that test it). SPEC §6.2 has the full schema.
 3. List the rules the prompt needs in `includes_rules`; never place rule text
    in the body. Claude Code and OpenCode commands then open with a generated
    `## Before you start` block naming each scoped rule's skill and reference,
@@ -110,30 +110,30 @@ the consumer's `playbook/`) replaces an artifact with the same `id`.
    `tests/unit/test_catalog_prompt_references.py` requires every included
    scoped rule to name its skill.
 
-## Add an eval task
+## Add an eval sample
 
-1. Create `core/eval_tasks/<task-id>/task.toml` with `id`, `prompt_id`,
+1. Create `core/eval_samples/<sample-id>/sample.toml` with `id`, `prompt_id`,
    `description`, `version`, `[setup]`, `[invocation]`, and the `[gate]` /
    `[rubric]` / `[verdict]` layers (SPEC §6.5.3).
 2. Put the starting repo in `setup/`, including a `setup/pyproject.toml` when
-   the task depends on detector facts.
-3. Ship a reference answer in `solution/`. For an edit task, mirror `setup/`
-   paths with the files a correct agent would write. For a review-only task,
+   the sample depends on detector facts.
+3. Ship a reference answer in `solution/`. For an edit sample, mirror `setup/`
+   paths with the files a correct agent would write. For a review-only sample,
    write the answer to `solution/transcript.md`. Put known-wrong attempts in
-   `solution/negatives/`; a review-only task needs at least one. CI proves the
+   `solution/negatives/`; a review-only sample needs at least one. CI proves the
    gate fails on the untouched `setup/` and on every negative, and passes on the
    solution.
-4. Add the task id to the `eval_tasks:` list of the prompt named by
-   `prompt_id`. A task finds its prompt in the `prompts/` directory next to its
-   layer's `eval_tasks/`, so a core task uses `core/prompts/`.
-5. Credit third-party fixture code in `core/eval_tasks/ATTRIBUTIONS.md`.
+4. Add the sample id to the `eval_samples:` list of the prompt named by
+   `prompt_id`. A sample finds its prompt in the `prompts/` directory next to its
+   layer's `eval_samples/`, so a core sample uses `core/prompts/`.
+5. Credit third-party fixture code in `core/eval_samples/ATTRIBUTIONS.md`.
 
-Eval tasks belong to a layer, like every other kind. A bundled plugin ships
-its own in `plugins/<name>/eval_tasks/<task-id>/`, laid out as above, and each
-of its tasks finds its prompt in `plugins/<name>/prompts/`. Its tasks are
+Eval samples belong to a layer, like every other kind. A bundled plugin ships
+its own in `plugins/<name>/eval_samples/<sample-id>/`, laid out as above, and each
+of its samples finds its prompt in `plugins/<name>/prompts/`. Its samples are
 listed by `playbook eval --list` only in a repo that enables the plugin. Ruff
 never lints or reformats `setup/` in either home
-(`core/eval_tasks/*/setup` and `plugins/*/eval_tasks/*/setup`), and mypy never
+(`core/eval_samples/*/setup` and `plugins/*/eval_samples/*/setup`), and mypy never
 reads this tree.
 
 ## Add a hook
@@ -232,7 +232,7 @@ with no change outside `catalog/`.
   any other directory here, and a content gate fails CI on it. Consumers must
   spell the name with exactly the same case.
 - **At least one kind directory:** `skills/`, `rules/`, `prompts/`, `hooks/`
-  or `eval_tasks/`.
+  or `eval_samples/`.
 - **A `README.md`** saying what the plugin is and how to enable it, as plain
   prose with no URL:
   `overlays_enabled = ["coding_agent_playbook.plugins.<name>"]`.
@@ -279,7 +279,7 @@ Run them inside the dev environment (`uv sync --extra dev`, then prefix each
 with `uv run`). CI's `ruff format --check .` also formats the Python code
 blocks inside markdown, this guide's included. The pytest suite validates the
 shipped content: link containment and self-containment for `core/` and every
-bundled plugin (see "Add a bundled plugin"), every eval task's gate, and the
+bundled plugin (see "Add a bundled plugin"), every eval sample's gate, and the
 skill inventory that `mattpocock_skills` and `superpowers` each pin.
 
 With `pre-commit install`, every commit formats markdown the way CI does, and a
