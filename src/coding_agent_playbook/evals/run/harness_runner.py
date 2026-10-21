@@ -39,6 +39,7 @@ from pathlib import Path
 from time import monotonic
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.catalog.prompt_sets import DEFAULT_PROMPT_SET
 from coding_agent_playbook.evals.prompting import render_prompt
 from coding_agent_playbook.evals.run.git_env import without_repo_location
 from coding_agent_playbook.evals.run.scoring import score
@@ -369,6 +370,7 @@ class HarnessRunner(ABC):
         judge: JudgeLike | None = None,
         judge_samples: int = 1,
         fail_fast: bool = True,
+        prompt_set: str = DEFAULT_PROMPT_SET,
     ) -> SampleResult:
         """Run ``sample`` over ``N`` trials in ``scratch_dir`` and grade a :class:`SampleResult`.
 
@@ -386,7 +388,8 @@ class HarnessRunner(ABC):
         report + its derived verdict). The prompt is resolved **once** up front
         (identical across trials) via :func:`render_prompt` — so a real runner's
         strict resolution still raises :class:`PromptResolutionError` before any
-        trial runs.
+        trial runs. ``prompt_set`` is the prompt set it renders from (D76): v1 by
+        default, as every sample grades; the eval comparison (D37) passes another.
 
         With an ``[aggregate]`` layer the sample verdict is that layer's pass/fail —
         the :class:`~coding_agent_playbook.evals.checks.aggregate.AggregateCheck`\\ s
@@ -410,7 +413,7 @@ class HarnessRunner(ABC):
         started = monotonic()
         # Resolve the prompt first (identical across trials) so a real runner's
         # strict resolution raises before any trial.
-        prompt = render_prompt(sample, strict=self.requires_resolved_prompt)
+        prompt = render_prompt(sample, strict=self.requires_resolved_prompt, prompt_set=prompt_set)
         compiled = compile_eval_sample(sample)
         n = compiled.trials_needed
 

@@ -15,6 +15,7 @@ import difflib
 from typing import TYPE_CHECKING, Any, TypeGuard
 
 from coding_agent_playbook import toml_writer as _toml
+from coding_agent_playbook.catalog.prompt_sets import PROMPT_SETS
 from coding_agent_playbook.catalog.roots import canonical_overlay_name
 from coding_agent_playbook.config.framework import BUNDLED_FRAMEWORK_NAMES
 
@@ -360,6 +361,31 @@ def _framework_value_problem(value: object) -> str:
     return (
         f"framework must be a framework name such as {bundled}, "
         f'an overlay module name or "none", got {value!r}'
+    )
+
+
+_PROMPTS_KEY = "prompts"
+
+
+def check_prompts_key(data: Mapping[str, object], *, source: str) -> None:
+    """Refuse a top-level ``prompts`` that names no prompt set (D76).
+
+    The value is one of :data:`~coding_agent_playbook.catalog.prompt_sets.PROMPT_SETS`
+    (``"v1"``, the default, or ``"v2"``), compared exactly.
+
+    Example::
+
+        >>> check_prompts_key({"prompts": "v3"}, source="c.toml")  # doctest: +ELLIPSIS
+        Traceback (most recent call last):
+        ...
+        coding_agent_playbook.config.schema.ConfigError: c.toml: prompts must be ...
+    """
+    if _PROMPTS_KEY not in data or data[_PROMPTS_KEY] in PROMPT_SETS:
+        return
+    sets = " or ".join(f'"{name}"' for name in PROMPT_SETS)
+    raise ConfigError(
+        f"{source}: prompts must be the prompt set {sets} "
+        f"(default {PROMPT_SETS[0]!r}), got {data[_PROMPTS_KEY]!r}"
     )
 
 

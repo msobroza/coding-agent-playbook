@@ -15,7 +15,7 @@ Sub-modes:
 - ``playbook eval <id>`` (no ``--run``): prints how to run the sample. Exits 0 if
   the sample is known, exits 1 if it isn't (so typos still surface).
 - ``playbook eval <id> --run [--runner NAME] [--judge NAME] [--judge-samples N]
-  [--format text|json]``: load the sample, select the runner ``NAME`` from the
+  [--prompt-set v1|v2] [--format text|json]``: load the sample, select the runner ``NAME`` from the
   ``coding_agent_playbook.runners`` entry-point group (default ``claude_code``),
   run it in a throwaway scratch dir, and render ``result.report`` (reusing
   ``commands/metrics.py``'s text/json renderer). Exits ``0`` on a passing report,
@@ -34,6 +34,11 @@ Sub-modes:
   from ``--help``, it still works, prints one stderr line naming
   ``--judge-samples``, and passing both flags is a usage error (exit ``2``).
 
+  ``--prompt-set`` (D76) renders the sample's prompt from that prompt set
+  (default ``v1``, the set every sample grades; a prompt with no twin in the set
+  keeps its v1 text). The repo's ``prompts`` key is never read, so the opt-in
+  eval comparison (D37) names each side's set explicitly.
+
   Unlike ``playbook metrics``, there is **no ``--run-tests`` flag**: whether the
   execution evaluators (``coverage``/``test_pass_rate``) run is declared by the
   sample's own ``[metrics]`` block (``run_tests``), so the eval sample — not a CLI
@@ -49,6 +54,7 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.catalog.prompt_sets import DEFAULT_PROMPT_SET, PROMPT_SETS
 from coding_agent_playbook.commands._eval_enumerate import (
     _DEFAULT_RUNNER,
     _print_list,
@@ -115,6 +121,13 @@ def configure(parser: argparse.ArgumentParser) -> None:
         "--runner",
         help="runner name from the coding_agent_playbook.runners group "
         "(default: claude_code; use 'fake' for a hermetic no-op run)",
+    )
+    parser.add_argument(
+        "--prompt-set",
+        choices=PROMPT_SETS,
+        dest="prompt_set",
+        help="prompt set to render the sample's prompt from (default: v1; "
+        "the repo's prompts key is not read)",
     )
     _configure_scoring(parser)
 
@@ -261,6 +274,7 @@ def _run_sample_cli(args: argparse.Namespace, repo_root: Path) -> int:
                 judge=judge,
                 judge_samples=judge_samples,
                 fail_fast=fail_fast,
+                prompt_set=getattr(args, "prompt_set", None) or DEFAULT_PROMPT_SET,
             )
     except (PromptResolutionError, JudgeError) as exc:
         # Neither a pass nor a fail: no verdict exists, so never exit 0/1 here.

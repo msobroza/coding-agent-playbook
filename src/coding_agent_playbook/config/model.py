@@ -17,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from coding_agent_playbook.catalog.prompt_sets import DEFAULT_PROMPT_SET
 from coding_agent_playbook.catalog.roots import canonical_overlay_list
 from coding_agent_playbook.config.entries import (
     copy_toml_value,
@@ -29,6 +30,7 @@ from coding_agent_playbook.config.schema import (
     check_config_tables,
     check_enabled_keys,
     check_framework_key,
+    check_prompts_key,
     required_value,
 )
 
@@ -54,6 +56,7 @@ def check_config_file(data: Mapping[str, object], *, source: str) -> None:
     check_enabled_keys(data, source=source)
     check_config_tables(data, source=source)
     check_framework_key(data, source=source)
+    check_prompts_key(data, source=source)
     if "output" in data:
         parse_output_config(data["output"], source=source)
 
@@ -109,6 +112,9 @@ class Config:
     # The committed ``framework`` (D57): a bundled short name, an overlay module or
     # "none". ``None`` = no key in the TOML (no framework), so ``to_dict`` stays sparse.
     framework: str | None = None
+    # The committed ``prompts`` key (D76): the prompt set sync renders. ``None`` = no
+    # key in the TOML (the default set, see ``prompt_set``), so ``to_dict`` stays sparse.
+    prompts: str | None = None
     storage: StorageConfig = field(default_factory=StorageConfig)
     detector_cache: dict[str, Any] = field(default_factory=dict)
     user_choices: dict[str, Any] = field(default_factory=dict)
@@ -168,6 +174,17 @@ class Config:
         """
         return layers_with_framework(self.overlays_enabled, self.framework)
 
+    @property
+    def prompt_set(self) -> str:
+        """The prompt set a sync renders: the ``prompts`` key, else ``"v1"`` (D76).
+
+        Example::
+
+            >>> Config(1, ProjectMeta("x", "python-library"), "0.1").prompt_set
+            'v1'
+        """
+        return self.prompts if self.prompts is not None else DEFAULT_PROMPT_SET
+
     @classmethod
     def from_dict(cls, data: dict[str, Any], *, source: str = "config") -> Config:
         """Build a :class:`Config` from decoded TOML, refusing misread shapes.
@@ -198,6 +215,7 @@ class Config:
             overlays_enabled=list(data.get("overlays_enabled", [])),
             adapters_enabled=list(data.get("adapters_enabled", [])),
             framework=data["framework"].strip() if "framework" in data else None,
+            prompts=data.get("prompts"),
             storage=StorageConfig(
                 artifact_source=storage.get("artifact_source", "filesystem"),
                 state_source=storage.get("state_source", "filesystem"),
@@ -239,6 +257,8 @@ class Config:
             result["adapters_enabled"] = list(self.adapters_enabled)
         if self.framework is not None:
             result["framework"] = self.framework
+        if self.prompts is not None:
+            result["prompts"] = self.prompts
         result["storage"] = {
             "artifact_source": self.storage.artifact_source,
             "state_source": self.storage.state_source,

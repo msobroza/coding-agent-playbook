@@ -36,6 +36,7 @@ CONFIG_MANAGED_KEYS: frozenset[str] = frozenset(
         "overlays_enabled",
         "adapters_enabled",
         "framework",
+        "prompts",
         "storage",
         "detector_cache",
         "user_choices",

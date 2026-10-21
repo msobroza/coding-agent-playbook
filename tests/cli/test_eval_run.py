@@ -255,12 +255,19 @@ def test_run_judge_available_is_passed_to_runner(
         judge: Any = None,
         judge_samples: int = 1,
         fail_fast: bool = True,
+        prompt_set: str = "v1",
     ) -> Any:
         captured["judge"] = judge
         captured["judge_samples"] = judge_samples
         captured["fail_fast"] = fail_fast
         return real_run_sample(
-            self, sample, scratch, judge=judge, judge_samples=judge_samples, fail_fast=fail_fast
+            self,
+            sample,
+            scratch,
+            judge=judge,
+            judge_samples=judge_samples,
+            fail_fast=fail_fast,
+            prompt_set=prompt_set,
         )
 
     monkeypatch.setattr(_registry, "load_judge_class", lambda name: _AvailableStub)

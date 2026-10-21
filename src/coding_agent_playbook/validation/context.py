@@ -300,6 +300,7 @@ class SyncContext:
             artifact_source = FileSystemArtifactSource(
                 repo_root=repo_root,
                 overlay_packages=config.layers_enabled,
+                prompt_set=config.prompt_set,
             )
         # FileSystemArtifactSource walks the engine and bundled-plugin artifacts
         # in the catalog (``catalog/core/``, ``catalog/plugins/<name>/``)

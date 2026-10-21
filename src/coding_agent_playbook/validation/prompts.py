@@ -11,6 +11,11 @@ A typo there would silently drop guidance, so three checks guard it (P3-7):
   iterated character by character);
 - every id names a rule of the merged set, with a did-you-mean.
 
+``check_prompt_set_twins`` checks the prompt sets of every layer (D76): each
+prompt in ``prompts/v2/`` has a v1 twin of the same id, keeping its name, slash
+command and ``includes_rules``, and once a layer has a v2 set every v1 prompt of
+the layer has a twin there.
+
 ``check_prompt_rule_calls`` is the first check alone, for ``playbook sync
 --check-staged``, which is not validate-gated; sync imports it from outside the
 package, so it is public, unlike the other check modules beside ``checks``.
@@ -20,17 +25,33 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final, TypeGuard
 
+from coding_agent_playbook.catalog.prompt_sets import (
+    DEFAULT_PROMPT_SET,
+    PROMPT_SETS,
+    prompt_set_dir,
+)
+from coding_agent_playbook.catalog.source import (
+    FileSystemArtifactSource,
+    layer_prompts,
+    prompt_set_prompts,
+)
 from coding_agent_playbook.hooks.contract.findings import did_you_mean
 from coding_agent_playbook.rendering.jinja import RULE_CALL_RE
 from coding_agent_playbook.validation.findings import ValidationError
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Sequence
+    from pathlib import Path
 
     from coding_agent_playbook.artifacts.prompt import Prompt
+    from coding_agent_playbook.catalog.source import ArtifactSource
 
 #: How a well-formed ``includes_rules`` looks, quoted in the shape error.
 _INCLUDES_RULES_SHAPE: Final = "expected a list of rule ids, e.g. ['python-typing', 'pytest']"
+
+#: The frontmatter a twin keeps from its v1 prompt: what the listing and the eval
+#: comparison read (D76).
+_TWIN_KEPT_KEYS: Final = ("name", "slash", "includes_rules")
 
 #: Where a valid id comes from: the merged rule set of every layer.
 _RULE_LAYERS: Final = "which is no rule in core, an enabled overlay or playbook/rules/"
@@ -73,6 +94,78 @@ def check_prompt_rule_calls(prompts: Sequence[Prompt]) -> list[ValidationError]:
         for prompt in prompts
         for message in _rule_call_messages(prompt)
     ]
+
+
+def check_prompt_set_twins(artifact_source: ArtifactSource) -> list[ValidationError]:
+    """D76: every layer's later prompt sets are complete twins of its v1 prompts.
+
+    Only a filesystem source has prompt sets; any other source passes.
+
+    Example::
+
+        check_prompt_set_twins(ctx.artifact_source)
+    """
+    if not isinstance(artifact_source, FileSystemArtifactSource):
+        return []
+    return [
+        error
+        for label, root in artifact_source.layer_roots("prompts")
+        for prompt_set in PROMPT_SETS[1:]
+        for error in _twin_errors(
+            layer_prompts(root, label, DEFAULT_PROMPT_SET),
+            prompt_set_prompts(root, label, prompt_set),
+            prompt_set=prompt_set,
+            set_dir=prompt_set_dir(root, prompt_set),
+        )
+    ]
+
+
+def _twin_errors(
+    v1: Sequence[Prompt], twins: Sequence[Prompt], *, prompt_set: str, set_dir: Path
+) -> list[ValidationError]:
+    """One layer's twin findings for ``prompt_set``; none when the layer has no such set."""
+    if not twins:
+        return []
+    by_id = {prompt.frontmatter.id: prompt for prompt in v1}
+    twin_ids = {twin.frontmatter.id for twin in twins}
+    errors = [
+        ValidationError(
+            path=_where(prompt),
+            message=f"prompt {prompt.frontmatter.id!r} has no {prompt_set} twin in {set_dir}; "
+            f"add one with the same id, or remove the {prompt_set} set",
+        )
+        for prompt in v1
+        if prompt.frontmatter.id not in twin_ids
+    ]
+    for twin in twins:
+        original = by_id.get(twin.frontmatter.id)
+        if original is None:
+            errors.append(
+                ValidationError(
+                    path=_where(twin),
+                    message=f"{prompt_set} prompt {twin.frontmatter.id!r} has no v1 twin; "
+                    "a prompt set only replaces the text of prompts with the same id",
+                )
+            )
+            continue
+        errors.extend(
+            ValidationError(path=_where(twin), message=message)
+            for message in _kept_key_messages(original, twin, prompt_set)
+        )
+    return errors
+
+
+def _kept_key_messages(original: Prompt, twin: Prompt, prompt_set: str) -> list[str]:
+    """One message per :data:`_TWIN_KEPT_KEYS` entry ``twin`` changes."""
+    messages = []
+    for key in _TWIN_KEPT_KEYS:
+        before, after = getattr(original.frontmatter, key), getattr(twin.frontmatter, key)
+        if before != after:
+            messages.append(
+                f"{prompt_set} prompt {twin.frontmatter.id!r} changes {key} from "
+                f"{before!r} to {after!r}; a twin keeps its v1 prompt's {key}"
+            )
+    return messages
 
 
 def _where(prompt: Prompt) -> str:

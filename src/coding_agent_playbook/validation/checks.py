@@ -9,6 +9,8 @@ Validates:
   at a time, as hooks do, and treats each ``ValueError`` as an error).
 - Prompts never call ``{{ rule() }}``; every ``includes_rules`` id names a rule
   (``validation.prompts``, specs/prS-skills-context.md §7.5).
+- Each layer's later prompt sets (``prompts/v2/``) are complete twins of its v1
+  prompts, keeping their names, slash commands and ``includes_rules`` (D76).
 - Every prompt ``output_contract`` entry compiles as a Python regex (fail-closed,
   like ``AnswerMatchesCheck``; specs/prK-hook-pack.md §E.2).
 - Rule templates never call ``{{ rule(...) }}`` (rules cannot include rules,
@@ -89,7 +91,10 @@ from coding_agent_playbook.validation.findings import (
     report_validation_warnings,
     skill_label,
 )
-from coding_agent_playbook.validation.prompts import check_prompt_rule_references
+from coding_agent_playbook.validation.prompts import (
+    check_prompt_rule_references,
+    check_prompt_set_twins,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -381,6 +386,7 @@ def _artifact_errors(ctx: SyncContext, *, config_less: bool) -> list[ValidationE
     errors.extend(check_rule_shape(rules))
     errors.extend(_check_applies_if(rules, prompts, ctx.facts, ctx.repo_root))
     errors.extend(check_prompt_rule_references(prompts, {r.frontmatter.id for r in rules}))
+    errors.extend(check_prompt_set_twins(ctx.artifact_source))
     errors.extend(_check_output_contracts(prompts))
     errors.extend(check_write_scope(prompts))
     errors.extend(

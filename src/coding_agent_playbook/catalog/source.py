@@ -23,6 +23,11 @@ from coding_agent_playbook.artifacts.rule import Rule, RuleLoadError
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.catalog._hook_walk import walk_hook_layer
 from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE, REPO_LOCAL_SOURCE
+from coding_agent_playbook.catalog.prompt_sets import (
+    DEFAULT_PROMPT_SET,
+    prompt_set_dir,
+    prompt_set_dirs,
+)
 from coding_agent_playbook.catalog.roots import catalog_layer_root, is_bundled_layer
 from coding_agent_playbook.evals.loader import (
     discover_eval_sample_dirs,
@@ -30,13 +35,10 @@ from coding_agent_playbook.evals.loader import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Sequence
-    from typing import TypeVar
+    from collections.abc import Iterator, Sequence
 
     from coding_agent_playbook.artifacts.hook import Hook
     from coding_agent_playbook.evals.sample import EvalSample
-
-    _T = TypeVar("_T")
 
 
 class ArtifactSource(ABC):
@@ -165,9 +167,15 @@ def _bundled_subdir(layer: str, subdir: str) -> Path | None:
     return candidate if candidate.is_dir() else None
 
 
-def _iter_md_files(root: Path) -> Iterator[Path]:
-    """Yield ``*.md`` and ``*.md.j2`` files under ``root`` in deterministic order."""
+def _iter_md_files(root: Path, *, skip: Sequence[Path] = ()) -> Iterator[Path]:
+    """Yield ``*.md`` and ``*.md.j2`` files under ``root`` in deterministic order.
+
+    Files under a directory of ``skip`` are left out (a prompts root skips its
+    later prompt sets, ``catalog.prompt_sets.prompt_set_dirs``).
+    """
     for path in sorted(root.rglob("*.md*")):
+        if any(path.is_relative_to(skipped) for skipped in skip):
+            continue
         # Skip dotted directories (.git, .venv, node_modules-of-vendored-skills,
         # etc.) for hygiene — these never legitimately contain canonical
         # artifacts, and walking them silently inflates source listings.
@@ -201,6 +209,46 @@ def _iter_skills(skills_root: Path, source_package: str) -> Iterator[Skill]:
             references_dir=references_dir if references_dir.is_dir() else None,
             source_package=source_package,
         )
+
+
+def layer_prompts(prompts_root: Path, label: str, prompt_set: str) -> list[Prompt]:
+    """One layer's prompts in ``prompt_set``: its v1 prompts, each replaced by its twin.
+
+    The v1 set is every prompt under ``prompts_root`` outside the later sets'
+    directories. For another set, a v1 prompt whose id has a twin in that set's
+    directory takes the twin; the others keep their v1 text, so the ids, and
+    their order, never change (D76). A twin with no v1 prompt is left out here;
+    ``playbook validate`` reports it.
+
+    Example::
+
+        >>> layer_prompts(Path("catalog/core/prompts"), "coding_agent_playbook", "v2")  # doctest: +SKIP
+        [Prompt(...), ...]
+    """
+    v1 = [
+        Prompt.from_markdown(md, label)
+        for md in _iter_md_files(prompts_root, skip=prompt_set_dirs(prompts_root))
+    ]
+    if prompt_set == DEFAULT_PROMPT_SET:
+        return v1
+    twins = {
+        twin.frontmatter.id: twin for twin in prompt_set_prompts(prompts_root, label, prompt_set)
+    }
+    return [twins.get(prompt.frontmatter.id, prompt) for prompt in v1]
+
+
+def prompt_set_prompts(prompts_root: Path, label: str, prompt_set: str) -> list[Prompt]:
+    """The prompts in ``prompt_set``'s own directory of one layer (``[]`` when it has none).
+
+    Example::
+
+        >>> prompt_set_prompts(Path("/no/such/prompts"), "x", "v2")
+        []
+    """
+    set_root = prompt_set_dir(prompts_root, prompt_set)
+    if not set_root.is_dir():
+        return []
+    return [Prompt.from_markdown(md, label) for md in _iter_md_files(set_root)]
 
 
 def _load_rule_or_error(path: Path, source_package: str) -> Rule | RuleLoadError:
@@ -241,11 +289,13 @@ class FileSystemArtifactSource(ArtifactSource):
         engine_package: str = ENGINE_PACKAGE,
         overlay_packages: list[str] | None = None,
         extra_resource_roots: Sequence[Path] = (),
+        prompt_set: str = DEFAULT_PROMPT_SET,
     ) -> None:
         self._repo_root = repo_root
         self._engine_package = engine_package
         self._overlay_packages = overlay_packages or []
         self._extra_resource_roots = tuple(extra_resource_roots)
+        self._prompt_set = prompt_set
 
     @property
     def engine_package(self) -> str:
@@ -322,11 +372,24 @@ class FileSystemArtifactSource(ArtifactSource):
         rules = [item for item in loaded if isinstance(item, Rule)]
         return rules, [item for item in loaded if isinstance(item, RuleLoadError)]
 
+    @property
+    def prompt_set(self) -> str:
+        """The prompt set :meth:`list_prompts` returns (D76; ``Config.prompt_set``)."""
+        return self._prompt_set
+
     def list_prompts(self) -> list[Prompt]:
-        return self._walk_artifacts(
-            subdir="prompts",
-            builder=Prompt.from_markdown,
-        )
+        """Every layer's prompts in :attr:`prompt_set` (:func:`layer_prompts`), layer by layer.
+
+        Example::
+
+            >>> FileSystemArtifactSource(repo_root=Path("/no/such/repo")).list_prompts()  # doctest: +SKIP
+            [Prompt(...), ...]
+        """
+        return [
+            prompt
+            for label, root in self.layer_roots("prompts")
+            for prompt in layer_prompts(root, label, self._prompt_set)
+        ]
 
     def list_skills(self) -> list[Skill]:
         return [
@@ -360,18 +423,6 @@ class FileSystemArtifactSource(ArtifactSource):
         """
         walks = [walk_hook_layer(root, label) for label, root in self.layer_roots("hooks")]
         return [h for walk in walks for h in walk.hooks], [e for walk in walks for e in walk.errors]
-
-    def _walk_artifacts(
-        self,
-        *,
-        subdir: str,
-        builder: Callable[[Path, str], _T],
-    ) -> list[_T]:
-        return [
-            builder(md, label)
-            for label, root in self.layer_roots(subdir)
-            for md in _iter_md_files(root)
-        ]
 
     def list_eval_samples(self) -> list[EvalSample]:
         """Walk every layer's ``eval_samples/<id>/`` (:meth:`layer_roots` order).
