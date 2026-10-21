@@ -67,6 +67,17 @@ class Facts(TypedDict, total=False):
     playbook_layer: bool
 
 
+#: The boolean facts ``detect()`` reports: the one list ``applies_if`` (``detector.predicate``)
+#: and ``playbook check``'s Detected section read, so a new flag needs no second edit.
+DETECTED_BOOL_FACTS: Final = (
+    "has_notebooks",
+    "has_dockerfile",
+    "has_ci",
+    "domino_project",
+    "playbook_layer",
+)
+
+
 # Frameworks the detector recognises (subset of dependencies treated as frameworks).
 KNOWN_FRAMEWORKS: frozenset[str] = frozenset(
     {
@@ -286,18 +297,14 @@ def _add_dependency_facts(
         facts["dev_tools"] = dev_tools
 
 
-def _add_marker_facts(
-    facts: Facts,
-    repo_root: Path,
-    pyproject: dict[str, Any] | None,
-    requirement_names: frozenset[str],
-) -> None:
-    """Set ``domino_project`` (prU D63) and ``playbook_layer`` (D70), always, true or false."""
-    declared = {*facts.get("dependencies", {}), *facts.get("dev_dependencies", {})}
+def _add_marker_facts(facts: Facts, repo_root: Path, declared: frozenset[str]) -> None:
+    """Set ``domino_project`` (prU D63) and ``playbook_layer`` (D70), always, true or false.
+
+    ``declared`` is every dependency name the repo declares, in any group.
+    """
     platforms = committed_platforms(repo_root)
     facts["domino_project"] = is_domino_project(repo_root, declared, platforms)
-    manifest = manifest_dependency_names(pyproject or {}) | requirement_names
-    facts["playbook_layer"] = has_playbook_layer(repo_root, manifest)
+    facts["playbook_layer"] = has_playbook_layer(repo_root, declared)
 
 
 def detect(repo_root: Path) -> Facts:
@@ -334,7 +341,8 @@ def detect(repo_root: Path) -> Facts:
 
     facts["has_dockerfile"] = _has_dockerfile(repo_root)
     facts["has_ci"] = _has_ci(repo_root)
-    _add_marker_facts(facts, repo_root, pyproject, requirement_names)
+    declared = manifest_dependency_names(pyproject or {}) | requirement_names
+    _add_marker_facts(facts, repo_root, declared)
 
     facts["project_kind"] = _infer_kind(facts, repo_root)
 

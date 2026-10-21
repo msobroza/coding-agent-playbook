@@ -31,7 +31,7 @@ from coding_agent_playbook.config.committed import (
     plan_detector_cache_refresh,
 )
 from coding_agent_playbook.config.files import CONFIG_FILENAME, ConfigFiles
-from coding_agent_playbook.detector.facts import detect
+from coding_agent_playbook.detector.facts import DETECTED_BOOL_FACTS, detect
 from coding_agent_playbook.detector.harness_markers import adapter_hints
 from coding_agent_playbook.detector.predicate import LIST_PREDICATE_KEYS, evaluate_predicate
 from coding_agent_playbook.lockfile.drift import drift_entries
@@ -90,11 +90,7 @@ def _format_detected_section(ctx: SyncContext) -> str:
         "=== Detected ===",
         f"  project_kind: {facts.get('project_kind', '(unknown)')}",
         f"  frameworks: {frameworks_str}",
-        f"  has_notebooks: {facts.get('has_notebooks', False)}",
-        f"  has_dockerfile: {facts.get('has_dockerfile', False)}",
-        f"  has_ci: {facts.get('has_ci', False)}",
-        f"  domino_project: {facts.get('domino_project', False)}",
-        f"  playbook_layer: {facts.get('playbook_layer', False)}",
+        *(f"  {name}: {facts.get(name, False)}" for name in DETECTED_BOOL_FACTS),
     ]
     return "\n".join(lines)
 
@@ -126,7 +122,7 @@ def _format_skip_reason(predicate: dict[str, object], facts: dict[str, object]) 
             return f"(skipped: applies_if {key}={wanted!r})"
         if key in _VERBATIM_PREDICATE_KEYS:
             return f"(skipped: applies_if {key}={value!r})"
-        # Boolean facts (has_notebooks, has_ci, domino_project, playbook_layer...).
+        # Boolean facts (detector.facts.DETECTED_BOOL_FACTS, banking_mode).
         actual = facts.get(key, False)
         return f"(skipped: {key}={actual})"
     return "(skipped)"

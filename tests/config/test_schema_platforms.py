@@ -70,3 +70,16 @@ def test_a_platforms_key_nested_in_a_table_is_refused() -> None:
         "use the top-level key instead, at the top of the file, above the first [table] "
         'header: platforms = ["domino"]'
     )
+
+
+def test_a_top_level_platforms_table_is_refused() -> None:
+    """Regression: a ``[platforms]`` table loaded silently, and the detector ignores it."""
+    data = _data(tables="\n[platforms]\ndomino = true\n")
+
+    with pytest.raises(ConfigError) as exc:
+        Config.from_dict(data, source=_PRIMARY)
+
+    assert str(exc.value) == (
+        f"{_PRIMARY}: platforms must be a list of platform names, got {{'domino': True}}; "
+        'write platforms = ["domino"]'
+    )

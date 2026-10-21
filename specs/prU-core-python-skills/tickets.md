@@ -797,6 +797,8 @@ Acceptance:
 | C-playbook-creator-02 | feat(playbook-creator): vendor the skills, hooks, prompts and eval samples, plugins and overlays rules | `playbook-skill-sections`, `playbook-skill-md`, `playbook-skill-files`, `playbook-hook-definition`, `playbook-hook-guardrails`, `playbook-prompt-frontmatter`, `playbook-eval-samples`, `playbook-plugin-layout`, `playbook-third-party-content` | L0-15, L0-16, L0-00b, L0-07, L0-11, L0-12, L0-13, L0-19, L0-20, L0-21, L0-22, L0-23 |
 | C-playbook-creator-refs | docs(playbook-creator): add the skill's references and its generated navigation entries | `references/rule-template.md`, `references/skill-template.md`, `references/hook-template.md`, `references/prompt-template.md`, `references/eval-sample-template.md`, `references/plugin-template.md` | C-playbook-creator-01, C-playbook-creator-02 |
 
+Domino skills: C-domino-apps-01, C-domino-jobs-01 and C-domino-agents-01 each also add the skill-level activation test that L0-20's first acceptance line defers until the skill exists: the Domino probe (tests/_budget_probe.py write_domino_probe) activates the skill, the standard probe does not, and platforms = ["domino"] activates it in a marker-free repo.
+
 ## Risks
 
 - Forge #170 adds a sixth always-present core skill and possibly core rules: whichever of the two merges second rebases, moves its rules into skills/<skill>/rules (L0-07's R5 enforces it) and re-checks the known-skills quote, counts and budgets (D36).

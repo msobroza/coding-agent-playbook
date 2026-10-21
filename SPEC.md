@@ -1587,7 +1587,7 @@ Inspect the consumer repo and produce a `facts` dictionary used as the rendering
 | --- | --- | --- |
 | `python_version` | `str` (e.g. `"3.12"`) | `pyproject.toml [project] requires-python`, then `python --version` |
 | `package_manager` | `Literal["uv", "poetry", "pip-tools", "pip"]` | presence of `uv.lock`, `poetry.lock`, `requirements.txt`, `[tool.poetry]`; usable in `applies_if` (§6.4) |
-| `dependencies` | `dict[str, str]` (name → version) | `pyproject.toml`, plus the names in the root `requirements*.txt` files (constraint `""`; a pyproject entry of the same name keeps its own) |
+| `dependencies` | `dict[str, str]` (name → version) | `pyproject.toml`, plus the names in every root `requirements*.txt` file, `requirements-dev.txt` included (constraint `""`; a pyproject entry of the same name keeps its own) |
 | `dev_dependencies` | `dict[str, str]` | same, dev group |
 | `frameworks` | `dict[str, str]` | subset of dependencies matching a known list (fastapi, pydantic, sqlalchemy, pytest, etc.) |
 | `ml_stack` | `dict[str, str]` | subset matching ML deps (torch, transformers, scikit-learn, etc.) |
@@ -1595,7 +1595,7 @@ Inspect the consumer repo and produce a `facts` dictionary used as the rendering
 | `has_dockerfile` | `bool` | `Dockerfile` exists at root or `./docker/` |
 | `has_ci` | `bool` | `.github/workflows/`, `Jenkinsfile`, `.gitlab-ci.yml`, etc. |
 | `dev_tools` | `set[str]` | `ruff`, `black`, `flake8`, `mypy`, `pyright` from dev deps + config presence |
-| `domino_project` | `bool` (always set) | a reliable Domino marker: `.dominoignore`, `.dominoresults` or `dominostats.json` at the root, or a `dominodatalab` / `dominodatalab-data` dependency; or the committed config's top-level `platforms = ["domino"]` (validated against the known platforms). Weak markers (`app.sh`, `/mnt/...` paths) never count |
+| `domino_project` | `bool` (always set) | a reliable Domino marker: `.dominoignore` or `.dominoresults` at the root, a committed root `dominostats.json` (git-tracked; any file counts in a repo without `.git`, such as a Domino File System project), or a `dominodatalab` / `dominodatalab-data` dependency in any group; or the committed config's top-level `platforms = ["domino"]` (validated against the known platforms). Weak markers (`app.sh`, `/mnt/...` paths) never count |
 | `playbook_layer` | `bool` (always set) | a `catalog/` or `playbook/` directory at the root (even empty), or an overlay: a `coding-agent-playbook` dependency and a `src/<pkg>/resources/<kind>/` or `<pkg>/resources/<kind>/` catalog directory |
 | `project_kind` | `Literal[...]` | inferred from layout: presence of `src/`, notebooks, etc. (see 8.3) |
 ### 8.3 Project-kind inference rule
@@ -2616,6 +2616,8 @@ $ playbook check
   has_notebooks: False
   has_dockerfile: True
   has_ci: True
+  domino_project: False
+  playbook_layer: True
 === Artifacts ===
   Rules (14 applicable / 18 total):
     [✓] 00-project-context         (engine, scope=always)

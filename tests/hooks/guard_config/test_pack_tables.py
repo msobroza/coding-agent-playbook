@@ -160,9 +160,11 @@ def test_facts_carry_dependency_names_and_presence_flags(repo: Path) -> None:
     assert compiled_document(request)["facts"] == {
         "dependencies": ["fastapi", "torch"],
         "dev_dependencies": ["pytest"],
+        "domino_project": False,
         "has_ci": False,
         "has_dockerfile": True,
         "has_notebooks": False,
+        "playbook_layer": False,
     }
 
 

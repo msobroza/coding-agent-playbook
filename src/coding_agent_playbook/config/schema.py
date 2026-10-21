@@ -392,8 +392,10 @@ def check_platforms_key(data: Mapping[str, object], *, source: str) -> None:
 
 def _platforms_problem(path: _TablePath, value: object) -> str | None:
     """Why ``platforms`` (in the table at ``path``) is not read as written, else ``None``."""
-    if isinstance(value, dict):
-        return None  # a table of that name is someone else's (``[detector_cache.platforms]``)
+    # A nested table of that name is someone else's (``[detector_cache.platforms]``);
+    # a top-level ``[platforms]`` table is refused below, since the detector ignores it.
+    if path and isinstance(value, dict):
+        return None
     if path:
         return (
             f"{_describe_key(path, PLATFORMS_KEY, value)} is not read (found {value!r}) "

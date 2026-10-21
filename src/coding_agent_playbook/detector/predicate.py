@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, cast
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 
-from coding_agent_playbook.detector.facts import KNOWN_PACKAGE_MANAGERS
+from coding_agent_playbook.detector.facts import DETECTED_BOOL_FACTS, KNOWN_PACKAGE_MANAGERS
 from coding_agent_playbook.detector.pep503 import canonical_name
 
 if TYPE_CHECKING:
@@ -31,16 +31,7 @@ _SUPPORTED_OPERATORS = (">=", "<=", "==", "~=", ">", "<")
 # Boolean facts that may appear in an ``applies_if`` predicate. Gating the
 # boolean dispatch branch on this set means a typo'd key (e.g. ``has_dokerfile``)
 # raises ``ValueError`` instead of silently matching by value-type alone.
-_KNOWN_BOOL_FACT_KEYS: frozenset[str] = frozenset(
-    {
-        "has_notebooks",
-        "has_dockerfile",
-        "has_ci",
-        "banking_mode",
-        "domino_project",
-        "playbook_layer",
-    }
-)
+_KNOWN_BOOL_FACT_KEYS: frozenset[str] = frozenset({*DETECTED_BOOL_FACTS, "banking_mode"})
 
 #: ``all`` or ``any``: how a list-valued key combines its per-name results.
 type _Combiner = Callable[[Iterable[object]], bool]
@@ -238,9 +229,8 @@ def evaluate_predicate(
       - ``package_manager: "uv"`` or ``["uv", "poetry"]`` — facts["package_manager"]
         is that name, or any of the listed names; an absent fact never matches, and
         an unknown name raises even then
-      - ``banking_mode: true`` — boolean facts compared by equality (also
-        ``has_notebooks``, ``has_dockerfile``, ``has_ci``, ``domino_project``,
-        ``playbook_layer``)
+      - ``banking_mode: true`` — boolean facts compared by equality (also every
+        ``detector.facts.DETECTED_BOOL_FACTS`` name, e.g. ``domino_project``)
 
     Multiple keys are AND-ed together. Unknown keys raise ``ValueError`` so
     typos fail loudly at validate time.

@@ -7,14 +7,20 @@ Domino skill's rules carry, holds for those facts).
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from coding_agent_playbook.config.files import CONFIG_FILENAME
+from coding_agent_playbook.detector.bounded_read import DETECTOR_INPUT_MAX_BYTES
 from coding_agent_playbook.detector.facts import detect
-from coding_agent_playbook.detector.platform_facts import has_playbook_layer
+from coding_agent_playbook.detector.platform_facts import committed_platforms, has_playbook_layer
 from coding_agent_playbook.detector.predicate import evaluate_predicate
+from coding_agent_playbook.detector.requirements_files import (
+    REQUIREMENTS_MAX_BYTES,
+    root_requirement_names,
+)
 from tests._budget_probe import write_domino_probe, write_reference_probe
 
 _DOMINO_GATE = {"domino_project": True}
@@ -170,3 +176,56 @@ def test_playbook_layer_is_false_in_the_standard_probe(tmp_path: Path) -> None:
 
     assert facts["playbook_layer"] is False
     assert not evaluate_predicate({"playbook_layer": True}, facts)
+
+
+def _run_vcs(repo: Path, *args: str) -> None:
+    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, timeout=30)
+
+
+def test_an_untracked_dominostats_json_in_a_git_repo_does_not_count(tmp_path: Path) -> None:
+    """A Domino run writes dominostats.json; D63 counts only a committed one."""
+    _run_vcs(tmp_path, "init", "-q")
+    _write(tmp_path, "dominostats.json", "{}\n")
+
+    assert detect(tmp_path)["domino_project"] is False
+
+
+def test_a_tracked_dominostats_json_in_a_git_repo_counts(tmp_path: Path) -> None:
+    _run_vcs(tmp_path, "init", "-q")
+    _write(tmp_path, "dominostats.json", "{}\n")
+    _run_vcs(tmp_path, "add", "dominostats.json")
+
+    assert detect(tmp_path)["domino_project"] is True
+
+
+def test_an_oversized_committed_config_yields_no_platforms(tmp_path: Path) -> None:
+    padding = "#\n" * (DETECTOR_INPUT_MAX_BYTES // 2)
+    _write(tmp_path, CONFIG_FILENAME, 'platforms = ["domino"]\n' + padding)
+
+    assert committed_platforms(tmp_path) == frozenset()
+
+
+def test_a_domino_dependency_in_an_optional_group_counts(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "pyproject.toml",
+        '[project]\nname = "x"\n[project.optional-dependencies]\ndomino = ["dominodatalab"]\n',
+    )
+
+    assert detect(tmp_path)["domino_project"] is True
+
+
+@pytest.mark.parametrize("unusable", ["oversized", "not-utf8", "directory"])
+def test_an_unusable_root_requirements_file_contributes_nothing(
+    tmp_path: Path, unusable: str
+) -> None:
+    target = tmp_path / "requirements-x.txt"
+    if unusable == "oversized":
+        target.write_text("dominodatalab\n" + "#\n" * REQUIREMENTS_MAX_BYTES, encoding="utf-8")
+    elif unusable == "not-utf8":
+        target.write_bytes(b"dominodatalab\n# caf\xe9\n")
+    else:
+        target.mkdir()
+    _write(tmp_path, "requirements.txt", "flask\n")
+
+    assert root_requirement_names(tmp_path) == frozenset({"flask"})

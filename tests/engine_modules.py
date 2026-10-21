@@ -48,6 +48,7 @@ STDLIB_LEAVES: Final = frozenset(
         "artifacts.path_classes",
         "artifacts.path_globs",
         "catalog.roots",
+        "detector.bounded_read",
         "detector.pep503",
         "detector.pyproject_deps",
         "detector.requirements_files",

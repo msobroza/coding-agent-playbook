@@ -8,15 +8,18 @@ and the two can never disagree. Each file is parsed by the one requirement
 parser, ``detector.pep503.requirement_names``.
 
 Only the repo root is read (``requirements.txt``, ``requirements-dev.txt``…);
-nested files and ``requirements*.in`` are not. A file that cannot be read,
-is not UTF-8 or is larger than :data:`REQUIREMENTS_MAX_BYTES` contributes
-nothing: the detector never raises.
+nested files and ``requirements*.in`` are not. Every root file feeds the
+runtime ``dependencies`` fact, ``requirements-dev.txt`` included: D78(2) names
+no group, and a file name is no reliable group marker (``-r requirements.txt``
+chains mix them). A file that cannot be read, is not UTF-8 or is larger than
+:data:`REQUIREMENTS_MAX_BYTES` contributes nothing: the detector never raises.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.detector.bounded_read import DETECTOR_INPUT_MAX_BYTES, read_bounded_utf8
 from coding_agent_playbook.detector.pep503 import requirement_names
 
 if TYPE_CHECKING:
@@ -24,9 +27,9 @@ if TYPE_CHECKING:
 
 __all__ = ["REQUIREMENTS_MAX_BYTES", "root_requirement_names"]
 
-#: A requirements file larger than this is skipped (a generated lock with hashes stays well under).
-REQUIREMENTS_MAX_BYTES: Final = 1024 * 1024
-_PATTERN: Final = "requirements*.txt"
+#: A requirements file larger than this is skipped.
+REQUIREMENTS_MAX_BYTES: Final = DETECTOR_INPUT_MAX_BYTES
+_REQUIREMENTS_GLOB: Final = "requirements*.txt"
 
 
 def root_requirement_names(repo_root: Path) -> frozenset[str]:
@@ -38,25 +41,8 @@ def root_requirement_names(repo_root: Path) -> frozenset[str]:
         frozenset({'dominodatalab', 'flask'})
     """
     names: set[str] = set()
-    for path in sorted(repo_root.glob(_PATTERN)):
-        text = _read_small_text(path)
+    for path in sorted(repo_root.glob(_REQUIREMENTS_GLOB)):
+        text = read_bounded_utf8(path, REQUIREMENTS_MAX_BYTES)
         if text is not None:
             names |= requirement_names(text)
     return frozenset(names)
-
-
-def _read_small_text(path: Path) -> str | None:
-    """``path``'s UTF-8 text, or ``None`` when it is no regular file, too large or unreadable."""
-    try:
-        if not path.is_file():
-            return None
-        with path.open("rb") as handle:
-            data = handle.read(REQUIREMENTS_MAX_BYTES + 1)
-    except OSError:
-        return None
-    if len(data) > REQUIREMENTS_MAX_BYTES:
-        return None
-    try:
-        return data.decode("utf-8")
-    except UnicodeDecodeError:
-        return None
