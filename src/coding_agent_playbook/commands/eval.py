@@ -14,7 +14,7 @@ Sub-modes:
   Invocation / Expected / Rubric).
 - ``playbook eval <id>`` (no ``--run``): prints how to run the sample. Exits 0 if
   the sample is known, exits 1 if it isn't (so typos still surface).
-- ``playbook eval <id> --run [--runner NAME] [--judge NAME] [--samples N]
+- ``playbook eval <id> --run [--runner NAME] [--judge NAME] [--judge-samples N]
   [--format text|json]``: load the sample, select the runner ``NAME`` from the
   ``coding_agent_playbook.runners`` entry-point group (default ``claude_code``),
   run it in a throwaway scratch dir, and render ``result.report`` (reusing
@@ -27,8 +27,11 @@ Sub-modes:
   ``--judge`` (R2) selects a Tier-2 judge from the
   ``coding_agent_playbook.judges`` group (``llm`` ships, opt-in/CLI-gated) so the
   sample's ``[rubric]`` criteria are scored too; omitted ⇒ deterministic-only (no
-  judge). ``--samples N`` (default 1) is the per-criterion sample count the judge
-  averages.
+  judge). ``--judge-samples N`` (default 1) is how many times the judge scores each
+  rubric criterion before averaging; it is not a count of eval samples. The old
+  ``--samples N`` spelling is a deprecated alias for one release (D80): hidden
+  from ``--help``, it still works, prints one stderr line naming
+  ``--judge-samples``, and passing both flags is a usage error (exit ``2``).
 
   Unlike ``playbook metrics``, there is **no ``--run-tests`` flag**: whether the
   execution evaluators (``coverage``/``test_pass_rate``) run is declared by the
@@ -38,6 +41,7 @@ Sub-modes:
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 import tempfile
@@ -60,8 +64,6 @@ from coding_agent_playbook.evals.report_format import (
 from coding_agent_playbook.validation.context import SyncContext
 
 if TYPE_CHECKING:
-    import argparse
-
     from coding_agent_playbook.evals.judge import Judge
     from coding_agent_playbook.evals.run.harness_runner import HarnessRunner
     from coding_agent_playbook.evals.sample import EvalSample
@@ -71,6 +73,16 @@ NAME: Final = "eval"
 HELP: Final = "eval enumeration + `--run` a sample (SPEC §12.8, §15)"
 
 _VALID_FORMATS = ("text", "json")
+
+# D80: the old --samples spelling stays one release as a hidden alias; it is
+# removed in the release after v0.21. Printed (not warnings.warn): pytest runs
+# with filterwarnings = error.
+_SAMPLES_DEPRECATION: Final = (
+    "warning: --samples is deprecated and will be removed in the next release; use --judge-samples"
+)
+_BOTH_SAMPLE_FLAGS: Final = (
+    "error: pass --judge-samples or its deprecated alias --samples, not both"
+)
 
 
 def configure(parser: argparse.ArgumentParser) -> None:
@@ -107,20 +119,23 @@ def configure(parser: argparse.ArgumentParser) -> None:
 
 
 def _configure_scoring(parser: argparse.ArgumentParser) -> None:
-    """Declare the ``--run`` grading flags: judge, samples, fail-fast and output format."""
+    """Declare the ``--run`` grading flags: judge, judge samples, fail-fast and output format."""
     # PR R2 — judged [rubric] scoring. --judge selects a Tier-2 judge from the
     # coding_agent_playbook.judges group (e.g. 'llm', opt-in/CLI-gated); omitted
-    # means deterministic-only. --samples is the per-criterion average count.
+    # means deterministic-only. --judge-samples is the per-criterion average count.
     parser.add_argument(
         "--judge",
         help="judge name from the coding_agent_playbook.judges group to score "
         "[rubric] criteria (e.g. 'llm'); omit for a deterministic-only run",
     )
     parser.add_argument(
-        "--samples",
+        "--judge-samples",
         type=int,
-        help="per-criterion judge samples to average (default: 1)",
+        dest="judge_samples",
+        help="how many times the judge scores each rubric criterion before averaging (default: 1)",
     )
+    # D80: deprecated alias, hidden from --help; resolved by _judge_samples().
+    parser.add_argument("--samples", type=int, dest="deprecated_samples", help=argparse.SUPPRESS)
     # By default --run is fail-fast: a lost deterministic gate skips the costlier
     # judge tier (saving an LLM call). --full-scoring grades every check.
     parser.add_argument(
@@ -177,6 +192,10 @@ def _run_sample_cli(args: argparse.Namespace, repo_root: Path) -> int:
         print(f"error: unknown --format {fmt!r}", file=sys.stderr)
         return 2
 
+    judge_samples = _judge_samples(args)
+    if judge_samples is None:
+        return 2
+
     sample_id = getattr(args, "id", None)
     if not sample_id:
         print("error: `playbook eval --run` requires a sample id", file=sys.stderr)
@@ -228,7 +247,6 @@ def _run_sample_cli(args: argparse.Namespace, repo_root: Path) -> int:
             return 2
         judge = judge_cls()
 
-    samples = getattr(args, "samples", None) or 1
     # Fail-fast is ON by default (a lost deterministic gate skips the costlier
     # judge tier); --full-scoring grades every check unconditionally.
     fail_fast = not bool(getattr(args, "full_scoring", False))
@@ -240,7 +258,7 @@ def _run_sample_cli(args: argparse.Namespace, repo_root: Path) -> int:
                 sample,
                 Path(tmp) / "scratch",
                 judge=judge,
-                samples=samples,
+                judge_samples=judge_samples,
                 fail_fast=fail_fast,
             )
     except (PromptResolutionError, JudgeError) as exc:
@@ -259,6 +277,29 @@ def _run_sample_cli(args: argparse.Namespace, repo_root: Path) -> int:
     # was skipped). ``report.passed`` alone would be only the *first* trial's
     # verdict, so map the exit code off ``result.passed``.
     return 0 if result.passed else 1
+
+
+def _judge_samples(args: argparse.Namespace) -> int | None:
+    """The per-criterion judge sample count, or ``None`` on a usage error.
+
+    Reads ``--judge-samples`` and its deprecated ``--samples`` alias (D80): the
+    alias prints one stderr line naming ``--judge-samples``; both flags at once
+    print an error and return ``None`` (the caller exits ``2``).
+
+    Example::
+
+        >>> _judge_samples(argparse.Namespace(judge_samples=3, deprecated_samples=None))
+        3
+    """
+    new = getattr(args, "judge_samples", None)
+    old = getattr(args, "deprecated_samples", None)
+    if new is not None and old is not None:
+        print(_BOTH_SAMPLE_FLAGS, file=sys.stderr)
+        return None
+    if old is not None:
+        print(_SAMPLES_DEPRECATION, file=sys.stderr)
+        return int(old) or 1
+    return int(new or 1)
 
 
 def _load_sample(sample_id: str, repo_root: Path) -> EvalSample | None:

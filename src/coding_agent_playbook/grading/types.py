@@ -304,7 +304,7 @@ class EvalContext:
     """Everything an evaluator might need, decoupled per family (SPEC prM §A).
 
     Static evaluators read ``module``/``source``/``label``. The execution field
-    (``project``), the judged fields (``judge``/``artifact``/``samples``), and the
+    (``project``), the judged fields (``judge``/``artifact``/``judge_samples``), and the
     expected-outcome fields (``tree``/``baseline_tree``) are consumed by the
     execution, judged, and ``[expected]`` families respectively and default to
     ``None``/``1`` so static evaluators never touch them. ``judge`` is typed as
@@ -352,7 +352,7 @@ class EvalContext:
     project: Any | None = None
     judge: JudgeLike | None = None
     artifact: Any | None = None
-    samples: int = 1
+    judge_samples: int = 1
     tree: Path | None = None
     baseline_tree: Path | None = None
     candidate_measurements: list[Measurement] | None = None

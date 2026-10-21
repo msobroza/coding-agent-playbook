@@ -3,7 +3,7 @@
 :class:`JudgeCheck` holds a single criterion string (one per ``[rubric]`` line)
 and grades it by calling the structural
 :class:`~coding_agent_playbook.grading.types.JudgeLike` on the context
-(``ctx.judge.score_criterion(criterion, ctx.artifact, n=ctx.samples)``), so this
+(``ctx.judge.score_criterion(criterion, ctx.artifact, n=ctx.judge_samples)``), so this
 module never imports ``evals`` - avoiding the ``grading`` <-> ``evals`` cycle -
 and a concrete :class:`~coding_agent_playbook.evals.judge.Judge` satisfies it
 structurally.
@@ -63,14 +63,14 @@ class JudgeCheck(Check):
         return ctx.judge is not None
 
     def grade(self, ctx: EvalContext, measurements: MeasurementSet) -> CheckResult:
-        """Score the criterion via ``ctx.judge`` (averaged over ``ctx.samples``).
+        """Score the criterion via ``ctx.judge`` (averaged over ``ctx.judge_samples``).
 
         ``measurements`` is ignored: a judged score is produced by the judge, not
         by a deterministic measurement. ``available`` guarantees a judge is
         present, so the call is unconditional here.
         """
         assert ctx.judge is not None  # guaranteed by available(); narrows for mypy
-        score = ctx.judge.score_criterion(self.criterion, ctx.artifact, n=max(1, ctx.samples))
+        score = ctx.judge.score_criterion(self.criterion, ctx.artifact, n=max(1, ctx.judge_samples))
         passed = score >= self.threshold
         detail = ScopeDetail(
             evaluator=self.id,
