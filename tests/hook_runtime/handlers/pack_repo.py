@@ -32,7 +32,6 @@ from coding_agent_playbook.adapters.continue_ import ContinueAdapter
 from coding_agent_playbook.adapters.opencode import OpenCodeAdapter
 from coding_agent_playbook.artifacts.hook import Hook
 from coding_agent_playbook.artifacts.prompt import Prompt
-from coding_agent_playbook.artifacts.rule import Rule
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
 from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL
@@ -53,13 +52,14 @@ from coding_agent_playbook.hooks.resolution.effective import resolve_effective_h
 from coding_agent_playbook.hooks.resolution.merge import merge_hook_layers
 from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, compute_hash
 from coding_agent_playbook.sync._protect import adapter_output_dirs
-from tests._catalog import CORE_ROOT
+from tests._catalog import CORE_ROOT, core_rules
 from tests.hook_payloads import PROJECT_DIR, HookPayloadCase
 from tests.hook_runtime.guard_repo import GuardRepo
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
 
+    from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateReport
     from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
@@ -137,9 +137,7 @@ def engine_prompts() -> list[Prompt]:
 
 def engine_rules() -> list[Rule]:
     """Every engine rule as shipped (the linked rules of the §E.3 lint hooks among them)."""
-    root = ENGINE_HOOKS.parent / "rules"
-    paths = sorted(p for p in root.rglob("*") if p.name.endswith((".md", ".md.j2")))
-    return [Rule.from_markdown(path, ENGINE_PACKAGE) for path in paths]
+    return list(core_rules().values())
 
 
 def resolve_engine_hooks(

@@ -146,8 +146,9 @@ def test_scoped_rule_without_skill_fails_naming_known_skills(
 
     assert rc == 1
     assert fail_lines(out) == [
-        f"FAIL {rule}: scope 'scoped' needs 'skill: <skill-id>' naming the skill whose "
-        f"references deliver this rule; known skills: {_KNOWN_SKILLS}"
+        f"FAIL {rule}: scope 'scoped' needs a skill: put the file in that skill's rules/ "
+        "directory (skills/<skill-id>/rules/), or add 'skill: <skill-id>' when the skill "
+        f"comes from another layer; known skills: {_KNOWN_SKILLS}"
     ]
 
 
@@ -161,8 +162,9 @@ def test_scoped_override_without_skill_suggests_the_overridden_rules_skill(
 
     assert rc == 1
     assert fail_lines(out) == [
-        f"FAIL {rule}: scope 'scoped' needs 'skill: <skill-id>' naming the skill whose "
-        f"references deliver this rule; known skills: {_KNOWN_SKILLS}; the rule it overrides "
+        f"FAIL {rule}: scope 'scoped' needs a skill: put the file in that skill's rules/ "
+        "directory (skills/<skill-id>/rules/), or add 'skill: <skill-id>' when the skill "
+        f"comes from another layer; known skills: {_KNOWN_SKILLS}; the rule it overrides "
         "(coding_agent_playbook) names 'python-coding'"
     ]
 
@@ -431,8 +433,8 @@ def test_playbook_block_without_members_warns(
 
     assert rc == 0, out
     assert err.splitlines() == [
-        f"warning: skills/{_OWN_SKILL} {_REPO_LOCAL}: declares 'playbook' but no rule names "
-        "it in 'skill:'; it is never written"
+        f"warning: skills/{_OWN_SKILL} {_REPO_LOCAL}: declares 'playbook' but has no member "
+        "rule (none in its rules/ directory, none naming it in 'skill:'); it is never written"
     ]
 
 

@@ -266,7 +266,8 @@ def test_sync_writes_nothing_for_a_scoped_rule_without_skill(
     assert _tree_snapshot(repo) == before
     err = capsys.readouterr().err
     assert (
-        f"FAIL {bad}: scope 'scoped' needs 'skill: <skill-id>' naming the skill whose "
-        f"references deliver this rule; known skills: {', '.join(core_rule_skill_ids())}"
+        f"FAIL {bad}: scope 'scoped' needs a skill: put the file in that skill's rules/ "
+        "directory (skills/<skill-id>/rules/), or add 'skill: <skill-id>' when the skill "
+        f"comes from another layer; known skills: {', '.join(core_rule_skill_ids())}"
     ) in err.splitlines()
     assert _ABORT_LINE in err

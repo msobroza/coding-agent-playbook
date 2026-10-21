@@ -12,7 +12,8 @@ from __future__ import annotations
 import tomllib
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.catalog.source import FileSystemArtifactSource, _iter_md_files
+from coding_agent_playbook.catalog._skill_rules import iter_md_files
+from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.config.files import CONFIG_FILENAME
 from coding_agent_playbook.config.tables.links import LinksConfig, parse_links_config
 from coding_agent_playbook.validation.findings import ValidationError
@@ -121,7 +122,7 @@ def check_markdown_links(
         error
         for subdir in _LINK_CHECKED_SUBDIRS
         for _label, root in artifact_source.layer_roots(subdir)
-        for md in _iter_md_files(root)
+        for md in iter_md_files(root)
         for error in _scan_markdown_file(md, root_dir=root.parent, links_config=links_config)
     ]
 

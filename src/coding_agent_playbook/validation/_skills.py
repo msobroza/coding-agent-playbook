@@ -1,10 +1,13 @@
 """``playbook validate`` over member rules and ``playbook:`` blocks (prS §6.4.12, §6.6).
 
-A scoped rule that names a skill in ``skill:`` is a member rule of that skill
-(ADR 0001); the engine writes it as one of the skill's references. Two checks
-guard that composition before ``playbook sync`` writes anything:
+A scoped rule is a member rule of one skill (ADR 0001, ADR 0005): of the skill
+whose ``skills/<skill>/rules/`` directory holds it, or, for a rule from another
+layer, of the skill it names in ``skill:``. The loader fills ``skill`` from the
+location (``Rule.home_skill``), so every check below reads ``skill`` alone. The
+engine writes a member as one of the skill's references. Two checks guard that
+composition before ``playbook sync`` writes anything:
 
-- :func:`check_skill_membership`, per rule: ``skill`` is required on a scoped
+- :func:`check_skill_membership`, per rule: a skill is required on a scoped
   rule (V1, with V2's hint when the rule overrides one that named a skill) and
   forbidden on an always rule (V3), must be a skill id string (V4) naming a
   skill that exists after the layer merge (V5) and declares a ``playbook:``
@@ -13,7 +16,8 @@ guard that composition before ``playbook sync`` writes anything:
 - :func:`check_rule_skills`, per skill with a ``playbook:`` block: the block's
   shape (V7-V10, E15), the worst-case composed description within 300 chars
   (V11, E7), no hand-written reference named like a member (V12), no authored
-  ``## References`` heading (V13); warnings for a block without members (W1),
+  ``## References`` heading (V13); warnings for a block without members, in its
+  ``rules/`` directory or naming it (W1),
   members without ``files`` (W2) and a truncated Covers clause (W3).
 
 Every check runs over the merged sets and ignores ``applies_if``, so overlay
@@ -81,8 +85,9 @@ _REFERENCES_HEADING: Final = "## References"
 #: V1's message; MIGRATION.md quotes it with ``{known}`` filled for core, and a docs
 #: test imports it so the quote cannot drift (prS §6.4.12).
 SCOPED_RULE_NEEDS_SKILL_MESSAGE: Final = (
-    "scope 'scoped' needs 'skill: <skill-id>' naming the skill whose references deliver "
-    "this rule; known skills: {known}"
+    "scope 'scoped' needs a skill: put the file in that skill's rules/ directory "
+    "(skills/<skill-id>/rules/), or add 'skill: <skill-id>' when the skill comes from "
+    "another layer; known skills: {known}"
 )
 
 
@@ -356,7 +361,8 @@ def _rule_skill_warnings(skill: Skill, members: Sequence[Rule]) -> list[str]:
     """W1 without members; otherwise W2 (no ``files``) and W3 (truncated Covers clause)."""
     if not members:
         return [
-            f"declares '{PLAYBOOK_BLOCK_KEY}' but no rule names it in 'skill:'; it is never written"
+            f"declares '{PLAYBOOK_BLOCK_KEY}' but has no member rule (none in its rules/ "
+            "directory, none naming it in 'skill:'); it is never written"
         ]
     block = skill.frontmatter[PLAYBOOK_BLOCK_KEY]
     warnings = []
