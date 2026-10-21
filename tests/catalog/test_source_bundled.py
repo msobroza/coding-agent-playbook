@@ -21,7 +21,8 @@ from coding_agent_playbook.catalog.source import FileSystemArtifactSource, _reso
 from coding_agent_playbook.cli import main
 from coding_agent_playbook.evals.prompting import _infer_prompts_dir, _resolve_prompt
 from coding_agent_playbook.validation.preflight import unusable_overlays
-from tests._catalog import CORE_ROOT, plugin_root
+from tests._catalog import CORE_ROOT, core_markdown_sources, plugin_root
+from tests.core_skill_pins import ALL_PINS, PLAIN_CORE_SKILL_IDS
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -38,17 +39,14 @@ _SHIPPED_PROMPT_FILE = "explain.md"
 #: The id the shipped prompt declares, and the plugin sample's id (distinctive, for output scans).
 _SHIPPED_PROMPT_ID = "explain"
 _DEMO_SAMPLE_ID = "demo-plugin-eval-sample"
-#: Two always rules and 26 scoped rules, each scoped one a member of a core skill.
-_ENGINE_RULE_COUNT = 28
-#: python-coding, python-testing, python-tooling, ml-data and playbook-guardrails (spec D4).
-_ENGINE_SKILL_COUNT = 5
 _SUPERPOWERS_SKILL_COUNT = 15
 
 
 def test_engine_rules_come_from_catalog_core(tmp_path: Path) -> None:
     rules = FileSystemArtifactSource(repo_root=tmp_path).list_rules()
     engine_rules = [rule for rule in rules if rule.source_package == ENGINE_PACKAGE]
-    assert len(engine_rules) == _ENGINE_RULE_COUNT
+    # Derived from the files on disk (prU L0-03), so a content lane adding a rule edits no pin.
+    assert len(engine_rules) == len(core_markdown_sources("rules"))
     rules_root = (CORE_ROOT / "rules").resolve()
     for rule in engine_rules:
         assert rule.source_path is not None
@@ -58,7 +56,11 @@ def test_engine_rules_come_from_catalog_core(tmp_path: Path) -> None:
 def test_engine_skills_come_from_catalog_core(tmp_path: Path) -> None:
     skills = FileSystemArtifactSource(repo_root=tmp_path).list_skills()
     engine_skills = [skill for skill in skills if skill.source_package == ENGINE_PACKAGE]
-    assert len(engine_skills) == _ENGINE_SKILL_COUNT
+    # Derived (prU L0-03): every core skill dir with a SKILL.md, i.e. one per pins module
+    # plus the plain skills, so a content lane adding a skill edits no shared pin.
+    skill_dirs = [p.parent for p in sorted((CORE_ROOT / "skills").glob("*/SKILL.md"))]
+    assert len(skill_dirs) == len(ALL_PINS) + len(PLAIN_CORE_SKILL_IDS)
+    assert len(engine_skills) == len(skill_dirs)
     skills_root = (CORE_ROOT / "skills").resolve()
     for skill in engine_skills:
         assert skill.references_dir is None and skill.scripts_dir is None, skill.frontmatter

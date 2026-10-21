@@ -10,11 +10,19 @@ their roots from here, so a change to the catalog layout edits this one module.
 
 from __future__ import annotations
 
+import tempfile
 from importlib import resources
 from pathlib import Path
+from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.artifacts.rule import Rule
 from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE
+from coding_agent_playbook.catalog.source import FileSystemArtifactSource
+from coding_agent_playbook.skills.membership import is_rule_skill
+from coding_agent_playbook.skills.naming import skill_id_of
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 #: The repository checkout this test suite runs from.
 REPO_ROOT: Path = Path(__file__).resolve().parents[1]
@@ -31,6 +39,24 @@ PLUGINS_ROOT: Path = CATALOG_ROOT / "plugins"
 PRECOMMIT_TEMPLATE_DIR: Path = Path(
     str(resources.files("coding_agent_playbook") / "templates" / "precommit")
 )
+#: Rule id -> its core skill, for the ids hooks (``linked_rule``) and prompts
+#: (``includes_rules``) depend on: a split keeps them on the piece with the old topic (prU D21).
+KEPT_RULE_IDS: Final[Mapping[str, str]] = {
+    "python-typing": "python-coding",
+    "python-error-handling": "python-coding",
+    "python-docstrings": "python-coding",
+    "python-dependency-injection": "python-coding",
+    "python-pure-core": "python-coding",
+    "pytest": "python-testing",
+    "ml-serialization-security": "ml-data",
+}
+#: Rule id -> the core skill it belonged to, for the ids prU retires (D21).
+RETIRED_RULE_IDS: Final[Mapping[str, str]] = {
+    "python-performance-idioms": "python-coding",
+    "python-classes-and-protocols": "python-coding",
+    "ml-dtypes-and-typing": "ml-data",
+    "ml-reproducibility-and-testing": "ml-data",
+}
 
 
 def bundled_plugin_dirs() -> list[Path]:
@@ -118,3 +144,23 @@ def core_skill_ids() -> frozenset[str]:
     Example: ``"python-coding" in core_skill_ids()`` -> ``True``.
     """
     return frozenset(path.name for path in (CORE_ROOT / "skills").iterdir() if path.is_dir())
+
+
+def core_rule_skill_ids() -> list[str]:
+    """The sorted ids of the core skills that take member rules: a ``playbook:`` block (E6).
+
+    Validation's V1 and V5 messages list exactly these as the known skills, so
+    tests build those strings here instead of spelling the skills out. The list
+    goes through the engine's own discovery (``list_skills``, ``is_rule_skill``,
+    ``skill_id_of``) so the expectation cannot drift from what the engine lists;
+    the throwaway repo root holds no repo-local skills, so only core's count.
+
+    Example: ``", ".join(core_rule_skill_ids())`` -> ``"ml-data, python-coding, ..."``.
+    """
+    with tempfile.TemporaryDirectory() as repo_root:
+        skills = FileSystemArtifactSource(repo_root=Path(repo_root)).list_skills()
+        return sorted(
+            skill_id_of(skill)
+            for skill in skills
+            if skill.source_package == ENGINE_PACKAGE and is_rule_skill(skill)
+        )

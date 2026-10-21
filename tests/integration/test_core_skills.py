@@ -1,10 +1,11 @@
 """CI gates for the core skills that deliver the scoped rules in core (D4, D13; spec 6.8.12).
 
 Core ships one skill per topic, and every scoped rule in core names the one that
-owns it (ADR 0001). The two tables below are the contract later content PRs
-extend. Core also ships one plain skill, ``playbook-guardrails``, which takes no
-member rules: sync composes it from the on hooks' guardrail text (D6), so it has
-no ``playbook:`` block and its authored description carries its own "Use when".
+owns it (ADR 0001). Each core skill's pins live in its own module under
+``tests/core_skill_pins/`` (prU L0-03), so content lanes extend them in
+parallel. Core also ships one plain skill, ``playbook-guardrails``, which takes
+no member rules: sync composes it from the on hooks' guardrail text (D6), so it
+has no ``playbook:`` block and its authored description carries its own "Use when".
 The D13 static checks (description shape, 500 lines, references one level deep,
 plain markdown) cover the core skills only: bundled plugin skills are exempt
 (D24) because their vendored or distilled descriptions and bodies fail them as
@@ -15,7 +16,7 @@ skill-listing budget in ``test_context_budget.py`` still counts every plugin.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from typing import TYPE_CHECKING, Final
 
 import pytest
@@ -31,11 +32,12 @@ from coding_agent_playbook.hooks.guardrails_skill import (
     compose_guardrails_skill,
 )
 from coding_agent_playbook.skills.document import DESCRIPTION_MAX_CHARS
-from coding_agent_playbook.skills.membership import compose_skills
+from coding_agent_playbook.skills.membership import compose_skills, member_rules_of
 from coding_agent_playbook.skills.naming import agent_skill_issues
 from coding_agent_playbook.validation.link_check import extract_markdown_links
 from tests._budget_probe import reference_probe_facts, render_core_rule
-from tests._catalog import CORE_ROOT, core_rules
+from tests._catalog import CORE_ROOT, core_rule_skill_ids, core_rules
+from tests.core_skill_pins import ALL_PINS, PLAIN_CORE_SKILL_IDS, CoreSkillPins
 from tests.hook_runtime.handlers.pack_repo import engine_hook, engine_hook_paths
 from tests.hook_samples import resolved_hook
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
@@ -50,209 +52,20 @@ if TYPE_CHECKING:
 
 pytestmark = pytest.mark.catalog
 
-#: Scoped rule in core -> the core skill whose references deliver it.
-EXPECTED_MEMBERSHIP: Final[Mapping[str, str]] = {
-    "python-dependency-injection": "python-coding",
-    "python-pure-core": "python-coding",
-    "python-data-shapes": "python-coding",
-    "python-typing": "python-coding",
-    "python-performance-idioms": "python-coding",
-    "python-async": "python-coding",
-    "python-classes-and-protocols": "python-coding",
-    "python-error-handling": "python-coding",
-    "python-context-managers": "python-coding",
-    "python-docstrings": "python-coding",
-    "python-retries-and-timeouts": "python-coding",
-    "python-idioms": "python-coding",
-    "pytest": "python-testing",
-    "pytest-test-doubles": "python-testing",
-    "pytest-fixtures": "python-testing",
-    "python-static-checks": "python-tooling",
-    "pytest-configuration": "python-tooling",
-    "python-uv-workflow": "python-tooling",
-    "fastapi-app-wiring": "python-tooling",
-    "fastapi-error-boundaries": "python-tooling",
-    "pydantic-boundaries": "python-tooling",
-    "ml-serialization-security": "ml-data",
-    "ml-data-transforms": "ml-data",
-    "ml-vectorization": "ml-data",
-    "ml-dtypes-and-typing": "ml-data",
-    "ml-reproducibility-and-testing": "ml-data",
+#: Every core skill with member rules, one pins module each under ``tests/core_skill_pins/``.
+PINS_BY_SKILL: Final[Mapping[str, CoreSkillPins]] = {pins.skill_id: pins for pins in ALL_PINS}
+#: Scoped rule in core -> the core skill whose references deliver it, from the pins modules.
+MEMBERSHIP_FROM_PINS: Final[Mapping[str, str]] = {
+    rule_id: pins.skill_id for pins in ALL_PINS for rule_id in pins.members
 }
 #: Core skill with member rules -> its ``playbook.files`` phrase in "Where guidance lives".
-EXPECTED_WHERE: Final[Mapping[str, str]] = {
-    "python-coding": "Any Python file",
-    "python-testing": "Test files and conftest.py",
-    "python-tooling": "Tool configuration and framework wiring",
-    "ml-data": "Model, array and data-frame code",
-}
-CORE_SKILLS: Final = sorted(EXPECTED_WHERE)
-#: Core members whose gate the reference probe fails: it has no uv.lock (spec 9.6.2).
-PROBE_INACTIVE_MEMBERS: Final = frozenset({"python-uv-workflow"})
-#: Core skills that take no member rules: no ``playbook:`` block, an authored "Use when".
-EXPECTED_PLAIN_CORE_SKILLS: Final = frozenset({GUARDRAILS_SKILL_ID})
-EVERY_CORE_SKILL: Final = sorted({*CORE_SKILLS, *EXPECTED_PLAIN_CORE_SKILLS})
-#: python-coding's member count after the python-best-practices distillation (spec 9.6.2, H13).
-PYTHON_CODING_MEMBER_COUNT: Final = 12
-#: python-testing's members after the pytest distillation (spec 9.6.2): pytest plus two.
-PYTHON_TESTING_MEMBERS: Final = ("pytest", "pytest-fixtures", "pytest-test-doubles")
-#: python-tooling's members (spec 9.6.2): the two FastAPI rules plus four distilled ones.
-PYTHON_TOOLING_MEMBERS: Final = (
-    "fastapi-app-wiring",
-    "fastapi-error-boundaries",
-    "pydantic-boundaries",
-    "pytest-configuration",
-    "python-static-checks",
-    "python-uv-workflow",
-)
-#: ml-data's members after the array and data-frame distillation (spec 9.6.2), sorted by id.
-ML_DATA_MEMBERS: Final = (
-    "ml-data-transforms",
-    "ml-dtypes-and-typing",
-    "ml-reproducibility-and-testing",
-    "ml-serialization-security",
-    "ml-vectorization",
-)
-
-
-@dataclass(frozen=True)
-class DistilledRuleRow:
-    """One row of spec 9.6.1: a distilled rule's file, skill, label, gate and priority."""
-
-    path: str
-    skill: str
-    name: str
-    globs: tuple[str, ...]
-    applies_if: Mapping[str, object]
-    priority: int
-    tags: tuple[str, ...]
-
-
-_PY_FILES: Final = ("**/*.py",)
-_TEST_FILES: Final = ("tests/**/*.py", "**/conftest.py")
-_PYTEST_GATE: Final[Mapping[str, object]] = {"has_framework": ["pytest"]}
-_ML_FILES: Final = ("**/*.py", "**/*.ipynb")
-_ML_ARRAY_GATE: Final[Mapping[str, object]] = {"any_ml_stack": ["numpy", "pandas", "polars"]}
-#: Distilled rule id -> its spec 9.6.1 row; ``path`` is relative to ``catalog/core/rules``.
-DISTILLED_RULES: Final[Mapping[str, DistilledRuleRow]] = {
-    "python-performance-idioms": DistilledRuleRow(
-        "languages/python/performance-idioms.md",
-        "python-coding",
-        "Performance idioms",
-        _PY_FILES,
-        {},
-        51,
-        ("python", "performance"),
-    ),
-    "python-async": DistilledRuleRow(
-        "languages/python/async.md",
-        "python-coding",
-        "Asyncio",
-        _PY_FILES,
-        {"python_version": ">=3.11"},
-        53,
-        ("python", "async", "concurrency"),
-    ),
-    "python-classes-and-protocols": DistilledRuleRow(
-        "languages/python/classes-and-protocols.md",
-        "python-coding",
-        "Classes and protocols",
-        _PY_FILES,
-        {},
-        53,
-        ("python", "design", "oop"),
-    ),
-    "pytest-test-doubles": DistilledRuleRow(
-        "frameworks/pytest-test-doubles.md",
-        "python-testing",
-        "pytest test doubles",
-        _TEST_FILES,
-        _PYTEST_GATE,
-        61,
-        ("python", "testing", "pytest", "mocking"),
-    ),
-    "pytest-fixtures": DistilledRuleRow(
-        "frameworks/pytest-fixtures.md",
-        "python-testing",
-        "pytest fixtures",
-        _TEST_FILES,
-        _PYTEST_GATE,
-        63,
-        ("python", "testing", "pytest", "fixtures"),
-    ),
-    "python-static-checks": DistilledRuleRow(
-        "languages/python/static-checks.md",
-        "python-tooling",
-        "Static checks",
-        ("**/*.py", "pyproject.toml", "ruff.toml", ".ruff.toml", "mypy.ini", ".mypy.ini"),
-        {},
-        21,
-        ("python", "tooling", "ruff", "mypy"),
-    ),
-    "pytest-configuration": DistilledRuleRow(
-        "frameworks/pytest-configuration.md",
-        "python-tooling",
-        "pytest configuration",
-        ("pyproject.toml", "pytest.ini", "tox.ini", "setup.cfg", "**/conftest.py"),
-        _PYTEST_GATE,
-        23,
-        ("python", "tooling", "pytest"),
-    ),
-    "python-uv-workflow": DistilledRuleRow(
-        "languages/python/uv-workflow.md",
-        "python-tooling",
-        "uv workflow",
-        ("pyproject.toml",),
-        {"package_manager": "uv"},
-        28,
-        ("python", "tooling", "uv"),
-    ),
-    "pydantic-boundaries": DistilledRuleRow(
-        "frameworks/pydantic-boundaries.md",
-        "python-tooling",
-        "Pydantic boundaries",
-        _PY_FILES,
-        {"has_framework": ["pydantic"]},
-        63,
-        ("python", "pydantic", "validation"),
-    ),
-    "ml-vectorization": DistilledRuleRow(
-        "ml/vectorization.md.j2",
-        "ml-data",
-        "Vectorization",
-        _ML_FILES,
-        _ML_ARRAY_GATE,
-        71,
-        ("ml", "numpy", "pandas", "polars", "performance"),
-    ),
-    "ml-data-transforms": DistilledRuleRow(
-        "ml/data-transforms.md.j2",
-        "ml-data",
-        "Data transforms",
-        _ML_FILES,
-        _ML_ARRAY_GATE,
-        71,
-        ("ml", "pandas", "polars", "numpy"),
-    ),
-    "ml-dtypes-and-typing": DistilledRuleRow(
-        "ml/dtypes-and-typing.md.j2",
-        "ml-data",
-        "Dtypes and typing",
-        _ML_FILES,
-        _ML_ARRAY_GATE,
-        73,
-        ("ml", "dtypes", "typing"),
-    ),
-    "ml-reproducibility-and-testing": DistilledRuleRow(
-        "ml/reproducibility-and-testing.md.j2",
-        "ml-data",
-        "Reproducibility and numeric tests",
-        _ML_FILES,
-        _ML_ARRAY_GATE,
-        73,
-        ("ml", "reproducibility", "testing"),
-    ),
-}
+WHERE_FROM_PINS: Final[Mapping[str, str]] = {pins.skill_id: pins.where for pins in ALL_PINS}
+CORE_SKILLS: Final = sorted(PINS_BY_SKILL)
+#: Core members whose gate the reference probe fails (spec 9.6.2).
+PROBE_INACTIVE_MEMBERS: Final = frozenset().union(*(pins.probe_inactive for pins in ALL_PINS))
+EVERY_CORE_SKILL: Final = sorted({*CORE_SKILLS, *PLAIN_CORE_SKILL_IDS})
+#: (skill id, rule id) of every rule a pins module pins the frontmatter of.
+PINNED_RULES: Final = sorted((p.skill_id, rule_id) for p in ALL_PINS for rule_id in p.rules)
 SKILLS_ROOT: Final = CORE_ROOT / "skills"
 #: A third-person description check (no "I", "you" or "we"), extended with "use" (a "Use when" opener).
 _NOT_THIRD_PERSON: Final = re.compile(r"(?i)(i|you|we|use)\b")
@@ -294,7 +107,7 @@ def _probe_members(skill_id: str) -> list[Rule]:
 def _is_core_member_reference(path: str) -> bool:
     """Whether repo-relative ``path`` is ``<root>/<core skill>/references/<file>``."""
     parts = path.split("/")
-    return len(parts) >= 3 and parts[-2] == "references" and parts[-3] in EXPECTED_WHERE
+    return len(parts) >= 3 and parts[-2] == "references" and parts[-3] in WHERE_FROM_PINS
 
 
 def _probe_skill_md(repo: Path, skill_id: str) -> str:
@@ -339,7 +152,7 @@ def test_core_skill_identity_and_description_shape(skill_id: str) -> None:
     assert not use_when.lower().startswith("use when"), f"{skill_id}: {use_when!r}"
 
 
-@pytest.mark.parametrize("skill_id", sorted(EXPECTED_PLAIN_CORE_SKILLS))
+@pytest.mark.parametrize("skill_id", sorted(PLAIN_CORE_SKILL_IDS))
 def test_plain_core_skill_identity_and_description_shape(skill_id: str) -> None:
     """The D13 description lint for a core skill without members (spec 8.4.3, H15).
 
@@ -363,8 +176,8 @@ def test_plain_core_skill_identity_and_description_shape(skill_id: str) -> None:
 def test_core_skill_declares_where_phrase(skill_id: str) -> None:
     block = _authored(skill_id)[0].get("playbook")
     files = block.get("files") if isinstance(block, dict) else None
-    assert files == EXPECTED_WHERE[skill_id], (
-        f"core skill {skill_id!r} needs playbook.files {EXPECTED_WHERE[skill_id]!r}, got {files!r}"
+    assert files == WHERE_FROM_PINS[skill_id], (
+        f"core skill {skill_id!r} needs playbook.files {WHERE_FROM_PINS[skill_id]!r}, got {files!r}"
     )
     assert 1 <= len(files) <= 80 and not files.endswith(".")
 
@@ -452,70 +265,60 @@ def test_core_skills_pass_agent_skill_issues(skill_id: str, tmp_path: Path) -> N
     assert agent_skill_issues(_loaded_skill(skill_id, tmp_path)) == []
 
 
-@pytest.mark.parametrize("rule_id", sorted(EXPECTED_MEMBERSHIP))
+@pytest.mark.parametrize("rule_id", sorted(MEMBERSHIP_FROM_PINS))
 def test_scoped_core_rule_names_its_skill(rule_id: str) -> None:
     skill = core_rules()[rule_id].frontmatter.skill
-    assert skill == EXPECTED_MEMBERSHIP[rule_id], (
-        f"core rule {rule_id!r} names skill {skill!r}; EXPECTED_MEMBERSHIP expects "
-        f"{EXPECTED_MEMBERSHIP[rule_id]!r} (scoped rules in core must name one of: "
+    assert skill == MEMBERSHIP_FROM_PINS[rule_id], (
+        f"core rule {rule_id!r} names skill {skill!r}; tests/core_skill_pins expects "
+        f"{MEMBERSHIP_FROM_PINS[rule_id]!r} (scoped rules in core must name one of: "
         f"{', '.join(CORE_SKILLS)})"
     )
 
 
-def test_membership_table_covers_every_scoped_core_rule() -> None:
-    """Regression: a new scoped rule in core cannot ship without an owning skill."""
-    scoped = {rule_id for rule_id, r in core_rules().items() if r.frontmatter.scope == "scoped"}
-    missing = sorted(scoped - set(EXPECTED_MEMBERSHIP))
-    assert not missing, f"scoped rules {missing} in core are missing from EXPECTED_MEMBERSHIP"
-    assert scoped == set(EXPECTED_MEMBERSHIP)
+def test_each_scoped_core_rule_is_pinned_by_exactly_its_skill() -> None:
+    """Regression: a scoped rule in core appears in exactly one pins module, its skill's."""
+    rules = core_rules()
+    scoped = sorted(rule_id for rule_id, r in rules.items() if r.frontmatter.scope == "scoped")
+    for rule_id in scoped:
+        owners = [pins.skill_id for pins in ALL_PINS if rule_id in pins.members]
+        assert owners == [rules[rule_id].frontmatter.skill], (
+            f"scoped core rule {rule_id!r} is pinned by {owners}; expected only the pins "
+            f"module of its skill {rules[rule_id].frontmatter.skill!r}"
+        )
+    pinned = [rule_id for pins in ALL_PINS for rule_id in pins.members]
+    extra = sorted(set(pinned) - set(scoped))
+    assert not extra, f"pins name rules that are not scoped core rules: {extra}"
+    dupes = sorted({rule_id for rule_id in pinned if pinned.count(rule_id) > 1})
+    assert not dupes, f"pins list these member rules more than once: {dupes}"
 
 
-def test_python_coding_members() -> None:
-    """The twelve members of spec 9.6.2: nine from the always-text move, three distilled."""
-    members = sorted(i for i, r in core_rules().items() if r.frontmatter.skill == "python-coding")
-    expected = sorted(i for i, skill in EXPECTED_MEMBERSHIP.items() if skill == "python-coding")
-    assert members == expected, f"python-coding members are {members}; expected {expected}"
-    assert len(members) == PYTHON_CODING_MEMBER_COUNT, (
-        f"python-coding has {len(members)} members; expected {PYTHON_CODING_MEMBER_COUNT}"
+@pytest.mark.parametrize("pins", ALL_PINS, ids=lambda pins: pins.skill_id)
+def test_core_skill_members_in_index_order(pins: CoreSkillPins) -> None:
+    """Spec 9.6.2: each skill's members, in the order its references index lists them."""
+    members = [
+        rule.frontmatter.id for rule in member_rules_of(pins.skill_id, list(core_rules().values()))
+    ]
+    assert tuple(members) == pins.members, (
+        f"{pins.skill_id} members are {members}; expected {list(pins.members)}"
     )
 
 
-def test_python_testing_members() -> None:
-    """Spec 9.6.2: pytest plus the two distilled members, test doubles and fixtures."""
-    members = sorted(i for i, r in core_rules().items() if r.frontmatter.skill == "python-testing")
-    assert tuple(members) == PYTHON_TESTING_MEMBERS, (
-        f"python-testing members are {members}; expected {list(PYTHON_TESTING_MEMBERS)}"
-    )
-
-
-def test_python_tooling_members() -> None:
-    """Spec 9.6.2: the two FastAPI rules plus the four distilled tooling members."""
-    members = sorted(i for i, r in core_rules().items() if r.frontmatter.skill == "python-tooling")
-    assert tuple(members) == PYTHON_TOOLING_MEMBERS, (
-        f"python-tooling members are {members}; expected {list(PYTHON_TOOLING_MEMBERS)}"
-    )
-
-
-def test_ml_data_members() -> None:
-    """Spec 9.6.2: the serialization rule plus the four array and data-frame members."""
-    members = sorted(i for i, r in core_rules().items() if r.frontmatter.skill == "ml-data")
-    assert tuple(members) == ML_DATA_MEMBERS, (
-        f"ml-data members are {members}; expected {list(ML_DATA_MEMBERS)}"
-    )
-
-
-@pytest.mark.parametrize("rule_id", sorted(DISTILLED_RULES))
-def test_distilled_rule_frontmatter(rule_id: str) -> None:
-    """Spec 9.4.1 / 9.6.1: the row's file and frontmatter, version 1 and no ``lint_codes`` (D23)."""
-    row, rule = DISTILLED_RULES[rule_id], core_rules()[rule_id]
-    front = rule.frontmatter
-    assert rule.source_path == CORE_ROOT / "rules" / row.path, rule.source_path
+@pytest.mark.parametrize(("skill_id", "rule_id"), PINNED_RULES)
+def test_pinned_rule_frontmatter(skill_id: str, rule_id: str) -> None:
+    """Spec 9.4.1 / 9.6.1: the pinned frontmatter; distilled rules have no ``lint_codes`` (D23)."""
+    pin, front = PINS_BY_SKILL[skill_id].rules[rule_id], core_rules()[rule_id].frontmatter
     actual = (front.skill, front.scope, front.version, front.name, tuple(front.globs))
-    assert actual == (row.skill, "scoped", 1, row.name, row.globs), f"{rule_id}: {actual}"
-    assert (front.applies_if, front.priority) == (row.applies_if, row.priority), rule_id
-    assert tuple(front.tags) == row.tags, f"{rule_id}: tags {front.tags}"
-    assert front.lint_codes == {}, f"{rule_id} carries lint_codes {front.lint_codes} (D23)"
+    assert actual == (skill_id, "scoped", pin.version, pin.name, pin.globs), f"{rule_id}: {actual}"
+    assert (front.applies_if, front.priority) == (pin.applies_if, pin.priority), rule_id
+    assert tuple(front.tags) == pin.tags, f"{rule_id}: tags {front.tags}"
+    assert front.lint_codes == pin.lint_codes, f"{rule_id} carries lint_codes {front.lint_codes}"
     assert front.description.endswith("."), f"{rule_id}: one-sentence description"
+
+
+@pytest.mark.parametrize("pins", ALL_PINS, ids=lambda pins: pins.skill_id)
+def test_pinned_rules_are_members_and_probe_inactive_are_members(pins: CoreSkillPins) -> None:
+    stray = sorted((set(pins.rules) | pins.probe_inactive) - set(pins.members))
+    assert not stray, f"{pins.skill_id} pins non-members {stray}"
 
 
 def test_always_core_rules_name_no_skill() -> None:
@@ -526,7 +329,11 @@ def test_always_core_rules_name_no_skill() -> None:
 
 
 def test_every_core_member_skill_has_a_core_member() -> None:
-    assert set(EXPECTED_MEMBERSHIP.values()) == set(EXPECTED_WHERE)
+    assert set(MEMBERSHIP_FROM_PINS.values()) == set(WHERE_FROM_PINS)
+
+
+def test_pins_modules_cover_exactly_the_core_skills_with_a_playbook_block() -> None:
+    assert core_rule_skill_ids() == CORE_SKILLS, "one tests/core_skill_pins module per such skill"
 
 
 @pytest.mark.parametrize("skill_id", CORE_SKILLS)
@@ -558,7 +365,7 @@ def test_reference_probe_where_section_lists_every_core_skill(reference_probe_re
     for relative in ("AGENTS.md", CLAUDE_RULES_PATH):
         text = (reference_probe_repo / relative).read_text(encoding="utf-8")
         assert text.count("## Where guidance lives") == 1, relative
-        for skill_id, files in EXPECTED_WHERE.items():
+        for skill_id, files in WHERE_FROM_PINS.items():
             assert f"- {files}: skill `{skill_id}`" in text, f"{relative} lacks {skill_id}"
         assert "Lint feedback names a rule id" in text, relative
 
@@ -607,7 +414,7 @@ def test_reference_probe_lockfile_records_member_references_as_rules(
     expected = {
         f"{root}/{skill_id}/references/{rule_id}.md": ("rule", rule_id)
         for root in NATIVE_SKILL_ROOTS
-        for rule_id, skill_id in EXPECTED_MEMBERSHIP.items()
+        for rule_id, skill_id in MEMBERSHIP_FROM_PINS.items()
         if rule_id not in PROBE_INACTIVE_MEMBERS
     }
     assert rows == expected
