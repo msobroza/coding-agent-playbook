@@ -7,7 +7,8 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.artifacts.prompt import Prompt
-from coding_agent_playbook.catalog.source import FileSystemArtifactSource, _iter_md_files
+from coding_agent_playbook.catalog._skill_rules import iter_md_files
+from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -71,7 +72,7 @@ def test_without_a_v2_set_the_listing_is_the_walk_list_prompts_did_before_prompt
     before_prompt_sets = [
         Prompt.from_markdown(md, label)
         for label, root in source.layer_roots("prompts")
-        for md in _iter_md_files(root)
+        for md in iter_md_files(root)
     ]
 
     assert [(p.source_path, p.body) for p in source.list_prompts()] == [
