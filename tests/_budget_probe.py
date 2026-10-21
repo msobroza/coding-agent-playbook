@@ -20,20 +20,21 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 import coding_agent_playbook
-from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
-from coding_agent_playbook.artifacts.skill import Skill
-from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE
 from coding_agent_playbook.commands import init as _init
 from coding_agent_playbook.detector.facts import detect
 from coding_agent_playbook.rendering.session import RenderSession, TemplateContext
 from coding_agent_playbook.skills.document import WhereEntry, skill_catalog_block
 from coding_agent_playbook.skills.naming import skill_id_of
-from tests._catalog import CORE_ROOT, core_rules
+from tests._catalog import CORE_ROOT, core_rules, core_skills
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from coding_agent_playbook.detector.facts import Facts
+
+#: prU D18 as amended by D54 (6,000 -> 6,500 -> 7,000): core plus EACH bundled plugin's
+#: skill listing, on the reference probe and in the per-plugin listing test.
+LISTING_MAX_CHARS: Final = 7000
 
 REFERENCE_PROBE_PYPROJECT: Final = """\
 [project]
@@ -184,20 +185,18 @@ def render_core_rule(
     return session.render_rule(rules[rule_id]).body
 
 
-def every_core_where_entry() -> list[WhereEntry]:
-    """A ``Where guidance lives`` row for every core skill declaring ``playbook.files``, by id.
+def every_core_where_entry(skills_root: Path = CORE_ROOT / "skills") -> list[WhereEntry]:
+    """A ``Where guidance lives`` row for every skill under ``skills_root`` declaring ``playbook.files``.
 
     The worst case of prU D35: sync lists a skill only when one of its members
     is active, so the probe's own map shrinks with its facts; this one does not.
-    Read from the checkout's ``SKILL.md`` files, so a new core skill joins without
-    an edit here.
+    Loaded through :func:`tests._catalog.core_skills` (the engine's own walker,
+    ``SKILL.md`` or ``SKILL.md.j2``), so a new core skill joins without an edit here.
 
     Example: ``where_guidance_section(every_core_where_entry())``.
     """
     entries: list[WhereEntry] = []
-    for skill_md in sorted((CORE_ROOT / "skills").glob("*/SKILL.md")):
-        frontmatter, body = split_frontmatter(skill_md.read_text(encoding="utf-8"))
-        skill = Skill(dict(frontmatter), body, None, None, ENGINE_PACKAGE)
+    for skill in core_skills(skills_root):
         files = skill_catalog_block(skill).files
         if files is not None:
             entries.append(WhereEntry(skill_id=skill_id_of(skill), files=files))

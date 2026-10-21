@@ -27,7 +27,7 @@ from coding_agent_playbook.rendering.formats import render_for
 from coding_agent_playbook.skills.document import where_entry, where_guidance_section
 from coding_agent_playbook.sync.render import render_artifacts
 from coding_agent_playbook.validation.context import SyncContext
-from tests._budget_probe import every_core_where_entry
+from tests._budget_probe import LISTING_MAX_CHARS, every_core_where_entry
 from tests._catalog import core_rules, core_skill_ids
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
 
@@ -40,8 +40,6 @@ AGENTS_MD_MAX_WORDS: Final = 1500
 CORE_DESCRIPTION_MAX_CHARS: Final = 300
 #: prU D18 as amended by D54 (2,000 -> 2,400 -> 2,800); the per-skill cap above stays.
 CORE_DESCRIPTIONS_MAX_CHARS: Final = 2800
-#: prU D18 as amended by D54 (6,000 -> 6,500 -> 7,000): core plus each bundled plugin.
-LISTING_MAX_CHARS: Final = 7000
 #: prU D59: the Domino probe's own caps, the worst case once the Domino skills apply.
 DOMINO_CORE_DESCRIPTIONS_MAX_CHARS: Final = 3400
 DOMINO_LISTING_MAX_CHARS: Final = 7500
@@ -116,6 +114,23 @@ def test_where_map_with_every_core_skill_within_800_words(reference_probe_repo: 
     )
 
 
+def test_every_core_where_entry_reads_templated_skill_md(tmp_path: Path) -> None:
+    """A skill shipped as ``SKILL.md.j2`` joins the worst-case map, as sync would list it."""
+    for name, filename in (("plain", "SKILL.md"), ("templated", "SKILL.md.j2")):
+        skill_dir = tmp_path / name
+        skill_dir.mkdir()
+        (skill_dir / filename).write_text(
+            f"---\nid: {name}\nname: {name}\ndescription: d\n"
+            f'playbook:\n  use_when: "w"\n  files: "{name} files"\n---\n\n# {name}\n',
+            encoding="utf-8",
+        )
+    entries = every_core_where_entry(tmp_path)
+    assert [(e.skill_id, e.files) for e in entries] == [
+        ("plain", "plain files"),
+        ("templated", "templated files"),
+    ]
+
+
 def test_always_sections_within_240_words(reference_probe_repo: Path) -> None:
     """``## Project context`` plus ``## Python house style``, without the map (D17)."""
     sections, _ = _always_text(reference_probe_repo, "agents_md_section")
@@ -175,9 +190,14 @@ def test_agents_md_guardrails_are_one_line_per_hook_with_an_advisory(
         assert check in ci_line, ci_line
 
 
+def _over_per_skill_cap(repo: Path) -> dict[str, int]:
+    """The core skills of ``repo`` whose description exceeds the per-skill cap, with lengths."""
+    lengths = {sid: len(text) for sid, text in _core_descriptions(repo).items()}
+    return {sid: n for sid, n in lengths.items() if n > CORE_DESCRIPTION_MAX_CHARS}
+
+
 def test_each_core_description_within_300_chars(reference_probe_repo: Path) -> None:
-    lengths = {sid: len(text) for sid, text in _core_descriptions(reference_probe_repo).items()}
-    over = {sid: n for sid, n in lengths.items() if n > CORE_DESCRIPTION_MAX_CHARS}
+    over = _over_per_skill_cap(reference_probe_repo)
     assert not over, f"core descriptions over {CORE_DESCRIPTION_MAX_CHARS} chars: {over}"
 
 
@@ -202,8 +222,7 @@ def test_core_and_plugin_descriptions_total_within_7000_chars_d18(
 
 
 def test_domino_probe_each_core_description_within_300_chars(domino_probe_repo: Path) -> None:
-    lengths = {sid: len(text) for sid, text in _core_descriptions(domino_probe_repo).items()}
-    over = {sid: n for sid, n in lengths.items() if n > CORE_DESCRIPTION_MAX_CHARS}
+    over = _over_per_skill_cap(domino_probe_repo)
     assert not over, f"core descriptions over {CORE_DESCRIPTION_MAX_CHARS} chars: {over}"
 
 

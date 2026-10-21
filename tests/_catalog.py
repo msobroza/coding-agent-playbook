@@ -12,9 +12,14 @@ from __future__ import annotations
 
 from importlib import resources
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from coding_agent_playbook.artifacts.rule import Rule
 from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE
+from coding_agent_playbook.catalog.source import _iter_skills
+
+if TYPE_CHECKING:
+    from coding_agent_playbook.artifacts.skill import Skill
 
 #: The repository checkout this test suite runs from.
 REPO_ROOT: Path = Path(__file__).resolve().parents[1]
@@ -107,6 +112,18 @@ def core_rules() -> dict[str, Rule]:
     """
     rules = (Rule.from_markdown(path, ENGINE_PACKAGE) for path in core_markdown_sources("rules"))
     return {rule.frontmatter.id: rule for rule in rules}
+
+
+def core_skills(skills_root: Path = CORE_ROOT / "skills") -> list[Skill]:
+    """Every skill under ``skills_root`` (core's by default), loaded as sync loads it, by directory.
+
+    The skills counterpart of :func:`core_rules`: anchored on the checkout, but
+    parsed by the engine's own skill walker, so a ``SKILL.md.j2`` skill counts
+    exactly as sync would count it.
+
+    Example: ``[skill.frontmatter["id"] for skill in core_skills()][0]`` -> ``"ml-data"``.
+    """
+    return list(_iter_skills(skills_root, ENGINE_PACKAGE))
 
 
 def core_skill_ids() -> frozenset[str]:
