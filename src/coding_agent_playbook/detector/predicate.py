@@ -7,6 +7,7 @@ every render (``sync``, ``render``, the eval runner).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, cast
 
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
@@ -16,7 +17,7 @@ from coding_agent_playbook.detector.facts import KNOWN_PACKAGE_MANAGERS
 from coding_agent_playbook.detector.pep503 import canonical_name
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Mapping
+    from collections.abc import Callable, Iterable
     from pathlib import Path
 
     from coding_agent_playbook.artifacts.prompt import Prompt
@@ -79,8 +80,19 @@ def _check_python_version(constraint: str, facts: Facts) -> bool:
 
 
 def _fact_keys(facts: Facts, field: str) -> Mapping[str, object]:
-    """The mapping fact ``field`` (``frameworks``, ``ml_stack``, a dependency table); empty if absent."""
-    return cast("Mapping[str, Mapping[str, object]]", facts).get(field, {})
+    """The mapping fact ``field`` (``frameworks``, ``ml_stack``, a dependency table); empty if absent.
+
+    A non-mapping value (a hand-written eval mock fact such as ``"torch"``) raises:
+    a membership test on a string would match substrings and silently pass.
+
+    >>> _fact_keys({"ml_stack": "torch"}, "ml_stack")
+    Traceback (most recent call last):
+    ValueError: fact 'ml_stack' must be a mapping of name to version; got 'torch'
+    """
+    value = cast("Mapping[str, object]", facts).get(field, {})
+    if not isinstance(value, Mapping):
+        raise ValueError(f"fact {field!r} must be a mapping of name to version; got {value!r}")
+    return value
 
 
 def _canonical_keys(facts: Facts, *fields: str) -> frozenset[str]:

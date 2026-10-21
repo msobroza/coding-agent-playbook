@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
@@ -434,3 +434,21 @@ def test_has_dev_dependency_normalizes_the_fact_keys_too() -> None:
     """Hand-written facts (an eval sample's) match like detected ones: both sides are PEP 503."""
     facts: Facts = {"dev_dependencies": {"Pytest_Cov": ">=5"}}
     assert evaluate_predicate({"has_dev_dependency": ["pytest-cov"]}, facts)
+
+
+@pytest.mark.parametrize(
+    ("key", "field"),
+    [
+        ("has_framework", "frameworks"),
+        ("has_ml_stack", "ml_stack"),
+        ("any_ml_stack", "ml_stack"),
+        ("has_dev_dependency", "dev_dependencies"),
+        ("has_dependency", "dependencies"),
+        ("any_dependency", "dev_dependencies"),
+    ],
+)
+def test_names_predicates_reject_a_mis_shaped_fact(key: str, field: str) -> None:
+    """A non-mapping fact raises naming the field: ``"a" in "abc"`` must not match as a substring."""
+    facts = cast("Facts", {field: "abc"})
+    with pytest.raises(ValueError, match=f"fact {field!r} must be a mapping"):
+        evaluate_predicate({key: ["a"]}, facts)
