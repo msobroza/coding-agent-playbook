@@ -292,6 +292,8 @@ playbook init --adapters claude_code,opencode,shared_skills,continue
 
 Codex needs no adapter: it reads `AGENTS.md` and `.agents/skills/`.
 
+Choose the spec-driven framework with `playbook init --framework superpowers | mattpocock | none` (default `none`; it writes the committed `framework` key).
+
 Then install the git hooks — all three hook types, so the auto-sync runs after
 checkouts and pulls:
 
@@ -559,6 +561,16 @@ using-superpowers, and diagnosing-superpowers.
 overlays_enabled = ["coding_agent_playbook.plugins.superpowers"]
 adapters_enabled = ["claude_code", "opencode", "shared_skills"]   # the init default
 ```
+
+Both bundled plugins are spec-driven frameworks (each ships a `framework.toml`
+at its root), so the shorter way to enable one is the top-level key
+`framework = "superpowers"` or `framework = "mattpocock"`
+(`playbook init --framework …` writes it); `overlays_enabled` stays for
+add-ons that are not frameworks. `playbook validate` refuses two frameworks
+enabled together, naming both. Switching is a config change plus
+`playbook sync`, which removes the old framework's files, and `playbook check`
+prints the enabled framework's roles, such as
+`framework mattpocock: clarify -> grill-me, debug -> diagnosing-bugs, …`.
 
 Use these top-level keys: they are the only ones the engine reads. Put them
 at the top of the file, above the first `[table]` header: the file

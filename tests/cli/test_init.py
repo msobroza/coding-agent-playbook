@@ -153,6 +153,7 @@ def test_init_interactive_uses_input(tmp_path, monkeypatch):
             "Some description",  # project description
             "python-library",  # kind
             "",  # adapters: blank => defaults
+            "",  # framework: blank => none (D57)
             "",  # overlays: blank => defaults
             "",  # lifecycle hooks: blank => yes (prK §B.1)
         ]
@@ -829,6 +830,7 @@ def test_apply_answers_replaces_answered_fields_and_keeps_the_rest(
         kind="python-application",
         description="",
         adapters=["continue"],
+        framework=None,
         overlays=[],
         hooks=None,
     )
@@ -839,6 +841,7 @@ def test_apply_answers_replaces_answered_fields_and_keeps_the_rest(
         engine_version="0.1.0a0",
         overlays_enabled=[],
         adapters_enabled=["custom", "continue"],
+        framework="none",
         storage=StorageConfig(artifact_source="custom"),
         detector_cache={"fresh": True},
         user_choices={"docstring_style": "numpy"},

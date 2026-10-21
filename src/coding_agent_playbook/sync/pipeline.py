@@ -247,7 +247,7 @@ def execute(
 
 def _environment_ready(ctx: SyncContext) -> bool:
     """Refuse (``False``) when an overlay is unusable; warn on missing adapters."""
-    unusable = _sync_preflight.unusable_overlays(ctx.config.overlays_enabled)
+    unusable = _sync_preflight.unusable_overlays(ctx.config.layers_enabled)
     if unusable:
         _sync_preflight.report_unusable_overlays(unusable)
         return False

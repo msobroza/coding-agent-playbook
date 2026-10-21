@@ -30,6 +30,8 @@ _QUESTIONS = [
     "Project description: ",
     "Project kind [python-application]: ",
     "> ",  # the adapters multi-select
+    "Spec-driven framework (superpowers, mattpocock, an overlay module or none; "
+    "blank keeps the current one, else none): ",
     "> ",  # the overlays multi-select
     "Enable assistant lifecycle hooks? [Y/n]: ",
 ]
@@ -58,7 +60,7 @@ def test_interactive_init_asks_through_the_injected_ask(
         '[project]\nname="x"\nrequires-python=">=3.12"\ndependencies=[]\n', encoding="utf-8"
     )
     monkeypatch.setattr("builtins.input", _refuse_console_input)
-    ask = FakeAsk(["asked-repo", "", "python-library", "", "", "n"])
+    ask = FakeAsk(["asked-repo", "", "python-library", "", "", "", "n"])
 
     assert _init.run(argparse.Namespace(repo_root=str(tmp_path)), ask=ask) == 0
 
@@ -91,6 +93,7 @@ def test_init_args_from_a_partial_namespace_uses_the_flag_defaults() -> None:
         kind=None,
         description="",
         adapters=None,
+        framework=None,
         overlays="",
         no_hooks=False,
     )

@@ -88,6 +88,29 @@ def compose_skills(
     return [skill for skill in composed if skill is not None]
 
 
+def active_skill_ids(
+    skills: Sequence[Skill], merged_rules: Sequence[Rule], active_rules: Sequence[Rule]
+) -> frozenset[str]:
+    """The ids of the skills :func:`compose_skills` keeps, without rendering anything.
+
+    What a template's ``skill_active(name)`` reads (D74): a plain skill always
+    renders, a skill with a ``playbook`` block only when one of its members is
+    in ``active_rules``. Example::
+
+        active_skill_ids(ctx.skills_resolved, ctx.rules_resolved, applicable_rules)
+    """
+    active = {rule.frontmatter.id for rule in active_rules}
+    return frozenset(
+        skill_id_of(skill)
+        for skill in skills
+        if not is_rule_skill(skill)
+        or any(
+            rule.frontmatter.id in active
+            for rule in member_rules_of(skill_id_of(skill), merged_rules)
+        )
+    )
+
+
 def member_reference(rule: Rule) -> MemberReference:
     """``rule`` (body already rendered) as the reference its skill writes.
 

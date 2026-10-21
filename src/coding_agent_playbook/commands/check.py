@@ -23,6 +23,7 @@ from coding_agent_playbook.adapters.claude_code.settings.drift import (
     settings_document,
     stray_launcher_edited,
 )
+from coding_agent_playbook.commands._check_framework import format_framework_lines
 from coding_agent_playbook.commands._check_hooks import format_hooks_section
 from coding_agent_playbook.config.committed import (
     detector_cache_table,
@@ -58,6 +59,7 @@ def _format_env_section(ctx: SyncContext, unusable: Sequence[UnusableOverlay] = 
         f"  Python: {python_version}",
         f"  Package manager: {package_manager}",
         f"  Engine: coding-agent-playbook {_engine_version}",
+        *format_framework_lines(ctx.config.layers_enabled, ctx.skills_resolved),
         f"  Overlays: {overlays}",
         *_format_unusable_overlays(unusable),
     ]
@@ -266,7 +268,7 @@ def run(args: argparse.Namespace) -> int:
     """
     repo_root = Path(getattr(args, "repo_root", None) or Path.cwd())
     ctx = SyncContext.from_repo(repo_root)
-    unusable = _sync_preflight.unusable_overlays(ctx.config.overlays_enabled)
+    unusable = _sync_preflight.unusable_overlays(ctx.config.layers_enabled)
     if getattr(args, "refresh", False):
         _refresh(repo_root)
         print(f"Refreshed detector_cache in {CONFIG_FILENAME}.")

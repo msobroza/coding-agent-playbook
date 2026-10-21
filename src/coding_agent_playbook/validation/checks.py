@@ -25,6 +25,9 @@ Validates:
   sync`` refuses to run without (``validation.preflight.unusable_overlays``), so a
   misspelled bundled plugin fails here too instead of validating the engine
   layer alone.
+- The ``framework`` key names a framework, at most one framework is enabled,
+  and its ``framework.toml`` and capability tags are sound (D57, D77;
+  ``validation._framework``).
 - Every skill is a valid Agent Skill (SPEC §6.3): it declares an ``id`` string
   (id-less skills all collapse into one skill named ``skill``), its id — emitted
   as the ``SKILL.md`` ``name`` and the output directory — matches
@@ -68,6 +71,7 @@ from coding_agent_playbook.generated_output.source_files import refused_skill_fi
 from coding_agent_playbook.rendering.jinja import RULE_CALL_RE, jinja_syntax_error
 from coding_agent_playbook.skills.naming import agent_skill_issues, has_declared_id
 from coding_agent_playbook.validation import preflight as _sync_preflight
+from coding_agent_playbook.validation._framework import check_framework
 from coding_agent_playbook.validation._frontmatter import (
     check_lint_codes,
     check_write_scope,
@@ -108,6 +112,13 @@ def _check_overlays_usable(overlays: Sequence[str]) -> list[ValidationError]:
         ValidationError(path="overlays_enabled", message=str(problem))
         for problem in _sync_preflight.unusable_overlays(overlays)
     ]
+
+
+def _consumer_config_errors(ctx: SyncContext) -> list[ValidationError]:
+    """The checks that need a consumer config: usable overlays, then the framework (D57)."""
+    errors = _check_overlays_usable(ctx.config.overlays_enabled)
+    errors.extend(check_framework(ctx.config, ctx.artifact_source.list_skills()))
+    return errors
 
 
 def _applies_if_errors(
@@ -362,7 +373,7 @@ def sync_gate_errors(ctx: SyncContext) -> list[ValidationError]:
 def _artifact_errors(ctx: SyncContext, *, config_less: bool) -> list[ValidationError]:
     """The rule, prompt, eval-sample, link and skill checks (everything but hooks)."""
     rules, prompts = ctx.rules_resolved, ctx.prompts_resolved
-    errors = [] if config_less else _check_overlays_usable(ctx.config.overlays_enabled)
+    errors = [] if config_less else _consumer_config_errors(ctx)
     errors.extend(_check_applies_if(rules, prompts, ctx.facts, ctx.repo_root))
     errors.extend(check_prompt_rule_references(prompts, {r.frontmatter.id for r in rules}))
     errors.extend(_check_output_contracts(prompts))

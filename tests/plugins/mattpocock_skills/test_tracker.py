@@ -24,6 +24,7 @@ from tests.plugins.mattpocock_skills._expectations import (
     RULE_FILE_NAME,
     RULES_ROOT,
     SKILLS_ROOT,
+    vendored_text,
 )
 from tests.plugins.mattpocock_skills.conftest import init_probe
 from tests.plugins.superpowers_expectations import SKILL_ADAPTERS
@@ -353,7 +354,7 @@ KEPT_NON_ASCII: Final = (
 
 
 def _text(skill_id: str, rel: str) -> str:
-    return (SKILLS_ROOT / skill_id / rel).read_text(encoding="utf-8")
+    return vendored_text(skill_id, rel)
 
 
 def _rule_path() -> Path:
@@ -385,7 +386,7 @@ def test_vendored_file_keeps_lf_one_final_newline_and_its_line_count(
     case: tuple[str, str, int],
 ) -> None:
     skill_id, rel, lines = case
-    data = (SKILLS_ROOT / skill_id / rel).read_bytes()
+    data = vendored_text(skill_id, rel).encode("utf-8")
     newlines = data.count(b"\n")
     assert b"\r" not in data and data.endswith(b"\n") and not data.endswith(b"\n\n")
     assert newlines == lines, f"skills/{skill_id}/{rel}: {newlines} lines, expected {lines}"

@@ -20,6 +20,8 @@ from coding_agent_playbook.detector.predicate import filter_applies_if
 from coding_agent_playbook.rendering.jinja import build_environment, render_sandboxed
 from coding_agent_playbook.rendering.prompt_rule_delivery import includes_rules_appendix
 from coding_agent_playbook.rendering.rule_registry import RuleRegistryImpl
+from coding_agent_playbook.skills.capabilities import framework_role_map
+from coding_agent_playbook.skills.membership import active_skill_ids
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -30,6 +32,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.hook import Hook
     from coding_agent_playbook.artifacts.prompt import Prompt
     from coding_agent_playbook.artifacts.rule import Rule
+    from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.config.model import Config
     from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
@@ -112,12 +115,17 @@ class RenderSession:
         *,
         repo_root: Path,
         on_malformed_predicate: MalformedPredicate = "raise",
+        skills: Sequence[Skill] = (),
+        framework: str | None = None,
     ) -> RenderSession:
         """Filter ``rules`` by ``applies_if`` once; build the environment and the registry from them.
 
         ``repo_root`` anchors ``has_file``. A predicate ``playbook validate`` would
         reject raises ``ValueError``, unless ``on_malformed_predicate="omit"``:
         ``playbook render`` runs no validate gate, so it drops that rule instead.
+        ``skills`` (the merged skills) and ``framework`` (the enabled framework's
+        layer) feed ``framework_skill(role)`` and ``skill_active(name)`` (D74);
+        without them every role is ``""`` and no skill is active.
 
         Example: ``RenderSession.open([], context, repo_root=repo).render_rule(rule)``.
         """
@@ -125,6 +133,8 @@ class RenderSession:
         env = build_environment([])
         # SPEC §9.4: has_framework and has_ml_dep read the facts from the globals.
         env.globals["_facts"] = dict(context.facts)
+        env.globals["_framework_roles"] = framework_role_map(skills, framework)
+        env.globals["_active_skills"] = active_skill_ids(skills, rules, kept)
         return cls(kept, context, env)
 
     @property

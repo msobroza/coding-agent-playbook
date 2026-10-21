@@ -297,3 +297,28 @@ def required_value(data: Mapping[str, Any], path: tuple[str, ...], *, source: st
             )
         value = value[key]
     return value
+
+
+def check_framework_key(data: Mapping[str, object], *, source: str) -> None:
+    """Refuse a top-level ``framework`` that is not a non-empty name (D57).
+
+    The value is a bundled framework's short name (``superpowers``,
+    ``mattpocock``), an overlay module name, or ``none``; which layer it names is
+    resolved later (``config.framework``), so a misspelt name is reported by the
+    overlay preflight, not here.
+
+    Example::
+
+        >>> check_framework_key({"framework": 1}, source="c.toml")  # doctest: +ELLIPSIS
+        Traceback (most recent call last):
+        ...
+        coding_agent_playbook.config.schema.ConfigError: c.toml: framework must be ...
+    """
+    if "framework" not in data:
+        return
+    value = data["framework"]
+    if not isinstance(value, str) or not value.strip():
+        raise ConfigError(
+            f'{source}: framework must be a framework name such as "superpowers", '
+            f'"mattpocock", an overlay module name or "none", got {value!r}'
+        )

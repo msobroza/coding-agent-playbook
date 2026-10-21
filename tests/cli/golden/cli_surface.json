@@ -180,6 +180,21 @@
         {
           "action": "_StoreAction",
           "option_strings": [
+            "--framework"
+          ],
+          "dest": "framework",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "spec-driven framework: superpowers, mattpocock, an overlay module name, or none (writes the committed framework key; default: keep the current one, else none)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
             "--overlays"
           ],
           "dest": "overlays",

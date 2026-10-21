@@ -262,11 +262,11 @@ def _detect_inputs(ctx: SyncContext, hooks: SyncHooks) -> DetectInputs:
 
 
 def layer_packages(ctx: SyncContext) -> tuple[str, ...]:
-    """The artifact layers: the engine package, then ``overlays_enabled`` (bundled plugins too).
+    """The artifact layers: the engine package, then ``config.layers_enabled`` (framework first).
 
     Example: ``layer_packages(ctx) == ("coding_agent_playbook",)`` without overlays.
     """
-    return (engine_package_of(ctx.artifact_source), *ctx.config.overlays_enabled)
+    return (engine_package_of(ctx.artifact_source), *ctx.config.layers_enabled)
 
 
 def _generated_locations(adapters: Mapping[str, Adapter]) -> list[str]:

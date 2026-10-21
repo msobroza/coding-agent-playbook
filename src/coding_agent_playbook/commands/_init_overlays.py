@@ -10,6 +10,11 @@ from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.catalog.roots import canonical_overlay_name
 from coding_agent_playbook.config.files import CONFIG_LOCAL_FILENAME
+from coding_agent_playbook.config.framework import (
+    bundled_framework_names,
+    framework_layers,
+    framework_package,
+)
 from coding_agent_playbook.validation import preflight as _sync_preflight
 
 if TYPE_CHECKING:
@@ -56,6 +61,35 @@ def refuse_unusable_overlays(overlays: list[str], origin: str) -> bool:
     print(
         f"error: {origin} names overlay package(s) or bundled plugin(s) that cannot be used "
         f"here; nothing was written:{listed}",
+        file=sys.stderr,
+    )
+    return True
+
+
+def refuse_unusable_framework(choice: str | None) -> bool:
+    """Print an ``error:`` and return ``True`` when ``choice`` names no usable framework.
+
+    ``None`` (no choice) and ``none`` pass. Otherwise the layer ``choice``
+    resolves to must pass the overlay preflight and ship ``framework.toml``
+    (D57), so init never commits a framework every sync would refuse.
+
+    Example::
+
+        >>> refuse_unusable_framework("superpowers")
+        False
+    """
+    package = None if choice is None else framework_package(choice)
+    if package is None:
+        return False
+    unusable = _sync_preflight.unusable_overlays([package])
+    if not unusable and framework_layers([package]):
+        return False
+    reason = str(unusable[0]) if unusable else f"{package} ships no framework.toml"
+    known = ", ".join(sorted(bundled_framework_names()))
+    print(
+        f"error: --framework {choice!r} is not a usable framework ({reason}); "
+        f"use {known}, an overlay module that ships framework.toml, or none; "
+        "nothing was written",
         file=sys.stderr,
     )
     return True

@@ -133,7 +133,7 @@ def test_g1_plugin_is_usable_and_adds_only_skills_and_rules(tmp_path: Path) -> N
     )
 
 
-def test_g2_plugin_root_holds_only_the_five_entries() -> None:
+def test_g2_plugin_root_holds_only_the_six_entries() -> None:
     entries = {p.name for p in PLUGIN_ROOT.iterdir()}
     assert entries <= ROOT_ENTRIES, f"unexpected root entries {sorted(entries - ROOT_ENTRIES)}"
     assert entries >= ROOT_ENTRIES - {"rules"}, f"missing {sorted(ROOT_ENTRIES - entries)}"

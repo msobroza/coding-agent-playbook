@@ -62,8 +62,8 @@ def _adapters_enabled(repo: Path) -> list[str]:
 
 
 def _answer_interactively(monkeypatch: pytest.MonkeyPatch, adapters_answer: str) -> None:
-    """Feed ``input()``: name, description, kind, adapters, overlays, hooks."""
-    replies: Iterator[str] = iter(["r", "", "python-library", adapters_answer, "", ""])
+    """Feed ``input()``: name, description, kind, adapters, framework, overlays, hooks."""
+    replies: Iterator[str] = iter(["r", "", "python-library", adapters_answer, "", "", ""])
     monkeypatch.setattr("builtins.input", lambda *_a, **_k: next(replies))
 
 

@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.artifacts.member_reference import member_reference_path
+from coding_agent_playbook.skills.capabilities import CAPABILITIES_KEY
 from coding_agent_playbook.skills.naming import skill_id_of
 
 if TYPE_CHECKING:
@@ -33,6 +34,9 @@ DESCRIPTION_MAX_CHARS: Final = 300
 
 #: The catalog-only frontmatter key of a skill with member rules; stripped on output (E1).
 PLAYBOOK_BLOCK_KEY: Final = "playbook"
+
+#: Frontmatter keys only the engine reads, never written to an emitted ``SKILL.md``.
+_ENGINE_OWNED_KEYS: Final = frozenset({PLAYBOOK_BLOCK_KEY, CAPABILITIES_KEY})
 
 _SENTENCE_ENDINGS: Final = (".", "!", "?")
 
@@ -191,14 +195,17 @@ def worst_case_description(
 
 
 def emitted_frontmatter(skill: Skill) -> dict[str, Any]:
-    """Authored frontmatter minus ``playbook``; ``description`` composed when members exist.
+    """Authored frontmatter minus the engine-owned keys; ``description`` composed when members exist.
 
-    A skill without members keeps every other key and value as authored, so a
-    plugin skill's ``SKILL.md`` stays byte-identical. Always a new mapping.
+    The engine-owned keys are ``playbook`` and a framework skill's
+    ``capabilities`` tags (D77). A skill without members keeps every other key
+    and value as authored. Always a new mapping.
 
-    Example: ``emitted_frontmatter(plugin_skill) == plugin_skill.frontmatter`` -> ``True``.
+    Example: ``"capabilities" in emitted_frontmatter(brainstorming)`` -> ``False``.
     """
-    emitted = {key: value for key, value in skill.frontmatter.items() if key != PLAYBOOK_BLOCK_KEY}
+    emitted = {
+        key: value for key, value in skill.frontmatter.items() if key not in _ENGINE_OWNED_KEYS
+    }
     if skill.member_references:
         emitted["description"] = compose_description(
             str(skill.frontmatter.get("description") or ""),

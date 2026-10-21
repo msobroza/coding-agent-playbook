@@ -54,7 +54,7 @@ def _hooks_table(repo: Path) -> Any:
 
 def _interactive(monkeypatch: pytest.MonkeyPatch, hooks_answers: list[str]) -> list[str]:
     """Feed the interactive prompts; return every question asked."""
-    answers = iter(["interactive-repo", "", "python-library", "", "", *hooks_answers])
+    answers = iter(["interactive-repo", "", "python-library", "", "", "", *hooks_answers])
     asked: list[str] = []
 
     def _input(prompt: str = "") -> str:
