@@ -57,7 +57,8 @@
         "check-notebooks",
         "scan-secrets",
         "check-commit-trailers",
-        "check-deps"
+        "check-deps",
+        "docs-check"
       ],
       "required": false,
       "help": null,
@@ -1580,6 +1581,74 @@
           "choices": null,
           "required": false,
           "help": "repo to check (defaults to cwd)",
+          "metavar": null
+        }
+      ],
+      "exclusive_groups": []
+    },
+    {
+      "name": "docs-check",
+      "help": "check changed documentation: links, code blocks, the repo's docs tools (D69)",
+      "func": "coding_agent_playbook.commands.twins.docs_check.run",
+      "description": null,
+      "actions": [
+        {
+          "action": "_HelpAction",
+          "option_strings": [
+            "-h",
+            "--help"
+          ],
+          "dest": "help",
+          "nargs": 0,
+          "const": null,
+          "default": "==SUPPRESS==",
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "show this help message and exit",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [],
+          "dest": "paths",
+          "nargs": "*",
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "documentation files to check (default: changed since --base)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--base"
+          ],
+          "dest": "base",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "base ref (default: the default branch, origin/HEAD first)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--repo-root"
+          ],
+          "dest": "repo_root",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "repo the paths are relative to (defaults to cwd)",
           "metavar": null
         }
       ],

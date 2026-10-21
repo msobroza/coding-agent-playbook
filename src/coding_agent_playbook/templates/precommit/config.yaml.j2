@@ -98,6 +98,17 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-commit]
+      # The playbook — documentation check (D69), on staged documentation only: the
+      # relative links and Python code blocks of changed Markdown, then your own docs
+      # build, doctests and linters where the repo configures them (a tool that is
+      # not installed is skipped with a hint). [guardrails.docs] mode = "off" stops it.
+      - id: coding-agent-playbook-docs
+        name: coding-agent-playbook docs
+        entry: playbook docs-check
+        language: system
+        files: '(\.(md|markdown|rst)$|^docs/|^mkdocs\.ya?ml$|^doc/conf\.py$)'
+        require_serial: true
+        stages: [pre-commit]
 {% if commit_trailers %}
       # The playbook — commit-message trailer rows (CP4xx: forbidden, co-author and
       # required trailers) from [hooks.git-commit-push-policy-guard], for every

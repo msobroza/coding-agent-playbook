@@ -39,6 +39,7 @@ if TYPE_CHECKING:
 UnattendedAsk = Literal["deny", "warn"]
 NetworkMode = Literal["off", "ask", "enforce"]
 StopSweepMode = Literal["block", "warn", "off"]
+DocsCheckMode = Literal["block", "warn", "off"]
 
 #: The top-level tables ``.coding-agent-playbook.local.toml`` may never carry (§B.1).
 POLICY_TABLE_NAMES: Final = ("hooks", "guardrails")
@@ -162,6 +163,13 @@ class StopSweepGuardrails:
     mode: StopSweepMode = "block"
 
 
+@dataclass(frozen=True)
+class DocsGuardrails:
+    """``[guardrails.docs]``: ``playbook docs-check``'s mode; ``off`` switches it off (D69)."""
+
+    mode: DocsCheckMode = "block"
+
+
 #: Domain -> its dataclass and key shapes; the merge policy of each key is the
 #: handler's own (CONFIG_SCHEMA), applied by
 #: hooks.resolution.effective.resolve_effective_hooks.
@@ -175,6 +183,7 @@ _GUARDRAIL_DOMAINS: Final[Mapping[str, tuple[type[Any], Mapping[str, TableShape]
     "dependencies": (DependenciesGuardrails, {"mode": TEXT, "allowlist": STRINGS}),
     "audit": (AuditGuardrails, {"retain_days": POSITIVE_INT}),
     "stop_sweep": (StopSweepGuardrails, {"mode": one_of("block", "warn", "off")}),
+    "docs": (DocsGuardrails, {"mode": one_of("block", "warn", "off")}),
 }
 
 
@@ -198,6 +207,7 @@ class GuardrailsConfig:
     dependencies: DependenciesGuardrails = field(default_factory=DependenciesGuardrails)
     audit: AuditGuardrails = field(default_factory=AuditGuardrails)
     stop_sweep: StopSweepGuardrails = field(default_factory=StopSweepGuardrails)
+    docs: DocsGuardrails = field(default_factory=DocsGuardrails)
     explicit: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
     def domain_values(self, domain: str) -> dict[str, Any]:

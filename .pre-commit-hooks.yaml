@@ -161,3 +161,19 @@
   language: system
   stages: [commit-msg]
   minimum_pre_commit_version: "3.2.0"
+
+# Documentation check (D69): the guard twin `playbook docs-check` on the staged
+# documentation only (`files:` is its D69 path list, so a commit of Python files
+# alone never runs it). Always: relative links and Python code blocks of the
+# changed Markdown (stdlib). Only where your repo configures them: `mkdocs build
+# --strict`, `sphinx-build -W --keep-going`, doctests your pytest addopts collect,
+# markdownlint and doc8. A configured tool that is not installed is skipped with
+# an install hint. Switch it off with `[guardrails.docs] mode = "off"` (or "warn").
+- id: playbook-docs
+  name: coding-agent-playbook docs (links, code blocks, your docs build)
+  description: Check staged documentation - relative links, Python code blocks and the repo's own docs tools
+  entry: playbook docs-check
+  language: python
+  files: '(\.(md|markdown|rst)$|^docs/|^mkdocs\.ya?ml$|^doc/conf\.py$)'
+  require_serial: true
+  stages: [pre-commit]

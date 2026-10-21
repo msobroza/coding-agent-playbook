@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+from coding_agent_playbook.commands.twins.docs_check import DOCS_FILES_PATTERN
 
 HOOKS_PATH = Path(__file__).resolve().parents[2] / ".pre-commit-hooks.yaml"
 
@@ -127,6 +130,7 @@ def test_no_unexpected_hooks():
         "playbook-scan-sinks",
         "playbook-secrets",
         "playbook-commit-msg",
+        "playbook-docs",
     }
     assert ids == expected, f"unexpected hook IDs: {ids - expected}"
 
@@ -184,6 +188,21 @@ def test_secrets_hook_scans_staged():
     assert hook["pass_filenames"] is False
     assert hook["always_run"] is True
     assert hook["stages"] == ["pre-commit"]
+
+
+def test_docs_hook_runs_docs_check_on_documentation_only():
+    """D69: the staged docs are its PATHS; a commit of Python files alone never runs it."""
+    hook = _hook("playbook-docs")
+    assert hook["entry"] == "playbook docs-check"
+    assert hook["language"] == "python"
+    assert hook["files"] == DOCS_FILES_PATTERN
+    assert hook.get("pass_filenames", True) is True
+    assert hook.get("always_run") in (None, False)
+    assert hook["require_serial"] is True  # one docs build per commit, not one per batch
+    assert hook["stages"] == ["pre-commit"]
+    files = re.compile(hook["files"])
+    assert not any(files.search(path) for path in ("src/a.py", "tests/test_a.py", "setup.py"))
+    assert all(files.search(path) for path in ("README.md", "docs/index.rst", "mkdocs.yml"))
 
 
 def _header_comment() -> str:

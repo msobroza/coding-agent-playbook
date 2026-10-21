@@ -61,7 +61,7 @@ writes the shared skill root `.agents/skills/` read by Codex and OpenCode, and t
 commands (`init` / `sync` / `check` / `validate` / `render` / `eval` /
 `metrics` / `import-harness` / `validate-harness`), the off-workstation checks
 (`ci` / `gate-scan` / `scan-secrets` / `scan-sinks` / `check-deps` /
-`check-commit-trailers` / `check-notebooks`), the Tier 0 eval schema
+`check-commit-trailers` / `check-notebooks` / `docs-check`), the Tier 0 eval schema
 plus the v1.1 eval runner (`playbook eval --run`, deterministic layers live;
 judged rubric scoring live via `--judge`), and the code-quality metrics gate.
 v0.20 adds the opt-in [assistant lifecycle hooks](#assistant-lifecycle-hooks):
@@ -803,13 +803,15 @@ their off-workstation twin.
 | `playbook-commit-msg` | `commit-msg` | Runs commitizen's `cz check --commit-msg-file` against your [`[tool.commitizen]` convention](#commit-message-convention-commitizen). `language: system`: `cz` comes from your environment, and a machine without it fails loudly. |
 | `playbook-notebooks` | Every commit (notebooks) | Runs `playbook check-notebooks`; fails when a staged notebook keeps cell outputs (they may embed data rows). For ML / data-science repos. |
 | `playbook-scan-sinks` | Every commit (Python, notebooks) | Runs `playbook scan-sinks --staged`; fails when staged code adds an unsafe deserialization sink (`pickle.loads`, `torch.load(weights_only=False)`, …). For ML repos. |
+| `playbook-docs` | Every commit (documentation: `*.md`, `*.rst`, `docs/**`, `mkdocs.yml`) | Runs `playbook docs-check` on the staged docs: relative links and Python code blocks of changed Markdown, then only the docs tools your repo configures (`mkdocs build --strict`, `sphinx-build -W --keep-going`, doctests your pytest `addopts` collect, markdownlint, doc8). A configured tool that is not installed is skipped with an install hint. `[guardrails.docs] mode = "off"` (or `"warn"`) switches it. |
 
 `playbook-commit-msg` needs the `commit-msg` hook type: add it to
 `default_install_hook_types` (`[pre-commit, post-checkout, post-merge, commit-msg]`),
 or append `--hook-type commit-msg` to the `pre-commit install` line above. The
 air-gapped starter `playbook init` writes carries `repo: local` twins of these:
 `coding-agent-playbook-metrics` (with `--no-run-tests`), the manual
-`coding-agent-playbook-coverage` and `coding-agent-playbook-secrets`, plus, only
+`coding-agent-playbook-coverage`, `coding-agent-playbook-secrets` and
+`coding-agent-playbook-docs` (`playbook docs-check`), plus, only
 when the repo opted into them, `coding-agent-playbook-commit-msg` (commitizen) and
 `coding-agent-playbook-commit-trailers` (`playbook check-commit-trailers`, the
 commit-trailer rows of `[hooks.git-commit-push-policy-guard]`), both at the

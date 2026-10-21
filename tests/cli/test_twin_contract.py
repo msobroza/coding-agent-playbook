@@ -43,6 +43,7 @@ TWIN_ARGV: Final = {
     "check-commit-trailers": ["check-commit-trailers", "--range", "HEAD~1..HEAD"],
     "check-notebooks": ["check-notebooks"],
     "check-deps": ["check-deps"],
+    "docs-check": ["docs-check"],
 }
 SINK_LINE: Final = "import pickle\nx = pickle.loads(b)\n"
 
