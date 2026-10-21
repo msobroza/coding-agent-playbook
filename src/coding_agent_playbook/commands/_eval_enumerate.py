@@ -38,7 +38,7 @@ def _print_list(prompts: list[Prompt], samples: list[EvalSample]) -> int:
 
         Total: P prompts, T eval samples, U prompts without samples
     """
-    samples_by_id: dict[str, EvalSample] = {t.id: t for t in samples}
+    samples_by_id: dict[str, EvalSample] = {s.id: s for s in samples}
     samples_by_prompt: dict[str, list[EvalSample]] = {}
     for sample in samples:
         samples_by_prompt.setdefault(sample.prompt_id, []).append(sample)
@@ -61,7 +61,7 @@ def _print_list(prompts: list[Prompt], samples: list[EvalSample]) -> int:
             if candidate is not None and candidate.prompt_id == prompt_id:
                 ordered.append(candidate)
                 seen.add(declared_id)
-        for leftover in sorted(samples_by_prompt.get(prompt_id, []), key=lambda t: t.id):
+        for leftover in sorted(samples_by_prompt.get(prompt_id, []), key=lambda s: s.id):
             if leftover.id not in seen:
                 ordered.append(leftover)
         prompt_samples = ordered
@@ -95,13 +95,13 @@ def _print_list(prompts: list[Prompt], samples: list[EvalSample]) -> int:
     # "prompts without samples" suffix has to be spelled out because the
     # head noun ("prompt") is not at the tail — naively appending "s" to
     # "prompt without samples" would emit "prompt without sampless".
-    pwt_label = (
+    without_label = (
         "prompt without samples" if prompts_without_samples == 1 else "prompts without samples"
     )
     lines.append(
         f"Total: {_plural(len(prompts), 'prompt')}, "
         f"{_plural(len(samples), 'eval sample')}, "
-        f"{prompts_without_samples} {pwt_label}"
+        f"{prompts_without_samples} {without_label}"
     )
     print("\n".join(lines))
     return 0
@@ -121,7 +121,7 @@ def _plural(n: int, word: str) -> str:
 
 def _print_show(sample_id: str, samples: list[EvalSample], prompts: list[Prompt]) -> int:
     """Detailed sample dump per SPEC §12.8."""
-    sample = next((t for t in samples if t.id == sample_id), None)
+    sample = next((s for s in samples if s.id == sample_id), None)
     if sample is None:
         print(f"error: no eval sample with id {sample_id!r}", file=sys.stderr)
         return 1
@@ -184,7 +184,7 @@ def _print_run_hint(sample_id: str, samples: list[EvalSample], prompts: list[Pro
 
     Exit 0. Unknown sample ids exit 1 so typos surface.
     """
-    sample = next((t for t in samples if t.id == sample_id), None)
+    sample = next((s for s in samples if s.id == sample_id), None)
     if sample is None:
         print(f"error: no eval sample with id {sample_id!r}", file=sys.stderr)
         return 1

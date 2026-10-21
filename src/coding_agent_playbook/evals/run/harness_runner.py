@@ -118,7 +118,7 @@ class SampleResult:
 class EvalReport:
     """Aggregate over several :class:`SampleResult`\\ s for one harness.
 
-    ``aggregate_pass_rate`` is the mean of ``tr.passed`` across ``sample_results``
+    ``aggregate_pass_rate`` is the mean of ``result.passed`` across ``sample_results``
     (``0.0`` for an empty run).
     """
 
@@ -130,10 +130,10 @@ class EvalReport:
 
     @staticmethod
     def pass_rate(sample_results: list[SampleResult]) -> float:
-        """Mean of ``tr.passed`` over ``sample_results`` (``0.0`` when empty)."""
+        """Mean of ``result.passed`` over ``sample_results`` (``0.0`` when empty)."""
         if not sample_results:
             return 0.0
-        return sum(1 for tr in sample_results if tr.passed) / len(sample_results)
+        return sum(1 for result in sample_results if result.passed) / len(sample_results)
 
 
 # --------------------------------------------------------------------------- #

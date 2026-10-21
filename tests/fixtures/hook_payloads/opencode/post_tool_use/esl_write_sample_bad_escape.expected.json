@@ -20,7 +20,7 @@
       "tool_classes": [
         "write"
       ],
-      "use_id": "call_etl_01",
+      "use_id": "call_esl_01",
       "paths": [
         {
           "path": "/playbook-fixture/proj/playbook/eval_samples/demo-sample/sample.toml",

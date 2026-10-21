@@ -3377,10 +3377,10 @@ class EvalReport:                                 # aggregate over several sampl
     engine_version: str
     harness: str
     sample_results: list[SampleResult]
-    aggregate_pass_rate: float                    # mean of tr.passed across sample_results
+    aggregate_pass_rate: float                    # mean of result.passed across sample_results
     timestamp: str
     @staticmethod
-    def pass_rate(sample_results: list[SampleResult]) -> float: ...   # mean(tr.passed), 0.0 when empty
+    def pass_rate(sample_results: list[SampleResult]) -> float: ...   # mean(result.passed), 0.0 when empty
 class PromptResolutionError(RuntimeError):
     """A sample's prompt could not be resolved (strict mode) or failed to render."""
 class HarnessRunner(ABC):
@@ -3399,7 +3399,7 @@ class HarnessRunner(ABC):
         """Drive the agent against scratch_dir and return its raw outcome. The only per-assistant step."""
         ...
 ```
-**Result model (Option B).** `SampleResult` carries one representative `report: EvaluationReport` (the first trial's, covering the `[gate]` / `[rubric]` layer checks) plus the convenience aggregates `passed` / `aggregate_score` / `duration_seconds` / `transcript`, and — for a multi-trial `[aggregate]` sample — `trials` (every per-trial `TrialResult`) and `aggregate` (the graded aggregate `CheckResult`). `passed` is the **sample** verdict: the single trial's derived `[verdict].trial` for a non-aggregate sample, or the `[aggregate]` layer's pass/fail when the sample aggregates across trials — unless that layer is skipped (its `over` axis ran in fewer than `k` trials, e.g. `over = "rubric"` with no judge): then `aggregate` is a `status="skipped"` result, `passed` holds only if every trial's verdict passed, and `aggregate_score` is the trial pass rate (§21.2.5). A gate predicate is a deterministic `Check` whose result rides on `report.checks`; `CheckResult` is the per-check outcome of `Check.grade`. `EvalReport.pass_rate` is the mean of `tr.passed`.
+**Result model (Option B).** `SampleResult` carries one representative `report: EvaluationReport` (the first trial's, covering the `[gate]` / `[rubric]` layer checks) plus the convenience aggregates `passed` / `aggregate_score` / `duration_seconds` / `transcript`, and — for a multi-trial `[aggregate]` sample — `trials` (every per-trial `TrialResult`) and `aggregate` (the graded aggregate `CheckResult`). `passed` is the **sample** verdict: the single trial's derived `[verdict].trial` for a non-aggregate sample, or the `[aggregate]` layer's pass/fail when the sample aggregates across trials — unless that layer is skipped (its `over` axis ran in fewer than `k` trials, e.g. `over = "rubric"` with no judge): then `aggregate` is a `status="skipped"` result, `passed` holds only if every trial's verdict passed, and `aggregate_score` is the trial pass rate (§21.2.5). A gate predicate is a deterministic `Check` whose result rides on `report.checks`; `CheckResult` is the per-check outcome of `Check.grade`. `EvalReport.pass_rate` is the mean of `result.passed`.
 
 Concrete runners (discovered via the `coding_agent_playbook.runners` entry-point group — never instantiated directly):
 - **`FakeRunner`** (`name="fake"`, `evals/run/fake_runner.py`) — the **hermetic default + test driver**. Its `_invoke_agent` applies a caller-supplied deterministic mutation (`Callable[[Path], None]`; default a no-op) to the scratch tree and returns a canned transcript. No network, no CLI; every unit test uses it. It leaves `requires_resolved_prompt=False`, so it tolerates the placeholder `render_prompt` emits for a synthetic test sample.

@@ -73,7 +73,7 @@ def validate_samples(
     """
     errors: list[EvalValidationError] = []
     prompts_by_id = {p.frontmatter.id: p for p in prompts}
-    samples_by_id = {t.id: t for t in samples}
+    samples_by_id = {s.id: s for s in samples}
 
     for sample in samples:
         # Rule 2: the gate/rubric/verdict schema must compile.

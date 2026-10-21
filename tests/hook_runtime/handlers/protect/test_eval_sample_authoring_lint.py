@@ -96,7 +96,7 @@ def _write(
 
 @pytest.mark.parametrize(
     ("harness", "case"),
-    [("claude_code", "etl_write_sample_bad_escape"), ("opencode", "etl_write_sample_bad_escape")],
+    [("claude_code", "esl_write_sample_bad_escape"), ("opencode", "esl_write_sample_bad_escape")],
 )
 def test_basic_string_backslash_s_gets_literal_string_hint(
     repo: PackRepo,
