@@ -5,7 +5,8 @@
 1. the ``PLAYBOOK_HOOKS=off`` gate (read only from the hook process env);
 2. stdin, capped at 16 MiB (the rest drained unread), parsed by the
    harness's parser: a foreign payload is inert, a ``ContractFault`` goes to
-   the failure policy, an event outside git is inert (K-12);
+   the failure policy, an event outside git is inert (K-12); an inert call
+   still leaves one ``ignored`` decision line (D79, ``_ignored``);
 3. ``guard_config.json``, trusted only through its lockfile digest
    (a ``ConfigFault`` asks once per session);
 4. selection (event, harness, ``PLAYBOOK_HOOKS_DISABLE``, matcher), ordered
@@ -36,6 +37,11 @@ from coding_agent_playbook.hook_runtime.dispatch._faults import (
     contract_fault_results,
     degraded_lines,
     fault_event,
+)
+from coding_agent_playbook.hook_runtime.dispatch._ignored import (
+    NOT_A_REPO,
+    ignored_line,
+    user_state_store,
 )
 from coding_agent_playbook.hook_runtime.dispatch._pipeline import Shared, run_configured
 from coding_agent_playbook.hook_runtime.dispatch.escape import (
@@ -191,12 +197,14 @@ class _Dispatch:
             return DispatchTrace(wire=WireOutput())
         outcome = self._parse(payload, truncated, argv_problem)
         if isinstance(outcome, ForeignPayload):
+            self._log_ignored(outcome.marker, outcome.session_id)
             return DispatchTrace(wire=WireOutput())
         if isinstance(outcome, ContractFault):
             if self.asynchronous:
                 return DispatchTrace(wire=WireOutput())  # the synchronous dispatch reports it
             return self._contract_fault(outcome)
         if outcome.repo is None:
+            self._log_ignored(NOT_A_REPO, outcome.session_id)
             return DispatchTrace(wire=WireOutput())  # hooks are git-only in v1 (K-12)
         shared = Shared(
             deps=self.deps,
@@ -259,6 +267,33 @@ class _Dispatch:
         self._log_unconfigured(
             self._bare_event(session_id or ""), [line], once_key=f"escape:{HOOKS_VAR}"
         )
+
+    def _log_ignored(self, reason: str, session_id: str) -> None:
+        """One ``ignored`` line for an inert call (D79): per session, event and reason.
+
+        Without a session id there is nothing to dedupe on, so every call is
+        logged; the async dispatch leaves the line to its synchronous twin.
+        """
+        if self.asynchronous:
+            return
+        store = self._ignored_store()
+        if store is None:
+            return
+        key = f"ignored:{self.event.value}:{reason}"
+        if session_id and not SessionState(store, session_id).once(key):
+            return
+        ev = self._bare_event(session_id)
+        log = DecisionLog(store, ev, now=self.deps.clock.time, enabled=True, canary=self.canary)
+        log.write([ignored_line(reason)], force=True)
+
+    def _ignored_store(self) -> StateStore | None:
+        """The injected store, else the root guess's worktree store, else the user-level one."""
+        if self.deps.state is not None:
+            return self.deps.state
+        repo = find_repo(self.root_guess)
+        if repo is not None:
+            return StateStore.for_repo(repo, clock=self.deps.clock)
+        return user_state_store(self.deps)
 
     def _bare_event(self, session_id: str) -> CanonicalEvent:
         return fault_event(

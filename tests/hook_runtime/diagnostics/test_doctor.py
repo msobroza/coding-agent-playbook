@@ -379,3 +379,74 @@ def test_doctor_without_a_decision_log_adds_no_rows(
     checks = run_doctor(str(repo.root), deps=_deps(runtime_deps, python))
 
     assert not [c for c in checks if c.name.startswith("decision-log")]
+
+
+# --- ignored hook calls (specs/prU-core-python-skills.md D79) --------------------------
+
+
+def _ignored(reason: str, ts: str, event: str = "pre_tool_use") -> GuardDecisionRecord:
+    record = _decision("playbook-dispatcher", "ignored", ts)
+    record["rule_id"], record["effective"], record["event"] = reason, "none", event
+    record["tool_name"] = record["tool_class"] = None
+    return record
+
+
+def _user_root(tmp_path: Path) -> Path:
+    root = tmp_path / "state" / "coding-agent-playbook" / "playbook-hooks"
+    root.mkdir(parents=True, mode=0o700)
+    return root
+
+
+def test_doctor_reports_ignored_calls_most_recent_first_and_flags_misconfiguration(
+    tmp_path: Path, runtime_deps: Callable[..., RuntimeDeps]
+) -> None:
+    repo, python = _healthy(tmp_path)
+    for reason, ts in [
+        ("event_mismatch", "2026-10-10T09:00:00.000Z"),
+        ("claude_project_dir_unset", "2026-10-11T09:00:00.000Z"),
+        ("claude_project_dir_unset", "2026-10-12T09:00:00.000Z"),
+        ("missing_session_id", "2026-10-09T09:00:00.000Z"),
+        ("timestamp", "2026-08-01T09:00:00.000Z"),  # outside --since 30
+    ]:
+        append_decision(repo.state_root, _ignored(reason, ts))
+    append_decision(
+        _user_root(tmp_path), _ignored("not_a_repo", "2026-10-13T09:00:00.000Z", "stop")
+    )
+    deps = _deps(runtime_deps, python, env={"XDG_STATE_HOME": str(tmp_path / "state")})
+
+    checks = run_doctor(str(repo.root), deps=deps)
+
+    rows = [(c.name, c.severity, c.detail) for c in checks if c.name.startswith("ignored:")]
+    assert [(name, severity) for name, severity, _ in rows] == [
+        ("ignored:not_a_repo", "ok"),
+        ("ignored:claude_project_dir_unset", "warning"),
+        ("ignored:event_mismatch", "ok"),
+        ("ignored:missing_session_id", "warning"),
+    ]
+    details = {name: detail for name, _, detail in rows}
+    assert details["ignored:claude_project_dir_unset"].startswith(
+        "2 calls, last 2026-10-12T09:00:00.000Z (claude_code: pre_tool_use)"
+    )
+    assert "likely a misconfigured real session" in details["ignored:claude_project_dir_unset"]
+    assert "likely a misconfigured real session" in details["ignored:missing_session_id"]
+    assert "misconfigured" not in details["ignored:event_mismatch"]
+    assert "outside any git repository" in details["ignored:not_a_repo"]
+    assert not [c for c in checks if c.name == "decision-log:playbook-dispatcher"]
+    assert exit_code(checks) == 0  # a warning: the install itself is healthy
+
+
+def test_doctor_outside_git_still_reports_user_level_ignored_calls(
+    tmp_path: Path, runtime_deps: Callable[..., RuntimeDeps]
+) -> None:
+    append_decision(_user_root(tmp_path), _ignored("not_a_repo", "2026-10-13T09:00:00.000Z"))
+    plain = tmp_path / "plain"
+    plain.mkdir()
+
+    checks = run_doctor(
+        str(plain), deps=runtime_deps(env={"XDG_STATE_HOME": str(tmp_path / "state")})
+    )
+
+    assert [(c.name, c.severity) for c in checks] == [
+        ("repo", "broken"),
+        ("ignored:not_a_repo", "ok"),
+    ]
