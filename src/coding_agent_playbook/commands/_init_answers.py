@@ -18,6 +18,7 @@ from coding_agent_playbook.commands._init_adapters import (
     DEFAULT_ADAPTERS,
     adapters_from_flag,
 )
+from coding_agent_playbook.config.framework import BUNDLED_FRAMEWORK_NAMES
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -57,13 +58,15 @@ _VALID_KINDS = (
 
 _HOOKS_QUESTION = "Enable assistant lifecycle hooks?"
 
-#: The ``--framework`` help: the bundled short names are listed by ``framework.toml`` name.
+#: The ``--framework`` help and the interactive question list the bundled frameworks'
+#: short names (``config.framework.BUNDLED_FRAMEWORK_NAMES``).
+_BUNDLED_FRAMEWORKS = ", ".join(BUNDLED_FRAMEWORK_NAMES)
 FRAMEWORK_FLAG_HELP = (
-    "spec-driven framework: superpowers, mattpocock, an overlay module name, or none "
+    f"spec-driven framework: {_BUNDLED_FRAMEWORKS}, an overlay module name, or none "
     "(writes the committed framework key; default: keep the current one, else none)"
 )
 _FRAMEWORK_QUESTION = (
-    "Spec-driven framework (superpowers, mattpocock, an overlay module or none; "
+    f"Spec-driven framework ({_BUNDLED_FRAMEWORKS}, an overlay module or none; "
     "blank keeps the current one, else none)"
 )
 _YES = frozenset({"y", "yes"})

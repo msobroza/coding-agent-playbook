@@ -68,7 +68,7 @@ def test_a_clean_hooks_table_has_no_issues() -> None:
         "wrapper_prefixes": ["proxy", "proxy run"],
     }
 
-    assert classify_hook_set(_inputs(table, overlays_enabled=(OVERLAY,))) == []
+    assert classify_hook_set(_inputs(table, layers_enabled=(OVERLAY,))) == []
 
 
 _MANDATORY = sample_hook(OVERLAY, mandatory=True, path="/o/hooks/guard-x/HOOK.md")
@@ -84,7 +84,7 @@ _CASES: list[tuple[str, dict[str, Any], dict[str, Any], str]] = [
     (
         "H15-off-around-mandatory",
         {"enabled": False},
-        {"hooks": (_MANDATORY,), "overlays_enabled": (OVERLAY,)},
+        {"hooks": (_MANDATORY,), "layers_enabled": (OVERLAY,)},
         f"[hooks] enabled = false while overlay {OVERLAY!r} ships mandatory hook 'guard-x'; "
         "mandatory hooks cannot be switched off: set enabled = true",
     ),
@@ -110,7 +110,7 @@ _CASES: list[tuple[str, dict[str, Any], dict[str, Any], str]] = [
     (
         "H21-allow-code-from",
         {"enabled": True, "allow_code_from": ["other_rules"]},
-        {"overlays_enabled": (OVERLAY,)},
+        {"layers_enabled": (OVERLAY,)},
         "[hooks] allow_code_from: 'other_rules' is neither an enabled overlay nor "
         "'<repo-local>'; allowed: acme_rules, <repo-local>",
     ),
@@ -159,7 +159,7 @@ def test_set_level_config_rule(
 
 def test_an_absent_hooks_table_is_not_an_opt_out_of_mandatory_hooks() -> None:
     # Absent [hooks] is the no-upgrade-drift default (§B.1): not an H15 error.
-    inputs = _inputs(None, hooks=(_MANDATORY,), overlays_enabled=(OVERLAY,))
+    inputs = _inputs(None, hooks=(_MANDATORY,), layers_enabled=(OVERLAY,))
 
     assert classify_hook_set(inputs) == []
 
@@ -182,7 +182,7 @@ def test_h16_spares_allowed_sources_and_hooks_that_are_off() -> None:
     allowed = _inputs(
         {"enabled": True, "allow_code_from": [OVERLAY]},
         hooks=(hook,),
-        overlays_enabled=(OVERLAY,),
+        layers_enabled=(OVERLAY,),
         on_hook_ids=frozenset({"guard-x"}),
     )
     off = _inputs({"enabled": True}, hooks=(hook,))

@@ -36,6 +36,10 @@ if TYPE_CHECKING:
 
 #: The metadata file that marks a layer as a spec-driven framework.
 FRAMEWORK_FILENAME: Final = "framework.toml"
+#: The bundled frameworks' short names (their ``framework.toml`` ``name``), in the
+#: order help text lists them. Spelled out so ``--help`` builds without reading the
+#: catalog; ``tests/config/test_framework.py`` pins it to :func:`bundled_framework_names`.
+BUNDLED_FRAMEWORK_NAMES: Final = ("superpowers", "mattpocock")
 #: The ``framework`` value (and init answer) that enables no framework; the default.
 NO_FRAMEWORK: Final = "none"
 #: The document layout keys of D71, in the spec's order; a layout alias maps to one.

@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, TypeGuard
 
 from coding_agent_playbook import toml_writer as _toml
 from coding_agent_playbook.catalog.roots import canonical_overlay_name
+from coding_agent_playbook.config.framework import BUNDLED_FRAMEWORK_NAMES
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
@@ -299,13 +300,25 @@ def required_value(data: Mapping[str, Any], path: tuple[str, ...], *, source: st
     return value
 
 
+_FRAMEWORK_KEY = "framework"
+
+#: Spellings of ``framework`` refused wherever they hold a value but are not read:
+#: TOML nests a key written after a ``[table]`` header (init writes
+#: ``[detector_cache.frameworks]`` last), and ``Config`` reads only the top-level
+#: ``framework``, so a switch appended at the end of the file did nothing (D57).
+_FRAMEWORK_SPELLINGS = (_FRAMEWORK_KEY, "frameworks")
+
+
 def check_framework_key(data: Mapping[str, object], *, source: str) -> None:
-    """Refuse a top-level ``framework`` that is not a non-empty name (D57).
+    """Refuse a ``framework`` that is not a non-empty name, or that is not read (D57).
 
     The value is a bundled framework's short name (``superpowers``,
     ``mattpocock``), an overlay module name, or ``none``; which layer it names is
     resolved later (``config.framework``), so a misspelt name is reported by the
-    overlay preflight, not here.
+    overlay preflight, not here. Like the enabled lists (:func:`check_enabled_keys`),
+    a ``framework`` (or ``frameworks``) value inside a table, and a top-level
+    ``frameworks``, are refused with the line to write instead; a table is never
+    refused, so ``[detector_cache.frameworks]`` still loads.
 
     Example::
 
@@ -314,11 +327,42 @@ def check_framework_key(data: Mapping[str, object], *, source: str) -> None:
         ...
         coding_agent_playbook.config.schema.ConfigError: c.toml: framework must be ...
     """
-    if "framework" not in data:
-        return
-    value = data["framework"]
-    if not isinstance(value, str) or not value.strip():
-        raise ConfigError(
-            f'{source}: framework must be a framework name such as "superpowers", '
-            f'"mattpocock", an overlay module name or "none", got {value!r}'
-        )
+    problems = [
+        problem
+        for path, table in _iter_tables(data)
+        for key, value in table.items()
+        if (problem := _framework_key_problem(path, key, value)) is not None
+    ]
+    if problems:
+        raise ConfigError("\n".join(f"{source}: {problem}" for problem in problems))
+
+
+def _framework_key_problem(path: _TablePath, key: str, value: object) -> str | None:
+    """Why ``key`` (in the table at ``path``) is a misread ``framework``, else ``None``."""
+    if key not in _FRAMEWORK_SPELLINGS or isinstance(value, dict):
+        return None
+    if not path and key == _FRAMEWORK_KEY:
+        return None if _is_name(value) else _framework_value_problem(value)
+    notes = [_NESTED_NOTE] if path else []
+    if key != _FRAMEWORK_KEY:
+        notes.append(f"did you mean {_FRAMEWORK_KEY}?")
+    shown = _toml.format_scalar(value) if _is_name(value) else '"<framework name>"'
+    return (
+        f"{_describe_key(path, key, value)} is not read (found {value!r}) "
+        f"({'; '.join(notes)}); use the top-level key instead, {_PLACEMENT}: "
+        f"{_FRAMEWORK_KEY} = {shown}"
+    )
+
+
+def _framework_value_problem(value: object) -> str:
+    """The message for a top-level ``framework`` that is not a non-empty name."""
+    bundled = ", ".join(f'"{name}"' for name in BUNDLED_FRAMEWORK_NAMES)
+    return (
+        f"framework must be a framework name such as {bundled}, "
+        f'an overlay module name or "none", got {value!r}'
+    )
+
+
+def _is_name(value: object) -> TypeGuard[str]:
+    """True for a non-blank string."""
+    return isinstance(value, str) and bool(value.strip())

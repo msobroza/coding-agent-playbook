@@ -125,7 +125,8 @@ class RenderSession:
         ``playbook render`` runs no validate gate, so it drops that rule instead.
         ``skills`` (the merged skills) and ``framework`` (the enabled framework's
         layer) feed ``framework_skill(role)`` and ``skill_active(name)`` (D74);
-        without them every role is ``""`` and no skill is active.
+        without them every role is ``""`` and no skill is active, which is what
+        eval-sample prompts see (``evals.prompting._sample_session``).
 
         Example: ``RenderSession.open([], context, repo_root=repo).render_rule(rule)``.
         """

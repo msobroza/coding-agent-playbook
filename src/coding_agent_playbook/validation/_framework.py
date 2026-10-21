@@ -12,10 +12,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.config.framework import (
-    FRAMEWORK_FILENAME,
     FrameworkMetadataError,
     framework_layers,
-    framework_package,
     read_framework_metadata,
 )
 from coding_agent_playbook.skills.capabilities import capability_problems
@@ -52,20 +50,9 @@ def check_framework(config: Config, skills: list[Skill]) -> list[ValidationError
 
 def _framework_key_errors(framework: str | None) -> list[ValidationError]:
     """The ``framework`` key's layer is unusable, or is not a framework."""
-    package = None if framework is None else framework_package(framework)
-    if package is None:
-        return []
-    unusable = _sync_preflight.unusable_overlays([package])
-    if unusable:
-        return [ValidationError(path=_PATH, message=str(problem)) for problem in unusable]
-    if framework_layers([package]):
-        return []
     return [
-        ValidationError(
-            path=_PATH,
-            message=f"{framework!r} names {package}, which ships no {FRAMEWORK_FILENAME}, "
-            "so it is not a framework; list an add-on in overlays_enabled instead",
-        )
+        ValidationError(path=_PATH, message=problem)
+        for problem in _sync_preflight.framework_choice_problems(framework)
     ]
 
 

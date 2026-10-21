@@ -95,19 +95,17 @@ def active_skill_ids(
 
     What a template's ``skill_active(name)`` reads (D74): a plain skill always
     renders, a skill with a ``playbook`` block only when one of its members is
-    in ``active_rules``. Example::
+    in ``active_rules`` (the same rule as :func:`compose_skills`, ``_is_kept``).
+    One known gap: ``playbook-guardrails`` counts as active when authored, but
+    sync splits it off and writes it only when an on hook has advisory text
+    (``hooks.guardrails_skill``), which is resolved after the templates render;
+    templates should not gate on it. Example::
 
         active_skill_ids(ctx.skills_resolved, ctx.rules_resolved, applicable_rules)
     """
-    active = {rule.frontmatter.id for rule in active_rules}
+    active_by_id = {rule.frontmatter.id: rule for rule in active_rules}
     return frozenset(
-        skill_id_of(skill)
-        for skill in skills
-        if not is_rule_skill(skill)
-        or any(
-            rule.frontmatter.id in active
-            for rule in member_rules_of(skill_id_of(skill), merged_rules)
-        )
+        skill_id_of(skill) for skill in skills if _is_kept(skill, merged_rules, active_by_id)
     )
 
 
@@ -156,13 +154,29 @@ def _composed_skill(
     skill: Skill, merged_rules: Sequence[Rule], active_by_id: Mapping[str, Rule]
 ) -> Skill | None:
     """``skill`` as written: unchanged when plain, None without an active member."""
+    if not _is_kept(skill, merged_rules, active_by_id):
+        return None
     if not is_rule_skill(skill):
         return skill
-    member_ids = [rule.frontmatter.id for rule in member_rules_of(skill_id_of(skill), merged_rules)]
-    active = [active_by_id[rule_id] for rule_id in member_ids if rule_id in active_by_id]
-    if not active:
-        return None
+    active = _active_members(skill, merged_rules, active_by_id)
     return dataclasses.replace(skill, member_references=tuple(map(member_reference, active)))
+
+
+def _is_kept(skill: Skill, merged_rules: Sequence[Rule], active_by_id: Mapping[str, Rule]) -> bool:
+    """The one keep/drop rule of :func:`compose_skills` and :func:`active_skill_ids`.
+
+    A plain skill is always kept; a gated one (``playbook`` block) only with an
+    active member.
+    """
+    return not is_rule_skill(skill) or bool(_active_members(skill, merged_rules, active_by_id))
+
+
+def _active_members(
+    skill: Skill, merged_rules: Sequence[Rule], active_by_id: Mapping[str, Rule]
+) -> list[Rule]:
+    """``skill``'s member rules that are active, as ``active_by_id`` holds them, in order."""
+    member_ids = [rule.frontmatter.id for rule in member_rules_of(skill_id_of(skill), merged_rules)]
+    return [active_by_id[rule_id] for rule_id in member_ids if rule_id in active_by_id]
 
 
 def _enabled_phrase(adapters: Sequence[MemberRuleDeliverer]) -> str:

@@ -9,7 +9,10 @@ lockfile removes the old framework's files; ``check`` prints the role map (D77).
 from __future__ import annotations
 
 import argparse
+import importlib
 import tomllib
+from pathlib import Path
+from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 import pytest
@@ -21,7 +24,7 @@ from coding_agent_playbook.sync import pipeline as _sync
 from tests.fakes import FakeGitClient
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    from collections.abc import Callable, Mapping
 
 # init ends with a real sync (SubprocessGitClient); keep git off the developer's config.
 pytestmark = [pytest.mark.usefixtures("hermetic_git_env"), pytest.mark.catalog]
@@ -120,6 +123,119 @@ def test_two_frameworks_fail_validate_naming_both(
         f"coding_agent_playbook.plugins.superpowers, {_MATTPOCOCK}; enable one with the "
         "framework key and remove the others from overlays_enabled"
     ]
+
+
+def _overlay(
+    make_package: Callable[..., str],
+    *,
+    framework_toml: str | None = None,
+    skills: Mapping[str, str] = MappingProxyType({}),
+) -> str:
+    """An importable overlay whose ``resources/`` holds ``framework_toml`` and ``skills``.
+
+    ``skills`` maps a skill id to its ``capabilities`` frontmatter value.
+    """
+    name = make_package("acme_cli_framework", resources=True)
+    resources = Path(importlib.import_module(name).__path__[0]) / "resources"
+    if framework_toml is not None:
+        (resources / "framework.toml").write_text(framework_toml, encoding="utf-8")
+    for skill_id, capabilities in skills.items():
+        skill_dir = resources / "skills" / skill_id
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(
+            f"---\nid: {skill_id}\nname: {skill_id}\ndescription: The {skill_id} skill.\n"
+            f"capabilities: {capabilities}\n---\n# {skill_id}\n",
+            encoding="utf-8",
+        )
+    return name
+
+
+def _validate_fails(repo: Path, capsys: pytest.CaptureFixture[str]) -> list[str]:
+    capsys.readouterr()
+    assert _validate.run(argparse.Namespace(repo_root=str(repo))) == 1
+    return [line for line in capsys.readouterr().out.splitlines() if line.startswith("FAIL")]
+
+
+def test_init_refuses_a_framework_that_ships_no_framework_toml(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], make_package: Callable[..., str]
+) -> None:
+    overlay = _overlay(make_package)
+
+    assert _init_repo(tmp_path, framework=overlay) == 2
+
+    err = capsys.readouterr().err
+    assert (
+        f"error: --framework {overlay!r} is not a usable framework ({overlay} ships no "
+        "framework.toml, so it is not a framework; list an add-on in overlays_enabled "
+        "instead); use mattpocock, superpowers, an overlay module that ships "
+        "framework.toml, or none; nothing was written"
+    ) in err
+    assert not (tmp_path / _CONFIG).exists()
+
+
+def test_validate_fails_a_framework_key_naming_no_framework(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], make_package: Callable[..., str]
+) -> None:
+    overlay = _overlay(make_package)
+    assert _init_repo(tmp_path) == 0
+    _set_framework(tmp_path, overlay)
+
+    assert _validate_fails(tmp_path, capsys) == [
+        f"FAIL framework: {overlay} ships no framework.toml, so it is not a framework; "
+        "list an add-on in overlays_enabled instead"
+    ]
+
+
+def test_validate_fails_a_framework_key_naming_an_unusable_layer(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert _init_repo(tmp_path) == 0
+    _set_framework(tmp_path, "acme_missing_framework")
+
+    assert _validate_fails(tmp_path, capsys) == [
+        "FAIL framework: acme_missing_framework: not importable"
+    ]
+
+
+def test_validate_fails_a_broken_framework_toml_naming_its_path(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], make_package: Callable[..., str]
+) -> None:
+    overlay = _overlay(
+        make_package,
+        framework_toml='name = "acme"\ndescription = "A"\nextra = 1\n'
+        '[layout_aliases]\n"docs/acme" = "plans"\n',
+    )
+    assert _init_repo(tmp_path) == 0
+    _set_framework(tmp_path, overlay)
+
+    assert _validate_fails(tmp_path, capsys) == [
+        f"FAIL {overlay}/framework.toml: unknown key 'extra'; allowed keys: name, "
+        "description, layout_aliases",
+        f"FAIL {overlay}/framework.toml: layout_aliases 'docs/acme' is not a path prefix: "
+        "write a relative directory path ending with '/', without '..'",
+    ]
+
+
+def test_validate_fails_bad_capability_tags_naming_the_skill(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], make_package: Callable[..., str]
+) -> None:
+    overlay = _overlay(
+        make_package,
+        framework_toml='name = "acme"\ndescription = "A"\n',
+        skills={"ship": "[deploy]", "ask": "[clarify]", "ask-more": "[clarify]"},
+    )
+    assert _init_repo(tmp_path) == 0
+    _set_framework(tmp_path, overlay)
+
+    fails = _validate_fails(tmp_path, capsys)
+
+    assert f"FAIL {overlay} skills/ship: capabilities has unknown role 'deploy'; " in "\n".join(
+        fails
+    )
+    assert (
+        f"FAIL {overlay} skills/ask-more: capabilities role 'clarify' is already declared "
+        "by skill 'ask'; one skill per role"
+    ) in fails
 
 
 def test_switching_framework_leaves_only_the_new_framework(tmp_path: Path) -> None:

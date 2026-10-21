@@ -120,6 +120,22 @@ def test_local_toml_any_policy_key_change_denies() -> None:
     assert toml_verdict("[broken", "x = 1\n", local=False) is ASK
 
 
+@pytest.mark.parametrize(
+    ("before", "after"),
+    [
+        ('framework = "superpowers"\n', 'framework = "mattpocock"\n'),
+        ('framework = "superpowers"\n', ""),
+        (None, 'framework = "superpowers"\n'),
+    ],
+)
+def test_a_framework_change_asks_and_denies_in_the_local_file(
+    before: str | None, after: str
+) -> None:
+    """The framework key enables a layer like overlays_enabled does (D57, L0-19 review)."""
+    assert toml_verdict(before, after, local=False) is ASK
+    assert toml_verdict(before, after, local=True) is DENY
+
+
 def test_local_policy_overrides_lists_set_policy_keys() -> None:
     doc = {"hooks": {}, "engine": {"version": "1"}, "links": {"other": 1}, "project": {}}
 

@@ -156,6 +156,9 @@ def _sample_session(sample: EvalSample, prompt: Prompt) -> RenderSession:
     A prompt without ``includes_rules`` gets ``rules=()``, so it never parses a
     rule file and a broken rule under ``setup/playbook/rules/`` cannot fail it
     (RS-D7). ``has_file`` paths resolve inside ``setup/``, the agent's project.
+    No skills and no framework are passed (a sample is not a synced repo), so
+    ``framework_skill(role)`` renders ``""`` and ``skill_active(name)`` ``False``
+    here, unlike in sync; ``tests/evals/test_prompting.py`` pins that.
 
     Example: ``_sample_session(sample, prompt).prompt_text(prompt)``.
     """

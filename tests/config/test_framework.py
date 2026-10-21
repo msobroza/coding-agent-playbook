@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import importlib
+import tomllib
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.commands import _init_answers as init_answers
+from coding_agent_playbook.commands._init_answers import FRAMEWORK_FLAG_HELP
 from coding_agent_playbook.config.framework import (
+    BUNDLED_FRAMEWORK_NAMES,
     FrameworkMetadataError,
     bundled_framework_names,
     framework_layers,
@@ -19,6 +23,7 @@ from coding_agent_playbook.config.framework import (
 )
 from coding_agent_playbook.config.model import Config, ProjectMeta
 from coding_agent_playbook.config.schema import ConfigError
+from coding_agent_playbook.validation.preflight import framework_choice_problems
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -188,3 +193,69 @@ def _overlay_with_framework_toml(make_package: Callable[..., str], text: str) ->
     package_dir = Path(importlib.import_module(name).__path__[0])
     (package_dir / "resources" / "framework.toml").write_text(text, encoding="utf-8")
     return name
+
+
+def test_the_help_text_names_are_the_bundled_frameworks() -> None:
+    """``--help``, the init question and the schema error list these names (L0-19 review)."""
+    assert sorted(BUNDLED_FRAMEWORK_NAMES) == sorted(bundled_framework_names())
+    for text in (FRAMEWORK_FLAG_HELP, init_answers._FRAMEWORK_QUESTION):
+        assert ", ".join(BUNDLED_FRAMEWORK_NAMES) in text
+
+
+def test_a_framework_key_after_a_table_header_is_refused() -> None:
+    """Appended after ``[detector_cache.frameworks]``, TOML nests it there (L0-19 review)."""
+    data = tomllib.loads(
+        'schema_version = 1\n[project]\nname = "x"\nkind = "python-library"\n'
+        '[engine]\nversion = "0.1"\n[detector_cache.frameworks]\npytest = "8"\n'
+        'framework = "superpowers"\n'
+    )
+
+    with pytest.raises(ConfigError) as caught:
+        Config.from_dict(data, source="c.toml")
+
+    assert str(caught.value) == (
+        "c.toml: 'framework' in the [detector_cache.frameworks] table is not read "
+        "(found 'superpowers') (TOML puts every key written after a [table] header in that "
+        "table); use the top-level key instead, at the top of the file, above the first "
+        '[table] header: framework = "superpowers"'
+    )
+
+
+def test_a_top_level_frameworks_key_is_refused_as_a_misspelling() -> None:
+    with pytest.raises(ConfigError, match=r"did you mean framework\?.*framework = \"mattpocock\""):
+        Config.from_dict(_config_data(frameworks="mattpocock"), source="c.toml")
+
+
+def test_the_detector_cache_frameworks_table_still_loads() -> None:
+    config = Config.from_dict(_config_data(detector_cache={"frameworks": {"pytest": "8"}}))
+
+    assert config.framework is None
+
+
+@pytest.mark.parametrize(
+    ("choice", "expected"),
+    [
+        (None, []),
+        ("none", []),
+        ("superpowers", []),
+        ("mattpocock", []),
+        (
+            "coding_agent_playbook",
+            [
+                "coding_agent_playbook ships no framework.toml, so it is not a framework; "
+                "list an add-on in overlays_enabled instead"
+            ],
+        ),
+        ("no_such_framework_overlay", ["no_such_framework_overlay: not importable"]),
+    ],
+)
+def test_framework_choice_problems(choice: str | None, expected: list[str]) -> None:
+    assert framework_choice_problems(choice) == expected
+
+
+def test_framework_choice_problems_accepts_an_overlay_shipping_framework_toml(
+    make_package: Callable[..., str],
+) -> None:
+    package = _overlay_with_framework_toml(make_package, 'name = "acme"\ndescription = "A"\n')
+
+    assert framework_choice_problems(package) == []
