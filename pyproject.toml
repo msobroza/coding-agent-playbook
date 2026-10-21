@@ -263,7 +263,7 @@ layers = [
     "grading",
     "generated_output",
     "artifacts",
-    "security | toml_writer | exit_two | (_plugin_registry)",
+    "security | toml_writer | exit_two | forge | (_plugin_registry)",
 ]
 exhaustive = true
 # Top-level modules not yet in their target package: each move PR deletes its
@@ -296,6 +296,7 @@ source_modules = [
     "coding_agent_playbook.catalog.roots",
     "coding_agent_playbook.detector.pep503",
     "coding_agent_playbook.detector.pyproject_deps",
+    "coding_agent_playbook.forge",
     "coding_agent_playbook.generated_output.atomic_io",
     "coding_agent_playbook.generated_output.sentinel",
     "coding_agent_playbook.lockfile",
