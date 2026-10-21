@@ -93,10 +93,12 @@ the consumer's `playbook/`) replaces an artifact with the same `id`.
    `EXPECTED_MEMBERSHIP` in `tests/integration/test_core_skills.py`.
 4. Pick `globs` with the skill nudge in mind: an edit names at most five
    skills, ranked by the most specific glob that matched (fewer wildcards,
-   then the longer literal part). Every test-related rule uses the shared
-   test-file glob set, so a test edit names `python-testing` first:
+   then the longer literal part; a `**/` counts least). A test-related rule
+   must use the shared test-file glob set, so a test edit names
+   `python-testing` first:
    `**/test_*.py`, `**/*_test.py`, `**/tests/**/*.py`, `**/conftest.py`,
-   `**/fakes.py`.
+   `**/fakes.py`. Some core test rules still use `tests/**/*.py`; they move to
+   the set as they are revised.
 5. Keep the body to guidance an assistant can act on. A rule cannot include
    another rule.
 

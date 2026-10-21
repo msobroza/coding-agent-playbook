@@ -13,8 +13,9 @@ the repository is skipped (its key is absolute, and ``**/*.py`` would match it).
 
 One line per matching skill, ``Conventions for this file: skill <id>.``, at
 most 200 characters, most specific first (D41, specs/prU-core-python-skills.md):
-each skill ranks by the most specific of its globs that matched, fewer
-wildcards first, then the longer literal part; ties keep config order. One
+each skill ranks by the most specific of its globs that matched
+(``path_globs.glob_specificity``: fewer wildcards, then the longer literal part,
+then fewer ``**/``); ties keep config order. One
 Python edit can match six skills while combine shows at most five lines per
 hook (``OutputCaps.CONTEXT_ITEMS_PER_HOOK``), so the rank decides which line
 the cap cuts: a test-file edit names python-testing before the principle
@@ -32,7 +33,11 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Final, TypeGuard
 
-from coding_agent_playbook.artifacts.path_globs import compile_globs
+from coding_agent_playbook.artifacts.path_globs import (
+    GlobSpecificity,
+    compile_globs,
+    glob_specificity,
+)
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.registry import register_hook_handler
 
@@ -47,7 +52,6 @@ __all__ = [
     "CONFIG_SCHEMA",
     "SKILL_NUDGE_LINE",
     "SKILL_NUDGE_MAX_CHARS",
-    "glob_specificity",
     "matching_skills",
     "nudge_line",
     "skill_glob_table",
@@ -60,8 +64,6 @@ SKILL_NUDGE_MAX_CHARS: Final = 200
 CONFIG_SCHEMA: Final[Mapping[str, ConfigKey]] = {}
 #: Combine's per-session ``once`` namespace; the line text makes the key per skill.
 _DEDUPE_KEY: Final = "skill-nudge"
-#: One wildcard token of the path-glob grammar: ``**``, ``*``, ``?`` or a ``[...]`` class.
-_WILDCARD: Final = re.compile(r"\*\*|\*|\?|\[!?\]?[^\]]*\]")
 
 
 @register_hook_handler(
@@ -109,26 +111,13 @@ def matching_skills(ctx: HandlerContext, keys: Sequence[str]) -> list[str]:
     if not keys:
         return []
     table = skill_glob_table(ctx.config, platform=ctx.platform, home=ctx.home)
-    ranked: list[tuple[tuple[int, int], str]] = []
+    ranked: list[tuple[GlobSpecificity, str]] = []
     for skill_id, globs in table:
         matched = [pattern for key in keys for pattern in globs.matching(key)]
         if matched:
             ranked.append((min(glob_specificity(p) for p in matched), skill_id))
     ranked.sort(key=lambda row: row[0])
     return [skill_id for _, skill_id in ranked]
-
-
-def glob_specificity(pattern: str) -> tuple[int, int]:
-    """A sort key for ``pattern``: fewer wildcards first, then the longer literal part.
-
-    Example::
-
-        >>> sorted(["**/*.py", "**/conftest.py", "src/app.py"], key=glob_specificity)
-        ['src/app.py', '**/conftest.py', '**/*.py']
-    """
-    wildcards = _WILDCARD.findall(pattern)
-    literal = len(pattern) - sum(len(token) for token in wildcards)
-    return len(wildcards), -literal
 
 
 def skill_glob_table(
