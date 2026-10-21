@@ -6,7 +6,7 @@ Generated from the verified mapping data; do not edit by hand. Decisions: [../pr
 | --- | --- | --- |
 | 0 | L0-00 | bootstrap the integration branch |
 | 0b | L0-00b | eval sample rename before any other ticket (D68) |
-| 1 | L0-01, L0-02, L0-03, L0-04, L0-19, L0-21 | independent engine pieces and test-pin restructuring; parallel; framework choice (D57) |
+| 1 | L0-01, L0-02, L0-03, L0-04, L0-19, L0-21, L0-25, L0-26 | independent engine pieces and test-pin restructuring; parallel; framework choice (D57); inert-hook logging and harness hints (D79) |
 | 2 | L0-05, L0-08, L0-20, L0-23 | in-skill discovery and rendered rules/ path; parallel (both touch validation/_skills.py in different functions); Domino detection (D51); layout adapter (D71) |
 | 3 | L0-06, L0-09, L0-10, L0-22, L0-24 | layout checks, section schema, agent_harness; parallel; layout guard and always rule (D61, D71); prompt sets (D76) |
 | 4 | L0-07, L0-11, L0-12 | mechanical move + D36 check, sectioned index, impact tag; parallel |
@@ -556,11 +556,47 @@ Acceptance:
 - Each v2 prompt has the same name, frontmatter keys and includes_rules as its v1 twin.
 - Rendered with no framework, no v2 prompt names a plugin skill.
 
+### L0-25: feat(hook_runtime): log hook calls ignored as foreign or outside a repo, and report them in doctor
+
+Lane lane0, size S, depends on L0-00b; decisions D79.
+
+D79(1): every hook call the harness parser classifies as foreign, and every call outside a git repository, is logged once with its event, harness and reason (foreign_marker:<key>, timestamp, event_mismatch, missing_session_id, claude_project_dir_unset, not_a_repo, and OpenCode's equivalents), reusing the hooks-off logging path (JSON with named fields). Exit code and wire output stay unchanged: a foreign payload stays inert. playbook-hook doctor reports the ignored calls (counts, reasons, most recent first) and flags claude_project_dir_unset and missing_session_id as a likely misconfigured real session.
+
+- `src/coding_agent_playbook/hook_runtime/dispatch/run.py`: log the silent ForeignPayload return (~line 193) and the outcome.repo is None return (~line 199), reusing the hooks-off logging path (~lines 189-191)
+- `src/coding_agent_playbook/hook_runtime/harness/claude.py`: expose the reasons (~lines 81-105) to the log
+- `src/coding_agent_playbook/hook_runtime/harness/opencode.py`: the same for OpenCode's reasons
+- `src/coding_agent_playbook (playbook-hook doctor diagnostics)`: report ignored calls and flag likely misconfiguration
+- test `tests/hook_runtime`: one test per reason: logged once with event, harness and reason; exit code and wire output unchanged
+- test `tests (doctor)`: doctor lists counts and reasons most recent first and names claude_project_dir_unset as a likely misconfiguration
+
+Acceptance:
+- The exit code and wire output are unchanged for every inert case.
+- Each ignored call is logged once with event, harness and reason.
+- doctor names claude_project_dir_unset and missing_session_id as a likely misconfigured real session.
+
+### L0-26: feat(cli): warn when configured adapters and repo harness markers differ, and pre-select detected adapters in interactive init
+
+Lane lane0, size M, depends on L0-00b; decisions D79.
+
+D79(2): one harness-marker module (single source of truth; repo files only, never PATH) drives advisory playbook check warnings (a harness's markers exist but its adapter is off: opencode.json or user-written .opencode/ files, .continue/; or a configured adapter shows no use beyond the engine's own generated outputs, told apart by the lockfile), each naming the exact config change or playbook init --adapters ... that fixes it and never failing the command; and interactive playbook init pre-selecting the detected adapters. The non-interactive default (claude_code, opencode, shared_skills) is unchanged.
+
+- `src/coding_agent_playbook (new harness-marker module)`: the marker table, the single source of truth
+- `src/coding_agent_playbook/commands (check)`: advisory warnings with the exact fix
+- `src/coding_agent_playbook/commands/_init_answers.py`: pre-select detected adapters in the multi-select (~line 181)
+- `src/coding_agent_playbook/commands/_init_adapters.py`: default unchanged (~lines 14-19)
+- test `tests/cli (check, init)`: each marker; generated-only files do not count as use; the non-interactive default is unchanged; warnings never fail check
+
+Acceptance:
+- Every marker in the table has a test.
+- Files the engine generated (per the lockfile) never count as harness use.
+- playbook check exits 0 when only these warnings fire.
+- Non-interactive init still defaults to claude_code, opencode, shared_skills.
+
 ### D-01: docs(spec): describe rules inside skills, sections and the priority policy
 
-Lane docs, size M, depends on L0-10, L0-15, L0-16; decisions D5, D17, D21, D22, ADR 0005.
+Lane docs, size M, depends on L0-10, L0-15, L0-16; decisions D5, D17, D21, D22, ADR 0005, D79.
 
-Rewrite the SPEC parts on rule discovery and rendering (re-grep, line numbers drift): 5.1 engine tree (rules inside skills, the two always rules); 6.0, 6.1.1, 6.1.2 frontmatter (section:, skill: only for rules from another layer; keep an example of a repo-local rule with 'skill: python-coding' so tests/unit/test_docs_glossary.py:103,107,112 keep holding); 6.1.6 a rendered rules/<id>.md sample with the [IMPACT] tag; 6.2.x 'Before you start' samples; 6.3.x skills (rules/ vs free-form references/, playbook.sections, Covers by sections, grouped index sample, what sync copies); 10.2.1 priority policy (0-19 always rules, CRITICAL 20-39, HIGH 40-59, MEDIUM 60-79, LOW 80-99, rank inside the section; replaces the kind bands; sectionless skills keep free 0-99); 12.6 validate rows (V1 and W1 text, V12 removed, V13 '## Rules', R1-R6, S1-S7, rule load errors and shape checks); 12.7 render; 14.4 lockfile sample paths; 20.3 discovery order; the agent_harness tree with skills/<id>/rules. 6.4 and 9.4 predicates were done in L0-02.
+Rewrite the SPEC parts on rule discovery and rendering (re-grep, line numbers drift): 5.1 engine tree (rules inside skills, the two always rules); 6.0, 6.1.1, 6.1.2 frontmatter (section:, skill: only for rules from another layer; keep an example of a repo-local rule with 'skill: python-coding' so tests/unit/test_docs_glossary.py:103,107,112 keep holding); 6.1.6 a rendered rules/<id>.md sample with the [IMPACT] tag; 6.2.x 'Before you start' samples; 6.3.x skills (rules/ vs free-form references/, playbook.sections, Covers by sections, grouped index sample, what sync copies); 10.2.1 priority policy (0-19 always rules, CRITICAL 20-39, HIGH 40-59, MEDIUM 60-79, LOW 80-99, rank inside the section; replaces the kind bands; sectionless skills keep free 0-99); 12.6 validate rows (V1 and W1 text, V12 removed, V13 '## Rules', R1-R6, S1-S7, rule load errors and shape checks); 12.7 render; 14.4 lockfile sample paths; 20.3 discovery order; the agent_harness tree with skills/<id>/rules. 6.4 and 9.4 predicates were done in L0-02. D79: one SPEC line on logged inert hook calls (doctor) and harness-marker warnings in playbook check.
 
 - `SPEC.md`: the sections above
 - `tests/unit/test_docs_glossary.py`: only if a pinned phrase must move
@@ -573,7 +609,7 @@ Acceptance:
 
 ### D-02: docs(spec): record vendored core guidance, the new budgets and the v0.21 changelog
 
-Lane docs, size M, depends on L0-14, L0-15, L0-16; decisions D1, D4, D18, D19, D31, ADR 0004.
+Lane docs, size M, depends on L0-14, L0-15, L0-16; decisions D1, D4, D18, D19, D31, ADR 0004, D79.
 
 SPEC text that limits vendoring to bundled plugins (the 2347-area paragraph, 11.5.x) and calls core text distilled (header line 13, 5.1 comments) changes to ADR 0004: core vendors and adapts pbp and pca, ships byte-identical license copies in each skill's references/ (D19), ATTRIBUTIONS mapping tables (D31). Budgets: 2,400 core, 6,500 listing, the listing sentence near L2425 ('core's four skills ...'), eight core skills. v0.21 changelog entry: vendored core, three new skills, rules/ in sources and output, sections and impact bands, has_dependency, retired ids. Edits sections D-01 does not touch; merge D-01 first if both are open. Also ADR 0006 (bundled frameworks follow one document layout) and the eval sample rename's SPEC wording are already in place or handled by L0-00b.
 

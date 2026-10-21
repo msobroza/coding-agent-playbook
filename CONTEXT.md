@@ -147,6 +147,10 @@ The engine part that writes rendered content in one harness's native format and 
 **Harness**:
 A coding-agent runtime the engine writes files for, such as Claude Code, OpenCode, Codex, Continue or Cursor.
 
+**Harness marker**:
+A file in the consumer repo that shows a harness is in use (for example `opencode.json` or `.continue/`), read only from the repo and never from PATH; the engine's own generated outputs do not count.
+_Avoid_: harness signal
+
 **Agent Harness tree**:
 The directory tree the agent_harness adapter writes for Agent Harness clients and `import-harness` reads back; it is not a Harness.
 
