@@ -98,9 +98,9 @@ def test_is_skill_member_only_for_rules_naming_a_skill() -> None:
     assert is_skill_member(_rule("legacy", skill=None)) is False
 
 
-def test_member_reference_path_is_references_slash_id_md() -> None:
-    assert member_reference_path("pytest") == "references/pytest.md"
-    assert member_reference_path("python-typing") == "references/python-typing.md"
+def test_member_reference_path_is_rules_slash_id_md() -> None:
+    assert member_reference_path("pytest") == "rules/pytest.md"
+    assert member_reference_path("python-typing") == "rules/python-typing.md"
 
 
 def test_compose_skills_passes_plain_skill_through_unchanged() -> None:

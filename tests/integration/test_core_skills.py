@@ -54,7 +54,7 @@ pytestmark = pytest.mark.catalog
 
 #: Every core skill with member rules, one pins module each under ``tests/core_skill_pins/``.
 PINS_BY_SKILL: Final[Mapping[str, CoreSkillPins]] = {pins.skill_id: pins for pins in ALL_PINS}
-#: Scoped rule in core -> the core skill whose references deliver it, from the pins modules.
+#: Scoped rule in core -> the core skill whose rules/ delivers it, from the pins modules.
 MEMBERSHIP_FROM_PINS: Final[Mapping[str, str]] = {
     rule_id: pins.skill_id for pins in ALL_PINS for rule_id in pins.members
 }
@@ -104,10 +104,10 @@ def _probe_members(skill_id: str) -> list[Rule]:
     return [r for r in _members(skill_id) if r.frontmatter.id not in PROBE_INACTIVE_MEMBERS]
 
 
-def _is_core_member_reference(path: str) -> bool:
-    """Whether repo-relative ``path`` is ``<root>/<core skill>/references/<file>``."""
+def _is_core_member_rule(path: str, subdir: str = "rules") -> bool:
+    """Whether repo-relative ``path`` is ``<root>/<core skill>/<subdir>/<file>``."""
     parts = path.split("/")
-    return len(parts) >= 3 and parts[-2] == "references" and parts[-3] in WHERE_FROM_PINS
+    return len(parts) >= 3 and parts[-2] == subdir and parts[-3] in WHERE_FROM_PINS
 
 
 def _probe_skill_md(repo: Path, skill_id: str) -> str:
@@ -294,7 +294,7 @@ def test_each_scoped_core_rule_is_pinned_by_exactly_its_skill() -> None:
 
 @pytest.mark.parametrize("pins", ALL_PINS, ids=lambda pins: pins.skill_id)
 def test_core_skill_members_in_index_order(pins: CoreSkillPins) -> None:
-    """Spec 9.6.2: each skill's members, in the order its references index lists them."""
+    """Spec 9.6.2: each skill's members, in the order its rules index lists them."""
     members = [
         rule.frontmatter.id for rule in member_rules_of(pins.skill_id, list(core_rules().values()))
     ]
@@ -356,7 +356,7 @@ def test_reference_probe_emits_each_core_skill_within_budget(
     for rule in _probe_members(skill_id):
         assert rule.frontmatter.name in description, f"{skill_id} omits {rule.frontmatter.name!r}"
     assert sorted(frontmatter) == ["description", "id", "name"]
-    index = body.partition("## References\n")[2]
+    index = body.partition("## Rules\n")[2]
     lines = [line for line in index.splitlines() if line.startswith("- [")]
     assert len(lines) == len(_probe_members(skill_id)), f"{skill_id} index: {lines}"
 
@@ -393,7 +393,7 @@ def test_reference_probe_writes_the_guardrails_skill_to_opencode_and_agents_root
 def test_reference_probe_member_reference_is_byte_identical_in_every_skill_root(
     reference_probe_repo: Path,
 ) -> None:
-    relative = "python-coding/references/python-typing.md"
+    relative = "python-coding/rules/python-typing.md"
     copies = {
         root: (reference_probe_repo / root / relative).read_bytes() for root in NATIVE_SKILL_ROOTS
     }
@@ -409,15 +409,17 @@ def test_reference_probe_lockfile_records_member_references_as_rules(
     rows = {
         entry.path: (entry.kind, entry.artifact_id)
         for entry in lockfile.entries
-        if _is_core_member_reference(entry.path)
+        if _is_core_member_rule(entry.path)
     }
     expected = {
-        f"{root}/{skill_id}/references/{rule_id}.md": ("rule", rule_id)
+        f"{root}/{skill_id}/rules/{rule_id}.md": ("rule", rule_id)
         for root in NATIVE_SKILL_ROOTS
         for rule_id, skill_id in MEMBERSHIP_FROM_PINS.items()
         if rule_id not in PROBE_INACTIVE_MEMBERS
     }
     assert rows == expected
+    # prU D5: no member is written under references/ any more.
+    assert not [e.path for e in lockfile.entries if _is_core_member_rule(e.path, "references")]
 
 
 def test_reference_probe_writes_no_continue_prompt_for_a_member_skill(

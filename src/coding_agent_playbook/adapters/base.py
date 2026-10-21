@@ -52,7 +52,7 @@ class Adapter(ABC):
     retired_output_locations: ClassVar[tuple[str, ...]] = ()
 
     #: Whether this adapter's harness receives scoped rules: through its own rule
-    #: files (continue, agent_harness) or through skill references (claude_code,
+    #: files (continue, agent_harness) or through skill rule files (claude_code,
     #: opencode, shared_skills). Only ``agents_md`` sets False: it carries always
     #: rules only. ``playbook sync`` warns when every enabled adapter sets False
     #: (``skills.membership.undelivered_member_warning``). True by default, because

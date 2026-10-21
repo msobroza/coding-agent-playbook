@@ -142,7 +142,7 @@ def test_override_hint_is_absent_when_no_overridden_rule_named_a_skill() -> None
 
 
 def test_check_rule_skills_leaves_plain_skills_alone() -> None:
-    plain = _skill("query-db", body="## References\n")
+    plain = _skill("query-db", body="## Rules\n")
 
     findings = check_rule_skills([_rule("db", skill="query-db")], [plain])
 

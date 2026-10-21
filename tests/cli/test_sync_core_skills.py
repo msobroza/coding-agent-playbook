@@ -71,8 +71,8 @@ def _skill_lock_paths(repo: Path, skill_id: str) -> list[str]:
 
 
 def _references(repo: Path, root: str, skill_id: str) -> list[str]:
-    """The sorted file names in ``repo/<root>/<skill_id>/references/``."""
-    return sorted(p.name for p in (repo / root / skill_id / "references").iterdir())
+    """The sorted file names in ``repo/<root>/<skill_id>/rules/``."""
+    return sorted(p.name for p in (repo / root / skill_id / "rules").iterdir())
 
 
 def _synthetic_skill_repo(tmp_path: Path, make_synthetic_repo: Callable[..., Path]) -> Path:

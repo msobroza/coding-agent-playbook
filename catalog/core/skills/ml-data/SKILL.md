@@ -9,11 +9,11 @@ playbook:
 
 # ML and data
 
-Conventions for code that loads, stores or transforms models, arrays and data frames, in modules and in notebooks alike. A reference applies only when the repo uses the libraries it covers, and each one renders only the sections for the libraries detected here, so the references index in this file lists just the ones that apply, each with the one line it requires.
+Conventions for code that loads, stores or transforms models, arrays and data frames, in modules and in notebooks alike. A rule applies only when the repo uses the libraries it covers, and each one renders only the sections for the libraries detected here, so the rules index in this file lists just the ones that apply, each with the one line it requires.
 
-## Picking references
+## Picking rules
 
-Open every reference whose line matches the change and read it in full before writing code. Treat code that loads a model, checkpoint, cache or array from disk or the network as security-sensitive: open the serialization reference first when the index lists it.
+Open every rule whose line matches the change and read it in full before writing code. Treat code that loads a model, checkpoint, cache or array from disk or the network as security-sensitive: open the serialization rule first when the index lists it.
 
 - Loading or saving a model, checkpoint, cache or pickled artifact: serialization.
 - A loop over array values or frame rows, or an array or frame built up step by step: vectorization.

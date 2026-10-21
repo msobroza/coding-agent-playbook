@@ -36,7 +36,7 @@ UV_PROBE_DESCRIPTION: Final = (
     f"{_SENTENCE} Covers Static checks, pytest configuration, uv workflow, FastAPI app "
     f"wiring, FastAPI error boundaries, Pydantic boundaries. {_USE_WHEN}"
 )
-_UV_PROBE_REFERENCES: Final = [
+_UV_PROBE_RULES: Final = [
     "fastapi-app-wiring.md",
     "fastapi-error-boundaries.md",
     "pydantic-boundaries.md",
@@ -64,8 +64,8 @@ def test_uv_lock_adds_the_uv_workflow_to_python_tooling(uv_reference_probe_repo:
     assert description == UV_PROBE_DESCRIPTION
     assert len(description) <= 300, f"{len(description)} chars; the cap is 300"
     for root in NATIVE_SKILL_ROOTS:
-        references = uv_reference_probe_repo / root / "python-tooling" / "references"
-        assert sorted(p.name for p in references.iterdir()) == _UV_PROBE_REFERENCES, root
+        rules = uv_reference_probe_repo / root / "python-tooling" / "rules"
+        assert sorted(p.name for p in rules.iterdir()) == _UV_PROBE_RULES, root
 
 
 #: Member display name -> the picker label the body uses instead. ``pytest`` is also

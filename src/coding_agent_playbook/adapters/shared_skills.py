@@ -14,7 +14,7 @@ step 9): pristine copies are deleted, edited or tracked ones kept and owned
 
 Rules and prompts are no-ops here: always rules reach every assistant through
 ``AGENTS.md``, scoped rules travel inside the skills this adapter writes (as
-the references of the skill each one names), and prompts go through the
+the ``rules/`` files of the skill each one names), and prompts go through the
 harness adapters. With any on hook carrying guardrail text, the composed
 ``playbook-guardrails`` skill is written here too (D6). The skill bytes come
 from the shared :class:`~coding_agent_playbook.adapters.skill_dirs.writer.SkillWriter`

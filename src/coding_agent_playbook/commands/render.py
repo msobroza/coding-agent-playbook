@@ -180,7 +180,7 @@ def _show_rules(prompt: Prompt, ctx: SyncContext) -> str:
     """The ``--show-rules`` listing: each included id with its gate and its delivery (D15).
 
     Example line: ``  - pytest  (coding_agent_playbook, applies_if=True -> skill
-    python-testing, references/pytest.md)``.
+    python-testing, rules/pytest.md)``.
     """
     rule_index = {rule.frontmatter.id: rule for rule in ctx.rules_resolved}
     lines = [f"Prompt:    {prompt.frontmatter.id}", "includes_rules:"]

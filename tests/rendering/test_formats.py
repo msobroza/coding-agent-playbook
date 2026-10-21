@@ -53,6 +53,25 @@ def test_render_for_continue_rule(tmp_path: Path) -> None:
     assert out.endswith(body)
 
 
+def test_continue_rule_renders_links_to_skill_references_as_plain_file_names(
+    tmp_path: Path,
+) -> None:
+    """prU D46(9): Continue receives no skill ``references/``, so such a link would dangle."""
+    body = (
+        "See [the worked example](../references/worked-example.md) and\n"
+        "[`layers`](../references/arch/layers.md#top), or [docs](https://example.org/a.md).\n"
+    )
+    out = render_for(
+        tmp_path / "rule.md",
+        body,
+        "continue_rule",
+        frontmatter={"id": "x", "name": "X", "description": "x", "scope": "scoped"},
+    )
+    assert out.endswith(
+        "See worked-example.md and\nlayers.md, or [docs](https://example.org/a.md).\n"
+    )
+
+
 def test_render_for_continue_rule_drops_globs_when_always_apply(tmp_path: Path) -> None:
     """When scope=always, alwaysApply=true, globs is not emitted
     (Continue semantics — globs is meaningful only with alwaysApply=false)."""
@@ -284,7 +303,7 @@ def test_render_for_prompt_claude_command_emits_title_and_body(tmp_path: Path) -
 # --- D15: Claude Code and OpenCode commands point at skills -----------------
 
 
-_TYPING_REFERENCE = SkillReference("python-coding", "references/python-typing.md")
+_TYPING_REFERENCE = SkillReference("python-coding", "rules/python-typing.md")
 _POINTER_FRONTMATTER = {
     "name": "Review",
     "description": "Review a diff.",
@@ -293,7 +312,7 @@ _POINTER_FRONTMATTER = {
 _POINTER_BODY = "# Review\n\nYou are reviewing code.\n\n## Tone\n\nBe kind.\n"
 _POINTER_BLOCK = (
     "## Before you start\n\n"
-    "1. Load skill `python-coding` and read its reference `references/python-typing.md`.\n"
+    "1. Load skill `python-coding` and read its rule `rules/python-typing.md`.\n"
     "2. For each file in scope, also load any other listed skill whose description matches it.\n"
 )
 

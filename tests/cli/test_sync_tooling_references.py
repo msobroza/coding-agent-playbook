@@ -5,7 +5,7 @@ written in every Python repo. Its other distilled members follow their gates: th
 uv workflow reference needs a ``uv.lock`` (``package_manager: uv``), and the
 Pydantic boundaries reference a declared ``pydantic`` dependency
 (``has_framework: ["pydantic"]``). Each test syncs a synthetic repo with the
-``claude_code`` adapter only and reads the rule ids the skill holds as references.
+``claude_code`` adapter only and reads the rule ids the skill holds as rule files.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ version = "0.1.0a0"
 artifact_source = "filesystem"
 state_source = "filesystem"
 """
-_TOOLING_REFERENCES: Final = (".claude", "skills", "python-tooling", "references")
+_TOOLING_REFERENCES: Final = (".claude", "skills", "python-tooling", "rules")
 _UV_WORKFLOW: Final = "python-uv-workflow"
 _PYDANTIC_BOUNDARIES: Final = "pydantic-boundaries"
 
@@ -47,7 +47,7 @@ def _python_repo(root: Path, make_synthetic_repo: Callable[..., Path], **extras:
 
 
 def _synced_tooling_references(repo: Path) -> list[str]:
-    """Sync ``repo`` and return the sorted rule ids ``python-tooling`` holds as references."""
+    """Sync ``repo`` and return the sorted rule ids ``python-tooling`` holds as rule files."""
     assert _sync.run(argparse.Namespace(repo_root=str(repo), check=False)) == 0
     references = repo.joinpath(*_TOOLING_REFERENCES)
     return sorted(path.name.removesuffix(".md") for path in references.iterdir())

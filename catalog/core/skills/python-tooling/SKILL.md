@@ -9,11 +9,11 @@ playbook:
 
 # Python tooling
 
-Conventions tied to one named developer tool or framework: the linter and type checker, the test runner's settings, the package manager, input validation models and web framework wiring. Library-agnostic conventions stay in the python-coding skill, and test code in the python-testing skill; a reference here adds only what its tool or framework changes.
+Conventions tied to one named developer tool or framework: the linter and type checker, the test runner's settings, the package manager, input validation models and web framework wiring. Library-agnostic conventions stay in the python-coding skill, and test code in the python-testing skill; a rule here adds only what its tool or framework changes.
 
-## Picking references
+## Picking rules
 
-The references index in this file lists only the references that apply to this repo, most important first, each with the one line it requires. Open every reference whose line matches the change and read it in full before writing code or editing configuration.
+The rules index in this file lists only the rules that apply to this repo, most important first, each with the one line it requires. Open every rule whose line matches the change and read it in full before writing code or editing configuration.
 
 - A lint or type-check finding, a suppression comment, or ruff or mypy settings: static checks.
 - Test-runner settings, markers, warning filters or coverage thresholds: the test runner's configuration.

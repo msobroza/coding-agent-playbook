@@ -1,8 +1,8 @@
-"""The skill writer's member references (specs/prS-skills-context.md 6.4.5, 6.8.4).
+"""The skill writer's member rules (specs/prS-skills-context.md 6.4.5, 6.8.4; prU D5).
 
 A skill with member rules is written with the composed frontmatter (the
 catalog-only ``playbook:`` block stripped), the authored body plus the generated
-``## References`` index, and one ``references/<rule-id>.md`` per active member,
+``## Rules`` index, and one ``rules/<rule-id>.md`` per active member,
 byte-identical in every skill root. Split from ``test_skill_writer.py``, which
 is already over 900 lines.
 """
@@ -25,7 +25,7 @@ from coding_agent_playbook.adapters.skill_dirs.writer import (
 from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.generated_output.sentinel import SENTINEL
-from coding_agent_playbook.skills.document import references_index
+from coding_agent_playbook.skills.document import rules_index
 from tests.member_skill_samples import (
     sample_member_reference,
     sample_member_skill,
@@ -56,21 +56,22 @@ def test_write_emits_member_references_and_index(tmp_path: Path) -> None:
     written = _write(skill, tmp_path)
 
     skill_dir = tmp_path / ".claude" / "skills" / "python-coding"
-    references = skill_dir / "references"
+    rules = skill_dir / "rules"
     assert written == [
         skill_dir / SKILL_FILENAME,
-        references / "python-dependency-injection.md",
-        references / "python-typing.md",
+        rules / "python-dependency-injection.md",
+        rules / "python-typing.md",
     ]
-    assert (references / "python-typing.md").read_bytes() == _TYPING.text.encode("utf-8")
-    assert (references / "python-dependency-injection.md").read_bytes() == _DI.text.encode()
+    assert (rules / "python-typing.md").read_bytes() == _TYPING.text.encode("utf-8")
+    assert (rules / "python-dependency-injection.md").read_bytes() == _DI.text.encode()
+    assert not (skill_dir / "references").exists()
     skill_md = (skill_dir / SKILL_FILENAME).read_text(encoding="utf-8")
     frontmatter, body = split_frontmatter(skill_md)
     assert frontmatter["description"] == (
         "Library-agnostic Python conventions. Covers Dependency injection, Typing. "
         "Use when editing Python code."
     )
-    index = references_index(skill.member_references)
+    index = rules_index(skill.member_references)
     assert body.endswith(f"Pick the reference the task needs.\n\n{index}")
     assert "playbook" not in frontmatter
 
@@ -86,8 +87,8 @@ def test_member_reference_bytes_identical_across_writer_roots(tmp_path: Path) ->
     assert all(tree == trees[0] for tree in trees[1:])
     assert set(trees[0]) == {
         "SKILL.md",
-        "references/python-dependency-injection.md",
-        "references/python-typing.md",
+        "rules/python-dependency-injection.md",
+        "rules/python-typing.md",
     }
 
 
@@ -127,7 +128,7 @@ def test_render_skill_md_of_a_plain_skill_is_unchanged() -> None:
     )
 
 
-def test_hand_written_references_are_copied_next_to_member_references(tmp_path: Path) -> None:
+def test_hand_written_references_are_copied_beside_the_member_rules(tmp_path: Path) -> None:
     handwritten = tmp_path / "src-refs"
     handwritten.mkdir()
     (handwritten / "guide.md").write_bytes(b"# Guide\n")
@@ -135,8 +136,9 @@ def test_hand_written_references_are_copied_next_to_member_references(tmp_path: 
 
     written = _write(skill, tmp_path / "repo")
 
-    references = tmp_path / "repo" / ".claude" / "skills" / "python-coding" / "references"
-    assert written[1:] == [references / "guide.md", references / "python-typing.md"]
+    skill_dir = tmp_path / "repo" / ".claude" / "skills" / "python-coding"
+    references = skill_dir / "references"
+    assert written[1:] == [references / "guide.md", skill_dir / "rules" / "python-typing.md"]
     assert (references / "guide.md").read_bytes() == b"# Guide\n"
 
 
@@ -146,7 +148,7 @@ def test_rewrite_replaces_the_member_reference_an_earlier_write_left(tmp_path: P
 
     _write(sample_member_skill("python-coding", edited), tmp_path)
 
-    reference = tmp_path / ".claude/skills/python-coding/references/python-typing.md"
+    reference = tmp_path / ".claude/skills/python-coding/rules/python-typing.md"
     assert reference.read_text(encoding="utf-8") == edited.text
 
 
@@ -155,7 +157,7 @@ def test_member_reference_blocked_by_user_directory_is_skipped_with_warning(
 ) -> None:
     skill = sample_member_skill("python-coding", _DI, _TYPING)
     _write(skill, tmp_path)
-    blocked = tmp_path / ".claude/skills/python-coding/references/python-typing.md"
+    blocked = tmp_path / ".claude/skills/python-coding/rules/python-typing.md"
     blocked.unlink()
     blocked.mkdir()
     (blocked / "notes.md").write_bytes(b"my notes\n")  # no lockfile lists it
@@ -180,12 +182,12 @@ def test_member_reference_behind_a_link_leaving_the_skill_dir_is_skipped(
     outside = tmp_path / "elsewhere"
     outside.mkdir()
     skill_dir = tmp_path / "repo" / ".claude" / "skills" / "python-coding"
-    shutil.rmtree(skill_dir / "references")
-    (skill_dir / "references").symlink_to(outside, target_is_directory=True)
+    shutil.rmtree(skill_dir / "rules")
+    (skill_dir / "rules").symlink_to(outside, target_is_directory=True)
 
     written = _write(skill, tmp_path / "repo")
 
     assert written == [skill_dir / SKILL_FILENAME]
     assert list(outside.iterdir()) == []
-    assert (skill_dir / "references").is_symlink()
+    assert (skill_dir / "rules").is_symlink()
     assert "leading outside the skill directory" in capsys.readouterr().err

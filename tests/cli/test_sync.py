@@ -520,7 +520,7 @@ def test_sync_points_claude_and_opencode_commands_at_skills(tmp_path, make_synth
     files = _generated_prompt_files(repo, "plain")
     block = (
         "## Before you start\n\n"
-        "1. Load skill `python-coding` and read its reference `references/house-rule.md`.\n"
+        "1. Load skill `python-coding` and read its rule `rules/house-rule.md`.\n"
         f"2. {_CLOSING_STEP}\n\n## Steps\n"
     )
     for harness in ("claude_code", "opencode"):
@@ -531,7 +531,7 @@ def test_sync_points_claude_and_opencode_commands_at_skills(tmp_path, make_synth
         content = files[harness].read_text(encoding="utf-8")
         assert content.count("HOUSE RULE BODY") == 1, harness
         assert "## Before you start" not in content, harness
-    reference = repo / ".claude" / "skills" / "python-coding" / "references" / "house-rule.md"
+    reference = repo / ".claude" / "skills" / "python-coding" / "rules" / "house-rule.md"
     assert "HOUSE RULE BODY" in reference.read_text(encoding="utf-8")
 
 
@@ -581,7 +581,7 @@ def test_sync_omits_the_pointer_line_of_a_filtered_rule(tmp_path, make_synthetic
     assert sync_cmd.run(_ns(repo)) == 0
 
     command = _generated_prompt_files(repo, "plain")["claude_code"].read_text(encoding="utf-8")
-    assert "read its reference `references/house-rule.md`." in command
+    assert "read its rule `rules/house-rule.md`." in command
     assert "gated-rule" not in command
 
 

@@ -1,7 +1,7 @@
 """The emitted skill sections (specs/prS-skills-context.md 6.4.4, 6.8.3).
 
 The frontmatter and body a skill with member rules is written with, its
-``## References`` index, the member reference files and the ``## Where guidance
+``## Rules`` index, the member rule files and the ``## Where guidance
 lives`` section. Expected texts are the spec's worked examples, copied
 verbatim. Split from ``test_document.py`` (the descriptions) to keep each
 test module under 300 lines.
@@ -17,8 +17,8 @@ from coding_agent_playbook.skills.document import (
     WhereEntry,
     emitted_body,
     emitted_frontmatter,
-    references_index,
     render_member_reference,
+    rules_index,
     skill_catalog_block,
     where_entry,
     where_guidance_section,
@@ -78,24 +78,24 @@ def test_emitted_frontmatter_of_a_plain_skill_is_the_authored_mapping() -> None:
     assert emitted_body(plugin) == "body\n"
 
 
-def test_emitted_body_appends_references_index_after_authored_body() -> None:
+def test_emitted_body_appends_rules_index_after_authored_body() -> None:
     assert emitted_body(_python_coding(*MEMBERS)) == (
         "\n# Python coding\n\nIntro.\n\n"
-        "## References\n\n"
-        "Each reference is one rule. Open only the ones the current task needs.\n\n"
-        "- [python-dependency-injection](references/python-dependency-injection.md) — "
+        "## Rules\n\n"
+        "Each file under rules/ is one rule. Open only the ones the current task needs.\n\n"
+        "- [python-dependency-injection](rules/python-dependency-injection.md) — "
         f"Dependency injection: {DI_DESCRIPTION}\n"
-        f"- [python-typing](references/python-typing.md) — Typing: {TYPING_DESCRIPTION}\n"
+        f"- [python-typing](rules/python-typing.md) — Typing: {TYPING_DESCRIPTION}\n"
     )
 
 
-def test_references_index_line_links_rule_id_with_name_and_description() -> None:
-    index = references_index(MEMBERS[1:])
+def test_rules_index_line_links_rule_id_with_name_and_description() -> None:
+    index = rules_index(MEMBERS[1:])
     assert index.splitlines()[-1] == (
-        "- [python-typing](references/python-typing.md) — Typing: Prefer a concrete type or a "
+        "- [python-typing](rules/python-typing.md) — Typing: Prefer a concrete type or a "
         "Protocol to Any, write X | None, and take abstract read-only types as inputs."
     )
-    assert references_index(()) == ""
+    assert rules_index(()) == ""
 
 
 def test_render_member_reference_with_and_without_globs() -> None:
@@ -122,12 +122,12 @@ def test_where_guidance_section_sorted_by_skill_id_with_lint_line() -> None:
     assert where_guidance_section(entries) == (
         "## Where guidance lives\n\n"
         "Detailed conventions live in skills. Before you edit one of these files, load its "
-        "skill and open the references its index lists.\n\n"
+        "skill and open the rules its index lists.\n\n"
         "- Code that loads or saves models, checkpoints or caches: skill `ml-data`\n"
         "- Any Python file: skill `python-coding`\n"
         "- Test files and conftest.py: skill `python-testing`\n"
         f"- {TOOLING_FILES}: skill `python-tooling`\n\n"
-        "Lint feedback names a rule id; that rule's reference in the skill has the fix.\n\n"
+        "Lint feedback names a rule id; that rule's file in the skill's rules/ has the fix.\n\n"
         "---\n"
     )
 
