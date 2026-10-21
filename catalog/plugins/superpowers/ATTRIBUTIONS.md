@@ -52,6 +52,14 @@ plugin, marketplace, repository, or network access is needed at run time):
   first frontmatter key of every `SKILL.md`. `name` is unchanged, and so is
   every `description` except diagnosing-superpowers', which no longer names the
   upstream maintainers as the bug report's recipient (see Dropped below).
+  Six skills gain one engine-owned line, `capabilities: [<role>]`, as their
+  last frontmatter key: brainstorming (`clarify`), writing-plans (`plan`),
+  test-driven-development (`tdd`), systematic-debugging (`debug`),
+  requesting-code-review (`review`) and verification-before-completion
+  (`verify`). The engine reads it to map the framework's roles and never writes
+  it to the synced copies.
+- **Framework metadata added.** `framework.toml` at the pack root is new: it
+  marks the pack as a spec-driven framework named `superpowers`.
 - **Cross-skill references.** Namespaced `superpowers:<skill>` references were
   rewritten to the plain skill name (`<skill>`); all referenced skills ship in
   this pack.

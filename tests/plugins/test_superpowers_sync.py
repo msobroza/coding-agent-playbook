@@ -155,7 +155,8 @@ def test_sync_writes_skill_md_faithfully(synced_pack_repo: Path, skill_id: str) 
     source_fm, source_body = split_frontmatter(source.read_text(encoding="utf-8"))
     # The SkillWriter puts ``name`` (= id) first and keeps every other key.
     assert text.startswith(f"---\nname: {skill_id}\n")
-    assert written_fm == source_fm
+    # The engine-owned capabilities tag (D77) is the one key sync never writes.
+    assert written_fm == {k: v for k, v in source_fm.items() if k != "capabilities"}
     assert written_fm["id"] == skill_id
     # Exactly the sentinel line is added; the vendored body after it is
     # untouched, since the port's whole point is upstream fidelity.

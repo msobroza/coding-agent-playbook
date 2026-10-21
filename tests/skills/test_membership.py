@@ -25,6 +25,7 @@ from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.rendering.session import RenderSession, TemplateContext
 from coding_agent_playbook.skills.membership import (
     MemberRuleDeliverer,
+    active_skill_ids,
     compose_skills,
     is_rule_skill,
     is_skill_member,
@@ -115,6 +116,28 @@ def test_compose_skills_drops_skill_whose_members_are_all_inactive() -> None:
     merged = [_rule("python-typing"), _rule("pytest", skill="python-testing")]
     active = [merged[1]]  # python-typing failed its applies_if
     assert compose_skills([coding, plain], merged, active) == [plain]
+
+
+def test_active_skill_ids_are_the_ids_compose_skills_keeps() -> None:
+    """One keep/drop rule for sync and ``skill_active`` (D74; L0-19 review)."""
+    skills = [
+        _skill("python-coding"),
+        _skill("python-testing"),
+        _skill("brainstorming", playbook=False),
+    ]
+    merged = [_rule("python-typing"), _rule("pytest", skill="python-testing")]
+    active = [merged[1]]
+
+    composed = {skill.frontmatter["id"] for skill in compose_skills(skills, merged, active)}
+
+    assert (
+        active_skill_ids(skills, merged, active)
+        == composed
+        == {
+            "python-testing",
+            "brainstorming",
+        }
+    )
 
 
 def test_compose_skills_drops_declared_skill_without_any_member() -> None:

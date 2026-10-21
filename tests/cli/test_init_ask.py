@@ -30,6 +30,8 @@ _QUESTIONS = [
     "Project description: ",
     "Project kind [python-application]: ",
     "> ",  # the adapters multi-select
+    "Spec-driven framework (superpowers, mattpocock, an overlay module or none; "
+    "blank keeps the current one, else none): ",
     "> ",  # the overlays multi-select
     "Enable assistant lifecycle hooks? [Y/n]: ",
 ]
@@ -58,7 +60,7 @@ def test_interactive_init_asks_through_the_injected_ask(
         '[project]\nname="x"\nrequires-python=">=3.12"\ndependencies=[]\n', encoding="utf-8"
     )
     monkeypatch.setattr("builtins.input", _refuse_console_input)
-    ask = FakeAsk(["asked-repo", "", "python-library", "", "", "n"])
+    ask = FakeAsk(["asked-repo", "", "python-library", "", "", "", "n"])
 
     assert _init.run(argparse.Namespace(repo_root=str(tmp_path)), ask=ask) == 0
 
@@ -66,6 +68,41 @@ def test_interactive_init_asks_through_the_injected_ask(
     config = tomllib.loads((tmp_path / ".coding-agent-playbook.toml").read_text("utf-8"))
     assert config["project"]["name"] == "asked-repo"
     assert config["hooks"] == {"enabled": False}
+
+
+def _write_pyproject(repo: Path) -> None:
+    (repo / "pyproject.toml").write_text(
+        '[project]\nname="x"\nrequires-python=">=3.12"\ndependencies=[]\n', encoding="utf-8"
+    )
+
+
+@pytest.mark.catalog
+def test_interactive_framework_answer_is_committed_and_synced(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D57: the framework question's answer is the committed ``framework`` (L0-19 review)."""
+    _write_pyproject(tmp_path)
+    monkeypatch.setattr("builtins.input", _refuse_console_input)
+    ask = FakeAsk(["asked-repo", "", "python-library", "", "mattpocock", "", "n"])
+
+    assert _init.run(argparse.Namespace(repo_root=str(tmp_path)), ask=ask) == 0
+
+    config = tomllib.loads((tmp_path / ".coding-agent-playbook.toml").read_text("utf-8"))
+    assert config["framework"] == "mattpocock"
+    assert (tmp_path / ".claude" / "skills" / "grill-me" / "SKILL.md").is_file()
+
+
+def test_interactive_unknown_framework_is_refused_before_writing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _write_pyproject(tmp_path)
+    monkeypatch.setattr("builtins.input", _refuse_console_input)
+    ask = FakeAsk(["asked-repo", "", "python-library", "", "mattpock", "", "n"])
+
+    assert _init.run(argparse.Namespace(repo_root=str(tmp_path)), ask=ask) == 2
+
+    assert "error: --framework 'mattpock' is not a usable framework" in capsys.readouterr().err
+    assert not (tmp_path / ".coding-agent-playbook.toml").exists()
 
 
 def test_console_ask_reads_builtins_input_at_call_time(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -91,6 +128,7 @@ def test_init_args_from_a_partial_namespace_uses_the_flag_defaults() -> None:
         kind=None,
         description="",
         adapters=None,
+        framework=None,
         overlays="",
         no_hooks=False,
     )

@@ -17,6 +17,10 @@ first `[table]` header, then run `playbook sync`:
 overlays_enabled = ["coding_agent_playbook.plugins.mattpocock_skills"]
 ```
 
+The plugin is a spec-driven framework (`framework.toml`), so
+`framework = "mattpocock"` (what `playbook init --framework mattpocock`
+writes) enables it the same way.
+
 Then, once per repo:
 
 - Run `/setup-matt-pocock-skills`. It writes `docs/agents/issue-tracker.md`,

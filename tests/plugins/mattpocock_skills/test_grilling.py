@@ -32,6 +32,7 @@ from tests.plugins.mattpocock_skills._expectations import (
     USER_INVOKED_IDS,
     skill_files,
     split_skill,
+    vendored_text,
 )
 
 if TYPE_CHECKING:
@@ -190,7 +191,7 @@ def _case_ids(cases: list[tuple[VendoredFile, Edit]]) -> list[str]:
 
 def _shipped(vendored: VendoredFile) -> str:
     """The shipped text of ``vendored``, read as bytes so a newline change shows."""
-    return (SKILLS_ROOT / vendored.skill_id / vendored.path).read_bytes().decode("utf-8")
+    return vendored_text(vendored.skill_id, vendored.path)
 
 
 # --- The listed edits and nothing else (D4, section 9.1 common acceptance) -------

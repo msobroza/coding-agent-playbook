@@ -28,6 +28,7 @@ from tests.plugins.mattpocock_skills._expectations import (
     SKILLS_ROOT,
     skill_files,
     split_skill,
+    vendored_text,
 )
 
 if TYPE_CHECKING:
@@ -279,7 +280,7 @@ _DIAGNOSING_REPLACED = (
 
 
 def test_diagnosing_bugs_frontmatter_adds_only_the_id() -> None:
-    text = (_DIAGNOSING / "SKILL.md").read_text(encoding="utf-8")
+    text = vendored_text("diagnosing-bugs")
     assert text.startswith(
         f"---\nid: diagnosing-bugs\nname: diagnosing-bugs\ndescription: {_DIAGNOSING_DESCRIPTION}\n---\n"
     )
@@ -292,7 +293,7 @@ def test_diagnosing_bugs_frontmatter_adds_only_the_id() -> None:
 
 
 def test_diagnosing_bugs_skill_text() -> None:
-    text = (_DIAGNOSING / "SKILL.md").read_text(encoding="utf-8")
+    text = vendored_text("diagnosing-bugs")
     assert [t for t in _DIAGNOSING_NEW_TEXTS if t not in text] == []
     assert [t for t in _DIAGNOSING_REPLACED if t in text] == []
     assert text.count("`scripts/hitl_loop_template.py`") == 2

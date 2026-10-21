@@ -23,6 +23,7 @@ from coding_agent_playbook.artifacts.identity import artifact_id_of, template_so
 from coding_agent_playbook.artifacts.prompt import Prompt
 from coding_agent_playbook.artifacts.rule import Rule
 from coding_agent_playbook.artifacts.skill import Skill
+from coding_agent_playbook.config.framework import enabled_framework
 from coding_agent_playbook.detector.predicate import evaluate_predicate
 from coding_agent_playbook.rendering.formats import BUILTIN_FORMATS, FORMAT_ALIASES, render_for
 from coding_agent_playbook.rendering.jinja import TemplateSecurityError
@@ -263,7 +264,12 @@ def _run_session(ctx: SyncContext) -> RenderSession:
     """The run's one render session; render has no validate gate, so a malformed predicate omits."""
     context = TemplateContext.for_config(ctx.config, ctx.facts)
     return RenderSession.open(
-        ctx.rules_resolved, context, repo_root=ctx.repo_root, on_malformed_predicate="omit"
+        ctx.rules_resolved,
+        context,
+        repo_root=ctx.repo_root,
+        on_malformed_predicate="omit",
+        skills=ctx.skills_resolved,
+        framework=enabled_framework(ctx.config.layers_enabled),
     )
 
 

@@ -175,7 +175,7 @@ def _set_inputs(
         hooks_table_present=tables.hooks is not None,
         on_hook_ids=_on_hook_ids(ctx, hooks_cfg),
         local_keys=tables.local_keys,
-        overlays_enabled=tuple(ctx.config.overlays_enabled),
+        layers_enabled=tuple(ctx.config.layers_enabled),
         engine_package=engine_package_of(ctx.artifact_source),
         config_where=_config_where(ctx, CONFIG_FILENAME),
         local_where=_config_where(ctx, CONFIG_LOCAL_FILENAME),

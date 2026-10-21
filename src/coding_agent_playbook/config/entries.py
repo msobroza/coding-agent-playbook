@@ -35,6 +35,7 @@ CONFIG_MANAGED_KEYS: frozenset[str] = frozenset(
         "engine",
         "overlays_enabled",
         "adapters_enabled",
+        "framework",
         "storage",
         "detector_cache",
         "user_choices",

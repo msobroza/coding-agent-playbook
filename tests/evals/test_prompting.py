@@ -225,6 +225,18 @@ def _includes_rules_yaml(rule_ids: tuple[str, ...]) -> str:
     return "includes_rules:\n" + "".join(f"  - {rule_id}\n" for rule_id in rule_ids)
 
 
+def test_sample_prompts_see_no_framework_and_no_active_skill(tmp_path: Path) -> None:
+    """Eval sessions open without skills or a framework (D74 helpers; L0-19 review).
+
+    A sample's prompt renders against its ``setup/`` tree, not a synced repo, so
+    ``framework_skill(role)`` is ``""`` and ``skill_active(name)`` is ``False``.
+    """
+    sample = _synthetic_sample(
+        tmp_path, "[{{ framework_skill('clarify') }}]|{{ skill_active('brainstorming') }}\n"
+    )
+    assert "[]|False" in render_prompt(sample, strict=True)
+
+
 def test_render_error_raises_prompt_resolution_error_even_when_not_strict(
     tmp_path: Path,
 ) -> None:

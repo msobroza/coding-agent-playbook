@@ -67,7 +67,9 @@ def test_sync_writes_the_source_frontmatter_and_the_sentinel_then_the_source_bod
     written = (synced_repo / root / skill_id / "SKILL.md").read_text(encoding="utf-8")
     frontmatter, body = split_frontmatter(written)
     source_frontmatter, source_body = split_skill(skill_id)
-    assert frontmatter == source_frontmatter, f"{root}/{skill_id}: frontmatter changed"
+    # The engine-owned capabilities tag (D77) is the one key sync never writes.
+    expected = {k: v for k, v in source_frontmatter.items() if k != "capabilities"}
+    assert frontmatter == expected, f"{root}/{skill_id}: frontmatter changed"
     assert body == _SENTINEL_BODY_PREFIX + source_body, f"{root}/{skill_id}: body changed"
 
 

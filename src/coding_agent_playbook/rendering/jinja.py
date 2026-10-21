@@ -54,6 +54,9 @@ def build_environment(template_search_paths: Sequence[Path]) -> Environment:
     Rules, prompts and hook bodies all render in this one shape. There is no
     ``rule()`` helper (D15): a template calling it raises ``UndefinedError``,
     and prompts declare their rules in ``includes_rules`` instead.
+    ``framework_skill(role)`` returns the enabled framework's skill for a D74
+    role (``""`` without one) and ``skill_active(name)`` whether that skill
+    renders in this repo; both read what ``RenderSession.open`` stashes.
 
     Example::
 
@@ -108,6 +111,19 @@ def build_environment(template_search_paths: Sequence[Path]) -> Environment:
             ) from exc
 
     env.globals["python_at_least"] = _python_at_least
+
+    # D74: the session stashes the enabled framework's role map and the ids of the
+    # skills that render under ``_framework_roles`` / ``_active_skills``.
+    def _framework_skill(role: str) -> str:
+        roles = env.globals.get("_framework_roles", {})
+        return str(roles.get(role, "")) if isinstance(roles, dict) else ""
+
+    def _skill_active(name: str) -> bool:
+        active = env.globals.get("_active_skills", frozenset())
+        return isinstance(active, frozenset) and name in active
+
+    env.globals["framework_skill"] = _framework_skill
+    env.globals["skill_active"] = _skill_active
     return env
 
 

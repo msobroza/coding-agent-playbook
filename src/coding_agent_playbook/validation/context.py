@@ -286,7 +286,7 @@ class SyncContext:
 
         Config-less ``playbook validate`` passes a stand-in ``config`` and an
         ``artifact_source`` with extra checkout layers (prK §P P8); by default
-        the source walks the engine, ``config.overlays_enabled`` and
+        the source walks the engine, ``config.layers_enabled`` (the framework, then the overlays) and
         ``<repo>/playbook/``. Without ``policy_tables`` there is no ``[hooks]``
         table, so hooks are off.
 
@@ -299,7 +299,7 @@ class SyncContext:
         if artifact_source is None:
             artifact_source = FileSystemArtifactSource(
                 repo_root=repo_root,
-                overlay_packages=list(config.overlays_enabled),
+                overlay_packages=config.layers_enabled,
             )
         # FileSystemArtifactSource walks the engine and bundled-plugin artifacts
         # in the catalog (``catalog/core/``, ``catalog/plugins/<name>/``)

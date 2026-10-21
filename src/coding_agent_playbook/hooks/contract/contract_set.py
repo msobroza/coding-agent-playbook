@@ -10,7 +10,8 @@ The rules no single ``HOOK.md`` can decide:
   and no hook id is also a rule or prompt id (``playbook render`` looks ids up
   across kinds);
 - H21: ``enable``/``disable`` name existing hooks and are disjoint;
-  ``allow_code_from`` ⊆ ``overlays_enabled`` + ``<repo-local>``; no
+  ``allow_code_from`` ⊆ the enabled layers (``Config.layers_enabled``: the
+  framework, then ``overlays_enabled``) + ``<repo-local>``; no
   ``wrapper_prefixes`` entry hides a guarded command
   (``hook_runtime.shell.wrapper_policy``, the rule the dispatcher applies to
   ``PLAYBOOK_HOOK_WRAPPER_PREFIXES``); every ``[hooks.<x>]`` names a hook;
@@ -95,7 +96,7 @@ class HookSetInputs:
     hooks_table_present: bool = False
     on_hook_ids: frozenset[str] = frozenset()
     local_keys: tuple[str, ...] = ()
-    overlays_enabled: tuple[str, ...] = ()
+    layers_enabled: tuple[str, ...] = ()
     engine_package: str = ENGINE_PACKAGE
     # Factories, not the constants: hooks stays import-light (its stdlib-only
     # import probe), so config.files loads only when a default is needed.
@@ -170,7 +171,7 @@ def _mandatory_switches(inputs: HookSetInputs) -> Iterator[HookIssue]:
     if not inputs.hooks_table_present or cfg.enabled:
         return  # an absent table is the no-upgrade-drift default, not an opt-out (§B.1)
     for hook_id, hook in mandatory.items():
-        if hook.source_package in inputs.overlays_enabled:
+        if hook.source_package in inputs.layers_enabled:
             yield _config_error(
                 inputs,
                 f"[hooks] enabled = false while overlay {hook.source_package!r} ships mandatory "
@@ -228,7 +229,7 @@ def _hooks_table(inputs: HookSetInputs) -> Iterator[HookIssue]:
 
 
 def _code_source_names(inputs: HookSetInputs, cfg: HooksConfig) -> Iterator[HookIssue]:
-    allowed = (*inputs.overlays_enabled, REPO_LOCAL_SOURCE)
+    allowed = (*inputs.layers_enabled, REPO_LOCAL_SOURCE)
     for source in dict.fromkeys(cfg.allow_code_from):
         if source not in allowed:
             yield _config_error(

@@ -81,6 +81,13 @@ change from the upstream text listed in this file.
 - Every other key stays verbatim (`description`, `disable-model-invocation`,
   `argument-hint`, `metadata`), except pr-body's `metadata.credits.url` line,
   which is deleted (see "No external URLs").
+- Seven skills gain one engine-owned line, `capabilities: [<role>]`, as their
+  last frontmatter key: grill-me (`clarify`), grill-with-docs
+  (`clarify_with_docs`), to-spec (`spec`), to-tickets (`plan`), tdd (`tdd`),
+  diagnosing-bugs (`debug`) and two-axis-review (`review`). The engine reads
+  it to map the framework's roles and never writes it to the synced copies.
+  `framework.toml` at the plugin root marks the plugin as a spec-driven
+  framework named `mattpocock`.
 - No skill gets a `playbook:` block, so none is a rule skill, and no file in the
   plugin is a `.j2` template.
 - Descriptions are verbatim except two, each listed in its skill's section:
