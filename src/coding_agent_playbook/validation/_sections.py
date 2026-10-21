@@ -5,20 +5,26 @@ member rules; each member names its entry in ``section:`` and takes a priority
 inside that section's impact band. The checks, each finding naming the file or
 the skill label, the value and the allowed values or band:
 
-- S1, per skill: the list's shape (a non-empty list of mappings with exactly
-  ``id``, ``title``, ``impact``, ``summary`` and a one-line ``open_when``;
-  kebab-case ids, unique; titles of at most 40 chars; a known impact).
+- S1, per skill: the list's shape (a list of mappings with exactly ``id``,
+  ``title``, ``impact``, ``summary`` and a one-line ``open_when``; kebab-case
+  ids, unique; titles of at most 40 chars; a known impact). ``sections: []``
+  declares no sections.
 - S2, per skill: sections run from CRITICAL to LOW.
 - S3, per member: its ``section:`` is declared by its skill.
-- S4, per member: a member of a sectioned skill from the skill's own layer sets
-  ``section:``. A member from another layer without one only warns (D42): it is
-  listed under the engine's "Other" section, after the declared ones.
+- S4, per member: a member of a sectioned skill sets ``section:`` when it comes
+  from the skill's own layer or from the repository (``<repo-local>``, which the
+  repo owner can edit), including a rule joining by ``skill:``. A member from
+  another overlay or bundled layer without one only warns (D42): it is listed
+  under the engine's "Other" section, after the declared ones. When a higher
+  layer replaces a skill and declares sections, the replaced layer's members are
+  such members: their authors cannot see the new sections.
 - S5, per rule: ``section:`` on an always rule, or on a member of a skill that
   declares no sections.
 - S6, per member: its priority lies in its section's band. Bands apply only to
   sectioned skills (D46.8).
-- S7, per member: its first heading carries no authored ``[IMPACT]`` tag; the
-  engine renders the tag from the section (D32).
+- S7, per member of a sectioned skill: its first heading carries no authored
+  ``[IMPACT]`` tag; the engine renders the tag from the section (D32). Members of
+  a skill without sections are left as they are today.
 
 Member checks wait until S1 accepts the list, so a broken list reports once.
 A declared section without members is no finding: it would print on every sync
@@ -29,20 +35,18 @@ while content lanes fill a skill. ``playbook.references`` (D47) is checked by
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
 from itertools import pairwise
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.skills.document import PLAYBOOK_BLOCK_KEY
+from coding_agent_playbook.catalog.layers import REPO_LOCAL_SOURCE
 from coding_agent_playbook.skills.membership import is_rule_skill, member_rules_of
 from coding_agent_playbook.skills.naming import skill_id_of
 from coding_agent_playbook.skills.sections import (
-    SECTION_KEYS,
-    SECTIONS_KEY,
+    SECTIONS_FIELD,
     Impact,
     SkillSection,
-    duplicate_section_ids,
-    section_entry_problems,
+    declared_sections_value,
+    section_list_problems,
     skill_sections,
 )
 from coding_agent_playbook.validation._skill_references import (
@@ -61,7 +65,6 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.artifacts.skill import Skill
 
-_SECTIONS_FIELD: Final = f"'{PLAYBOOK_BLOCK_KEY}.{SECTIONS_KEY}'"
 _FENCE: Final = re.compile(r"^\s*(```|~~~)")
 _HEADING: Final = re.compile(r"^#{1,6}\s")
 _IMPACT_TAG: Final = re.compile(r"\[(" + "|".join(Impact) + r")\]\s*$")
@@ -99,11 +102,7 @@ def _skill_findings(
     skill_problems = [*_list_problems(skill), *skill_reference_problems(skill, check_predicate)]
     member_findings = _member_findings(skill, members)
     return ValidationFindings(
-        [
-            *(ValidationError(label, m) for m in skill_problems),
-            *(_rule_error(rule, m) for rule in members for m in _impact_tag_problems(rule)),
-            *member_findings.errors,
-        ],
+        [*(ValidationError(label, m) for m in skill_problems), *member_findings.errors],
         member_findings.warnings,
     )
 
@@ -124,45 +123,12 @@ def _always_rule_problems(rule: Rule) -> list[str]:
     ]
 
 
-def _declares_sections(skill: Skill) -> bool:
-    """Whether the skill's ``playbook:`` block has a ``sections`` key (even a malformed one)."""
-    block = skill.frontmatter.get(PLAYBOOK_BLOCK_KEY)
-    return isinstance(block, Mapping) and SECTIONS_KEY in block
-
-
 def _list_problems(skill: Skill) -> list[str]:
     """S1 on the ``sections`` value, then S2 once the list is sound."""
-    if not _declares_sections(skill):
+    value = declared_sections_value(skill)
+    if value is None:
         return []
-    value = skill.frontmatter[PLAYBOOK_BLOCK_KEY][SECTIONS_KEY]
-    if not isinstance(value, list) or not value:
-        return [
-            f"{_SECTIONS_FIELD} must be a non-empty list of mappings with keys "
-            f"{', '.join(SECTION_KEYS)}, got {type(value).__name__} {value!r}"
-        ]
-    problems = [
-        f"{_entry_label(index, entry)}: {problem}"
-        for index, entry in enumerate(value, start=1)
-        for problem in section_entry_problems(entry)
-    ]
-    if problems:
-        return problems
-    duplicates = duplicate_section_ids(entry["id"] for entry in value)
-    if duplicates:
-        return [
-            f"{_SECTIONS_FIELD} declares section {section_id!r} more than once; ids are unique"
-            for section_id in duplicates
-        ]
-    return list(_order_problems(skill_sections(skill)))
-
-
-def _entry_label(index: int, entry: object) -> str:
-    """``section 'mocking' (entry 1 of 'playbook.sections')``, or without the id."""
-    where = f"entry {index} of {_SECTIONS_FIELD}"
-    section_id = entry.get("id") if isinstance(entry, Mapping) else None
-    return (
-        f"section {section_id!r} ({where})" if isinstance(section_id, str) else f"section {where}"
-    )
+    return section_list_problems(value) or list(_order_problems(skill_sections(skill)))
 
 
 def _order_problems(sections: Sequence[SkillSection]) -> Iterator[str]:
@@ -170,7 +136,7 @@ def _order_problems(sections: Sequence[SkillSection]) -> Iterator[str]:
     for before, section in pairwise(sections):
         if section.impact.rank < before.impact.rank:
             yield (
-                f"{_SECTIONS_FIELD} must run from CRITICAL to LOW: section {section.id!r} "
+                f"{SECTIONS_FIELD} must run from CRITICAL to LOW: section {section.id!r} "
                 f"({section.impact}) comes after {before.id!r} ({before.impact})"
             )
 
@@ -199,8 +165,8 @@ def _first_heading(body: str) -> str | None:
 
 
 def _member_findings(skill: Skill, members: Sequence[Rule]) -> ValidationFindings:
-    """S3-S6 and D42's warning per member, or S5 alone for a skill without sections."""
-    if not _declares_sections(skill):
+    """S3, S4, S6, S7 and D42's warning per member, or S5 alone for a skill without sections."""
+    if declared_sections_value(skill) is None:
         sectioned = [rule for rule in members if rule.frontmatter.section is not None]
         return ValidationFindings(
             [_rule_error(r, _sectionless_problem(skill, r)) for r in sectioned]
@@ -211,7 +177,8 @@ def _member_findings(skill: Skill, members: Sequence[Rule]) -> ValidationFinding
     errors = [
         _rule_error(rule, problem)
         for rule in members
-        if (problem := _member_problem(skill, sections, rule)) is not None
+        for problem in (_member_problem(skill, sections, rule), *_impact_tag_problems(rule))
+        if problem is not None
     ]
     warnings = [
         _rule_error(rule, _other_section_warning(skill, sections))
@@ -225,13 +192,21 @@ def _sectionless_problem(skill: Skill, rule: Rule) -> str:
     """S5 for a member of a skill that declares no sections."""
     return (
         f"'section: {rule.frontmatter.section}' is not allowed: skill {skill_id_of(skill)!r} "
-        f"declares no {_SECTIONS_FIELD}; remove 'section', or declare the section in that skill"
+        f"declares no {SECTIONS_FIELD}; remove 'section', or declare the section in that skill"
     )
 
 
 def _joins_other_section(skill: Skill, rule: Rule) -> bool:
-    """D42: a member from another layer without ``section:`` lands in "Other"."""
-    return rule.frontmatter.section is None and rule.source_package != skill.source_package
+    """D42: a member without ``section:`` from a layer its author cannot align lands in "Other".
+
+    The repository's own rules are never such members: the repo owner edits them
+    and sees the skill's sections, so S4 holds for them (the ticket's acceptance).
+    """
+    return (
+        rule.frontmatter.section is None
+        and rule.source_package != skill.source_package
+        and rule.source_package != REPO_LOCAL_SOURCE
+    )
 
 
 def _other_section_warning(skill: Skill, sections: Sequence[SkillSection]) -> str:

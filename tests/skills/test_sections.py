@@ -11,6 +11,9 @@ from coding_agent_playbook.skills.sections import (
     IMPACT_BANDS,
     Impact,
     SkillSection,
+    declared_sections_value,
+    one_line_phrase_problem,
+    section_list_problems,
     skill_sections,
 )
 
@@ -103,3 +106,38 @@ def test_each_impact_owns_its_priority_band(impact: Impact, low: int, high: int)
 def test_impacts_are_declared_from_critical_to_low() -> None:
     assert list(Impact) == [Impact.CRITICAL, Impact.HIGH, Impact.MEDIUM, Impact.LOW]
     assert [impact.rank for impact in Impact] == [0, 1, 2, 3]
+
+
+def test_an_empty_sections_list_declares_no_sections() -> None:
+    assert declared_sections_value(_skill({"sections": []})) is None
+    assert declared_sections_value(_skill({"use_when": "testing"})) is None
+    assert declared_sections_value(_skill({"sections": "x"})) == "x"
+
+
+def test_section_list_problems_reports_a_non_list_then_entries_then_duplicates() -> None:
+    assert section_list_problems("mocking") == [
+        "'playbook.sections' must be a list of mappings with keys id, title, impact, summary, "
+        "open_when, got str 'mocking'"
+    ]
+    assert section_list_problems([_MOCKING, "fixtures"]) == [
+        "section entry 2 of 'playbook.sections': must be a mapping with keys id, title, "
+        "impact, summary, open_when, got str 'fixtures'"
+    ]
+    assert section_list_problems([_MOCKING, _MOCKING]) == [
+        "'playbook.sections' declares section 'mocking' more than once; ids are unique"
+    ]
+    assert section_list_problems([_MOCKING, _FIXTURES]) == []
+
+
+@pytest.mark.parametrize(
+    ("value", "problem"),
+    [
+        (None, "is missing 'open_when'"),
+        (" ", "'open_when' must be a non-empty string, got str ' '"),
+        (3, "'open_when' must be a non-empty string, got int 3"),
+        ("a\nb", "'open_when' must be one line, got 'a\\nb'"),
+        ("Editing a model.", None),
+    ],
+)
+def test_one_line_phrase_problem(value: object, problem: str | None) -> None:
+    assert one_line_phrase_problem("open_when", value) == problem

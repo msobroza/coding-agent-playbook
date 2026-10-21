@@ -6,22 +6,23 @@ list. Each entry is a mapping with exactly ``id``, ``title``, ``impact``,
 ``section:``, and its priority lies in the band of that section's impact
 (CRITICAL 20-39, HIGH 40-59, MEDIUM 60-79, LOW 80-99). One module defines the
 shape, so the parser here and ``playbook validate`` (``validation._sections``)
-cannot disagree: :func:`section_entry_problems` is what both read.
+cannot disagree: :func:`section_list_problems` is what both read.
 
-A malformed ``sections:`` value reads as no sections at all, so rendering never
-half-applies a broken list; ``playbook validate`` reports why it is malformed.
+An empty ``sections: []`` declares no sections. A malformed ``sections:`` value
+reads as no sections at all, so rendering never half-applies a broken list;
+``playbook validate`` reports why it is malformed.
 """
 
 from __future__ import annotations
 
 import re
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.skills.document import PLAYBOOK_BLOCK_KEY
+from coding_agent_playbook.skills.document import PLAYBOOK_BLOCK_KEY, playbook_block
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -30,6 +31,8 @@ if TYPE_CHECKING:
 
 #: The ``playbook:`` key that holds a skill's ordered sections.
 SECTIONS_KEY: Final = "sections"
+#: How findings name the list: ``'playbook.sections'``.
+SECTIONS_FIELD: Final = f"'{PLAYBOOK_BLOCK_KEY}.{SECTIONS_KEY}'"
 #: The keys every section entry declares, all required (D17, D47's ``open_when``).
 SECTION_KEYS: Final = ("id", "title", "impact", "summary", "open_when")
 #: A section title becomes an index heading and part of the Covers clause.
@@ -87,14 +90,12 @@ class SkillSection:
 
 
 def declared_sections_value(skill: Skill) -> object | None:
-    """The raw ``playbook.sections`` value, or ``None`` when the skill declares none.
+    """The raw ``playbook.sections`` value; ``None`` when absent or an empty list.
 
     Example: ``declared_sections_value(skill)`` -> ``[{"id": "mocking", ...}]``.
     """
-    block = skill.frontmatter.get(PLAYBOOK_BLOCK_KEY)
-    if not isinstance(block, Mapping):
-        return None
-    return block.get(SECTIONS_KEY)
+    value = playbook_block(skill).get(SECTIONS_KEY)
+    return None if isinstance(value, list) and not value else value
 
 
 def skill_sections(skill: Skill) -> tuple[SkillSection, ...]:
@@ -103,14 +104,35 @@ def skill_sections(skill: Skill) -> tuple[SkillSection, ...]:
     Example: ``[s.id for s in skill_sections(python_testing)]`` -> ``["mocking", "fixtures"]``.
     """
     value = declared_sections_value(skill)
-    if not isinstance(value, list) or not value:
+    if not isinstance(value, list) or section_list_problems(value):
         return ()
-    if any(section_entry_problems(entry) for entry in value):
-        return ()
-    sections = tuple(_section(entry) for entry in value)
-    if duplicate_section_ids(section.id for section in sections):
-        return ()
-    return sections
+    return tuple(_section(entry) for entry in value)
+
+
+def section_list_problems(value: object) -> list[str]:
+    """S1: why a declared ``sections`` value is no sound list; ``[]`` when it is.
+
+    Entry problems come first; uniqueness is checked once every entry is sound.
+
+    Example: ``section_list_problems("mocking")`` ->
+    ``["'playbook.sections' must be a list of mappings with keys ..., got str 'mocking'"]``.
+    """
+    if not isinstance(value, list):
+        return [
+            f"{SECTIONS_FIELD} must be a list of mappings with keys "
+            f"{', '.join(SECTION_KEYS)}, got {type(value).__name__} {value!r}"
+        ]
+    problems = [
+        f"{_entry_label(index, entry)}: {problem}"
+        for index, entry in enumerate(value, start=1)
+        for problem in section_entry_problems(entry)
+    ]
+    if problems:
+        return problems
+    return [
+        f"{SECTIONS_FIELD} declares section {section_id!r} more than once; ids are unique"
+        for section_id in duplicate_section_ids(entry["id"] for entry in value)
+    ]
 
 
 def duplicate_section_ids(section_ids: Iterable[str]) -> list[str]:
@@ -147,24 +169,69 @@ def section_entry_problems(entry: object) -> list[str]:
     return problems
 
 
-def _value_problem(key: str, value: object) -> str | None:
-    """Why one section value is malformed, or ``None``."""
+def one_line_phrase_problem(key: str, value: object) -> str | None:
+    """Why ``value`` of ``key`` is no non-empty one-line string; ``None`` when it is.
+
+    Shared by section entries and ``playbook.references`` entries (D47's ``open_when``).
+
+    Example: ``one_line_phrase_problem("open_when", "")`` ->
+    ``"'open_when' must be a non-empty string, got str ''"``.
+    """
     if value is None:
         return f"is missing {key!r}"
     if not isinstance(value, str) or not value.strip():
         return f"{key!r} must be a non-empty string, got {type(value).__name__} {value!r}"
     if "\n" in value.strip():
         return f"{key!r} must be one line, got {value!r}"
-    if key == "id" and not _KEBAB_CASE.fullmatch(value):
-        return f"'id' {value!r} must be kebab-case, e.g. 'error-handling'"
-    if key == "title" and len(value.strip()) > SECTION_TITLE_MAX_CHARS:
-        return (
-            f"'title' {value!r} is {len(value.strip())} chars; keep it to at most "
-            f"{SECTION_TITLE_MAX_CHARS}"
-        )
-    if key == "impact" and value not in Impact.__members__:
-        return f"'impact' {value!r} must be one of {', '.join(Impact)}"
     return None
+
+
+def _entry_label(index: int, entry: object) -> str:
+    """``section 'mocking' (entry 1 of 'playbook.sections')``, or without the id."""
+    where = f"entry {index} of {SECTIONS_FIELD}"
+    section_id = entry.get("id") if isinstance(entry, Mapping) else None
+    return (
+        f"section {section_id!r} ({where})" if isinstance(section_id, str) else f"section {where}"
+    )
+
+
+def _value_problem(key: str, value: object) -> str | None:
+    """Why one section value is malformed, or ``None``."""
+    problem = one_line_phrase_problem(key, value)
+    key_check = _KEY_CHECKS.get(key)
+    if problem is not None or key_check is None:
+        return problem
+    return key_check(str(value))
+
+
+def _id_problem(value: str) -> str | None:
+    """A section id is kebab-case, as rule ``section:`` values are."""
+    if _KEBAB_CASE.fullmatch(value):
+        return None
+    return f"'id' {value!r} must be kebab-case, e.g. 'error-handling'"
+
+
+def _title_problem(value: str) -> str | None:
+    """A section title fits an index heading."""
+    length = len(value.strip())
+    if length <= SECTION_TITLE_MAX_CHARS:
+        return None
+    return f"'title' {value!r} is {length} chars; keep it to at most {SECTION_TITLE_MAX_CHARS}"
+
+
+def _impact_problem(value: str) -> str | None:
+    """A section impact is one of :class:`Impact`."""
+    if value in Impact.__members__:
+        return None
+    return f"'impact' {value!r} must be one of {', '.join(Impact)}"
+
+
+#: The check a key adds once its value is a one-line string; summary and open_when add none.
+_KEY_CHECKS: Final[Mapping[str, Callable[[str], str | None]]] = {
+    "id": _id_problem,
+    "title": _title_problem,
+    "impact": _impact_problem,
+}
 
 
 def _section(entry: Mapping[str, str]) -> SkillSection:

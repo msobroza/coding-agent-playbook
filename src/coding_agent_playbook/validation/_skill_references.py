@@ -7,8 +7,10 @@ relative, under ``references/`` or ``examples/``, and exists in the skill
 directory (a file, or a directory such as one example project). Once a skill
 declares ``sections`` or ``references``, every file under its ``references/``
 and ``examples/`` must be covered by an entry (its own path or a parent
-directory's); license files are exempt (D19). A list-typed predicate key given a
-bare string is reported here, never at render time.
+directory's); license files are exempt (D19). Skills that declare neither are
+left as they are today (the ticket's "skills without sections behave as
+today"); F-02's final-state test covers every core skill. A list-typed predicate
+key given a bare string is reported here, never at render time.
 """
 
 from __future__ import annotations
@@ -17,8 +19,8 @@ from collections.abc import Callable, Mapping
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.skills.document import PLAYBOOK_BLOCK_KEY
-from coding_agent_playbook.skills.sections import SECTIONS_KEY
+from coding_agent_playbook.skills.document import PLAYBOOK_BLOCK_KEY, playbook_block
+from coding_agent_playbook.skills.sections import declared_sections_value, one_line_phrase_problem
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -26,6 +28,8 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.skill import Skill
 
 #: Evaluates one ``applies_if`` mapping; raises ``ValueError`` when it is malformed.
+#: ``dict[str, Any]`` on purpose: the mapping is raw YAML handed unchanged to
+#: ``detector.predicate.evaluate_predicate``, whose job is to reject bad shapes.
 type PredicateCheck = Callable[[dict[str, Any]], object]
 
 REFERENCES_KEY: Final = "references"
@@ -43,11 +47,10 @@ def skill_reference_problems(skill: Skill, check_predicate: PredicateCheck) -> l
     Example: ``skill_reference_problems(skill, lambda p: None)`` -> ``[]`` for a skill
     whose every references/ and examples/ file is listed.
     """
-    block = skill.frontmatter.get(PLAYBOOK_BLOCK_KEY)
-    if not isinstance(block, Mapping):
-        return []
+    block = playbook_block(skill)
     if REFERENCES_KEY not in block:
-        return _unlisted_problems(skill, []) if SECTIONS_KEY in block else []
+        declares_sections = declared_sections_value(skill) is not None
+        return _unlisted_problems(skill, []) if declares_sections else []
     value = block[REFERENCES_KEY]
     if not isinstance(value, list):
         return [
@@ -74,27 +77,18 @@ def _entry_problems(entry: object, skill: Skill, check_predicate: PredicateCheck
     """Shape, path and ``applies_if`` problems of one entry."""
     if not isinstance(entry, Mapping):
         return [
-            f"must be a mapping with keys path, open_when and optional applies_if, got {entry!r}"
+            "must be a mapping with keys path, open_when and optional applies_if, "
+            f"got {type(entry).__name__} {entry!r}"
         ]
     problems = [
         f"has unknown key {key!r}; allowed keys: {', '.join(_ENTRY_KEYS)}"
         for key in sorted(str(key) for key in entry if key not in _ENTRY_KEYS)
     ]
-    problems.extend(_open_when_problems(entry.get("open_when")))
+    open_when_problem = one_line_phrase_problem("open_when", entry.get("open_when"))
+    problems.extend([] if open_when_problem is None else [open_when_problem])
     problems.extend(_path_problems(entry.get("path"), _skill_dir(skill)))
     problems.extend(_applies_if_problems(entry, check_predicate))
     return problems
-
-
-def _open_when_problems(value: object) -> list[str]:
-    """D47: ``open_when`` is one non-empty line."""
-    if value is None:
-        return ["is missing 'open_when'"]
-    if not isinstance(value, str) or not value.strip():
-        return [f"'open_when' must be a non-empty string, got {type(value).__name__} {value!r}"]
-    if "\n" in value.strip():
-        return [f"'open_when' must be one line, got {value!r}"]
-    return []
 
 
 def _path_problems(value: object, skill_dir: Path | None) -> list[str]:
@@ -127,7 +121,11 @@ def _is_listed_path(entry: object) -> bool:
 
 
 def _applies_if_problems(entry: Mapping[Any, Any], check_predicate: PredicateCheck) -> list[str]:
-    """The optional gate is a mapping, checked one predicate key at a time."""
+    """The optional gate is a mapping, checked one predicate key at a time.
+
+    ``Mapping[Any, Any]``: raw YAML, whose keys need not be strings; the predicate
+    check rejects whatever it cannot read.
+    """
     if "applies_if" not in entry:
         return []
     predicate = entry["applies_if"]
@@ -173,18 +171,16 @@ def _unlisted_problems(skill: Skill, listed: list[str]) -> list[str]:
 
 
 def _listable_files(skill_dir: Path) -> list[PurePosixPath]:
-    """Every file under references/ and examples/, sorted, minus license and cache files."""
+    """Every file under references/ and examples/, sorted, minus license files."""
     files = [
         PurePosixPath(path.relative_to(skill_dir).as_posix())
         for name in _LISTED_DIRS
         for path in (skill_dir / name).rglob("*")
         if path.is_file()
     ]
-    return sorted(path for path in files if not _is_exempt(path))
+    return sorted(path for path in files if not _is_license(path))
 
 
-def _is_exempt(path: PurePosixPath) -> bool:
-    """License copies (D19), dotfiles and Python caches need no entry."""
-    return path.name.upper().startswith(("LICENSE", "COPYING")) or any(
-        part.startswith(".") or part == "__pycache__" for part in path.parts
-    )
+def _is_license(path: PurePosixPath) -> bool:
+    """License copies need no entry (D19, D47); D47 exempts nothing else."""
+    return path.name.upper().startswith(("LICENSE", "COPYING"))

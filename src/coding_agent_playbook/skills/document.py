@@ -101,6 +101,18 @@ class WhereEntry:
     files: str
 
 
+def playbook_block(skill: Skill) -> Mapping[str, Any]:
+    """The raw ``playbook:`` block of ``skill``; ``{}`` when absent or not a mapping.
+
+    The one accessor of the block: V7 reports a non-mapping block, every reader
+    here sees it as empty. Values stay raw YAML (``Any``) for the callers to check.
+
+    Example: ``playbook_block(python_coding).get("use_when")`` -> ``"editing Python code"``.
+    """
+    block = skill.frontmatter.get(PLAYBOOK_BLOCK_KEY)
+    return block if isinstance(block, Mapping) else {}
+
+
 def skill_catalog_block(skill: Skill) -> SkillCatalogBlock:
     """The ``playbook`` block of ``skill``; absent or malformed keys read as ``None``.
 
@@ -109,9 +121,7 @@ def skill_catalog_block(skill: Skill) -> SkillCatalogBlock:
 
     Example: ``skill_catalog_block(python_coding).files`` -> ``"Any Python file"``.
     """
-    block = skill.frontmatter.get(PLAYBOOK_BLOCK_KEY)
-    if not isinstance(block, Mapping):
-        return SkillCatalogBlock(use_when=None, files=None)
+    block = playbook_block(skill)
     return SkillCatalogBlock(
         use_when=_catalog_phrase(block.get("use_when")),
         files=_catalog_phrase(block.get("files")),
