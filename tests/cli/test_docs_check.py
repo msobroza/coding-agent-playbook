@@ -140,7 +140,7 @@ def test_missing_tool_fails_open_with_an_install_hint(
 
     assert capsys.readouterr().out.splitlines() == [
         "docs-check: skipped `mkdocs build --strict`: mkdocs is not installed "
-        "(install it: pip install mkdocs)",
+        "(install it: uv add --group docs mkdocs)",
         "docs-check: 1 file(s) clean",
     ]
 
@@ -149,7 +149,7 @@ def test_missing_tool_fails_open_with_an_install_hint(
     ("pyproject", "hint"),
     [
         ('[dependency-groups]\ndocs = ["mkdocs"]\n', "uv sync --group docs"),
-        ('[project.optional-dependencies]\ndocs = ["mkdocs"]\n', 'pip install -e ".[docs]"'),
+        ('[project.optional-dependencies]\ndocs = ["mkdocs"]\n', "uv sync --extra docs"),
     ],
 )
 def test_a_docs_dependency_group_is_the_docs_toolchain_the_hint_names(
@@ -286,3 +286,31 @@ def test_without_paths_the_docs_changed_since_the_base_are_checked(
 )
 def test_docs_paths_is_the_d69_path_list(path: str, is_docs: bool) -> None:
     assert (docs_check.docs_paths([path]) == [path]) is is_docs
+
+
+def test_a_tool_that_cannot_run_is_a_failure(
+    root: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _write(root, "mkdocs.yml", "site_name: x\n")
+    proc = FakeProc(programs=dict(EVERY_TOOL))
+    proc.script(["mkdocs", "build"], timeout=True)
+
+    assert _run(root, proc, "docs/guide.md") == 1
+
+    out = capsys.readouterr().out.splitlines()
+    assert out[0].startswith("docs-check: `mkdocs build --strict` failed: ")
+    assert out[-1] == "docs-check: 1 finding(s) in 1 file(s)"
+
+
+def test_a_failing_tool_prints_only_the_last_20_output_lines(
+    root: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _write(root, "mkdocs.yml", "site_name: x\n")
+    proc = FakeProc(programs=dict(EVERY_TOOL))
+    output = "".join(f"line {n}\n" for n in range(1, 31)).encode()
+    proc.script(["mkdocs", "build"], returncode=1, stdout=output)
+
+    assert _run(root, proc, "docs/guide.md") == 1
+
+    out = capsys.readouterr().out.splitlines()
+    assert out[1:-1] == [f"  line {n}" for n in range(11, 31)]

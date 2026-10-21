@@ -98,7 +98,7 @@ def docs_group_hint(root: Path) -> str:
     if DOCS_GROUP in _table(pyproject, "dependency-groups"):
         return f"uv sync --group {DOCS_GROUP}"
     if DOCS_GROUP in _table(_table(pyproject, "project"), "optional-dependencies"):
-        return f'pip install -e ".[{DOCS_GROUP}]"'
+        return f"uv sync --extra {DOCS_GROUP}"
     return ""
 
 

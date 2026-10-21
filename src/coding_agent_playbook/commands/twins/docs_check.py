@@ -42,6 +42,7 @@ from coding_agent_playbook.hook_runtime.dispatch.proc import SubprocessProc
 if TYPE_CHECKING:
     import argparse
 
+    from coding_agent_playbook.config.tables.hooks import DocsCheckMode
     from coding_agent_playbook.hook_runtime.dispatch.deps import ProcPort
     from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
 
@@ -124,7 +125,7 @@ def _outcome(
     return TwinOutcome(code, "\n".join([*lines, *tools.lines, summary]))
 
 
-def _mode(root: Path) -> str:
+def _mode(root: Path) -> DocsCheckMode:
     table = ConfigFiles(root).committed_table("guardrails")
     return parse_guardrails_config(dict(table) if table else None).docs.mode
 

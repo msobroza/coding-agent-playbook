@@ -194,7 +194,8 @@ def test_docs_hook_runs_docs_check_on_documentation_only():
     """D69: the staged docs are its PATHS; a commit of Python files alone never runs it."""
     hook = _hook("playbook-docs")
     assert hook["entry"] == "playbook docs-check"
-    assert hook["language"] == "python"
+    # system: the repo's docs tools live in the project env, not pre-commit's hook venv
+    assert hook["language"] == "system"
     assert hook["files"] == DOCS_FILES_PATTERN
     assert hook.get("pass_filenames", True) is True
     assert hook.get("always_run") in (None, False)

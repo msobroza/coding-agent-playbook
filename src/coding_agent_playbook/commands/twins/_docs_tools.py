@@ -14,13 +14,14 @@ never imposes one:
 Both builds write to a temporary directory, never into the repository. A tool
 that is not on ``PATH`` fails open: one ``skipped`` line whose install hint is
 the repository's ``docs`` dependency group or extra when it declares one (that
-group is the docs toolchain), else the tool's own package.
+group is the docs toolchain), else adding the tool's own package to that group
+with uv (D10).
 """
 
 from __future__ import annotations
 
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Final
 
@@ -65,7 +66,7 @@ class _ToolRun:
     program: str
     args: tuple[str, ...]
     hint: str
-    python_tool: bool = True
+    python_tool: bool = field(default=True, kw_only=True)
 
 
 def tool_report(root: Path, paths: list[str], proc: ProcPort) -> ToolReport:
@@ -101,7 +102,7 @@ def _mkdocs(root: Path, site: Path) -> _ToolRun | None:
     if config is None:
         return None
     args = ("build", "--strict", "--config-file", config, "--site-dir", str(site))
-    return _ToolRun("mkdocs build --strict", "mkdocs", args, "pip install mkdocs")
+    return _ToolRun("mkdocs build --strict", "mkdocs", args, "uv add --group docs mkdocs")
 
 
 def _sphinx(root: Path, build: Path) -> _ToolRun | None:
@@ -110,7 +111,9 @@ def _sphinx(root: Path, build: Path) -> _ToolRun | None:
         return None
     source = str(PurePosixPath(conf).parent)
     args = ("-W", "--keep-going", "-q", "-b", "html", source, str(build))
-    return _ToolRun("sphinx-build -W --keep-going", "sphinx-build", args, "pip install sphinx")
+    return _ToolRun(
+        "sphinx-build -W --keep-going", "sphinx-build", args, "uv add --group docs sphinx"
+    )
 
 
 def _doctests(root: Path, paths: list[str]) -> list[_ToolRun]:
@@ -118,7 +121,7 @@ def _doctests(root: Path, paths: list[str]) -> list[_ToolRun]:
     files = tuple(p for p in paths if any(PurePosixPath(p).match(glob) for glob in globs))
     if not files:
         return []
-    return [_ToolRun("pytest (doctests)", "pytest", files, "pip install pytest")]
+    return [_ToolRun("pytest (doctests)", "pytest", files, "uv add --dev pytest")]
 
 
 def _linters(root: Path, paths: list[str]) -> list[_ToolRun]:
@@ -129,7 +132,7 @@ def _linters(root: Path, paths: list[str]) -> list[_ToolRun]:
         runs.append(_ToolRun("markdownlint", "markdownlint", markdown, hint, python_tool=False))
     rst = tuple(p for p in paths if PurePosixPath(p).suffix.lower() == ".rst")
     if rst and doc8_configured(root):
-        runs.append(_ToolRun("doc8", "doc8", rst, "pip install doc8"))
+        runs.append(_ToolRun("doc8", "doc8", rst, "uv add --group docs doc8"))
     return runs
 
 
