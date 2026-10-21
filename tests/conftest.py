@@ -284,7 +284,11 @@ def make_package(
     directory outside ``tmp_path`` that is prepended to ``sys.path``, and returns
     the name. Dotted names nest (build the parent first to give it an
     ``__init__.py``). Every name built is dropped from ``sys.modules`` afterwards.
+    Each build invalidates the import caches: a package written in the same
+    clock tick as an earlier import from ``root`` leaves the directory's mtime
+    unchanged, so the cached listing would hide it.
     """
+    import importlib
     import sys
 
     root = tmp_path_factory.mktemp("packages")
@@ -297,6 +301,7 @@ def make_package(
         (package / "__init__.py").write_text(init, encoding="utf-8")
         if resources:
             (package / "resources").mkdir()
+        importlib.invalidate_caches()
         built.append(name)
         return name
 
