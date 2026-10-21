@@ -205,3 +205,12 @@ def test_check_rule_skills_skips_the_truncation_warning_on_a_malformed_block(
 
     assert len(findings.errors) == 1
     assert findings.warnings == []
+
+
+def test_check_skill_membership_leaves_an_in_skill_always_rule_to_r6() -> None:
+    """V3's 'remove skill' does not apply to a location the author cannot remove (R6 hints)."""
+    rule = _rule("house-style", skill="python-coding", scope="always")
+    rule.home_skill, rule.skill_from_location = "python-coding", True
+
+    skills = [_skill("python-coding", block=_BLOCK)]
+    assert check_skill_membership([rule], skills, all_rules=[rule]) == []

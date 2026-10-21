@@ -34,6 +34,11 @@ Validates:
   ``^[a-z0-9]+(-[a-z0-9]+)*$`` (1-64 chars), and it has a 1-1024 char
   ``description``. OpenCode silently drops a skill that fails these, so authors
   learn here instead.
+- The ``rules/`` layout of every layer (prU D21, R1-R4 and R6,
+  ``validation._rule_layout``): an in-skill rule names no other skill, file
+  names equal ids where the layout fixes them, no id twice in one layer, a
+  skill's ``rules/`` sits in a skill that takes members, and no always rule
+  sits in a skill.
 - Member rules and ``playbook:`` blocks (prS §6.6 V3-V14, W1-W3,
   ``validation._skills``): a rule's ``skill`` names a merged skill that takes
   members, and that skill's block, description fit and references are sound.
@@ -79,6 +84,7 @@ from coding_agent_playbook.validation._frontmatter import (
 )
 from coding_agent_playbook.validation._hooks import check_hooks
 from coding_agent_playbook.validation._links import check_markdown_links, load_links_config
+from coding_agent_playbook.validation._rule_layout import check_rule_layout
 from coding_agent_playbook.validation._skills import (
     check_rule_skills,
     check_skill_membership,
@@ -379,6 +385,7 @@ def _artifact_errors(ctx: SyncContext, *, config_less: bool) -> list[ValidationE
         ValidationError(path=str(e.path), message=e.problem) for e in ctx.rule_load_errors
     )
     errors.extend(check_rule_shape(rules))
+    errors.extend(check_rule_layout(ctx.rule_definitions, ctx.artifact_source))
     errors.extend(_check_applies_if(rules, prompts, ctx.facts, ctx.repo_root))
     errors.extend(check_prompt_rule_references(prompts, {r.frontmatter.id for r in rules}))
     errors.extend(_check_output_contracts(prompts))
