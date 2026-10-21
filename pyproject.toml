@@ -99,15 +99,15 @@ llm = "coding_agent_playbook.evals.judge:LLMJudge"
 # grading strategies beyond the built-in threshold/regression/file/judge checks.
 
 [project.entry-points."coding_agent_playbook.rubrics"]
-# Out-of-tree named rubrics; reference from task.toml via [rubric] ref = …. A
+# Out-of-tree named rubrics; reference from sample.toml via [rubric] ref = …. A
 # code-defined Rubric subclass (declaring its CRITERIA) registers here so eval
-# tasks can share one rubric by name. The engine ships none; in-tree
+# samples can share one rubric by name. The engine ships none; in-tree
 # registrations win on a name clash.
 
 [project.entry-points."coding_agent_playbook.gates"]
-# Out-of-tree composed gates; reference from a task's [gate.bind] via ref = …. A
+# Out-of-tree composed gates; reference from a sample's [gate.bind] via ref = …. A
 # code-defined factory returning a composed boolean Check (AllOf/AnyOf/Not over
-# file/threshold/judge checks) registers here so eval tasks can share one gate by
+# file/threshold/judge checks) registers here so eval samples can share one gate by
 # name. The engine ships none; in-tree registrations win on a name clash.
 
 [project.entry-points."coding_agent_playbook.hook_handlers"]
@@ -139,21 +139,21 @@ src = ["src", "tests"]
 # ruff versions also reformat code blocks inside markdown (CI has gone red on
 # that before), so only its markdown is excluded; its two Python script
 # rewrites are our own code and stay linted and formatted.
-# Eval-task fixtures under setup/ are deliberately unclean needle material (the
+# Eval-sample fixtures under setup/ are deliberately unclean needle material (the
 # find-injected-vuln-* bugs live there), so `ruff check --fix` / `ruff format`
-# must never rewrite them either (specs/prK-lifecycle-hooks.md §P9). Eval tasks
+# must never rewrite them either (specs/prK-lifecycle-hooks.md §P9). Eval samples
 # are per layer, so a bundled plugin's fixtures get the same exclude as core's.
 # mypy needs none: catalog/ is outside its `files`.
 extend-exclude = [
     "catalog/plugins/superpowers",
     "catalog/plugins/mattpocock_skills/**/*.md",
-    "catalog/core/eval_tasks/*/setup",
-    "catalog/plugins/*/eval_tasks/*/setup",
+    "catalog/core/eval_samples/*/setup",
+    "catalog/plugins/*/eval_samples/*/setup",
 ]
 # Pre-commit and the hook/Stop stages pass file names explicitly, and ruff
 # ignores the excludes above for an explicitly passed path unless force-exclude
 # is on: the hooks would then rewrite the vendored superpowers markdown and the
-# eval-task needle fixtures.
+# eval-sample needle fixtures.
 force-exclude = true
 # Skill scripts run in consumer repos on Python 3.10+, so pyupgrade must not
 # suggest 3.12-only syntax there (PEP 695 aliases/generics).
@@ -269,7 +269,7 @@ exhaustive_ignores = [
     "hook_runtime",
 ]
 ignore_imports = [
-    # kept: catalog-layers (the artifact source parses eval tasks) is not scheduled (L12)
+    # kept: catalog-layers (the artifact source parses eval samples) is not scheduled (L12)
     "coding_agent_playbook.catalog.source -> coding_agent_playbook.evals.**",
     # kept: catalog-layers (injecting the hook merger from the callers) is not scheduled
     # (L12): OverlayResolver defaults to the layer merge's merge_hook_layers and
@@ -410,9 +410,9 @@ ignore_imports = [
     "coding_agent_playbook.hook_runtime.handlers.verify.coverage_diff_gate -> coding_agent_playbook.grading.**",
     "coding_agent_playbook.hook_runtime.handlers.verify.coverage_diff_gate -> coding_agent_playbook.metrics_gate.**",
     "coding_agent_playbook.hook_runtime.handlers.verify.docstring_nonregression -> coding_agent_playbook.grading.**",
-    "coding_agent_playbook.hook_runtime.handlers.protect.eval_task_authoring_lint -> coding_agent_playbook.evals.**",
-    "coding_agent_playbook.hook_runtime.handlers.protect.eval_task_authoring_lint -> coding_agent_playbook.catalog.source",
-    "coding_agent_playbook.hook_runtime.handlers.protect.eval_task_authoring_lint -> coding_agent_playbook.artifacts.**",
+    "coding_agent_playbook.hook_runtime.handlers.protect.eval_sample_authoring_lint -> coding_agent_playbook.evals.**",
+    "coding_agent_playbook.hook_runtime.handlers.protect.eval_sample_authoring_lint -> coding_agent_playbook.catalog.source",
+    "coding_agent_playbook.hook_runtime.handlers.protect.eval_sample_authoring_lint -> coding_agent_playbook.artifacts.**",
     "coding_agent_playbook.hook_runtime.handlers.verify.clean_code_metrics_nonregression -> coding_agent_playbook.grading.**",
     "coding_agent_playbook.hook_runtime.handlers.verify.clean_code_metrics_nonregression -> coding_agent_playbook.metrics_gate.**",
     # N4: detect() (detector.facts) and evaluate_predicate (detector.predicate) both load on
@@ -477,7 +477,7 @@ forbidden_modules = [
     "yaml",
 ]
 broken_contract_guidance = """
-The grading kernel is shared by eval tasks and the metrics gate, so it imports neither, nor
+The grading kernel is shared by eval samples and the metrics gate, so it imports neither, nor
 the hook runtime: only the stdlib, itself and STDLIB_LEAVES (tests/engine_modules.py).
 """
 

@@ -10,7 +10,7 @@
   "hook_event_name": "PreToolUse",
   "tool_name": "Edit",
   "tool_input": {
-    "file_path": "/playbook-fixture/proj/src/coding_agent_playbook/resources/eval_tasks/find-injected-vuln-pytorch-deserial/setup/app/loader.py",
+    "file_path": "/playbook-fixture/proj/src/coding_agent_playbook/resources/eval_samples/find-injected-vuln-pytorch-deserial/setup/app/loader.py",
     "old_string": "return torch.load(p)",
     "new_string": "return torch.load(p, weights_only=True)"
   },

@@ -3,7 +3,7 @@
 This file is the only place in the shipped resources that credits outside
 sources for the engine's own rules and prompts. Artifact bodies carry no
 attribution. Attributions for the `find-injected-vuln-*` eval fixtures live in
-`eval_tasks/ATTRIBUTIONS.md`.
+`eval_samples/ATTRIBUTIONS.md`.
 
 ## Clean-architecture guidance for Python
 

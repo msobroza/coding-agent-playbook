@@ -270,13 +270,13 @@ def test_validate_flags_jinja_syntax_error(tmp_path, make_synthetic_repo, capsys
     assert "Jinja syntax error" in out
 
 
-def test_validate_flags_orphan_eval_task(tmp_path, make_synthetic_repo, capsys):
-    """An on-disk task.toml referencing a non-existent prompt."""
+def test_validate_flags_orphan_eval_sample(tmp_path, make_synthetic_repo, capsys):
+    """An on-disk sample.toml referencing a non-existent prompt."""
     repo = make_synthetic_repo(tmp_path)
-    task_dir = repo / "playbook" / "eval_tasks" / "orphan-task"
-    task_dir.mkdir(parents=True, exist_ok=True)
-    (task_dir / "task.toml").write_text(
-        'id = "orphan-task"\n'
+    sample_dir = repo / "playbook" / "eval_samples" / "orphan-sample"
+    sample_dir.mkdir(parents=True, exist_ok=True)
+    (sample_dir / "sample.toml").write_text(
+        'id = "orphan-sample"\n'
         'prompt_id = "deleted-prompt"\n'
         'description = "An orphan that points at a deleted prompt"\n',
         encoding="utf-8",
@@ -338,18 +338,18 @@ def test_shipped_prompt_contracts_compile() -> None:
     )
 
 
-def test_validate_flags_missing_eval_task_for_prompt(tmp_path, make_synthetic_repo, capsys):
-    """A prompt declares eval_tasks: [...] but the task dir doesn't exist."""
+def test_validate_flags_missing_eval_sample_for_prompt(tmp_path, make_synthetic_repo, capsys):
+    """A prompt declares eval_samples: [...] but the sample dir doesn't exist."""
     repo = make_synthetic_repo(tmp_path)
     prompts_dir = repo / "playbook" / "prompts"
     prompts_dir.mkdir(parents=True, exist_ok=True)
-    (prompts_dir / "claims-task.md").write_text(
+    (prompts_dir / "claims-sample.md").write_text(
         "---\n"
-        "id: claims-task\n"
+        "id: claims-sample\n"
         "name: Claims\n"
-        "description: claims a task that does not exist\n"
+        "description: claims a sample that does not exist\n"
         "slash: claims\n"
-        "eval_tasks:\n"
+        "eval_samples:\n"
         "  - foo-bar\n"
         "---\n"
         "body\n",

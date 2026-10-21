@@ -146,8 +146,10 @@ def test_justified_self_service_pragma_is_a_note_not_a_block() -> None:
 
 
 def test_eval_fixture_paths_skipped() -> None:
-    path = "src/coding_agent_playbook/resources/eval_tasks/t1/setup/app/db.py"
-    pair = ConfigPair("pkg/eval_tasks/t1/setup/pyproject.toml", "[tool.mypy]\nstrict = true\n", "")
+    path = "src/coding_agent_playbook/resources/eval_samples/t1/setup/app/db.py"
+    pair = ConfigPair(
+        "pkg/eval_samples/t1/setup/pyproject.toml", "[tool.mypy]\nstrict = true\n", ""
+    )
 
     report = scan([AddedLine(path, 1, "q = f()  # type: ignore")], (), [pair], POLICY)
 

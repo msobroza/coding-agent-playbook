@@ -3,7 +3,7 @@
 This is to :class:`~coding_agent_playbook.grading.check.Check` what
 :mod:`coding_agent_playbook.evals.compile.rubric_registry` is to ``Rubric`` and
 :mod:`coding_agent_playbook.grading.metric` is to ``Metric``: a registry that
-lets a task (and out-of-tree packages) build a check by a short id. It mirrors the
+lets a sample (and out-of-tree packages) build a check by a short id. It mirrors the
 rubric idiom with one deliberate difference — the registry **values are
 factories** (``Callable[..., Check]``), not zero-arg classes, because a check
 takes ctor kwargs. A factory may be a plain function *or* a ``Check`` subclass
@@ -22,7 +22,7 @@ Acyclic by construction: :func:`register_check` and the registry dict are define
 import *back* only :func:`register_check` (no class-level dependency on the
 factories), so there is no import cycle.
 
-The task pipeline consumes this registry: the handle builder
+The sample pipeline consumes this registry: the handle builder
 (:mod:`coding_agent_playbook.evals.compile._handles`) routes a ``{check = "…"}`` (or
 aggregate ``{metric = "…"}``) binding through :func:`get_check`.
 """

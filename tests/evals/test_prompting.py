@@ -1,11 +1,11 @@
 """Tests for eval prompt rendering (``evals/prompting.py``).
 
-An eval task's prompt must render as ``playbook sync`` renders it for a
+An eval sample's prompt must render as ``playbook sync`` renders it for a
 consumer: the Jinja context carries the detector facts + project metadata, and
 the prompt's ``includes_rules`` arrive as the ``## Reference rules`` appendix
 Continue also gets (D15, D22), resolved through a rule registry. Before this
 module the runner rendered with a bare environment, so 7 of the 20 shipped
-tasks crashed with ``UndefinedError`` (``rule`` for review/security-review,
+samples crashed with ``UndefinedError`` (``rule`` for review/security-review,
 ``project_name`` for generate-tests) — even under the hermetic ``FakeRunner``.
 """
 
@@ -17,13 +17,13 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.evals.loader import load_eval_task_from_dir
+from coding_agent_playbook.evals.loader import load_eval_sample_from_dir
 from coding_agent_playbook.evals.prompting import (
     PromptResolutionError,
     _infer_prompts_dir,
     render_prompt,
 )
-from coding_agent_playbook.evals.task import EvalTask, TaskInvocation, TaskSetup
+from coding_agent_playbook.evals.sample import EvalSample, SampleInvocation, SampleSetup
 from tests._catalog import CORE_ROOT
 
 if TYPE_CHECKING:
@@ -33,33 +33,33 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.catalog
 
 _ENGINE = "coding_agent_playbook"
-_SHIPPED_TASKS = CORE_ROOT / "eval_tasks"
-#: A shipped task of the plain-`.md` `refactor` prompt (no Jinja, four included rules).
-_REFACTOR_TASK = "refactor-extract-helper"
+_SHIPPED_SAMPLES = CORE_ROOT / "eval_samples"
+#: A shipped sample of the plain-`.md` `refactor` prompt (no Jinja, four included rules).
+_REFACTOR_SAMPLE = "refactor-extract-helper"
 
 
-def _shipped_task_dirs() -> list[Path]:
-    return sorted(p for p in _SHIPPED_TASKS.iterdir() if (p / "task.toml").is_file())
+def _shipped_sample_dirs() -> list[Path]:
+    return sorted(p for p in _SHIPPED_SAMPLES.iterdir() if (p / "sample.toml").is_file())
 
 
-def _shipped(task_id: str) -> EvalTask:
-    return load_eval_task_from_dir(_SHIPPED_TASKS / task_id, source_package=_ENGINE)
+def _shipped(sample_id: str) -> EvalSample:
+    return load_eval_sample_from_dir(_SHIPPED_SAMPLES / sample_id, source_package=_ENGINE)
 
 
 # --------------------------------------------------------------------------- #
-# Every shipped task renders strictly (regression: 7/20 crashed)
+# Every shipped sample renders strictly (regression: 7/20 crashed)
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.parametrize("task_dir", _shipped_task_dirs(), ids=lambda p: p.name)
-def test_every_shipped_task_prompt_renders_strictly(task_dir: Path) -> None:
-    """A real runner renders with ``strict=True``; no shipped task may crash."""
-    task = load_eval_task_from_dir(task_dir, source_package=_ENGINE)
-    prompt = render_prompt(task, strict=True)
+@pytest.mark.parametrize("sample_dir", _shipped_sample_dirs(), ids=lambda p: p.name)
+def test_every_shipped_sample_prompt_renders_strictly(sample_dir: Path) -> None:
+    """A real runner renders with ``strict=True``; no shipped sample may crash."""
+    sample = load_eval_sample_from_dir(sample_dir, source_package=_ENGINE)
+    prompt = render_prompt(sample, strict=True)
     assert prompt.strip()
-    assert not prompt.startswith(f"[prompt:{task.prompt_id}]")  # not the placeholder
-    if task.invocation.prompt_args:
-        assert prompt.rstrip().endswith(task.invocation.prompt_args)
+    assert not prompt.startswith(f"[prompt:{sample.prompt_id}]")  # not the placeholder
+    if sample.invocation.prompt_args:
+        assert prompt.rstrip().endswith(sample.invocation.prompt_args)
 
 
 def test_reference_appendix_inlines_the_included_rule() -> None:
@@ -71,7 +71,7 @@ def test_reference_appendix_inlines_the_included_rule() -> None:
 
 def test_plain_md_prompt_gets_the_reference_appendix() -> None:
     """The shipped ``refactor`` prompt is plain ``.md``: no Jinja, but its rules still arrive."""
-    prompt = render_prompt(_shipped(_REFACTOR_TASK), strict=True)
+    prompt = render_prompt(_shipped(_REFACTOR_SAMPLE), strict=True)
     assert prompt.count("## Reference rules") == 1
     assert "### Typing" in prompt
 
@@ -79,7 +79,7 @@ def test_plain_md_prompt_gets_the_reference_appendix() -> None:
 def test_mocked_ml_stack_list_satisfies_any_ml_stack() -> None:
     """``[setup] ml_stack = ["torch", …]`` gates the ML rule in.
 
-    Task TOML authors mock facts as a *list* of names while the detector emits a
+    Sample TOML authors mock facts as a *list* of names while the detector emits a
     ``{name: version}`` dict; ``any_ml_stack`` reads ``.keys()``, so the list must
     be normalized or the predicate crashes.
     """
@@ -110,32 +110,32 @@ def test_authored_project_kind_is_the_mock_detector_fact() -> None:
     ids=["catalog", "overlay-resources", "repo-local"],
 )
 def test_infer_prompts_dir_layers(tmp_path: Path, layer_parts: tuple[str, ...]) -> None:
-    """``<layer>/eval_tasks/<dir>/task.toml`` finds ``<layer>/prompts`` in every layer.
+    """``<layer>/eval_samples/<dir>/sample.toml`` finds ``<layer>/prompts`` in every layer.
 
     The bundled layer (``catalog/core``) has no ``resources`` segment, and a
-    repo-local task never found its prompts before.
+    repo-local sample never found its prompts before.
     """
     layer = tmp_path.joinpath(*layer_parts)
-    task_toml = layer / "eval_tasks" / "t" / "task.toml"
-    assert _infer_prompts_dir(task_toml) == layer / "prompts"
+    sample_toml = layer / "eval_samples" / "t" / "sample.toml"
+    assert _infer_prompts_dir(sample_toml) == layer / "prompts"
 
 
-def test_infer_prompts_dir_non_task_path(tmp_path: Path) -> None:
-    """A task dir whose parent is not ``eval_tasks`` has no prompts layer."""
-    assert _infer_prompts_dir(tmp_path / "t" / "task.toml") is None
+def test_infer_prompts_dir_non_sample_path(tmp_path: Path) -> None:
+    """A sample dir whose parent is not ``eval_samples`` has no prompts layer."""
+    assert _infer_prompts_dir(tmp_path / "t" / "sample.toml") is None
 
 
 def test_infer_prompts_dir_does_not_resolve_symlinks(tmp_path: Path) -> None:
-    """A symlinked task dir maps to the layer it is reached through, not its target's."""
-    target = tmp_path / "target_layer" / "eval_tasks" / "t"
+    """A symlinked sample dir maps to the layer it is reached through, not its target's."""
+    target = tmp_path / "target_layer" / "eval_samples" / "t"
     target.mkdir(parents=True)
-    (target / "task.toml").write_text("", encoding="utf-8")
+    (target / "sample.toml").write_text("", encoding="utf-8")
     link_layer = tmp_path / "link_layer"
-    (link_layer / "eval_tasks").mkdir(parents=True)
-    (link_layer / "eval_tasks" / "t").symlink_to(target, target_is_directory=True)
+    (link_layer / "eval_samples").mkdir(parents=True)
+    (link_layer / "eval_samples" / "t").symlink_to(target, target_is_directory=True)
 
-    task_toml = link_layer / "eval_tasks" / "t" / "task.toml"
-    assert _infer_prompts_dir(task_toml) == link_layer / "prompts"
+    sample_toml = link_layer / "eval_samples" / "t" / "sample.toml"
+    assert _infer_prompts_dir(sample_toml) == link_layer / "prompts"
 
 
 def test_strict_unresolved_prompt_hint_points_at_the_layers_prompts_dir(tmp_path: Path) -> None:
@@ -143,26 +143,26 @@ def test_strict_unresolved_prompt_hint_points_at_the_layers_prompts_dir(tmp_path
 
     Regression: it said to check "that resources/prompts/ is reachable", but the
     engine's own content has no ``resources/`` since v0.19, and every layer's
-    prompts are found next to its ``eval_tasks/`` (:func:`_infer_prompts_dir`).
+    prompts are found next to its ``eval_samples/`` (:func:`_infer_prompts_dir`).
     """
-    task_dir = tmp_path / "catalog" / "core" / "eval_tasks" / "orphan-task"
-    (task_dir / "setup").mkdir(parents=True)
-    task = EvalTask(
-        id="orphan-task",
+    sample_dir = tmp_path / "catalog" / "core" / "eval_samples" / "orphan-sample"
+    (sample_dir / "setup").mkdir(parents=True)
+    sample = EvalSample(
+        id="orphan-sample",
         prompt_id="no-such-prompt",
-        description="A task whose prompt is not shipped.",
-        source_path=task_dir / "task.toml",
+        description="A sample whose prompt is not shipped.",
+        source_path=sample_dir / "sample.toml",
         source_package=_ENGINE,
-        setup=TaskSetup(),
-        invocation=TaskInvocation(prompt_args="go"),
+        setup=SampleSetup(),
+        invocation=SampleInvocation(prompt_args="go"),
     )
 
     with pytest.raises(PromptResolutionError) as raised:
-        render_prompt(task, strict=True)
+        render_prompt(sample, strict=True)
 
     message = str(raised.value)
     assert "resources/prompts" not in message
-    assert "the prompts/ directory next to the task's eval_tasks/" in message
+    assert "the prompts/ directory next to the sample's eval_samples/" in message
 
 
 # --------------------------------------------------------------------------- #
@@ -170,16 +170,16 @@ def test_strict_unresolved_prompt_hint_points_at_the_layers_prompts_dir(tmp_path
 # --------------------------------------------------------------------------- #
 
 
-def _synthetic_task(
+def _synthetic_sample(
     tmp_path: Path,
     prompt_body: str,
     *,
     templated: bool = True,
     pyproject: str | None = None,
-    setup: TaskSetup | None = None,
+    setup: SampleSetup | None = None,
     includes_rules: tuple[str, ...] = (),
-) -> EvalTask:
-    """Lay down ``<tmp>/pkg/resources/{prompts,eval_tasks}`` with one prompt + task.
+) -> EvalSample:
+    """Lay down ``<tmp>/pkg/resources/{prompts,eval_samples}`` with one prompt + sample.
 
     ``includes_rules`` lands in the prompt's frontmatter.
     """
@@ -203,18 +203,18 @@ def _synthetic_task(
         + prompt_body,
         encoding="utf-8",
     )
-    task_dir = resources / "eval_tasks" / "synthetic-task"
-    (task_dir / "setup").mkdir(parents=True)
+    sample_dir = resources / "eval_samples" / "synthetic-sample"
+    (sample_dir / "setup").mkdir(parents=True)
     if pyproject is not None:
-        (task_dir / "setup" / "pyproject.toml").write_text(pyproject, encoding="utf-8")
-    return EvalTask(
-        id="synthetic-task",
+        (sample_dir / "setup" / "pyproject.toml").write_text(pyproject, encoding="utf-8")
+    return EvalSample(
+        id="synthetic-sample",
         prompt_id="synthetic",
-        description="DO-NOT-LEAK task description",
-        source_path=task_dir / "task.toml",
+        description="DO-NOT-LEAK sample description",
+        source_path=sample_dir / "sample.toml",
         source_package=_ENGINE,
-        setup=setup or TaskSetup(),
-        invocation=TaskInvocation(prompt_args="go"),
+        setup=setup or SampleSetup(),
+        invocation=SampleInvocation(prompt_args="go"),
     )
 
 
@@ -232,29 +232,29 @@ def test_render_error_raises_prompt_resolution_error_even_when_not_strict(
 
     ``strict`` only governs the *unresolvable*-prompt fallback; a typo'd variable
     in a prompt that does resolve must fail loudly for every runner, and must name
-    the task and prompt rather than surfacing a bare Jinja ``UndefinedError``.
+    the sample and prompt rather than surfacing a bare Jinja ``UndefinedError``.
     """
-    task = _synthetic_task(tmp_path, "Hello {{ no_such_variable }}\n")
-    with pytest.raises(PromptResolutionError, match=r"synthetic-task.*no_such_variable"):
-        render_prompt(task, strict=False)
+    sample = _synthetic_sample(tmp_path, "Hello {{ no_such_variable }}\n")
+    with pytest.raises(PromptResolutionError, match=r"synthetic-sample.*no_such_variable"):
+        render_prompt(sample, strict=False)
 
 
 def test_non_templated_prompt_is_passed_through_verbatim(tmp_path: Path) -> None:
     """A plain ``.md`` prompt is not run through Jinja (mirrors ``playbook sync``)."""
-    task = _synthetic_task(tmp_path, "Literal {{ braces }} stay as written.\n", templated=False)
-    assert "Literal {{ braces }} stay as written." in render_prompt(task, strict=True)
+    sample = _synthetic_sample(tmp_path, "Literal {{ braces }} stay as written.\n", templated=False)
+    assert "Literal {{ braces }} stay as written." in render_prompt(sample, strict=True)
 
 
 def test_input_variables_and_facts_reach_the_template(tmp_path: Path) -> None:
     """``input_variables`` + mock facts + project metadata are all in the context."""
-    task = _synthetic_task(
+    sample = _synthetic_sample(
         tmp_path,
         "{{ project_name }}|{{ project_kind }}|{{ target }}|{{ has_ml_dep('torch') }}\n",
         pyproject='[project]\nname = "demo-fixture"\nversion = "0.1.0"\n',
-        setup=TaskSetup(project_kind="ml-research", extra_facts={"ml_stack": ["torch"]}),
+        setup=SampleSetup(project_kind="ml-research", extra_facts={"ml_stack": ["torch"]}),
     )
-    task.invocation.input_variables["target"] = "src/x.py::f"
-    assert "demo-fixture|ml-research|src/x.py::f|True" in render_prompt(task, strict=True)
+    sample.invocation.input_variables["target"] = "src/x.py::f"
+    assert "demo-fixture|ml-research|src/x.py::f|True" in render_prompt(sample, strict=True)
 
 
 @pytest.mark.parametrize(
@@ -271,45 +271,45 @@ def test_reference_appendix_honours_the_rule_applies_if(
     SPEC §6.2.5, identical to ``playbook sync``.
     """
     extra = {"ml_stack": ml_stack} if ml_stack is not None else {}
-    task = _synthetic_task(
+    sample = _synthetic_sample(
         tmp_path,
         "Review.\n",
-        setup=TaskSetup(extra_facts=extra),
+        setup=SampleSetup(extra_facts=extra),
         includes_rules=("ml-serialization-security",),
     )
-    prompt = render_prompt(task, strict=True)
+    prompt = render_prompt(sample, strict=True)
     assert ("### ML serialization & deserialization security" in prompt) is inlined
 
 
 def test_rule_call_in_a_prompt_raises_prompt_resolution_error(tmp_path: Path) -> None:
     """Regression (D15): the removed ``rule()`` helper is an authoring error (exit 2)."""
-    task = _synthetic_task(tmp_path, 'Review.\n{{ rule("python-error-handling") }}\n')
-    with pytest.raises(PromptResolutionError, match=r"synthetic-task.*'rule' is undefined"):
-        render_prompt(task, strict=False)
+    sample = _synthetic_sample(tmp_path, 'Review.\n{{ rule("python-error-handling") }}\n')
+    with pytest.raises(PromptResolutionError, match=r"synthetic-sample.*'rule' is undefined"):
+        render_prompt(sample, strict=False)
 
 
-def test_project_name_falls_back_to_the_task_id_without_a_pyproject(tmp_path: Path) -> None:
-    """No ``setup/pyproject.toml`` ⇒ the task id names the project.
+def test_project_name_falls_back_to_the_sample_id_without_a_pyproject(tmp_path: Path) -> None:
+    """No ``setup/pyproject.toml`` ⇒ the sample id names the project.
 
-    Never the task ``description``: that narrates the scenario (often the bug the
+    Never the sample ``description``: that narrates the scenario (often the bug the
     agent is meant to find), so it must not leak into the agent's prompt.
     """
-    task = _synthetic_task(tmp_path, "{{ project_name }}: {{ project_description }}\n")
-    prompt = render_prompt(task, strict=True)
-    assert prompt.startswith("synthetic-task: ")
+    sample = _synthetic_sample(tmp_path, "{{ project_name }}: {{ project_description }}\n")
+    prompt = render_prompt(sample, strict=True)
+    assert prompt.startswith("synthetic-sample: ")
     assert "DO-NOT-LEAK" not in prompt
 
 
 def test_input_variables_win_over_facts_and_project_metadata(tmp_path: Path) -> None:
     """An ``input_variables`` key overrides a same-named fact or project field."""
-    task = _synthetic_task(
+    sample = _synthetic_sample(
         tmp_path,
         "{{ project_name }}|{{ project_kind }}\n",
         pyproject='[project]\nname = "from-pyproject"\nversion = "0.1.0"\n',
-        setup=TaskSetup(project_kind="ml-research"),
+        setup=SampleSetup(project_kind="ml-research"),
     )
-    task.invocation.input_variables.update(project_name="from-invocation", project_kind="cli")
-    assert "from-invocation|cli" in render_prompt(task, strict=True)
+    sample.invocation.input_variables.update(project_name="from-invocation", project_kind="cli")
+    assert "from-invocation|cli" in render_prompt(sample, strict=True)
 
 
 @pytest.mark.parametrize(
@@ -327,22 +327,22 @@ def test_mis_shaped_mock_facts_raise_prompt_resolution_error(
     ``TypeError`` would surface as a traceback and exit 1 — the code for a
     *failing* report.
     """
-    task = _synthetic_task(
+    sample = _synthetic_sample(
         tmp_path,
         "Review.\n",
-        setup=TaskSetup(extra_facts=extra_facts),
+        setup=SampleSetup(extra_facts=extra_facts),
         includes_rules=("python-error-handling",),
     )
     with pytest.raises(PromptResolutionError, match="failed to render"):
-        render_prompt(task, strict=True)
+        render_prompt(sample, strict=True)
 
 
 def test_async_prompt_sees_pytest_asyncio_from_main_dependencies() -> None:
     """``pytest-asyncio`` in ``[project].dependencies`` counts as available.
 
     The generate-tests prompt and the pytest rule used to check only
-    ``dev_dependencies``, so this task's prompt told the agent the plugin was
-    missing ("stop and ask first") — working against the task itself.
+    ``dev_dependencies``, so this sample's prompt told the agent the plugin was
+    missing ("stop and ask first") — working against the sample itself.
     """
     prompt = render_prompt(_shipped("generate-tests-async-code"), strict=True)
     assert "with `pytest-asyncio` available" in prompt
@@ -351,7 +351,7 @@ def test_async_prompt_sees_pytest_asyncio_from_main_dependencies() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Overlay tasks — rules resolve by id before applies_if (sync parity)
+# Overlay samples — rules resolve by id before applies_if (sync parity)
 # --------------------------------------------------------------------------- #
 
 _OVERLAY = "temp_prompting_overlay"
@@ -381,28 +381,28 @@ def _overlay_rule(resources: Path, rule_id: str, *, name: str, applies_if: str =
     )
 
 
-def _overlay_task(resources: Path, prompt_body: str, *, includes_rule: str) -> EvalTask:
+def _overlay_sample(resources: Path, prompt_body: str, *, includes_rule: str) -> EvalSample:
     (resources / "prompts").mkdir()
     (resources / "prompts" / "overlay-prompt.md.j2").write_text(
         "---\nid: overlay-prompt\nname: O\ndescription: d\nslash: o\nversion: 1\n"
         f"includes_rules:\n  - {includes_rule}\n---\n" + prompt_body,
         encoding="utf-8",
     )
-    task_dir = resources / "eval_tasks" / "overlay-task"
-    (task_dir / "setup").mkdir(parents=True)
-    return EvalTask(
-        id="overlay-task",
+    sample_dir = resources / "eval_samples" / "overlay-sample"
+    (sample_dir / "setup").mkdir(parents=True)
+    return EvalSample(
+        id="overlay-sample",
         prompt_id="overlay-prompt",
         description="d",
-        source_path=task_dir / "task.toml",
+        source_path=sample_dir / "sample.toml",
         source_package=_OVERLAY,
     )
 
 
-def test_overlay_task_can_include_an_overlay_only_rule(overlay_package: Path) -> None:
+def test_overlay_sample_can_include_an_overlay_only_rule(overlay_package: Path) -> None:
     _overlay_rule(overlay_package, "bank-house-rule", name="Bank house rule")
-    task = _overlay_task(overlay_package, "Review.\n", includes_rule="bank-house-rule")
-    assert "### Bank house rule" in render_prompt(task, strict=True)
+    sample = _overlay_sample(overlay_package, "Review.\n", includes_rule="bank-house-rule")
+    assert "### Bank house rule" in render_prompt(sample, strict=True)
 
 
 def test_overlay_override_with_false_applies_if_drops_the_rule(overlay_package: Path) -> None:
@@ -417,28 +417,30 @@ def test_overlay_override_with_false_applies_if_drops_the_rule(overlay_package: 
         name="Overlay error handling",
         applies_if="applies_if:\n  any_ml_stack: [torch]\n",
     )
-    task = _overlay_task(overlay_package, "Start.\nEnd.\n", includes_rule="python-error-handling")
-    prompt = render_prompt(task, strict=True)
+    sample = _overlay_sample(
+        overlay_package, "Start.\nEnd.\n", includes_rule="python-error-handling"
+    )
+    prompt = render_prompt(sample, strict=True)
     assert "### Error handling" not in prompt  # the engine body did not leak back
     assert "Overlay body" not in prompt
 
 
 def test_detected_project_kind_wins_over_the_unauthored_default(tmp_path: Path) -> None:
     """With no authored ``[setup] project_kind`` the detector's kind is used."""
-    task = _synthetic_task(
+    sample = _synthetic_sample(
         tmp_path,
         "kind={{ project_kind }}\n",
         pyproject='[project]\nname = "x"\nversion = "0.1"\ndependencies = ["fastapi"]\n',
     )
-    package = task.source_path.parent / "setup" / "src" / "app"
+    package = sample.source_path.parent / "setup" / "src" / "app"
     package.mkdir(parents=True)
     (package / "__init__.py").write_text("", encoding="utf-8")
-    prompt = render_prompt(task, strict=True)
+    prompt = render_prompt(sample, strict=True)
     assert "kind=python-application" in prompt
 
 
-def _broken_rule(task: EvalTask, *, as_directory: bool = False) -> None:
-    rules = task.source_path.parent / "setup" / "playbook" / "rules"
+def _broken_rule(sample: EvalSample, *, as_directory: bool = False) -> None:
+    rules = sample.source_path.parent / "setup" / "playbook" / "rules"
     rules.mkdir(parents=True)
     if as_directory:
         (rules / "bad.md").mkdir()
@@ -456,11 +458,11 @@ def test_a_broken_rule_file_fails_only_prompts_that_include_rules(
     one that does gets a :class:`PromptResolutionError` (exit 2), never a raw
     ``yaml`` / ``OSError`` traceback (exit 1, a "failing report").
     """
-    plain = _synthetic_task(tmp_path / "plain", "No rules here, {{ project_name }}.\n")
+    plain = _synthetic_sample(tmp_path / "plain", "No rules here, {{ project_name }}.\n")
     _broken_rule(plain, as_directory=as_directory)
     assert "No rules here" in render_prompt(plain, strict=True)
 
-    inlining = _synthetic_task(
+    inlining = _synthetic_sample(
         tmp_path / "inlining", "Review.\n", includes_rules=("python-error-handling",)
     )
     _broken_rule(inlining, as_directory=as_directory)
@@ -468,9 +470,9 @@ def test_a_broken_rule_file_fails_only_prompts_that_include_rules(
         render_prompt(inlining, strict=True)
 
 
-def _sandbox_escaping_rule(task: EvalTask) -> Path:
+def _sandbox_escaping_rule(sample: EvalSample) -> Path:
     """Lay down ``setup/playbook/rules/evil.md.j2`` whose body escapes the Jinja sandbox."""
-    rules = task.source_path.parent / "setup" / "playbook" / "rules"
+    rules = sample.source_path.parent / "setup" / "playbook" / "rules"
     rules.mkdir(parents=True)
     rule = rules / "evil.md.j2"
     rule.write_text(
@@ -490,13 +492,13 @@ def test_sandbox_violation_in_included_rule_raises_prompt_resolution_error(
 
     ``RuleRegistryImpl`` raises ``rendering.jinja.TemplateSecurityError`` (a plain
     ``Exception``, not a jinja ``TemplateError``), which escaped ``render_prompt``
-    as a raw traceback: ``playbook eval --run`` then exited 1 ("task failed")
+    as a raw traceback: ``playbook eval --run`` then exited 1 ("sample failed")
     instead of 2. The same escape written in the prompt body was already handled.
     """
-    task = _synthetic_task(tmp_path, "Review.\n", includes_rules=("evil",))
-    _sandbox_escaping_rule(task)
-    with pytest.raises(PromptResolutionError, match=r"synthetic-task") as excinfo:
-        render_prompt(task, strict=strict)
+    sample = _synthetic_sample(tmp_path, "Review.\n", includes_rules=("evil",))
+    _sandbox_escaping_rule(sample)
+    with pytest.raises(PromptResolutionError, match=r"synthetic-sample") as excinfo:
+        render_prompt(sample, strict=strict)
     assert "evil.md.j2" in str(excinfo.value)
     assert "sandbox" in str(excinfo.value)
 
@@ -505,9 +507,9 @@ def test_sandbox_violation_in_prompt_body_raises_prompt_resolution_error(
     tmp_path: Path,
 ) -> None:
     """The direct escape (jinja's own ``SecurityError``) takes the same exit path."""
-    task = _synthetic_task(tmp_path, "{{ lipsum.__globals__['os'].__name__ }}\n")
-    with pytest.raises(PromptResolutionError, match=r"synthetic-task.*__globals__"):
-        render_prompt(task, strict=False)
+    sample = _synthetic_sample(tmp_path, "{{ lipsum.__globals__['os'].__name__ }}\n")
+    with pytest.raises(PromptResolutionError, match=r"synthetic-sample.*__globals__"):
+        render_prompt(sample, strict=False)
 
 
 @pytest.mark.parametrize("with_dockerfile", [False, True])
@@ -516,8 +518,8 @@ def test_has_file_rule_gate_resolves_against_the_setup_tree(
 ) -> None:
     """``has_file`` paths are checked inside ``setup/`` (the project the agent works in),
     never against the eval process's working directory."""
-    task = _synthetic_task(tmp_path, "Review.\n", includes_rules=("needs-dockerfile",))
-    setup = task.source_path.parent / "setup"
+    sample = _synthetic_sample(tmp_path, "Review.\n", includes_rules=("needs-dockerfile",))
+    setup = sample.source_path.parent / "setup"
     rules = setup / "playbook" / "rules"
     rules.mkdir(parents=True)
     (rules / "needs-dockerfile.md").write_text(
@@ -539,4 +541,4 @@ def test_has_file_rule_gate_resolves_against_the_setup_tree(
     if with_dockerfile:
         (setup / "Dockerfile").write_text("FROM python:3.12\n", encoding="utf-8")
 
-    assert ("DOCKERFILE RULE BODY" in render_prompt(task, strict=True)) is with_dockerfile
+    assert ("DOCKERFILE RULE BODY" in render_prompt(sample, strict=True)) is with_dockerfile

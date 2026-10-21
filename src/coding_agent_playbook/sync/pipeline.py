@@ -261,7 +261,7 @@ def _passes_validation(ctx: SyncContext, validate: ValidateFn) -> bool:
     """Run the validate gate; on findings print them and the abort line to stderr.
 
     Any rendering of content ``playbook validate`` rejects — an unknown
-    ``applies_if`` fact, a broken eval-task reference, an invalid Agent Skill
+    ``applies_if`` fact, a broken eval-sample reference, an invalid Agent Skill
     — is refused before the first write (prK §P P8b, OQ-4). ``--check-staged``,
     the ``commit = false`` pre-commit hot path, comes here only with the
     ``rule()`` call check (D15).

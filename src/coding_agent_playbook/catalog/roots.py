@@ -1,6 +1,6 @@
 """Where the engine's catalog lives (stdlib-only leaf; imports nothing from the engine).
 
-The catalog is the engine's own content: its rules, prompts, eval tasks, hooks
+The catalog is the engine's own content: its rules, prompts, eval samples, hooks
 and bundled plugins, in one root with two homes:
 
 - installed wheel: ``<package>/_catalog`` (hatch force-includes ``catalog/``);

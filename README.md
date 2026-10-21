@@ -33,7 +33,7 @@ Multi-harness playbook engine
   pre-commit hooks run locally, so it works fully offline. Distribute via
   internal PyPI / git.
 - **Mistakes caught before they ship.** `playbook validate` cross-checks the
-  canonical source (prompt↔rule inclusion symmetry, eval-task back-references,
+  canonical source (prompt↔rule inclusion symmetry, eval-sample back-references,
   typo'd predicate keys), and a local lockfile records the engine version and
   content hash of every artifact it produced, so regenerations are reproducible
   (and, with `[output] commit = true`, reviewable in a diff).
@@ -47,7 +47,7 @@ Multi-harness playbook engine
   resolve inside the shipped bundle; external links pass only through the
   `[links] allowed_domains` allowlist (default: none). Deterministic — no
   network — and enforced on CI for the engine's own artifacts (SPEC §12.6).
-- **Quality is measurable.** Prompts can declare paired eval tasks (positive +
+- **Quality is measurable.** Prompts can declare paired eval samples (positive +
   false-positive guards), so prompt behavior is testable rather than vibes —
   authored as `[gate]` / `[rubric]` layers and run end-to-end with
   `playbook eval --run`.
@@ -154,7 +154,7 @@ and `cli/`'s `main` are the two exceptions).
    └ sync           the sync pipeline: plan, write, check modes, machine-local hook pins
     └ validation    the validation rule set and its findings (`playbook validate`, sync's gate)
      └ agent_harness | evals | precommit
-                    the Agent Harness tree round trip | eval tasks: load, compile, run | the pre-commit template
+                    the Agent Harness tree round trip | eval samples: load, compile, run | the pre-commit template
       └ adapters    one adapter per harness (base.py is the out-of-tree interface); claude_code/
        └ rendering  the Renderer: sandboxed Jinja, output formats, RenderSession
         └ hooks     the sync-time half of a hook: resolution/, contract/, registrations/, guard_config/
@@ -204,21 +204,21 @@ commands. Section 6 of `specs/prT-package-layout.md` designs each contract.
 
 Everything the playbook ships as content lives in `catalog/`, outside the
 Python package; `src/coding_agent_playbook/` is engine logic only. Writing a
-rule, prompt, eval task, skill or hook never means touching Python:
+rule, prompt, eval sample, skill or hook never means touching Python:
 
 - `catalog/core/` holds the engine's built-ins: `rules/`, `skills/`,
-  `prompts/`, `eval_tasks/` and the lifecycle `hooks/`, always on (a hook still
+  `prompts/`, `eval_samples/` and the lifecycle `hooks/`, always on (a hook still
   runs only where `[hooks]` turns it on, and a core skill is written only where
   one of its rules applies).
 - `catalog/plugins/<name>/` holds one **bundled plugin** per directory
   (today `superpowers` and `mattpocock_skills`), off until a consumer lists
   `coding_agent_playbook.plugins.<name>` in `overlays_enabled`. A new
   directory there is a new plugin, with no code change. A plugin may ship
-  any kind `core/` does, `eval_tasks/` included: its tasks use its own
+  any kind `core/` does, `eval_samples/` included: its samples use its own
   `prompts/` and are listed only where the plugin is enabled.
 
 `catalog/README.md` is the contributor guide: where each kind lives, how to
-add a rule, prompt, eval task, skill or bundled plugin, and the four commands
+add a rule, prompt, eval sample, skill or bundled plugin, and the four commands
 CI runs. There is still one wheel: the build copies `catalog/` into it, so
 `pip install coding-agent-playbook` ships everything. Build releases from the
 sdist (`uv build` or `python -m build`, never `--wheel`).
@@ -226,7 +226,7 @@ sdist (`uv build` or `python -m build`, never `--wheel`).
 ```mermaid
 flowchart LR
     subgraph catalog["catalog/ (playbook content, no Python)"]
-        core["core/: rules, skills, prompts, eval_tasks, hooks (always on)"]
+        core["core/: rules, skills, prompts, eval_samples, hooks (always on)"]
         plugins["plugins/: one directory per bundled plugin (opt-in)"]
     end
     subgraph src["src/coding_agent_playbook/ (engine logic)"]
@@ -398,7 +398,7 @@ Three layers compose, later overriding earlier **by artifact `id`** (SPEC §11):
    config.
 
 3. **Repo-local `playbook/`** — drop in per-repo rules, prompts, skills, or eval
-   tasks; anything here wins on `id` collision:
+   samples; anything here wins on `id` collision:
 
    ```text
    playbook/
@@ -406,7 +406,7 @@ Three layers compose, later overriding earlier **by artifact `id`** (SPEC §11):
    │                  # (a scoped rule names its skill with `skill:`)
    ├── prompts/
    ├── skills/        # <id>/SKILL.md (+ scripts/, references/)
-   └── eval_tasks/
+   └── eval_samples/
    ```
 
 Not every resource renders everywhere: the detector inspects the repo and each
@@ -796,7 +796,7 @@ their off-workstation twin.
 | `playbook-sync` | `post-checkout`, `post-merge` | Runs `playbook sync` to re-render the gitignored output. Default policy (`[output] commit = false`). |
 | `playbook-no-generated-output` | Every commit | Runs `playbook sync --check-staged`; fails the commit when generated output is staged. Default policy. |
 | `playbook-sync-check` | Every commit | **Legacy** (`[output] commit = true`): runs `playbook sync --check`; fails the commit on drift. |
-| `playbook-validate` | Manual only (`pre-commit run --hook-stage manual playbook-validate`) | Runs `playbook validate`; surfaces canonical-source mistakes (typo'd `applies_if` keys, orphan eval tasks, etc.). Overlay-author-facing. |
+| `playbook-validate` | Manual only (`pre-commit run --hook-stage manual playbook-validate`) | Runs `playbook validate`; surfaces canonical-source mistakes (typo'd `applies_if` keys, orphan eval samples, etc.). Overlay-author-facing. |
 | `playbook-metrics` | Every commit (Python files) | Runs `playbook metrics --baseline git:HEAD --no-run-tests`; fails the commit when staged Python worsens vs `HEAD`. **Static only**: `--no-run-tests` keeps your test suite out even when `[metrics] run_tests = true`. |
 | `playbook-coverage` | Manual only (`pre-commit run playbook-coverage --hook-stage manual`, or move it to `pre-push`) | **Runs your test suite** with coverage: changed lines must be at least 80% executed (`diff_coverage`) and total coverage must not drop below `HEAD`. Needs `pytest-cov` in your project. |
 | `playbook-secrets` | Every commit | Runs `playbook scan-secrets --staged`; fails when staged lines add a known token format (cloud, VCS, chat and LLM API keys, PEM private keys, JWTs, URLs with inline passwords) or a credential file (`.env*`, `*.pem`, …) is staged. Output is masked. The stdlib, air-gapped stand-in for gitleaks. |
@@ -898,8 +898,8 @@ API). Everywhere else, the hook's guidance reaches the assistant as text.
 | `validate-then-sync-on-canonical-edit` | `default` | Claude Code, OpenCode | Report `playbook validate` failures for an edited canonical source in-turn; sync only when `[hooks] auto_sync` allows. |
 | `resync-on-detector-input-change` | `default` | Claude Code, OpenCode | Name the rules and prompts a dependency, Dockerfile, CI or notebook change newly activates. |
 | `session-start-playbook-briefing` | `default` | Claude Code; checked on OpenCode | Prove the guards answer (one `PLAYBOOK-GUARDS: OK` heartbeat line) and report playbook anomalies at session start. |
-| `eval-task-authoring-lint` | `default` | Claude Code, OpenCode | Parse and trial-compile an edited eval task; never runs it. |
-| `guard-eval-fixtures` | `opt-in` | Claude Code, OpenCode | Ask before editing a committed eval task's frozen `setup/` fixtures. |
+| `eval-sample-authoring-lint` | `default` | Claude Code, OpenCode | Parse and trial-compile an edited eval sample; never runs it. |
+| `guard-eval-fixtures` | `opt-in` | Claude Code, OpenCode | Ask before editing a committed eval sample's frozen `setup/` fixtures. |
 
 #### Verify before done
 
@@ -1251,7 +1251,7 @@ jobs:
 
 ## Running evals
 
-`playbook eval` enumerates the prompt-to-task graph (`--list` / `--show`); with `--run` (v1.1) it **executes** a single task end-to-end against an agent and grades it:
+`playbook eval` enumerates the prompt-to-sample graph (`--list` / `--show`); with `--run` (v1.1) it **executes** a single sample end-to-end against an agent and grades it:
 
 ```bash
 playbook eval refactor-extract-helper --run --runner claude_code   # real: drive the Claude Code CLI
@@ -1262,6 +1262,6 @@ playbook eval refactor-extract-helper --run --full-scoring          # run every 
 playbook eval refactor-extract-helper --run --format json          # machine-readable report
 ```
 
-A task declares its success criteria as **layers** (SPEC §6.5.3): a deterministic `[gate]` (file + metric checks composed by a tiny boolean `expr`), an optional llm-judge `[rubric]` (weighted criteria), a `[verdict]` (a boolean expression over the two layers), and an optional cross-trial `[aggregate]` (`pass@k` / `pass^k`). They compile into one **rubric** of checks (the `Metric` / `Check` / `Rubric` model, SPEC §21): the `[gate]` layer — file predicates (`file_exists` / `file_contains` / `file_unchanged` / `file_forbidden`) and static/execution metric checks (0–1 normalized thresholds, non-regression vs the `setup/` baseline) — is scored **deterministically** into one report, rendered like `playbook metrics`, and the per-trial verdict is **derived** from the layer results. Two opt-in real runners ship — `claude_code` (the default, drives the `claude` CLI) and `opencode` (drives the `opencode` CLI) — both `available()`-gated on their binary and never exercised in CI; `--runner fake` is the hermetic driver for demos and CI. There is no `--run-tests` flag — a task runs the suite iff its `[gate]` references an execution metric (`coverage` / `test_pass_rate`). Exit `0` on a passing report, `1` on a failing one, `2` on a usage error (unknown task/runner/judge, or a real runner or judge whose CLI is not on `PATH`) or when the task cannot be scored at all (its prompt fails to render, or the judge gives no score after its retries). Judged scores are labelled uncalibrated (a note in the text report, `"uncalibrated_judge": true` in JSON). Judged `[rubric]` scoring (v1.1 R2) is **opt-in via `--judge`**: pick a judge from the `coding_agent_playbook.judges` group (the shipped `llm` shells out to the `claude` CLI, `available()`-gated), and `--samples N` averages N gradings per criterion. Omit `--judge` for a deterministic-only run (the rubric layer skips; a skipped layer is neutral in the verdict). A cost-tiered scheduler runs the cheap deterministic checks first and **short-circuits once the gate is lost** — so with the default `gate and rubric` verdict a failing file/metric check never spends an LLM call (a task whose verdict or aggregate a skipped layer could change, e.g. `gate or rubric`, is always scored in full); `--full-scoring` forces every check to run for a complete report.
+A sample declares its success criteria as **layers** (SPEC §6.5.3): a deterministic `[gate]` (file + metric checks composed by a tiny boolean `expr`), an optional llm-judge `[rubric]` (weighted criteria), a `[verdict]` (a boolean expression over the two layers), and an optional cross-trial `[aggregate]` (`pass@k` / `pass^k`). They compile into one **rubric** of checks (the `Metric` / `Check` / `Rubric` model, SPEC §21): the `[gate]` layer — file predicates (`file_exists` / `file_contains` / `file_unchanged` / `file_forbidden`) and static/execution metric checks (0–1 normalized thresholds, non-regression vs the `setup/` baseline) — is scored **deterministically** into one report, rendered like `playbook metrics`, and the per-trial verdict is **derived** from the layer results. Two opt-in real runners ship — `claude_code` (the default, drives the `claude` CLI) and `opencode` (drives the `opencode` CLI) — both `available()`-gated on their binary and never exercised in CI; `--runner fake` is the hermetic driver for demos and CI. There is no `--run-tests` flag — a sample runs the suite iff its `[gate]` references an execution metric (`coverage` / `test_pass_rate`). Exit `0` on a passing report, `1` on a failing one, `2` on a usage error (unknown sample/runner/judge, or a real runner or judge whose CLI is not on `PATH`) or when the sample cannot be scored at all (its prompt fails to render, or the judge gives no score after its retries). Judged scores are labelled uncalibrated (a note in the text report, `"uncalibrated_judge": true` in JSON). Judged `[rubric]` scoring (v1.1 R2) is **opt-in via `--judge`**: pick a judge from the `coding_agent_playbook.judges` group (the shipped `llm` shells out to the `claude` CLI, `available()`-gated), and `--samples N` averages N gradings per criterion. Omit `--judge` for a deterministic-only run (the rubric layer skips; a skipped layer is neutral in the verdict). A cost-tiered scheduler runs the cheap deterministic checks first and **short-circuits once the gate is lost** — so with the default `gate and rubric` verdict a failing file/metric check never spends an LLM call (a sample whose verdict or aggregate a skipped layer could change, e.g. `gate or rubric`, is always scored in full); `--full-scoring` forces every check to run for a complete report.
 
 A handle can also `{ref = "name"}` a **named gate or rubric** instead of inlining: in the `[gate]` layer it resolves a composed boolean gate registered via `@register_gate` (the `coding_agent_playbook.gates` group), in the `[rubric]` layer a code-defined `Rubric` subclass registered via `@register_rubric` (the `coding_agent_playbook.rubrics` group) — so several tasks share one gate/rubric by name. The engine ships no builtin gates or rubrics; both are third-party extension points.

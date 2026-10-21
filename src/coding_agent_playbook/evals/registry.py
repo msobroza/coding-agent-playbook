@@ -1,4 +1,4 @@
-"""The runner and judge lookups for an Eval task run (``playbook eval --run``, SPEC §15).
+"""The runner and judge lookups for an Eval sample run (``playbook eval --run``, SPEC §15).
 
 ``playbook eval --run`` selects its runner from the ``coding_agent_playbook.runners``
 entry-point group and its optional judge from ``coding_agent_playbook.judges``; the

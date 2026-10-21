@@ -1,7 +1,7 @@
 """Tests for the handle builder (Track C5).
 
 The handle builder turns a ``[<layer>.bind]`` TOML table into a ``name -> Check``
-map for the new task config. Each binding (and any nested child) is exactly one of
+map for the new sample config. Each binding (and any nested child) is exactly one of
 five mutually exclusive shapes:
 
 * a **boolean group** - ``all_of`` / ``any_of`` / ``not``;

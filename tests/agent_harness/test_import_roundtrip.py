@@ -114,7 +114,7 @@ def _make_prompt() -> Prompt:
             applies_if={},
             input_variables=[],
             includes_rules=["python-house-style"],
-            eval_tasks=[],
+            eval_samples=[],
         ),
         body=_PROMPT_BODY,
         template_body=_PROMPT_BODY,

@@ -1,7 +1,7 @@
 """Tests for ``playbook eval --list/--show`` and the bare ``<id>`` path (SPEC §12.8).
 
 The read-only Tier 0 surface. Without ``--run``, bare ``playbook eval <id>``
-exits 0 and prints how to run the task (``tests/cli/test_eval_run.py`` covers
+exits 0 and prints how to run the sample (``tests/cli/test_eval_run.py`` covers
 ``--run`` itself).
 """
 
@@ -34,17 +34,17 @@ def _ns(
 
 
 def _seed_eval_repo(repo: Path, make_synthetic_repo: Any) -> None:
-    """Build a synthetic repo with three prompts and three eval tasks.
+    """Build a synthetic repo with three prompts and three eval samples.
 
-    Prompt-task topology mirrors the SPEC §12.8 example:
+    Prompt-sample topology mirrors the SPEC §12.8 example:
 
-    - refactor               (1 task)  refactor-extract-helper
-    - generate-tests         (2 tasks) generate-tests-happy-path,
+    - refactor               (1 sample)  refactor-extract-helper
+    - generate-tests         (2 samples) generate-tests-happy-path,
                                        generate-tests-edge-cases
-    - local-only-no-tasks    (0 tasks) triggers "consider adding tasks"
+    - local-only-no-samples    (0 samples) triggers "consider adding samples"
 
-    The "no-tasks" prompt uses a non-colliding id so it remains genuinely
-    task-less even after PR 13's engine content (which ships tasks for the
+    The "no-samples" prompt uses a non-colliding id so it remains genuinely
+    sample-less even after PR 13's engine content (which ships samples for the
     ``review``/``refactor``/``generate-tests`` prompt ids) is layered in.
     """
     make_synthetic_repo(repo)
@@ -57,7 +57,7 @@ def _seed_eval_repo(repo: Path, make_synthetic_repo: Any) -> None:
         "name: Refactor\n"
         "description: Refactor an existing function\n"
         "slash: refactor\n"
-        "eval_tasks:\n"
+        "eval_samples:\n"
         "  - refactor-extract-helper\n"
         "---\n"
         "Refactor body.\n",
@@ -69,25 +69,25 @@ def _seed_eval_repo(repo: Path, make_synthetic_repo: Any) -> None:
         "name: Generate Tests\n"
         "description: Generate pytest tests for a function\n"
         "slash: generate-tests\n"
-        "eval_tasks:\n"
+        "eval_samples:\n"
         "  - generate-tests-happy-path\n"
         "  - generate-tests-edge-cases\n"
         "---\n"
         "Body.\n",
         encoding="utf-8",
     )
-    (prompts_dir / "local-only-no-tasks.md").write_text(
+    (prompts_dir / "local-only-no-samples.md").write_text(
         "---\n"
-        "id: local-only-no-tasks\n"
-        "name: Local Only No Tasks\n"
-        "description: A repo-local prompt deliberately shipped without any eval tasks\n"
-        "slash: local-only-no-tasks\n"
+        "id: local-only-no-samples\n"
+        "name: Local Only No Samples\n"
+        "description: A repo-local prompt deliberately shipped without any eval samples\n"
+        "slash: local-only-no-samples\n"
         "---\n"
         "Body.\n",
         encoding="utf-8",
     )
 
-    tasks_root = repo / "playbook" / "eval_tasks"
+    samples_root = repo / "playbook" / "eval_samples"
     rubric_happy = (
         "[rubric]\n"
         'expr = "quality"\n'
@@ -116,7 +116,7 @@ def _seed_eval_repo(repo: Path, make_synthetic_repo: Any) -> None:
         'quality = { fail = 0.5, rubric = [{ judge = "Helper has tests", weight = 1.0 }] }\n'
     )
 
-    for task_id, prompt_id, description, rubric_block in [
+    for sample_id, prompt_id, description, rubric_block in [
         (
             "refactor-extract-helper",
             "refactor",
@@ -136,11 +136,11 @@ def _seed_eval_repo(repo: Path, make_synthetic_repo: Any) -> None:
             rubric_edge,
         ),
     ]:
-        d = tasks_root / task_id
+        d = samples_root / sample_id
         d.mkdir(parents=True, exist_ok=True)
         (d / "setup").mkdir(exist_ok=True)
-        (d / "task.toml").write_text(
-            f'id = "{task_id}"\n'
+        (d / "sample.toml").write_text(
+            f'id = "{sample_id}"\n'
             f'prompt_id = "{prompt_id}"\n'
             f'description = "{description}"\n'
             "\n"
@@ -171,18 +171,18 @@ def test_eval_list_prints_tree(tmp_path, make_synthetic_repo, capsys):
     # Each prompt header appears.
     assert "generate-tests" in out
     assert "refactor" in out
-    assert "local-only-no-tasks" in out
+    assert "local-only-no-samples" in out
     # Tree markers from SPEC §12.8.
     assert "├──" in out or "└──" in out
-    # Every task name appears.
+    # Every sample name appears.
     assert "generate-tests-happy-path" in out
     assert "generate-tests-edge-cases" in out
     assert "refactor-extract-helper" in out
-    # Task-defined marker for prompts that have tasks.
-    assert "task defined" in out
-    # Warning for the task-less prompt — scope the assertion to that prompt's
-    # tree segment so engine-shipped prompts with tasks don't crowd it out.
-    local_only_idx = out.index("local-only-no-tasks")
+    # Sample-defined marker for prompts that have samples.
+    assert "sample defined" in out
+    # Warning for the sample-less prompt — scope the assertion to that prompt's
+    # tree segment so engine-shipped prompts with samples don't crowd it out.
+    local_only_idx = out.index("local-only-no-samples")
     # The synthetic prompt's tree segment runs from its header to the next
     # blank line (or the Total: footer); within that window the warning must
     # appear.
@@ -190,15 +190,15 @@ def test_eval_list_prints_tree(tmp_path, make_synthetic_repo, capsys):
     if segment_end == -1:
         segment_end = out.index("Total:")
     segment = out[local_only_idx:segment_end]
-    assert "consider adding tasks" in segment
-    # Per-task summary line shape.
+    assert "consider adding samples" in segment
+    # Per-sample summary line shape.
     assert "rubric criteria" in out
     assert "gate checks" in out
     # Final tally.
     assert "Total" in out
 
 
-def test_eval_list_groups_tasks_under_prompts(tmp_path, make_synthetic_repo, capsys):
+def test_eval_list_groups_samples_under_prompts(tmp_path, make_synthetic_repo, capsys):
     _seed_eval_repo(tmp_path, make_synthetic_repo)
     _eval.run(_ns(tmp_path, list_=True))
     out = capsys.readouterr().out
@@ -222,32 +222,32 @@ def test_plural_helper_uses_singular_for_n_equals_one():
     assert _plural(0, "prompt") == "0 prompts"
     assert _plural(1, "prompt") == "1 prompt"
     assert _plural(2, "prompt") == "2 prompts"
-    assert _plural(1, "eval task") == "1 eval task"
-    assert _plural(3, "eval task") == "3 eval tasks"
+    assert _plural(1, "eval sample") == "1 eval sample"
+    assert _plural(3, "eval sample") == "3 eval samples"
 
 
-def test_eval_list_total_pluralizes_prompts_without_tasks_correctly(
+def test_eval_list_total_pluralizes_prompts_without_samples_correctly(
     tmp_path, make_synthetic_repo, capsys
 ):
-    """The ``prompts without tasks`` suffix has to be pluralised separately
+    """The ``prompts without samples`` suffix has to be pluralised separately
     because the head noun isn't at the tail of the phrase (naively appending
     ``s`` would emit ``prompt without taskss``).
 
-    Singular case: seed a repo with exactly one task-less repo-local prompt.
-    The Total: line must read ``1 prompt without tasks``, never ``1 prompts
-    without tasks``. The other Total: counts include the engine's prompts and
-    tasks so we only pin the suffix here.
+    Singular case: seed a repo with exactly one sample-less repo-local prompt.
+    The Total: line must read ``1 prompt without samples``, never ``1 prompts
+    without samples``. The other Total: counts include the engine's prompts and
+    samples so we only pin the suffix here.
     """
     make_synthetic_repo(tmp_path)
     prompts_dir = tmp_path / "playbook" / "prompts"
     prompts_dir.mkdir(parents=True, exist_ok=True)
-    # Non-colliding id so the engine doesn't ship tasks for it.
-    (prompts_dir / "lone-no-tasks.md").write_text(
+    # Non-colliding id so the engine doesn't ship samples for it.
+    (prompts_dir / "lone-no-samples.md").write_text(
         "---\n"
-        "id: lone-no-tasks\n"
-        "name: Lone No Tasks\n"
-        "description: A prompt with deliberately zero eval tasks\n"
-        "slash: lone-no-tasks\n"
+        "id: lone-no-samples\n"
+        "name: Lone No Samples\n"
+        "description: A prompt with deliberately zero eval samples\n"
+        "slash: lone-no-samples\n"
         "---\n"
         "Body.\n",
         encoding="utf-8",
@@ -255,17 +255,17 @@ def test_eval_list_total_pluralizes_prompts_without_tasks_correctly(
 
     _eval.run(_ns(tmp_path, list_=True))
     out = capsys.readouterr().out
-    assert "1 prompt without tasks" in out
+    assert "1 prompt without samples" in out
     # Negative assertion for the buggy plural-only form.
-    assert "1 prompts without tasks" not in out
+    assert "1 prompts without samples" not in out
 
 
-def test_eval_show_existing_task_prints_details(tmp_path, make_synthetic_repo, capsys):
+def test_eval_show_existing_sample_prints_details(tmp_path, make_synthetic_repo, capsys):
     _seed_eval_repo(tmp_path, make_synthetic_repo)
     rc = _eval.run(_ns(tmp_path, show="generate-tests-happy-path"))
     assert rc == 0
     out = capsys.readouterr().out
-    assert "Task: generate-tests-happy-path" in out
+    assert "Sample: generate-tests-happy-path" in out
     assert "Source:" in out
     assert "Prompt under test: generate-tests" in out
     assert "Description:" in out
@@ -285,7 +285,7 @@ def test_show_uses_prompt_slash_not_id_when_they_differ(tmp_path, make_synthetic
     canonical Prompt schema), ``playbook eval --show`` must print the slash in the
     ``Prompt: /...`` line, not the id.
 
-    Regression: PR 11 originally used ``task.prompt_id`` as the slash because
+    Regression: PR 11 originally used ``sample.prompt_id`` as the slash because
     the show-printer didn't have the prompt registry. That broke for any
     prompt whose slash deliberately differed from its id.
     """
@@ -299,15 +299,15 @@ def test_show_uses_prompt_slash_not_id_when_they_differ(tmp_path, make_synthetic
         "name: Generate Tests\n"
         "description: Generate pytest tests\n"
         "slash: gen-tests\n"
-        "eval_tasks:\n"
+        "eval_samples:\n"
         "  - generate-tests-happy-path\n"
         "---\n"
         "Body.\n",
         encoding="utf-8",
     )
-    task_dir = tmp_path / "playbook" / "eval_tasks" / "generate-tests-happy-path"
-    task_dir.mkdir(parents=True, exist_ok=True)
-    (task_dir / "task.toml").write_text(
+    sample_dir = tmp_path / "playbook" / "eval_samples" / "generate-tests-happy-path"
+    sample_dir.mkdir(parents=True, exist_ok=True)
+    (sample_dir / "sample.toml").write_text(
         'id = "generate-tests-happy-path"\n'
         'prompt_id = "generate-tests"\n'
         'description = "Tests for a simple function"\n'
@@ -327,126 +327,130 @@ def test_show_uses_prompt_slash_not_id_when_they_differ(tmp_path, make_synthetic
     assert "Prompt: /generate-tests" not in out
 
 
-def test_display_source_path_uses_package_prefix_for_engine_tasks(tmp_path):
-    """A bundled layer's task is labelled ``<package>/eval_tasks/<dir>/``.
+def test_display_source_path_uses_package_prefix_for_engine_samples(tmp_path):
+    """A bundled layer's sample is labelled ``<package>/eval_samples/<dir>/``.
 
-    The label comes from the layer, not from the path: even a bundled task whose
-    path holds ``resources/eval_tasks/`` gets no ``resources/`` in its label."""
+    The label comes from the layer, not from the path: even a bundled sample whose
+    path holds ``resources/eval_samples/`` gets no ``resources/`` in its label."""
     from coding_agent_playbook.commands._eval_enumerate import _display_source_path
-    from coding_agent_playbook.evals.task import EvalTask
+    from coding_agent_playbook.evals.sample import EvalSample
 
-    # Synthesize an engine task under the pre-v0.19 layout
-    # (<package>/resources/eval_tasks/<id>/task.toml), so only the layer can
+    # Synthesize an engine sample under the pre-v0.19 layout
+    # (<package>/resources/eval_samples/<id>/sample.toml), so only the layer can
     # explain a label without ``resources/``.
-    task_dir = tmp_path / "coding_agent_playbook" / "resources" / "eval_tasks" / "task-a"
-    task_dir.mkdir(parents=True)
-    task = EvalTask(
-        id="task-a",
+    sample_dir = tmp_path / "coding_agent_playbook" / "resources" / "eval_samples" / "sample-a"
+    sample_dir.mkdir(parents=True)
+    sample = EvalSample(
+        id="sample-a",
         prompt_id="some-prompt",
         description="desc",
-        source_path=task_dir / "task.toml",
+        source_path=sample_dir / "sample.toml",
         source_package="coding_agent_playbook",
     )
-    assert _display_source_path(task) == "coding_agent_playbook/eval_tasks/task-a/"
+    assert _display_source_path(sample) == "coding_agent_playbook/eval_samples/sample-a/"
 
 
-def test_display_source_path_uses_package_prefix_for_overlay_tasks(tmp_path):
+def test_display_source_path_uses_package_prefix_for_overlay_samples(tmp_path):
     """A third-party overlay keeps its real package-relative path,
-    ``<package>/resources/eval_tasks/<dir>/``."""
+    ``<package>/resources/eval_samples/<dir>/``."""
     from coding_agent_playbook.commands._eval_enumerate import _display_source_path
-    from coding_agent_playbook.evals.task import EvalTask
+    from coding_agent_playbook.evals.sample import EvalSample
 
-    task_dir = tmp_path / "playbook_rules_bnp" / "resources" / "eval_tasks" / "pii-scan"
-    task_dir.mkdir(parents=True)
-    task = EvalTask(
+    sample_dir = tmp_path / "playbook_rules_bnp" / "resources" / "eval_samples" / "pii-scan"
+    sample_dir.mkdir(parents=True)
+    sample = EvalSample(
         id="pii-scan",
         prompt_id="pii-scan",
         description="d",
-        source_path=task_dir / "task.toml",
+        source_path=sample_dir / "sample.toml",
         source_package="playbook_rules_bnp",
     )
-    assert _display_source_path(task) == "playbook_rules_bnp/resources/eval_tasks/pii-scan/"
+    assert _display_source_path(sample) == "playbook_rules_bnp/resources/eval_samples/pii-scan/"
 
 
 @pytest.mark.parametrize(
-    ("source_package", "task_dir_parts", "expected"),
+    ("source_package", "sample_dir_parts", "expected"),
     [
         (
             "coding_agent_playbook.plugins.x",
-            ("catalog", "plugins", "x", "eval_tasks", "t"),
-            "coding_agent_playbook.plugins.x/eval_tasks/t/",
+            ("catalog", "plugins", "x", "eval_samples", "t"),
+            "coding_agent_playbook.plugins.x/eval_samples/t/",
         ),
-        ("some_overlay", ("weird_root", "task-x"), "some_overlay/resources/eval_tasks/task-x/"),
-        ("<repo-local>", ("no_playbook_dir", "task-y"), "playbook/eval_tasks/task-y/"),
+        (
+            "some_overlay",
+            ("weird_root", "sample-x"),
+            "some_overlay/resources/eval_samples/sample-x/",
+        ),
+        ("<repo-local>", ("no_playbook_dir", "sample-y"), "playbook/eval_samples/sample-y/"),
     ],
     ids=["bundled-plugin", "overlay-odd-layout", "repo-local-odd-layout"],
 )
 def test_display_source_path_depends_only_on_layer_and_dir(
-    tmp_path: Path, source_package: str, task_dir_parts: tuple[str, ...], expected: str
+    tmp_path: Path, source_package: str, sample_dir_parts: tuple[str, ...], expected: str
 ) -> None:
-    """The label is built from the layer kind and the task dir's name alone.
+    """The label is built from the layer kind and the sample dir's name alone.
 
     No segment of the path is searched for, so an unusual parent layout
     (no ``resources/``, no ``playbook/``) still yields the canonical label."""
     from coding_agent_playbook.commands._eval_enumerate import _display_source_path
-    from coding_agent_playbook.evals.task import EvalTask
+    from coding_agent_playbook.evals.sample import EvalSample
 
-    task_dir = tmp_path.joinpath(*task_dir_parts)
-    task = EvalTask(
-        id=task_dir.name,
+    sample_dir = tmp_path.joinpath(*sample_dir_parts)
+    sample = EvalSample(
+        id=sample_dir.name,
         prompt_id="p",
         description="d",
-        source_path=task_dir / "task.toml",
+        source_path=sample_dir / "sample.toml",
         source_package=source_package,
     )
-    assert _display_source_path(task) == expected
+    assert _display_source_path(sample) == expected
 
 
 @pytest.mark.parametrize(
     ("source_package", "expected"),
     [
-        ("coding_agent_playbook", "coding_agent_playbook/eval_tasks/task-dir/"),
-        ("some_overlay", "some_overlay/resources/eval_tasks/task-dir/"),
-        ("<repo-local>", "playbook/eval_tasks/task-dir/"),
+        ("coding_agent_playbook", "coding_agent_playbook/eval_samples/sample-dir/"),
+        ("some_overlay", "some_overlay/resources/eval_samples/sample-dir/"),
+        ("<repo-local>", "playbook/eval_samples/sample-dir/"),
     ],
     ids=["bundled", "overlay", "repo-local"],
 )
-def test_display_source_path_uses_directory_not_task_id(
+def test_display_source_path_uses_directory_not_sample_id(
     tmp_path: Path, source_package: str, expected: str
 ) -> None:
-    """``<dir>`` is the task directory's name; nothing ties ``task.id`` to it."""
+    """``<dir>`` is the sample directory's name; nothing ties ``sample.id`` to it."""
     from coding_agent_playbook.commands._eval_enumerate import _display_source_path
-    from coding_agent_playbook.evals.task import EvalTask
+    from coding_agent_playbook.evals.sample import EvalSample
 
-    task_dir = tmp_path / "eval_tasks" / "task-dir"
-    task = EvalTask(
+    sample_dir = tmp_path / "eval_samples" / "sample-dir"
+    sample = EvalSample(
         id="declared-id",
         prompt_id="p",
         description="d",
-        source_path=task_dir / "task.toml",
+        source_path=sample_dir / "sample.toml",
         source_package=source_package,
     )
-    assert _display_source_path(task) == expected
+    assert _display_source_path(sample) == expected
 
 
-def test_show_source_path_is_repo_relative_for_repo_local_tasks(
+def test_show_source_path_is_repo_relative_for_repo_local_samples(
     tmp_path, make_synthetic_repo, capsys
 ):
-    """``playbook eval --show``'s ``Source:`` line for a repo-local task must start
-    at ``playbook/eval_tasks/...``, not an absolute filesystem path.
+    """``playbook eval --show``'s ``Source:`` line for a repo-local sample must start
+    at ``playbook/eval_samples/...``, not an absolute filesystem path.
 
     SPEC §12.8 example uses package-relative paths
-    (``coding_agent_playbook/eval_tasks/.../``); the repo-local
+    (``coding_agent_playbook/eval_samples/.../``); the repo-local
     analogue should anchor at ``playbook/`` so the output is reproducible
     across user machines (no leak of ``$HOME``/scratch-dir layouts).
 
-    Uses a non-colliding task id so the engine's PR 13 tasks (which include
+    Uses a non-colliding sample id so the engine's PR 13 samples (which include
     ``generate-tests-happy-path``) don't shadow the repo-local copy in the
     by-id lookup.
     """
     make_synthetic_repo(tmp_path)
-    # Author a prompt + task with non-colliding ids so the engine's PR 13
-    # eval tasks don't shadow the repo-local copy.
+    # Author a prompt + sample with non-colliding ids so the engine's PR 13
+    # eval samples don't shadow the repo-local copy.
     prompts_dir = tmp_path / "playbook" / "prompts"
     prompts_dir.mkdir(parents=True, exist_ok=True)
     (prompts_dir / "local-only.md").write_text(
@@ -455,18 +459,18 @@ def test_show_source_path_is_repo_relative_for_repo_local_tasks(
         "name: Local Only\n"
         "description: A repo-local-only prompt for path-display assertions\n"
         "slash: local-only\n"
-        "eval_tasks:\n"
+        "eval_samples:\n"
         "  - local-only-unique-zzz\n"
         "---\n"
         "Body.\n",
         encoding="utf-8",
     )
-    task_dir = tmp_path / "playbook" / "eval_tasks" / "local-only-unique-zzz"
-    task_dir.mkdir(parents=True, exist_ok=True)
-    (task_dir / "task.toml").write_text(
+    sample_dir = tmp_path / "playbook" / "eval_samples" / "local-only-unique-zzz"
+    sample_dir.mkdir(parents=True, exist_ok=True)
+    (sample_dir / "sample.toml").write_text(
         'id = "local-only-unique-zzz"\n'
         'prompt_id = "local-only"\n'
-        'description = "Repo-local task that doesn\'t collide with engine ids"\n'
+        'description = "Repo-local sample that doesn\'t collide with engine ids"\n'
         "[setup]\n"
         "files = []\n"
         'project_kind = "python-application"\n'
@@ -479,22 +483,22 @@ def test_show_source_path_is_repo_relative_for_repo_local_tasks(
     out = capsys.readouterr().out
     # The Source: line must read the repo-relative form, not the absolute
     # path under tmp_path.
-    assert "Source: playbook/eval_tasks/local-only-unique-zzz/" in out
+    assert "Source: playbook/eval_samples/local-only-unique-zzz/" in out
     assert str(tmp_path) not in out
 
 
 def test_show_falls_back_to_prompt_id_when_prompt_missing(tmp_path, make_synthetic_repo, capsys):
-    """If a task references a prompt that isn't loaded (mid-authoring state),
+    """If a sample references a prompt that isn't loaded (mid-authoring state),
     ``playbook eval --show`` falls back to printing the ``prompt_id`` as the slash
     so the output is still useful."""
     make_synthetic_repo(tmp_path)
-    # No prompt file at all — only the task.
-    task_dir = tmp_path / "playbook" / "eval_tasks" / "orphan-task"
-    task_dir.mkdir(parents=True, exist_ok=True)
-    (task_dir / "task.toml").write_text(
-        'id = "orphan-task"\n'
+    # No prompt file at all — only the sample.
+    sample_dir = tmp_path / "playbook" / "eval_samples" / "orphan-sample"
+    sample_dir.mkdir(parents=True, exist_ok=True)
+    (sample_dir / "sample.toml").write_text(
+        'id = "orphan-sample"\n'
         'prompt_id = "missing-prompt"\n'
-        'description = "Task without a prompt"\n'
+        'description = "Sample without a prompt"\n'
         "[setup]\n"
         "files = []\n"
         'project_kind = "python-application"\n'
@@ -503,7 +507,7 @@ def test_show_falls_back_to_prompt_id_when_prompt_missing(tmp_path, make_synthet
         encoding="utf-8",
     )
 
-    rc = _eval.run(_ns(tmp_path, show="orphan-task"))
+    rc = _eval.run(_ns(tmp_path, show="orphan-sample"))
     assert rc == 0
     out = capsys.readouterr().out
     assert "Prompt: /missing-prompt" in out
@@ -516,11 +520,11 @@ def test_eval_show_unknown_id_exits_nonzero(tmp_path, make_synthetic_repo, capsy
     err = capsys.readouterr()
     combined = err.out + err.err
     assert "does-not-exist" in combined
-    assert "no eval task" in combined.lower()
+    assert "no eval sample" in combined.lower()
 
 
-def test_eval_bare_id_known_task_exits_zero_with_run_hint(tmp_path, make_synthetic_repo, capsys):
-    """Without ``--run`` a known task prints how to run it (the runner is live)."""
+def test_eval_bare_id_known_sample_exits_zero_with_run_hint(tmp_path, make_synthetic_repo, capsys):
+    """Without ``--run`` a known sample prints how to run it (the runner is live)."""
     _seed_eval_repo(tmp_path, make_synthetic_repo)
     rc = _eval.run(_ns(tmp_path, id_="generate-tests-happy-path"))
     assert rc == 0
@@ -530,13 +534,13 @@ def test_eval_bare_id_known_task_exits_zero_with_run_hint(tmp_path, make_synthet
     assert "--judge llm" in out
 
 
-def test_eval_bare_id_unknown_task_exits_nonzero(tmp_path, make_synthetic_repo, capsys):
+def test_eval_bare_id_unknown_sample_exits_nonzero(tmp_path, make_synthetic_repo, capsys):
     _seed_eval_repo(tmp_path, make_synthetic_repo)
-    rc = _eval.run(_ns(tmp_path, id_="ghost-task"))
+    rc = _eval.run(_ns(tmp_path, id_="ghost-sample"))
     assert rc == 1
     err = capsys.readouterr()
     combined = err.out + err.err
-    assert "ghost-task" in combined
+    assert "ghost-sample" in combined
 
 
 def test_eval_no_args_defaults_to_list(tmp_path, make_synthetic_repo, capsys):
@@ -544,29 +548,29 @@ def test_eval_no_args_defaults_to_list(tmp_path, make_synthetic_repo, capsys):
     rc = _eval.run(_ns(tmp_path))
     assert rc == 0
     out = capsys.readouterr().out
-    assert "Eval tasks" in out or "generate-tests" in out
+    assert "Eval samples" in out or "generate-tests" in out
 
 
 def test_eval_list_handles_repo_with_no_local_artifacts(tmp_path, make_synthetic_repo, capsys):
-    """``playbook eval --list`` on a fresh repo with no repo-local prompts or tasks
+    """``playbook eval --list`` on a fresh repo with no repo-local prompts or samples
     must:
 
-    - still print the SPEC §12.8 header ``=== Eval tasks ===``
-    - print a ``Total: ... prompts, ... eval tasks, ... prompts without
-      tasks`` summary (with the engine-shipped totals — PR 13 ships 4
-      prompts and 8 eval tasks)
+    - still print the SPEC §12.8 header ``=== Eval samples ===``
+    - print a ``Total: ... prompts, ... eval samples, ... prompts without
+      samples`` summary (with the engine-shipped totals — PR 13 ships 4
+      prompts and 8 eval samples)
     - exit 0 (no error — a repo with no local artifacts is a legitimate
       state; engine content is still listed)
-    - not emit any repo-local prompts/tasks since none were authored
+    - not emit any repo-local prompts/samples since none were authored
     """
-    # Bare synthetic repo: pyproject + config, no repo-local prompts or tasks.
+    # Bare synthetic repo: pyproject + config, no repo-local prompts or samples.
     make_synthetic_repo(tmp_path)
     rc = _eval.run(_ns(tmp_path, list_=True))
     assert rc == 0
     out = capsys.readouterr().out
-    assert "=== Eval tasks ===" in out
+    assert "=== Eval samples ===" in out
     # Total: line present — exact counts come from the engine.
     assert "Total:" in out
-    assert "eval task" in out
-    # No repo-local prompts or tasks since the synthetic repo authored none.
+    assert "eval sample" in out
+    # No repo-local prompts or samples since the synthetic repo authored none.
     assert "(repo-local)" not in out

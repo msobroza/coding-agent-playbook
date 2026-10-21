@@ -441,7 +441,7 @@ def _effective_config(request: MetricsGateRequest) -> tuple[MetricConfig, str | 
 def build_rubric(metrics: Sequence[Metric], config: MetricConfig) -> Rubric:
     """One metric-backed :class:`Check` per metric, in order, as the gate's :class:`Rubric`.
 
-    Each check comes from the shared ``metric_check`` factory (the eval-task
+    Each check comes from the shared ``metric_check`` factory (the eval-sample
     compiler uses the same one): ``config``'s per-metric override when present,
     else the metric's ported default. Unknown metric names get no check.
 

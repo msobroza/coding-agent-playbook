@@ -22,26 +22,26 @@ from coding_agent_playbook.evals.prompting import PromptResolutionError, render_
 from coding_agent_playbook.evals.run.fake_runner import write_files
 from coding_agent_playbook.evals.run.harness_runner import AgentRun, materialize
 from coding_agent_playbook.evals.run.opencode_runner import OpenCodeRunner
-from coding_agent_playbook.evals.task import EvalTask, TaskInvocation
+from coding_agent_playbook.evals.sample import EvalSample, SampleInvocation
 
 if TYPE_CHECKING:
     from pathlib import Path
 
 
-def _make_setup(task_dir: Path) -> None:
-    setup = task_dir / "setup"
+def _make_setup(sample_dir: Path) -> None:
+    setup = sample_dir / "setup"
     setup.mkdir(parents=True, exist_ok=True)
     (setup / "mod.py").write_text("x = 1\n", encoding="utf-8")
 
 
-def _make_task(task_dir: Path, *, prompt_id: str = "refactor") -> EvalTask:
-    return EvalTask(
+def _make_sample(sample_dir: Path, *, prompt_id: str = "refactor") -> EvalSample:
+    return EvalSample(
         id="t-fixture",
         prompt_id=prompt_id,
-        description="fixture task",
-        source_path=task_dir / "task.toml",
+        description="fixture sample",
+        source_path=sample_dir / "sample.toml",
         source_package="<test>",
-        invocation=TaskInvocation(prompt_args="do the thing"),
+        invocation=SampleInvocation(prompt_args="do the thing"),
     )
 
 
@@ -193,23 +193,23 @@ def test_runner_requires_resolved_prompt_flag() -> None:
 
 
 def test_render_prompt_strict_raises_on_unresolvable(tmp_path: Path) -> None:
-    task_dir = tmp_path / "task"
-    _make_setup(task_dir)
-    task = _make_task(task_dir, prompt_id="nonexistent")
+    sample_dir = tmp_path / "sample"
+    _make_setup(sample_dir)
+    sample = _make_sample(sample_dir, prompt_id="nonexistent")
     with pytest.raises(PromptResolutionError):
-        render_prompt(task, strict=True)
+        render_prompt(sample, strict=True)
 
 
-def test_run_task_raises_rather_than_feeding_placeholder(tmp_path: Path) -> None:
-    """``OpenCodeRunner.run_task`` on an unresolvable prompt raises (no placeholder)."""
-    task_dir = tmp_path / "task"
-    _make_setup(task_dir)
-    task = _make_task(task_dir, prompt_id="nonexistent")
+def test_run_sample_raises_rather_than_feeding_placeholder(tmp_path: Path) -> None:
+    """``OpenCodeRunner.run_sample`` on an unresolvable prompt raises (no placeholder)."""
+    sample_dir = tmp_path / "sample"
+    _make_setup(sample_dir)
+    sample = _make_sample(sample_dir, prompt_id="nonexistent")
     # Use a harmless fake command so we never reach the real CLI even if the raise
     # regressed; the strict prompt resolution must fail first.
     runner = OpenCodeRunner(command=[sys.executable, "-c", ""])
     with pytest.raises(PromptResolutionError):
-        runner.run_task(task, tmp_path / "scratch")
+        runner.run_sample(sample, tmp_path / "scratch")
 
 
 # --------------------------------------------------------------------------- #
@@ -236,18 +236,18 @@ def test_opencode_runner_is_registered_via_entry_point() -> None:
     reason="real opencode CLI smoke test: needs the CLI on PATH and PLAYBOOK_E2E_OPENCODE=1",
 )
 def test_real_opencode_smoke(tmp_path: Path) -> None:  # pragma: no cover - opt-in only
-    task_dir = tmp_path / "task"
-    _make_setup(task_dir)
-    task = EvalTask(
+    sample_dir = tmp_path / "sample"
+    _make_setup(sample_dir)
+    sample = EvalSample(
         id="smoke",
         prompt_id="refactor",
         description="d",
-        source_path=task_dir / "task.toml",
+        source_path=sample_dir / "sample.toml",
         source_package="<test>",
-        invocation=TaskInvocation(prompt_args="create a file named DONE.txt"),
+        invocation=SampleInvocation(prompt_args="create a file named DONE.txt"),
     )
     # Drive a real run; we only assert it produced a transcript without crashing.
-    baseline = materialize(task, tmp_path / "scratch")
+    baseline = materialize(sample, tmp_path / "scratch")
     write_files({})(baseline.repo_root)  # no-op; keep import used
     runner = OpenCodeRunner()
     run = runner._invoke_agent("create a file named DONE.txt", baseline.repo_root)

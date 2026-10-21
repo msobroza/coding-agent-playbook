@@ -23,7 +23,7 @@ from coding_agent_playbook.evals.checks.aggregate import (
     PassPowK,
 )
 from coding_agent_playbook.evals.compile._handles import build_handles
-from coding_agent_playbook.evals.compile.compiler import compile_task
+from coding_agent_playbook.evals.compile.compiler import compile_sample
 from coding_agent_playbook.grading.check import MeasurementSet
 from coding_agent_playbook.grading.check_registry import get_check
 from coding_agent_playbook.grading.compose import AllOf
@@ -315,7 +315,7 @@ def test_check_with_metric_kwarg_is_still_a_check_shape() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# compile_task: aggregate layer + trials_needed
+# compile_sample: aggregate layer + trials_needed
 # --------------------------------------------------------------------------- #
 
 _GATE_BIND = {"build": {"check": "file_exists", "path": "x.py"}}
@@ -326,7 +326,7 @@ def test_compile_aggregate_composed_with_and() -> None:
         "reliable": {"metric": "pass_at_k", "k": 5, "over": "verdict", "fail": 0.9},
         "consistent": {"metric": "pass_pow_k", "k": 3, "over": "verdict", "fail": 0.5},
     }
-    compiled = compile_task(
+    compiled = compile_sample(
         gate_bind=_GATE_BIND,
         gate_expr="build",
         verdict_trial="gate",
@@ -339,7 +339,7 @@ def test_compile_aggregate_composed_with_and() -> None:
 
 def test_compile_single_aggregate_handle_defaults_expr() -> None:
     aggregate_bind = {"rel": {"metric": "pass_at_k", "k": 4, "over": "gate", "fail": 0.8}}
-    compiled = compile_task(
+    compiled = compile_sample(
         gate_bind=_GATE_BIND,
         gate_expr="build",
         verdict_trial="gate",
@@ -350,7 +350,7 @@ def test_compile_single_aggregate_handle_defaults_expr() -> None:
 
 
 def test_compile_no_aggregate_is_degenerate() -> None:
-    compiled = compile_task(gate_bind=_GATE_BIND, gate_expr="build", verdict_trial="gate")
+    compiled = compile_sample(gate_bind=_GATE_BIND, gate_expr="build", verdict_trial="gate")
     assert compiled.aggregate is None
     assert compiled.trials_needed == 1
 
@@ -361,7 +361,7 @@ def test_compile_multi_aggregate_handle_no_expr_raises() -> None:
         "b": {"metric": "pass_pow_k", "k": 2, "over": "verdict", "fail": 0.5},
     }
     with pytest.raises(ValueError, match="compose"):
-        compile_task(
+        compile_sample(
             gate_bind=_GATE_BIND,
             gate_expr="build",
             verdict_trial="gate",
@@ -395,14 +395,14 @@ def _agg_bind(**handles: tuple[str, int]) -> dict[str, dict[str, object]]:
     ],
 )
 def test_short_circuit_is_safe_only_for_a_full_conjunction(verdict: str, safe: bool) -> None:
-    compiled = compile_task(
+    compiled = compile_sample(
         gate_bind=_SC_GATE_BIND, rubric_bind=_SC_RUBRIC_BIND, verdict_trial=verdict
     )
     assert compiled.short_circuit_safe is safe
 
 
 def test_weighted_verdict_is_not_short_circuit_safe() -> None:
-    compiled = compile_task(
+    compiled = compile_sample(
         gate_bind=_SC_GATE_BIND,
         rubric_bind=_SC_RUBRIC_BIND,
         verdict_weights={"gate": 0.5, "rubric": 0.5},
@@ -419,7 +419,7 @@ def test_aggregate_breaks_short_circuit_safety_only_over_a_skippable_layer(
     over: str, safe: bool
 ) -> None:
     """The judged rubric sits behind the deterministic gate, so only it is skippable."""
-    compiled = compile_task(
+    compiled = compile_sample(
         gate_bind=_SC_GATE_BIND,
         rubric_bind=_SC_RUBRIC_BIND,
         aggregate_bind=_agg_bind(a=(over, 2)),
@@ -429,7 +429,7 @@ def test_aggregate_breaks_short_circuit_safety_only_over_a_skippable_layer(
 
 
 def test_composed_aggregate_collects_every_over_axis() -> None:
-    compiled = compile_task(
+    compiled = compile_sample(
         gate_bind=_SC_GATE_BIND,
         rubric_bind=_SC_RUBRIC_BIND,
         aggregate_bind=_agg_bind(a=("verdict", 3), b=("rubric", 2)),

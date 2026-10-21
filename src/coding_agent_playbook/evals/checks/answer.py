@@ -2,12 +2,12 @@
 
 The file checks in :mod:`coding_agent_playbook.evals.checks.files` gate on
 what the agent *did* (the candidate tree). This one gates on the graded
-**artifact** (:attr:`EvalContext.artifact`), which for a review-only task is the
-agent's answer: such a task forbids edits (a ``file_unchanged`` gate), so it
+**artifact** (:attr:`EvalContext.artifact`), which for a review-only sample is the
+agent's answer: such a sample forbids edits (a ``file_unchanged`` gate), so it
 produces no diff and the file predicates alone can only prove the agent stayed
 its hand — never that it reached the right conclusion.
 
-Its purpose is a cheap, token-free *class* gate in front of the LLM judge: a task
+Its purpose is a cheap, token-free *class* gate in front of the LLM judge: a sample
 whose answer must land in a known category (a CWE class, a required verdict word)
 declares one regex, and the cost-tiered scheduler's short-circuit
 (:mod:`coding_agent_playbook.grading.scheduler`, ``fail_fast=True`` — the
@@ -22,7 +22,7 @@ Two deliberate design points:
   skipped check is neutral in the layer expression, which would let a silent
   agent through the gate it was meant to lose.
 * **The regex compiles at construction.** A malformed pattern is an authoring
-  error in ``task.toml``, so it raises while the task is being compiled (and
+  error in ``sample.toml``, so it raises while the sample is being compiled (and
   hence during ``playbook validate``) instead of midway through a scored run.
 """
 
@@ -82,7 +82,7 @@ class AnswerMatchesCheck(Check):
 
         ``measurements`` is ignored — like the file checks this one reads the
         context directly. ``ctx.artifact`` is typed ``Any`` (the scoring bridge
-        sets the candidate's diff or, for a review task, its transcript), so it is
+        sets the candidate's diff or, for a review sample, its transcript), so it is
         stringified; ``None`` becomes ``""`` and therefore cannot match.
         """
         ok = self._regex.search(_as_text(ctx.artifact)) is not None

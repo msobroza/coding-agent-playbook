@@ -39,7 +39,7 @@ includes_rules:
   - python-typing
   - pytest
 ---
-# Task: generate tests
+# Sample: generate tests
 
 Body.
 """
@@ -115,7 +115,7 @@ def test_split_frontmatter_rejects_fence_with_trailing_space():
     """A '---' line with trailing whitespace is not a valid fence under the
     column-0 rstrip("\\r\\n") check; document this intentional strictness so
     nobody "fixes" it back to .strip() thinking they're being more lenient
-    (Task 1 code-review follow-up)."""
+    (Sample 1 code-review follow-up)."""
     with pytest.raises(ValueError, match="unterminated"):
         split_frontmatter("---\nid: x\n---  \nbody\n")
 
@@ -265,10 +265,10 @@ def test_prompt_dict_roundtrip():
             description="Generate pytest tests",
             slash="generate-tests",
             includes_rules=["python-typing", "pytest"],
-            eval_tasks=["generate-tests-happy-path"],
+            eval_samples=["generate-tests-happy-path"],
         ),
-        body="# Task\n",
-        template_body="# Task\n",
+        body="# Sample\n",
+        template_body="# Sample\n",
         is_templated=False,
         source_path=None,
         source_package="pkg",
@@ -298,18 +298,18 @@ def test_prompt_frontmatter_coerces_none_to_defaults():
         applies_if=None,  # type: ignore[arg-type]
         input_variables=None,  # type: ignore[arg-type]
         includes_rules=None,  # type: ignore[arg-type]
-        eval_tasks=None,  # type: ignore[arg-type]
+        eval_samples=None,  # type: ignore[arg-type]
     )
     assert fm.version == 1
     assert fm.applies_if == {}
     assert fm.input_variables == []
     assert fm.includes_rules == []
-    assert fm.eval_tasks == []
+    assert fm.eval_samples == []
 
 
 def test_prompt_markdown_roundtrip_with_blank_optional_fields(tmp_path):
     """A prompt authored with blank 'applies_if:' / 'input_variables:' /
-    'includes_rules:' / 'eval_tasks:' lines round-trips through markdown
+    'includes_rules:' / 'eval_samples:' lines round-trips through markdown
     (bug_001 — symmetric to test_rule_markdown_roundtrip_with_blank_optional_fields)."""
     text = (
         "---\n"
@@ -320,7 +320,7 @@ def test_prompt_markdown_roundtrip_with_blank_optional_fields(tmp_path):
         "applies_if:\n"
         "input_variables:\n"
         "includes_rules:\n"
-        "eval_tasks:\n"
+        "eval_samples:\n"
         "---\n"
         "body\n"
     )
@@ -330,7 +330,7 @@ def test_prompt_markdown_roundtrip_with_blank_optional_fields(tmp_path):
     assert prompt.frontmatter.applies_if == {}
     assert prompt.frontmatter.input_variables == []
     assert prompt.frontmatter.includes_rules == []
-    assert prompt.frontmatter.eval_tasks == []
+    assert prompt.frontmatter.eval_samples == []
     path.write_text(prompt.to_markdown(), encoding="utf-8")
     assert Prompt.from_markdown(path, "pkg") == prompt
 
@@ -352,7 +352,7 @@ def test_prompt_output_contract_none_coerced():
 
 def test_prompt_output_contract_round_trips_markdown(tmp_path):
     """Regex backslashes survive the YAML frontmatter both ways (specs/prK-hook-pack.md §E.2)."""
-    text = PROMPT_MD.replace("---\n# Task", f"output_contract:\n  - '{VERDICT}'\n---\n# Task")
+    text = PROMPT_MD.replace("---\n# Sample", f"output_contract:\n  - '{VERDICT}'\n---\n# Sample")
     path = tmp_path / "review.md"
     path.write_text(text, encoding="utf-8")
 

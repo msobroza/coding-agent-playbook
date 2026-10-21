@@ -19,7 +19,7 @@ Layout (§B):
 - ``.playbook/hooks/<id>/`` hook sidecars and ``rules/30-guardrail-<id>.md``
   advisories (:mod:`.hook_sidecars`, specs/prK-lifecycle-hooks.md §C.6).
 
-Eval tasks are authoring-only and never dispatched to adapters, so this adapter
+Eval samples are authoring-only and never dispatched to adapters, so this adapter
 never emits an ``evals/`` directory — consistent with the five built-in adapters.
 
 The playbook sentinel is written as the **first body line** of every generated

@@ -46,7 +46,7 @@ def repo(tmp_path: Path, make_synthetic_repo: Callable[..., Path]) -> Path:
         tmp_path,
         rules=[("style-guide", "Use spaces.\n")],
         # Not an engine prompt id: overriding one (``refactor``) without its
-        # eval_tasks fails validate, so sync would refuse to write (prK §P P8).
+        # eval_samples fails validate, so sync would refuse to write (prK §P P8).
         prompts=[("tidy-up", {"slash": "tidy-up", "body": "Tidy up.\n"})],
     )
     _add_skill(built)

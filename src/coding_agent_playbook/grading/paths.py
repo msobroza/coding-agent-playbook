@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 __all__ = ["EVAL_FIXTURE_GLOBS", "TEST_PATH_GLOBS", "is_test_path", "matches_any_glob"]
 
-#: The frozen eval-task fixtures (``**/eval_tasks/*/setup/**``): ``[metrics] exclude``'s default.
+#: The frozen eval-sample fixtures (``**/eval_samples/*/setup/**``): ``[metrics] exclude``'s default.
 EVAL_FIXTURE_GLOBS: Final = FIXTURE_GLOBS
 
 #: Repo-relative paths are exact (git and the gate report them as written), so
@@ -50,7 +50,7 @@ def matches_any_glob(rel_posix: str, globs: Iterable[str]) -> bool:
 
     Example::
 
-        >>> matches_any_glob("eval_tasks/t1/setup/app.py", EVAL_FIXTURE_GLOBS)
+        >>> matches_any_glob("eval_samples/t1/setup/app.py", EVAL_FIXTURE_GLOBS)
         True
     """
     return _compiled(tuple(globs)).matches(rel_posix)

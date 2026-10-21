@@ -51,7 +51,7 @@ def read_lossless(
             result.skills.append(_skill_from_entry(absolute, entry, source_package))
         elif entry.kind == "hook":
             _read_hook(absolute, entry, result, source_package)
-        else:  # eval_task or unknown — no canonical adapter home
+        else:  # eval_sample or unknown — no canonical adapter home
             result.warnings.append(
                 f"manifest entry {rel_path!r} has unsupported kind {entry.kind!r}; skipped"
             )
@@ -132,7 +132,7 @@ def _prompt_from_entry(path: Path, entry: ManifestEntry, source_package: str) ->
             applies_if=dict(entry.applies_if),
             input_variables=[dict(v) for v in entry.input_variables],
             includes_rules=list(entry.includes_rules),
-            eval_tasks=list(entry.eval_tasks),
+            eval_samples=list(entry.eval_samples),
             output_contract=list(entry.output_contract),
             write_scope=dict(entry.write_scope),
         ),

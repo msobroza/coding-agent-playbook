@@ -265,7 +265,7 @@ def test_section_6_6_7_lists_every_tool_class() -> None:
 
 
 def test_section_6_4_documents_has_dev_dependency() -> None:
-    predicate = _spec_section("### 6.4 The `applies_if` predicate", "### 6.5 Eval tasks")
+    predicate = _spec_section("### 6.4 The `applies_if` predicate", "### 6.5 Eval samples")
     assert "has_dev_dependency" in predicate
 
 

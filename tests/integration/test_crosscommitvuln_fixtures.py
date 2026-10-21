@@ -9,7 +9,7 @@
 - the deterministic CWE-class gate (`answer_matches`) accepts a correct answer,
   rejects a wrong-class one, and short-circuits the judge when it rejects.
 
-These are review-only tasks: the agent must not edit, so it is graded on its
+These are review-only samples: the agent must not edit, so it is graded on its
 *answer* (the transcript). The stand-in answers live in `ccv_answers.py`.
 """
 
@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from coding_agent_playbook.evals.judge import StubJudge
-from coding_agent_playbook.evals.loader import load_eval_task_from_dir
+from coding_agent_playbook.evals.loader import load_eval_sample_from_dir
 from coding_agent_playbook.evals.run.harness_runner import capture, materialize
 from coding_agent_playbook.evals.run.scoring import score
 from tests._catalog import CORE_ROOT
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 pytestmark = pytest.mark.catalog
 
-_TASKS_ROOT = CORE_ROOT / "eval_tasks"
+_SAMPLES_ROOT = CORE_ROOT / "eval_samples"
 
 # Per-fixture banned tokens: CVE id, CWE id (both forms), sink API symbol(s), and
 # flaw-class words (spec §5.2). The v2 framing bans below are shared across all
@@ -169,27 +169,29 @@ def stub_uv_sync(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def _task(fixture_id: str) -> Any:
-    return load_eval_task_from_dir(_TASKS_ROOT / fixture_id, source_package="coding_agent_playbook")
+def _sample(fixture_id: str) -> Any:
+    return load_eval_sample_from_dir(
+        _SAMPLES_ROOT / fixture_id, source_package="coding_agent_playbook"
+    )
 
 
 def _class_gate_pattern(fixture_id: str) -> str:
     """The raw ``names_class`` regex a fixture authors in its ``[gate.bind]``."""
-    binding = _task(fixture_id).gate.bind["names_class"]
+    binding = _sample(fixture_id).gate.bind["names_class"]
     assert binding["check"] == "answer_matches", binding
     return str(binding["pattern"])
 
 
 @pytest.mark.parametrize("fixture_id", _FIXTURE_IDS)
 def test_prompt_args_leak_no_needle(fixture_id: str) -> None:
-    query = _task(fixture_id).invocation.prompt_args.lower()
+    query = _sample(fixture_id).invocation.prompt_args.lower()
     banned = _PER_FIXTURE_BANS[fixture_id] + _FRAMING_BANS
     offenders = [tok for tok in banned if tok in query]
     assert offenders == [], f"{fixture_id}: banned token(s) leaked into query: {offenders}"
 
 
 def test_attributions_file_present() -> None:
-    attributions = (_TASKS_ROOT / "ATTRIBUTIONS.md").read_text(encoding="utf-8")
+    attributions = (_SAMPLES_ROOT / "ATTRIBUTIONS.md").read_text(encoding="utf-8")
     assert "creativecommons.org/licenses/by/4.0" in attributions
     assert "Arunabh Majumdar" in attributions
     assert "10.5281/zenodo.19338596" in attributions
@@ -202,10 +204,10 @@ def test_attributions_file_present() -> None:
 
 @pytest.mark.parametrize("fixture_id", _FIXTURE_IDS)
 def test_fixture_runs_hermetically(fixture_id: str, tmp_path: Path, stub_uv_sync: None) -> None:
-    task = _task(fixture_id)
-    baseline = materialize(task, tmp_path / "scratch")
+    sample = _sample(fixture_id)
+    baseline = materialize(sample, tmp_path / "scratch")
     candidate = capture(baseline.repo_root, baseline, CORRECT_ANSWER[fixture_id])
-    report = score(task, baseline, candidate, judge=StubJudge(default=0.9))
+    report = score(sample, baseline, candidate, judge=StubJudge(default=0.9))
     gate = next(c for c in report.checks if c.check_id == "gate")
     rubric = next(c for c in report.checks if c.check_id == "rubric")
     # Review-only gate: the no-op fake runner leaves the files unchanged, and the
@@ -230,11 +232,11 @@ def test_wrong_class_answer_loses_the_gate(
     files, only the answer differs — so this isolates the class gate from the
     ``file_unchanged`` handles.
     """
-    task = _task(fixture_id)
-    baseline = materialize(task, tmp_path / "scratch")
+    sample = _sample(fixture_id)
+    baseline = materialize(sample, tmp_path / "scratch")
     candidate = capture(baseline.repo_root, baseline, WRONG_CLASS_ANSWER)
 
-    report = score(task, baseline, candidate, judge=StubJudge(default=0.9))
+    report = score(sample, baseline, candidate, judge=StubJudge(default=0.9))
 
     gate = next(c for c in report.checks if c.check_id == "gate")
     assert gate.passed is False
@@ -250,12 +252,12 @@ def test_wrong_class_answer_never_reaches_the_judge(
     ``fail_fast=True`` is what the runner (and ``playbook eval --run``) pass, so
     this exercises the real cost-saving path rather than a synthetic one.
     """
-    task = _task(fixture_id)
-    baseline = materialize(task, tmp_path / "scratch")
+    sample = _sample(fixture_id)
+    baseline = materialize(sample, tmp_path / "scratch")
     candidate = capture(baseline.repo_root, baseline, WRONG_CLASS_ANSWER)
 
     judge = StubJudge(default=0.9)
-    score(task, baseline, candidate, judge=judge, fail_fast=True)
+    score(sample, baseline, candidate, judge=judge, fail_fast=True)
 
     assert judge.calls == []
 
@@ -269,12 +271,12 @@ def test_correct_class_answer_does_reach_the_judge(
     Without this, the ``judge.calls == []`` assertion above would also hold if the
     judge had simply never been wired up.
     """
-    task = _task(fixture_id)
-    baseline = materialize(task, tmp_path / "scratch")
+    sample = _sample(fixture_id)
+    baseline = materialize(sample, tmp_path / "scratch")
     candidate = capture(baseline.repo_root, baseline, CORRECT_ANSWER[fixture_id])
 
     judge = StubJudge(default=0.9)
-    score(task, baseline, candidate, judge=judge, fail_fast=True)
+    score(sample, baseline, candidate, judge=judge, fail_fast=True)
 
     assert judge.calls != []
 
@@ -304,14 +306,14 @@ def test_class_gate_rejects_every_other_fixtures_answer(fixture_id: str) -> None
 def test_judge_grades_the_answer_not_an_empty_diff(
     fixture_id: str, tmp_path: Path, stub_uv_sync: None
 ) -> None:
-    """The judged artifact is the agent's answer — these tasks produce no diff."""
-    task = _task(fixture_id)
-    baseline = materialize(task, tmp_path / "scratch")
+    """The judged artifact is the agent's answer — these samples produce no diff."""
+    sample = _sample(fixture_id)
+    baseline = materialize(sample, tmp_path / "scratch")
     answer = CORRECT_ANSWER[fixture_id]
     candidate = capture(baseline.repo_root, baseline, answer)
 
     judge = StubJudge(default=0.9)
-    score(task, baseline, candidate, judge=judge)
+    score(sample, baseline, candidate, judge=judge)
 
     assert candidate.diff.strip() == ""  # review-only: nothing was edited
     _criterion, artifact, _n = judge.calls[0]

@@ -1,4 +1,4 @@
-"""The eval run pipeline: run an eval task against a harness in a scratch workspace and score it.
+"""The eval run pipeline: run an eval sample against a harness in a scratch workspace and score it.
 
 Deliberately empty: import the defining module. ``harness_runner`` holds the runner
 interface and the workspace, ``scoring`` the scoring, ``fake_runner``,

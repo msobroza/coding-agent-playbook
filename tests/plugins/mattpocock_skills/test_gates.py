@@ -126,7 +126,7 @@ def test_g1_plugin_is_usable_and_adds_only_skills_and_rules(tmp_path: Path) -> N
     with_plugin = FileSystemArtifactSource(repo_root=tmp_path, overlay_packages=[PLUGIN_NAME])
     assert len(with_plugin.list_prompts()) == len(plain.list_prompts())
     assert len(with_plugin.list_hooks()) == len(plain.list_hooks())
-    assert len(with_plugin.list_eval_tasks()) == len(plain.list_eval_tasks())
+    assert len(with_plugin.list_eval_samples()) == len(plain.list_eval_samples())
     plugin_rules = [r for r in with_plugin.list_rules() if r.source_package == PLUGIN_NAME]
     assert sorted(str(r.source_path) for r in plugin_rules) == sorted(
         str(p) for p in rule_files() if p.suffix == ".md"

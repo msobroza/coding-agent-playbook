@@ -25,8 +25,8 @@ from coding_agent_playbook.catalog._hook_walk import walk_hook_layer
 from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE, REPO_LOCAL_SOURCE
 from coding_agent_playbook.catalog.roots import catalog_layer_root, is_bundled_layer
 from coding_agent_playbook.evals.loader import (
-    discover_eval_task_dirs,
-    load_eval_task_from_dir,
+    discover_eval_sample_dirs,
+    load_eval_sample_from_dir,
 )
 
 if TYPE_CHECKING:
@@ -34,13 +34,13 @@ if TYPE_CHECKING:
     from typing import TypeVar
 
     from coding_agent_playbook.artifacts.hook import Hook
-    from coding_agent_playbook.evals.task import EvalTask
+    from coding_agent_playbook.evals.sample import EvalSample
 
     _T = TypeVar("_T")
 
 
 class ArtifactSource(ABC):
-    """Where rules, prompts, skills, hooks, and eval tasks come from."""
+    """Where rules, prompts, skills, hooks, and eval samples come from."""
 
     name: str
 
@@ -83,7 +83,7 @@ class ArtifactSource(ABC):
             return [], [exc]
 
     @abstractmethod
-    def list_eval_tasks(self) -> list[EvalTask]: ...
+    def list_eval_samples(self) -> list[EvalSample]: ...
 
 
 def _resource_subdir(package: str, subdir: str) -> Path | None:
@@ -239,7 +239,7 @@ class FileSystemArtifactSource(ArtifactSource):
 
         Returns a tuple (not the live list) so callers cannot mutate the
         source's internal package list. Order matches the walk order in
-        :meth:`list_rules` / :meth:`list_prompts` / :meth:`list_eval_tasks`.
+        :meth:`list_rules` / :meth:`list_prompts` / :meth:`list_eval_samples`.
         """
         return tuple(self._overlay_packages)
 
@@ -331,25 +331,25 @@ class FileSystemArtifactSource(ArtifactSource):
             for md in _iter_md_files(root)
         ]
 
-    def list_eval_tasks(self) -> list[EvalTask]:
-        """Walk every layer's ``eval_tasks/<id>/`` (:meth:`layer_roots` order).
+    def list_eval_samples(self) -> list[EvalSample]:
+        """Walk every layer's ``eval_samples/<id>/`` (:meth:`layer_roots` order).
 
-        Each layer's ``eval_tasks/`` (``catalog/core/eval_tasks/`` for the
-        engine, ``catalog/plugins/<name>/eval_tasks/`` for a bundled plugin,
-        ``<pkg>/resources/eval_tasks/`` for an overlay package, then
-        ``<repo>/playbook/eval_tasks/``). Later layers do NOT override earlier
+        Each layer's ``eval_samples/`` (``catalog/core/eval_samples/`` for the
+        engine, ``catalog/plugins/<name>/eval_samples/`` for a bundled plugin,
+        ``<pkg>/resources/eval_samples/`` for an overlay package, then
+        ``<repo>/playbook/eval_samples/``). Later layers do NOT override earlier
         ones here — ``catalog.resolve``'s :class:`OverlayResolver` handles ID-based
-        collision semantics for rules/prompts/skills, but eval tasks are
+        collision semantics for rules/prompts/skills, but eval samples are
         aggregated as-is in v1 (no per-layer override pass yet; the
         collision-by-id pattern is identical and lands when first overlay ships
-        eval tasks). Each task's ``source_package`` is its layer's label (the
+        eval samples). Each sample's ``source_package`` is its layer's label (the
         engine package, a bundled-plugin or overlay-package name, or
         ``"<repo-local>"``).
         """
         return [
-            load_eval_task_from_dir(task_dir, source_package=label)
-            for label, root in self.layer_roots("eval_tasks")
-            for task_dir in discover_eval_task_dirs(root)
+            load_eval_sample_from_dir(sample_dir, source_package=label)
+            for label, root in self.layer_roots("eval_samples")
+            for sample_dir in discover_eval_sample_dirs(root)
         ]
 
 

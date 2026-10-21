@@ -1,7 +1,7 @@
 """Shared plumbing of the post_tool_use source-changed hooks (specs/prK-hook-pack.md §E.0.4, §E.1).
 
 validate-then-sync-on-canonical-edit, resync-on-detector-input-change and
-eval-task-authoring-lint share:
+eval-sample-authoring-lint share:
 
 - the 2 s per-session debounce (``SessionState.debounce``, :data:`DEBOUNCE_S`);
 - :func:`run_playbook`: ``playbook <args>`` as a **child process** on the

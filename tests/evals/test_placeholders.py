@@ -5,9 +5,9 @@ Option A): :meth:`Judge.score_criterion` is the single abstract primitive and
 :meth:`Judge.score` is a concrete batch wrapper over it (no more
 ``NotImplementedError`` placeholder). The
 :class:`~coding_agent_playbook.evals.run.harness_runner.HarnessRunner` is live (PR R1, Option
-B): ``run_task`` is a concrete template method, the abstract hook is
+B): ``run_sample`` is a concrete template method, the abstract hook is
 ``_invoke_agent``, and the result model is
-:class:`~coding_agent_playbook.evals.run.harness_runner.TaskResult` carrying an
+:class:`~coding_agent_playbook.evals.run.harness_runner.SampleResult` carrying an
 :class:`~coding_agent_playbook.grading.types.EvaluationReport` (``CheckResult``
 and ``programmatic_checks``/``rubric_scores`` are retired).
 """
@@ -23,7 +23,7 @@ from coding_agent_playbook.evals.run.harness_runner import (
     AgentRun,
     EvalReport,
     HarnessRunner,
-    TaskResult,
+    SampleResult,
 )
 from coding_agent_playbook.grading.types import EvaluationReport
 
@@ -42,10 +42,10 @@ def test_judge_is_abstract() -> None:
 
 
 def test_invoke_agent_is_the_only_abstract_hook(tmp_path: Path) -> None:
-    """A subclass only has to implement ``_invoke_agent``; ``run_task`` is concrete.
+    """A subclass only has to implement ``_invoke_agent``; ``run_sample`` is concrete.
 
     Implementing the single hook makes the class instantiable (no abstract
-    ``run_task`` left), proving the template method moved to ``_invoke_agent``.
+    ``run_sample`` left), proving the template method moved to ``_invoke_agent``.
     """
 
     class _Runner(HarnessRunner):
@@ -91,11 +91,11 @@ def test_judge_score_batch_wraps_score_criterion() -> None:
     assert judge.seen == [("A", "transcript-text", 1), ("B", "transcript-text", 1)]
 
 
-def test_task_result_carries_an_evaluation_report() -> None:
-    """Option B: ``TaskResult.report`` is the unified :class:`EvaluationReport`."""
+def test_sample_result_carries_an_evaluation_report() -> None:
+    """Option B: ``SampleResult.report`` is the unified :class:`EvaluationReport`."""
     report = EvaluationReport(findings=[], warn_count=0, fail_count=0, composite=None, passed=True)
-    tr = TaskResult(
-        task_id="t",
+    tr = SampleResult(
+        sample_id="t",
         harness="fake",
         report=report,
         passed=True,
@@ -110,12 +110,12 @@ def test_task_result_carries_an_evaluation_report() -> None:
 def test_eval_report_aggregate_pass_rate_reads_report_passed() -> None:
     """``EvalReport.aggregate_pass_rate`` is the mean of ``tr.passed``."""
 
-    def _tr(passed: bool) -> TaskResult:
+    def _tr(passed: bool) -> SampleResult:
         report = EvaluationReport(
             findings=[], warn_count=0, fail_count=0, composite=None, passed=passed
         )
-        return TaskResult(
-            task_id="t",
+        return SampleResult(
+            sample_id="t",
             harness="fake",
             report=report,
             passed=report.passed,

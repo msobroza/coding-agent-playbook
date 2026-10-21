@@ -3,7 +3,7 @@
 A *gate* is a code-defined, composed boolean
 :class:`~coding_agent_playbook.grading.check.Check` (typically an
 ``AllOf``/``AnyOf``/``Not`` tree over file/threshold/judge checks) that an
-out-of-tree package ships and a task references by name: the handle builder
+out-of-tree package ships and a sample references by name: the handle builder
 (:mod:`coding_agent_playbook.evals.compile._handles`) resolves a gate-layer
 ``[gate.bind] <handle> = { ref = "<name>" }`` through :func:`get_gate`. This
 module is to a

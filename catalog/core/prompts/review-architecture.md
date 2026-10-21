@@ -10,7 +10,7 @@ input_variables:
     required: false
 includes_rules:
   - python-dependency-injection
-eval_tasks:
+eval_samples:
   - review-architecture-layer-leak
 ---
 

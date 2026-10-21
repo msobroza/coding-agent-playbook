@@ -1,7 +1,7 @@
 """Tests for the deterministic ``answer_matches`` check (``evals/checks/answer.py``).
 
 Unlike the file checks (which read ``ctx.tree``), this one grades the **graded
-artifact** — ``ctx.artifact`` — so a review-only task, whose agent produces no
+artifact** — ``ctx.artifact`` — so a review-only sample, whose agent produces no
 diff at all, can still be gated deterministically on what the agent *said*.
 
 The gate is deliberately **fail-closed**: it is always ``available`` (it needs no

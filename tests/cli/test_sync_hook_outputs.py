@@ -152,7 +152,7 @@ def test_first_sync_writes_every_hook_output(synced: Path) -> None:
         "destructive-command-guard",
         "docstring-nonregression",
         "error-handling-lint-feedback",
-        "eval-task-authoring-lint",
+        "eval-sample-authoring-lint",
         "exfil-channel-guard",
         "gate-weakening-guard",
         "git-commit-push-policy-guard",

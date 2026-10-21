@@ -75,7 +75,7 @@ _ENGINE_PACK = (
     "destructive-command-guard",
     "docstring-nonregression",
     "error-handling-lint-feedback",
-    "eval-task-authoring-lint",
+    "eval-sample-authoring-lint",
     "exfil-channel-guard",
     "gate-weakening-guard",
     "git-commit-push-policy-guard",
@@ -165,7 +165,7 @@ def test_hooks_block_labels_per_adapter(
         # K7: a rule-linked lint hook has no body (its rule carries the practice).
         "    [✓] error-handling-lint-feedback (agents_md: —, claude_code: enforced, "
         "continue: —, opencode: enforced)",
-        "    [✓] eval-task-authoring-lint (agents_md: advisory, claude_code: enforced, "
+        "    [✓] eval-sample-authoring-lint (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: enforced)",
         # K8: its remote snapshot rides OpenCode's experimental session_start: degraded there.
         "    [✓] exfil-channel-guard (agents_md: advisory, claude_code: enforced, "

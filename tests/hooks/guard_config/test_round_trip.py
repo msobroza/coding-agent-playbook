@@ -132,7 +132,7 @@ def test_compiled_config_loads_and_every_table_reads_typed(compiled_repo: Compil
     assert facts is not None and (facts["package_manager"], facts["has_notebooks"]) == ("uv", True)
     assert tables.applicability() == ()  # the request carries no applicability rows
     assert tables.notebook_max_bytes(1) == 5 * 1024 * 1024
-    assert tables.eval_fixture_globs(()) == ("**/eval_tasks/*/setup/**",)
+    assert tables.eval_fixture_globs(()) == ("**/eval_samples/*/setup/**",)
     assert tables.secret_path_exempt(()) == SECRET_PATH_EXEMPT  # no [guardrails] allow_paths
     assert tables.secret_glob_exempt({}) == SECRET_GLOB_EXEMPT
 
