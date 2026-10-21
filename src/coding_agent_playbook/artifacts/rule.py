@@ -95,14 +95,27 @@ class Rule:
     is_templated: bool
     source_path: Path | None
     source_package: str
+    # The skill whose ``skills/<skill>/rules/`` holds the source file (prU D5,
+    # ADR 0005), or None for a ``<layer>/rules/`` file. Membership by location:
+    # the loader copies it into ``frontmatter.skill`` when the file sets none,
+    # so every consumer of ``skill`` sees in-skill rules as members unchanged.
+    home_skill: str | None = None
 
     @classmethod
-    def from_markdown(cls, path: Path, source_package: str) -> Rule:
+    def from_markdown(
+        cls, path: Path, source_package: str, *, home_skill: str | None = None
+    ) -> Rule:
         """Load the rule at ``path``, raising :class:`RuleLoadError` when it is malformed.
+
+        ``home_skill`` is the id of the skill whose ``rules/`` directory holds
+        ``path``; it fills ``frontmatter.skill`` when the file leaves it out (an
+        explicit ``skill:`` is kept as written, for validation to judge).
 
         Example::
 
             >>> Rule.from_markdown(Path("playbook/rules/x.md"), "<repo-local>")  # doctest: +SKIP
+            >>> Rule.from_markdown(path, "<repo-local>", home_skill="s").frontmatter.skill  # doctest: +SKIP
+            's'
         """
         try:
             data, body, is_templated = _read_markdown(path)
@@ -113,12 +126,21 @@ class Rule:
         problem = _frontmatter_keys_problem(data)
         if problem is not None:
             raise RuleLoadError(path, problem)
-        return cls(RuleFrontmatter(**data), body, body, is_templated, path, source_package)
+        frontmatter = RuleFrontmatter(**data)
+        if frontmatter.skill is None:
+            frontmatter.skill = home_skill
+        return cls(frontmatter, body, body, is_templated, path, source_package, home_skill)
 
     def to_markdown(self) -> str:
-        return format_frontmatter(
-            _without_empty(dataclasses.asdict(self.frontmatter)), self.template_body
-        )
+        """The rule as a markdown file; a ``skill`` equal to ``home_skill`` is left out.
+
+        The location carries that membership, so writing it back would add a
+        ``skill:`` line the author never wrote (prU D5).
+        """
+        data = dataclasses.asdict(self.frontmatter)
+        if self.home_skill is not None and data["skill"] == self.home_skill:
+            data["skill"] = None
+        return format_frontmatter(_without_empty(data), self.template_body)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -128,6 +150,7 @@ class Rule:
             "is_templated": self.is_templated,
             "source_path": None if self.source_path is None else str(self.source_path),
             "source_package": self.source_package,
+            "home_skill": self.home_skill,
         }
 
     @classmethod
@@ -140,6 +163,7 @@ class Rule:
             data["is_templated"],
             None if source_path is None else Path(source_path),
             data["source_package"],
+            data.get("home_skill"),
         )
 
 

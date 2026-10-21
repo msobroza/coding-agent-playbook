@@ -270,3 +270,23 @@ def test_in_tree_deliverers_cover_every_registered_adapter() -> None:
     entry_points = metadata.entry_points(group="coding_agent_playbook.adapters")
     registered = {ep.load() for ep in entry_points if ep.value.startswith("coding_agent_playbook.")}
     assert set(_IN_TREE_DELIVERERS) == registered
+
+
+def test_membership_by_location_equals_membership_by_skill_key(tmp_path: Path) -> None:
+    """A rule in ``skills/s/rules/`` joins ``s`` exactly as one naming ``skill: s`` (prU D5)."""
+    text = "---\nid: {id}\nname: {id}\ndescription: d\nscope: scoped\n{skill}---\nBody\n"
+    in_skill = tmp_path / "skills" / "python-coding" / "rules" / "located.md"
+    keyed = tmp_path / "rules" / "keyed.md"
+    for path, rule_id, skill in (
+        (in_skill, "located", ""),
+        (keyed, "keyed", "skill: python-coding\n"),
+    ):
+        path.parent.mkdir(parents=True)
+        path.write_text(text.format(id=rule_id, skill=skill), encoding="utf-8")
+    located = Rule.from_markdown(in_skill, "<repo-local>", home_skill="python-coding")
+    by_key = Rule.from_markdown(keyed, "<repo-local>")
+
+    assert is_skill_member(located) is is_skill_member(by_key) is True
+    assert member_rules_of("python-coding", [located, by_key]) == [by_key, located]
+    [composed] = compose_skills([_skill("python-coding")], [located, by_key], [located, by_key])
+    assert [ref.rule_id for ref in composed.member_references] == ["keyed", "located"]

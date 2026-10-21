@@ -22,6 +22,7 @@ from coding_agent_playbook.artifacts.prompt import Prompt
 from coding_agent_playbook.artifacts.rule import Rule, RuleLoadError
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.catalog._hook_walk import walk_hook_layer
+from coding_agent_playbook.catalog._skill_rules import find_skill_md, iter_skill_rule_files
 from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE, REPO_LOCAL_SOURCE
 from coding_agent_playbook.catalog.roots import catalog_layer_root, is_bundled_layer
 from coding_agent_playbook.evals.loader import (
@@ -184,10 +185,12 @@ def _iter_skills(skills_root: Path, source_package: str) -> Iterator[Skill]:
 
     Each skill directory must contain ``SKILL.md`` (or ``SKILL.md.j2``).
     ``scripts/`` and ``references/`` sibling subdirectories are recorded on
-    the Skill if present.
+    the Skill if present. A ``rules/`` subdirectory is not: its files are
+    rules, which :meth:`FileSystemArtifactSource.collect_rules` loads as
+    members of this skill (prU D5), never byte-copied.
     """
     for skill_dir in sorted(p for p in skills_root.iterdir() if p.is_dir()):
-        skill_md = _find_skill_md(skill_dir)
+        skill_md = find_skill_md(skill_dir)
         if skill_md is None:
             continue
         text = skill_md.read_text(encoding="utf-8")
@@ -203,21 +206,30 @@ def _iter_skills(skills_root: Path, source_package: str) -> Iterator[Skill]:
         )
 
 
-def _load_rule_or_error(path: Path, source_package: str) -> Rule | RuleLoadError:
-    """The rule at ``path``, or the :class:`RuleLoadError` it raised (for collect_rules)."""
+def _load_rule_or_error(
+    path: Path, source_package: str, home: str | RuleLoadError | None = None
+) -> Rule | RuleLoadError:
+    """The rule at ``path``, or the :class:`RuleLoadError` it raised (for collect_rules).
+
+    ``home`` is the skill whose ``rules/`` holds the file (``None`` for a
+    ``<layer>/rules/`` file), or the error that skill's ``SKILL.md`` gave.
+    """
+    if isinstance(home, RuleLoadError):
+        return home
     try:
-        return Rule.from_markdown(path, source_package)
+        return Rule.from_markdown(path, source_package, home_skill=home)
     except RuleLoadError as exc:
         return exc
 
 
-def _find_skill_md(skill_dir: Path) -> Path | None:
-    """Return ``SKILL.md`` or ``SKILL.md.j2`` inside ``skill_dir`` if it exists."""
-    for candidate_name in ("SKILL.md", "SKILL.md.j2"):
-        candidate = skill_dir / candidate_name
-        if candidate.is_file():
-            return candidate
-    return None
+def _layer_rule_files(
+    rules_root: Path | None, skills_root: Path | None
+) -> Iterator[tuple[str | RuleLoadError | None, Path]]:
+    """One layer's rule files: ``rules/`` first, then ``skills/*/rules/`` with each home skill."""
+    if rules_root is not None and rules_root.is_dir():
+        yield from ((None, path) for path in _iter_md_files(rules_root))
+    if skills_root is not None and skills_root.is_dir():
+        yield from iter_skill_rule_files(skills_root, _iter_md_files)
 
 
 class FileSystemArtifactSource(ArtifactSource):
@@ -288,12 +300,23 @@ class FileSystemArtifactSource(ArtifactSource):
             >>> FileSystemArtifactSource(repo_root=Path("/repo")).layer_roots("rules")[0][0]
             'coding_agent_playbook'
         """
-        candidates: list[tuple[str, Path | None]] = [
+        return [
+            (label, root)
+            for label, root in self._layer_candidates(subdir)
+            if root is not None and root.is_dir()
+        ]
+
+    def _layer_candidates(self, subdir: str) -> list[tuple[str, Path | None]]:
+        """Every layer's ``(label, <layer>/<subdir> or None)``, one row per layer whatever ``subdir``.
+
+        Same length and order for every ``subdir``, so two kinds of one layer
+        line up by position (:meth:`collect_rules` pairs ``rules`` with ``skills``).
+        """
+        return [
             *((package, _resource_subdir(package, subdir)) for package in self._packages()),
             *((root.parent.name, root / subdir) for root in self._extra_resource_roots),
             (REPO_LOCAL_SOURCE, self._repo_root / "playbook" / subdir),
         ]
-        return [(label, root) for label, root in candidates if root is not None and root.is_dir()]
 
     def _packages(self) -> tuple[str, ...]:
         """The importable layers: the engine package, then the overlays."""
@@ -309,15 +332,22 @@ class FileSystemArtifactSource(ArtifactSource):
     def collect_rules(self) -> tuple[list[Rule], list[RuleLoadError]]:
         """Every well-formed rule plus one error per malformed rule file, never raising.
 
+        Layers come in :meth:`layer_roots` order; inside a layer, ``<layer>/rules/``
+        first, then each skill's ``<layer>/skills/<dir>/rules/`` (prU D5). A rule
+        found in a skill's ``rules/`` is a member of that skill: its
+        ``home_skill`` is the skill's id, which also fills ``skill`` when the file
+        leaves it out. Later layers still override earlier ones by id.
+
         Example::
 
             >>> FileSystemArtifactSource(repo_root=Path("/no/such/repo")).collect_rules()[1]
             []
         """
+        layers = zip(self._layer_candidates("rules"), self._layer_candidates("skills"), strict=True)
         loaded = [
-            _load_rule_or_error(md, label)
-            for label, root in self.layer_roots("rules")
-            for md in _iter_md_files(root)
+            _load_rule_or_error(path, label, home)
+            for (label, rules_root), (_, skills_root) in layers
+            for home, path in _layer_rule_files(rules_root, skills_root)
         ]
         rules = [item for item in loaded if isinstance(item, Rule)]
         return rules, [item for item in loaded if isinstance(item, RuleLoadError)]

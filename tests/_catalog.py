@@ -125,15 +125,40 @@ def core_markdown_sources(kind: str) -> list[Path]:
     return sorted(p for p in root.rglob("*") if p.name.endswith((".md", ".md.j2")))
 
 
+def core_rule_paths() -> list[tuple[str | None, Path]]:
+    """``(home skill, path)`` for every core rule source, ``rules/`` first, then each skill's.
+
+    Walks ``CORE_ROOT / "rules"`` (home ``None``) and ``CORE_ROOT / "skills/<dir>/rules"``
+    for each skill dir holding ``SKILL.md`` (home ``<dir>``: core names each
+    skill directory by its id), the layout the loader reads (prU D5). One walker,
+    so a rule moved into its skill stays visible to every catalog gate.
+
+    Example: ``core_rule_paths()[0]`` -> ``(None, CORE_ROOT / "rules/always/00-....md.j2")``.
+    """
+    rules: list[tuple[str | None, Path]] = [(None, p) for p in core_markdown_sources("rules")]
+    for skill_dir in sorted(p for p in (CORE_ROOT / "skills").iterdir() if p.is_dir()):
+        rules_dir = skill_dir / "rules"
+        if not rules_dir.is_dir() or not (skill_dir / "SKILL.md").is_file():
+            continue
+        found = sorted(p for p in rules_dir.rglob("*") if p.name.endswith((".md", ".md.j2")))
+        rules.extend((skill_dir.name, path) for path in found)
+    return rules
+
+
 def core_rules() -> dict[str, Rule]:
-    """Every rule under ``CORE_ROOT / "rules"``, parsed from its file, by id.
+    """Every core rule (:func:`core_rule_paths`), parsed from its file, by id.
 
     Read from the checkout, not through the artifact source, so a loader bug
-    cannot hide a shipped rule from the catalog gates.
+    cannot hide a shipped rule from the catalog gates. A rule in a skill's
+    ``rules/`` gets that skill as ``home_skill``, which fills ``skill`` when the
+    file leaves it out, as the loader does.
 
     Example: ``core_rules()["python-typing"].frontmatter.skill`` -> ``"python-coding"``.
     """
-    rules = (Rule.from_markdown(path, ENGINE_PACKAGE) for path in core_markdown_sources("rules"))
+    rules = (
+        Rule.from_markdown(path, ENGINE_PACKAGE, home_skill=home)
+        for home, path in core_rule_paths()
+    )
     return {rule.frontmatter.id: rule for rule in rules}
 
 
