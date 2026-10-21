@@ -45,8 +45,8 @@ __all__ = [
 #: Programs a guard inspects by name, beyond the launchers, runners and shells.
 _GUARDED: Final = frozenset(
     {
-        # git and its hosts: the git guards, exfil, commit convention, pre-commit bypass
-        *("git", "gh", "pre-commit", "cz", "export"),
+        # git and its forges' CLIs: the git guards, exfil, commit convention, pre-commit bypass
+        *("git", "gh", "glab", "pre-commit", "cz", "export"),
         # destructive-command-guard and the file writers the sink scans read
         *("rm", "rmdir", "find", "rsync", "chmod", "chown", "dd", "shred", "truncate"),
         *("mv", "cp", "ln", "install", "tee", "touch", "patch", ":"),

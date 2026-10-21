@@ -50,6 +50,8 @@ from coding_agent_playbook.hook_runtime.shell.wrapper_policy import (
         ("bash", "bash"),
         ("rm", "rm"),
         ("curl", "curl"),
+        ("glab", "glab"),  # a forge CLI the git guards and exfil read (prF §8.1)
+        ("proxy playbook", "playbook"),
         ("tee", "tee"),
         ("", None),
     ],

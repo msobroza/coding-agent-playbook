@@ -154,6 +154,47 @@ def test_push_with_upstream_scans_its_range(repo: PackRepo, deps: Deps) -> None:
     assert ("unpushed_lines", ("refs/remotes/origin/main",)) in git.calls
 
 
+@pytest.mark.parametrize(
+    "command",
+    [
+        "glab mr create --fill",
+        "glab mr new --push --title t",
+        "gh repo create app --private --source . --push",
+        "git push -o merge_request.create",
+        "glab -R g/app mr create -yf",
+        "glab mr create --fill --push=false",  # --fill always pushes (glab 1.115)
+        "glab mr create --push false",  # pflag: a bool takes no separate value
+        "glab mr create --fill -t 'unterminated",  # unparsed: the text names a push
+    ],
+)
+def test_forge_commands_that_push_are_scanned_like_a_push(
+    repo: PackRepo, deps: Deps, command: str
+) -> None:
+    """prF §8.3: a forge CLI command that pushes ``HEAD``'s branch is a ``git push``."""
+    added = (AddedLine("deploy/ci.sh", 4, f"export AWS_ACCESS_KEY_ID={AWS_KEY}"),)
+    git = FakeGit(upstream_ref="refs/remotes/origin/main", unpushed=DiffLines(added=added))
+
+    report = _run(repo, deps, "Bash", {"command": command}, git=git)
+
+    assert report.trace.combined.decision is Decision.DENY
+    assert report.trace.combined.reason.startswith("Blocked: an unpushed commit adds")
+
+
+@pytest.mark.parametrize(
+    "command",
+    ["glab mr create --title t", "glab mr create --push=false -t t", "gh pr create --fill"],
+)
+def test_forge_commands_that_do_not_push_read_no_git(
+    repo: PackRepo, deps: Deps, command: str
+) -> None:
+    git = FakeGit()
+
+    report = _run(repo, deps, "Bash", {"command": command}, git=git)
+
+    assert report.trace.combined.decision is Decision.NONE
+    assert git.calls == []
+
+
 def test_push_scan_without_upstream_finds_key_in_only_commit(
     pack_repo: PackRepo,
     deps: Deps,

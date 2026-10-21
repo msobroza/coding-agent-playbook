@@ -18,7 +18,12 @@ network-egress-guard judges every outbound command, where exfil-channel-guard
   request nothing: the lockfile pins their sources;
 - ``docker pull IMAGE``: the image's registry (Docker Hub for a bare name);
 - ``huggingface-cli download|upload|login|...``: ``HF_ENDPOINT``'s host, else
-  ``huggingface.co``.
+  ``huggingface.co``;
+- the forge CLIs and ``playbook forge`` (``judges.forge_calls``,
+  specs/prF-forge-adapter.md §8.2): the host the command or its environment
+  names (``-R HOST/…``, ``--hostname``, ``GH_HOST``, ``GITLAB_HOST``, ...), else
+  the caller's ``forge_hosts`` (the session's remotes on that forge), else a
+  host nobody can read (``unknown``). Help, version and local config reach nothing.
 
 A private module: it registers no handler.
 """
@@ -32,6 +37,7 @@ from typing import TYPE_CHECKING, Final, Literal
 
 from coding_agent_playbook.hook_runtime.handlers.safety._egress import network_hosts
 from coding_agent_playbook.hook_runtime.judges.cli_words import split_words, value_options
+from coding_agent_playbook.hook_runtime.judges.forge_calls import FORGE_ARGV0S, forge_call
 from coding_agent_playbook.hook_runtime.judges.hosts import extract_hosts, url_host
 from coding_agent_playbook.hook_runtime.judges.install_commands import install_requests
 from coding_agent_playbook.hook_runtime.shell.git_command import parse_git
@@ -39,11 +45,12 @@ from coding_agent_playbook.hook_runtime.shell.git_command import parse_git
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
+    from coding_agent_playbook.hook_runtime.judges.forge_calls import ForgeCall
     from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
 __all__ = ["NetKind", "NetTarget", "Remotes", "image_registry", "segment_target"]
 
-type NetKind = Literal["client", "git", "install", "docker", "hub"]
+type NetKind = Literal["client", "git", "install", "docker", "hub", "forge"]
 #: Configured remotes: name -> its fetch and push URLs (``git remote -v``).
 type Remotes = Mapping[str, tuple[str, ...]]
 
@@ -86,10 +93,19 @@ class NetTarget:
     unknown: bool = False
 
 
-def segment_target(segment: Segment, remotes: Callable[[], Remotes]) -> NetTarget | None:
+def segment_target(
+    segment: Segment,
+    remotes: Callable[[], Remotes],
+    *,
+    env: Mapping[str, str] | None = None,
+    forge_hosts: Callable[[ForgeCall], tuple[str, ...]] | None = None,
+) -> NetTarget | None:
     """The network destination of ``segment``, or ``None`` when it reaches no network.
 
-    ``remotes`` is called only for a git command whose repository is a remote name.
+    ``remotes`` is called only for a git command whose repository is a remote
+    name; ``forge_hosts`` (``_remotes.ForgeHosts``) only for a forge CLI or
+    ``playbook forge`` command line (``env`` is the hook's environment, where a
+    forge host env var may name a host).
 
     Example::
 
@@ -105,6 +121,8 @@ def segment_target(segment: Segment, remotes: Callable[[], Remotes]) -> NetTarge
         return _docker(segment.argv[1:])
     if program == _HUB:
         return _hub(segment)
+    if program in FORGE_ARGV0S:
+        return _forge(segment, env, forge_hosts)
     return _install(segment)
 
 
@@ -196,6 +214,20 @@ def _hub(segment: Segment) -> NetTarget | None:
     endpoint = dict(segment.env).get("HF_ENDPOINT")
     host = (url_host(endpoint) if endpoint else None) or _HUB_HOST
     return NetTarget("hub", _HUB, (host,))
+
+
+def _forge(
+    segment: Segment,
+    env: Mapping[str, str] | None,
+    forge_hosts: Callable[[ForgeCall], tuple[str, ...]] | None,
+) -> NetTarget | None:
+    call = forge_call(segment, env)
+    if call is None:
+        return _install(segment)  # ``playbook sync``: not ``playbook forge``
+    if not call.contacts_forge:
+        return None
+    hosts = forge_hosts(call) if forge_hosts is not None else call.hosts
+    return NetTarget("forge", call.command, hosts, unknown=not hosts)
 
 
 def _install(segment: Segment) -> NetTarget | None:

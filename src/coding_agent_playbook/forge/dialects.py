@@ -40,7 +40,12 @@ __all__ = [
 type CommandPath = tuple[str, ...]
 #: What a git push option does on the forge that reads it (spec §8.4).
 type PushOptionEffect = Literal[
-    "skips_secret_detection", "sets_ci_input", "skips_ci", "opens_pull_request", "sends_text"
+    "skips_secret_detection",
+    "bypasses_security_policy",
+    "sets_ci_input",
+    "skips_ci",
+    "opens_pull_request",
+    "sends_text",
 ]
 
 _NONE: Final[frozenset[str]] = frozenset()
@@ -80,11 +85,13 @@ class CliCommand:
     file_operands: int | None = None
     #: The command publishes its file operands as a gist or a snippet.
     snippet: bool = False
-    #: Flags that make the command push ``HEAD``'s branch; one given ``=false``
-    #: (``--push=false``) cancels the push (spec §8.3, Q13).
+    #: Flags that make the command push ``HEAD``'s branch, each unless given ``=false``:
+    #: ``glab mr create --fill --push=false`` still pushes (spec §8.3, Q13).
     pushes: frozenset[str] = _NONE
     #: Flags whose presence makes the command add or repoint a git remote.
     remotes: frozenset[str] = _NONE
+    #: The command adds a git remote whatever its flags (``glab repo create``).
+    adds_remote: bool = False
     #: The command creates a repository on the forge.
     creates_repository: bool = False
     #: The command opens a pull request (``push_requires_green`` asks first).
@@ -129,8 +136,23 @@ class Forge:
     hostname_flags: frozenset[str]
     #: The forge CLI commands the guards judge.
     commands: tuple[CliCommand, ...]
+    #: The env vars naming the repository as ``[HOST/]OWNER/REPO``, like a ``repo_flags`` value.
+    repo_env: tuple[str, ...] = ()
+    #: How many ``/``-separated parts a ``repo_flags`` value has when it leads with a host
+    #: (``HOST/OWNER/REPO``: 3); ``None`` when a host cannot be told from a group by count
+    #: (GitLab's ``GROUP/NAMESPACE/REPO``): a reader then takes a first part for a host when
+    #: it is this forge's host, one its host env vars name, or a dotted name.
+    repo_host_parts: int | None = None
+    #: What the forge calls a published file snippet (``gist`` on GitHub).
+    snippet_name: Literal["gist", "snippet"] = "snippet"
+    #: The host a snippet lands on when the command names none (GitHub's gist host);
+    #: empty: the repository's own host.
+    snippet_host: str = ""
     #: The git push options the forge reads, by name (``ci.variable=K=V`` is ``ci.variable``).
     push_options: tuple[tuple[str, PushOptionEffect], ...] = ()
+    #: ``(alias, namespace)``: a push option namespace the forge also reads under another
+    #: name (GitLab's ``mr.create`` is ``merge_request.create``).
+    push_option_aliases: tuple[tuple[str, str], ...] = ()
     #: Commit-message markers that make the forge skip its secret push protection.
     secret_skip_markers: tuple[str, ...] = ()
     #: Title markers that make the forge skip CI: ``playbook forge`` refuses such a
@@ -166,7 +188,12 @@ class Forge:
             >>> GITLAB.push_option("ci.variable=DEPLOY=1"), GITHUB.push_option("ci.skip")
             ('sets_ci_input', None)
         """
-        name = option.partition("=")[0].strip()
+        namespace, dot, key = option.partition("=")[0].partition(".")
+        if not dot:
+            return None
+        namespace = namespace.strip()  # the forge strips each part, as GitLab does
+        namespace = dict(self.push_option_aliases).get(namespace, namespace)
+        name = f"{namespace}.{key.strip()}"
         return next((effect for known, effect in self.push_options if known == name), None)
 
 
@@ -211,6 +238,10 @@ GITHUB: Final = Forge(
     token_env=("GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"),
     repo_flags=_REPO,
     hostname_flags=_flags("--hostname"),
+    repo_env=("GH_REPO",),
+    repo_host_parts=3,
+    snippet_name="gist",
+    snippet_host="gist.github.com",
     commands=(
         CliCommand(
             paths=(("gist", "create"), ("gist", "new")),
@@ -223,9 +254,8 @@ GITHUB: Final = Forge(
             paths=(("issue", "create"), ("issue", "new")),
             options=_REPO
             | _flags("-a --assignee -b --body -l --label -m --milestone -p --project --recover")
-            | _flags("-t --title"),
+            | _flags("-t --title -T --template"),
             files=_GH_BODY,
-            templates=_flags("-T --template"),
         ),
         CliCommand(
             paths=(("issue", "comment"),), options=_REPO | _flags("-b --body"), files=_GH_BODY
@@ -243,9 +273,8 @@ GITHUB: Final = Forge(
             paths=(("pr", "create"), ("pr", "new")),
             options=_REPO
             | _flags("-a --assignee -B --base -b --body -H --head -l --label -m --milestone")
-            | _flags("-p --project --recover -r --reviewer -t --title"),
+            | _flags("-p --project --recover -r --reviewer -t --title -T --template"),
             files=_GH_BODY,
-            templates=_flags("-T --template"),
             opens_pull_request=True,
         ),
         CliCommand(paths=(("pr", "comment"),), options=_REPO | _flags("-b --body"), files=_GH_BODY),
@@ -272,7 +301,7 @@ GITHUB: Final = Forge(
             options=_flags("--cache -H --header --hostname -q --jq -X --method -p --preview")
             | _flags("-f --raw-field -t --template"),
             files=_flags("--input"),
-            field_files=_flags("-F --field --form"),
+            field_files=_flags("-F --field"),
         ),
         CliCommand(
             paths=(("repo", "create"), ("repo", "new")),
@@ -304,6 +333,7 @@ GITLAB: Final = Forge(
     token_env=("GITLAB_TOKEN", "GITLAB_ACCESS_TOKEN", "OAUTH_TOKEN"),
     repo_flags=_REPO,
     hostname_flags=_flags("--hostname"),
+    repo_env=("GITLAB_REPO",),
     commands=(
         CliCommand(
             paths=(("snippet", "create"), ("snippet", "new")),
@@ -342,7 +372,8 @@ GITLAB: Final = Forge(
             | _flags("-t --title"),
             files=_GLAB_BODY,
             templates=_flags("--template"),
-            pushes=_flags("-f --fill --push"),
+            # --recover restores a saved push or fill setting (glab 1.115 mr_create.go)
+            pushes=_flags("-f --fill --push --recover"),
             opens_pull_request=True,
         ),
         CliCommand(
@@ -363,7 +394,7 @@ GITLAB: Final = Forge(
             options=_REPO
             | _flags("-a --assets-links -m --milestone -n --name -N --notes --package-name")
             | _flags("-r --ref -D --released-at -T --tag-message"),
-            files=_GLAB_NOTES,
+            files=_GLAB_NOTES | _flags("--experimental-notes-text-or-file"),
             file_operands=1,
         ),
         CliCommand(
@@ -382,7 +413,7 @@ GITLAB: Final = Forge(
             paths=(("repo", "create"),),
             options=_flags("--defaultBranch -d --description -g --group -n --name --remoteName")
             | _flags("-t --tag"),
-            pushes=_flags("--push"),
+            adds_remote=True,  # git remote add <remoteName>; glab 1.115 has no --push
             creates_repository=True,
         ),
         CliCommand(
@@ -405,6 +436,8 @@ GITLAB: Final = Forge(
     ),
     push_options=(
         ("secret_push_protection.skip_all", "skips_secret_detection"),
+        ("secret_detection.skip_all", "skips_secret_detection"),  # deprecated; GitGuardian reads it
+        ("security_policy.bypass_reason", "bypasses_security_policy"),
         ("ci.variable", "sets_ci_input"),
         ("ci.input", "sets_ci_input"),
         ("ci.skip", "skips_ci"),
@@ -413,7 +446,8 @@ GITLAB: Final = Forge(
         ("merge_request.create", "opens_pull_request"),
         ("merge_request.description", "sends_text"),
     ),
-    secret_skip_markers=("[skip secret push protection]",),
+    push_option_aliases=(("mr", "merge_request"),),
+    secret_skip_markers=("[skip secret push protection]", "[skip secret detection]"),
     skip_ci_markers=("[skip ci]", "[ci skip]", "[skip pipeline]", "[no ci]"),
 )
 

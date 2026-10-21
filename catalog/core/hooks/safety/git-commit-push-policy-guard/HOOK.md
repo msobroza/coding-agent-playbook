@@ -1,7 +1,7 @@
 ---
 id: git-commit-push-policy-guard
 name: Git commit and push policy guard
-description: Deny changes to git identity, authorship or signing (--author, -S, git config user.*, -c and GIT_* overrides) and commits under a placeholder identity; ask before committing in another worktree or on the default branch.
+description: Deny changes to git identity, authorship or signing (--author, -S, git config user.*, -c and GIT_* overrides), commits under a placeholder identity and push options that turn off a forge's secret push protection; ask before committing in another worktree or on the default branch, and on push options that set CI variables or skip CI.
 summary: Commit as the user's git identity on a feature branch; never pass `--author` or `-S`, or write `git config user.*`.
 version: 1
 tier: default
@@ -9,7 +9,7 @@ priority: 22
 events: [pre_tool_use]
 matcher:
   pre_tool_use:
-    tools: [shell]
+    tools: [shell, edit, write]
 handler:
   builtin: git_policy_guard
   config:
@@ -29,4 +29,5 @@ tags: [safety, git]
 Commit as the user's configured git identity: never pass `--author`, `-S` / `--gpg-sign`,
 `git -c user.*` or `GIT_AUTHOR_*` / `GIT_COMMITTER_*`, and never write `git config user.*`.
 If the identity is missing or a placeholder, ask the user to fix it. Commit from this
-session's worktree on a feature branch, never directly on the default branch.
+session's worktree on a feature branch, never directly on the default branch. Never pass a
+push option (`-o`, `push.pushOption`) that skips the forge's secret push protection or CI.

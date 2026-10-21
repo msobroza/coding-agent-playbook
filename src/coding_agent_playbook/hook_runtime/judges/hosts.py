@@ -14,7 +14,9 @@ lookup is itself egress (it leaks the name to a resolver; catalog principle
 - :func:`is_loopback`: ``localhost`` and loopback addresses only (``ipaddress``
   is imported for a word that looks like an IP, nothing else); RFC 1918
   ranges are not trusted, since a LAN host is still off the machine;
-- :func:`host_matches`: the suffix match of an ``allowed_hosts`` row.
+- :func:`host_matches`: the suffix match of an ``allowed_hosts`` row;
+- :func:`without_userinfo`: a URL with its ``user:token@`` dropped, so a
+  remote URL is stored and compared without a credential (prF Q56).
 """
 
 from __future__ import annotations
@@ -25,7 +27,14 @@ from typing import TYPE_CHECKING, Final
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
 
-__all__ = ["extract_hosts", "host_matches", "is_loopback", "scp_host", "url_host"]
+__all__ = [
+    "extract_hosts",
+    "host_matches",
+    "is_loopback",
+    "scp_host",
+    "url_host",
+    "without_userinfo",
+]
 
 #: ``scheme://[userinfo@]host``: an IPv6 literal in brackets, else up to ``/ : ? #``.
 _URL: Final = re.compile(
@@ -39,6 +48,8 @@ _BARE: Final = re.compile(
 )
 _IP_LIKE: Final = re.compile(r"^[0-9.]+$|:")
 _LOCALHOST: Final = frozenset({"localhost", "localhost.localdomain"})
+#: ``scheme://`` then the userinfo up to the authority's last ``@``.
+_USERINFO: Final = re.compile(r"^([A-Za-z][A-Za-z0-9+.-]*://)[^/?#]*@")
 
 
 def extract_hosts(words: Sequence[str], *, remotes: Mapping[str, str] | None = None) -> list[str]:
@@ -137,6 +148,17 @@ def host_matches(host: str, suffixes: Iterable[str]) -> bool:
         if suffix and (name == suffix or name.endswith("." + suffix)):
             return True
     return False
+
+
+def without_userinfo(url: str) -> str:
+    """``url`` without the ``user[:password]@`` of a ``scheme://`` URL (scp-like stays).
+
+    Example::
+
+        >>> without_userinfo("https://ci:tok@gitlab.example/g/app.git")
+        'https://gitlab.example/g/app.git'
+    """
+    return _USERINFO.sub(r"\1", url, count=1)
 
 
 def _hosts_of(word: str) -> list[str]:

@@ -13,8 +13,9 @@ in ``<state>`` (``SessionState.flags``):
   ``~/.config/opencode``) are the user's, not untrusted content.
 
 Once marked, normally allowed actions ask, naming the source: outbound network
-(exfil rows and any client to a non-loopback host, ``allowed_hosts`` or not),
-``git push``, package installs, control-plane edits (control-plane-guard's
+(exfil rows, the forge CLIs' and ``playbook forge``'s included, and any client to
+a non-loopback host, ``allowed_hosts`` or not), ``git push`` and a forge CLI command
+that pushes ``HEAD``'s branch (specs/prF-forge-adapter.md §8.3), package installs, control-plane edits (control-plane-guard's
 table) and reads of ``$HOME`` dotfiles outside the repository. The flag clears
 only with a new session, or ``taint_escalation:session_start`` with source
 ``clear``; a compaction keeps it (the summary may carry the content).
@@ -162,11 +163,15 @@ def _segment_action(segment: Segment) -> tuple[str, str] | None:
         network_hosts,
         segment_egress,
     )
+    from coding_agent_playbook.hook_runtime.judges.forge_calls import forge_call
     from coding_agent_playbook.hook_runtime.judges.install_commands import install_requests
     from coding_agent_playbook.hook_runtime.shell.git_command import parse_git
 
     git = parse_git(segment)
     if git is not None and git.subcommand == "push":
+        return "push", "pushing commits"
+    forge = forge_call(segment) if git is None else None
+    if forge is not None and forge.pushes:
         return "push", "pushing commits"
     if install_requests(segment):
         return "install", "installing packages"
