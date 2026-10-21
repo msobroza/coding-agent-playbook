@@ -20,22 +20,24 @@ The mapping and ticket files were generated from verified mapping data during de
 
 Waves run in the order of the wave table in `tickets.md` (0, 0b, 1-9). Wave N+1 starts only after wave N is integrated and its gate is green.
 
-1. **Implement.** Each ticket runs in its own fresh-context agent, in an isolated git worktree, at medium effort, with the text of the `/mattpocock-skills:implement` skill plus the ticket's section of `tickets.md`. At most three tickets run at once, because the machine has about 8 GB of RAM and little free disk. The agent:
+From wave 2 on, the owner chose speed: no separate verify step and no full suite per wave. Wave 1 ran with both: an acceptance verifier with repair rounds, and the chunked full suite.
+
+1. **Implement.** Each ticket runs in its own fresh-context agent, in an isolated git worktree, at medium effort, with the text of the `/mattpocock-skills:implement` skill plus the ticket's section of `tickets.md`. At most three tickets run at once (two while the machine swaps heavily), because it has about 8 GB of RAM and little free disk. The skill's own last steps are replaced: the agent does not run the full suite (see step 4) and does not run `/code-review` itself (see step 2). The agent:
    - starts from the integration tip: `git fetch origin integration/core-python-skills && git checkout -B ticket/<id> origin/integration/core-python-skills`;
    - creates its test interpreter (see "Test interpreters" below);
    - works test-first at the seams (`/tdd`), runs type checks and single test files regularly, and runs the test directories it touches plus `pytest -m catalog`; it never runs the full suite;
    - commits with a Conventional Commits subject equal to the ticket title, the body ending `Refs: #<issue> (prU <id>)`;
    - pushes with `git push origin HEAD:refs/heads/ticket/<id>`.
-2. **Review.** Two more fresh-context agents read the pushed diff (`git diff origin/integration/core-python-skills...origin/ticket/<id>`), read-only. They are the two axes of `/code-review`: *Standards* (the repo's conventions, `CONTEXT.md`, the ADRs, the clean-code rules) and *Spec* (every acceptance criterion and decision). They run as separate agents because an agent inside a workflow cannot start agents of its own.
-3. **Fix.** When the reviewers report findings, one more agent applies the real ones (or says why it rejects one), reruns the touched tests and pushes the ticket branch again.
-4. **Verify.** A fresh agent checks out the pushed branch, decides every acceptance criterion with evidence (the command it names, the test that proves it, or the code line), checks the listed files, the scope and the commit rules, and runs ruff, mypy and the touched test directories. When something is unmet, a fix agent repairs it and the verifier runs again, for at most two repair rounds. A ticket that is still unverified stays out of the integration and goes back to the orchestrator.
-5. **Integrate.** One integrator agent, also isolated, then:
-   - squash-merges each verified ticket branch (still at the verified commit) into `integration/core-python-skills` as one commit `<ticket title> (#<issue>)` whose body ends `Closes #<issue>`;
-   - runs the full CI-parity gate once for the wave: `ruff check .`, `ruff format --check .`, `mypy`, the full `pytest` in chunks (see "The full suite in chunks" below), and the commit-convention check;
+2. **Review.** The `/mattpocock-skills:code-review` skill, run as its two parallel sub-agents: *Standards* (the repo's documented standards plus the skill's smell baseline) and *Spec* (the ticket's issue, its section of `tickets.md` and the decisions it cites). Each sub-agent receives the skill's full text, a header that names its role, and the inputs of the skill's steps 1-3: the fixed point `origin/integration/core-python-skills`, `origin/ticket/<id>` as `HEAD`, the spec source and the standards files. The workflow plays the skill's lead: an agent inside a workflow cannot start sub-agents, so the workflow starts both and keeps their reports apart (step 5). The repo has no `docs/agents/issue-tracker.md`; the header points the Spec sub-agent at `gh issue view`.
+3. **Fix.** When the reviewers report findings, one more agent fixes every hard violation and every Spec finding, applies a judgement-call smell when it clearly helps, rejects wrong findings with a reason, reruns the touched tests and pushes the ticket branch again.
+4. **Integrate.** One integrator agent, also isolated, then:
+   - squash-merges each pushed ticket branch into `integration/core-python-skills` as one commit `<ticket title> (#<issue>)` whose body ends `Closes #<issue>`; `tests/cli/golden/cli_surface.json` is re-recorded, never merged by hand;
+   - runs a light gate: `ruff check .`, `ruff format --check .`, plain `mypy` (no path argument: `mypy .` also checks the `catalog/` eval-sample fixtures and fails on them), the test directories the wave's diff touches, `pytest -m catalog` when catalog files changed, and the commit-convention check;
    - fixes failures with small `fix:` commits, or records pre-existing ones;
    - pushes fast-forward only: `git push origin HEAD:refs/heads/integration/core-python-skills`;
    - removes the merged tickets' local worktrees to free disk.
-6. **Record.** The orchestrator ticks the wave's boxes in tracker #176 and comments with the integration head and the gate result.
+   The full suite, in chunks (see "The full suite in chunks" below), runs once in the final wave (F-02), before the PR into `main`.
+5. **Record.** The orchestrator ticks the wave's boxes in tracker #176 and comments with the integration head and the gate result.
 
 ### Test interpreters
 
@@ -92,6 +94,7 @@ The `Closes #N` lines close each issue only when the final PR merges into `main`
    - *Pushed, not integrated*: its `ticket/<id>` branch exists. Rerun only the integrate step for it.
    - *Committed locally, not pushed*: its commits sit in a leftover worktree. Each session may write only inside its own worktree, so to finish such a ticket by hand, check that the leftover worktree is clean, remove it (`git worktree remove <path>`; the commits stay on `ticket/<id>`), check the branch out in your own worktree, finish it, and push.
    - *Lost or never started*: nothing pushed. Discard any local leftover (`git worktree list`, then `git worktree remove --force <path>`; delete the local `ticket/<id>` branch) and rerun its implement step from the integration tip.
+   - *A stopped wave workflow* can be resumed with its run id and the same arguments. It reuses finished agents only up to the first agent call whose start order changed, so with tickets in a pipeline the later stages of the batch in flight run again. That is harmless, because they read the pushed branches, but it costs time.
 3. **Never skip a wave.** Finish and integrate the lowest unfinished wave, gate green, before starting the next.
 4. **On a new machine,** first:
    - clone the repo and check out `integration/core-python-skills`;
