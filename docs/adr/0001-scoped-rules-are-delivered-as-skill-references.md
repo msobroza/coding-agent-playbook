@@ -16,3 +16,5 @@ Every scoped rule used to be loaded in full on every turn: Claude Code's rules f
 
 - A skill's presence depends on detector facts: it is written only when at least one member rule passes its gate. Its description gains an engine-written "Covers …" clause naming only the active members.
 - Loading a skill is the model's choice. Three things push it toward the right skill: the "where guidance lives" lines in always-loaded context, prompts that name the skills and references they need, and hooks (lint feedback that names the skill, plus the skill nudge).
+
+Amended by ADR 0005: member rules now live in, and render to, their skill's `rules/` directory, grouped into sections; `references/` holds only free-form documents.

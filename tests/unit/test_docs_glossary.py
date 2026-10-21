@@ -51,7 +51,7 @@ _GLOSSARY_TERMS = (
     "Hook",
     "Guardrail",
     "Skill nudge",
-    "Eval task",
+    "Eval sample",
     "Always-loaded context",
     "Skill listing",
     "Context budget",

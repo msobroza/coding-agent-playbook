@@ -15,24 +15,44 @@ A rule placed in always-loaded context, because nearly every task needs it and t
 _Avoid_: global rule, core rule
 
 **Scoped rule**:
-A rule delivered on demand, as a reference inside the one skill it names as the owner of its topic.
+A rule delivered on demand, inside the one skill that owns its topic.
 _Avoid_: conditional rule, glob rule
 
 **Member rule**:
-A scoped rule seen from the skill it names in `skill:`; the engine renders it as one of that skill's references. Continue, which reads no skills, still receives it as its own rule file.
+A scoped rule seen from the skill that owns it: it sits in that skill's rules directory, or, when it comes from another layer, names the skill in `skill:`. The engine renders it into the skill's rules directory. Continue, which reads no skills, still receives it as its own rule file.
 _Avoid_: child rule
 
 **Skill**:
-A named unit of on-demand guidance: a short index the agent loads by name, plus references it opens only when needed.
+A named unit of on-demand guidance: a short index the agent loads by name, plus member rules and references it opens only when needed.
 _Avoid_: pack, plugin
 
 **Reference**:
-A file inside a skill that the agent opens only when the skill's index points it there.
+A free-form document inside a skill (long-form explanation, checklist, walkthrough) that the agent opens when a rule names it or its open-when line matches the change. Unlike a member rule, it has no priority and no section; it may carry a gate that decides whether it is written at all.
 _Avoid_: appendix, sub-rule
+
+**Decision guide**:
+A reference that routes a recurring situation (which test double, which idiom on this Python version, which rule a failing check points to) to the rules that cover it, without repeating them.
+_Avoid_: cheat sheet
+
+**Example**:
+A small runnable project inside a skill, with its own tests, that shows the skill's rules working together; written only where its gate passes.
+_Avoid_: demo, sample app (an **Eval sample** is a different thing)
+
+**Section**:
+A named group of a skill's member rules, listed in the skill's index under its title, its impact and its open-when line, which names the kind of change that should make the agent read those rules. Every member rule belongs to exactly one section of its skill.
+_Avoid_: category
+
+**Impact**:
+How much harm ignoring a section's rules does: CRITICAL, HIGH, MEDIUM or LOW. It decides which sections a skill lists first and which priority band their rules take.
+_Avoid_: severity, importance
 
 **Prompt**:
 A named task the user invokes explicitly, as a slash command.
 _Avoid_: command, template
+
+**Prompt set**:
+One complete version of the core prompts, chosen per consumer repo; the same prompt names render from whichever set the repo selects.
+_Avoid_: prompt variant, v2 prompts
 
 **Hook**:
 An assistant lifecycle handler that runs on agent events (before a tool, after an edit, at stop) and can block, warn or feed back to the agent.
@@ -46,8 +66,9 @@ _Avoid_: advisory, advisory rule
 A one-line hook message, sent the first time in a session that the agent edits a file a skill covers, naming the skill to load.
 _Avoid_: reminder, hint
 
-**Eval task**:
+**Eval sample**:
 A reproducible test case for a prompt: a starting repo state, an invocation and a definition of success.
+_Avoid_: eval task
 
 ### Context
 
@@ -57,6 +78,10 @@ _Avoid_: system prompt, memory
 
 **Skill listing**:
 The names and descriptions of the skills a harness advertises to the model on every turn; it is part of always-loaded context.
+
+**Probe repo**:
+A synthetic consumer repo that CI syncs to measure budgets and check rendering. Gated skills count only in the probe whose facts turn them on (a standard, a Domino and an authoring probe).
+_Avoid_: fixture repo
 
 **Context budget**:
 The ceiling on always-loaded context that CI enforces.
@@ -72,10 +97,14 @@ _Avoid_: skills hub
 The installable package that detects facts about a consumer repo, renders the catalog and writes each harness's files.
 
 **Catalog**:
-The canonical source of rules, skills, prompts, hooks and eval tasks that the engine renders.
+The canonical source of rules, skills, prompts, hooks and eval samples that the engine renders.
 
 **Layer**:
 One source of catalog content. Later layers override earlier ones by id: core, then overlays and bundled plugins, then the consumer repo's own content.
+
+**Local layer**:
+A consumer repo's own layer, kept in its `playbook/` directory; it can add rules or skills and override others by id.
+_Avoid_: repo-local overlay
 
 **Core**:
 The engine's own layer, active in every consumer repo.
@@ -84,8 +113,23 @@ The engine's own layer, active in every consumer repo.
 An opt-in layer that ships inside the engine.
 _Avoid_: pack
 
+**Document layout**:
+Where a consumer repo keeps its glossary, decision records, architecture overview, specs, plans, research notes and framework setup notes. It has defaults, the repo may change any directory in its committed config, and every framework follows it.
+_Avoid_: docs structure, folder convention
+
+**Framework**:
+The bundled plugin or overlay that supplies the spec-driven workflow skills an agent follows from idea to merge (planning, test-first work, review). A consumer repo enables at most one, chosen by name. It declares itself in a metadata file, and may map its own document paths onto the document layout there.
+
+**Capability**:
+A standard role a framework fills with one of its skills (clarify, spec, plan, tdd, debug, review, verify). The skill declares the role in its own frontmatter, so core content can name the role instead of a framework's skill.
+_Avoid_: hook point, extension
+_Avoid_: methodology, workflow pack
+
 **Overlay**:
 An organization's package that adds a layer on top of core.
+
+**Platform**:
+A hosting environment a consumer repo builds for (today, Domino). Its skills turn on when the detector finds the platform's markers in the repo, or when the consumer config names the platform.
 
 **Detector fact**:
 A property of the consumer repo (frameworks, ML stack, notebooks, Python version and so on) that decides which content is rendered.
@@ -137,17 +181,17 @@ The checks `playbook validate` and the sync gate run over canonical artifacts be
 A CLI command that runs the same judge as a guard hook, so the check also runs outside an agent session, in CI or pre-commit.
 
 **Grading kernel**:
-The engine's shared machinery for scoring work (metrics, checks, rubrics and how they compose), used by eval tasks and the metrics gate.
+The engine's shared machinery for scoring work (metrics, checks, rubrics and how they compose), used by eval samples and the metrics gate.
 _Avoid_: evaluators
 
 ### Third-party content
 
 **Distilled content**:
-Third-party ideas rewritten from scratch in the catalog's own formats, credited by name and license only.
+Third-party ideas rewritten from scratch in the catalog's own formats, credited by name (and license, when the source has one) and never copied; the only form allowed for sources without an open license.
 _Avoid_: ported, adapted
 
 **Vendored content**:
-Third-party files copied into a bundled plugin together with their license and a list of changes.
+Third-party text copied into a layer (core or a bundled plugin) together with its license and a list of changes, then adapted to the catalog's formats.
 _Avoid_: imported, mirrored
 
 ### What a skill may run
