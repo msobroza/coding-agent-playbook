@@ -22,6 +22,7 @@ from tests.plugins.superpowers_expectations import PLUGIN_NAME
 from tests.toml_equality import assert_toml_identical
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
 
@@ -120,8 +121,12 @@ def test_skip_reason_names_has_dev_dependency(tmp_path, make_synthetic_repo, cap
     ],
 )
 def test_skip_reason_quotes_the_dependency_and_any_file_keys(
-    key, value, tmp_path, make_synthetic_repo, capsys
-):
+    key: str,
+    value: str,
+    tmp_path: Path,
+    make_synthetic_repo: Callable[..., Path],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     """D23, D78(10): the gate as written, not a boolean fact named after the key."""
     repo = make_synthetic_repo(tmp_path)
     rules_dir = repo / "playbook" / "rules"

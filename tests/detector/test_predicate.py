@@ -10,6 +10,7 @@ from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.detector.facts import Facts, detect
 from coding_agent_playbook.detector.predicate import (
     LIST_PREDICATE_KEYS,
+    PREDICATE_KEYS,
     evaluate_predicate,
     filter_applies_if,
 )
@@ -222,6 +223,11 @@ def test_any_dependency_reads_the_detected_pyproject(tmp_path: Path) -> None:
     assert evaluate_predicate({"any_dependency": ["pandera"]}, detect(tmp_path)) is True
 
 
+def test_any_dependency_is_false_in_an_empty_repo(tmp_path: Path) -> None:
+    """Acceptance: ``any_dependency: [pandera]`` fails on the facts ``detect`` emits for no files."""
+    assert evaluate_predicate({"any_dependency": ["pandera"]}, detect(tmp_path)) is False
+
+
 # --- any_file (D78(10)): at least one listed path exists ---
 
 
@@ -395,24 +401,22 @@ def test_filter_applies_if_raises_on_an_unknown_predicate_key(tmp_path: Path) ->
         filter_applies_if([_rule("typo", {"has_dokerfile": True})], {}, tmp_path)
 
 
-#: Every key ``evaluate_predicate`` accepts (SPEC §6.4). A new key goes here too.
-_EVERY_PREDICATE_KEY = (
-    "python_version",
-    "has_framework",
-    "any_framework",
-    "has_ml_stack",
-    "any_ml_stack",
-    "has_dev_dependency",
-    "has_dependency",
-    "any_dependency",
-    "has_file",
-    "any_file",
-    "package_manager",
-    "has_notebooks",
-    "has_dockerfile",
-    "has_ci",
-    "banking_mode",
-)
+def _is_accepted(key: str, tmp_path: Path) -> bool:
+    """Whether ``evaluate_predicate`` dispatches ``key`` (any outcome but 'unknown predicate key')."""
+    for value in (5, True):  # bool facts dispatch only on a bool value
+        try:
+            evaluate_predicate({key: value}, {}, repo_root=tmp_path)
+        except ValueError as exc:
+            if "unknown predicate key" not in str(exc):
+                return True
+        else:
+            return True
+    return False
+
+
+def test_every_predicate_key_is_accepted_by_evaluate_predicate(tmp_path: Path) -> None:
+    assert all(_is_accepted(key, tmp_path) for key in PREDICATE_KEYS)
+    assert not _is_accepted("has_dokerfile", tmp_path)
 
 
 def _rejects_as_non_list(key: str, tmp_path: Path) -> bool:
@@ -426,7 +430,7 @@ def _rejects_as_non_list(key: str, tmp_path: Path) -> bool:
 
 def test_list_predicate_keys_are_exactly_the_keys_that_take_a_list(tmp_path: Path) -> None:
     """One home for the list-valued keys: ``playbook check`` imports this set."""
-    takes_a_list = {key for key in _EVERY_PREDICATE_KEY if _rejects_as_non_list(key, tmp_path)}
+    takes_a_list = {key for key in PREDICATE_KEYS if _rejects_as_non_list(key, tmp_path)}
     assert takes_a_list == LIST_PREDICATE_KEYS
 
 

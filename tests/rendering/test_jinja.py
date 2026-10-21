@@ -141,6 +141,22 @@ def test_python_at_least_names_itself_on_a_malformed_version(tmp_path: Path, min
         render_string(f'{{% if python_at_least("{minimum}") %}}x{{% endif %}}', {}, env=env)
 
 
+def test_python_at_least_names_itself_on_a_malformed_fact(tmp_path: Path) -> None:
+    env = build_environment([tmp_path])
+    env.globals["_facts"] = {"python_version": "3.x"}
+    expected = "python_at_least('3.11'): fact python_version must be a version like '3.11'; "
+    with pytest.raises(ValueError, match=re.escape(expected + "got '3.x'")):
+        render_string(_AT_LEAST_311, {}, env=env)
+
+
+@pytest.mark.parametrize("argument", ["5", "none", '["anyio"]'])
+def test_has_dependency_names_itself_on_a_non_string_name(tmp_path: Path, argument: str) -> None:
+    env = build_environment([tmp_path])
+    env.globals["_facts"] = {}
+    with pytest.raises(ValueError, match="has_dependency expects a dependency name string; got "):
+        render_string(f"{{% if has_dependency({argument}) %}}x{{% endif %}}", {}, env=env)
+
+
 _ANYIO_RULE = (
     "---\nid: anyio-rule\nname: AnyIO\ndescription: d\nscope: always\n---\n"
     "{% if has_dependency('anyio') %}use anyio{% else %}use asyncio{% endif %}\n"

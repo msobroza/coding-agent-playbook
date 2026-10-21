@@ -35,24 +35,10 @@ _KNOWN_BOOL_FACT_KEYS: frozenset[str] = frozenset(
     {"has_notebooks", "has_dockerfile", "has_ci", "banking_mode"}
 )
 
-#: How each list-valued ``applies_if`` key combines its names: ``all`` or ``any``.
-#: An explicit map rather than a key-name test, so a lookup that misses raises
-#: ``KeyError`` instead of silently falling into any-semantics.
-_LIST_COMBINERS: dict[str, Callable[[Iterable[object]], bool]] = {
-    "has_framework": all,
-    "any_framework": any,
-    "has_ml_stack": all,
-    "any_ml_stack": any,
-    "has_dev_dependency": all,
-    "has_dependency": all,
-    "any_dependency": any,
-    "has_file": all,
-    "any_file": any,
-}
-
-#: Every ``applies_if`` key whose value is a list of strings. The one home of
-#: that fact: ``playbook check`` quotes these keys as written in its skip reason.
-LIST_PREDICATE_KEYS: frozenset[str] = frozenset(_LIST_COMBINERS)
+#: ``all`` or ``any``: how a list-valued key combines its per-name results.
+type _Combiner = Callable[[Iterable[object]], bool]
+#: Evaluates one list-valued key: ``(value, key, facts, repo_root) -> holds``.
+type _ListReader = Callable[[object, str, Facts, Path | None], bool]
 
 
 def _coerce_string_list(value: Any, key: str) -> list[str]:
@@ -109,43 +95,87 @@ def _canonical_keys(facts: Facts, *fields: str) -> frozenset[str]:
     return frozenset(canonical_name(name) for field in fields for name in _fact_keys(facts, field))
 
 
-def _dependencies_match(value: object, key: str, facts: Facts, *fields: str) -> bool:
+def _dependencies_match(
+    value: object, key: str, facts: Facts, combine: _Combiner, *fields: str
+) -> bool:
     """Whether the dependency predicate ``key`` holds over the dependency facts ``fields``.
 
     ``has_dev_dependency`` reads ``dev_dependencies`` (prK §F.1.2); ``has_dependency``
     and ``any_dependency`` read runtime and dev dependencies alike (D23).
 
     >>> _dependencies_match(["pandera"], "any_dependency", {"dependencies": {"pandera": ""}},
-    ...                     "dependencies")
+    ...                     any, "dependencies")
     True
     """
     wanted = [canonical_name(name) for name in _coerce_string_list(value, key)]
     present = _canonical_keys(facts, *fields)
-    return _LIST_COMBINERS[key](name in present for name in wanted)
+    return combine(name in present for name in wanted)
 
 
-def _names_present(value: object, key: str, facts: Facts, field: str) -> bool:
+def _names_present(value: object, key: str, facts: Facts, combine: _Combiner, field: str) -> bool:
     """Whether the names predicate ``key`` holds over the keys of ``facts[field]`` (exact names).
 
-    >>> _names_present(["torch"], "has_ml_stack", {"ml_stack": {"torch": "2"}}, "ml_stack")
+    >>> _names_present(["torch"], "has_ml_stack", {"ml_stack": {"torch": "2"}}, all, "ml_stack")
     True
     """
     wanted = _coerce_string_list(value, key)
     present = _fact_keys(facts, field)
-    return _LIST_COMBINERS[key](name in present for name in wanted)
+    return combine(name in present for name in wanted)
 
 
-def _files_exist(value: object, key: str, repo_root: Path | None) -> bool:
+def _files_exist(value: object, key: str, repo_root: Path | None, combine: _Combiner) -> bool:
     """Whether ``has_file`` (all) or ``any_file`` (any) holds under ``repo_root``.
 
-    >>> _files_exist(["mkdocs.yml"], "any_file", None)
+    >>> _files_exist(["mkdocs.yml"], "any_file", None, any)
     Traceback (most recent call last):
     ValueError: predicate 'any_file' requires repo_root keyword argument
     """
     paths = _coerce_string_list(value, key)
     if repo_root is None:
         raise ValueError(f"predicate {key!r} requires repo_root keyword argument")
-    return _LIST_COMBINERS[key]((repo_root / rel).exists() for rel in paths)
+    return combine((repo_root / rel).exists() for rel in paths)
+
+
+def _names_reader(combine: _Combiner, field: str) -> _ListReader:
+    """A reader for a names key (``has_framework``…) over the mapping fact ``field``."""
+    return lambda value, key, facts, _root: _names_present(value, key, facts, combine, field)
+
+
+def _dependencies_reader(combine: _Combiner, *fields: str) -> _ListReader:
+    """A reader for a dependency key over the dependency facts ``fields`` (D23)."""
+    return lambda value, key, facts, _root: _dependencies_match(value, key, facts, combine, *fields)
+
+
+def _files_reader(combine: _Combiner) -> _ListReader:
+    """A reader for ``has_file`` / ``any_file`` under the predicate's ``repo_root``."""
+    return lambda value, key, _facts, root: _files_exist(value, key, root, combine)
+
+
+_RUNTIME_AND_DEV = ("dependencies", "dev_dependencies")
+
+#: Every list-valued ``applies_if`` key and the reader that evaluates it (its
+#: ``all``/``any`` combiner and the fact it reads are bound in). The one home of
+#: the list keys: ``evaluate_predicate`` dispatches on it and ``playbook check``
+#: quotes ``LIST_PREDICATE_KEYS`` as written in its skip reason.
+_LIST_PREDICATES: dict[str, _ListReader] = {
+    "has_framework": _names_reader(all, "frameworks"),
+    "any_framework": _names_reader(any, "frameworks"),
+    "has_ml_stack": _names_reader(all, "ml_stack"),
+    "any_ml_stack": _names_reader(any, "ml_stack"),
+    "has_dev_dependency": _dependencies_reader(all, "dev_dependencies"),
+    "has_dependency": _dependencies_reader(all, *_RUNTIME_AND_DEV),
+    "any_dependency": _dependencies_reader(any, *_RUNTIME_AND_DEV),
+    "has_file": _files_reader(all),
+    "any_file": _files_reader(any),
+}
+
+#: Every ``applies_if`` key whose value is a list of strings.
+LIST_PREDICATE_KEYS: frozenset[str] = frozenset(_LIST_PREDICATES)
+
+#: Every key ``evaluate_predicate`` accepts; any other key raises ``ValueError``.
+PREDICATE_KEYS: frozenset[str] = (
+    LIST_PREDICATE_KEYS | {"python_version", "package_manager"} | (_KNOWN_BOOL_FACT_KEYS)
+)
 
 
 def _package_manager_names(value: object) -> frozenset[str]:
@@ -217,20 +247,8 @@ def evaluate_predicate(
                 )
             if not _check_python_version(value, facts):
                 return False
-        elif key in ("has_framework", "any_framework"):
-            if not _names_present(value, key, facts, "frameworks"):
-                return False
-        elif key in ("has_ml_stack", "any_ml_stack"):
-            if not _names_present(value, key, facts, "ml_stack"):
-                return False
-        elif key == "has_dev_dependency":
-            if not _dependencies_match(value, key, facts, "dev_dependencies"):
-                return False
-        elif key in ("has_dependency", "any_dependency"):
-            if not _dependencies_match(value, key, facts, "dependencies", "dev_dependencies"):
-                return False
-        elif key in ("has_file", "any_file"):
-            if not _files_exist(value, key, repo_root):
+        elif key in _LIST_PREDICATES:
+            if not _LIST_PREDICATES[key](value, key, facts, repo_root):
                 return False
         elif key == "package_manager":
             if not _package_manager_matches(value, facts):

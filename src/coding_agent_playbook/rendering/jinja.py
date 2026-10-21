@@ -90,13 +90,22 @@ def build_environment(template_search_paths: Sequence[Path]) -> Environment:
     # D23/D40: both go through the applies_if seam, so a template branch and a
     # gate never disagree, and neither fails when its fact is undefined.
     def _has_dependency(name: str) -> bool:
+        if not isinstance(name, str):
+            raise ValueError(f"has_dependency expects a dependency name string; got {name!r}")
         return evaluate_predicate({"has_dependency": [name]}, cast("Facts", _facts()))
 
     env.globals["has_dependency"] = _has_dependency
 
     def _python_at_least(minimum: str) -> bool:
         _require_version(minimum)
-        return evaluate_predicate({"python_version": f">={minimum}"}, cast("Facts", _facts()))
+        facts = _facts()
+        try:
+            return evaluate_predicate({"python_version": f">={minimum}"}, cast("Facts", facts))
+        except ValueError as exc:  # a malformed fact, e.g. in an eval sample's mock facts
+            raise ValueError(
+                f"python_at_least({minimum!r}): fact python_version must be a version "
+                f"like '3.11'; got {facts.get('python_version')!r}"
+            ) from exc
 
     env.globals["python_at_least"] = _python_at_least
     return env
