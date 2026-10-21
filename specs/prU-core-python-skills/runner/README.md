@@ -27,7 +27,7 @@ Then start the Workflow tool with `scriptPath` set to the absolute path of `prU-
 
 When the run returns:
 
-- **`integrated`**: done. Refresh the tracker: fetch its body with `gh issue view 176 --repo msobroza/coding-agent-playbook --json body -q .body > now.md`, run `plan.py tracker-body --current now.md > new.md`, then `gh issue edit 176 --repo msobroza/coding-agent-playbook --body-file new.md`. This is idempotent, so either machine can run it.
+- **`integrated`**: done. Refresh the tracker: fetch its body with `gh issue view 176 --repo msobroza/coding-agent-playbook --json body -q .body > now.md`, run `plan.py tracker-body --current now.md > new.md`, then `gh issue edit --repo msobroza/coding-agent-playbook 176 --body-file new.md`. Keep `--repo` first: the allow rules match the command's beginning. This is idempotent, so either machine can run it.
 - **`blocked`**: the ticket waits for a ticket of the other machine. Poll `plan.py status --machine B` every 15 minutes and start a new run when tickets become ready.
 - **`failed`**: read the run's journal, then fix the ticket by hand or rerun it with `plan.py args --only <id>`.
 - **Cleanup**: run `plan.py cleanup` (a dry run), then `plan.py cleanup --apply`, only when no run is active on this machine.
