@@ -299,6 +299,16 @@ class Lockfile:
             "entries": [entry.to_dict() for entry in self.entries],
         }
 
+    def recorded_paths(self) -> frozenset[str]:
+        """Every repo-relative path an entry records, scoped entries included.
+
+        Example::
+
+            Lockfile(1, "0", "", [LockEntry("AGENTS.md", "0" * 64, 1)]).recorded_paths()
+            # frozenset({'AGENTS.md'})
+        """
+        return frozenset(entry.path for entry in self.entries)
+
     def find(self, repo_relative_path: str) -> LockEntry | None:
         for entry in self.entries:
             if entry.path == repo_relative_path:

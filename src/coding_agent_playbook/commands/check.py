@@ -7,7 +7,8 @@ A diagnostic, so it exits 0 whatever it finds (drift included). An overlay in
 ``overlays_enabled`` that ``playbook sync`` would refuse (``validation.preflight``) is
 flagged under Environment, and the Drift section then never reports a clean state.
 The Hooks block comes from :mod:`._check_hooks` (specs/prK-lifecycle-hooks.md
-§A.8). The Drift lines are ``lockfile.drift.drift_entries``, the definition the
+§A.8); the Harnesses block from :mod:`~coding_agent_playbook.detector.harness_markers`
+(advisory, D79). The Drift lines are ``lockfile.drift.drift_entries``, the definition the
 ``drift`` Stop stage shares (specs/prK-hook-pack.md §E.1), with Claude's strict
 settings parser for the scoped (``json:<pointer>``) entries (§C.2.6).
 """
@@ -30,6 +31,7 @@ from coding_agent_playbook.config.committed import (
 )
 from coding_agent_playbook.config.files import CONFIG_FILENAME, ConfigFiles
 from coding_agent_playbook.detector.facts import detect
+from coding_agent_playbook.detector.harness_markers import adapter_hints
 from coding_agent_playbook.detector.predicate import evaluate_predicate
 from coding_agent_playbook.lockfile.drift import drift_entries
 from coding_agent_playbook.validation import preflight as _sync_preflight
@@ -207,6 +209,22 @@ def _format_drift_section(ctx: SyncContext, unusable: Sequence[UnusableOverlay] 
     return "\n".join(lines)
 
 
+def _format_harness_section(ctx: SyncContext) -> str:
+    """Advisory hints where the enabled adapters and the repo's harness files disagree (D79).
+
+    Each hint names the config change that settles it; none affects the exit code.
+    """
+    lockfile = ctx.state_source.load_lockfile()
+    generated = lockfile.recorded_paths() if lockfile is not None else frozenset()
+    hints = adapter_hints(
+        ctx.repo_root, ctx.config.adapters_enabled, generated, config_name=CONFIG_FILENAME
+    )
+    lines = [f"  ! {hint}" for hint in hints] or [
+        "  Enabled adapters match the repo's harness files."
+    ]
+    return "\n".join(["=== Harnesses ===", *lines])
+
+
 def _lockfile_drift(ctx: SyncContext, lockfile: Lockfile) -> list[str]:
     """One line per lockfile entry whose file is missing, changed, or lost its exec bit.
 
@@ -274,6 +292,7 @@ def run(args: argparse.Namespace) -> int:
     print(_format_detected_section(ctx))
     print(_format_artifacts_section(ctx))
     print(format_hooks_section(ctx))
+    print(_format_harness_section(ctx))
     print(_format_drift_section(ctx, unusable))
     # A diagnostic: problems are reported above, never through the exit code
     # (drift exits 0 too). `playbook validate` and `playbook sync` are the gates.
