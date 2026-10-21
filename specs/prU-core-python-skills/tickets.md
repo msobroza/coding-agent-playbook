@@ -571,7 +571,7 @@ D79(1): every hook call the harness parser classifies as foreign, and every call
 
 Acceptance:
 - The exit code and wire output are unchanged for every inert case.
-- Each ignored call is logged once with event, harness and reason.
+- Each ignored call is logged once (per session, event and reason; once per UTC day when the payload has no session id) with event, harness and reason.
 - doctor names claude_project_dir_unset and missing_session_id as a likely misconfigured real session.
 
 ### L0-26: feat(cli): warn when configured adapters and repo harness markers differ, and pre-select detected adapters in interactive init

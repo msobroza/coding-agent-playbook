@@ -4,22 +4,24 @@ A foreign payload and an event outside git stay inert: exit 0, nothing on
 stdout or stderr. Each one leaves one ``ignored`` decision line naming its
 event, harness and reason, so ``playbook-hook doctor`` can show that the
 guards were off. With a session id the line is written once per session per
-event and reason; without one there is no session to dedupe on, so every call
-is logged.
+event and reason; without one, once per UTC day per event and reason.
 """
 
 from __future__ import annotations
 
+import io
 import json
 from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from coding_agent_playbook.hook_runtime.diagnostics._doctor_ignored import ignored_call_checks
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.dispatch.run import dispatch_event
 from coding_agent_playbook.hook_runtime.harness.wire import WireOutput
 from tests.hook_runtime.dispatch_kit import PRE
-from tests.hook_runtime.guard_repo import SESSION_ID, hook_record
+from tests.hook_runtime.fakes import FakeClock
+from tests.hook_runtime.guard_repo import SESSION_ID, hook_record, streams
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -29,6 +31,13 @@ if TYPE_CHECKING:
     from tests.hook_runtime.guard_repo import GuardRepo
 
 _INERT = WireOutput()
+_DAY_S = 86_400
+
+
+def _silent(*deps: RuntimeDeps) -> bool:
+    """Nothing reached the real out/err streams, not only the returned wire."""
+    sinks = [stream for d in deps for stream in (d.out, d.err)]
+    return all(isinstance(s, io.StringIO) and not s.getvalue() for s in sinks)
 
 
 def _ignored(lines: list[dict[str, Any]]) -> list[tuple[str, str, str, str]]:
@@ -60,25 +69,48 @@ def test_claude_foreign_payload_is_logged_once_per_session_and_stays_inert(
 ) -> None:
     payload = repo.payload(PRE, tool="Bash", **fields)
 
-    first = dispatch_event(PRE, Harness.CLAUDE_CODE, payload, make_deps())
-    second = dispatch_event(PRE, Harness.CLAUDE_CODE, payload, make_deps())
+    deps = [make_deps(), make_deps()]
+
+    first, second = (dispatch_event(PRE, Harness.CLAUDE_CODE, payload, d) for d in deps)
 
     assert (first.wire, second.wire, first.written) == (_INERT, _INERT, False)
+    assert _silent(*deps)
     assert _ignored(repo.decisions()) == [("pre_tool_use", "claude_code", reason, SESSION_ID)]
 
 
-def test_missing_session_id_is_logged_for_every_call(
-    repo: GuardRepo, make_deps: Callable[..., RuntimeDeps]
+def test_missing_session_id_is_logged_once_per_utc_day(
+    repo: GuardRepo, runtime_deps: Callable[..., RuntimeDeps]
 ) -> None:
     payload = repo.payload(PRE, tool="Bash", session_id="")
+    clock = FakeClock()
 
-    wires = [dispatch_event(PRE, Harness.CLAUDE_CODE, payload, make_deps()).wire for _ in "ab"]
+    def call() -> WireOutput:
+        out, err = streams()
+        deps = runtime_deps(env=repo.env(), clock=clock, out=out, err=err)
+        wire = dispatch_event(PRE, Harness.CLAUDE_CODE, payload, deps).wire
+        assert _silent(deps)
+        return wire
 
-    assert wires == [_INERT, _INERT]
+    wires = [call(), call()]
+    clock.advance(_DAY_S)
+    wires.append(call())
+
+    assert wires == [_INERT] * 3
     assert (
         _ignored(repo.decisions())
         == [("pre_tool_use", "claude_code", "missing_session_id", "")] * 2
     )
+
+
+def test_doctor_reads_back_what_the_dispatcher_wrote(
+    repo: GuardRepo, make_deps: Callable[..., RuntimeDeps]
+) -> None:
+    deps = make_deps()
+    dispatch_event(PRE, Harness.CLAUDE_CODE, repo.payload(PRE, timestamp="t"), deps)
+
+    checks = ignored_call_checks(repo.repo, deps, since_days=1)
+
+    assert [(c.name, c.severity) for c in checks] == [("ignored:timestamp", "ok")]
 
 
 @pytest.mark.parametrize("payload", [None, b"not json"])
@@ -148,6 +180,29 @@ def test_event_outside_git_is_logged_once_in_the_user_state_dir(
 
     assert [t.wire for t in traces] == [_INERT, _INERT]
     assert _ignored(_user_log(state_home)) == [("stop", harness.value, "not_a_repo", "s")]
+
+
+def test_unwritable_user_state_dir_drops_the_line_and_stays_inert(
+    tmp_path: Path, runtime_deps: Callable[..., RuntimeDeps]
+) -> None:
+    elsewhere = _plain_dir(tmp_path)
+    state_home = tmp_path / "state"
+    state_home.write_text("a regular file, not a directory\n", encoding="utf-8")
+    out, err = streams()
+    deps = runtime_deps(
+        env={"CLAUDE_PROJECT_DIR": str(elsewhere), "XDG_STATE_HOME": str(state_home)},
+        out=out,
+        err=err,
+    )
+    payload = json.dumps({"session_id": "s", "cwd": str(elsewhere)}).encode()
+
+    trace = dispatch_event(
+        EventName.STOP, Harness.CLAUDE_CODE, payload, deps, project_dir=str(elsewhere)
+    )
+
+    assert trace.wire == _INERT
+    assert _silent(deps)
+    assert state_home.is_file()
 
 
 def test_async_dispatch_leaves_the_log_to_the_synchronous_one(

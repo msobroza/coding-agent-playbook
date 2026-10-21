@@ -41,7 +41,8 @@ from coding_agent_playbook.hook_runtime.dispatch._faults import (
 from coding_agent_playbook.hook_runtime.dispatch._ignored import (
     NOT_A_REPO,
     ignored_line,
-    user_state_store,
+    ignored_store,
+    worktree_store,
 )
 from coding_agent_playbook.hook_runtime.dispatch._pipeline import Shared, run_configured
 from coding_agent_playbook.hook_runtime.dispatch.escape import (
@@ -61,7 +62,7 @@ from coding_agent_playbook.hook_runtime.harness.wire import (
     WireOutput,
 )
 from coding_agent_playbook.hook_runtime.state.session import SessionState
-from coding_agent_playbook.hook_runtime.state.store import StateStore
+from coding_agent_playbook.hook_runtime.state.store import iso_utc
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -70,6 +71,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.harness.wire import ParseOutcome
+    from coding_agent_playbook.hook_runtime.state.store import StateStore
 
 __all__ = ["DispatchTrace", "dispatch_event", "read_stdin", "run_event"]
 
@@ -269,31 +271,18 @@ class _Dispatch:
         )
 
     def _log_ignored(self, reason: str, session_id: str) -> None:
-        """One ``ignored`` line for an inert call (D79): per session, event and reason.
+        """One ``ignored`` line for an inert call (D79), once per session, event and reason.
 
-        Without a session id there is nothing to dedupe on, so every call is
-        logged; the async dispatch leaves the line to its synchronous twin.
+        The async dispatch leaves the line to its synchronous twin.
         """
         if self.asynchronous:
             return
-        store = self._ignored_store()
-        if store is None:
-            return
-        key = f"ignored:{self.event.value}:{reason}"
-        if session_id and not SessionState(store, session_id).once(key):
-            return
-        ev = self._bare_event(session_id)
-        log = DecisionLog(store, ev, now=self.deps.clock.time, enabled=True, canary=self.canary)
-        log.write([ignored_line(reason)], force=True)
-
-    def _ignored_store(self) -> StateStore | None:
-        """The injected store, else the root guess's worktree store, else the user-level one."""
-        if self.deps.state is not None:
-            return self.deps.state
-        repo = find_repo(self.root_guess)
-        if repo is not None:
-            return StateStore.for_repo(repo, clock=self.deps.clock)
-        return user_state_store(self.deps)
+        self._log_unconfigured(
+            self._bare_event(session_id),
+            [ignored_line(reason)],
+            once_key=f"ignored:{self.event.value}:{reason}",
+            ignored=True,
+        )
 
     def _bare_event(self, session_id: str) -> CanonicalEvent:
         return fault_event(
@@ -305,15 +294,37 @@ class _Dispatch:
         )
 
     def _log_unconfigured(
-        self, ev: CanonicalEvent, lines: list[LogLine], *, once_key: str | None = None
+        self,
+        ev: CanonicalEvent,
+        lines: list[LogLine],
+        *,
+        once_key: str | None = None,
+        ignored: bool = False,
     ) -> None:
-        """Lines decided before a config loaded are always logged: they mark an unguarded event."""
-        repo = find_repo(self.root_guess)
-        if repo is None or not ev.session_id:
+        """Lines decided before a config loaded are always logged: they mark an unguarded event.
+
+        ``ignored`` (D79) also logs outside git, in the user-level store, and
+        without a session id, deduping such calls per UTC day instead of per
+        session so a misconfigured session cannot write one line per tool call.
+        """
+        store = self._unconfigured_store(ignored=ignored)
+        if store is None or not (ev.session_id or ignored):
             return
-        store = self.deps.state or StateStore.for_repo(repo, clock=self.deps.clock)
-        if once_key is not None and not SessionState(store, ev.session_id).once(once_key):
+        if once_key is not None and not self._first_time(store, ev.session_id, once_key):
             return
         DecisionLog(store, ev, now=self.deps.clock.time, enabled=True, canary=self.canary).write(
             lines
         )
+
+    def _unconfigured_store(self, *, ignored: bool) -> StateStore | None:
+        """The store of the root guess's worktree; ``ignored`` falls back to the user level."""
+        repo = find_repo(self.root_guess)
+        if ignored:
+            return ignored_store(repo, self.deps)
+        return worktree_store(repo, self.deps) if repo is not None else None
+
+    def _first_time(self, store: StateStore, session_id: str, once_key: str) -> bool:
+        """``once`` per session; without a session id, once per UTC day (``YYYY-MM-DD``)."""
+        if not session_id:
+            once_key = f"{once_key}:{iso_utc(self.deps.clock.time())[:10]}"
+        return SessionState(store, session_id).once(once_key)

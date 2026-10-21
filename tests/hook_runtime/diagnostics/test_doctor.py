@@ -21,11 +21,13 @@ import pytest
 from coding_agent_playbook.hook_runtime.cli import main as cli_main
 from coding_agent_playbook.hook_runtime.config.pin import INTERPRETER_PIN, write_machine_pins
 from coding_agent_playbook.hook_runtime.diagnostics._doctor_checks import PROBE
+from coding_agent_playbook.hook_runtime.diagnostics._doctor_ignored import ignored_call_checks
 from coding_agent_playbook.hook_runtime.diagnostics.doctor import Check, exit_code, main, run_doctor
 from coding_agent_playbook.hook_runtime.dispatch.escape import WRAPPER_PREFIXES_VAR
 from coding_agent_playbook.hook_runtime.state.audit_log import GuardDecisionRecord, append_decision
+from coding_agent_playbook.hook_runtime.state.store import StateStore
 from coding_agent_playbook.security.trust import HandlerApproval, sha256_of_json
-from tests.hook_runtime.fakes import FakeProc, FakeTrustStore
+from tests.hook_runtime.fakes import FakeClock, FakeProc, FakeTrustStore
 from tests.hook_runtime.guard_repo import GuardRepo, hook_record
 
 if TYPE_CHECKING:
@@ -433,6 +435,19 @@ def test_doctor_reports_ignored_calls_most_recent_first_and_flags_misconfigurati
     assert "outside any git repository" in details["ignored:not_a_repo"]
     assert not [c for c in checks if c.name == "decision-log:playbook-dispatcher"]
     assert exit_code(checks) == 0  # a warning: the install itself is healthy
+
+
+def test_doctor_reads_ignored_calls_from_an_injected_state_store(
+    tmp_path: Path, runtime_deps: Callable[..., RuntimeDeps]
+) -> None:
+    store = StateStore(tmp_path / "injected", clock=FakeClock())
+    store.root.mkdir(mode=0o700)
+    append_decision(store.root, _ignored("timestamp", "2026-10-13T09:00:00.000Z"))
+    deps = runtime_deps(state=store, env={"XDG_STATE_HOME": str(tmp_path / "state")})
+
+    checks = ignored_call_checks(None, deps, since_days=30)
+
+    assert [(c.name, c.severity) for c in checks] == [("ignored:timestamp", "ok")]
 
 
 def test_doctor_outside_git_still_reports_user_level_ignored_calls(

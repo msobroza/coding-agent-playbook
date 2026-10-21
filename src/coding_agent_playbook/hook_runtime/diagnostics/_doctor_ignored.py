@@ -15,20 +15,20 @@ those calls, so their rows are warnings naming the likely cause. The rest are
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.hook_runtime.diagnostics._doctor_checks import Check
 from coding_agent_playbook.hook_runtime.dispatch._ignored import (
     IGNORED,
     NOT_A_REPO,
-    user_state_root,
+    ignored_state_roots,
 )
 from coding_agent_playbook.hook_runtime.state.decision_summary import read_decisions
-from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME, iso_utc
+from coding_agent_playbook.hook_runtime.state.store import iso_utc
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
+    from pathlib import Path
 
     from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
     from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
@@ -92,20 +92,11 @@ def ignored_call_checks(
     """
     since = iso_utc(deps.clock.time() - since_days * _DAY_S)
     tallies: dict[str, _ReasonTally] = {}
-    for record in _ignored_records(_state_roots(repo, deps), since):
+    for record in _ignored_records(ignored_state_roots(repo, deps), since):
         reason = str(record.get("rule_id") or "unknown")
         tallies.setdefault(reason, _ReasonTally(reason)).add(record)
     ordered = sorted(tallies.values(), key=lambda t: (t.last_ts, t.reason), reverse=True)
     return [tally.check() for tally in ordered]
-
-
-def _state_roots(repo: RepoInfo | None, deps: RuntimeDeps) -> list[Path]:
-    roots = [user_state_root(deps)]
-    if deps.state is not None:
-        roots.insert(0, deps.state.root)
-    elif repo is not None:
-        roots.insert(0, Path(repo.git_dir) / STATE_DIR_NAME)
-    return roots
 
 
 def _ignored_records(roots: Iterable[Path], since: str) -> list[dict[str, Any]]:
