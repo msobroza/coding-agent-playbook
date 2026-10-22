@@ -141,12 +141,13 @@ def test_readme_architecture_names_skill_references() -> None:
         assert token in diagram, f"README architecture block lacks {token!r}"
 
 
-#: A "hook" not preceded by "pre-commit " (CONTEXT.md, Hook: avoid bare "hook" for the git kind).
-_BARE_HOOK = re.compile(r"(?<!pre-commit )\bhooks?\b", re.IGNORECASE)
+#: A "hook" not preceded by "pre-commit " (CONTEXT.md, Hook: avoid bare "hook" for the git kind)
+#: nor by "` playbook ": an engine hook is named by its backticked id, "`<id>` playbook hook".
+_BARE_HOOK = re.compile(r"(?<!pre-commit )(?<!` playbook )\bhooks?\b", re.IGNORECASE)
 
 
 def test_python_documentation_says_pre_commit_hook_for_the_git_kind() -> None:
-    """The docs skill only talks about git hooks, so every "hook" in it is a pre-commit hook."""
+    """Every "hook" in the docs skill is a pre-commit hook or a named playbook hook."""
     skill_dir = CATALOG_ROOT / "core" / "skills" / "python-documentation"
     bare = [
         f"{path.relative_to(skill_dir).as_posix()}:{n}: {line}"

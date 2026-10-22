@@ -66,7 +66,7 @@ docs/
 ## Notes
 
 - A repo may rename these directories in the layout table of its committed playbook config; sync then rewrites the paths in this rule, so the paths shown are this repo's. The file name patterns never change: the ISO date the document is created, a lowercase kebab slug, the next free four-digit ADR number.
-- The always-loaded document-layout rule states the layout in three lines, and the document-layout-guard hook blocks spec or plan writes into other known locations (a framework's own folder, a spec under .scratch/) and names this repo's directory.
+- The always-loaded document-layout rule states the layout in three lines, and the `document-layout-guard` playbook hook blocks spec or plan writes into other known locations (a framework's own folder, a spec under .scratch/) and names this repo's directory.
 - A document found at another path is reported to the user, not moved, unless the user asks.
 - Where the repo builds docs with Sphinx or MkDocs, these engineering directories are kept out of the user build.
 - What each kind of document holds: decision records in `docs-record-why`, the overview in `docs-architecture-overview`.

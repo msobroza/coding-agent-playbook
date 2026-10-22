@@ -82,4 +82,4 @@ Refs: #412
 - Refactors and test-only changes get no entry unless the repo's convention says so.
 - A deprecation is listed under Deprecated and, in code, warns with `DeprecationWarning` and `stacklevel=2`.
 - Version bumps happen at release time through the repo's tool, not in a feature change.
-- Where the repo uses commitizen, the commit-message-convention hook checks the message format.
+- Where the repo uses commitizen, the `commit-message-convention` playbook hook checks the message format.
