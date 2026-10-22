@@ -39,7 +39,7 @@ Files are copied back when a run succeeds, fails or is stopped, so a stopped run
 | `email.html` | the project root | the artifacts root | not kept | domino-job-email-report |
 | `manifest.json` | beside the results it describes | beside the results it describes | a declared output | domino-run-manifest |
 | Logs | stdout; its tail lands in `results/stdout.txt` | stdout | stdout | domino-job-logging |
-| Spot checkpoints | unverified: the docs name only the Git-based path | `checkpoints/` under the artifacts directory | not kept | domino-spot-checkpoints |
+| Spot checkpoints | `checkpoints/` under the artifacts directory; confirm on the first run (the docs name only the Git-based path) | `checkpoints/` under the artifacts directory | not kept | domino-spot-checkpoints |
 | Big or many files | a run-keyed dataset directory | a run-keyed dataset directory | a declared output; a Flow writes no dataset | domino-datasets-for-large-data, domino-run-scoped-writes |
 | Extracts from databases, APIs, drives | a dataset file with its query record | a dataset file with its query record | a declared output | domino-materialize-external-data |
 | Caches, virtual environments, scratch | listed in `.dominoignore` | outside the artifacts directory | anywhere but the outputs | domino-job-results |
@@ -57,13 +57,13 @@ Keep result names stable from run to run; Domino versions files itself. A custom
 
 ## Limits next to each location
 
-| Location | Default limits | Rules |
-| --- | --- | --- |
-| Project files (working directory, artifacts, imported projects) | copied into every run and back; 10,000 files per project, 8 GB per transferred file, sync not designed for more than about 10 GB or 100,000 files, a 15-minute timeout on the copy into a run; cluster workers cannot see them | domino-datasets-for-large-data |
-| Datasets | mounted, not copied; no file-count or file-size limit; read-write or read-only by the user's dataset role | domino-datasets-for-large-data |
-| Dataset snapshots | immutable and read-only; taking one copies the data and grows with its size | domino-dataset-snapshots |
-| Results compared between runs | example admin caps of 250 files and about 1 MB of diffs | domino-job-results |
-| Flow outputs | one file per declared output name; a missing one fails the task | domino-flow-task-io |
+| Location and its default limits | DFS project | Git-based project | Flow task | Rules |
+| --- | --- | --- | --- | --- |
+| Project files: 10,000 files per project, 8 GB per transferred file, sync not designed for more than about 10 GB or 100,000 files, a 15-minute timeout on the copy into a run; cluster workers cannot see them | the working directory and imported projects, copied in and back | the checkout and imported projects copied in; the artifacts directory copied in and back | copied in like any job; nothing copied back | domino-datasets-for-large-data |
+| Datasets: mounted, not copied; no file-count or file-size limit | read-write or read-only by the user's dataset role | read-write or read-only by the user's dataset role | one read-only snapshot per dataset | domino-datasets-for-large-data, domino-flow-task-io |
+| Dataset snapshots: immutable; taking one copies the data and grows with its size | read-only, by number | read-only, by number | the chosen one, read-only, at the plain dataset path | domino-dataset-snapshots |
+| Results compared between runs: example admin caps of 250 files and about 1 MB of diffs | applies | applies | not documented | domino-job-results |
+| Flow outputs: one file per declared output name; a missing one fails the task | not used | not used | applies | domino-flow-task-io |
 
 ## When an output goes wrong
 

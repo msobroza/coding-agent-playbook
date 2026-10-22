@@ -5,7 +5,9 @@ the skill only where the detector finds a reliable Domino marker or the committe
 config names the platform: the Domino probe gets it, the standard reference
 probe does not, and ``platforms = ["domino"]`` turns it on in a repo without
 markers. Each case is one real ``playbook init`` / ``sync``, read at the
-emitted skill directory and the "Where guidance lives" map.
+emitted skill directory and the "Where guidance lives" map. On the Domino probe
+the emitted skill also lists and ships its where-outputs-go guide (D47); the
+guide's own content is checked in tests/core_skills/domino_jobs/test_references.py.
 """
 
 from __future__ import annotations
@@ -18,6 +20,8 @@ import pytest
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.config.files import CONFIG_FILENAME
 from tests._budget_probe import init_and_sync_reference_probe, write_reference_probe
+from tests._catalog import core_skill_root
+from tests._mapping_references import mapped_references
 from tests.conftest import apply_hermetic_git_env
 from tests.core_skill_pins.domino_jobs import PINS
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
@@ -29,6 +33,7 @@ pytestmark = pytest.mark.catalog
 
 _SKILL: Final = "domino-jobs"
 _WHERE_LINE: Final = "skill `domino-jobs`"
+_GUIDE: Final = "references/where-outputs-go.md"
 
 
 def _emitted_roots(repo: Path) -> list[str]:
@@ -80,3 +85,19 @@ def test_platforms_domino_emits_domino_jobs_without_markers(platforms_domino_rep
     assert _emitted_roots(platforms_domino_repo) == list(NATIVE_SKILL_ROOTS)
     assert _WHERE_LINE in _agents_md(platforms_domino_repo)
     assert _emitted_members(platforms_domino_repo) == sorted(PINS.members)
+
+
+def test_domino_probe_lists_the_guide_with_its_open_when(domino_probe_repo: Path) -> None:
+    """D47: the emitted skill lists the mapping's reference with its open_when line."""
+    skill_md = (domino_probe_repo / ".claude" / "skills" / _SKILL / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    listed = skill_md.partition("## References and examples\n")[2]
+    lines = [line for line in listed.splitlines() if line.startswith("- [")]
+    open_when = mapped_references(_SKILL)[_GUIDE].open_when
+    assert lines == [f"- [{_GUIDE}]({_GUIDE}) — Open when: {open_when}"]
+
+
+def test_domino_probe_ships_the_guide(domino_probe_repo: Path) -> None:
+    emitted = domino_probe_repo / ".claude" / "skills" / _SKILL / _GUIDE
+    assert emitted.read_bytes() == (core_skill_root(_SKILL) / _GUIDE).read_bytes()
