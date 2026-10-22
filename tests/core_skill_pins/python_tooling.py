@@ -30,6 +30,7 @@ PINS: Final = CoreSkillPins(
             priority=20,
             name="Static checks",
             tags=("python", "tooling", "ruff", "mypy"),
+            section="linting",
         ),
         "pytest-configuration": RulePin(
             applies_if={"has_framework": ["pytest"]},
@@ -37,6 +38,7 @@ PINS: Final = CoreSkillPins(
             priority=42,
             name="pytest configuration",
             tags=("python", "tooling", "pytest"),
+            section="test-configuration",
         ),
         "python-uv-workflow": RulePin(
             applies_if={"package_manager": "uv"},
@@ -44,6 +46,7 @@ PINS: Final = CoreSkillPins(
             priority=60,
             name="uv workflow",
             tags=("python", "tooling", "uv"),
+            section="package-management",
         ),
     },
 )

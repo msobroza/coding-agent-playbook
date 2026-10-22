@@ -38,6 +38,16 @@ PINS: Final = CoreSkillPins(
         "ml-reproducibility-and-testing",
     ),
     probe_inactive=frozenset(),
+    section_ids=(
+        "security",
+        "vectorization",
+        "mutation",
+        "dtypes",
+        "reproducibility",
+        "style",
+        "typing",
+        "testing",
+    ),
     rules={
         "ml-serialization-security": RulePin(
             applies_if=_ML_MODEL_GATE,

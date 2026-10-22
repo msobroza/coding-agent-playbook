@@ -31,6 +31,7 @@ PINS: Final = CoreSkillPins(
             priority=41,
             name="FastAPI error boundaries",
             tags=("python", "fastapi", "errors"),
+            section="api-design",
         ),
         "fastapi-app-wiring": RulePin(
             applies_if={"has_framework": ["fastapi"]},
@@ -47,6 +48,7 @@ PINS: Final = CoreSkillPins(
             priority=44,
             name="FastAPI app wiring",
             tags=("python", "fastapi"),
+            section="app-structure",
         ),
     },
 )

@@ -18,6 +18,7 @@ PINS: Final = CoreSkillPins(
     where="Test files and conftest.py",
     members=("pytest-test-doubles", "pytest", "pytest-fixtures"),
     probe_inactive=frozenset(),
+    section_ids=("mocking", "structure", "isolation", "fixtures", "parametrization", "coverage"),
     rules={
         "pytest-test-doubles": RulePin(
             applies_if=_PYTEST_GATE,

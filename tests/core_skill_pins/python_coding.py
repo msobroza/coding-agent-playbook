@@ -54,6 +54,7 @@ PINS: Final = CoreSkillPins(
             priority=79,
             name="Performance idioms",
             tags=("python", "performance"),
+            section="idioms",
         ),
         "python-async": RulePin(
             applies_if={"python_version": ">=3.11"},
@@ -61,6 +62,7 @@ PINS: Final = CoreSkillPins(
             priority=55,
             name="Asyncio",
             tags=("python", "async", "concurrency"),
+            section="async",
         ),
         "python-classes-and-protocols": RulePin(
             applies_if={},
@@ -68,6 +70,7 @@ PINS: Final = CoreSkillPins(
             priority=61,
             name="Classes and protocols",
             tags=("python", "design", "oop"),
+            section="classes",
         ),
         "pydantic-boundaries": RulePin(
             applies_if={"has_framework": ["pydantic"]},
@@ -75,6 +78,7 @@ PINS: Final = CoreSkillPins(
             priority=59,
             name="Pydantic boundaries",
             tags=("python", "pydantic", "validation"),
+            section="pydantic",
         ),
     },
 )
