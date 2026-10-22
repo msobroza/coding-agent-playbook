@@ -8,6 +8,7 @@ import pytest
 
 from coding_agent_playbook.config.layout import (
     LAYOUT_DEFAULTS,
+    LAYOUT_KEYS,
     LayoutRewriter,
     RewriteCount,
     resolve_layout,
@@ -165,3 +166,47 @@ def test_an_alias_follows_the_configured_directory() -> None:
     text, _ = rewriter.rewrite("docs/superpowers/plans/x.md and docs/plans/y.md")
 
     assert text == "plans/x.md and plans/y.md"
+
+
+# prU L0-28: a configured path that extends its own default (docs/specs -> docs/specs/v2).
+
+
+def test_a_path_extending_its_default_is_not_doubled() -> None:
+    rewriter = LayoutRewriter.for_layout({"specs": "docs/specs/v2"})
+
+    text, counts = rewriter.rewrite("docs/specs/x.md, docs/specs/v2/y.md and docs/specs/v2.")
+
+    assert text == "docs/specs/v2/x.md, docs/specs/v2/y.md and docs/specs/v2."
+    assert counts == (RewriteCount("docs/specs", "docs/specs/v2", 1),)
+
+
+@pytest.mark.parametrize("key", LAYOUT_KEYS)
+def test_rewriting_is_idempotent_on_every_layout_key(key: str) -> None:
+    # File keys (CONTEXT.md/v2) are not plausible layouts; they are kept so the guard
+    # regex is exercised on every default, dotted file names included.
+    default = LAYOUT_DEFAULTS[key]
+    rewriter = LayoutRewriter.for_layout({key: f"{default}/v2"})
+    once, _ = rewriter.rewrite(f"see {default}, {default}/a.md and ./{default}/b\n")
+
+    assert rewriter.rewrite(once) == (once, ())
+    assert f"{default}/v2/v2" not in once
+
+
+def test_an_alias_extending_its_source_is_not_doubled() -> None:
+    rewriter = LayoutRewriter.for_layout(
+        {"plans": "docs/acme/plans/v2"}, aliases={"docs/acme/plans/": "plans"}
+    )
+
+    once, _ = rewriter.rewrite("docs/acme/plans/x.md")
+
+    assert once == "docs/acme/plans/v2/x.md"
+    assert rewriter.rewrite(once) == (once, ())
+
+
+def test_a_path_extending_another_remapped_default_is_not_rewritten_again() -> None:
+    rewriter = LayoutRewriter.for_layout({"specs": "docs/plans/specs", "plans": "plans"})
+
+    once, _ = rewriter.rewrite("docs/specs/x.md and docs/plans/y.md")
+
+    assert once == "docs/plans/specs/x.md and plans/y.md"
+    assert rewriter.rewrite(once) == (once, ())
