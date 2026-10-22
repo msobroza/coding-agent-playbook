@@ -70,11 +70,6 @@ MOVED_GUIDANCE_OWNERS: Final = (
 #: (tickets.md, content-ticket template step 1), and
 #: ``test_pending_owners_are_not_shipped_yet`` fails until it does.
 PENDING_OWNERS: Final[Mapping[str, tuple[str, str, str]]] = {
-    "design-composition-over-inheritance": (
-        "composition over inheritance",
-        "python-classes-and-protocols",
-        "C-design-patterns-01",
-    ),
     "pytest-monkeypatch": ("monkeypatch", "pytest-test-doubles", "C-python-testing-01"),
     "pytest-conftest": ("from conftest import", "pytest-fixtures", "C-python-testing-02"),
 }

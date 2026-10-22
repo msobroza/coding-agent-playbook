@@ -348,6 +348,7 @@ def test_a_new_domino_input_names_the_domino_gated_rule(
     [item] = report.trace.combined.context
     assert 'rule "domino-runs" (source "<repo-local>")' in item, item
     assert 'rule "domino-app-bind-host-port" (source "coding_agent_playbook")' in item, item
+    assert 'rule "domino-agent-access-token" (source "coding_agent_playbook")' in item, item
     assert " more." not in item, item
 
 

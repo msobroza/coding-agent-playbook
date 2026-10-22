@@ -36,7 +36,7 @@ A class earns its place when it keeps state together with the behavior that prot
 
 ## Composition first
 
-- Prefer composition over inheritance: keep a collaborator in an attribute and delegate to it.
+- Keep a collaborator in an attribute and delegate to it, rather than inheriting from it.
 - Inherit only when every subclass can stand in for its base everywhere the base is used.
 - Use a mixin only for a small piece of behavior that is independent of the rest of the class.
 - Framework base classes (`BaseModel`, `BaseSettings`, `DeclarativeBase`, Django views), exception hierarchies and documented ABC extension points are normal subclassing; the house-style rule to wrap rather than subclass a third-party class does not apply to them.

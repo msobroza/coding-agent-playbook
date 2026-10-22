@@ -25,8 +25,9 @@ skill under "Engine-written files" at the end.
 
 The code-legibility always rule (the eight principles it names, each pointing
 at the skill rule that holds its detail) distills ideas from Akita, "Clean Code
-para Agentes de IA" (2026-04-20), as reformulated by the engine's owner; it is
-credited by name only. No sentences or examples from the article are copied;
+para Agentes de IA" (2026-04-20), as reformulated by the engine's owner, and
+so does the opening rationale of design-patterns' design-single-responsibility
+rule; both are credited by name only. No sentences or examples from the article are copied;
 the ideas are restated in the engine's own words as general clean-code
 principles. The same article, credited the same way, gave the rationale of the
 python-coding rules on small units, shallow nesting and error messages that
@@ -41,6 +42,15 @@ not reproduced, and the facts are restated in the engine's own words. The
 `domino-docs` section below records, per documentation page, the files that
 use its facts or why it was dropped; a distilled source has no pin and no
 license copy.
+
+The domino-agents skill's SKILL.md and rules distill facts from the Domino
+Data Lab 6.2 documentation (the agentic-systems, Apps, python-domino and
+environment variable pages), which carries no open license, and ideas from the
+`simple_agent_api_only` example agent by Domino Data Lab (Apache-2.0, commit
+`eee728252c42fa660e65c2dccbea6ae4f679c04c`). The rules restate those facts and
+ideas in the engine's own words, with no sentences or code copied, so they are
+listed under "Engine-written files", with the upstream files each one draws on
+and the upstream text they leave out.
 
 The playbook-creator skill is engine-written throughout: it restates the
 engine's own documentation and code (where each kind of artifact lives, how
@@ -61,6 +71,12 @@ pytest rules.
 
 | Upstream file | Core files | Changes |
 | --- | --- | --- |
+| `skills/coding-standards/SKILL.md` | `SKILL.md` | Lines 13 and 154-160 only: the intro, rewritten for the skill's scope, and the open/closed and interface-segregation snippets of the Design Patterns quick reference; the dependency-injection and early-return snippets belong to python-coding. |
+| `skills/coding-standards/rules/design-single-responsibility.md` | `rules/design-single-responsibility.md` | Engine frontmatter; title without the impact tag; the password-hashing step and its notes (25, 49-55, 94) replaced by a neutral collaborator (web-application owns password hashing); collaborators are plain classes, not dataclasses; Description opens with why one responsibility helps every reader, people and agents (distilled, see above); Notes gain the core warning signs, function-level splits and the coordinator and script exceptions; References list (96-97) dropped. |
+| `skills/coding-standards/rules/solid-ocp.md` | `rules/design-open-closed.md` | Engine frontmatter; `format: str` renamed and typed as an Enum; Good Example leads with an Enum-keyed mapping of Callables and keeps the Protocol classes for multi-method variants; Notes add isinstance ladders, rules as data, singledispatch and the restraint lines; References list (61-63) dropped. |
+| `skills/coding-standards/rules/oop-composition-over-inheritance.md` | `rules/design-composition-over-inheritance.md` | Engine frontmatter; behaviors return strings instead of printing; the Employee hierarchy pair (27-38, 74-84) cut for size; 'mixins ... use sparingly' (91) replaced by the engine's mixin and framework-base lines; Bad and Good Examples gain the inherit-for-reuse store and the value-only subclass; References list (93-94) dropped. |
+| `skills/coding-standards/rules/solid-lsp.md` | `rules/design-liskov-substitution.md` | Engine frontmatter; the missing Sparrow defined in both examples; Notes restated as the engine's three-part contract and warning signs, plus substitution as a test, not a ban; References list (64-66) dropped. |
+| `skills/coding-standards/rules/solid-isp.md` | `rules/design-interface-segregation.md` | Engine frontmatter; Notes gain the engine's split trigger, the no-symmetry-split line and Protocol segregation; the oop-protocol cross-reference points to python-coding; References list (76-78) dropped. |
 
 ### ml-data
 
@@ -138,6 +154,19 @@ review-architecture, make-testable, characterize, review and refactor prompts.
 
 | Upstream file | Core files | Changes |
 | --- | --- | --- |
+| `skills/clean-architecture/SKILL.md` | `SKILL.md` | Lines 73-83 and 85-122 only: the seven principles one line each, mapped to this skill's sections (the mixin ban, 80, dropped: engine wins, F1), and the smell-to-pattern table merged with the engine's lightest-form table ('signal, lightest form, heavier form, stop when, pattern'); the singleton, value-object, registry, notification and plugin rows rewritten to the engine decisions (F9, F14, F10); repository, unit of work, CQRS, event sourcing and retry rows name their owning skills; the default preferences as bullets. |
+| `skills/clean-architecture/references/design-principles.md` | `rules/design-single-responsibility.md`, `rules/design-tell-dont-ask.md`, `rules/design-low-coupling.md`, `rules/design-dependency-inversion.md`, `rules/design-open-closed.md`, `rules/design-composition-over-inheritance.md` | Lines 5-35 and 55-87 become function-level split notes; the Law of Demeter and Information Expert (164-175, 429-447) the tell-don't-ask examples; the coupling ladder, global-coupling example and trade-off chain (90-163, 176-215) the low-coupling rule, with no literal token and no real host, settings built once by the entry point, and the stamp-coupling Protocol shrunk to one note; 'Depend on Abstractions' (216-255) the dependency-inversion skeleton with a Callable alias owned by the consumer; dictionary mapping as OCP (419-421) a note; configuration vs subclass and the composition pattern (276-345) the composition rule, pay in int cents, the mixin ban (342) dropped (engine wins, F1). |
+| `skills/clean-architecture/references/grasp-principles.md` | `rules/design-tell-dont-ask.md`, `rules/design-split-god-class.md`, `rules/design-grasp-responsibilities.md`, `rules/design-low-coupling.md`, `rules/design-dependency-inversion.md`, `rules/design-open-closed.md` | Creator, Controller, Indirection and Pure Fabrication (17-38, 70-97, 173-202, 228-249) become the GRASP rule: an injected date instead of date.today(), Decimal rates instead of float, a thin handler without a web framework; Information Expert and its caveat (44-69) go to tell-don't-ask; low-cohesion signs (128-140) to the god-class rule without fixed counts (F30); the net-price example (102-127) to a low-coupling note in Decimal; Polymorphism (144-172) to open-closed; Protected Variations (206-227) to a dependency-inversion note. Course attribution and the three-layer and DBInterface asides (5, 40, 98, 124, 224, 250) dropped (python-architecture owns layering). |
+| `skills/clean-architecture/references/code-quality.md` | `rules/design-tell-dont-ask.md`, `rules/design-split-god-class.md`, `rules/design-open-closed.md` | Tell-don't-ask and feature envy (72-85, 110-113) the tell-don't-ask skeleton, with an Enum status and a domain error; no god classes (106-109) the god-class rule; isinstance dispatch (266-284) an open-closed note. |
+| `skills/clean-architecture/references/code-smells.md` | `rules/design-tell-dont-ask.md`, `rules/design-split-god-class.md`, `rules/design-liskov-substitution.md` | Tell-don't-ask violations (276-298) the feature-envy example; too many instance variables (112-151) a note on splitting a record, without the fixed count (F30); subclasses that break substitution (334) a Liskov warning sign. |
+| `skills/clean-architecture/references/refactoring-case-studies.md` | `rules/design-tell-dont-ask.md`, `rules/design-open-closed.md` | Encapsulate data-structure access (232-249) a tell-don't-ask note; rules consolidated into a list of predicates (180-209) an open-closed note, as a role-named Callable alias. |
+| `skills/clean-architecture/references/dependency-injection.md` | `rules/design-dependency-inversion.md` | The DI-vs-DIP framing (3) and table (32-50) restated in prose; the Bad Example is DI without DIP, a vendor class imported by the consumer. Title and attribution lines (1, 5, 250) dropped. |
+| `skills/clean-architecture/references/patterns/template-method.md` | `rules/design-interface-segregation.md` | Protocol segregation (251-321) and the 4-5 method heuristic (342) as notes, without endorsing or banning mixins. |
+| `commands/decouple.md` | `rules/design-tell-dont-ask.md`, `rules/design-low-coupling.md` | Checklist items only (15-17): global mutable state, content coupling and Law of Demeter violations, as notes; command frontmatter, $ARGUMENTS and plugin paths dropped (D9). |
+| `commands/extract-god-class.md` | `rules/design-split-god-class.md` | Steps 13-34 as a non-interactive procedure: propose the split, apply it only when asked; AskUserQuestion and auto-apply (35-39, F28), frontmatter and plugin paths (1-11) dropped. |
+| `skills/clean-architecture/references/pythonic-patterns.md` | `SKILL.md` | Lines 15-605 only as one row each of the pattern table ('signal, lightest form, heavier form, stop when, pattern'). DROP: the per-pattern summaries and their code (15-605), which the pattern rules duplicate; the retry (535-566), repository (498-514), unit-of-work (375-398), CQRS (337-354) and event-sourcing (317-336) summaries are covered by their owners' full files and become rows naming python-coding and python-architecture. |
+| `commands/suggest-patterns.md` | `SKILL.md` | Lines 13-41: the smell-to-pattern rows, merged into the same pattern table; the singleton, value-object, registry and notification rows rewritten to the engine decisions (F9, F14, F10). DROP: command frontmatter, $ARGUMENTS and plugin paths (1-11, 53; D9). |
+| `commands/make-pythonic.md` | `rules/design-composition-over-inheritance.md` | Smell row 19 (deep inheritance or mixins -> composition with a Protocol) as the rule's premise, with mixins per the engine line (F1). |
 
 ### ml-data
 
@@ -249,7 +278,64 @@ that comes to hold vendored text moves from here into its source's table.
 
 ### design-patterns
 
+- `scripts/_pyscan_common.py`
+- `scripts/_smell_detectors.py`
+- `scripts/_smell_model.py`
+- `scripts/detect_smells.py`
+- `scripts/lcom4_clusters.py`
+
 ### domino-agents
+
+- `SKILL.md`
+- `rules/domino-agent-llm-keys.md`
+- `rules/domino-agent-access-token.md`
+- `rules/domino-agent-endpoint-auth.md`
+- `rules/domino-agent-redact-traces.md`
+- `rules/domino-agent-app-factory.md`
+- `rules/domino-agent-chat-endpoint.md`
+- `rules/domino-agent-run-limits.md`
+- `rules/domino-agent-conversation-state.md`
+- `rules/domino-agent-logging.md`
+
+Upstream files each rule draws on (example-agent files by path and lines, 6.2
+documentation pages by guide and page id):
+
+- domino-agent-llm-keys: `ai_system_config.yaml` 1-33, `README.md` 289-296,
+  `dev_eval_simplest_agent.py` 154-164; api_guide/c5ef26, user_guide/baab29.
+- domino-agent-access-token: `README.md` 51-77, 366-370, 420-425,
+  `simplest_agent.py` 84-98, `chat_app.py` 136-137; admin_guide/71d6ad,
+  user_guide/40b91f, api_guide/c5ef26.
+- domino-agent-endpoint-auth: `simplest_agent.py` 80-109, `ai_system_config.yaml`
+  15-33 (the endpoint shape only); user_guide/e038f2, user_guide/5aedde.
+- domino-agent-redact-traces: `chat_app.py` 99-102; api_guide/c5ef26,
+  user_guide/da707d.
+- domino-agent-app-factory: `chat_app.py` 1-84, 121-133, 180-211,
+  `simplest_agent.py` 13-20, 112-128, `app.sh` 1-11, `static/app.js` 4-11;
+  user_guide/5aedde, user_guide/9d3c12.
+- domino-agent-chat-endpoint: `chat_app.py` 87-118, `README.md` 40-49, 81-103;
+  user_guide/5aedde, admin_guide/71d6ad.
+- domino-agent-run-limits: `simplest_agent.py` 116-121, `ai_system_config.yaml`
+  35-38; admin_guide/71d6ad.
+- domino-agent-conversation-state: `chat_app.py` 87-96, 110,
+  `ai_system_config.yaml` 38; user_guide/f46bdc, user_guide/b99d5d.
+- domino-agent-logging: `chat_app.py` 20-21, 115-118, 203-210,
+  `simplest_agent.py` 38, 65, `app.sh` 11, `dev_eval_simplest_agent.py` 31-38;
+  admin_guide/a9e507, user_guide/bb4b24.
+
+Upstream text these rules leave out (DROP, with the reason):
+
+- `ai_system_config.yaml` 15-33, 46-61: commented provider blocks with an
+  internal host and endpoint id, not reproduced (the endpoint URL moves to
+  settings), and unused alternative prompts.
+- `chat_app.py` 27-29, 136-146, 153-177: the static directory constants, the
+  UI-only platform-info route and the static catch-all go with the playground
+  UI; the catch-all's prefix-match check and its 200 for unknown paths are not
+  reproduced.
+- `static/app.js` 1-3, 12-103, 140-217, 234-625: playground UI code; only its
+  relative base-path idea (4-11) is used, as a Note of domino-agent-app-factory.
+- user_guide/5aedde: the page's FastAPI sample is not copied; it builds the
+  agent inside the traced function on every call, and domino-agent-app-factory
+  and domino-agent-endpoint-auth state the safe behavior instead.
 
 ### domino-apps
 

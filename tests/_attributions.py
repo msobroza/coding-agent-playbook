@@ -17,10 +17,11 @@ The file's shape (ADR 0004)::
 
 Core paths are relative to the skill directory; one ending in ``/`` covers every
 file under that directory (an example app). A distilled source's rows credit files
-that hold none of its text, so their targets stay engine-written or distilled, and
-one of its pages may feed several skills (one row per skill). :func:`attribution_errors` holds the
-D31 checks; the gates in ``tests/integration/test_core_attributions.py`` and
-``test_core_license_copies.py`` run them on the shipped tree.
+that hold none of its text, so their targets stay engine-written or distilled. An
+upstream file, vendored or distilled, may feed several skills (one row per skill).
+:func:`attribution_errors` holds the D31 checks; the gates in
+``tests/integration/test_core_attributions.py`` and ``test_core_license_copies.py`` run
+them on the shipped tree.
 
 Example: ``load_core_attributions().sources["python-best-practices"].commit``
 -> ``"fa0d3f58afb8bf56c028bb559e0e7bc1538e079a"``.
@@ -326,15 +327,14 @@ def _pin_errors(parsed: Attributions, pins: Mapping[str, str]) -> list[str]:
 def _row_errors(parsed: Attributions) -> list[str]:
     errors = []
     for name, source in parsed.sources.items():
-        # A vendored file has one row per source; a distilled page, one per skill it feeds.
+        # An upstream file (vendored or distilled) has one row per skill it feeds.
         seen: set[tuple[str, str]] = set()
         for skill, mapping in source.skills.items():
-            scope = skill if source.distilled else ""
             for row in mapping.rows:
-                if (scope, row.upstream) in seen:
+                if (skill, row.upstream) in seen:
                     where = f"{name}/{skill}" if source.distilled else name
                     errors.append(f"{where}: `{row.upstream}` appears in more than one row")
-                seen.add((scope, row.upstream))
+                seen.add((skill, row.upstream))
                 if not row.changes:
                     missing = "is dropped without a reason" if row.dropped else "lists no changes"
                     errors.append(f"{name}/{skill}: `{row.upstream}` {missing}")
