@@ -29,8 +29,8 @@ A code appears only where the repo selects it; a row here is no reason to enable
 | The D1 family | A missing docstring | Write the docstring the repo's convention asks for | python-coding's python-docstrings |
 | E722, BLE001, S110, S112, B904, TRY400, TRY401, S101 | A broad or silent handler, a lost cause, an assert used as a check | Catch the specific error, chain with `from`, log with the traceback, raise instead of asserting | python-coding's python-error-handling |
 | S608 | SQL built from strings | Bind parameters | python-coding's python-parameterized-queries |
-| The PD and NPY families; S301, S403 or S506 on loaded data | pandas, NumPy or unsafe-loading findings | Follow review-signals.md in the ml-data skill, which maps each code to its rule | the ml-data skill |
-| The PT family | pytest style findings | Follow reviewing-tests.md in the python-testing skill, which maps each PT code to its rule | the python-testing skill |
+| The PD and NPY families; S301, S403 or S506 on loaded data | pandas, NumPy or unsafe-loading findings | Fix the cause `ruff rule <CODE>` explains; never load untrusted data unsafely. In NumPy, pandas or polars repos, review-signals.md in the ml-data skill maps each code to its rule | the ml-data skill |
+| The PT family | pytest style findings | Fix the cause `ruff rule <CODE>` explains. In pytest repos, reviewing-tests.md in the python-testing skill maps each PT code to its rule | the python-testing skill |
 | C901, PLR0911, PLR0912, PLR0913, PLR0915 | A function too complex or with too many arguments | Restructure with python-coding's python-early-return and python-function-signatures; or split the class with the design-patterns skill's design-split-god-class (its lint-guardrails.md maps smells to codes); never raise the limit | ruff-lint |
 | A fix ruff holds back as unsafe | The fix can change behavior | Read each one before applying it | ruff-lint |
 | A code the repo does not select | Not a finding here | Leave it; propose an `extend-select` change only when asked | ruff-lint |
