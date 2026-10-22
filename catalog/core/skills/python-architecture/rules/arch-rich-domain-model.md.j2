@@ -1,0 +1,69 @@
+---
+id: arch-rich-domain-model
+name: Rich domain model
+description: "Encode business rules as behavior on frozen domain types (entities, value objects), with no framework import, I/O, clock, randomness or environment access in the domain."
+version: 1
+scope: scoped
+globs:
+  - "**/domain/**/*.py"
+  - "**/models/**/*.py"
+  - "**/entities/**/*.py"
+  - "**/domain.py"
+  - "**/models.py"
+section: domain
+priority: 43
+tags: [python, architecture, ddd]
+---
+
+# Put the business rules in a rich domain model
+
+## Description
+
+A domain model is the shared understanding of what the system represents: entities (things with identity, such as a room or a booking), value objects (things without identity, such as a price or a date range), their relationships, and the operations that are valid on each. Code is a temporary expression of that model: the model persists and evolves, and the code is rewritten to match it.
+
+A model that holds only data leaves every rule to be re-derived by whoever reads the fields. Encode the behavior on the types: a booking knows how many nights it covers and whether it overlaps another. Iterate the model with the people who know the business, and keep it in the domain layer as frozen dataclasses, value objects, enums, pure functions and the project's error hierarchy.
+
+The domain imports no other layer and no framework, performs no I/O, and reads no clock, randomness or environment variable: those values arrive as arguments.
+
+## Bad Example
+
+```python
+@dataclass
+class Booking:  # just data: callers recompute nights and overlaps, each their own way
+    room_id: int
+    check_in: date
+    check_out: date
+    price_cents: int
+```
+
+## Good Example
+
+```python
+@dataclass(frozen=True)
+class Booking:
+    room_id: int
+    check_in: date
+    check_out: date
+    price_cents: int
+
+    def __post_init__(self) -> None:
+        if self.check_out <= self.check_in:
+            raise InvalidStayError(self.check_in, self.check_out)
+
+    @property
+    def nights(self) -> int:
+        return (self.check_out - self.check_in).days
+
+    def overlaps(self, other: Booking) -> bool:
+        return self.check_in < other.check_out and other.check_in < self.check_out
+```
+
+## Notes
+
+- Warning signs in the domain: a session attribute on an entity, `datetime.now()` inside a rule, an entity method that saves itself, logging configuration, `import pydantic` or `import sqlalchemy`.
+- Distill the model: a distinction that changes no behavior (a quiz and an exam that work alike) is collapsed, because a smaller model is easier to implement, test and explain.
+- Optimize for replacing code: small units with one job and tests that protect the model's behavior, not its implementation details.
+- Pydantic stays at the edges (the python-coding skill's pydantic-boundaries rule); value objects are the design-patterns skill's design-value-objects rule; rules as pure functions are the python-coding skill's python-pure-core rule.
+{% if has_framework("fastapi") %}
+- Worked example: web-application's hotel example (fastapi-hotel-api), file app/domain/model.py: `Stay` validates its dates and a booking's price is nights times the nightly rate in integer cents, with no framework import.
+{% endif %}

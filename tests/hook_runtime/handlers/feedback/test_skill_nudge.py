@@ -77,16 +77,40 @@ def _line(skill_id: str) -> str:
 
 
 #: Every core skill with members, as in the reference probe (FastAPI + pytest + ML):
-#: ``**/*.py`` reaches design-patterns, ml-data, python-coding and python-tooling; tests
-#: reach python-testing. web-application ranks first on ``src/app.py``: fastapi-app-wiring's
-#: ``**/app.py`` is the most specific glob that matched (D41); the ``**/*.py`` ties keep
-#: config order. Five lines fill the per-hook cap.
+#: ``**/*.py`` reaches design-patterns, ml-data, python-architecture, python-coding and
+#: python-tooling; tests reach python-testing. On ``src/app.py`` python-architecture
+#: (arch-composition-root) and web-application (fastapi-app-wiring) rank first: ``**/app.py``
+#: is the most specific glob that matched (D41), and the ties keep config order. Five lines
+#: fill the per-hook cap, so python-tooling waits for the next matching edit.
 SOURCE_LINES: Final = [
+    _line("python-architecture"),
     _line("web-application"),
     _line("design-patterns"),
     _line("ml-data"),
     _line("python-coding"),
-    _line("python-tooling"),
+]
+#: The source skill the five-line cap cuts from the first edit of ``src/app.py``.
+CUT_SOURCE_LINE: Final = _line("python-tooling")
+#: python-architecture's member globs in member order: Python files, the composition-root
+#: file names (arch-composition-root), then the domain and application packages.
+ARCHITECTURE_GLOBS: Final = [
+    "**/*.py",
+    "**/main.py",
+    "**/app.py",
+    "**/__main__.py",
+    "**/deps.py",
+    "**/dependencies.py",
+    "**/container.py",
+    "**/bootstrap.py",
+    "**/wiring.py",
+    "**/cli.py",
+    "**/domain/**/*.py",
+    "**/models/**/*.py",
+    "**/entities/**/*.py",
+    "**/domain.py",
+    "**/models.py",
+    "**/services/**/*.py",
+    "**/application/**/*.py",
 ]
 
 
@@ -118,9 +142,11 @@ def test_second_edit_in_the_same_session_is_silent(
     edit(repo, deps(), APP, state=state)
 
     second = edit(repo, deps(), APP, state=state)
+    third = edit(repo, deps(), APP, state=state)
     test_file = edit(repo, deps(), TEST_APP, state=state)
 
-    assert second.trace.combined.decision is Decision.NONE
+    assert context(second) == [CUT_SOURCE_LINE]  # the line the cap cut, never lost
+    assert third.trace.combined.decision is Decision.NONE
     assert context(test_file) == [_line("python-testing")]  # spec 8.10 item 6
 
 
@@ -131,10 +157,17 @@ def test_test_file_names_testing_and_coding_once_each(
     source = edit(repo, deps(), APP, state=state)
     again = edit(repo, deps(), TEST_APP, state=state)
 
-    # D41: tests/**/*.py ranks python-testing and web-application (fastapi-app-wiring) first;
-    # the five-line cap cuts python-tooling, which the next source edit then names.
-    assert context(first) == [_line("python-testing"), *SOURCE_LINES[:4]]
-    assert context(source) == SOURCE_LINES[4:]
+    # D41: tests/**/*.py ranks python-testing and web-application first, then the
+    # ``**/*.py`` ties in config order; the five-line cap cuts python-coding and
+    # python-tooling, which the next source edit then names.
+    assert context(first) == [
+        _line("python-testing"),
+        _line("web-application"),
+        _line("design-patterns"),
+        _line("ml-data"),
+        _line("python-architecture"),
+    ]
+    assert context(source) == [_line("python-coding"), CUT_SOURCE_LINE]
     assert again.trace.combined.decision is Decision.NONE
 
 
@@ -349,6 +382,7 @@ def test_sync_derives_the_glob_table_from_the_rendered_member_rules(
     assert config == {
         "skills": [
             {"id": "design-patterns", "globs": ["**/*.py"]},
+            {"id": "python-architecture", "globs": ARCHITECTURE_GLOBS},
             {"id": "python-coding", "globs": ["**/*.py"]},
             # A repo with neither pytest nor uv: python-tooling's ungated members' globs.
             {"id": "python-tooling", "globs": list(UNGATED_GLOBS)},
