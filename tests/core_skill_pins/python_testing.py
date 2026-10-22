@@ -1,8 +1,7 @@
 """Pins of core skill ``python-testing`` (spec 9.6.2): pytest plus test doubles and fixtures.
 
-Sections and priorities follow mapping-python-testing.md (prU D17, L0-16): each
-priority is its section's band floor plus the rule's rank among the skill's
-rules of that impact in the full mapping order, so content lanes never renumber.
+Sections and priorities follow mapping-python-testing.md (prU D17, L0-16; the
+priority formula is on :class:`RulePin`).
 """
 
 from __future__ import annotations

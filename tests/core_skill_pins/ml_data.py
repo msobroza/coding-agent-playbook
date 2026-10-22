@@ -1,8 +1,7 @@
 """Pins of core skill ``ml-data`` (spec 9.6.2): serialization plus four array and frame rules.
 
-Sections and priorities follow mapping-ml-data.md (prU D17, L0-16): each priority
-is its section's band floor plus the rule's rank among the skill's rules of that
-impact in the full mapping order. The retired ids ``ml-dtypes-and-typing`` and
+Sections and priorities follow mapping-ml-data.md (prU D17, L0-16; the priority
+formula is on :class:`RulePin`). The retired ids ``ml-dtypes-and-typing`` and
 ``ml-reproducibility-and-testing`` stay until their content lane retires them,
 filed under their first successor's section and priority (``ml-dtypes-at-load``,
 ``ml-seeded-randomness``).
