@@ -1,7 +1,8 @@
 """Pins of core skill ``python-architecture`` (prU D4, D14): how modules depend on each other.
 
 C-python-architecture-01 creates the skill with its seven sections and the eight rules
-of the layers, boundaries and domain sections; later lanes append theirs.
+of the layers, boundaries and domain sections; C-python-architecture-02 adds the ten
+persistence and layer-test rules; later lanes append theirs.
 """
 
 from __future__ import annotations
@@ -29,6 +30,16 @@ _ROOTS: Final = (
     "**/wiring.py",
     "**/cli.py",
 )
+#: The shared test-file glob set (prU D41).
+_TESTS: Final = (
+    "**/test_*.py",
+    "**/*_test.py",
+    "**/conftest.py",
+    "**/tests/**/*.py",
+    "**/fakes.py",
+)
+#: The SQLAlchemy rules activate on either detected framework (prU D23).
+_SQLALCHEMY: Final = {"any_framework": ["sqlalchemy", "alembic"]}
 
 PINS: Final = CoreSkillPins(
     skill_id="python-architecture",
@@ -42,8 +53,19 @@ PINS: Final = CoreSkillPins(
         "arch-ports",
         "arch-rich-domain-model",
         "arch-ubiquitous-language",
+        "arch-persistence-steps",
+        "arch-repository-port",
+        "arch-unit-of-work",
+        "sqlalchemy-engine-and-session-scope",
+        "sqlalchemy-repositories",
+        "arch-effects-after-commit",
+        "arch-test-use-cases-with-fakes",
+        "arch-contract-tests-for-fakes",
+        "arch-tests-by-layer",
+        "arch-make-legacy-testable",
     ),
-    probe_inactive=frozenset(),
+    # The reference probe has no SQLAlchemy or Alembic.
+    probe_inactive=frozenset({"sqlalchemy-engine-and-session-scope", "sqlalchemy-repositories"}),
     section_ids=(
         "layers",
         "boundaries",
@@ -117,6 +139,142 @@ PINS: Final = CoreSkillPins(
             name="Ubiquitous language",
             tags=("python", "architecture", "ddd"),
             section="domain",
+        ),
+        "arch-persistence-steps": RulePin(
+            applies_if={},
+            globs=(
+                "**/db/**/*.py",
+                "**/db.py",
+                "**/repositories/**/*.py",
+                "**/repository.py",
+                "**/repositories.py",
+                "**/persistence/**/*.py",
+                "**/infrastructure/**/*.py",
+                "**/infra/**/*.py",
+                "**/adapters/**/*.py",
+                "**/storage/**/*.py",
+                "**/services/**/*.py",
+            ),
+            priority=45,
+            name="Persistence steps",
+            tags=("python", "architecture", "persistence"),
+            section="persistence",
+        ),
+        "arch-repository-port": RulePin(
+            applies_if={},
+            globs=(
+                "**/repositories/**/*.py",
+                "**/repository.py",
+                "**/repositories.py",
+                "**/ports.py",
+                "**/services/**/*.py",
+                "**/db/**/*.py",
+                "**/persistence/**/*.py",
+            ),
+            priority=46,
+            name="Repository port",
+            tags=("python", "architecture", "repository"),
+            section="persistence",
+        ),
+        "arch-unit-of-work": RulePin(
+            applies_if={},
+            globs=(
+                "**/services/**/*.py",
+                "**/uow.py",
+                "**/unit_of_work.py",
+                "**/db/**/*.py",
+                "**/persistence/**/*.py",
+                "**/infrastructure/**/*.py",
+            ),
+            priority=47,
+            name="Unit of work",
+            tags=("python", "architecture", "transactions"),
+            section="persistence",
+        ),
+        "sqlalchemy-engine-and-session-scope": RulePin(
+            applies_if=_SQLALCHEMY,
+            globs=(
+                "**/db/**/*.py",
+                "**/db.py",
+                "**/database.py",
+                "**/session.py",
+                "**/persistence/**/*.py",
+                "**/infrastructure/**/*.py",
+                "**/main.py",
+                "**/__main__.py",
+                "**/cli.py",
+                "**/worker.py",
+            ),
+            priority=48,
+            name="Engine and session scope",
+            tags=("python", "sqlalchemy", "database"),
+            section="persistence",
+        ),
+        "sqlalchemy-repositories": RulePin(
+            applies_if=_SQLALCHEMY,
+            globs=(
+                "**/db/**/*.py",
+                "**/db.py",
+                "**/repositories/**/*.py",
+                "**/repository.py",
+                "**/repositories.py",
+                "**/persistence/**/*.py",
+                "**/infrastructure/**/*.py",
+                "**/adapters/**/*.py",
+            ),
+            priority=49,
+            name="SQLAlchemy repositories",
+            tags=("python", "sqlalchemy", "repository"),
+            section="persistence",
+        ),
+        "arch-effects-after-commit": RulePin(
+            applies_if={},
+            globs=(
+                "**/services/**/*.py",
+                "**/use_cases/**/*.py",
+                "**/usecases/**/*.py",
+                "**/application/**/*.py",
+                "**/operations/**/*.py",
+                "**/worker.py",
+                "**/workers/**/*.py",
+                "**/outbox.py",
+            ),
+            priority=50,
+            name="Effects after commit",
+            tags=("python", "architecture", "transactions"),
+            section="persistence",
+        ),
+        "arch-test-use-cases-with-fakes": RulePin(
+            applies_if={},
+            globs=_TESTS,
+            priority=51,
+            name="Use-case tests with fakes",
+            tags=("python", "architecture", "testing"),
+            section="testing",
+        ),
+        "arch-contract-tests-for-fakes": RulePin(
+            applies_if={"has_framework": ["pytest"]},
+            globs=_TESTS,
+            priority=52,
+            name="Contract tests for fakes",
+            tags=("python", "architecture", "testing"),
+            section="testing",
+        ),
+        "arch-tests-by-layer": RulePin(
+            applies_if={},
+            globs=_TESTS[:4],
+            priority=53,
+            name="Tests by layer",
+            tags=("python", "architecture", "testing"),
+            section="testing",
+        ),
+        "arch-make-legacy-testable": RulePin(
+            applies_if={},
+            globs=_PY,
+            priority=54,
+            name="Make legacy code testable",
+            tags=("python", "architecture", "testing"),
+            section="testing",
         ),
     },
 )

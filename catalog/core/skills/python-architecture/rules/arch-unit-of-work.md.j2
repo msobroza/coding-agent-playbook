@@ -1,0 +1,84 @@
+---
+id: arch-unit-of-work
+name: Unit of work
+description: "When one use case writes through several repositories, give it a unit of work that shares one transaction and commit exactly once at the end of the use case; let failures propagate and roll back."
+version: 1
+scope: scoped
+globs:
+  - "**/services/**/*.py"
+  - "**/uow.py"
+  - "**/unit_of_work.py"
+  - "**/db/**/*.py"
+  - "**/persistence/**/*.py"
+  - "**/infrastructure/**/*.py"
+section: persistence
+priority: 47
+tags: [python, architecture, transactions]
+---
+
+# Commit once per use case through a unit of work
+
+## Description
+
+Related writes must all succeed or all fail. When each step commits on its own, a failure midway leaves the first writes saved and the rest missing. A unit of work hands the use case repositories that share one transaction and exposes a single `commit()`. This is step 3 of arch-persistence-steps: take it when one use case writes through two or more repositories, or checks one and then writes another.
+
+The use case owns the transaction: it loads, lets the domain decide, writes, and calls `commit()` once at the end. The caller never decides when the work is saved, and nobody swallows the failure.
+
+## Bad Example
+
+```python
+class UnitOfWork:
+    def __enter__(self) -> "UnitOfWork":
+        self.connection = sqlite3.connect(self.db_name)
+        self.items = ItemRepository(self.connection)
+        return self
+
+    def __exit__(self, exc_type: type[BaseException] | None, *rest: object) -> None:
+        if exc_type is None:
+            self.connection.commit()  # the commit hides in the caller's `with` block
+        else:
+            self.connection.rollback()
+        self.connection.close()
+
+
+def restock(names: list[str]) -> None:  # the caller holds the transaction boundary
+    try:
+        with UnitOfWork() as uow:
+            for name in names:
+                uow.items.add(name, 10)
+    except Exception:
+        logging.error("restock failed")  # the failure is swallowed; the caller sees success
+```
+
+## Good Example
+
+```python
+class LendingUnitOfWork(Protocol):  # declared beside the use cases
+    @property
+    def tools(self) -> ToolRepository: ...
+    @property
+    def loans(self) -> LoanRepository: ...
+    def commit(self) -> None: ...
+
+
+def lend_tool(uow: LendingUnitOfWork, tool_id: UUID, member_id: UUID, today: date) -> Loan:
+    tool = uow.tools.get(tool_id)  # raises ToolNotFoundError
+    if uow.loans.open_loan_for(tool_id) is not None:
+        raise ToolOnLoanError(tool_id)
+    loan = Loan.start(tool, member_id, today)
+    uow.loans.add(loan)
+    uow.commit()  # once, at the end; any exception above leaves nothing saved
+    return loan
+```
+
+## Notes
+
+- Commit exactly once per use case. Never commit inside a loop over items, and never inside a repository.
+- On failure, do nothing special: the exception propagates and the unit of work's exit path rolls back. Do not catch it inside the use case to log and continue.
+- Run check-then-act (is the tool free? then lend it) inside one unit of work, and back the check with a database constraint, such as a partial unique index on open loans per tool: two concurrent requests can both pass a check made in Python.
+- A SQLAlchemy `Session` already is a unit of work, so the SQL implementation is a thin wrapper that hands out repositories over one session; owning that session in a worker or CLI is sqlalchemy-engine-and-session-scope.
+- A transaction context manager that commits only after its block succeeds is fine inside a use case (the python-coding skill's python-context-managers rule); the defect above is where the commit lives and the swallowed failure.
+- In a web app, the per-request form is the web-application skill's sqlalchemy-transaction-boundary rule. Effects that leave the process follow arch-effects-after-commit.
+{% if has_framework("fastapi") %}
+- Worked example: web-application's hotel example (fastapi-hotel-api), files app/operations/booking.py and app/db/repositories.py: the use case calls the unit of work's commit once, and SqlHotelUnitOfWork.commit is the only commit under app/db.
+{% endif %}

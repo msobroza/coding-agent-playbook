@@ -1,0 +1,85 @@
+---
+id: sqlalchemy-repositories
+name: SQLAlchemy repositories
+description: "SQLAlchemy repositories add and flush but never commit, return typed records instead of rows or dicts, raise domain errors, and translate IntegrityError at this boundary."
+version: 1
+scope: scoped
+globs:
+  - "**/db/**/*.py"
+  - "**/db.py"
+  - "**/repositories/**/*.py"
+  - "**/repository.py"
+  - "**/repositories.py"
+  - "**/persistence/**/*.py"
+  - "**/infrastructure/**/*.py"
+  - "**/adapters/**/*.py"
+applies_if:
+  any_framework: ["sqlalchemy", "alembic"]
+section: persistence
+priority: 49
+tags: [python, sqlalchemy, repository]
+---
+
+# Implement repositories that flush, translate and return records
+
+## Description
+
+A SQLAlchemy repository implements a port its use cases declare (arch-repository-port). It is the one place that sees ORM rows and driver errors, so it converts both before they cross the boundary:
+
+- Take and return typed records; build them from rows with a per-table `to_record()` while the session is open.
+- When a row is missing, raise the domain not-found error carrying the id.
+- Add and flush, never commit: the use case or its unit of work owns the transaction. Flushing here surfaces constraint violations where they can be translated.
+- Translate `IntegrityError` into the domain error, raised `from` the original. When a table has several unique constraints, inspect the constraint name before choosing the error.
+
+## Bad Example
+
+```python
+class DBInterface:  # one generic class for every table
+    def __init__(self, db_session: Session, db_class: type) -> None:
+        self.db_session = db_session
+        self.db_class = db_class
+
+    def read_by_id(self, id: str) -> dict[str, Any]:
+        obj = self.db_session.get(self.db_class, id)
+        if obj is None:
+            raise KeyError(f"Not found: {id}")  # no domain error, no context for callers
+        return to_dict(obj)  # untyped rows cross the layer
+
+    def create(self, data: dict[str, Any]) -> dict[str, Any]:
+        obj = self.db_class(**data)
+        self.db_session.add(obj)
+        self.db_session.commit()  # each write commits: no use case can group two
+        return to_dict(obj)
+```
+
+## Good Example
+
+```python
+class SqlToolRepository:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def get(self, tool_id: UUID) -> Tool:
+        row = self._session.get(ToolRow, tool_id)
+        if row is None:
+            raise ToolNotFoundError(tool_id)
+        return row.to_record()
+
+    def add(self, tool: Tool) -> None:
+        self._session.add(ToolRow.from_record(tool))
+        try:
+            self._session.flush()
+        except IntegrityError as exc:  # the only unique constraint on tools is the barcode
+            raise DuplicateBarcodeError(tool.barcode) from exc
+```
+
+## Notes
+
+- Name query methods after the question (`due_before(day)`), select only the columns they return, and load relationships eagerly inside them: `selectinload` for collections, `joinedload` for a single parent.
+- A constraint closes a race that a Python check cannot: a partial unique index on open loans per tool, with its `IntegrityError` translated to `ToolOnLoanError`, makes a lost race answer like any other refusal.
+- Mapped classes use the 2.0 typed `Mapped` and `mapped_column` declarations, not `Column` attributes on a legacy base.
+- The `AsyncSession` form awaits the same calls (`await session.get(...)`, `await session.flush()`) with the same records and errors.
+- In web apps, per-request sessions and `lazy="raise"` are the web-application skill's sqlalchemy-session-per-request and sqlalchemy-eager-loading rules.
+{% if has_framework("fastapi") %}
+- Worked example: web-application's hotel example (fastapi-hotel-api), files app/db/repositories.py and tests/test_repositories.py: add and flush with the IntegrityError translated into a domain error, and the contract tests that pin it.
+{% endif %}
