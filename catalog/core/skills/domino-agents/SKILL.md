@@ -54,6 +54,8 @@ On Domino 6.2 an LLM agent is an App with its own dashboard: one request functio
 - `create_app(settings)` builds the agent, its model, its clients and the traced request function once per process; nothing agent-related happens at import.
 - `add_tracing` sits directly on one request function whose parameter names and returned keys are a stable contract with evaluators.
 - Development evaluations run as Jobs inside `DominoRun`; production scoring runs out of band in a scheduled Job, never inside a user request.
+- The A2A sub-app is built by the app factory and mounted with its lifespan run by the parent app; it publishes one agent card, and every call to another agent carries a deadline.
+- Tests run the agent on a fake model, a fake token endpoint and a fake Domino SDK, never on a live LLM or Domino.
 
 ```python
 def create_app(settings: AgentSettings) -> FastAPI:

@@ -313,6 +313,11 @@ that comes to hold vendored text moves from here into its source's table.
 - `rules/domino-agent-evaluators.md`
 - `rules/domino-agent-eval-out-of-band.md`
 - `rules/domino-agent-prod-eval-watermark.md`
+- `rules/a2a-agent-card.md`
+- `rules/a2a-client-deadlines.md`
+- `rules/a2a-mount-lifespan.md`
+- `rules/domino-agent-fake-domino-tests.md`
+- `rules/domino-agent-fake-llm-tests.md`
 
 Upstream files each secrets and service rule draws on (example-agent files by
 path and lines, 6.2 documentation pages by guide and page id):
