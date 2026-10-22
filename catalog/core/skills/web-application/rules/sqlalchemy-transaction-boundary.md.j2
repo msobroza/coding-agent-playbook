@@ -1,0 +1,102 @@
+---
+id: sqlalchemy-transaction-boundary
+name: Transaction boundary
+description: "Commit once per use case, never in helpers or in the session dependency's teardown."
+scope: scoped
+globs:
+  - "**/services/**/*.py"
+  - "**/models.py"
+  - "**/models/**/*.py"
+  - "**/db/**/*.py"
+  - "**/database.py"
+  - "**/repositories/**/*.py"
+  - "**/main.py"
+  - "**/app.py"
+  - "**/asgi.py"
+  - "**/deps.py"
+  - "**/dependencies.py"
+applies_if:
+  any_framework: ["fastapi", "flask", "django", "starlette"]
+  any_dependency: ["sqlalchemy", "alembic"]
+section: database
+priority: 27
+tags: [python, sqlalchemy, database]
+---
+
+# Commit once per use case, not in helpers or dependency teardown
+
+## Description
+
+A request that changes data should succeed or fail as one transaction. Helpers that each call `commit()` leave the first half persisted when a later step fails. Committing after `yield` in a FastAPI session dependency is worse: by default FastAPI runs that code after the response is sent, so a failed commit reaches the client as `200 OK`. Let helpers only add and modify objects, and commit once, explicitly, in the function that owns the use case.
+
+## Bad Example
+
+```python
+async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
+    async with request.app.state.sessionmaker() as session:
+        yield session
+        await session.commit()  # runs after the response; failures are invisible
+
+
+async def add_line(session: AsyncSession, invoice: Invoice, line: LineCreate) -> None:
+    invoice.lines.append(InvoiceLine(**line.model_dump()))
+    await session.commit()  # commits in the middle of the use case
+
+
+async def add_lines(
+    session: AsyncSession, invoice: Invoice, lines: list[LineCreate]
+) -> None:
+    for line in lines:
+        await add_line(session, invoice, line)  # line 3 fails: lines 1 and 2 are saved
+```
+
+## Good Example
+
+```python
+# LineCreate is the request schema, InvoiceLine the ORM row; SessionDep and
+# CurrentUser are the per-request session and authenticated-user aliases.
+async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
+    async with request.app.state.sessionmaker() as session:
+        yield session  # no commit here; closing rolls back anything uncommitted
+
+
+def add_line(invoice: Invoice, line: LineCreate) -> None:
+    invoice.lines.append(InvoiceLine(**line.model_dump()))
+
+
+async def add_lines(
+    session: AsyncSession, *, owner_id: int, invoice_id: int, lines: list[LineCreate]
+) -> Invoice:
+    stmt = (
+        select(Invoice)
+        .where(Invoice.id == invoice_id, Invoice.owner_id == owner_id)
+        .options(selectinload(Invoice.lines))
+    )
+    invoice = await session.scalar(stmt)
+    if invoice is None:
+        raise NotFoundError("Invoice")
+    for line in lines:
+        add_line(invoice, line)
+    await session.commit()  # one commit; an exception before it rolls everything back
+    return invoice
+
+
+@router.post("/{invoice_id}/lines", status_code=status.HTTP_201_CREATED)
+async def create_lines(
+    invoice_id: int, body: list[LineCreate], user: CurrentUser, session: SessionDep
+) -> InvoiceRead:
+    invoice = await add_lines(session, owner_id=user.id, invoice_id=invoice_id, lines=body)
+    return InvoiceRead.model_validate(invoice)
+```
+
+## Notes
+
+- FastAPI: for one transaction per request owned by the dependency, open it with `async with sessionmaker.begin() as session: yield session` and, where the installed FastAPI accepts `Depends(..., scope="function")`, declare that scope so the teardown runs before the response and a failed commit becomes a 500. Change the `SessionDep` alias itself so every user shares the same scope and session.
+- `async with session.begin():` inside a use case raises if the session already started a transaction, which happens as soon as a dependency such as `get_current_user` runs a query. A single explicit `await session.commit()` works in every case.
+- Use `await session.flush()` when you need generated ids or want constraint errors early; it sends SQL inside the open transaction without committing.
+- After a failed flush or commit, call `await session.rollback()` before using the session again, then translate expected failures such as unique violations into domain errors with `raise ... from`, never log and continue (`fastapi-error-boundaries`).
+- Commit only after the block succeeds and roll back on any other exit; a commit-on-success context manager is python-coding's python-context-managers.
+- Side effects that must only happen after the data is saved (emails, queue messages) go after `commit()`; python-architecture's arch-unit-of-work and arch-effects-after-commit own the multi-repository and outbox forms.
+{% if has_framework("fastapi") %}
+- The hotel example shows the split: examples/fastapi-hotel-api/app/operations/booking.py commits once per use case, and examples/fastapi-hotel-api/app/db/repositories.py only adds and flushes.
+{% endif %}
