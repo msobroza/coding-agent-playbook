@@ -23,9 +23,8 @@ The template method fixes the order of an algorithm's steps and lets each varian
 class FlourRestocker:
     def run(self) -> None:  # the same sequence, copied into every class
         prices = self.fetch_prices()
-        quantity = self.order_quantity()
         if self.should_buy(prices):
-            self.place_order(quantity)
+            self.place_order()
         elif self.should_cancel(prices):
             self.cancel_open_orders()
 
@@ -33,9 +32,8 @@ class FlourRestocker:
 class CoffeeRestocker:
     def run(self) -> None:
         prices = self.fetch_prices()
-        quantity = self.order_quantity()
         if self.should_buy(prices):
-            self.place_order(quantity)
+            self.place_order()
         elif self.should_cancel(prices):
             self.cancel_open_orders()
 ```
@@ -45,19 +43,17 @@ class CoffeeRestocker:
 ```python
 class Restocker(Protocol):
     def fetch_prices(self) -> Sequence[Decimal]: ...
-    def order_quantity(self) -> int: ...
     def should_buy(self, prices: Sequence[Decimal]) -> bool: ...
     def should_cancel(self, prices: Sequence[Decimal]) -> bool: ...
-    def place_order(self, quantity: int) -> None: ...
+    def place_order(self) -> None: ...  # each restocker sizes its own order
     def cancel_open_orders(self) -> None: ...
 
 
 def restock(restocker: Restocker) -> None:
     """The sequence, written once; each restocker supplies the steps."""
     prices = restocker.fetch_prices()
-    quantity = restocker.order_quantity()
     if restocker.should_buy(prices):
-        restocker.place_order(quantity)
+        restocker.place_order()
     elif restocker.should_cancel(prices):
         restocker.cancel_open_orders()
 

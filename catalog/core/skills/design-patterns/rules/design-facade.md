@@ -58,7 +58,7 @@ def main() -> None:
     panel.run()
 ```
 
-The panel now receives two callables and imports nothing from the device subsystem.
+`SpeakerPanel.__init__` now takes `power_speaker: Callable[..., None]` and `names: Callable[[], list[str]]` instead of the service and speaker id, so the panel imports nothing from the device subsystem.
 
 ## Notes
 

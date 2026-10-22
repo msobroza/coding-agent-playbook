@@ -31,20 +31,21 @@ def send_welcome_message(
 ## Good Example
 
 ```python
-MessageSender = Callable[[Customer, str, str], None]  # (customer, subject, body)
+class MessageSender(Protocol):
+    def __call__(self, customer: Customer, *, subject: str, body: str) -> None: ...
 
 
 def create_email_sender(config: MailSettings, send: SendEmail) -> MessageSender:
     """Capture the mail settings once; return a sender that needs only the message."""
 
-    def send_to_customer(customer: Customer, subject: str, body: str) -> None:
+    def send_to_customer(customer: Customer, *, subject: str, body: str) -> None:
         send(config, to_address=customer.email, subject=subject, body=body)
 
     return send_to_customer
 
 
 def send_welcome_message(customer: Customer, sender: MessageSender) -> None:
-    sender(customer, "Welcome!", f"Hello {customer.name}, welcome aboard!")
+    sender(customer, subject="Welcome!", body=f"Hello {customer.name}, welcome aboard!")
 
 
 def main() -> None:

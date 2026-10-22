@@ -55,18 +55,17 @@ def clear_text(doc: Document) -> Undo:
 def run_batch(commands: Sequence[Command]) -> Undo:
     """Run every command or none: on failure, undo the done ones and re-raise."""
     undos: list[Undo] = []
-    try:
-        for command in commands:
-            undos.append(command())
-    except Exception:
-        for undo in reversed(undos):
-            undo()
-        raise
 
     def undo_all() -> None:
         for undo in reversed(undos):
             undo()
 
+    try:
+        for command in commands:
+            undos.append(command())
+    except Exception:
+        undo_all()
+        raise
     return undo_all
 
 

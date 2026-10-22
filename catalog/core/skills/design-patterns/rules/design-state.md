@@ -1,7 +1,7 @@
 ---
 id: design-state
 name: State
-description: "When behavior depends on a mode that changes and the same status checks repeat in many methods, keep the legal transitions in one Enum-keyed table that raises a domain error naming both states; move to state objects only when each state carries substantial behavior."
+description: "When behavior depends on a mode that changes and the same status checks repeat in many methods, keep the legal transitions in one Enum-keyed table that raises a domain error naming the state and the action; move to state objects only when each state carries substantial behavior."
 version: 1
 scope: scoped
 globs:
