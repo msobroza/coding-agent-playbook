@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.artifacts.member_reference import RULES_DIR, member_reference_path
 from coding_agent_playbook.skills._rules_index import (
+    HOW_TO_USE_BLOCK,
     RULES_HEADING,
     RULES_LEAD,
     active_sections,
@@ -284,6 +285,27 @@ def emitted_body(skill: Skill) -> str:
         generated = "\n".join(part for part in parts if part)
     authored = skill.body.rstrip()
     return f"{authored}\n\n{generated}" if authored else generated
+
+
+def strip_rules_index(body: str) -> str:
+    """``body`` without the trailing navigation :func:`emitted_body` appended.
+
+    The inverse an importer needs when only the emitted ``SKILL.md`` is left (no
+    sidecar keeps the authored body): the navigation is recognised by its fixed
+    opening, the "How to use this skill" paragraph of a sectioned skill or the
+    ``## Rules`` heading and lead line of a sectionless one, and everything from
+    it to the end is dropped, so the next sync appends it exactly once again. A
+    body without the navigation is returned unchanged.
+
+    Example: ``strip_rules_index(emitted_body(skill))`` -> ``skill.body.rstrip() + "\n"``.
+    """
+    for marker in (HOW_TO_USE_BLOCK, f"{RULES_HEADING}\n\n{RULES_LEAD}\n"):
+        if body.startswith(marker):
+            return ""
+        cut = body.rfind(f"\n\n{marker}")
+        if cut != -1:
+            return body[:cut] + "\n"
+    return body
 
 
 def rules_index(members: Sequence[MemberReference]) -> str:

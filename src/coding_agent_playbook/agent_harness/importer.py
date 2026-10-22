@@ -40,6 +40,7 @@ from coding_agent_playbook.agent_harness._import_writes import (
 from coding_agent_playbook.agent_harness._lossless import read_lossless
 from coding_agent_playbook.agent_harness.manifest import read_manifest
 from coding_agent_playbook.agent_harness.models import NotAHarnessError
+from coding_agent_playbook.skills.naming import skill_id_of
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -96,10 +97,14 @@ def import_harness(harness_root: Path) -> ImportResult:
 def write_import(result: ImportResult, into: Path) -> None:
     """Write rules, prompts, skills, hooks and raw assets under ``into`` (was ``_write_result``).
 
+    A member rule whose skill is imported alongside lands in that skill's
+    ``rules/`` (prU D22); see :func:`~._import_writes.write_rule`.
+
     Example: ``write_import(import_harness(harness_root), Path("playbook"))``.
     """
+    skill_ids = {skill_id_of(skill) for skill in result.skills}
     for rule in result.rules:
-        write_rule(rule, into)
+        write_rule(rule, into, skill_ids=skill_ids)
     for prompt in result.prompts:
         write_prompt(prompt, into)
     for skill in result.skills:

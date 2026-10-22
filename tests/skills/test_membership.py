@@ -12,6 +12,8 @@ from importlib import metadata
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
+import pytest
+
 from coding_agent_playbook.adapters.agents_md import AgentsMdAdapter
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
@@ -19,7 +21,11 @@ from coding_agent_playbook.adapters.continue_ import ContinueAdapter
 from coding_agent_playbook.adapters.opencode import OpenCodeAdapter
 from coding_agent_playbook.adapters.shared_skills import SharedSkillsAdapter
 from coding_agent_playbook.agent_harness.adapter import AgentHarnessAdapter
-from coding_agent_playbook.artifacts.member_reference import member_reference_path
+from coding_agent_playbook.artifacts.member_reference import (
+    member_reference_path,
+    skill_member_location,
+    skill_member_path,
+)
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.rendering.session import RenderSession, TemplateContext
@@ -101,6 +107,26 @@ def test_is_skill_member_only_for_rules_naming_a_skill() -> None:
 def test_member_reference_path_is_rules_slash_id_md() -> None:
     assert member_reference_path("pytest") == "rules/pytest.md"
     assert member_reference_path("python-typing") == "rules/python-typing.md"
+
+
+def test_skill_member_path_round_trips_through_its_location() -> None:
+    path = skill_member_path("risk", "limits")
+    assert path == "skills/risk/rules/limits.md"
+    assert skill_member_path("risk", "limits", suffix=".md.j2") == "skills/risk/rules/limits.md.j2"
+    assert skill_member_location(path) == ("risk", "limits")
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "rules/limits.md",
+        "references/limits.md",
+        "skills/risk/references/x.md",
+        "skills/r/rules/x.py",
+    ],
+)
+def test_skill_member_location_is_none_outside_a_skill_rules_dir(path: str) -> None:
+    assert skill_member_location(path) is None
 
 
 def test_compose_skills_passes_plain_skill_through_unchanged() -> None:

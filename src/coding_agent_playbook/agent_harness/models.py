@@ -7,7 +7,8 @@ artifact catalog in ``specs/prH-agent-harness.md`` §A:
 - :class:`HarnessTree` — the root (``HARNESS.md`` + every top-level branch). Not
   CONTEXT's Harness, which is a coding-agent runtime (AH-2, #143).
 - :class:`HarnessDirectory` — a grouping directory (routing file + children).
-- :class:`SkillLeaf` — a ``SKILL.md``-typed leaf with ``scripts/`` + ``references/``.
+- :class:`SkillLeaf` — a ``SKILL.md``-typed leaf with ``scripts/``, ``references/``
+  and ``rules/`` (its member rules, prU D22).
 - :class:`ScriptFile` — one file under a skill's ``scripts/`` (with its exec bit).
 - :class:`ContentFile` — a markdown content file (optional ``description``).
 - :class:`RawAsset` — a non-markdown passthrough file (tracked by ``sha256``).
@@ -68,7 +69,12 @@ class LeafMarker:
 
 @dataclass(frozen=True)
 class SkillLeaf:
-    """A skill leaf: ``SKILL.md`` (``name``/``description`` + body) plus side files."""
+    """A skill leaf: ``SKILL.md`` (``name``/``description`` + body) plus side files.
+
+    ``rules`` holds every file of the leaf's ``rules/`` directory: markdown
+    member rules as :class:`ContentFile`, anything else as a :class:`RawAsset`
+    for ``validate-harness`` to reject (prU D22).
+    """
 
     name: str
     description: str
@@ -76,6 +82,7 @@ class SkillLeaf:
     path: Path
     scripts: tuple[ScriptFile, ...] = field(default_factory=tuple)
     references: tuple[ContentFile, ...] = field(default_factory=tuple)
+    rules: tuple[ContentFile | RawAsset, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True)

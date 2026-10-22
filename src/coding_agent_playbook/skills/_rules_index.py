@@ -44,6 +44,7 @@ _HOW_TO_USE: Final = (
     "rules in full before editing; usually one to three are enough. Open a reference or "
     "example when a rule names it or its open-when line matches the change."
 )
+HOW_TO_USE_BLOCK: Final = f"{_HOW_TO_USE_HEADING}\n\n{_HOW_TO_USE}\n"
 _TABLE_HEAD: Final = ("| Rule | Requires |", "| --- | --- |")
 _OTHER_HEADING: Final = "### Other"
 _OTHER_SUMMARY: Final = "Rules from other layers that name no section of this skill."
@@ -61,7 +62,7 @@ def sectioned_navigation(
     -> ``True``.
     """
     parts = [
-        f"{_HOW_TO_USE_HEADING}\n\n{_HOW_TO_USE}\n",
+        HOW_TO_USE_BLOCK,
         sectioned_rules_index(members, sections),
         references_section(references),
     ]

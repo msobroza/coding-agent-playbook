@@ -1,6 +1,7 @@
 """The skill-shaped leaves of the ``agent_harness`` adapter (``specs/prH-agent-harness.md`` §B).
 
-``skills/<id>/SKILL.md`` (plus byte-copied ``scripts/`` and ``references/``) and
+``skills/<id>/SKILL.md`` (the authored body plus the generated rules index, byte-copied
+``scripts/`` and ``references/``; member rules come from :mod:`._emit_rules`) and
 ``prompts/<slash>/SKILL.md``, each with its manifest entry. AH-2 (#143) moved these
 per-kind emitters out of :class:`~.adapter.AgentHarnessAdapter` to bring it under
 its 400-line budget; they take every input as an argument and hold no state. The
@@ -16,6 +17,7 @@ from coding_agent_playbook.agent_harness.hook_sidecars import copy_scripts
 from coding_agent_playbook.generated_output.output_io import write_output_bytes, write_output_text
 from coding_agent_playbook.generated_output.source_files import copyable_skill_files
 from coding_agent_playbook.rendering.formats import with_sentinel_body
+from coding_agent_playbook.skills.document import emitted_body
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -51,7 +53,8 @@ def _emit_skill_leaf(
     description = str(skill.frontmatter.get("description", ""))
     frontmatter = emitter.frontmatter_block({"name": name, "description": description})
     skill_md = skill_dir / "SKILL.md"
-    write_output_text(skill_md, with_sentinel_body(frontmatter, skill.body))
+    # The rules index (prU D46.7) is presentation; the entry keeps the authored body.
+    write_output_text(skill_md, with_sentinel_body(frontmatter, emitted_body(skill)))
     scripts, script_paths = copy_scripts(skill.scripts_dir, skill_dir / "scripts", repo_root)
     path = skill_md.relative_to(repo_root).as_posix()
     entries.append(_skill_entry(skill, path, skill_id, name, scripts))

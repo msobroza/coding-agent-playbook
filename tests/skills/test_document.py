@@ -20,10 +20,14 @@ from coding_agent_playbook.skills.document import (
     compose_sectioned_description,
     covered_member_count,
     covers_clause,
+    emitted_body,
     emitted_frontmatter,
+    rules_index,
     sectioned_description,
+    strip_rules_index,
     worst_case_description,
 )
+from tests.member_skill_samples import sample_member_reference
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -260,3 +264,34 @@ def test_emitted_description_of_a_sectioned_skill_names_only_its_active_sections
     assert emitted_frontmatter(skill)["description"] == (
         "Test conventions. Covers mocking, FastAPI wiring. Use when editing tests."
     )
+
+
+def test_strip_rules_index_removes_the_generated_index_only() -> None:
+    index = rules_index([sample_member_reference("python-typing")])
+    assert strip_rules_index(f"# Python\n\nAuthored.\n\n{index}") == "# Python\n\nAuthored.\n"
+    assert strip_rules_index(index) == ""
+    assert strip_rules_index("# Python\n\n## Rules\n\nMine.\n") == "# Python\n\n## Rules\n\nMine.\n"
+
+
+def test_strip_rules_index_removes_the_sectioned_navigation_too() -> None:
+    sections = [
+        {
+            "id": "mocking",
+            "title": "Mocking",
+            "impact": "CRITICAL",
+            "summary": "S.",
+            "open_when": "O.",
+        }
+    ]
+    frontmatter = {
+        "id": "python-testing",
+        "description": "Test conventions.",
+        "playbook": {"sections": sections},
+    }
+    members = (
+        MemberReference("mock-fake", "Fakes", "D.", 50, (), "t\n", "pkg", section="mocking"),
+    )
+    skill = Skill(frontmatter, "# Testing\n\nAuthored.\n", None, None, "pkg", members)
+    body = emitted_body(skill)
+    assert body.count("## How to use this skill") == 1
+    assert strip_rules_index(body) == "# Testing\n\nAuthored.\n"
