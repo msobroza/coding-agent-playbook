@@ -105,6 +105,7 @@ Distilled (credited by name only, no vendored text):
 
 | Upstream file | Core files | Changes |
 | --- | --- | --- |
+| `skills/web-application/rules/app-factory-lifespan.md` | `rules/web-api-resource-naming.md` | Line 101 (routers in feature modules with a prefix per resource; the factory only includes them) becomes a web-api-resource-naming Note; its `tags=[...]` point is left to fastapi-openapi-metadata, and the Note adds that the layout follows the repo's existing axis (pbp-B#68). |
 
 ## python-clean-architecture
 
@@ -174,6 +175,8 @@ Distilled (credited by name only, no vendored text):
 
 | Upstream file | Core files | Changes |
 | --- | --- | --- |
+| `skills/clean-architecture/references/rest-api-design.md` | `rules/fastapi-query-parameters.md`, `rules/web-api-resource-naming.md`, `rules/fastapi-openapi-metadata.md` | fastapi-query-parameters: lines 45-73 (sensible defaults, `Query()` constraints) are the skeleton in the engine rule format; the naive `datetime.now()` defaults become `None` resolved from an injected clock (pca-F13); constraints move into `Annotated[..., Query(...)]`; a `Literal` closed set and `Decimal` amounts added. web-api-resource-naming: lines 7-12 (plural nouns, ids in the path, nesting), 37-41 (one format everywhere) and 130-139 (path versioning, version only for breaking changes) become the Description, Good Example and Notes, with invoice resources and a non-CRUD action as a sub-resource. fastapi-openapi-metadata: lines 90-126 (`response_model`, `summary`, docstring, router tags, `responses=`) are the skeleton; the duplicate-email 400 becomes 409 (pca-F3b) and the return annotation replaces `response_model=`. Not vendored here: the route table and status codes (web-http-methods) and pagination (web-api-pagination). |
+| `commands/review-api-design.md` | `rules/web-api-resource-naming.md`, `rules/fastapi-openapi-metadata.md` | web-api-resource-naming: lines 20-25 (plural nouns, nesting, no verbs in URLs, one case style, ids in the path) and 46 (router prefix matches the resource) become the Bad/Good pair and Notes. fastapi-openapi-metadata: lines 47-48 (tags and response models on every endpoint) become a Note. |
 
 Distilled (credited by name only, no vendored text):
 
