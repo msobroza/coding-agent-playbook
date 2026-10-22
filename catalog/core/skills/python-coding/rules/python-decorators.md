@@ -86,6 +86,6 @@ def line_total(unit_price: Decimal, quantity: int) -> Decimal:
 - Stacked decorators apply bottom-up: the one nearest the `def` wraps the function first, so the example's `timed` measures the logged call. Past two or three, the order gets hard to reason about.
 - Keep each decorator to one concern, and never swallow an exception inside the wrapper: let it propagate, or re-raise it after recording it.
 - A decorator that keeps state between calls can be a class with `__call__` (call `functools.update_wrapper(self, func)` in `__init__`); for a single counter or flag, a closure with a `nonlocal` variable is enough.
-- Logging uses `%`-style arguments, so the message is only built when the level is enabled. Do not put an argument-logging decorator on a function that receives secrets.
+- Logging uses `%`-style arguments, so the message is only built when the level is enabled.
 - Decorator, partial or strategy: a concern applied uniformly to many functions is a decorator; behavior that varies per call is a strategy passed in (design-strategy in the design-patterns skill); configuration fixed at setup is `functools.partial` or a closure (`python-closures-and-partial`).
 - Retrying a call is a decorator only under the retry rules in `python-retries-and-timeouts`.

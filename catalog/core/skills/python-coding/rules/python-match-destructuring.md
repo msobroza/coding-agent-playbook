@@ -24,7 +24,7 @@ Do not use it when a plain `if`/`else` reads as well (two or three boolean condi
 ## Bad Example
 
 ```python
-def describe(event: object) -> str:
+def describe_order_event(event: object) -> str:
     if isinstance(event, OrderCreated):
         return f"order {event.order_id} created for {event.customer_id}"
     elif isinstance(event, OrderShipped):
@@ -66,7 +66,7 @@ class OrderCancelled:
 OrderEvent: TypeAlias = OrderCreated | OrderShipped | OrderCancelled
 
 
-def describe(event: OrderEvent) -> str:
+def describe_order_event(event: OrderEvent) -> str:
     match event:
         case OrderCreated(order_id, customer_id):
             return f"order {order_id} created for {customer_id}"
@@ -85,7 +85,10 @@ def parse_webhook(payload: dict[str, object]) -> Notice:  # decoded external JSO
         case {"type": "dispute", "reason": str(reason)}:
             return Dispute(reason=reason)
         case _:
-            raise ValueError(f"unknown webhook payload: {payload!r}")
+            raise ValueError(
+                f"unknown webhook payload {payload!r}, expected type 'refund' "
+                "with an int amount_cents or type 'dispute' with a str reason"
+            )
 ```
 
 ## Notes

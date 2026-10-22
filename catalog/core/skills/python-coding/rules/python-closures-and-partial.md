@@ -34,17 +34,17 @@ class AgeChecker:  # a class whose only job is to remember one number
 
 send_promotion(customers, is_eligible=AgeChecker(50).check)
 
-total_with_tax = lambda order: order.total * TAX_RATE if order.is_taxable else order.total
+total_with_tax = lambda order: order.total * (1 + TAX_RATE) if order.is_taxable else order.total
 ```
 
 ## Good Example
 
 ```python
-def is_eligible(customer: Customer, cutoff_age: int) -> bool:
+def is_at_least_age(customer: Customer, cutoff_age: int) -> bool:
     return customer.age >= cutoff_age
 
 
-is_senior = partial(is_eligible, cutoff_age=50)  # Callable[[Customer], bool]
+is_senior = partial(is_at_least_age, cutoff_age=50)  # Callable[[Customer], bool]
 send_promotion(customers, is_eligible=is_senior)
 
 

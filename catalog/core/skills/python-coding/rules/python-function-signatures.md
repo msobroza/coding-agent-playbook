@@ -17,7 +17,7 @@ tags: [python, functions, design]
 
 A signature is read at every call site, where `create_user("ada", True, False)` says nothing about what `True` and `False` mean. Design the header so each call explains itself and cannot be misused:
 
-- Put options after a bare `*` so callers must name them. Boolean flags are always keyword-only.
+- Put options after a bare `*` so callers must name them; the house style already makes boolean flags keyword-only.
 - When a boolean flag selects a different algorithm, split the function in two instead of branching on the flag. When it only adjusts one step of the same algorithm, keep it, keyword-only.
 - Parameters that always travel together (a street, city and postal code; a start and end date) become one frozen dataclass passed as one argument.
 - There is no fixed parameter count; a long list is the signal that a record is missing or that the function does two things.
@@ -78,6 +78,5 @@ class Wallet:
 
 - Telling the two kinds of flag apart: if the body is `if flag: <one procedure> else: <another>` with little shared code, the callers already know which one they want, so give each its own name. If the flag changes one argument passed down or one line, splitting would duplicate the rest.
 - Accept the most abstract read-only type the body needs (`Sequence`, `Mapping`, `Iterable`) and return a concrete one; the table is in `python-abstract-inputs`.
-- Defaults are immutable: `None` or an empty tuple, never `[]` or `{}` (the full rule is in `python-typing`). A default must not build an I/O collaborator either (`python-dependency-injection`).
-- A parameter whose values form a closed set takes an `Enum` or a `Literal`, not a free string the body compares against.
+- Mutable defaults are covered by the house style and `python-typing`. A default must not build an I/O collaborator either (`python-dependency-injection`).
 - When a call site still reads poorly after these steps, the function probably does two things; split it by responsibility (`python-small-units`).

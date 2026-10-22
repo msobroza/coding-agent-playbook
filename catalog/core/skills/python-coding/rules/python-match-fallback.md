@@ -37,7 +37,11 @@ def apply_status(order: Order, status: str) -> None:
 ## Good Example
 
 ```python
+HANDLED_STATUSES = ("paid", "shipped", "cancelled")
+
+
 def apply_status(order: Order, status: str) -> None:
+    # str, not Literal: the payment provider adds statuses without notice
     match status:
         case "paid":
             order.mark_paid()
@@ -46,7 +50,10 @@ def apply_status(order: Order, status: str) -> None:
         case "cancelled":
             order.cancel()
         case _:
-            raise ValueError(f"unknown status {status!r} for order {order.order_id}")
+            raise ValueError(
+                f"unknown status {status!r} for order {order.order_id}, "
+                f"expected one of {HANDLED_STATUSES}"
+            )
 
 
 class OrderStatus(Enum):
@@ -69,7 +76,7 @@ def next_step(status: OrderStatus) -> str:
 
 ## Notes
 
-- `assert_never` comes from `typing` on Python 3.11 and later and from `typing_extensions` before. Without either, a three-line helper `def assert_never(value: NoReturn) -> NoReturn` that raises `AssertionError(f"unhandled value {value!r}")` gives the type checker the same check.
+- `assert_never` comes from `typing` on Python 3.11 and later and from `typing_extensions` before. Without either, a three-line helper `def assert_never(value: NoReturn) -> NoReturn` that raises `AssertionError(f"unhandled value {value!r}, expected a case for every member")` gives the type checker the same check.
 - The fallback raises; it never returns a made-up default or logs and carries on (`python-error-handling`). Where ignoring unknown values is the documented contract, write that `case _:` explicitly with a comment saying why, never by leaving the case out.
 - The same holds when an `isinstance` chain is rewritten as a `match` on class patterns: the last `case _:` raises `TypeError` naming `type(value).__name__`, or calls `assert_never` on a closed union.
 - `match` is no faster than `if`/`elif` and checks no coverage itself; when to use it at all is in `python-match-destructuring`.
