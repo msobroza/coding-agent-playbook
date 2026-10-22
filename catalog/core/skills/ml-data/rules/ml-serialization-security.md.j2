@@ -15,82 +15,82 @@ tags: [ml, security, serialization]
 
 # ML serialization & deserialization security
 
-Deserializing an untrusted artifact is the most common way an ML codebase turns into a remote-code-execution hole. `pickle` — and every format built on it (`joblib`, `torch.load`, `np.load(allow_pickle=True)`, `pandas.read_pickle`) — executes arbitrary Python *while loading*. A poisoned checkpoint downloaded from a model hub, an artifact pulled from object storage, or a cache entry written by another service runs as your process the moment you load it.
+## Description
 
-When you touch model-loading, checkpoint, cache, or feature-pipeline code, treat the boundary between "bytes from elsewhere" and "a live Python object" as a security seam. The refactors below remove the seam or make it safe.
+Deserializing an untrusted artifact is the most common way an ML codebase turns into a remote-code-execution hole. `pickle`, and every format built on it (`joblib`, `torch.load`, `np.load(allow_pickle=True)`, `pandas.read_pickle`), executes arbitrary Python *while loading*. A poisoned checkpoint downloaded from a model hub, an artifact pulled from object storage, or a cache entry written by another service runs as your process the moment you load it.
 
-## Pickle is code execution, not a data format
+When you touch model-loading, checkpoint, cache or feature-pipeline code, treat the boundary between "bytes from elsewhere" and "a live Python object" as a security seam, and refactor it to a form that removes the seam or makes it safe.
 
-- **Never `pickle.load` / `joblib.load` an artifact you did not produce and store yourself.** Loading is enough — you do not have to call anything on the result.
-- Refactor toward a format that carries data, not code:
+## Bad Example
 
 ```python
-# avoid — arbitrary code runs during load
 import pickle
+
 with open(path, "rb") as f:
-    model = pickle.load(f)            # RCE if `path` is attacker-influenced
-
-# prefer — pickle-free, no code execution
-import json
-config = json.loads(Path(path).read_text(encoding="utf-8"))   # plain data
-# tensors/weights → safetensors; tabular → parquet/arrow; trees → ONNX
-```
-
-- If a third-party API *only* gives you pickle, isolate it: pin and verify the artifact (checksum / signature), document the trusted provenance next to the call, and load it in the most constrained context you can. Make the trust assumption explicit in code, never implicit.
-
+    model = pickle.load(f)  # arbitrary code runs if `path` is attacker-influenced
 {% if has_ml_dep("torch") %}
-## PyTorch checkpoints
-
-- `torch.load(...)` unpickles by default. Pass `weights_only=True` so only tensors/primitives are restored and no global is executed:
-
-```python
-state = torch.load(path)                       # avoid — full unpickle
-state = torch.load(path, weights_only=True)    # prefer — tensors only
-model.load_state_dict(state)
-```
-
-- For weights you publish or consume across a trust boundary, prefer **safetensors** (`safetensors.torch.load_file`) — it cannot carry executable payloads by construction.
+state = torch.load(path)  # full unpickle
 {% endif %}
 {% if has_ml_dep("transformers") %}
-## Hugging Face artifacts
-
-- Pin models by explicit revision (commit SHA), not a moving branch: `from_pretrained(repo, revision="<sha>")`.
-- Never pass `trust_remote_code=True` for a model you do not control — it imports and runs repo-shipped Python. Prefer architectures already in the library.
+# trust_remote_code runs Python shipped in the model repo
+model = AutoModel.from_pretrained(repo, trust_remote_code=True)
 {% endif %}
 {% if has_ml_dep("scikit-learn") %}
-## scikit-learn estimators
-
-- `joblib.load` / `pickle` of an `.pkl`/`.joblib` estimator is unpickling — same RCE exposure. Only load estimators your own pipeline serialized to storage you control.
-- The estimator must be unpickled with the same scikit-learn version it was written with; a mismatch is a correctness bug, not just a warning. Record the version alongside the artifact.
+estimator = joblib.load(path)  # unpickling, the same exposure
 {% endif %}
 {% if has_ml_dep("numpy") %}
-## NumPy / array data
-
-- `np.load(path)` enables pickle for object arrays. Disable it for untrusted input:
-
-```python
-arr = np.load(path)                       # avoid — allow_pickle defaults vary / object arrays unpickle
-arr = np.load(path, allow_pickle=False)   # prefer — fail loudly instead of executing
-```
+embeddings = np.load(path)  # object arrays unpickle
 {% endif %}
 {% if has_ml_dep("pandas") %}
-## pandas frames
-
-- `pandas.read_pickle` is unpickling — never point it at an untrusted file. Move interchange to `read_parquet` / `read_feather` / `read_csv` instead.
+frame = pd.read_pickle(path)  # unpickling
 {% endif %}
+settings = yaml.load(text, Loader=yaml.Loader)  # can instantiate arbitrary objects
+```
 
-## Other deserialization & dynamic-execution smells
+## Good Example
 
-- **YAML:** `yaml.load(...)` without a safe loader can instantiate arbitrary objects. Use `yaml.safe_load(...)`.
-- **Config / "plugin" dispatch:** no `eval` / `exec` / `pickle`-based dispatch in data and feature pipelines. Map names to callables with an explicit dict; reject anything not in it.
-- **Model/registry URIs:** validate that a path or URI resolves inside the expected directory/bucket before loading — block path traversal and surprise remote fetches.
+```python
+import json
 
-## How to spot it in a review
+config = json.loads(Path(path).read_text(encoding="utf-8"))  # plain data
+# tensors and weights -> safetensors; tabular -> Parquet or Arrow; trees -> ONNX
+{% if has_ml_dep("torch") %}
+state = torch.load(path, weights_only=True)  # tensors and primitives only
+model.load_state_dict(state)
+{% endif %}
+{% if has_ml_dep("transformers") %}
+model = AutoModel.from_pretrained(repo, revision=PINNED_COMMIT_SHA)
+{% endif %}
+{% if has_ml_dep("numpy") %}
+embeddings = np.load(path, allow_pickle=False)  # fails loudly instead of executing
+{% endif %}
+{% if has_ml_dep("pandas") %}
+frame = pd.read_parquet(path)
+{% endif %}
+settings = yaml.safe_load(text)
+```
 
-Walk the diff for these and refactor each to the safe form above:
+## Notes
 
-1. `pickle.load` / `pickle.loads` / `joblib.load` on anything not produced by this codebase.
-2. `torch.load(` without `weights_only=True`.
-3. `np.load(` without `allow_pickle=False`, or any `pandas.read_pickle`.
-4. `yaml.load(` without `SafeLoader`; any `eval(` / `exec(` reachable from data, config, or request input.
-5. `trust_remote_code=True`, or a model/checkpoint loaded from a path or revision that isn't pinned and provenance-checked.
+- Never `pickle.load` or `joblib.load` an artifact you did not produce and store yourself. Loading is enough: you do not have to call anything on the result.
+- If a third-party API only gives you pickle, isolate it: pin and verify the artifact (checksum or signature), document the trusted provenance next to the call, and load it in the most constrained context you can. Make the trust assumption explicit in code, never implicit.
+{% if has_ml_dep("torch") %}
+- For weights you publish or consume across a trust boundary, prefer safetensors (`safetensors.torch.load_file`): it cannot carry executable payloads by construction.
+{% endif %}
+{% if has_ml_dep("transformers") %}
+- Pin Hugging Face models by explicit revision (a commit SHA), not a moving branch. Never pass `trust_remote_code=True` for a model you do not control; prefer architectures already in the library.
+{% endif %}
+{% if has_ml_dep("scikit-learn") %}
+- Only load estimators your own pipeline serialized to storage you control. An estimator must be unpickled with the same scikit-learn version it was written with; a mismatch is a correctness bug, not just a warning, so record the version alongside the artifact.
+{% endif %}
+{% if has_ml_dep("pandas") %}
+- Never point `pandas.read_pickle` at an untrusted file; move interchange to `read_parquet`, `read_feather` or `read_csv`.
+{% endif %}
+- Config or "plugin" dispatch: no `eval`, `exec` or pickle-based dispatch in data and feature pipelines. Map names to callables with an explicit dict and reject anything not in it.
+- Model and registry URIs: check that a path or URI resolves inside the expected directory or bucket before loading, to block path traversal and surprise remote fetches.
+- In a review, walk the diff for these and refactor each to the safe form above:
+  1. `pickle.load`, `pickle.loads` or `joblib.load` on anything not produced by this codebase.
+  2. `torch.load(` without `weights_only=True`.
+  3. `np.load(` without `allow_pickle=False`, or any `pandas.read_pickle`.
+  4. `yaml.load(` without `SafeLoader`; any `eval(` or `exec(` reachable from data, config or request input.
+  5. `trust_remote_code=True`, or a model or checkpoint loaded from a path or revision that is not pinned and provenance-checked.

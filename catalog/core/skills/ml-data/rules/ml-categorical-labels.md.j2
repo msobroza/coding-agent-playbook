@@ -1,0 +1,79 @@
+---
+id: ml-categorical-labels
+name: Categorical labels
+description: "Store low-cardinality label columns as categoricals defined once as a shared dtype constant, with ordered categories for ordinal labels."
+version: 1
+scope: scoped
+globs:
+  - "**/*.py"
+  - "**/*.ipynb"
+applies_if:
+  any_ml_stack: ["pandas", "polars"]
+section: dtypes
+priority: 44
+tags: [ml, pandas, polars, dtypes]
+---
+
+# Use one shared categorical dtype for labels
+
+## Description
+
+A label column with a few distinct values (a region, a status, a device model) repeated across many rows stores every occurrence separately as text. A categorical dtype stores each distinct value once and an integer code per row, which cuts memory and speeds up grouping, sorting, merging and equality comparisons. It also declares the domain, the allowed values, and an explicit order for ordinal labels such as parcel sizes or alert severities, so sorting and comparisons follow the domain's order rather than the alphabet's.
+
+Define each label's categories once, as one shared dtype constant, and apply that constant to every source: categories inferred per source differ between files, and combining such frames silently falls back to text.
+
+## Bad Example
+
+```python
+{% if has_ml_dep("pandas") %}
+events = pd.read_csv(path)
+# event_type: text, 8 distinct values repeated on every row
+# severity: "low" / "medium" / "high" sorts alphabetically: high, low, medium
+events = events.sort_values("severity")  # wrong order
+
+north["region"] = north["region"].astype("category")  # categories inferred per source
+south["region"] = south["region"].astype("category")
+regions = pd.concat([north, south])  # region falls back to text
+{% endif %}
+{% if has_ml_dep("polars") %}
+# categories and their order are inferred from this one file
+events = pl.read_csv(path).with_columns(pl.col("severity").cast(pl.Categorical))
+{% endif %}
+```
+
+## Good Example
+
+```python
+{% if has_ml_dep("pandas") %}
+SEVERITY = pd.CategoricalDtype(["low", "medium", "high"], ordered=True)
+REGION = pd.CategoricalDtype(["north", "south", "east", "west"])
+
+events = pd.read_csv(path, dtype={"severity": SEVERITY, "region": REGION})
+summary = events.groupby("region", observed=True)["duration_s"].mean()
+events = events.sort_values("severity")  # low, medium, high
+serious = events[events["severity"] >= "medium"]  # ordinal comparison works
+
+regions = pd.concat(
+    [north.astype({"region": REGION}), south.astype({"region": REGION})]
+)
+{% endif %}
+{% if has_ml_dep("polars") %}
+SEVERITY_LEVELS = pl.Enum(["low", "medium", "high"])
+
+events = pl.read_csv(path, schema_overrides={"severity": SEVERITY_LEVELS})
+events = events.sort("severity")  # low, medium, high: the Enum's order
+{% endif %}
+```
+
+## Notes
+
+- Rule of thumb: convert when the distinct values are well under half of the rows; high-cardinality columns (free text, identifiers) gain nothing and may use more memory.
+{% if has_ml_dep("pandas") %}
+- pandas: pass `observed=True` explicitly to `groupby` on a categorical key, so categories with no rows do not appear in the result.
+- pandas: assigning a value outside the declared categories raises `TypeError`; add it first with `cat.add_categories`. This is a feature: unexpected labels fail fast.
+- pandas: `concat` and `merge` keep the categorical dtype only when both sides share identical categories, which the shared constant guarantees.
+- pandas: `frame["region"].cat.codes` gives the compact integer codes when a model input needs them.
+{% endif %}
+{% if has_ml_dep("polars") %}
+- polars: `pl.Enum([...])` fixes the categories and their order up front, and a value outside them raises; `pl.Categorical` infers its categories from the data, so prefer the Enum constant for a fixed set of labels.
+{% endif %}

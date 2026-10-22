@@ -1,0 +1,113 @@
+---
+id: ml-check-after-load
+name: Check after loading
+description: "Right after loading, check columns, dtypes and shapes once and raise an error naming the column or array, what arrived and what was expected."
+version: 1
+scope: scoped
+globs:
+  - "**/*.py"
+  - "**/*.ipynb"
+applies_if:
+  any_ml_stack: ["numpy", "pandas", "polars"]
+section: dtypes
+priority: 41
+tags: [ml, dtypes, validation]
+---
+
+# Check loaded data at the boundary
+
+## Description
+
+Data from files, databases and APIs is untrusted in the same way request payloads are. An array or a frame with a renamed column, a changed dtype or a wrong shape usually does not crash; it produces plausible-looking wrong results. Right after a load, a small check compares what arrived with what the code expects and raises an error that names the column or array, its actual dtype or shape, and the expected one. Everything downstream then relies on that check.
+
+## Bad Example
+
+```python
+{% if has_ml_dep("numpy") %}
+def load_embeddings(path: Path) -> npt.NDArray[np.float32]:
+    embeddings = np.load(path, allow_pickle=False)
+    assert embeddings.dtype == np.float32  # stripped under python -O; no shape check
+    return embeddings
+{% endif %}
+{% if has_ml_dep("pandas") %}
+{% if has_ml_dep("numpy") %}
+
+
+{% endif %}
+def load_orders(path: Path) -> pd.DataFrame:
+    return pd.read_parquet(path)  # whatever columns and dtypes the file holds today
+{% endif %}
+{% if has_ml_dep("polars") %}
+{% if has_ml_dep("numpy") or has_ml_dep("pandas") %}
+
+
+{% endif %}
+def load_orders(path: Path) -> pl.DataFrame:
+    return pl.read_parquet(path)  # whatever columns and dtypes the file holds today
+{% endif %}
+```
+
+## Good Example
+
+```python
+class SchemaMismatchError(ValueError):
+    """Loaded data does not have the columns, dtypes or shape the code expects."""
+{% if has_ml_dep("numpy") %}
+
+
+def load_embeddings(path: Path, *, dim: int) -> npt.NDArray[np.float32]:
+    array = np.load(path, allow_pickle=False)
+    if array.dtype != np.float32 or array.ndim != 2 or array.shape[1] != dim:
+        raise SchemaMismatchError(
+            f"{path.name}: expected float32 of shape (n, {dim}), got {array.dtype} {array.shape}"
+        )
+    return array
+{% endif %}
+{% if has_ml_dep("pandas") %}
+
+
+ORDER_DTYPES = {"order_id": "int64", "zip_code": "string", "weight_kg": "float64"}
+
+
+def check_dtypes(frame: pd.DataFrame, expected: Mapping[str, str]) -> None:
+    actual = frame.dtypes.astype(str).to_dict()
+    for column, dtype in expected.items():
+        got = actual.get(column)
+        if got != dtype:
+            raise SchemaMismatchError(f"{column!r}: expected {dtype}, got {got}")
+
+
+def load_orders(path: Path) -> pd.DataFrame:
+    orders = pd.read_parquet(path)
+    check_dtypes(orders, ORDER_DTYPES)
+    return orders
+{% endif %}
+{% if has_ml_dep("polars") %}
+
+
+ORDER_SCHEMA = {"order_id": pl.Int64, "zip_code": pl.String, "weight_kg": pl.Float64}
+
+
+def check_schema(frame: pl.DataFrame, expected: Mapping[str, pl.DataType]) -> None:
+    actual = frame.schema
+    for column, dtype in expected.items():
+        got = actual.get(column)
+        if got != dtype:
+            raise SchemaMismatchError(f"{column!r}: expected {dtype}, got {got}")
+
+
+def load_orders(path: Path) -> pl.DataFrame:
+    orders = pl.read_parquet(path)
+    check_schema(orders, ORDER_SCHEMA)
+    return orders
+{% endif %}
+```
+
+## Notes
+
+- Check once at the boundary (a load, an API response, the output of an upstream pipeline stage), not inside every transformation.
+- Raise an error, never `assert`: assertions vanish under `python -O`, and the message must name what arrived and what was expected.
+- A read that declares its dtypes (`ml-dtypes-at-load`) still needs this check when the source carries its own schema, such as Parquet, a database table or an array file, because that schema can drift.
+{% if has_ml_dep("pandas") or has_ml_dep("polars") %}
+- When the repo already uses pandera, write the frame check as one schema validated at the same boundary (`ml-frame-validation`). Never add pandera for this on your own; propose it to the user if the checks keep growing.
+{% endif %}
