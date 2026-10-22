@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING, Final
 
 import yaml
 
-from coding_agent_playbook.catalog._skill_rules import find_skill_md, read_skill_md
+from coding_agent_playbook.catalog.skill_rules import find_skill_md, read_skill_md
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource, engine_package_of
 from coding_agent_playbook.skills.naming import skill_id_of
 from coding_agent_playbook.skills.playbook_block import PLAYBOOK_BLOCK_KEY
@@ -234,7 +234,7 @@ def _and_join(items: Sequence[str]) -> str:
 def _skill_rules_dir_errors(source: ArtifactSource) -> list[ValidationError]:
     """R4: each ``skills/<dir>/rules/`` whose ``<dir>`` is no skill that takes members.
 
-    Discovery skips such a directory (``catalog._skill_rules``), so without
+    Discovery skips such a directory (``catalog.skill_rules``), so without
     this check its rules vanish silently. Only a filesystem source has layers.
     """
     if not isinstance(source, FileSystemArtifactSource):
@@ -290,7 +290,7 @@ def _always_in_skill_problem(rule: Rule, path: Path) -> list[str]:
 
 def _layer_root(path: Path) -> Path:
     """``<layer>`` for a file under ``<layer>/skills/<dir>/rules/**``, the only place a
-    rule with a ``home_skill`` comes from (``catalog._skill_rules``).
+    rule with a ``home_skill`` comes from (``catalog.skill_rules``).
 
     Example: ``_layer_root(Path("playbook/skills/s/rules/a/x.md"))`` -> ``Path("playbook")``.
     """

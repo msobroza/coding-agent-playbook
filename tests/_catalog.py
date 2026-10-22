@@ -16,8 +16,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.artifacts.rule import Rule
-from coding_agent_playbook.catalog._skill_rules import declared_skill_id, find_skill_md
 from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE
+from coding_agent_playbook.catalog.skill_rules import declared_skill_id, find_skill_md
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource, _iter_skills
 from coding_agent_playbook.skills.membership import is_rule_skill
 from coding_agent_playbook.skills.naming import skill_id_of

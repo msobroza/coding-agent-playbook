@@ -23,11 +23,6 @@ from coding_agent_playbook.artifacts.prompt import Prompt
 from coding_agent_playbook.artifacts.rule import Rule, RuleLoadError
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.catalog._hook_walk import walk_hook_layer
-from coding_agent_playbook.catalog._skill_rules import (
-    iter_md_files,
-    iter_skill_dirs,
-    iter_skill_rule_files,
-)
 from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE, REPO_LOCAL_SOURCE
 from coding_agent_playbook.catalog.prompt_sets import (
     DEFAULT_PROMPT_SET,
@@ -38,6 +33,11 @@ from coding_agent_playbook.catalog.prompt_sets import (
     require_prompt_set,
 )
 from coding_agent_playbook.catalog.roots import catalog_layer_root, is_bundled_layer
+from coding_agent_playbook.catalog.skill_rules import (
+    iter_md_files,
+    iter_skill_dirs,
+    iter_skill_rule_files,
+)
 from coding_agent_playbook.evals.loader import (
     discover_eval_sample_dirs,
     load_eval_sample_from_dir,

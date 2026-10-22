@@ -17,8 +17,8 @@ from typing import TYPE_CHECKING
 import yaml
 
 from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
+from coding_agent_playbook.artifacts.identity import artifact_id_of
 from coding_agent_playbook.artifacts.skill import Skill
-from coding_agent_playbook.skills.naming import skill_id_of
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
@@ -87,13 +87,13 @@ def read_skill_md(skill_md: Path) -> Skill:
 
 
 def declared_skill_id(skill_md: Path) -> str:
-    """The id the skill at ``skill_md`` merges under (``skills.naming.skill_id_of``).
+    """The id the skill at ``skill_md`` merges under (the overlay-merge key, ``artifact_id_of``).
 
     Raises ``ValueError`` or ``yaml.YAMLError`` when its frontmatter cannot be read.
 
     Example: ``declared_skill_id(Path("catalog/core/skills/python-coding/SKILL.md"))`` -> ``"python-coding"``.
     """
-    return skill_id_of(read_skill_md(skill_md))
+    return artifact_id_of(read_skill_md(skill_md))
 
 
 def iter_skill_rule_files(skills_root: Path) -> Iterator[tuple[str, Path]]:

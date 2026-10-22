@@ -12,7 +12,7 @@ from __future__ import annotations
 import tomllib
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.catalog._skill_rules import iter_md_files
+from coding_agent_playbook.catalog.skill_rules import iter_md_files
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.config.files import CONFIG_FILENAME
 from coding_agent_playbook.config.tables.links import LinksConfig, parse_links_config

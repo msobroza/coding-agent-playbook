@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.artifacts.prompt import Prompt
-from coding_agent_playbook.catalog._skill_rules import iter_md_files
+from coding_agent_playbook.catalog.skill_rules import iter_md_files
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 
 if TYPE_CHECKING:
