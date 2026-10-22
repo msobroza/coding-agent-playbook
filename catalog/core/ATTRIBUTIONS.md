@@ -147,6 +147,13 @@ Distilled (credited by name only, no vendored text):
 
 | Upstream file | Core files | Changes |
 | --- | --- | --- |
+| `skills/web-application/rules/sec-object-authorization.md` | `rules/web-object-authorization.md` | Engine frontmatter (security section, any web framework gate); title without the impact tag; References dropped; the dated Top 10 ranking dropped; the Good example names its own aliases, model and schema and defines `NotFoundError` on the project base exception, carrying the resource id, mapped to 404 through `fastapi-error-boundaries`; cross-references become rule ids; a Note for the owner or tenant filter in any framework. |
+| `skills/web-application/rules/sec-jwt-validation.md` | `rules/web-jwt-validation.md` | Engine frontmatter (security section, any web framework gate); title without the impact tag; References dropped; the Good example names the Settings fields and aliases it uses; the install command and the library-history sentence become "propose adding PyJWT through the project's package manager, never unasked"; a sentence for other JWT libraries; the secret one-liner shortened; the string-`sub` Note becomes a comment on the claim; cross-references become rule ids (pydantic-typed-settings, in another skill, in plain text). |
+| `skills/web-application/rules/sec-password-hashing.md` | `rules/web-password-hashing.md` | Engine frontmatter (security section, any web framework gate); title without the impact tag; References dropped; the module-level hasher and import-time dummy hash become a `PasswordHasher` built by the composition root and passed to `authenticate`, taking `SecretStr` and returning a frozen `PasswordCheck` instead of a bare tuple; the install line becomes a version-neutral proposal through the project's package manager; Notes on throttling, sign-up enumeration and Django's hasher setting; cross-references become rule ids. |
+| `skills/web-application/rules/sec-secure-tokens.md` | `rules/web-secure-tokens.md` | Engine frontmatter (security section, any web framework gate); title without the impact tag; References dropped; a comment names the two `User` columns the example writes; a Note for the same conditional update without SQLAlchemy; the S311 point stays Note text, with no `lint_codes` entry (D16); cross-references become rule ids. |
+| `skills/web-application/rules/sec-cors-origins.md` | `rules/web-cors-origins.md` | Engine frontmatter (security section, any web framework gate); title without the impact tag; References dropped; the Good example shows the settings field and the middleware inside `create_app(settings)` instead of pointing at other rules; origin examples with a scheme stay only inside the code block, the Notes describe them in prose; a Note for Django and Flask CORS extensions. |
+| `skills/web-application/SKILL.md` | `SKILL.md` | Lines 12, 16, 92, 131-190 and 223-227 only so far (the app-factory and testing blocks come with their rules): the intro joins the engine's summary, its one-stack sentence keeps the libraries and says the security and database rules hold for Flask, Django and Starlette, and "takes precedence" becomes "this skill's rule wins where python-coding or python-testing overlap"; the Quick Reference has the authorized query (the lazy-loading comment waits for the database rules), passwords and tokens, and settings and CORS blocks (the module-level hasher becomes an injected `PasswordHasher`, `NotFoundError` carries the id, `cors_origins` uses `Field(default_factory=list)`, settings fields only for those blocks); See Also becomes plain-text skill names, with python-architecture added. Dropped: the frontmatter `paths:` (the engine uses globs), the publisher sentence (14), the shared-example paragraph (18) and the Categories tables (20-90, replaced by the generated section index). |
+| `skills/web-application/rules/api-error-responses.md` | `rules/web-password-hashing.md` | Line 90 only so far: the sign-up account-enumeration point joins the password rule's "same error" Note, moved there from the error-boundary rule for size. |
 
 ## python-clean-architecture
 
@@ -229,6 +236,7 @@ Distilled (credited by name only, no vendored text):
 
 | Upstream file | Core files | Changes |
 | --- | --- | --- |
+| `skills/clean-architecture/references/rest-api-design.md` | `rules/web-password-hashing.md` | Lines 179-181 and 250-257 only so far: the rate-limiting idea becomes a Note (throttle login and reset endpoints at the proxy or with the project's limiter, limits read from settings and shared across instances); lines 182-249 (the third-party limiter and shared-store recipe) are dropped: a dependency the engine does not adopt, and a reference cannot be gated (D5). |
 
 Distilled (credited by name only, no vendored text):
 
@@ -407,4 +415,3 @@ Upstream text these rules leave out (DROP, with the reason):
 
 ### web-application
 
-- `SKILL.md`
