@@ -73,7 +73,12 @@ class DatasetFeedbackStore:
 
 
 def build_store() -> FeedbackStore:
-    return DatasetFeedbackStore(Path(os.environ["FEEDBACK_DATASET_DIR"]))
+    raw = os.environ.get("FEEDBACK_DATASET_DIR", "")
+    if not raw or not Path(raw).is_dir():
+        raise RuntimeError(
+            f"FEEDBACK_DATASET_DIR={raw!r}: expected the mounted Dataset directory to write to"
+        )
+    return DatasetFeedbackStore(Path(raw))
 ```
 
 A database or an object store adapter implements the same `add` method; tests use an in-memory fake.

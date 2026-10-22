@@ -67,7 +67,22 @@ class CartStore(Protocol):
     def add(self, viewer_id: str, item: str) -> None: ...
 ```
 
-A Flask App that keeps a small value per viewer can use the signed session cookie, with its `SECRET_KEY` read from settings, never a literal.
+A Flask App keeps a small value per viewer in its signed session cookie:
+
+```python
+from flask import Flask, session
+
+
+def create_app(session_key: str) -> Flask:
+    """``session_key`` comes from settings (a Domino secret), never a literal."""
+    app = Flask(__name__)
+    app.secret_key = session_key
+    return app
+
+
+def remember_page(page: int) -> None:
+    session["page"] = page  # a signed cookie: every worker and replica reads it
+```
 
 ## Notes
 

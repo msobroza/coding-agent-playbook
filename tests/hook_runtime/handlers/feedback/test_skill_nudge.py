@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
+    from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
     from tests.hook_payloads import HookPayloadCase
     from tests.hook_runtime.handlers.pack_repo import PackRepo
@@ -61,17 +62,24 @@ def _install_six_skill_pack(pack_repo: PackRepo) -> None:
     pack_repo.install_pack([HOOK_ID], handler_config={HOOK_ID: {"skills": [*principle, testing]}})
 
 
+def _reference_probe_rules() -> list[Rule]:
+    """Every core rule but the Domino-gated ones: the reference probe has no Domino marker.
+
+    The Domino skills' members all gate on ``domino_project`` (prU D63), so sync never
+    puts them in this repo's table; keeping them would change every line below.
+    """
+    return [rule for rule in engine_rules() if "domino_project" not in rule.frontmatter.applies_if]
+
+
 def _line(skill_id: str) -> str:
     return f"Conventions for this file: skill {skill_id}."
 
 
-#: Every core skill with members, every gate open (the pack installs each core rule):
+#: Every core skill with members, as in the reference probe (FastAPI + pytest + ML):
 #: ``**/*.py`` reaches ml-data, python-coding and python-tooling; tests reach python-testing.
-#: domino-apps and web-application rank first on ``src/app.py``: their ``**/app.py`` globs
-#: (the Domino App rules, fastapi-app-wiring) are the most specific that matched (D41);
-#: the ties keep config order.
+#: web-application ranks first on ``src/app.py``: fastapi-app-wiring's ``**/app.py`` is the
+#: most specific glob that matched (D41); the ``**/*.py`` ties keep config order.
 SOURCE_LINES: Final = [
-    _line("domino-apps"),
     _line("web-application"),
     _line("ml-data"),
     _line("python-coding"),
@@ -83,8 +91,8 @@ STATIC_CHECK_CONFIGS: Final = ("ruff.toml", ".ruff.toml", "mypy.ini", ".mypy.ini
 
 @pytest.fixture
 def repo(pack_repo: PackRepo) -> PackRepo:
-    """skill-nudge on, its table derived from every core rule (all five member skills)."""
-    pack_repo.install_pack([HOOK_ID], rules=engine_rules())
+    """skill-nudge on, its table derived from every core rule outside the Domino skills."""
+    pack_repo.install_pack([HOOK_ID], rules=_reference_probe_rules())
     return pack_repo
 
 
@@ -122,10 +130,9 @@ def test_test_file_names_testing_and_coding_once_each(
     source = edit(repo, deps(), APP, state=state)
     again = edit(repo, deps(), TEST_APP, state=state)
 
-    # D41: tests/**/*.py ranks python-testing and web-application (fastapi-app-wiring) first;
-    # no Domino App glob matches a test file, so only domino-apps is left for the source.
-    assert context(first) == [_line("python-testing"), *SOURCE_LINES[1:]]
-    assert context(source) == [_line("domino-apps")]
+    # D41: tests/**/*.py ranks python-testing and web-application (fastapi-app-wiring) first.
+    assert context(first) == [_line("python-testing"), *SOURCE_LINES]
+    assert source.trace.combined.decision is Decision.NONE
     assert again.trace.combined.decision is Decision.NONE
 
 
@@ -278,7 +285,7 @@ def test_nudge_line_comes_before_lint_feedback(
     head = "def run():\n    return 1\n"
     pack_repo.write("pyproject.toml", '[tool.ruff.lint]\nselect = ["F"]\n')
     pack_repo.write(APP, head + "try:\n    run()\nexcept:\n    raise\n")
-    pack_repo.install_pack([HOOK_ID, LINT_HOOK_ID], rules=engine_rules())
+    pack_repo.install_pack([HOOK_ID, LINT_HOOK_ID], rules=_reference_probe_rules())
     pin_ruff(pack_repo, ruff_program)
     ruff = FakeRuff(diagnostics=[ruff_row("E722", 5, "Do not use bare `except`")])
 

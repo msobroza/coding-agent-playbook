@@ -29,7 +29,7 @@ from coding_agent_playbook.sync.render import render_artifacts
 from coding_agent_playbook.validation.context import SyncContext
 from tests._budget_probe import LISTING_MAX_CHARS, every_core_where_entry
 from tests._catalog import core_rules, core_skill_ids
-from tests.core_skill_pins import ALL_PINS
+from tests.core_skill_pins import DOMINO_SKILL_IDS, ProbeKind
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
 
 pytestmark = pytest.mark.catalog
@@ -52,10 +52,6 @@ CORE_DESCRIPTIONS_MAX_CHARS: Final = 2800
 DOMINO_CORE_DESCRIPTIONS_MAX_CHARS: Final = 3400
 DOMINO_LISTING_MAX_CHARS: Final = 7500
 _GUARDRAILS_HEADING: Final = "## Guardrails"
-#: Core skills whose every member the standard probe leaves off: the Domino skills (D63).
-_PLATFORM_SKILLS: Final = frozenset(
-    pins.skill_id for pins in ALL_PINS if set(pins.members) <= pins.probe_inactive
-)
 
 
 def _words(text: str) -> int:
@@ -76,13 +72,13 @@ def _emitted_descriptions(repo: Path) -> dict[str, str]:
     return descriptions
 
 
-def _core_descriptions(repo: Path, *, domino: bool = False) -> dict[str, str]:
-    """The emitted description of every core skill the probe activates.
+def _core_descriptions(repo: Path, probe: ProbeKind = "reference") -> dict[str, str]:
+    """The emitted descriptions of the core skills ``repo``'s ``probe`` must activate.
 
-    The standard probe carries no Domino marker, so it activates no platform skill
-    (prU D63); the Domino probe (``domino=True``) activates every core skill.
+    The Domino skills gate on ``domino_project`` (prU D63): the reference probe never
+    emits them, the Domino probe emits every core skill.
     """
-    core_ids = core_skill_ids() if domino else core_skill_ids() - _PLATFORM_SKILLS
+    core_ids = core_skill_ids() if probe == "domino" else core_skill_ids() - DOMINO_SKILL_IDS
     emitted = _emitted_descriptions(repo)
     assert core_ids <= set(emitted), (
         f"the probe lacks core skills {sorted(core_ids - set(emitted))}"
@@ -207,9 +203,9 @@ def test_agents_md_guardrails_are_one_line_per_hook_with_an_advisory(
         assert check in ci_line, ci_line
 
 
-def _over_per_skill_cap(repo: Path, *, domino: bool = False) -> dict[str, int]:
+def _over_per_skill_cap(repo: Path, probe: ProbeKind = "reference") -> dict[str, int]:
     """The core skills of ``repo`` whose description exceeds the per-skill cap, with lengths."""
-    lengths = {sid: len(text) for sid, text in _core_descriptions(repo, domino=domino).items()}
+    lengths = {sid: len(text) for sid, text in _core_descriptions(repo, probe).items()}
     return {sid: n for sid, n in lengths.items() if n > CORE_DESCRIPTION_MAX_CHARS}
 
 
@@ -239,7 +235,7 @@ def test_core_and_plugin_descriptions_total_within_7000_chars_d18(
 
 
 def test_domino_probe_each_core_description_within_300_chars(domino_probe_repo: Path) -> None:
-    over = _over_per_skill_cap(domino_probe_repo, domino=True)
+    over = _over_per_skill_cap(domino_probe_repo, "domino")
     assert not over, f"core descriptions over {CORE_DESCRIPTION_MAX_CHARS} chars: {over}"
 
 
@@ -247,7 +243,7 @@ def test_domino_probe_core_descriptions_total_within_3400_chars_d59(
     domino_probe_repo: Path,
 ) -> None:
     """prU D59: the Domino descriptions stay full length, so this probe has its own cap."""
-    total = sum(map(len, _core_descriptions(domino_probe_repo, domino=True).values()))
+    total = sum(map(len, _core_descriptions(domino_probe_repo, "domino").values()))
     assert total <= DOMINO_CORE_DESCRIPTIONS_MAX_CHARS, (
         f"core descriptions total {total} chars on the Domino probe; prU D59 allows "
         f"{DOMINO_CORE_DESCRIPTIONS_MAX_CHARS}"

@@ -61,4 +61,3 @@ gatherUsageStats = false
 - `st.session_state` lives per connection and is lost on a reconnect to another pod (`domino-app-replica-state`).
 - Read viewer headers through `st.context.headers` (`domino-app-viewer-identity`).
 - Secrets come from environment variables, never a committed `.streamlit/secrets.toml` (domino-secrets-in-env-vars, domino-jobs).
-- Keep `server.maxUploadSize` at or below the proxy's body limit (`domino-app-proxy-limits`).

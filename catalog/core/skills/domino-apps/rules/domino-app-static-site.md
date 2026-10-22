@@ -51,4 +51,3 @@ if __name__ == "__main__":
 
 - Fine for a few viewers of static content. Anything that reads the viewer, stores data or computes per request belongs in a framework (`domino-app-flask`, `domino-app-dash`).
 - Links inside the pages stay relative, because the App lives under a prefix (`domino-app-relative-urls`).
-- Keep the site folder free of secrets and data exports; whatever sits in it is public to every viewer of the App.

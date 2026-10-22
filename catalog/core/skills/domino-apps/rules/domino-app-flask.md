@@ -26,12 +26,13 @@ Flask builds every URL from its mount point (`SCRIPT_NAME`) and the request's sc
 
 ```python
 from flask import Flask, redirect, url_for
+from werkzeug.wrappers import Response
 
 app = Flask(__name__)
 
 
 @app.get("/")
-def index():
+def index() -> Response:
     return redirect(url_for("report"))  # "/report": outside the App, and over http
 ```
 
@@ -39,17 +40,13 @@ def index():
 
 ```python
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
 from typing import Any
 
 from flask import Flask
 
+from sales_app.config import AppConfig  # url_prefix as domino-app-url-prefix loads it
+
 WSGIApp = Callable[[dict[str, Any], Callable[..., Any]], Iterable[bytes]]
-
-
-@dataclass(frozen=True)
-class Settings:
-    prefix: str  # from DOMINO_RUN_HOST_PATH, normalized to "/apps/<id>" or ""
 
 
 class PrefixMiddleware:
@@ -70,9 +67,10 @@ class PrefixMiddleware:
         return self._app(environ, start_response)
 
 
-def create_app(settings: Settings) -> Flask:
+def create_app(config: AppConfig) -> Flask:
     app = Flask(__name__)
-    app.wsgi_app = PrefixMiddleware(app.wsgi_app, prefix=settings.prefix)  # type: ignore[method-assign]
+    # Flask types wsgi_app as a method; WSGI middleware replaces it by design.
+    app.wsgi_app = PrefixMiddleware(app.wsgi_app, prefix=config.url_prefix)  # type: ignore[method-assign]
     return app
 ```
 
@@ -82,7 +80,7 @@ exec gunicorn --bind 0.0.0.0:8888 --workers "${APP_WORKERS:-2}" "wsgi:app"
 
 ## Notes
 
-- The prefix comes from `DOMINO_RUN_HOST_PATH` through settings (`domino-app-url-prefix`), never from a request header a client could send.
+- The prefix is `DOMINO_RUN_HOST_PATH` as `domino-app-url-prefix` normalizes it (one leading and one trailing slash, `/` locally; its form changes with the secure flag and a custom URL path), never a request header a client could send. The middleware drops the trailing slash, since `SCRIPT_NAME` takes none.
 - Keep `static/` and `templates/` beside the app package; Flask finds them by name. Build every link with `url_for` (`domino-app-relative-urls`).
 - werkzeug's `ProxyFix` reads the `X-Forwarded-*` family but not the `X-Scheme` header Domino documents, and the prefix comes from the variable anyway, so the small middleware stays (the engine's inference; check the links on a published App).
 - Serve with gunicorn and debug off (`domino-app-production-server`); the development server is single-threaded.

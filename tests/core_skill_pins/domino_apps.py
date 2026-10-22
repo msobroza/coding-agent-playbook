@@ -1,8 +1,8 @@
-"""Pins of core skill ``domino-apps`` (prU D50, D63; mapping-domino-apps.md).
+"""Pins of core skill ``domino-apps`` (prU D50, D63; C-domino-apps-02).
 
-Every member gates on ``domino_project``, so the standard reference probe
-activates none of them; the Domino probe (``tests/_budget_probe.py``
-``write_domino_probe``) does.
+Every member gates on ``domino_project``, so the skill is checked on the Domino
+probe (``tests/_budget_probe.py`` ``write_domino_probe``). That probe has no Dash,
+Flask, Streamlit or Shiny dependency, so it leaves those framework rules off.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ _STATE_GLOBS: Final = (
     "**/store.py",
 )
 _DOMINO: Final = {"domino_project": True}
+_TAGS: Final = ("python", "domino", "apps")
 
 PINS: Final = CoreSkillPins(
     skill_id="domino-apps",
@@ -37,17 +38,9 @@ PINS: Final = CoreSkillPins(
         "domino-app-static-site",
     ),
     probe_inactive=frozenset(
-        {
-            "domino-app-external-persistence",
-            "domino-app-concurrent-writes",
-            "domino-app-replica-state",
-            "domino-app-dash",
-            "domino-app-flask",
-            "domino-app-streamlit",
-            "domino-app-shiny",
-            "domino-app-static-site",
-        }
+        {"domino-app-dash", "domino-app-flask", "domino-app-streamlit", "domino-app-shiny"}
     ),
+    probe="domino",
     section_ids=("launch", "access", "state", "frameworks", "serving", "publishing"),
     rules={
         "domino-app-external-persistence": RulePin(
@@ -55,7 +48,7 @@ PINS: Final = CoreSkillPins(
             globs=_STATE_GLOBS,
             priority=30,
             name="Domino App external persistence",
-            tags=("python", "domino", "apps"),
+            tags=_TAGS,
             section="state",
         ),
         "domino-app-concurrent-writes": RulePin(
@@ -63,7 +56,7 @@ PINS: Final = CoreSkillPins(
             globs=_STATE_GLOBS,
             priority=31,
             name="Domino App concurrent writes",
-            tags=("python", "domino", "apps"),
+            tags=_TAGS,
             section="state",
         ),
         "domino-app-replica-state": RulePin(
@@ -71,7 +64,7 @@ PINS: Final = CoreSkillPins(
             globs=_STATE_GLOBS[:5],
             priority=32,
             name="Domino App replica state",
-            tags=("python", "domino", "apps"),
+            tags=_TAGS,
             section="state",
         ),
         "domino-app-dash": RulePin(
@@ -79,7 +72,7 @@ PINS: Final = CoreSkillPins(
             globs=("**/app.py", "**/callbacks.py", "**/layout.py", "**/app.sh"),
             priority=40,
             name="Dash on Domino",
-            tags=("python", "domino", "apps", "dash"),
+            tags=(*_TAGS, "dash"),
             section="frameworks",
         ),
         "domino-app-flask": RulePin(
@@ -93,7 +86,7 @@ PINS: Final = CoreSkillPins(
             ),
             priority=41,
             name="Flask on Domino",
-            tags=("python", "domino", "apps", "flask"),
+            tags=(*_TAGS, "flask"),
             section="frameworks",
         ),
         "domino-app-streamlit": RulePin(
@@ -107,7 +100,7 @@ PINS: Final = CoreSkillPins(
             ),
             priority=42,
             name="Streamlit on Domino",
-            tags=("python", "domino", "apps", "streamlit"),
+            tags=(*_TAGS, "streamlit"),
             section="frameworks",
         ),
         "domino-app-shiny": RulePin(
@@ -115,7 +108,7 @@ PINS: Final = CoreSkillPins(
             globs=("**/app.sh", "**/app.py"),
             priority=43,
             name="Shiny for Python on Domino",
-            tags=("python", "domino", "apps", "shiny"),
+            tags=(*_TAGS, "shiny"),
             section="frameworks",
         ),
         "domino-app-static-site": RulePin(
@@ -123,7 +116,7 @@ PINS: Final = CoreSkillPins(
             globs=("**/app.py", "**/site/**/*.html", "**/index.html"),
             priority=44,
             name="Static site on Domino",
-            tags=("python", "domino", "apps"),
+            tags=_TAGS,
             section="frameworks",
         ),
     },

@@ -40,27 +40,22 @@ python app.py
 ## Good Example
 
 ```python
-import os
-
 from dash import Dash, html
 
-
-def app_prefix() -> str:
-    raw = os.environ.get("DOMINO_RUN_HOST_PATH", "/")
-    return "/" + raw.strip("/") + "/" if raw.strip("/") else "/"
+from sales_app.config import load_config  # domino-app-url-prefix: both slashes, "/" locally
 
 
-def create_dash_app(prefix: str) -> Dash:
+def create_dash_app(url_prefix: str) -> Dash:
     app = Dash(
         __name__,
         routes_pathname_prefix="/",
-        requests_pathname_prefix=prefix,
+        requests_pathname_prefix=url_prefix,  # Dash needs the trailing slash
     )
     app.layout = html.Div([html.Img(src=app.get_asset_url("logo.png")), html.Div("Sales")])
     return app
 
 
-app = create_dash_app(app_prefix())
+app = create_dash_app(load_config().url_prefix)
 server = app.server  # the Flask instance gunicorn serves
 ```
 

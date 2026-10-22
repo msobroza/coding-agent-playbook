@@ -43,6 +43,7 @@ app_ui = ui.page_fluid(
 )
 
 
+# Shiny passes the inputs by the parameter name `input`, which shadows the builtin.
 def server(input: Inputs, output: Outputs, session: Session) -> None:  # noqa: A002
     @render.text
     def summary() -> str:
