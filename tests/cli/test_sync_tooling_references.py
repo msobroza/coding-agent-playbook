@@ -15,6 +15,7 @@ import argparse
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.commands import sync as _sync
+from tests.core_skill_pins.python_tooling import UNGATED_MEMBERS
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -41,7 +42,7 @@ _TOOLING: Final = "python-tooling"
 _UV_WORKFLOW: Final = "python-uv-workflow"
 _PYDANTIC_BOUNDARIES: Final = "pydantic-boundaries"
 #: python-tooling's ungated members, sorted: written in every Python repo.
-_UNGATED: Final = ["mypy-type-checking", "python-static-checks", "ruff-format", "ruff-lint"]
+_UNGATED: Final = list(UNGATED_MEMBERS)
 
 
 def _python_repo(root: Path, make_synthetic_repo: Callable[..., Path], **extras: object) -> Path:

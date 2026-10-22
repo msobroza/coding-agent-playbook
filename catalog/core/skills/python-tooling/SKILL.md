@@ -41,8 +41,8 @@ Conventions for the developer tools a Python repo already runs: the linter, the 
 
 | Tool | What it catches |
 | --- | --- |
-| ruff | Bugs and style violations, early, with fast static analysis; it also formats code and sorts imports |
-| mypy or pyright | Errors before runtime, through type checking; it also improves IDE completion |
+| ruff | Bugs and style violations, before review; it also formats code and sorts imports |
+| mypy or pyright | Type errors, before the code runs |
 | The test runner | Regressions, so changes can be made with confidence |
 | uv, in a uv project | Drift between the declared dependencies, the lock and the environment |
 

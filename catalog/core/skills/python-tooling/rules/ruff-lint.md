@@ -47,9 +47,12 @@ select = [
     "I",    # isort
     "UP",   # pyupgrade
     "B",    # flake8-bugbear
+    "S",    # flake8-bandit: security
     "BLE",  # flake8-blind-except
+    "ARG",  # flake8-unused-arguments
     "SIM",  # flake8-simplify
     "PTH",  # flake8-use-pathlib
+    "PLR",  # Pylint refactor
     "RUF",  # Ruff-specific rules
 ]
 unfixable = [
@@ -89,4 +92,4 @@ ruff check . --statistics   # count findings per code
 - `target-version`, or `requires-python` when it is unset, decides which UP fixes appear; never change it to silence one.
 - The broad-handler codes BLE001, S110 and S112 belong to python-error-handling. A handler BLE001 lets through because it logs the exception must still be a real boundary, not a swallowed failure.
 - Propose new codes to the user as an `extend-select` change sized with `ruff check --statistics`; never preview-only codes unless the repo already runs preview.
-- Delete dead code your change creates or touches (F401, F841, ERA001) instead of suppressing it: version control keeps the history. Dead code in untouched files is reported (`project-context`).
+- Delete dead code your change creates or touches (F401, F841, ERA001) instead of suppressing it: version control keeps the history. Dead code in untouched files is reported (project-context).

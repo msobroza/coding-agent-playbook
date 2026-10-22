@@ -116,3 +116,12 @@ PINS: Final = CoreSkillPins(
         ),
     },
 )
+
+#: The members with an empty ``applies_if``, sorted by id: written in every Python repo.
+UNGATED_MEMBERS: Final = tuple(
+    sorted(rule_id for rule_id, pin in PINS.rules.items() if not pin.applies_if)
+)
+#: The ungated members' globs, each once, in first-seen order over :data:`UNGATED_MEMBERS`.
+UNGATED_GLOBS: Final = tuple(
+    dict.fromkeys(glob for rule_id in UNGATED_MEMBERS for glob in PINS.rules[rule_id].globs)
+)

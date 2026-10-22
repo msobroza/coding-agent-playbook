@@ -333,8 +333,7 @@ def _row_errors(parsed: Attributions) -> list[str]:
             seen: set[str] = set()
             for row in mapping.rows:
                 if row.upstream in seen:
-                    where = f"{name}/{skill}" if source.distilled else name
-                    errors.append(f"{where}: `{row.upstream}` appears in more than one row")
+                    errors.append(f"{name}/{skill}: `{row.upstream}` appears in more than one row")
                 seen.add(row.upstream)
                 if not row.changes:
                     missing = "is dropped without a reason" if row.dropped else "lists no changes"

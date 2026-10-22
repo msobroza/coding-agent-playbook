@@ -54,8 +54,8 @@ pre-commit run --all-files
 
 - Read the settings before acting on a finding: `[tool.ruff]` in `pyproject.toml` or a `ruff.toml`, `[tool.mypy]` or a `mypy.ini`, and pyright's configuration. They decide which codes are on, which paths are excluded and how strict the typing is.
 - When a setting looks wrong, propose the change to the user as a separate step, naming the finding that prompted it.
-- Fix every finding your change introduces before you call the work done. A finding in code you did not touch is outside the task: report it (`project-context`) rather than fixing it in the same change.
-- Every suppression names its code and says why (`python-house-style`). Delete a stale `# noqa` or `# type: ignore[...]` on a line you touch: a comment that no longer silences anything hides the next real finding.
+- Fix every finding your change introduces before you call the work done. A finding in code you did not touch is outside the task: report it (project-context) rather than fixing it in the same change.
+- Every suppression names its code and says why (python-house-style). Delete a stale `# noqa` or `# type: ignore[...]` on a line you touch: a comment that no longer silences anything hides the next real finding.
 - A failing pre-commit hook is a finding to fix. Never bypass it with `--no-verify` or `SKIP=`; when a hook rewrites files, read the rewrite, stage it and commit again.
 - Adding or changing a hook is a settings change proposed to the user. A hook example uses `repo: local` with `language: system`, so it runs the tools the project already installs:
 

@@ -20,7 +20,7 @@ tags: [python, tooling, mypy]
 
 ## Description
 
-Mypy is a static type checker for Python. It catches type errors at development time, improving code reliability and enabling better IDE support. The repo runs mypy or pyright, in the workflow and in CI: run it the way CI does, never with stricter or looser flags, and work inside the settings it already has.
+Mypy is a static type checker for Python. It catches type errors before the code runs. The repo runs mypy or pyright, in the workflow and in CI: run it the way CI does, never with stricter or looser flags, and work inside the settings it already has.
 
 ## Bad Example
 

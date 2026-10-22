@@ -19,6 +19,7 @@ import pytest
 
 from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from tests._catalog import CORE_ROOT, core_rules
+from tests.core_skill_pins.python_tooling import PINS
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
 
 if TYPE_CHECKING:
@@ -37,15 +38,8 @@ PROBE_DESCRIPTION: Final = f"{_SENTENCE} Covers {_PROBE_SECTIONS}. {_USE_WHEN}"
 UV_PROBE_DESCRIPTION: Final = (
     f"{_SENTENCE} Covers {_PROBE_SECTIONS}, package management. {_USE_WHEN}"
 )
-_UV_PROBE_RULES: Final = [
-    "mypy-type-checking.md",
-    "pytest-configuration.md",
-    "python-pyproject-dependencies.md",
-    "python-static-checks.md",
-    "python-uv-workflow.md",
-    "ruff-format.md",
-    "ruff-lint.md",
-]
+#: With a ``uv.lock`` the probe activates every member.
+_UV_PROBE_RULES: Final = sorted(f"{rule_id}.md" for rule_id in PINS.members)
 
 
 def _tooling_description(repo: Path) -> str:

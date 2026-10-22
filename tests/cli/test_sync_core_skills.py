@@ -19,6 +19,7 @@ import pytest
 
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.config.files import FileSystemStateSource
+from tests.core_skill_pins.python_tooling import UNGATED_MEMBERS
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
 
 if TYPE_CHECKING:
@@ -30,12 +31,7 @@ _TESTING: Final = "python-testing"
 _WEB: Final = "web-application"
 #: python-tooling's ungated members, written in every synthetic repo, and
 #: web-application's FastAPI pair.
-_STATIC_CHECKS: Final = [
-    "mypy-type-checking.md",
-    "python-static-checks.md",
-    "ruff-format.md",
-    "ruff-lint.md",
-]
+_UNGATED_TOOLING_RULES: Final = [f"{rule_id}.md" for rule_id in UNGATED_MEMBERS]
 _FASTAPI_RULES: Final = ["fastapi-app-wiring.md", "fastapi-error-boundaries.md"]
 
 _CONFIG = """\
@@ -119,20 +115,20 @@ def test_fastapi_rules_follow_the_fastapi_dependency_in_and_out(
     repo = _synthetic_skill_repo(tmp_path, make_synthetic_repo)
     assert _sync.run(_ns(repo)) == 0
     for root in NATIVE_SKILL_ROOTS:
-        assert _rule_files(repo, root, _TOOLING) == _STATIC_CHECKS, root
+        assert _rule_files(repo, root, _TOOLING) == _UNGATED_TOOLING_RULES, root
         assert not (repo / root / _WEB).exists(), root
 
     _set_dependencies(repo, '["click", "fastapi"]')
     assert _sync.run(_ns(repo)) == 0
     for root in NATIVE_SKILL_ROOTS:
-        assert _rule_files(repo, root, _TOOLING) == _STATIC_CHECKS, root
+        assert _rule_files(repo, root, _TOOLING) == _UNGATED_TOOLING_RULES, root
         assert _rule_files(repo, root, _WEB) == _FASTAPI_RULES, root
     assert "skill `web-application`" in (repo / "AGENTS.md").read_text(encoding="utf-8")
 
     _set_dependencies(repo, '["click"]')
     assert _sync.run(_ns(repo)) == 0
     for root in NATIVE_SKILL_ROOTS:
-        assert _rule_files(repo, root, _TOOLING) == _STATIC_CHECKS, root
+        assert _rule_files(repo, root, _TOOLING) == _UNGATED_TOOLING_RULES, root
         assert not (repo / root / _WEB).exists(), root
     assert _skill_lock_paths(repo, _WEB) == []
     agents_md = (repo / "AGENTS.md").read_text(encoding="utf-8")

@@ -249,7 +249,10 @@ def test_a_mapped_row_without_changes_fails(tmp_path: Path) -> None:
 
 def test_an_upstream_file_mapped_twice_fails(tmp_path: Path) -> None:
     text = _SYNTHETIC.replace("`skills/b.md` | DROP", "`skills/a.md` | DROP")
-    assert _errors(tmp_path, text) == ["up-source: `skills/a.md` appears in more than one row"]
+    # The message names the skill whose table holds the duplicate: the file may feed others.
+    assert _errors(tmp_path, text) == [
+        "up-source/alpha: `skills/a.md` appears in more than one row"
+    ]
 
 
 def test_an_upstream_file_may_feed_two_skills_one_row_each(tmp_path: Path) -> None:
