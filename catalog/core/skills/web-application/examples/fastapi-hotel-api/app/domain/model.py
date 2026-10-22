@@ -11,6 +11,11 @@ from app.domain.errors import InvalidStayError
 
 @dataclass(frozen=True)
 class Room:
+    """A bookable room and its nightly rate in integer cents.
+
+    Example: ``Room(room_id, "101", capacity=2, nightly_rate_cents=9_500)``.
+    """
+
     room_id: UUID
     number: str
     capacity: int
@@ -20,6 +25,11 @@ class Room:
 
 @dataclass(frozen=True)
 class Customer:
+    """A registered customer; the email is unique among customers.
+
+    Example: ``Customer(customer_id, "Ada Example", "ada@example.com")``.
+    """
+
     customer_id: UUID
     name: str
     email: str
@@ -27,7 +37,11 @@ class Customer:
 
 @dataclass(frozen=True)
 class Stay:
-    """The nights from ``check_in`` up to, not including, ``check_out``."""
+    """The nights from ``check_in`` up to, not including, ``check_out``.
+
+    Example: ``Stay(date(2026, 3, 2), date(2026, 3, 4)).nights`` -> March 2 and March 3;
+    a check-out on or before the check-in raises InvalidStayError.
+    """
 
     check_in: date
     check_out: date
@@ -44,6 +58,12 @@ class Stay:
 
 @dataclass(frozen=True)
 class Booking:
+    """One customer's booking of one room for a stay, priced in integer cents.
+
+    Example: ``open_booking(booking_id, room, customer, stay)`` builds an active one;
+    ``cancelled_on`` is set once it is cancelled.
+    """
+
     booking_id: UUID
     room_id: UUID
     customer_id: UUID
@@ -69,5 +89,8 @@ def price_stay(room: Room, stay: Stay) -> int:
 
 
 def open_booking(booking_id: UUID, room: Room, customer: Customer, stay: Stay) -> Booking:
-    """A new, active booking of ``room`` for ``customer``, priced by :func:`price_stay`."""
+    """A new, active booking of ``room`` for ``customer``, priced by :func:`price_stay`.
+
+    Example: ``open_booking(uuid4(), room, customer, stay).price_cents == price_stay(room, stay)``.
+    """
     return Booking(booking_id, room.room_id, customer.customer_id, stay, price_stay(room, stay))

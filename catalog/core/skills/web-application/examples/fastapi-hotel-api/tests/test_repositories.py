@@ -1,13 +1,8 @@
-"""One contract suite for the repositories, run against the fakes and against SQL.
-
-The SQL side runs on the real engine in a rolled-back transaction. Its overlap
-test calls the repository directly, without the use case's availability check:
-the partial unique index refuses the second booking, and the repository turns
-the driver error into the same RoomUnavailableError the fake raises.
-"""
+"""One contract suite for the repositories, run against the fakes and against SQL."""
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date
 from uuid import UUID
 
@@ -26,6 +21,11 @@ from app.domain.errors import (
 from app.domain.model import Booking, Customer, Room, Stay
 from app.operations.ports import HotelUnitOfWork
 from tests.fakes import FakeHotelUnitOfWork
+
+# The SQL side runs on the real engine in a rolled-back transaction. Its overlap
+# test calls the repository directly, without the use case's availability check:
+# the partial unique index refuses the second booking, and the repository turns
+# the driver error into the same RoomUnavailableError the fake raises.
 
 pytestmark = pytest.mark.anyio
 
@@ -102,3 +102,38 @@ async def test_an_unknown_id_raises_the_matching_not_found_error(
 ) -> None:
     with pytest.raises(error):
         await getattr(hotel, repository).get(UUID(int=404))
+
+
+async def test_cancelling_an_unknown_booking_raises_booking_not_found(
+    hotel: HotelUnitOfWork,
+) -> None:
+    with pytest.raises(BookingNotFoundError) as raised:
+        await hotel.bookings.cancel(UUID(int=404), on=date(2026, 3, 1))
+
+    assert raised.value.booking_id == UUID(int=404)
+
+
+async def test_save_replaces_every_field_of_a_known_room(hotel: HotelUnitOfWork) -> None:
+    changed = replace(ROOM, number="102", capacity=3, nightly_rate_cents=12_000, notes="quiet")
+
+    await hotel.rooms.save(changed)
+
+    assert await hotel.rooms.get(ROOM.room_id) == changed
+
+
+async def test_saving_an_unknown_room_raises_room_not_found(hotel: HotelUnitOfWork) -> None:
+    with pytest.raises(RoomNotFoundError):
+        await hotel.rooms.save(replace(ROOM, room_id=UUID(int=404)))
+
+
+async def test_pages_list_rooms_by_number_and_count_counts_them_all(
+    hotel: HotelUnitOfWork,
+) -> None:
+    for number, room_id in (("103", 3), ("102", 4)):
+        await hotel.rooms.add(replace(ROOM, room_id=UUID(int=room_id), number=number))
+
+    first = await hotel.rooms.list_page(limit=2, offset=0)
+    second = await hotel.rooms.list_page(limit=2, offset=2)
+
+    assert [room.number for room in first + second] == ["101", "102", "103"]
+    assert await hotel.rooms.count() == 3

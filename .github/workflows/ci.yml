@@ -97,8 +97,8 @@ jobs:
   # pyproject.toml. uv builds a throwaway .venv inside the example from that
   # pyproject (its dependencies plus its default dev group), so the engine's
   # install, pyproject and lock gain nothing, and the `test` job never imports
-  # example code (pytest's testpaths is tests/). No example yet: the step says
-  # so and passes.
+  # example code (pytest's testpaths is tests/). UV_PYTHON picks the matrix
+  # Python, which uv downloads when the runner lacks it.
   core-examples:
     runs-on: ubuntu-latest
     # Examples run in consumer repos from Python 3.10 on (prU D40, D48).
@@ -114,13 +114,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-
       - name: Install uv
-        run: python -m pip install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
 
       - name: Test and type-check every core example in its own environment
         run: |

@@ -103,6 +103,16 @@ async def test_a_cancelled_booking_frees_its_nights(hotel: FakeHotelUnitOfWork) 
     assert (await hotel.bookings.get(BOOKING_ID)).cancelled_on == MONDAY
 
 
+async def test_cancelling_twice_changes_nothing(hotel: FakeHotelUnitOfWork) -> None:
+    await _book(hotel, MONDAY, date(2026, 3, 4))
+    await cancel_booking(hotel, BOOKING_ID, today=MONDAY)
+
+    await cancel_booking(hotel, BOOKING_ID, today=date(2026, 3, 3))
+
+    assert (await hotel.bookings.get(BOOKING_ID)).cancelled_on == MONDAY
+    assert hotel.commits == 2  # the booking and the first cancellation only
+
+
 @pytest.mark.parametrize(
     ("changes", "expected"),
     [

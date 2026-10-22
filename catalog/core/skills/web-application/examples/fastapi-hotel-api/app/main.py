@@ -23,7 +23,10 @@ HTTP_STATUS: Final[dict[type[HotelError], int]] = {
 
 
 def build_lifespan(settings: Settings) -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
-    """A lifespan that builds the engine from ``settings`` on startup and disposes of it."""
+    """A lifespan that builds the engine from ``settings`` on startup and disposes of it.
+
+    Example: ``FastAPI(lifespan=build_lifespan(settings))``, as :func:`create_app` does.
+    """
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -39,7 +42,11 @@ def build_lifespan(settings: Settings) -> Callable[[FastAPI], AbstractAsyncConte
 
 
 async def hotel_error_response(request: Request, exc: Exception) -> JSONResponse:
-    """Answer a mapped domain error with its status and ``{"detail": message}``."""
+    """Answer a mapped domain error with its status and ``{"detail": message}``.
+
+    Example: ``app.add_exception_handler(HotelError, hotel_error_response)``; a
+    ``RoomNotFoundError`` then answers 404 with ``{"detail": "no room with id ..."}``.
+    """
     mapped = next((cls for cls in type(exc).__mro__ if cls in HTTP_STATUS), None)
     if mapped is None:
         raise exc  # unmapped: the default handler logs it and answers a plain 500

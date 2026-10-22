@@ -18,6 +18,11 @@ from app.domain.model import Booking, Customer, Room
 
 
 class InMemoryRoomRepository:
+    """The RoomRepository port over a dict, ordered by number like the SQL one.
+
+    Example: ``InMemoryRoomRepository(room)`` starts with one room.
+    """
+
     def __init__(self, *rooms: Room) -> None:
         self.by_id = {room.room_id: room for room in rooms}
 
@@ -42,6 +47,11 @@ class InMemoryRoomRepository:
 
 
 class InMemoryCustomerRepository:
+    """The CustomerRepository port over a dict; it refuses a taken email like the SQL one.
+
+    Example: ``InMemoryCustomerRepository(customer)`` starts with one customer.
+    """
+
     def __init__(self, *customers: Customer) -> None:
         self.by_id = {customer.customer_id: customer for customer in customers}
 
@@ -57,6 +67,11 @@ class InMemoryCustomerRepository:
 
 
 class InMemoryBookingRepository:
+    """The BookingRepository port over a dict; it refuses an overlapping active night.
+
+    Example: ``await InMemoryBookingRepository().add(booking)``.
+    """
+
     def __init__(self) -> None:
         self.by_id: dict[UUID, Booking] = {}
 
@@ -81,7 +96,11 @@ class InMemoryBookingRepository:
 
 
 class FakeHotelUnitOfWork:
-    """The fake repositories plus a commit counter, so tests see what was made durable."""
+    """The fake repositories plus a commit counter, so tests see what was made durable.
+
+    Example: ``hotel = FakeHotelUnitOfWork(rooms=[room])``; after one use case,
+    ``hotel.commits == 1``.
+    """
 
     def __init__(self, *, rooms: Sequence[Room] = (), customers: Sequence[Customer] = ()) -> None:
         self.rooms = InMemoryRoomRepository(*rooms)

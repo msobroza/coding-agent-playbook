@@ -40,11 +40,19 @@ async def book_room(
 
 
 async def get_booking(hotel: HotelUnitOfWork, booking_id: UUID) -> Booking:
+    """The booking ``booking_id``, cancelled or not; an unknown id raises BookingNotFoundError.
+
+    Example: ``(await get_booking(hotel, booking_id)).cancelled_on`` -> None while active.
+    """
     return await hotel.bookings.get(booking_id)
 
 
 async def cancel_booking(hotel: HotelUnitOfWork, booking_id: UUID, *, today: date) -> None:
-    """Mark the booking and its nights cancelled on ``today``; cancelling twice changes nothing."""
+    """Mark the booking and its nights cancelled on ``today``; cancelling twice changes nothing.
+
+    Example: ``await cancel_booking(hotel, booking_id, today=date(2026, 3, 2))`` frees the
+    booking's nights; an unknown id raises BookingNotFoundError.
+    """
     booking = await hotel.bookings.get(booking_id)
     if booking.cancelled_on is not None:
         return

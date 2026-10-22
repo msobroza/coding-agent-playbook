@@ -20,10 +20,20 @@ NAMING_CONVENTION: Final = {
 
 
 class Base(DeclarativeBase):
+    """The mapped classes' shared metadata, with stable constraint names.
+
+    Example: ``await conn.run_sync(Base.metadata.create_all)`` builds the test schema.
+    """
+
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
 
 class RoomRow(Base):
+    """One row of the rooms table; repositories map it to a ``Room``.
+
+    Example: ``await session.get(RoomRow, room_id)``.
+    """
+
     __tablename__ = "rooms"
 
     room_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
@@ -34,6 +44,11 @@ class RoomRow(Base):
 
 
 class CustomerRow(Base):
+    """One row of the customers table; the email column is unique.
+
+    Example: ``session.add(CustomerRow(customer_id=..., name="Ada", email="ada@example.com"))``.
+    """
+
     __tablename__ = "customers"
 
     customer_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
@@ -42,6 +57,11 @@ class CustomerRow(Base):
 
 
 class BookingRow(Base):
+    """One row of the bookings table, with one ``RoomNightRow`` per booked night.
+
+    Example: ``BookingRow(booking_id=..., ..., nights=[RoomNightRow(room_id=r, night=d)])``.
+    """
+
     __tablename__ = "bookings"
 
     booking_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
@@ -56,7 +76,10 @@ class BookingRow(Base):
 
 
 class RoomNightRow(Base):
-    """One booked night of one room; the index lets only one active booking hold it."""
+    """One booked night of one room; the index lets only one active booking hold it.
+
+    Example: ``RoomNightRow(room_id=room_id, night=date(2026, 3, 2))`` in ``BookingRow.nights``.
+    """
 
     __tablename__ = "room_nights"
     __table_args__ = (

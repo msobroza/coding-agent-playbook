@@ -1,8 +1,4 @@
-"""Endpoint tests: the real app on the real engine, each test in a rolled-back transaction.
-
-They cover what the HTTP edge adds (status codes, headers, the error body, request
-validation); the business rules are tested on fakes in test_operations.py.
-"""
+"""Endpoint tests: the real app on the real engine, each test in a rolled-back transaction."""
 
 from __future__ import annotations
 
@@ -19,6 +15,9 @@ from app.settings import Settings
 
 if TYPE_CHECKING:  # the factory types only; fixtures arrive by name
     from tests.conftest import MakeCustomer, MakeRoom
+
+# They cover what the HTTP edge adds (status codes, headers, the error body, request
+# validation); the business rules are tested on fakes in test_operations.py.
 
 pytestmark = pytest.mark.anyio
 
@@ -48,6 +47,31 @@ async def test_booking_a_room_answers_201_with_its_location_and_price(
     assert response.headers["location"] == f"/bookings/{body['booking_id']}"
     assert body["price_cents"] == 28_500
     assert body["cancelled_on"] is None
+
+
+async def test_cancelling_a_booking_answers_204_and_shows_the_cancellation(
+    client: httpx.AsyncClient, make_room: MakeRoom, make_customer: MakeCustomer
+) -> None:
+    room = await make_room()
+    guest = await make_customer()
+    booked = await client.post(
+        "/bookings",
+        json={
+            "room_id": str(room.room_id),
+            "customer_id": str(guest.customer_id),
+            "check_in": "2026-03-02",
+            "check_out": "2026-03-04",
+        },
+    )
+    location = booked.headers["location"]
+
+    first = await client.delete(location)
+    again = await client.delete(location)
+
+    assert (first.status_code, first.content) == (204, b"")
+    assert again.status_code == 204  # cancelling twice changes nothing
+    shown = await client.get(location)
+    assert shown.json()["cancelled_on"] == "2026-03-02"
 
 
 async def test_booking_an_unknown_room_is_404_with_the_error_body(
@@ -131,10 +155,31 @@ async def test_patch_with_null_number_is_422(
     assert response.status_code == 422
 
 
+async def test_listing_rooms_returns_one_page_by_number_with_the_total(
+    client: httpx.AsyncClient, make_room: MakeRoom
+) -> None:
+    for number in ("103", "101", "102"):
+        await make_room(number=number)
+
+    response = await client.get("/rooms", params={"limit": 2})
+
+    assert response.status_code == 200
+    page = response.json()
+    assert [room["number"] for room in page["items"]] == ["101", "102"]
+    assert (page["total"], page["limit"], page["offset"]) == (3, 2, 0)
+
+
 async def test_listing_rooms_refuses_a_limit_above_100(client: httpx.AsyncClient) -> None:
     response = await client.get("/rooms", params={"limit": 101})
 
     assert response.status_code == 422
+
+
+async def test_health_answers_ok_without_the_database(client: httpx.AsyncClient) -> None:
+    response = await client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
 
 
 async def test_an_unmapped_domain_error_is_a_plain_500() -> None:

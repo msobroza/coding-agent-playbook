@@ -1,9 +1,4 @@
-"""Shared fixtures: the real engine, a rolled-back session per test, row factories, a client.
-
-Unit tests use fakes; persistence and endpoint tests use the real engine in a
-rolled-back transaction. tests/fakes.py is imported by the tests that need it,
-never from here.
-"""
+"""Shared fixtures: the real engine, a rolled-back session per test, row factories, a client."""
 
 from __future__ import annotations
 
@@ -26,22 +21,40 @@ from app.deps import get_session, today_utc
 from app.main import create_app
 from app.settings import Settings
 
+# Unit tests use fakes; persistence and endpoint tests use the real engine in a
+# rolled-back transaction. tests/fakes.py is imported by the tests that need it,
+# never from here.
+
 #: The date every endpoint test runs on, so "before today" never depends on the calendar.
 TODAY = date(2026, 3, 2)
 
 
 class MakeRoom(Protocol):
+    """The type of the ``make_room`` fixture.
+
+    Example: ``room = await make_room(number="102", notes="sea view")``.
+    """
+
     async def __call__(
         self, *, number: str = ..., nightly_rate_cents: int = ..., notes: str | None = ...
     ) -> RoomRow: ...
 
 
 class MakeCustomer(Protocol):
+    """The type of the ``make_customer`` fixture.
+
+    Example: ``guest = await make_customer(email="grace@example.com")``.
+    """
+
     async def __call__(self, *, name: str = ..., email: str = ...) -> CustomerRow: ...
 
 
 @pytest.fixture(scope="session")
 def anyio_backend() -> str:
+    """Run every ``@pytest.mark.anyio`` test on asyncio.
+
+    Example: ``pytestmark = pytest.mark.anyio`` at the top of an async test module.
+    """
     return "asyncio"  # one event loop for the session-scoped engine and every test
 
 
@@ -67,18 +80,28 @@ def _enable_sqlite_savepoints(engine: AsyncEngine) -> None:
 
 @pytest.fixture(scope="session")
 async def engine(tmp_path_factory: pytest.TempPathFactory) -> AsyncIterator[AsyncEngine]:
+    """The real engine with a fresh schema, shared by the whole test session.
+
+    Example: ``async def test_x(engine: AsyncEngine)``; setting HOTEL_TEST_DATABASE_URL to a
+    PostgreSQL DSN runs the same suite there.
+    """
     engine = create_async_engine(_database_url(tmp_path_factory))
     if engine.dialect.name == "sqlite":
         _enable_sqlite_savepoints(engine)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)  # the test schema only; the app never
+        # The test schema only: the app never creates tables, migrations own its schema.
+        await conn.run_sync(Base.metadata.create_all)
     yield engine
     await engine.dispose()
 
 
 @pytest.fixture
 async def session(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
+    """A session inside an outer transaction that is rolled back after the test.
+
+    Example: ``hotel = SqlHotelUnitOfWork(session)``; its commits end at a SAVEPOINT.
+    """
     async with engine.connect() as conn:
         transaction = await conn.begin()
         session = AsyncSession(
@@ -93,6 +116,10 @@ async def session(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
 
 @pytest.fixture
 def make_room(session: AsyncSession) -> MakeRoom:
+    """A factory that adds a room row to the test's session and flushes it.
+
+    Example: ``room = await make_room(nightly_rate_cents=9_500)``.
+    """
     room_ids = count(1)
 
     async def _make(
@@ -114,6 +141,10 @@ def make_room(session: AsyncSession) -> MakeRoom:
 
 @pytest.fixture
 def make_customer(session: AsyncSession) -> MakeCustomer:
+    """A factory that adds a customer row to the test's session and flushes it.
+
+    Example: ``guest = await make_customer()``.
+    """
     customer_ids = count(1_001)
 
     async def _make(*, name: str = "Ada Example", email: str = "ada@example.com") -> CustomerRow:
@@ -127,6 +158,10 @@ def make_customer(session: AsyncSession) -> MakeCustomer:
 
 @pytest.fixture
 async def client(session: AsyncSession) -> AsyncIterator[httpx.AsyncClient]:
+    """An HTTP client on a fresh app whose requests share the test's session.
+
+    Example: ``response = await client.get("/rooms")``.
+    """
     # A placeholder URL: httpx.ASGITransport skips the lifespan, so no engine is built.
     app = create_app(Settings(database_url=SecretStr("unused-the-lifespan-never-runs")))
 

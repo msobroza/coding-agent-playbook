@@ -13,12 +13,15 @@ example runs its own tests in its own CI job), so the modules are read with
 from __future__ import annotations
 
 import ast
+import re
+import subprocess
+import sys
 import tomllib
 from typing import TYPE_CHECKING, Final
 
 import pytest
 
-from tests._catalog import core_skill_root
+from tests._catalog import REPO_ROOT, core_skill_root
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -56,6 +59,10 @@ EXPECTED_FILES: Final = frozenset(
 )
 #: Calls that build an engine or read the environment: never at import time.
 _IMPORT_TIME_CALLS: Final = frozenset({"create_engine", "create_async_engine", "Settings"})
+#: python-architecture's import-direction checker; it lands with that skill's lane.
+LAYER_MAP: Final = core_skill_root("python-architecture") / "scripts" / "layer_map.py"
+#: The modules agents copy names from: each public name documents itself (python-docstrings).
+_DOCUMENTED_MODULES: Final = ("app/", "tests/conftest.py", "tests/fakes.py")
 #: The layers below the routes, which must not know FastAPI.
 _INNER_LAYERS: Final = ("app/domain/", "app/operations/", "app/db/")
 
@@ -82,14 +89,14 @@ def modules() -> dict[str, ast.Module]:
     }
 
 
-def _class(tree: ast.Module, name: str) -> ast.ClassDef:
+def _find_class(tree: ast.Module, name: str) -> ast.ClassDef:
     found = [node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == name]
     assert len(found) == 1, f"expected one class {name!r}, found {len(found)}"
     return found[0]
 
 
-def _method(tree: ast.Module, class_name: str, name: str) -> ast.AsyncFunctionDef:
-    body = _class(tree, class_name).body
+def _find_async_method(tree: ast.Module, class_name: str, name: str) -> ast.AsyncFunctionDef:
+    body = _find_class(tree, class_name).body
     found = [node for node in body if isinstance(node, ast.AsyncFunctionDef) and node.name == name]
     assert len(found) == 1, f"expected one async method {class_name}.{name}, found {len(found)}"
     return found[0]
@@ -157,7 +164,7 @@ def test_the_example_pyproject_is_a_virtual_project_with_its_own_tool_tables() -
 def test_room_night_table_declares_the_partial_unique_booking_index(
     modules: dict[str, ast.Module],
 ) -> None:
-    room_night = _class(modules["app/db/models.py"], "RoomNightRow")
+    room_night = _find_class(modules["app/db/models.py"], "RoomNightRow")
     table_args = [
         stmt.value
         for stmt in room_night.body
@@ -186,7 +193,7 @@ def test_sql_repository_translates_the_constraint_violation(
     modules: dict[str, ast.Module], repository: str, domain_error: str
 ) -> None:
     # Regression: an IntegrityError escaping add() answers 500 instead of 409.
-    add = _method(modules["app/db/repositories.py"], repository, "add")
+    add = _find_async_method(modules["app/db/repositories.py"], repository, "add")
     guarded = [
         (node, handler)
         for node in ast.walk(add)
@@ -203,7 +210,7 @@ def test_sql_repository_translates_the_constraint_violation(
 
 def test_fake_booking_repository_refuses_an_overlap_too(modules: dict[str, ast.Module]) -> None:
     # A fake raises the same domain errors as its SQL twin.
-    add = _method(modules["tests/fakes.py"], "InMemoryBookingRepository", "add")
+    add = _find_async_method(modules["tests/fakes.py"], "InMemoryBookingRepository", "add")
     assert _raises(add, "RoomUnavailableError")
 
 
@@ -235,7 +242,7 @@ def test_the_inner_layers_import_nothing_from_fastapi(modules: dict[str, ast.Mod
 def test_the_unit_of_work_holds_the_only_commit_under_db(modules: dict[str, ast.Module]) -> None:
     db_modules = {rel: tree for rel, tree in modules.items() if rel.startswith("app/db/")}
     commits = [call for tree in db_modules.values() for call in _calls_to(tree, "commit")]
-    commit = _method(modules["app/db/repositories.py"], "SqlHotelUnitOfWork", "commit")
+    commit = _find_async_method(modules["app/db/repositories.py"], "SqlHotelUnitOfWork", "commit")
     assert commits == _calls_to(commit, "commit")
     assert len(commits) == 1
 
@@ -250,3 +257,58 @@ def test_endpoint_tests_never_use_the_fakes(modules: dict[str, ast.Module]) -> N
         if isinstance(node, ast.ImportFrom) and node.module == "tests"
         for alias in node.names
     }
+
+
+def _public_definitions(
+    tree: ast.Module,
+) -> list[ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef]:
+    """The module's top-level classes and functions whose names do not start with ``_``."""
+    kinds = (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+    return [n for n in tree.body if isinstance(n, kinds) and not n.name.startswith("_")]
+
+
+def test_every_public_name_has_an_intent_line_and_a_usage_example(
+    modules: dict[str, ast.Module],
+) -> None:
+    # python-docstrings: the example is the code agents copy, so it follows the rule it teaches.
+    undocumented = sorted(
+        f"{rel}:{node.name}"
+        for rel, tree in modules.items()
+        if rel.startswith(_DOCUMENTED_MODULES)
+        for node in _public_definitions(tree)
+        if "Example" not in (ast.get_docstring(node) or "")
+    )
+    assert undocumented == []
+
+
+def test_every_module_docstring_is_one_line(modules: dict[str, ast.Module]) -> None:
+    # Mapping drop row: each adapted module gets a one-line docstring of its own.
+    long_or_missing = sorted(
+        rel
+        for rel, tree in modules.items()
+        if len((ast.get_docstring(tree) or "\n").splitlines()) != 1
+    )
+    assert long_or_missing == []
+
+
+def test_the_layer_map_finds_no_violation_and_no_cycle() -> None:
+    # The README claims this result; the script ships with python-architecture, whose
+    # lane depends on this example, so the check runs as soon as the script exists.
+    if not LAYER_MAP.is_file():
+        pytest.skip("python-architecture's scripts/layer_map.py has not landed yet")
+    result = subprocess.run(
+        [sys.executable, "-I", str(LAYER_MAP), str(EXAMPLE)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_ci_installs_uv_with_the_setup_action_pinned_by_sha() -> None:
+    workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    job = workflow.partition("\n  core-examples:\n")[2].partition("\n  wheel-smoke:\n")[0]
+    assert re.search(r"uses: astral-sh/setup-uv@[0-9a-f]{40}\b", job), job
+    assert "pip install uv" not in job

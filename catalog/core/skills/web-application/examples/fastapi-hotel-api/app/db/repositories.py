@@ -1,9 +1,4 @@
-"""SQL repositories that map rows to domain records, and the unit of work that commits them.
-
-Repositories add and flush but never commit: the use case calls
-``SqlHotelUnitOfWork.commit`` once. Driver errors stop here, translated into the
-domain errors the ports name.
-"""
+"""SQL repositories that map rows to domain records, and the unit of work that commits them."""
 
 from __future__ import annotations
 
@@ -25,6 +20,10 @@ from app.domain.errors import (
 )
 from app.domain.model import Booking, Customer, Room, Stay
 
+# Repositories add and flush but never commit: the use case calls
+# SqlHotelUnitOfWork.commit once. Driver errors stop here, translated into the
+# domain errors the ports name.
+
 
 def _room(row: RoomRow) -> Room:
     return Room(row.room_id, row.number, row.capacity, row.nightly_rate_cents, row.notes)
@@ -38,6 +37,11 @@ def _booking(row: BookingRow) -> Booking:
 
 
 class SqlRoomRepository:
+    """The RoomRepository port over the request's session.
+
+    Example: ``await SqlRoomRepository(session).list_page(limit=20, offset=0)``.
+    """
+
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
@@ -78,13 +82,16 @@ class SqlRoomRepository:
 
 
 class SqlCustomerRepository:
+    """The CustomerRepository port over the request's session.
+
+    Example: ``await SqlCustomerRepository(session).get(customer_id)``.
+    """
+
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
     async def get(self, customer_id: UUID) -> Customer:
-        row = await self._session.get(CustomerRow, customer_id)
-        if row is None:
-            raise CustomerNotFoundError(customer_id)
+        row = await self._row(customer_id)
         return Customer(row.customer_id, row.name, row.email)
 
     async def add(self, customer: Customer) -> None:
@@ -94,19 +101,28 @@ class SqlCustomerRepository:
         self._session.add(row)
         try:
             await self._session.flush()
-        except IntegrityError as exc:  # the unique email is the only constraint a new row breaks
+        # The unique email is the only constraint a new customer row can break.
+        except IntegrityError as exc:
             raise DuplicateEmailError(customer.email) from exc
+
+    async def _row(self, customer_id: UUID) -> CustomerRow:
+        row = await self._session.get(CustomerRow, customer_id)
+        if row is None:
+            raise CustomerNotFoundError(customer_id)
+        return row
 
 
 class SqlBookingRepository:
+    """The BookingRepository port over the request's session.
+
+    Example: ``await SqlBookingRepository(session).cancel(booking_id, on=today)``.
+    """
+
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
     async def get(self, booking_id: UUID) -> Booking:
-        row = await self._session.get(BookingRow, booking_id)
-        if row is None:
-            raise BookingNotFoundError(booking_id)
-        return _booking(row)
+        return _booking(await self._row(booking_id))
 
     async def room_is_free(self, room_id: UUID, nights: Sequence[date]) -> bool:
         stmt = select(RoomNightRow.night).where(
@@ -131,14 +147,14 @@ class SqlBookingRepository:
         self._session.add(row)
         try:
             await self._session.flush()
-        except (
-            IntegrityError
-        ) as exc:  # a new booking can only break one_active_booking_per_room_night
+        # A new booking can only break one_active_booking_per_room_night.
+        except IntegrityError as exc:
             raise RoomUnavailableError(
                 booking.room_id, booking.check_in, booking.check_out
             ) from exc
 
     async def cancel(self, booking_id: UUID, *, on: date) -> None:
+        await self._row(booking_id)  # an unknown id fails here, as it does in the fake
         await self._session.execute(
             update(BookingRow).where(BookingRow.booking_id == booking_id).values(cancelled_on=on)
         )
@@ -148,9 +164,18 @@ class SqlBookingRepository:
             .values(cancelled_on=on)
         )
 
+    async def _row(self, booking_id: UUID) -> BookingRow:
+        row = await self._session.get(BookingRow, booking_id)
+        if row is None:
+            raise BookingNotFoundError(booking_id)
+        return row
+
 
 class SqlHotelUnitOfWork:
-    """The repositories share the request's session, so one commit covers all of them."""
+    """The repositories share the request's session, so one commit covers all of them.
+
+    Example: ``hotel = SqlHotelUnitOfWork(session)``, then ``await hotel.commit()`` once.
+    """
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
