@@ -4,7 +4,6 @@ name: Static checks
 description: "Treat the repo's ruff and mypy settings as the contract: run what CI runs, fix every finding your change introduces, and never loosen a check to make one disappear."
 version: 1
 scope: scoped
-skill: python-tooling
 globs:
   - "**/*.py"
   - "pyproject.toml"

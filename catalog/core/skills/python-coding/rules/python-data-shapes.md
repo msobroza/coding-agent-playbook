@@ -4,7 +4,6 @@ name: Data shapes
 description: "Model records as dataclasses, not string dicts or parallel lists; freeze them with tuple fields; return at most three values; name magic constants."
 version: 1
 scope: scoped
-skill: python-coding
 globs:
   - "**/*.py"
 priority: 44

@@ -36,7 +36,7 @@ from coding_agent_playbook.skills.membership import compose_skills, member_rules
 from coding_agent_playbook.skills.naming import agent_skill_issues
 from coding_agent_playbook.validation.link_check import extract_markdown_links
 from tests._budget_probe import reference_probe_facts, render_core_rule
-from tests._catalog import CORE_ROOT, core_rule_skill_ids, core_rules
+from tests._catalog import CORE_ROOT, core_rule_paths, core_rule_skill_ids, core_rules
 from tests.core_skill_pins import ALL_PINS, PLAIN_CORE_SKILL_IDS, CoreSkillPins
 from tests.hook_runtime.handlers.pack_repo import engine_hook, engine_hook_paths
 from tests.hook_samples import resolved_hook
@@ -126,7 +126,39 @@ def test_core_ships_exactly_the_d4_skills() -> None:
     assert sorted(p.name for p in SKILLS_ROOT.iterdir()) == EVERY_CORE_SKILL
     for skill_id in EVERY_CORE_SKILL:
         entries = sorted(p.name for p in (SKILLS_ROOT / skill_id).iterdir())
-        assert entries == ["SKILL.md"], f"core skill {skill_id!r} holds {entries}"
+        assert entries in (["SKILL.md"], ["SKILL.md", "rules"]), (
+            f"core skill {skill_id!r} holds {entries}"
+        )
+        rules_dir = SKILLS_ROOT / skill_id / "rules"
+        files = sorted(rules_dir.iterdir()) if rules_dir.is_dir() else []
+        odd = [p.name for p in files if not p.is_file() or not p.name.endswith((".md", ".md.j2"))]
+        assert not odd, f"core skill {skill_id!r} rules/ holds more than rule files: {odd}"
+
+
+def test_core_rules_dir_holds_only_always_rules() -> None:
+    """prU L0-07 (D21, D36): core-layer scoped rules live in their skill's rules/.
+
+    Read from disk, so adding an always rule to core edits no pin here.
+    """
+    files = [path for path in (CORE_ROOT / "rules").rglob("*") if path.is_file()]
+    assert files
+    for path in files:
+        assert path.relative_to(CORE_ROOT / "rules").parts[0] == "always", path
+        front, _ = split_frontmatter(path.read_text(encoding="utf-8"))
+        assert front["scope"] == "always", path
+
+
+def test_core_in_skill_rules_declare_no_skill() -> None:
+    """prU L0-07: the directory sets membership, so a moved rule drops its 'skill:' line.
+
+    R1 allows a line naming the home skill; core keeps none. The file name is
+    R2's, checked on the real catalog by the validate no-finding test.
+    """
+    for home, path in core_rule_paths():
+        if home is None:
+            continue
+        front, _ = split_frontmatter(path.read_text(encoding="utf-8"))
+        assert "skill" not in front, f"{path} declares 'skill: {front['skill']}'"
 
 
 @pytest.mark.parametrize("skill_id", CORE_SKILLS)

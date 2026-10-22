@@ -4,7 +4,6 @@ name: Pydantic boundaries
 description: "Validate untrusted data once, where it enters, with Pydantic 2 models that declare their constraints; pass typed objects inward and translate ValidationError at that boundary."
 version: 1
 scope: scoped
-skill: python-tooling
 globs:
   - "**/*.py"
 applies_if:

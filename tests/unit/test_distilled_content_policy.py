@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Final
 import pytest
 
 from tests._budget_probe import reference_probe_facts, render_core_rule
-from tests._catalog import CORE_ROOT, core_markdown_sources, core_rules
+from tests._catalog import CORE_ROOT, core_markdown_sources, core_rule_paths, core_rules
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -67,7 +67,7 @@ _PBP_SECTION_HEADING: Final = "## Python best-practices guidance"
 
 
 #: Every rule and prompt source in core: the bodies an agent reads as guidance.
-_SCANNED_SOURCES: Final = core_markdown_sources("rules") + core_markdown_sources("prompts")
+_SCANNED_SOURCES: Final = [path for _, path in core_rule_paths()] + core_markdown_sources("prompts")
 
 
 def _pbp_attributions_section() -> str:
@@ -91,7 +91,7 @@ def test_core_artifacts_omit_dropped_recommendations(path: Path, token: str) -> 
 def test_policy_scan_covers_every_core_rule_and_prompt() -> None:
     """Guard against a walker that silently scans fewer files than core ships."""
     kinds = {path.relative_to(CORE_ROOT).parts[0] for path in _SCANNED_SOURCES}
-    assert kinds == {"rules", "prompts"}, kinds
+    assert kinds == {"rules", "skills", "prompts"}, kinds
     unscanned = {rule.source_path for rule in core_rules().values()} - set(_SCANNED_SOURCES)
     assert not unscanned, f"core rules missing from the policy scan: {sorted(map(str, unscanned))}"
 

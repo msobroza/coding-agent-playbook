@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.catalog
 
 _PEP_695_MARKER = "use **PEP 695** generic syntax"
-_TEMPLATE = CORE_ROOT / "rules" / "languages" / "python" / "typing.md.j2"
+_TEMPLATE = CORE_ROOT / "skills" / "python-coding" / "rules" / "python-typing.md.j2"
 
 
 @pytest.mark.parametrize(

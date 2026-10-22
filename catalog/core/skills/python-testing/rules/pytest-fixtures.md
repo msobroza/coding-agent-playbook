@@ -4,7 +4,6 @@ name: pytest fixtures
 description: "Keep fixtures function-scoped unless a resource is expensive and immutable, tear down after yield, place each where its users share it, name and type it by what it returns, and return factories for variations."
 version: 1
 scope: scoped
-skill: python-testing
 globs:
   - "tests/**/*.py"
   - "**/conftest.py"

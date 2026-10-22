@@ -21,7 +21,7 @@ from coding_agent_playbook.catalog.source import FileSystemArtifactSource, _reso
 from coding_agent_playbook.cli import main
 from coding_agent_playbook.evals.prompting import _infer_prompts_dir, _resolve_prompt
 from coding_agent_playbook.validation.preflight import unusable_overlays
-from tests._catalog import CORE_ROOT, core_markdown_sources, plugin_root
+from tests._catalog import CORE_ROOT, core_rule_paths, plugin_root
 from tests.core_skill_pins import ALL_PINS, PLAIN_CORE_SKILL_IDS
 
 if TYPE_CHECKING:
@@ -46,11 +46,18 @@ def test_engine_rules_come_from_catalog_core(tmp_path: Path) -> None:
     rules = FileSystemArtifactSource(repo_root=tmp_path).list_rules()
     engine_rules = [rule for rule in rules if rule.source_package == ENGINE_PACKAGE]
     # Derived from the files on disk (prU L0-03), so a content lane adding a rule edits no pin.
-    assert len(engine_rules) == len(core_markdown_sources("rules"))
-    rules_root = (CORE_ROOT / "rules").resolve()
+    assert len(engine_rules) == len(core_rule_paths())
+    # prU L0-07 (D21): always rules in rules/always/, scoped rules in their skill's rules/.
+    always_root = (CORE_ROOT / "rules" / "always").resolve()
+    skills_root = (CORE_ROOT / "skills").resolve()
     for rule in engine_rules:
         assert rule.source_path is not None
-        assert rule.source_path.resolve().is_relative_to(rules_root), rule.source_path
+        path = rule.source_path.resolve()
+        if rule.frontmatter.scope == "always":
+            assert path.is_relative_to(always_root), path
+        else:
+            assert path.parent.name == "rules", path
+            assert path.parent.parent.parent == skills_root, path
 
 
 def test_engine_skills_come_from_catalog_core(tmp_path: Path) -> None:

@@ -596,9 +596,9 @@ def render_artifact_body(template_path: Path, context: dict) -> str:
 | You want the source to be readable as-is in a GitHub preview | You render a section only for some projects (`{% if has_ml_dep("torch") %}`) |
 | Authors prefer not to learn Jinja | You loop over a list (`{% for dep in dependencies %}`) |
 A realistic split from the engine's content (`catalog/core/`):
-- `rules/frameworks/fastapi.md` — plain markdown. FastAPI conventions don't depend on project facts.
+- `skills/python-tooling/rules/fastapi-app-wiring.md` — plain markdown. FastAPI conventions don't depend on project facts.
 - `rules/always/00-project-context.md.j2` — needs `{{ project_name }}` and `{{ project_description }}`.
-- `rules/languages/python/typing.md.j2` — branches on Python version for PEP 695 syntax.
+- `skills/python-coding/rules/python-typing.md.j2` — branches on Python version for PEP 695 syntax.
 - `prompts/refactor.md` — plain instructions, no variation needed.
 - `prompts/generate-tests.md.j2` — branches on `pytest-asyncio` and project layout choice.
 The `.j2` suffix is the author's explicit signal to readers: *"this file has logic in it."* Without it, the file is just markdown.
@@ -630,7 +630,7 @@ lint_codes:                          # optional: the ruff codes a rule-linked li
 `skill` must name a skill that exists after the layer merge and declares a `playbook:` block (§6.3.3, §11.2), so an overlay or `playbook/rules/` adds a rule to a core skill just by naming it; Continue ignores the field (§10.2). Because the engine delivers a scoped rule as a reference of that skill, `description` is the rule's line in the skill's references index: write it as one actionable sentence. `name` is the rule's label in the skill's Covers clause, so keep it a short topic label (`Typing`, not `Python typing conventions`).
 
 `lint_codes` links the rule's text to the hook that enforces it: a hook whose `linked_rule` names this rule inherits its `applies_if` and `globs`, and the resolved code list (`warn` plus every `when` row whose predicate holds at sync) is merged into the hook's handler `config` (§6.6.7) as `lint_codes = {rule, skill, warn}`, with `skill` the rule's own `skill` (absent when it names none), so lint feedback names where the fix lives: `rule python-error-handling (skill python-coding): …`. There is no `block` key: lint feedback is warn-only. `playbook validate` checks the shape and the predicates, and an empty `lint_codes` is dropped from the markdown round trip, so unlinked rules stay byte-identical.
-#### 6.1.2 Example: `catalog/core/rules/languages/python/typing.md.j2`
+#### 6.1.2 Example: `catalog/core/skills/python-coding/rules/python-typing.md.j2`
 ```markdown
 ---
 id: python-typing
@@ -1733,12 +1733,12 @@ Removed in v0.21 (D15). A prompt declares the rules it needs in `includes_rules`
 ### 9.6 Example: render call
 ```python
 rendered = renderer.render_artifact(
-    template_path="rules/languages/python/typing.md.j2",
+    template_path="skills/python-coding/rules/python-typing.md.j2",
     context=context,
 )
 # rendered is now the full markdown including frontmatter, with all {{ vars }} substituted
 rendered_plain = renderer.render_artifact(
-    template_path="rules/frameworks/fastapi.md",
+    template_path="skills/python-tooling/rules/fastapi-app-wiring.md",
     context=context,
 )
 # .md files: frontmatter parsed, body returned verbatim. Context is unused for body.
@@ -2760,7 +2760,7 @@ The Agent Skills rule (v0.15) checks every resolved skill: it must declare a str
 
 V11 measures with `skills.document.worst_case_description`, the same bound the sync's composition holds: a real composition of `M` active members (`M` at most the merged count `N`) that falls back to one name is never longer than that worst case, so a skill that validates cannot make `playbook sync` raise. The D13 description lint, the 500-line limit and the one-level references check are CI tests over the core skills only, never validate checks, so enabling a bundled plugin whose skills predate them keeps validate passing.
 
-**The rules/ layout (v0.21, prU D21).** `validation/_rule_layout.py` checks every layer's rule files and skill directories before the merge; each finding names the file, the offending value and the fix. Overlay and local-layer `<layer>/rules/` files keep free names. An engine scoped rule still under `catalog/core/rules/` is left to R5, which lands with the move of the core rules into their skills.
+**The rules/ layout (v0.21, prU D21).** `validation/_rule_layout.py` checks every layer's rule files and skill directories before the merge; each finding names the file, the offending value and the fix. Overlay and local-layer `<layer>/rules/` files keep free names. The engine's `catalog/core/rules/` holds only always rules; an engine scoped rule there is R5's, not R2's (prU D36).
 
 | # | Check | Sample line |
 | --- | --- | --- |
@@ -2768,6 +2768,7 @@ V11 measures with `skills.document.worst_case_description`, the same bound the s
 | R2 | the file name minus `.md`/`.md.j2` is not the id, for a rule in a skill's `rules/` (any layer) or an engine always rule (which may keep a two-digit prefix such as `10-`) | `FAIL playbook/skills/s/rules/typing.md.j2: file name 'typing.md.j2' does not match rule id 'python-typing'; rename the file to python-typing.md.j2` |
 | R3 | two files of one layer share an id (the same id in two layers is an override) | `FAIL playbook/rules/r-old.md: rule id 'r' is defined by 2 files in layer <repo-local>: playbook/rules/r-old.md and playbook/skills/s/rules/r.md; the later one silently replaces the earlier, so give one file another id or delete it` |
 | R4 | a skill directory's `rules/` without `SKILL.md`, or in a skill without a `playbook:` block | `FAIL playbook/skills/plain/rules: skill 'plain' has a rules/ directory but its SKILL.md declares no 'playbook:' block, so it cannot take member rules; add a 'playbook:' block (e.g. 'playbook: {files: <which files this skill covers>}') to playbook/skills/plain/SKILL.md, or move the rules out` |
+| R5 | an engine-layer scoped rule outside a skill's `rules/` (that file's only finding; overlay and local layers keep scoped rules in `<layer>/rules/`) | `FAIL catalog/core/rules/languages/typing.md.j2: scoped rule 'python-typing' lies in the engine's rules/ directory catalog/core/rules/languages, which holds only always rules; move it to catalog/core/skills/python-coding/rules/python-typing.md.j2 and remove its 'skill:' line` |
 | R6 | an always rule in a skill's `rules/` (reported instead of V3, and as that file's only finding) | `FAIL playbook/skills/s/rules/house.md: always rule 'house' lies in the rules/ directory of skill 's', but always rules are never skill members; move it to playbook/rules/house.md, or set 'scope: scoped' to keep it in the skill` |
 
 **Without a consumer config (v0.20).** An engine or overlay checkout has no `.coding-agent-playbook.toml`, and `playbook validate` no longer fails there: it validates the engine's catalog, the checkout's own `src/*/resources/` (an overlay checkout; a checkout whose `src/<pkg>` is the engine package is never walked twice) and `playbook/`, and first names the consumer-config checks it skips. Installed overlays are not discovered, since overlays resolve by package name from `overlays_enabled` only:

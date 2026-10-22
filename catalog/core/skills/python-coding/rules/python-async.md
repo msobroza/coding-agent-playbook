@@ -4,7 +4,6 @@ name: Asyncio
 description: "Start independent awaits together, give every task an owner, bound fan-out and total wait, and never block the event loop."
 version: 1
 scope: scoped
-skill: python-coding
 globs:
   - "**/*.py"
 applies_if:
