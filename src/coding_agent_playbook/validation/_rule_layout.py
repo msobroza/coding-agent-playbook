@@ -8,13 +8,16 @@ each finding naming the file, the offending value and the fix:
   a skill's ``rules/`` (all layers) and every engine-layer always rule, which
   may carry a two-digit priority prefix (``10-python-house-style.md``). Overlay
   and local-layer ``<layer>/rules/`` files keep free names. An engine scoped
-  rule still in ``<engine>/rules/`` is left to R5 (L0-07, D36), which rejects
-  it outright with a move hint naming ``<id>.md``; once it sits in a skill, R2
-  checks its name, so every engine-layer rule ends up covered.
+  rule in ``<engine>/rules/`` is left to R5, whose move hint already names
+  ``<id>.md``; once it sits in a skill, R2 checks its name, so every
+  engine-layer rule is covered.
 - R3: two files of one layer with one id (the later silently wins the merge);
   one id in two layers is an override.
 - R4: a ``skills/<dir>/rules/`` whose ``<dir>`` has no ``SKILL.md`` or whose
   ``SKILL.md`` has no ``playbook:`` block (discovery would skip it silently).
+- R5 (D36): an engine-layer scoped rule outside a skill's ``rules/``; the
+  hint names ``<engine>/skills/<skill>/rules/<id>.md``. Overlay and local
+  layers keep scoped rules in ``<layer>/rules/`` with ``skill:``.
 - R6: an always rule inside a skill's ``rules/`` gets a move hint (instead of
   V3's "remove 'skill'", which ``validation._skills`` skips for it). It is that
   file's only finding: R1's and R2's hints would contradict the move.
@@ -48,7 +51,7 @@ _SUFFIXES: Final = (".md.j2", ".md")
 
 
 def check_rule_layout(rules: Sequence[Rule], source: ArtifactSource) -> list[ValidationError]:
-    """One error per rule file or skill directory that breaks the layout rules R1-R4, R6.
+    """One error per rule file or skill directory that breaks the layout rules R1-R6.
 
     ``rules`` is every layer's well-formed rule before the merge
     (``ctx.rule_definitions``, i.e. ``source.collect_rules()[0]``).
@@ -58,11 +61,12 @@ def check_rule_layout(rules: Sequence[Rule], source: ArtifactSource) -> list[Val
         errors = check_rule_layout(ctx.rule_definitions, ctx.artifact_source)
     """
     engine = engine_package_of(source)
+    engine_rules = _engine_rules_root(source, engine)
     per_file = [
         ValidationError(path=str(path), message=message)
         for rule in rules
         if (path := rule.source_path) is not None
-        for message in _file_problems(rule, path, engine)
+        for message in _file_problems(rule, path, engine, engine_rules)
     ]
     return [*per_file, *_duplicate_id_errors(rules), *_skill_rules_dir_errors(source)]
 
@@ -71,12 +75,51 @@ def _where(rule: Rule) -> str:
     return str(rule.source_path or rule.frontmatter.id)
 
 
-def _file_problems(rule: Rule, path: Path, engine: str) -> list[str]:
-    """R6 alone when it applies (its move makes R1 and R2 moot), else R1 and R2."""
-    move = _always_in_skill_problem(rule, path)
+def _engine_rules_root(source: ArtifactSource, engine: str) -> Path | None:
+    """The engine layer's ``rules/``; ``None`` without one or for a non-filesystem source."""
+    if not isinstance(source, FileSystemArtifactSource):
+        return None
+    return dict(source.layer_roots("rules")).get(engine)
+
+
+def _file_problems(rule: Rule, path: Path, engine: str, engine_rules: Path | None) -> list[str]:
+    """R5 or R6 alone when it applies (its move makes R1 and R2 moot), else R1 and R2."""
+    move = _always_in_skill_problem(rule, path) or _engine_scoped_outside_skill_problem(
+        rule, path, engine, engine_rules
+    )
     if move:
         return move
     return [*_foreign_skill_problem(rule, path), *_file_name_problem(rule, path, engine)]
+
+
+def _engine_scoped_outside_skill_problem(
+    rule: Rule, path: Path, engine: str, engine_rules: Path | None
+) -> list[str]:
+    """R5 (D36): an engine scoped rule belongs in its skill's ``rules/``, not ``<engine>/rules/``.
+
+    Example: ``catalog/core/rules/languages/python/typing.md.j2`` (id ``python-typing``,
+    ``skill: python-coding``) is told to move to
+    ``catalog/core/skills/python-coding/rules/python-typing.md.j2``.
+    """
+    if (
+        engine_rules is None
+        or rule.home_skill is not None
+        or rule.source_package != engine
+        or rule.frontmatter.scope == "always"
+        or not path.is_relative_to(engine_rules)
+    ):
+        return []
+    rule_id, skill = rule.frontmatter.id, rule.frontmatter.skill or "<skill>"
+    target = engine_rules.parent / "skills" / skill / "rules" / f"{rule_id}{_suffix(path.name)}"
+    return [
+        f"scoped rule {rule_id!r} lies in the engine's rules/ directory {path.parent}, "
+        f"which holds only always rules; move it to {target} and remove its 'skill:' line"
+    ]
+
+
+def _suffix(name: str) -> str:
+    """``.md.j2`` or ``.md``, whichever ends ``name``; ``""`` for neither."""
+    return next((s for s in _SUFFIXES if name.endswith(s)), "")
 
 
 def _foreign_skill_problem(rule: Rule, path: Path) -> list[str]:
@@ -94,13 +137,13 @@ def _foreign_skill_problem(rule: Rule, path: Path) -> list[str]:
 def _file_name_problem(rule: Rule, path: Path, engine: str) -> list[str]:
     """R2: an in-skill or engine-layer rule's file name minus its suffix is its id.
 
-    An engine scoped rule still under ``<engine>/rules/`` is left alone: R5
-    (L0-07, D36) rejects it with a hint that already names ``<id>.md``.
+    An engine scoped rule under ``<engine>/rules/`` is left alone: R5 rejects
+    it with a hint that already names ``<id>.md``.
     """
     if not _name_is_checked(rule, engine):
         return []
     name, rule_id = path.name, rule.frontmatter.id
-    suffix = next((s for s in _SUFFIXES if name.endswith(s)), "")
+    suffix = _suffix(name)
     stem = name.removesuffix(suffix)
     always = rule.frontmatter.scope == "always"
     if stem == rule_id or (always and _PRIORITY_PREFIX.fullmatch(stem.removesuffix(rule_id))):

@@ -4,7 +4,6 @@ name: Classes and protocols
 description: "Give each class one reason to change; pick the lightest construct, attributes before properties, composition before inheritance, small Protocols, substitutable subtypes, and abstractions only once earned."
 version: 1
 scope: scoped
-skill: python-coding
 globs:
   - "**/*.py"
 priority: 53

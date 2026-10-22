@@ -4,7 +4,6 @@ name: Idioms
 description: "Keep os.path for legacy str APIs, use f-strings, group imports, split flag-driven functions, guard with early returns, and avoid star imports and shadowed builtins."
 version: 1
 scope: scoped
-skill: python-coding
 globs:
   - "**/*.py"
 priority: 58

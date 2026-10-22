@@ -4,7 +4,6 @@ name: FastAPI app wiring
 description: "Build collaborators in Depends providers and lifespan resources, use async def only for async I/O, and override dependencies in tests."
 version: 1
 scope: scoped
-skill: python-tooling
 globs:
   - "**/routers/**/*.py"
   - "**/routes/**/*.py"

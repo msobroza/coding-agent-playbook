@@ -36,7 +36,7 @@ from coding_agent_playbook.skills.membership import compose_skills, member_rules
 from coding_agent_playbook.skills.naming import agent_skill_issues
 from coding_agent_playbook.validation.link_check import extract_markdown_links
 from tests._budget_probe import reference_probe_facts, render_core_rule
-from tests._catalog import CORE_ROOT, core_rule_skill_ids, core_rules
+from tests._catalog import CORE_ROOT, core_rule_paths, core_rule_skill_ids, core_rules
 from tests.core_skill_pins import ALL_PINS, PLAIN_CORE_SKILL_IDS, CoreSkillPins
 from tests.hook_runtime.handlers.pack_repo import engine_hook, engine_hook_paths
 from tests.hook_samples import resolved_hook
@@ -126,7 +126,32 @@ def test_core_ships_exactly_the_d4_skills() -> None:
     assert sorted(p.name for p in SKILLS_ROOT.iterdir()) == EVERY_CORE_SKILL
     for skill_id in EVERY_CORE_SKILL:
         entries = sorted(p.name for p in (SKILLS_ROOT / skill_id).iterdir())
-        assert entries == ["SKILL.md"], f"core skill {skill_id!r} holds {entries}"
+        assert entries in (["SKILL.md"], ["SKILL.md", "rules"]), (
+            f"core skill {skill_id!r} holds {entries}"
+        )
+        rules_dir = SKILLS_ROOT / skill_id / "rules"
+        files = sorted(rules_dir.iterdir()) if rules_dir.is_dir() else []
+        odd = [p.name for p in files if not p.is_file() or not p.name.endswith((".md", ".md.j2"))]
+        assert not odd, f"core skill {skill_id!r} rules/ holds more than rule files: {odd}"
+
+
+def test_core_rules_dir_holds_only_the_always_rules() -> None:
+    """prU L0-07 (D21, D36): scoped core rules live in their skill's rules/."""
+    files = sorted(p.relative_to(CORE_ROOT).as_posix() for p in (CORE_ROOT / "rules").rglob("*"))
+    assert [f for f in files if (CORE_ROOT / f).is_file()] == [
+        "rules/always/00-project-context.md.j2",
+        "rules/always/10-python-house-style.md",
+    ]
+
+
+def test_core_in_skill_rules_are_named_by_id_and_declare_no_skill() -> None:
+    """prU L0-07: the directory sets membership; the file stem is the id."""
+    for home, path in core_rule_paths():
+        if home is None:
+            continue
+        front, _ = split_frontmatter(path.read_text(encoding="utf-8"))
+        assert path.name.removesuffix(".j2").removesuffix(".md") == front["id"], path
+        assert "skill" not in front, f"{path} declares 'skill: {front['skill']}'"
 
 
 @pytest.mark.parametrize("skill_id", CORE_SKILLS)

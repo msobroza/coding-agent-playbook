@@ -94,7 +94,8 @@ _PUBLIC_ONLY: Final = frozenset({"ANN001", "ANN201"})
 _FIXED_BY_M1: Final = frozenset({"UP007", "UP045"})
 #: Heuristics reported once per file per session, whatever line they land on.
 _ONCE_PER_FILE: Final = frozenset({"pytest-loop-assert"})
-#: What the rule adds to ruff's own message (typing.md.j2's "when to use Any").
+#: What the rule adds to ruff's own message (the "when to use Any" of
+#: catalog/core/skills/python-coding/rules/python-typing.md.j2).
 _MESSAGE_NOTES: Final = {
     "ANN401": "Any is a last resort: narrow it, or justify a `# type: ignore[code]`",
 }

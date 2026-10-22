@@ -389,7 +389,7 @@ def test_scan_text_passes_clean_text() -> None:
 @pytest.mark.parametrize(
     ("rel", "expected"),
     [
-        ("rules/languages/python/pure-core.md", ScanPolicy(urls=True, markers=True)),
+        ("skills/python-coding/rules/python-pure-core.md", ScanPolicy(urls=True, markers=True)),
         ("prompts/characterize.md", ScanPolicy(urls=True, markers=True)),
         ("eval_samples/some-sample/sample.toml", ScanPolicy(urls=True, markers=True)),
         ("eval_samples/some-sample/setup/app/db.py", ScanPolicy(urls=True, markers=True)),

@@ -4,7 +4,6 @@ name: pytest test doubles
 description: "Double only what the code does not own: a named fake passed in like production by default, autospec only at thin third-party seams, and monkeypatch for the environment and code that cannot take a parameter yet."
 version: 1
 scope: scoped
-skill: python-testing
 globs:
   - "tests/**/*.py"
   - "**/conftest.py"

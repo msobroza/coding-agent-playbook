@@ -4,7 +4,6 @@ name: Timeouts and retries
 description: "Every outbound call gets an explicit timeout; idempotent calls get a small, bounded, transient-only retry."
 version: 1
 scope: scoped
-skill: python-coding
 globs:
   - "**/*.py"
 applies_if:

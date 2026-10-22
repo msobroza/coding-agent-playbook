@@ -569,10 +569,10 @@ def test_config_less_context_in_the_engine_checkout_walks_the_engine_once(tmp_pa
 def test_config_less_validate_of_the_engine_checkout_has_no_layout_finding(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """prU L0-06: the layout checks add no finding to the engine's own catalog.
+    """prU L0-06, L0-07: the layout checks add no finding to the engine's own catalog.
 
-    Core scoped rules still sit in ``catalog/core/rules/`` under their old file
-    names until L0-07 moves them; R2 leaves those to R5.
+    Since L0-07 the core scoped rules sit in their skills' ``rules/``, named by
+    id, so R2 and R5 cover every engine rule and find nothing.
     """
     ctx = _validate_context.config_less_context(REPO_ROOT)
 

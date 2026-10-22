@@ -4,7 +4,6 @@ name: Performance idioms
 description: "Write clear code first and fast code where a profile says so: comprehensions, generators, set and dict lookups, str.join, and .get only for optional keys."
 version: 1
 scope: scoped
-skill: python-coding
 globs:
   - "**/*.py"
 priority: 51
