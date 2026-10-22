@@ -29,7 +29,9 @@ Run each effect that leaves the process after the commit succeeds. When the effe
 ## Bad Example
 
 ```python
-def book_room(uow: HotelUnitOfWork, send_email: SendEmail, request: BookingRequest) -> Booking:
+def book_and_confirm(
+    uow: HotelUnitOfWork, send_email: SendEmail, request: BookingRequest
+) -> Booking:
     booking = Booking.create(uow.rooms.get(request.room_id), request)
     uow.bookings.add(booking)
     send_email(request.email, confirmation_text(booking))  # sent before anything is saved
@@ -40,7 +42,9 @@ def book_room(uow: HotelUnitOfWork, send_email: SendEmail, request: BookingReque
 ## Good Example
 
 ```python
-def book_room(uow: HotelUnitOfWork, send_email: SendEmail, request: BookingRequest) -> Booking:
+def book_and_confirm(
+    uow: HotelUnitOfWork, send_email: SendEmail, request: BookingRequest
+) -> Booking:
     booking = Booking.create(uow.rooms.get(request.room_id), request)
     uow.bookings.add(booking)
     uow.commit()
@@ -48,7 +52,7 @@ def book_room(uow: HotelUnitOfWork, send_email: SendEmail, request: BookingReque
     return booking
 
 
-def book_room_reliably(uow: HotelUnitOfWork, request: BookingRequest) -> Booking:
+def book_and_queue_confirmation(uow: HotelUnitOfWork, request: BookingRequest) -> Booking:
     booking = Booking.create(uow.rooms.get(request.room_id), request)
     uow.bookings.add(booking)
     uow.outbox.add(OutboxMessage.confirmation(booking, request.email))  # same transaction

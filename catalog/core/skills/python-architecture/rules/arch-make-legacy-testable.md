@@ -59,5 +59,5 @@ An intermediate step is fine: first lift the session to a parameter (`get_room(s
 
 - Introduce a Protocol only at a real seam (arch-ports): a clock or an id factory needs a `Callable` alias, an in-process helper needs nothing.
 - Freezing time with a library is for characterizing code that cannot accept a clock yet, never a substitute for passing one.
-- Change behavior only after the seams are in and the characterization tests are green; the refactoring moves themselves are the design-patterns skill's concern, and characterization tests the python-testing skill's.
+- Change behavior only after the seams are in and the characterization tests are green; the refactoring moves themselves are the design-patterns skill's concern, and characterization tests the characterize prompt's and the python-testing skill's.
 - The tests that follow are arch-test-use-cases-with-fakes; the root that now builds the concrete objects is arch-composition-root.

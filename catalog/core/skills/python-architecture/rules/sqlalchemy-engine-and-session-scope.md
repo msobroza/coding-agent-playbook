@@ -49,6 +49,10 @@ Building the engine at import time is allowed for a script or CLI. The defects a
 
 ```python
 class SqlLendingUnitOfWork:
+    _session: Session  # opened in __enter__, one per unit of work
+    tools: SqlToolRepository
+    loans: SqlLoanRepository
+
     def __init__(self, session_factory: sessionmaker[Session]) -> None:
         self._session_factory = session_factory
 

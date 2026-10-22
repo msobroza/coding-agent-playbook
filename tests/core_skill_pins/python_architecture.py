@@ -262,7 +262,7 @@ PINS: Final = CoreSkillPins(
         ),
         "arch-tests-by-layer": RulePin(
             applies_if={},
-            globs=_TESTS[:4],
+            globs=_TESTS,
             priority=53,
             name="Tests by layer",
             tags=("python", "architecture", "testing"),
