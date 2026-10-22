@@ -133,6 +133,8 @@ review-architecture, make-testable, characterize, review and refactor prompts.
 | `skills/clean-architecture/references/patterns/template-method.md` | `rules/design-interface-segregation.md` | Protocol segregation (251-321) and the 4-5 method heuristic (342) as notes, without endorsing or banning mixins. |
 | `commands/decouple.md` | `rules/design-tell-dont-ask.md`, `rules/design-low-coupling.md` | Checklist items only (15-17): global mutable state, content coupling and Law of Demeter violations, as notes; command frontmatter, $ARGUMENTS and plugin paths dropped (D9). |
 | `commands/extract-god-class.md` | `rules/design-split-god-class.md` | Steps 13-34 as a non-interactive procedure: propose the split, apply it only when asked; AskUserQuestion and auto-apply (35-39, F28), frontmatter and plugin paths (1-11) dropped. |
+| `skills/clean-architecture/references/pythonic-patterns.md` | `SKILL.md` | Lines 15-605 only as one row each of the pattern table ('signal, lightest form, heavier form, stop when, pattern'). DROP: the per-pattern summaries and their code (15-605), which the pattern rules duplicate; the retry (535-566), repository (498-514), unit-of-work (375-398), CQRS (337-354) and event-sourcing (317-336) summaries are covered by their owners' full files and become rows naming python-coding and python-architecture. |
+| `commands/suggest-patterns.md` | `SKILL.md` | Lines 13-41: the smell-to-pattern rows, merged into the same pattern table; the singleton, value-object, registry and notification rows rewritten to the engine decisions (F9, F14, F10). DROP: command frontmatter, $ARGUMENTS and plugin paths (1-11, 53; D9). |
 | `commands/make-pythonic.md` | `rules/design-composition-over-inheritance.md` | Smell row 19 (deep inheritance or mixins -> composition with a Protocol) as the rule's premise, with mixins per the engine line (F1). |
 
 ### ml-data
@@ -193,6 +195,9 @@ that comes to hold vendored text moves from here into its source's table.
 
 ### design-patterns
 
+- `scripts/_pyscan_common.py`
+- `scripts/_smell_detectors.py`
+- `scripts/_smell_model.py`
 - `scripts/detect_smells.py`
 - `scripts/lcom4_clusters.py`
 

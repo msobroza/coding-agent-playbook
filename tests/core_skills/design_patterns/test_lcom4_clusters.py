@@ -9,17 +9,20 @@ error. Fixtures are written to ``tmp_path``.
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import shutil
 import subprocess
-import sys
-import textwrap
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Final, cast
 
 import pytest
 
-from tests._catalog import core_skill_root
+from tests.core_skills.design_patterns._scripts import (
+    LCOM4_CLUSTERS,
+    CohesionHit,
+    dedent,
+    run_script,
+    write_tree,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -27,49 +30,25 @@ if TYPE_CHECKING:
 
 pytestmark = pytest.mark.catalog
 
-SCRIPT = core_skill_root("design-patterns") / "scripts" / "lcom4_clusters.py"
-RESULT_KEYS = {"class", "file", "line", "lcom4", "clusters"}
-
-
-@pytest.fixture(scope="module")
-def lcom4() -> ModuleType:
-    """The script loaded as a module (registered first: dataclasses look it up)."""
-    spec = importlib.util.spec_from_file_location("design_patterns_lcom4_clusters", SCRIPT)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    # No scripts/__pycache__ in the pack source tree (sync skips it anyway).
-    writes_bytecode, sys.dont_write_bytecode = sys.dont_write_bytecode, True
-    try:
-        spec.loader.exec_module(module)
-    finally:
-        sys.dont_write_bytecode = writes_bytecode
-    return module
+RESULT_KEYS: Final = {"class", "file", "line", "lcom4", "clusters"}
 
 
 def _scan(
     lcom4: ModuleType, tmp_path: Path, source: str, *, include_cohesive: bool = False
-) -> list[dict[str, Any]]:
+) -> list[CohesionHit]:
     path = tmp_path / "sample.py"
-    path.write_text(textwrap.dedent(source).lstrip("\n"), encoding="utf-8")
-    found: list[dict[str, Any]] = lcom4.scan([path], include_cohesive=include_cohesive)
+    path.write_text(dedent(source), encoding="utf-8")
+    found = cast("list[CohesionHit]", lcom4.scan([path], include_cohesive=include_cohesive))
     assert all(set(item) == RESULT_KEYS and item["file"] == path.as_posix() for item in found)
     return found
 
 
-def _clusters(found: list[dict[str, Any]]) -> dict[str, tuple[int, list[list[str]]]]:
+def _clusters(found: list[CohesionHit]) -> dict[str, tuple[int, list[list[str]]]]:
     return {item["class"]: (item["lcom4"], item["clusters"]) for item in found}
 
 
 def _run(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, str(SCRIPT), *args],
-        capture_output=True,
-        text=True,
-        cwd=cwd,
-        timeout=120,
-        check=False,
-    )
+    return run_script(LCOM4_CLUSTERS, *args, cwd=cwd)
 
 
 SHOP = """
@@ -304,15 +283,8 @@ SPLIT = "class Split:\n    def a(self):\n        return self.x\n\n    def b(self
 WHOLE = "class Whole:\n    def a(self):\n        return self.x\n\n    def b(self):\n        return self.x\n"
 
 
-def _write_tree(root: Path, files: dict[str, str]) -> None:
-    for relative, text in files.items():
-        target = root / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(text, encoding="utf-8")
-
-
 def test_cli_lists_split_classes_and_all_with_flag(tmp_path: Path) -> None:
-    _write_tree(tmp_path, {"b.py": SPLIT + "\n\n" + WHOLE, "a.py": WHOLE + "\n\n" + SPLIT})
+    write_tree(tmp_path, {"b.py": SPLIT + "\n\n" + WHOLE, "a.py": WHOLE + "\n\n" + SPLIT})
     default = _run(str(tmp_path))
     assert default.returncode == 0, default.stderr
     assert [(item["file"], item["class"]) for item in json.loads(default.stdout)] == [
@@ -327,8 +299,8 @@ def test_cli_lists_split_classes_and_all_with_flag(tmp_path: Path) -> None:
 
 def test_cli_default_path_recurses_and_skips_tool_dirs(tmp_path: Path) -> None:
     skipped = [".hidden", ".venv", "venv", "node_modules", "__pycache__", "lib/site-packages"]
-    _write_tree(tmp_path, {f"{folder}/mod.py": SPLIT for folder in skipped})
-    _write_tree(tmp_path, {"pkg/mod.py": SPLIT, "pkg/notes.txt": SPLIT})
+    write_tree(tmp_path, {f"{folder}/mod.py": SPLIT for folder in skipped})
+    write_tree(tmp_path, {"pkg/mod.py": SPLIT, "pkg/notes.txt": SPLIT})
     result = _run(cwd=tmp_path)
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout) == [
@@ -337,7 +309,7 @@ def test_cli_default_path_recurses_and_skips_tool_dirs(tmp_path: Path) -> None:
 
 
 def test_cli_unparseable_file_is_reported_and_skipped(tmp_path: Path) -> None:
-    _write_tree(tmp_path, {"broken.py": "class Broken(:\n", "good.py": SPLIT})
+    write_tree(tmp_path, {"broken.py": "class Broken(:\n", "good.py": SPLIT})
     result = _run(str(tmp_path))
     assert result.returncode == 0
     assert "broken.py" in result.stderr
@@ -370,7 +342,7 @@ def test_cli_runs_on_python_310(tmp_path: Path) -> None:
     interpreter = shutil.which("python3.10")
     assert interpreter is not None
     result = subprocess.run(
-        [interpreter, str(SCRIPT), str(tmp_path)],
+        [interpreter, str(LCOM4_CLUSTERS), str(tmp_path)],
         capture_output=True,
         text=True,
         timeout=120,

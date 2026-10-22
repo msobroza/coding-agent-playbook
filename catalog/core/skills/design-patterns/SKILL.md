@@ -111,7 +111,7 @@ Default preferences for every pattern:
 
 ## Scripts
 
-Two stdlib scripts sit in this skill's `scripts/` directory and run on Python 3.10 or later:
+Two stdlib scripts sit in this skill's `scripts/` directory and run on Python 3.10 or later; the `_`-prefixed modules beside them are helpers the scripts import, not scripts to run:
 
 ```bash
 python3 <this skill's directory>/scripts/detect_smells.py src/

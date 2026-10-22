@@ -56,8 +56,6 @@ processor = PaymentProcessor(authorize=sms_authorize)
 
 ## Notes
 
-- One behavior: a role-named `Callable` alias. Several methods: a small `Protocol` declared in the consuming module, listing only what the consumer calls. Implementations need no inheritance; structural typing matches them.
 - Do not put `__init__` in a Protocol: different implementations need different constructor arguments.
 - Protected variations: a controller that depends on a view Protocol (`bind_add_product`, `update_product_list`) works with any UI toolkit, and the toolkit can change without touching it.
-- Add the abstraction only at a real seam: an external system, a test fake, or two or more implementations. Without one, the interface is speculative; a pure in-process collaborator can be injected as its concrete type, and framework types are fine at the edge. A working ABC hierarchy does not need converting.
-- Which collaborator gets a port at a layer boundary is arch-ports in the python-architecture skill; choosing between `Callable`, Protocol and ABC is python-protocols in the python-coding skill; passing collaborators in is `python-dependency-injection`.
+- Which collaborator gets a port at a layer boundary is arch-ports in the python-architecture skill; choosing between `Callable`, Protocol and ABC is python-protocols in the python-coding skill; passing collaborators in, and when an abstraction is worth adding at all, is `python-dependency-injection`.

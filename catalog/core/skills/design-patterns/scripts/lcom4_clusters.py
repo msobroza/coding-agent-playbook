@@ -38,6 +38,9 @@ on stderr and skipped.
 
 Example:
     python3 lcom4_clusters.py src/ --all > cohesion.json
+
+``_pyscan_common.py``, beside this script, holds the file walk and AST helpers
+it shares with ``detect_smells.py``.
 """
 
 from __future__ import annotations
@@ -45,22 +48,36 @@ from __future__ import annotations
 import argparse
 import ast
 import json
-import os
 import sys
-import warnings
 from dataclasses import dataclass
 from itertools import combinations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+# The helper module sits beside this script: find it even under ``python -I`` (no script dir),
+# and write no __pycache__ into the synced skill directory.
+sys.dont_write_bytecode = True
+_HERE = str(Path(__file__).resolve().parent)
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
+
+from _pyscan_common import (  # noqa: E402
+    FUNCTION_TYPES,
+    is_dunder,
+    is_stub_body,
+    load_modules,
+    receiver_of,
+    report_unreadable,
+    simple_name,
+)
+
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Sequence
 
-SKIPPED_DIR_NAMES = frozenset({"__pycache__", "venv", ".venv", "node_modules", "site-packages"})
-FUNCTION_TYPES = (ast.FunctionDef, ast.AsyncFunctionDef)
-UNBOUND_DECORATORS = frozenset({"classmethod", "staticmethod"})
+    from _pyscan_common import FunctionNode
 
-FunctionNode = ast.FunctionDef | ast.AsyncFunctionDef
+PROG = "lcom4_clusters.py"
+UNBOUND_DECORATORS = frozenset({"classmethod", "staticmethod"})
 
 
 @dataclass(frozen=True)
@@ -86,39 +103,9 @@ class ClassCohesion:
 # --- AST helpers -------------------------------------------------------------------------
 
 
-def simple_name(node: ast.expr | None) -> str:
-    """Last dotted component of a name: ``typing.Protocol`` -> ``Protocol``, ``Base[T]`` -> ``Base``."""
-    if isinstance(node, ast.Call):
-        node = node.func
-    if isinstance(node, ast.Subscript):
-        node = node.value
-    if isinstance(node, ast.Name):
-        return node.id
-    return node.attr if isinstance(node, ast.Attribute) else ""
-
-
 def is_protocol(cls: ast.ClassDef) -> bool:
     """True when ``Protocol`` (or ``Protocol[T]``) is among the explicit bases."""
     return any(simple_name(base) == "Protocol" for base in cls.bases)
-
-
-def is_dunder(name: str) -> bool:
-    """True for ``__name__``-style names."""
-    return len(name) > 4 and name.startswith("__") and name.endswith("__")
-
-
-def is_stub_statement(stmt: ast.stmt) -> bool:
-    """Docstring, ``pass``, ``...`` or ``raise NotImplementedError``: no behaviour."""
-    if isinstance(stmt, ast.Raise):
-        return simple_name(stmt.exc) == "NotImplementedError"
-    is_literal = isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Constant)
-    return isinstance(stmt, ast.Pass) or is_literal
-
-
-def receiver_of(fn: FunctionNode) -> str | None:
-    """Name of the first positional parameter (``self`` by convention), if any."""
-    positional = fn.args.posonlyargs + fn.args.args
-    return positional[0].arg if positional else None
 
 
 def is_graph_method(fn: FunctionNode) -> bool:
@@ -126,7 +113,7 @@ def is_graph_method(fn: FunctionNode) -> bool:
     decorators = {simple_name(decorator) for decorator in fn.decorator_list}
     if decorators & UNBOUND_DECORATORS or is_dunder(fn.name) or receiver_of(fn) is None:
         return False
-    return not all(is_stub_statement(stmt) for stmt in fn.body)
+    return not is_stub_body(fn.body)
 
 
 def receiver_references(fn: FunctionNode) -> set[str]:
@@ -238,37 +225,6 @@ def module_cohesion(name: str, tree: ast.Module) -> Iterator[ClassCohesion]:
 
 
 # --- files and CLI -----------------------------------------------------------------------
-# Kept in step with the file walk in detect_smells.py: each script must run standalone.
-
-
-def iter_python_files(paths: Sequence[Path]) -> Iterator[Path]:
-    """Files named explicitly, plus every ``*.py`` under each directory."""
-    for path in paths:
-        if path.is_dir():
-            yield from walk_python_files(path)
-        else:
-            yield path
-
-
-def walk_python_files(root: Path) -> Iterator[Path]:
-    """``*.py`` files under ``root`` in sorted order, skipping tool and vendor directories."""
-    for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = sorted(
-            d for d in dirnames if not d.startswith(".") and d not in SKIPPED_DIR_NAMES
-        )
-        yield from (Path(dirpath) / name for name in sorted(filenames) if name.endswith(".py"))
-
-
-def parse_module(path: Path) -> ast.Module | None:
-    """Parse one file, or report it on stderr and return None."""
-    try:
-        source = path.read_bytes()
-        with warnings.catch_warnings():  # the scanned code's own warnings are not ours to print
-            warnings.simplefilter("ignore")
-            return ast.parse(source, filename=str(path))
-    except (OSError, SyntaxError, ValueError, RecursionError) as error:
-        print(f"lcom4_clusters.py: skipped {path}: {error}", file=sys.stderr)
-        return None
 
 
 def scan(paths: Sequence[Path], *, include_cohesive: bool = False) -> list[dict[str, object]]:
@@ -277,28 +233,17 @@ def scan(paths: Sequence[Path], *, include_cohesive: bool = False) -> list[dict[
     >>> scan([Path("pkg")])  # doctest: +SKIP
     [{'class': 'Shop', 'file': 'pkg/shop.py', 'line': 3, 'lcom4': 2, 'clusters': [...]}]
     """
-    files = sorted({path.as_posix(): path for path in iter_python_files(paths)}.items())
-    parsed = [(name, parse_module(path)) for name, path in files]
-    found = [
-        item for name, tree in parsed if tree is not None for item in module_cohesion(name, tree)
-    ]
+    modules = load_modules(paths, PROG)
+    found = [item for name, tree in modules for item in module_cohesion(name, tree)]
     kept = [item for item in found if include_cohesive or len(item.clusters) > 1]
     kept.sort(key=lambda item: (item.file, item.line, item.qualname))
     return [item.to_json() for item in kept]
 
 
-def path_problem(path: Path) -> str | None:
-    """Why ``path`` cannot be scanned, or None when it can."""
-    if not path.exists():
-        return f"no such file or directory: {path}"
-    mode = os.R_OK | (os.X_OK if path.is_dir() else 0)
-    return None if os.access(path, mode) else f"cannot read: {path}"
-
-
 def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     """Command-line interface; argparse exits with status 2 on a usage error."""
     parser = argparse.ArgumentParser(
-        prog="lcom4_clusters.py",
+        prog=PROG,
         description="Print the LCOM4 method clusters of Python classes as a JSON array.",
     )
     parser.add_argument(
@@ -314,9 +259,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Entry point: scan the given paths and print JSON; returns the exit status."""
     args = parse_args(argv)
     paths = [Path(raw) for raw in args.paths]
-    problems = [problem for problem in map(path_problem, paths) if problem]
-    if problems:
-        print(f"lcom4_clusters.py: error: {problems[0]}", file=sys.stderr)
+    if report_unreadable(paths, PROG):
         return 2
     print(json.dumps(scan(paths, include_cohesive=args.all), indent=2))
     return 0
