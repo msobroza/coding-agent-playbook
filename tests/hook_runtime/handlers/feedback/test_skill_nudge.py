@@ -65,11 +65,13 @@ def _line(skill_id: str) -> str:
     return f"Conventions for this file: skill {skill_id}."
 
 
-#: Every core skill with members, as in the reference probe (FastAPI + pytest + ML):
+#: Every core skill with members, every gate open (the pack installs each core rule):
 #: ``**/*.py`` reaches ml-data, python-coding and python-tooling; tests reach python-testing.
-#: web-application ranks first on ``src/app.py``: fastapi-app-wiring's ``**/app.py`` is the
-#: most specific glob that matched (D41); the ``**/*.py`` ties keep config order.
+#: domino-apps and web-application rank first on ``src/app.py``: their ``**/app.py`` globs
+#: (the Domino App rules, fastapi-app-wiring) are the most specific that matched (D41);
+#: the ties keep config order.
 SOURCE_LINES: Final = [
+    _line("domino-apps"),
     _line("web-application"),
     _line("ml-data"),
     _line("python-coding"),
@@ -120,9 +122,10 @@ def test_test_file_names_testing_and_coding_once_each(
     source = edit(repo, deps(), APP, state=state)
     again = edit(repo, deps(), TEST_APP, state=state)
 
-    # D41: tests/**/*.py ranks python-testing and web-application (fastapi-app-wiring) first.
-    assert context(first) == [_line("python-testing"), *SOURCE_LINES]
-    assert source.trace.combined.decision is Decision.NONE
+    # D41: tests/**/*.py ranks python-testing and web-application (fastapi-app-wiring) first;
+    # no Domino App glob matches a test file, so only domino-apps is left for the source.
+    assert context(first) == [_line("python-testing"), *SOURCE_LINES[1:]]
+    assert context(source) == [_line("domino-apps")]
     assert again.trace.combined.decision is Decision.NONE
 
 

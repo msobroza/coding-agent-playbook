@@ -29,6 +29,8 @@ from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.config.files import FileSystemStateSource
+from coding_agent_playbook.detector.facts import detect
+from coding_agent_playbook.detector.predicate import evaluate_predicate
 from coding_agent_playbook.hooks.guardrails_skill import (
     GUARDRAILS_SKILL_ID,
     compose_guardrails_skill,
@@ -72,6 +74,12 @@ WHERE_FROM_PINS: Final[Mapping[str, str]] = {pins.skill_id: pins.where for pins 
 CORE_SKILLS: Final = sorted(PINS_BY_SKILL)
 #: Core members whose gate the reference probe fails (spec 9.6.2).
 PROBE_INACTIVE_MEMBERS: Final = frozenset().union(*(pins.probe_inactive for pins in ALL_PINS))
+#: Core skills the reference probe activates none of: the Domino skills (prU D63).
+PLATFORM_SKILLS: Final = sorted(
+    pins.skill_id for pins in ALL_PINS if set(pins.members) <= pins.probe_inactive
+)
+#: Core skills with at least one member the reference probe activates.
+STANDARD_PROBE_SKILLS: Final = sorted(set(CORE_SKILLS) - set(PLATFORM_SKILLS))
 EVERY_CORE_SKILL: Final = sorted({*CORE_SKILLS, *PLAIN_CORE_SKILL_IDS})
 #: (skill id, rule id) of every rule a pins module pins the frontmatter of.
 PINNED_RULES: Final = sorted((p.skill_id, rule_id) for p in ALL_PINS for rule_id in p.rules)
@@ -369,11 +377,42 @@ def test_pins_modules_cover_exactly_the_core_skills_with_a_playbook_block() -> N
     assert core_rule_skill_ids() == CORE_SKILLS, "one tests/core_skill_pins module per such skill"
 
 
-@pytest.mark.parametrize("skill_id", CORE_SKILLS)
+@pytest.mark.parametrize("skill_id", STANDARD_PROBE_SKILLS)
 def test_reference_probe_emits_each_core_skill_within_budget(
     reference_probe_repo: Path, skill_id: str
 ) -> None:
-    frontmatter, body = split_frontmatter(_probe_skill_md(reference_probe_repo, skill_id))
+    _assert_emitted_within_budget(reference_probe_repo, skill_id, _probe_members(skill_id))
+
+
+@pytest.mark.parametrize("skill_id", PLATFORM_SKILLS)
+def test_domino_probe_emits_each_platform_skill_within_budget(
+    domino_probe_repo: Path, skill_id: str
+) -> None:
+    """prU D63: a skill whose every member gates on the platform is checked on the Domino probe."""
+    members = _active_members(skill_id, domino_probe_repo)
+    assert members, f"{skill_id}: the Domino probe activates none of its members"
+    _assert_emitted_within_budget(domino_probe_repo, skill_id, members)
+
+
+@pytest.mark.parametrize("skill_id", PLATFORM_SKILLS)
+def test_reference_probe_emits_no_platform_skill(reference_probe_repo: Path, skill_id: str) -> None:
+    """prU L0-20: the standard probe carries no Domino marker, so no platform skill is written."""
+    assert not (reference_probe_repo / ".claude" / "skills" / skill_id).exists(), skill_id
+
+
+def _active_members(skill_id: str, repo: Path) -> list[Rule]:
+    """The members of ``skill_id`` whose ``applies_if`` passes on ``repo``'s detected facts."""
+    facts = detect(repo)
+    return [
+        rule
+        for rule in _members(skill_id)
+        if evaluate_predicate(dict(rule.frontmatter.applies_if), facts, repo_root=repo)
+    ]
+
+
+def _assert_emitted_within_budget(repo: Path, skill_id: str, members: list[Rule]) -> None:
+    """The probe's ``SKILL.md`` of ``skill_id``: description shape and one index line per member."""
+    frontmatter, body = split_frontmatter(_probe_skill_md(repo, skill_id))
     authored = _authored(skill_id)[0]
     block = authored["playbook"]
     assert isinstance(block, dict)
@@ -386,7 +425,6 @@ def test_reference_probe_emits_each_core_skill_within_budget(
     assert description.endswith(f"Use when {block['use_when']}.")
     assert description.count(" Use when ") == 1
     assert not _TRUNCATION_TAIL.search(description), f"{skill_id} truncates: {description!r}"
-    members = _probe_members(skill_id)
     if block.get("sections"):
         # A sectioned skill's Covers clause names its active sections, not its members (D17).
         covers = description.partition(" Covers ")[2].partition(". Use when ")[0].lower()
@@ -411,9 +449,20 @@ def test_reference_probe_where_section_lists_every_core_skill(reference_probe_re
     for relative in ("AGENTS.md", CLAUDE_RULES_PATH):
         text = (reference_probe_repo / relative).read_text(encoding="utf-8")
         assert text.count("## Where guidance lives") == 1, relative
-        for skill_id, files in WHERE_FROM_PINS.items():
-            assert f"- {files}: skill `{skill_id}`" in text, f"{relative} lacks {skill_id}"
+        for skill_id in STANDARD_PROBE_SKILLS:
+            line = f"- {WHERE_FROM_PINS[skill_id]}: skill `{skill_id}`"
+            assert line in text, f"{relative} lacks {skill_id}"
+        for skill_id in PLATFORM_SKILLS:
+            assert f"skill `{skill_id}`" not in text, f"{relative} names inactive {skill_id}"
         assert "Lint feedback names a rule id" in text, relative
+
+
+def test_domino_probe_where_section_lists_every_platform_skill(domino_probe_repo: Path) -> None:
+    for relative in ("AGENTS.md", CLAUDE_RULES_PATH):
+        text = (domino_probe_repo / relative).read_text(encoding="utf-8")
+        for skill_id in PLATFORM_SKILLS:
+            line = f"- {WHERE_FROM_PINS[skill_id]}: skill `{skill_id}`"
+            assert line in text, f"{relative} lacks {skill_id}"
 
 
 def test_reference_probe_writes_the_guardrails_skill_to_opencode_and_agents_roots_only(

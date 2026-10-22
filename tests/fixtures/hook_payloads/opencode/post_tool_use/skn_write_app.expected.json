@@ -51,6 +51,7 @@
   "result": {
     "decision": "context",
     "context": [
+      "Conventions for this file: skill domino-apps.",
       "Conventions for this file: skill web-application.",
       "Conventions for this file: skill ml-data.",
       "Conventions for this file: skill python-coding.",
@@ -58,7 +59,7 @@
     ]
   },
   "wire": {
-    "stdout": "{\"v\":1,\"decision\":\"context\",\"reason\":\"\",\"context\":[\"Conventions for this file: skill web-application.\",\"Conventions for this file: skill ml-data.\",\"Conventions for this file: skill python-coding.\",\"Conventions for this file: skill python-tooling.\"],\"notice\":\"\"}\n",
+    "stdout": "{\"v\":1,\"decision\":\"context\",\"reason\":\"\",\"context\":[\"Conventions for this file: skill domino-apps.\",\"Conventions for this file: skill web-application.\",\"Conventions for this file: skill ml-data.\",\"Conventions for this file: skill python-coding.\",\"Conventions for this file: skill python-tooling.\"],\"notice\":\"\"}\n",
     "stderr": "",
     "exit_code": 0
   }

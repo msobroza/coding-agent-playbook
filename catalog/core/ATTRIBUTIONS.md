@@ -30,6 +30,12 @@ credited by name only. No sentences or examples from the article are copied;
 the ideas are restated in the engine's own words as general clean-code
 principles.
 
+The domino-apps skill distills facts from the Domino Data Lab 6.2 user and
+admin documentation, which carries no open license. It is credited by name
+only and not vendored: no sentences or examples are copied, the guidance is
+restated in the engine's own words, and its files are listed below as
+engine-written.
+
 ## python-best-practices
 
 Source: the "python-best-practices" agent skills by Ludo Technologies LLC, tag v0.8.0.
@@ -178,6 +184,16 @@ that comes to hold vendored text moves from here into its source's table.
 ### domino-agents
 
 ### domino-apps
+
+- `SKILL.md`
+- `rules/domino-app-external-persistence.md`
+- `rules/domino-app-concurrent-writes.md`
+- `rules/domino-app-replica-state.md`
+- `rules/domino-app-dash.md`
+- `rules/domino-app-flask.md`
+- `rules/domino-app-streamlit.md`
+- `rules/domino-app-shiny.md`
+- `rules/domino-app-static-site.md`
 
 ### domino-jobs
 
