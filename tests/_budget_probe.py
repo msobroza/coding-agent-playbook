@@ -41,6 +41,13 @@ if TYPE_CHECKING:
 #: prU D18 as amended by D54 (6,000 -> 6,500 -> 7,000): core plus EACH bundled plugin's
 #: skill listing, on the reference probe and in the per-plugin listing test.
 LISTING_MAX_CHARS: Final = 7000
+#: Each core skill's composed description; the per-skill cap D18/D54 leave unchanged.
+CORE_DESCRIPTION_MAX_CHARS: Final = 300
+#: prU D18 as amended by D54 (2,000 -> 2,400 -> 2,800); the per-skill cap above stays.
+CORE_DESCRIPTIONS_MAX_CHARS: Final = 2800
+#: prU D59: the Domino probe's own caps, the worst case once the Domino skills apply.
+DOMINO_CORE_DESCRIPTIONS_MAX_CHARS: Final = 3400
+DOMINO_LISTING_MAX_CHARS: Final = 7500
 
 REFERENCE_PROBE_PYPROJECT: Final = """\
 [project]
