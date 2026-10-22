@@ -221,6 +221,8 @@ function integrateTicket(t, sha, earlier) {
 async function pumpIntegration() {
   if (integrating || integrationQueue.length === 0) return
   integrating = true
+  // Let tickets queued in the same instant (a restart's integrate-only tickets) join this batch.
+  for (let i = 0; i < 20; i++) await Promise.resolve()
   integrationQueue.sort((a, b) => (b.t.priority || 0) - (a.t.priority || 0))
   const batch = integrationQueue.splice(0, MAX_BATCH)
   batchCount += 1
