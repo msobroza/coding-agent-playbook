@@ -715,7 +715,7 @@ Lint feedback names a rule id; that rule's reference in the skill has the fix.
 
 ---
 ```
-The Claude Code adapter concatenates the rules that name no skill into one rules file, `.claude/rules/coding-agent-playbook.md`, then the generated `## Where guidance lives` section, and leaves `.claude/CLAUDE.md` a rule-free stub (§10.3.1). A member rule (a scoped rule that names a skill in `skill:`, every scoped rule in core among them) is not in this file: it is a reference of that skill (§6.1.6, `docs/adr/0001-scoped-rules-are-delivered-as-skill-references.md`). Each section gets a `## {name}` heading and, for scoped rules, their globs in italics; the italic line is advisory only. The body follows verbatim — its own headings, a leading `# ` title included, are not demoted.
+The Claude Code adapter concatenates the rules that name no skill into one rules file, `.claude/rules/coding-agent-playbook.md`, then the generated `## Where guidance lives` section, and leaves `.claude/CLAUDE.md` a rule-free stub (§10.3.1). A member rule (a scoped rule that names a skill in `skill:`, every scoped rule in core among them) is not in this file: it is a reference of that skill (§6.1.6, `docs/adr/0001-scoped-rules-are-delivered-as-skill-references.md`). Each always-rule section gets a `## {name}` heading. The body follows verbatim — its own headings, a leading `# ` title included, are not demoted.
 #### 6.1.5 Rendered output for AGENTS.md: section
 Same shape as the Claude Code rules file, plus the Guardrails section (§10.4). Identical rule sections and the same `## Where guidance lives` section, byte for byte.
 #### 6.1.6 Rendered output as a skill reference: `.claude/skills/python-coding/references/python-typing.md`
