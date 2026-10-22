@@ -8,6 +8,9 @@ one unmapped slot, so it ties with no mapped rule. The classes section's mapped
 rules fill every slot from 60 to 66, so ``python-classes-and-protocols`` keeps
 its successor ``python-protocols``'s 61 and sorts after it by id.
 
+The effects section is vendored (C-python-coding-03): its seven rules are
+pinned at the mapping's priorities 48-54.
+
 The asyncio and pydantic sections are vendored (C-python-coding-04): the four
 async rules take 55-58 and the six pydantic rules share the HIGH band's last
 slot, 59, so they sort by id. ``pydantic-typed-settings`` gates on
@@ -31,8 +34,11 @@ PINS: Final = CoreSkillPins(
         "python-docstrings",
         "python-dependency-injection",
         "python-pure-core",
+        "python-no-global-singletons",
         "python-context-managers",
+        "python-parameterized-queries",
         "python-retries-and-timeouts",
+        "python-custom-context-managers",
         "python-async",
         "python-async-tasks",
         "python-async-fanout",
@@ -61,6 +67,62 @@ PINS: Final = CoreSkillPins(
         "idioms",
     ),
     rules={
+        "python-dependency-injection": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=48,
+            name="Dependency injection",
+            tags=("python", "design", "di"),
+            section="effects",
+        ),
+        "python-pure-core": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=49,
+            name="Pure core",
+            tags=("python", "design", "testability"),
+            section="effects",
+        ),
+        "python-no-global-singletons": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=50,
+            name="No global singletons",
+            tags=("python", "design", "di"),
+            section="effects",
+        ),
+        "python-context-managers": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=51,
+            name="Context managers",
+            tags=("python", "resources"),
+            section="effects",
+        ),
+        "python-parameterized-queries": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=52,
+            name="Parameterized queries",
+            tags=("python", "sql", "security"),
+            section="effects",
+        ),
+        "python-retries-and-timeouts": RulePin(
+            applies_if={"any_framework": ["requests", "httpx", "aiohttp"]},
+            globs=_PY_FILES,
+            priority=53,
+            name="Timeouts and retries",
+            tags=("python", "network", "resilience"),
+            section="effects",
+        ),
+        "python-custom-context-managers": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=54,
+            name="Custom context managers",
+            tags=("python", "resources"),
+            section="effects",
+        ),
         "python-performance-idioms": RulePin(
             applies_if={},
             globs=_PY_FILES,

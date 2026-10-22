@@ -1,7 +1,7 @@
 ---
 id: python-context-managers
 name: Context managers
-description: "Bind every releasable resource to a with block; turn repeated try/finally into context managers that never swallow errors."
+description: "Bind every releasable resource to a with or async with block, and commit a transaction only after its block succeeds."
 version: 1
 scope: scoped
 globs:
@@ -11,32 +11,69 @@ priority: 51
 tags: [python, resources]
 ---
 
-# Resource lifetime via context managers
+# Resource management with `with` and `async with`
 
-A resource that is released only on the happy path leaks the first time something raises. Tie each resource's lifetime to a `with` block so release happens on every exit path.
+## Description
 
-## Acquire with `with`
+Files, DB connections and sessions, locks, sockets, HTTP clients and responses, and temporary directories are acquired with `with` or `async with`, never closed by hand after the work. A resource released only on the happy path leaks the first time something raises; a `with` block releases it on every exit path and keeps cleanup out of the business logic.
 
-- Files, DB connections and sessions, locks, sockets, HTTP clients and temporary directories are acquired with `with` or `async with`, never closed by hand after the work. Some drivers' own `with` ends the transaction, not the connection (`with sqlite3.connect(...)` commits or rolls back and leaves it open); wrap those in `contextlib.closing(...)`.
-- A fixed set of resources goes in one parenthesized `with (open_a() as a, open_b() as b):`. When the count is known only at runtime, use `contextlib.ExitStack` or `AsyncExitStack`.
+## Bad Example
+
+```python
+def fetch_users(db_path: Path) -> list[User]:
+    connection = sqlite3.connect(db_path)
+    rows = connection.execute("SELECT id, email FROM users").fetchall()  # if this raises...
+    connection.close()  # ...this never runs
+    return [User(*row) for row in rows]
+
+
+async def fetch_report(url: str) -> Report:
+    session = aiohttp.ClientSession()  # no timeout, and leaked on any error
+    response = await session.get(url)
+    payload = await response.json()
+    await session.close()
+    return Report.from_payload(payload)
+```
+
+## Good Example
+
+```python
+from contextlib import closing
+from pathlib import Path
+
+
+def fetch_users(db_path: Path) -> list[User]:
+    with closing(sqlite3.connect(db_path)) as connection:
+        rows = connection.execute("SELECT id, email FROM users").fetchall()
+    return [User(*row) for row in rows]  # compute after the resource is released
+
+
+async def fetch_report(session: aiohttp.ClientSession, url: str) -> Report:
+    async with session.get(url) as response:  # the caller owns the session
+        response.raise_for_status()
+        return Report.from_payload(await response.json())
+
+
+async def main(settings: Settings) -> None:
+    timeout = aiohttp.ClientTimeout(total=settings.http_timeout_seconds)
+    async with (
+        aiohttp.ClientSession(timeout=timeout) as session,
+        open_pool(settings.database_dsn) as pool,
+    ):
+        await store_report(pool, await fetch_report(session, settings.report_url))
+```
+
+## Notes
+
+- Some drivers' own `with` ends the transaction, not the connection (`with sqlite3.connect(...)` commits or rolls back and leaves it open); wrap those in `contextlib.closing(...)`.
+- A fixed set of resources goes in one parenthesized `with (open_a() as a, open_b() as b):`, which needs Python 3.10. When the count is known only at runtime, use `contextlib.ExitStack` or `AsyncExitStack`; it exits them in reverse order.
 - Keep a read's block narrow: compute and raise domain errors after the resource is released. Inside a transaction or under a lock, check and raise inside the block, so the writes roll back and nothing changes between the check and the act.
-
-## Extract repeated setup and teardown
-
-- The second time the same acquire, `try`/`finally`, release shape appears, extract a context manager.
-- Stateless: `@contextlib.contextmanager` (or `@asynccontextmanager`) with the `yield` inside `try`/`finally`, annotated `-> Iterator[T]` or `-> AsyncIterator[T]`. Configured or stateful: a class with `__enter__`/`__exit__`.
-- Teardown must cope with partial setup, because acquisition itself can fail: guard handles that may never have been assigned.
-- Don't wrap an operation that needs no cleanup in a context manager.
-
-## Never swallow errors
-
 - `__exit__` never returns `True` to hide an exception. When ignoring one specific error is the intent, write `contextlib.suppress(SpecificError)`.
-- A transaction commits only after the block succeeds. On any other exit, an exception or an interrupt, it rolls back in `finally` and lets the exception propagate. Never commit in `finally`.
-- Restore temporarily changed global state (working directory, environment variables, a patched attribute) in `finally`, so a failure inside the block cannot leave it changed.
+- A transaction commits only after the block succeeds. On any other exit, an exception or an interrupt, it rolls back in `finally` and lets the exception propagate; never commit in `finally`:
 
 ```python
 @contextmanager
-def transaction(conn: Connection) -> Iterator[Connection]:
+def transaction(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
     committed = False
     try:
         yield conn
@@ -46,3 +83,6 @@ def transaction(conn: Connection) -> Iterator[Connection]:
         if not committed:  # an error or an interrupt: undo, then let it propagate
             conn.rollback()
 ```
+
+- Restore temporarily changed global state (working directory, environment variables, a patched attribute) in `finally`, so a failure inside the block cannot leave it changed.
+- Writing a new context manager, with a class or `@contextmanager`, is `python-custom-context-managers`.
