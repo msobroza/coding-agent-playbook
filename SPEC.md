@@ -1215,6 +1215,8 @@ class Skill:
     member_references: tuple[MemberReference, ...] = ()  # active member rules, set at sync
     source_dir: Path | None = None  # its directory, for validate (prU D47)
     listed_references: tuple[ListedReference, ...] = ()  # gated playbook.references, set at sync
+    examples_dir: Path | None = None  # synced like scripts/ and references/ (prU D48)
+    withheld_paths: tuple[str, ...] = ()  # entries whose applies_if failed: not written (D58)
     ...
 
 

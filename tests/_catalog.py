@@ -100,6 +100,19 @@ def plugin_root(name: str) -> Path:
     return PLUGINS_ROOT / name
 
 
+def core_skill_root(skill_id: str) -> Path:
+    """Return core skill ``skill_id``'s directory, the core twin of :func:`plugin_root`.
+
+    Script tests under ``tests/core_skills/<skill_snake>/`` load the skill's
+    ``scripts/`` from here (prU L0-13).
+
+    Example::
+
+        core_skill_root("python-coding") / "scripts" / "detect_smells.py"
+    """
+    return CORE_ROOT / "skills" / skill_id
+
+
 def plugin_files_root(name: str) -> Path:
     """Return bundled plugin *name*'s top directory, holding ``LICENSE`` and ``ATTRIBUTIONS.md``.
 

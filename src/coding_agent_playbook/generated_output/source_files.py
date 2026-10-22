@@ -1,4 +1,4 @@
-"""Which files of a skill's ``scripts/`` and ``references/`` a sync copies (SPEC §10.8, §17.3).
+"""Which files of a skill's ``scripts/``, ``references/`` and ``examples/`` a sync copies (SPEC §10.8, §17.3).
 
 Both native skill writers — the shared ``SkillWriter`` (``.claude/skills/``,
 ``.opencode/skills/``, ``.agents/skills/``) and the ``agent_harness`` adapter
@@ -48,7 +48,7 @@ from coding_agent_playbook.security.files import is_secret_file, user_home
 if TYPE_CHECKING:
     from pathlib import Path, PurePath
 
-    from coding_agent_playbook.artifacts.skill import Skill
+    from coding_agent_playbook.artifacts.skill import SideDirName, Skill
 
 #: Directory names whose whole subtree a sync never copies.
 SKIPPED_DIR_NAMES: frozenset[str] = frozenset({"__pycache__"})
@@ -119,8 +119,35 @@ def copyable_skill_files(src: Path | None, dst_root: Path) -> list[Path]:
     return copyable
 
 
+def published_skill_files(
+    skill: Skill, name: SideDirName, dst_root: Path
+) -> list[tuple[Path, Path]]:
+    """``(source file, destination)`` for each file of ``skill``'s side dir ``name`` a sync writes.
+
+    :func:`copyable_skill_files` of the side dir (``scripts``, ``references`` or
+    ``examples``), minus the files a ``playbook.references`` entry whose
+    ``applies_if`` failed withholds (``Skill.is_withheld``, prU D48, D58).
+    ``[]`` when the skill has no such dir; ``ValueError`` (from
+    ``Skill.side_dir``) for a name that is no side dir.
+
+    Example::
+
+        for src, dst in published_skill_files(skill, "examples", skill_dir / "examples"):
+            ...  # copy src to dst
+    """
+    src_root = skill.side_dir(name)
+    if src_root is None:
+        return []
+    pairs = [(src, src.relative_to(src_root)) for src in copyable_skill_files(src_root, dst_root)]
+    return [
+        (src, dst_root / relative)
+        for src, relative in pairs
+        if not skill.is_withheld(f"{name}/{relative.as_posix()}")
+    ]
+
+
 def refused_skill_files(skill: Skill) -> list[RefusedSkillFile]:
-    """The files of ``skill``'s ``scripts/`` and ``references/`` no copy will publish.
+    """The files of ``skill``'s ``scripts/``, ``references/`` and ``examples/`` no copy will publish.
 
     Example::
 
@@ -128,7 +155,7 @@ def refused_skill_files(skill: Skill) -> list[RefusedSkillFile]:
     """
     home = user_home()
     refused: list[RefusedSkillFile] = []
-    for src in (skill.scripts_dir, skill.references_dir):
+    for _, src in skill.side_dirs():
         if src is not None and src.is_dir():
             refused.extend(_partition(src, home=home)[1])
     return refused

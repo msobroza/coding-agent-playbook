@@ -102,7 +102,9 @@ def compose_skills(
     ``(priority, id)``; in a skill that declares sections, by section first,
     members in no declared section last (D17, D42). The skill's
     ``listed_references`` are its ``playbook.references`` entries whose
-    ``applies_if`` passes ``reference_applies`` (D47). Never mutates its inputs.
+    ``applies_if`` passes ``reference_applies`` (D47); the paths of the others
+    are its ``withheld_paths``, which no writer copies (D48, D58). Never mutates
+    its inputs.
     Example::
 
         skills = compose_skills(ctx.skills_resolved, ctx.rules_resolved, rendered_rules)
@@ -201,30 +203,36 @@ def _composed_skill(
         (member_reference(rule, sections) for rule in active),
         key=lambda member: rank(member.section),
     )  # stable: (priority, id) order holds within a section
+    listed, withheld = _gated_references(skill, reference_applies)
     return dataclasses.replace(
-        skill,
-        member_references=tuple(members),
-        listed_references=_listed_references(skill, reference_applies),
+        skill, member_references=tuple(members), listed_references=listed, withheld_paths=withheld
     )
 
 
-def _listed_references(
+def _gated_references(
     skill: Skill, reference_applies: ReferenceGate
-) -> tuple[ListedReference, ...]:
-    """The ``playbook.references`` entries whose ``applies_if`` passes, in declared order (D47).
+) -> tuple[tuple[ListedReference, ...], tuple[str, ...]]:
+    """The ``playbook.references`` entries split by their gate, each in declared order.
 
-    An entry validate would reject (not a mapping, no string ``path`` or
-    ``open_when``, an ``applies_if`` that is no mapping) is skipped.
+    First the entries whose ``applies_if`` passes, listed under "References and
+    examples" (D47); then the paths of those whose gate fails, whose files sync
+    does not write (D48, D58). An entry validate would reject (not a mapping, no
+    string ``path`` or ``open_when``, an ``applies_if`` that is no mapping) is
+    skipped.
     """
     entries = playbook_block(skill).get(REFERENCES_KEY)
     if not isinstance(entries, list):
-        return ()
-    return tuple(
-        ListedReference(entry["path"], one_line(entry["open_when"]))
-        for entry in entries
-        if _is_listable_entry(entry)
-        and ("applies_if" not in entry or reference_applies(dict(entry["applies_if"])))
-    )
+        return (), ()
+    listed: list[ListedReference] = []
+    withheld: list[str] = []
+    for entry in entries:
+        if not _is_listable_entry(entry):
+            continue
+        if "applies_if" not in entry or reference_applies(dict(entry["applies_if"])):
+            listed.append(ListedReference(entry["path"], one_line(entry["open_when"])))
+        else:
+            withheld.append(entry["path"])
+    return tuple(listed), tuple(withheld)
 
 
 def _is_listable_entry(entry: object) -> TypeGuard[Mapping[str, Any]]:

@@ -482,6 +482,8 @@ def test_skill_dict_roundtrip():
         scripts_dir=Path("skills/demo/scripts"),
         references_dir=None,
         source_package="pkg",
+        examples_dir=Path("skills/demo/examples"),
+        withheld_paths=("examples/cli",),
     )
     assert Skill.from_dict(skill.to_dict()) == skill
 

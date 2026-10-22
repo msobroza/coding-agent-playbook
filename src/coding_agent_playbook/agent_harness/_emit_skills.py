@@ -1,7 +1,7 @@
 """The skill-shaped leaves of the ``agent_harness`` adapter (``specs/prH-agent-harness.md`` §B).
 
 ``skills/<id>/SKILL.md`` (the authored body plus the generated rules index, byte-copied
-``scripts/`` and ``references/``; member rules come from :mod:`._emit_rules`) and
+``scripts/``, ``references/`` and ``examples/``; member rules come from :mod:`._emit_rules`) and
 ``prompts/<slash>/SKILL.md``, each with its manifest entry. AH-2 (#143) moved these
 per-kind emitters out of :class:`~.adapter.AgentHarnessAdapter` to bring it under
 its 400-line budget; they take every input as an argument and hold no state. The
@@ -10,12 +10,13 @@ adapter keeps the prompt-body render (it owns the rule registry) and the routing
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.agent_harness import emitter, manifest
-from coding_agent_playbook.agent_harness.hook_sidecars import copy_scripts
+from coding_agent_playbook.agent_harness.hook_sidecars import copy_script_files
 from coding_agent_playbook.generated_output.output_io import write_output_bytes, write_output_text
-from coding_agent_playbook.generated_output.source_files import copyable_skill_files
+from coding_agent_playbook.generated_output.sentinel import sentinel_line
+from coding_agent_playbook.generated_output.source_files import published_skill_files
 from coding_agent_playbook.rendering.formats import with_sentinel_body
 from coding_agent_playbook.skills.document import emitted_body
 
@@ -24,10 +25,18 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.artifacts.prompt import Prompt
-    from coding_agent_playbook.artifacts.skill import Skill
+    from coding_agent_playbook.artifacts.skill import SideDirName, Skill
 
 #: Skill frontmatter keys the leaf carries natively; every other key goes to the sidecar.
 _NATIVE_SKILL_KEYS = frozenset({"id", "name", "description"})
+#: The pytest config file that keeps a consumer's test run out of the skills' examples.
+_EXAMPLES_CONFTEST: Final = "conftest.py"
+_EXAMPLES_CONFTEST_TEXT: Final = (
+    f"{sentinel_line('hash')}\n"
+    '"""Keep pytest out of the skills\' examples: each runs its tests in its own environment."""\n'
+    "\n"
+    'collect_ignore_glob = ["*/examples"]\n'
+)
 
 
 def emit_skill_leaves(
@@ -38,14 +47,20 @@ def emit_skill_leaves(
     Example: ``written = emit_skill_leaves(self._skills, repo_root, entries)``.
     """
     written: list[Path] = []
+    examples: list[Path] = []
     for skill in skills:
-        written.extend(_emit_skill_leaf(skill, repo_root, entries))
+        leaf, copied_examples = _emit_skill_leaf(skill, repo_root, entries)
+        written.extend(leaf)
+        examples.extend(copied_examples)
+    if examples:
+        written.append(_emit_examples_conftest(repo_root))
     return written
 
 
 def _emit_skill_leaf(
     skill: Skill, repo_root: Path, entries: list[manifest.ManifestEntry]
-) -> list[Path]:
+) -> tuple[list[Path], list[Path]]:
+    """Write one ``skills/<id>/`` leaf: (every path written, the ``examples/`` files among them)."""
     skill_id = str(skill.frontmatter.get("id", "skill"))
     skill_dir = repo_root / "skills" / skill_id
     skill_dir.mkdir(parents=True, exist_ok=True)
@@ -55,10 +70,29 @@ def _emit_skill_leaf(
     skill_md = skill_dir / "SKILL.md"
     # The rules index (prU D46.7) is presentation; the entry keeps the authored body.
     write_output_text(skill_md, with_sentinel_body(frontmatter, emitted_body(skill)))
-    scripts, script_paths = copy_scripts(skill.scripts_dir, skill_dir / "scripts", repo_root)
+    scripts_root = skill_dir / "scripts"
+    scripts, script_paths = copy_script_files(
+        published_skill_files(skill, "scripts", scripts_root), repo_root
+    )
     path = skill_md.relative_to(repo_root).as_posix()
     entries.append(_skill_entry(skill, path, skill_id, name, scripts))
-    return [skill_md, *script_paths, *_copy_references(skill, skill_dir)]
+    references = _copy_side_files(skill, skill_dir, "references")
+    examples = _copy_side_files(skill, skill_dir, "examples")
+    return [skill_md, *script_paths, *references, *examples], examples
+
+
+def _emit_examples_conftest(repo_root: Path) -> Path:
+    """Write ``skills/conftest.py``, which keeps pytest out of every ``skills/<id>/examples/``.
+
+    The native skill roots are dot-directories, which pytest never enters; the
+    harness tree is not, so without this a consumer's plain ``pytest`` would
+    collect an example's tests, which need the example's own environment (prU
+    D48). The file sits outside every skill dir, so the stale scan settles it
+    once no example is left, and the importer never reads it.
+    """
+    target = repo_root / "skills" / _EXAMPLES_CONFTEST
+    write_output_text(target, _EXAMPLES_CONFTEST_TEXT)
+    return target
 
 
 def _skill_entry(
@@ -82,14 +116,14 @@ def _skill_entry(
     )
 
 
-def _copy_references(skill: Skill, skill_dir: Path) -> list[Path]:
-    """Byte-copy the skill's publishable references, filtered like ``scripts/``."""
-    if skill.references_dir is None:
-        return []
-    dst_root = skill_dir / "references"
+def _copy_side_files(skill: Skill, skill_dir: Path, name: SideDirName) -> list[Path]:
+    """Byte-copy the skill's published ``references/`` or ``examples/`` files (prU D48, D58).
+
+    Filtered like ``scripts/``, and a file a failed ``applies_if`` withholds is
+    not written.
+    """
     paths: list[Path] = []
-    for src in copyable_skill_files(skill.references_dir, dst_root):
-        dst = dst_root / src.relative_to(skill.references_dir)
+    for src, dst in published_skill_files(skill, name, skill_dir / name):
         dst.parent.mkdir(parents=True, exist_ok=True)
         write_output_bytes(dst, src.read_bytes())
         paths.append(dst)

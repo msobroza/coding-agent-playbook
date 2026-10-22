@@ -21,7 +21,7 @@ from coding_agent_playbook.catalog.source import FileSystemArtifactSource, _reso
 from coding_agent_playbook.cli import main
 from coding_agent_playbook.evals.prompting import _infer_prompts_dir, _resolve_prompt
 from coding_agent_playbook.validation.preflight import unusable_overlays
-from tests._catalog import CORE_ROOT, core_rule_paths, plugin_root
+from tests._catalog import CORE_ROOT, core_rule_paths, core_skill_root, plugin_root
 from tests.core_skill_pins import ALL_PINS, PLAIN_CORE_SKILL_IDS
 
 if TYPE_CHECKING:
@@ -70,9 +70,19 @@ def test_engine_skills_come_from_catalog_core(tmp_path: Path) -> None:
     assert len(engine_skills) == len(skill_dirs)
     skills_root = (CORE_ROOT / "skills").resolve()
     for skill in engine_skills:
-        assert skill.references_dir is None and skill.scripts_dir is None, skill.frontmatter
-        skill_md = skills_root / str(skill.frontmatter["id"]) / "SKILL.md"
-        assert skill_md.is_file(), f"engine skill {skill.frontmatter['id']!r} is not {skill_md}"
+        skill_dir = skills_root / str(skill.frontmatter["id"])
+        assert (skill_dir / "SKILL.md").is_file(), (
+            f"engine skill {skill_dir.name!r} has no SKILL.md"
+        )
+        # prU D2, D19, D25, D48: a core skill may ship references/, scripts/ and examples/.
+        for name, side_dir in skill.side_dirs():
+            expected = skill_dir / name if (skill_dir / name).is_dir() else None
+            assert (side_dir and side_dir.resolve()) == expected, (skill_dir.name, name)
+
+
+def test_core_skill_root_is_the_core_twin_of_plugin_root() -> None:
+    """Script tests under tests/core_skills/<skill_snake>/ find their skill through it."""
+    assert core_skill_root("python-coding") == CORE_ROOT / "skills" / "python-coding"
 
 
 def test_pack_names_resolve_to_catalog_plugins(tmp_path: Path) -> None:
