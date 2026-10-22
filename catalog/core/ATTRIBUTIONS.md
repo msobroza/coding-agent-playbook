@@ -32,6 +32,14 @@ the ideas are restated in the engine's own words as general clean-code
 principles. The same article, credited the same way, gave the rationale of the
 python-coding rules on small units, shallow nesting and error messages that
 carry the offending value.
+The rationale of python-coding's `rules/python-meaningful-names.md`
+(names that a search finds, the grep test) distills the same article the same
+way.
+
+python-coding's `rules/python-comments-why.md` distills one idea from the
+matforge article on documentation best practices (comments that give the
+reason), together with the engine owner's standing instruction to comment why,
+not what; it is credited by name only and copies no text.
 
 The domino-apps skill (its SKILL.md and every rule under its rules/
 directory, listed under "Engine-written files") distills facts from the
@@ -101,14 +109,14 @@ Distilled (credited by name only, no vendored text):
 | `skills/web-application/rules/db-parameterized-queries.md` | `rules/python-parameterized-queries.md` | Description, Bad/Good structure and Notes copied and generalized from SQLAlchemy to DB-API drivers: sqlite3 '?' placeholders in the examples, psycopg and asyncpg placeholders in a Note, sort columns from an allow-list mapping, LIKE wildcards and IN lists rewritten for drivers; the FastAPI route, StrEnum and SQLAlchemy specifics are left to sqlalchemy-bound-parameters; the References list is dropped. |
 | `skills/coding-standards/rules/error-no-silent-exceptions.md` | `rules/python-error-handling.md`, `rules/python-error-boundaries.md` | Engine frontmatter (kept id, lint codes and hook link); impact tag rendered from the section; References list dropped. Examples read text with `encoding="utf-8"` and `SettingsError` derives from the project base error. Notes absorb the engine's "what to catch", chaining, `assert` and logging points. The fixed "enable BLE001 and check-typed-exception" settings (line 48) are dropped for "the repo's ruff settings decide". The boundary and documented-fallback notes (lines 45, 47) also feed `python-error-boundaries`. |
 | `skills/coding-standards/rules/design-early-return.md` | `rules/python-early-return.md` | Retitled around shallow nesting (about two levels, one level of abstraction per function). The `Result(status=...)` strings become raised domain errors, and money totals use `Decimal`. The engine's named-predicate loop example joins the Good Example. "Order guards by likelihood for minor performance gains" (line 73) and the References list are dropped. |
+| `skills/coding-standards/rules/doc-type-hints.md` | `rules/python-typing.md.j2`, `rules/python-abstract-inputs.md`, `rules/python-type-aliases.md` | python-typing: the skeleton (Description, Bad/Good, Notes), widened from public APIs to every signature, `include_disabled` made keyword-only, the Bad/Good cut to `find_user`; engine frontmatter and lint codes, the generics and `Self` template branches (D40), the Any ladder, mutable defaults with `ClassVar` and named ignore codes added. python-abstract-inputs: the abstract-collections Note (54). python-type-aliases: the domain-alias Note (55), as NewType ids. The References list is dropped. |
+| `skills/coding-standards/rules/doc-docstring.md` | `rules/python-docstrings.md` | The skeleton (Description, Bad/Good, Notes); the Good Example gains the required usage example, keeps Google sections as optional, makes `capture` keyword-only and is trimmed to one function plus a class line; engine frontmatter and lint codes, the definition of public, the four accepted example forms and units and limits added. The References list is dropped. |
 
 Distilled (credited by name only, no vendored text):
 
 - `rules/python-performance-idioms.md`
 - `rules/python-async.md`
 - `rules/python-classes-and-protocols.md`
-- `rules/python-typing.md.j2`
-- `rules/python-docstrings.md`
 - `rules/python-data-shapes.md`
 - `rules/python-idioms.md`
 - `rules/pydantic-boundaries.md`
@@ -192,16 +200,16 @@ review-architecture, make-testable, characterize, review and refactor prompts.
 | `skills/clean-architecture/references/decorators.md` | `rules/python-retries-and-timeouts.md` | Lines 64-136 (retry decorator and its async version): the decorator form, re-raising the original and awaiting asyncio.sleep become Notes. Dropped: 'catching Exception broadly is acceptable in retry decorators' and exponential backoff by default (102-103) and 'use tenacity in production' (251), because engine retries catch only transient errors at a fixed delay (pca-F2); the re-raise point (104) is kept. |
 | `skills/clean-architecture/references/async-patterns.md` | `rules/python-custom-context-managers.md` | Lines 110-155 (__aenter__/__aexit__, @asynccontextmanager) become the async Note; the unguarded close and the commit inside the session manager are not vendored. |
 | `skills/clean-architecture/references/error-handling.md` | `rules/python-custom-context-managers.md`, `rules/python-error-handling.md`, `rules/python-error-boundaries.md`, `rules/python-custom-exceptions.md` | Lines 129-217 (the finally block, context managers preferred): the try/finally repeated across fetch functions becomes the Bad Example and the 'why a context manager beats try/finally' list the Description; print calls dropped. Dropped: the 'ACCEPTABLE: retry decorator catches Exception' example (93-103), because a retry catches only transient errors (pca-F2) and the unit-of-work rollback form is python-context-managers' committed-flag transaction (pca-F8). Split by topic. Lines 5-44: the custom exceptions inherit the project base error instead of `Exception`, and the unclosed sqlite connection becomes a `with closing(...)` block. Lines 45-92 and 280-324: one `except` clause per failure mode and the "a broad catch hides real bugs" note; "simple subclasses of `Exception`" becomes "subclasses of the project base", and the broad-catch exception follows the engine's surfacing-recovery rule. Lines 104-128, 218-242 and 263-279: fail fast, catch only at entry points, let unknown errors propagate, kept stack-neutral (the FastAPI handler and status mapping belong to the web-application skill). The "acceptable retry decorator catching `Exception`" example (lines 93-103) is dropped. |
-| `commands/make-pythonic.md` | `rules/python-custom-context-managers.md` | Line 26 ('try/finally for resource cleanup' -> context manager) becomes a Note. |
-| `skills/clean-architecture/references/code-quality.md` | `rules/python-custom-context-managers.md`, `rules/python-error-handling.md`, `rules/python-early-return.md` | Lines 180-201 (rule 13's SQLite class whose __exit__ reads a connection never assigned when connect() fails) become the partial-setup Bad case, rewritten with ExitStack and pop_all in the Good Example. Rule 12's blanket "never `except Exception`" is relaxed to the engine's surfacing-recovery rule (lines 160-178); rule 4's deep-nesting example becomes guard clauses and a per-item helper (lines 46-71). |
+| `commands/make-pythonic.md` | `rules/python-custom-context-managers.md`, `rules/python-type-aliases.md` | python-custom-context-managers: line 26 ('try/finally for resource cleanup' -> context manager) becomes a Note. python-type-aliases: the "single-method abstract class -> Callable alias" row (18) became one Note, limited to a real seam; the command's process and argument text are not carried. |
+| `skills/clean-architecture/references/code-quality.md` | `rules/python-custom-context-managers.md`, `rules/python-error-handling.md`, `rules/python-early-return.md`, `rules/python-meaningful-names.md`, `rules/python-typing.md.j2` | python-custom-context-managers, python-error-handling, python-early-return: lines 180-201 (rule 13's SQLite class whose __exit__ reads a connection never assigned when connect() fails) become the partial-setup Bad case, rewritten with ExitStack and pop_all in the Good Example. Rule 12's blanket "never `except Exception`" is relaxed to the engine's surfacing-recovery rule (lines 160-178); rule 4's deep-nesting example becomes guard clauses and a per-item helper (lines 46-71). python-meaningful-names: rule 2 "no vague identifiers" (21-32) became the Bad/Good names and the generic-words Note, rule 21 "no misleading method names" (330-346) the verb Note and the `add_line_item` example; rule 20's review angle (313-329) is left to design-name-for-intent. python-typing: rule 14 "no mutable default arguments" (202-217) confirms the mutable-default paragraph, its untyped `items: list` typed and its fix written as an explicit copy. |
 | `skills/clean-architecture/references/refactoring-case-studies.md` | `rules/python-error-handling.md`, `rules/python-error-boundaries.md`, `rules/python-early-return.md` | Move 8 (lines 210-231): the specific catch now chains with `raise ... from exc`. Move 14 (lines 352-373): "return one type from every path" becomes one Note under the engine's absence convention. Moves 1-2 (lines 15-62): guard clauses with `continue` and a named predicate. |
+| `skills/clean-architecture/references/types-and-type-hints.md` | `rules/python-typing.md.j2`, `rules/python-abstract-inputs.md`, `rules/python-type-aliases.md` | python-typing: the Optional section (155-181) became two Notes (the pipe form instead of Optional, `-> None` for side-effect functions); the 3.12 generic-alias section (441-528) became the template's 3.12 branch with one generic `type` alias, without the float `PriceMap` money alias and the float generic-strategy `Order`; "annotate every function" (608-625) became the Description, its `list[dict[str, float]]` invoice replaced by pbp's typed `find_user`. python-abstract-inputs: the "overly specific types" trade-off (559-562, 579-594) became the Description and the Bad/Good pair, with string ids instead of float prices; the "broadest appropriate type" table (722-732) became the Notes table. python-type-aliases: the Callable section (201-314) became the skeleton, its int discount strategies rewritten as Decimal fee rules (no float money) and joined by NewType ids; "keep type definitions readable" (669-696) became the nested-type Note. Dropped: the type-system theory and hint tutorial (1-154), the float side-by-side (182-200), the cryptic-errors trade-off (529-558) and the int-vs-float `compute_pay` example (563-578), which shows money as float; every course-credit line. |
 
 Distilled (credited by name only, no vendored text):
 
 - `rules/python-data-shapes.md`
 - `rules/python-idioms.md`
 - `rules/python-classes-and-protocols.md`
-- `rules/python-typing.md.j2`
 
 ### python-testing
 
@@ -378,6 +386,7 @@ Upstream text these rules leave out (DROP, with the reason):
 ### python-coding
 
 - `SKILL.md`
+- `rules/python-comments-why.md`
 - `rules/python-error-messages-with-context.md`
 - `rules/python-small-units.md`
 

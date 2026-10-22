@@ -47,8 +47,10 @@ _SKILL_ROOTS = (".claude/skills", ".opencode/skills", _NEW_ROOT)
 #: The python-coding members active on the synthetic repo (requires-python >=3.12, no
 #: dependencies): every member but python-retries-and-timeouts, which needs an HTTP client.
 _SYNTHETIC_PYTHON_CODING_MEMBERS = (
+    "python-abstract-inputs",
     "python-async",
     "python-classes-and-protocols",
+    "python-comments-why",
     "python-context-managers",
     "python-custom-context-managers",
     "python-custom-exceptions",
@@ -60,11 +62,13 @@ _SYNTHETIC_PYTHON_CODING_MEMBERS = (
     "python-error-handling",
     "python-error-messages-with-context",
     "python-idioms",
+    "python-meaningful-names",
     "python-no-global-singletons",
     "python-parameterized-queries",
     "python-performance-idioms",
     "python-pure-core",
     "python-small-units",
+    "python-type-aliases",
     "python-typing",
 )
 #: Every file the pre-v0.21 engine left under ``shared_skills/`` for ``_synced_then_rewound``:
@@ -148,8 +152,7 @@ def test_first_sync_after_upgrade_moves_pristine_shared_skills_tree(
 
     assert _sync.execute(repo, git=FakeGitClient()) == 0
 
-    # query-db's SKILL.md + run.py, python-coding's SKILL.md + its 19 rule files + its
-    # 2 license copies and python-tooling's SKILL.md + its 1 rule file: 26.
+    # The move removes the whole pristine old tree, so the removed count is every file in it.
     assert re.search(rf", {len(_OLD_TREE_FILES)} removed$", capsys.readouterr().out, re.MULTILINE)
     assert not (repo / _OLD_ROOT).exists()
     moved = repo / _NEW_ROOT / "query-db"

@@ -1,13 +1,11 @@
 ---
 id: python-typing
 name: Typing
-description: "Prefer a concrete type or a Protocol to Any, write X | None, and take abstract read-only types as inputs."
+description: "Annotate every signature precisely: a concrete type or a Protocol before Any, X | None, no mutable defaults, and a code on every ignore."
 version: 1
 scope: scoped
 globs:
   - "**/*.py"
-applies_if:
-  python_version: ">=3.11"
 section: types
 priority: 43
 tags: [python, typing]
@@ -18,63 +16,113 @@ lint_codes:
       warn: [UP040, UP046, UP047]
 ---
 
-# Python typing conventions
+# Typing
 
-Type hints aren't decoration — they're the cheapest documentation you can ship. Annotate every function signature, public and private; mypy or pyright keeps you honest.
+## Description
 
-## Generics
+Annotate every function and method signature, public and private: each parameter and the return value. Type hints make the contract machine-checkable, so the type checker catches a wrong argument at the call site before the code runs, and anyone reading the signature, a person or an agent, learns what goes in and what comes out without opening the body.
 
-{% if python_at_least("3.12") %}
-This project targets Python {{ python_version }}, so use **PEP 695** generic syntax. It is concise, scoped to the function/class that needs it, and removes the boilerplate `TypeVar` declarations.
+## Bad Example
 
 ```python
-def first[T](items: list[T]) -> T | None:
+def find_user(user_id, include_disabled=False):
+    row = database.fetch_user(user_id, include_disabled)
+    if row is None:
+        return None
+    return User(row["id"], row["email"], row["enabled"])
+```
+
+## Good Example
+
+```python
+def find_user(user_id: UserId, *, include_disabled: bool = False) -> User | None:
+    row = database.fetch_user(user_id, include_disabled=include_disabled)
+    if row is None:
+        return None
+    return User(row["id"], row["email"], row["enabled"])
+```
+
+{% if python_at_least("3.12") %}
+Write generics in PEP 695 syntax: the type parameters sit on the function, class or `type` alias that uses them, with no `TypeVar` declarations.
+
+```python
+from collections.abc import Callable, Sequence
+
+
+def first[T](items: Sequence[T]) -> T | None:
     return items[0] if items else None
 
 
 class Cache[K, V]:
     def __init__(self) -> None:
         self._store: dict[K, V] = {}
+
+
+type Transform[T] = Callable[[T], T]
 ```
 {% else %}
-This project predates PEP 695. Declare type variables explicitly and reuse them across related signatures.
+Declare each type variable once and reuse it across related signatures.
+
+```python
+from collections.abc import Sequence
+from typing import Generic, TypeVar
+
+T = TypeVar("T")
+K = TypeVar("K")
+V = TypeVar("V")
+
+
+def first(items: Sequence[T]) -> T | None:
+    return items[0] if items else None
+
+
+class Cache(Generic[K, V]):
+    def __init__(self) -> None:
+        self._store: dict[K, V] = {}
+```
+{% endif %}
+
+{% if python_at_least("3.11") %}
+A method that returns its own instance returns `Self`, so a subclass keeps its type:
+
+```python
+from typing import Self
+
+
+class QueryBuilder:
+    def where(self, clause: str) -> Self:
+        self._clauses.append(clause)
+        return self
+```
+{% else %}
+A method that returns its own instance returns a type variable bound to the class, so a subclass keeps its type:
 
 ```python
 from typing import TypeVar
 
-T = TypeVar("T")
+TBuilder = TypeVar("TBuilder", bound="QueryBuilder")
 
-def first(items: list[T]) -> T | None:
-    return items[0] if items else None
+
+class QueryBuilder:
+    def where(self: TBuilder, clause: str) -> TBuilder:
+        self._clauses.append(clause)
+        return self
 ```
 {% endif %}
 
-## `Any` is a fallback, not a default
-
-- Reach for a concrete type first; reach for a `Protocol` second; reach for `object` third; reach for `Any` only when the alternative is making types lie.
-- When you do use `Any`, suppress the corresponding mypy diagnostic with `# type: ignore[<code>]` and a comment that explains *why* a precise type isn't available.
-- Identifiers that must never be mixed up get their own type: `InvoiceId = NewType("InvoiceId", str)` beside `CustomerId`. When the value also needs validation, make it a small value object instead.
-
-## Optional types
-
-- Write `X | None`, not `Optional[X]`. They mean the same thing; the `|` form is shorter and reads top-to-bottom.
-- Never use a mutable default (`[]`, `{}`, `set()`): it is evaluated once, at definition time, and shared by every call. For a read-only input, default to an immutable empty value typed with the abstract type. When the function needs its own mutable copy, default to `None` and copy explicitly. In a dataclass, use `field(default_factory=list)`.
+Never use a mutable default (`[]`, `{}`, `set()`): it is built once, at definition time, and shared by every call. Give a read-only input an immutable default; copy explicitly when the function needs its own list. A mutable class attribute is shared by every instance: set it in `__init__`, or mark deliberate sharing `ClassVar`.
 
 ```python
-def push(items: list[int] = []) -> list[int]:            # avoid: one list shared by all calls
-    ...
+def total(items: Sequence[int] = ()) -> int:  # read-only input: immutable default
+    return sum(items)
 
-def total(items: Sequence[int] = ()) -> int:             # read-only input: immutable default
-    ...
 
-def push(items: list[int] | None = None) -> list[int]:   # needs its own copy
-    items = [] if items is None else list(items)         # never `items or []`
-    ...
-```
+def push(item: int, items: list[int] | None = None) -> list[int]:
+    items = [] if items is None else list(items)  # never `items or []`
+    items.append(item)
+    return items
 
-A mutable class-level default on a plain class is one object shared by every instance. Initialize it in `__init__`, annotate it `ClassVar[...]` when sharing is intended, or use an immutable default.
 
-```python
 class SensorBuffer:
     unit: ClassVar[str] = "celsius"  # shared on purpose
 
@@ -82,19 +130,10 @@ class SensorBuffer:
         self.readings: list[float] = []  # one list per instance
 ```
 
-## Read-only parameters
+## Notes
 
-For function inputs, prefer the abstract read-only types from `collections.abc` over the concrete mutable ones. They communicate *"I won't mutate this"* and accept a broader set of inputs.
-
-| Use this for inputs   | Not this    |
-| --------------------- | ----------- |
-| `Sequence[T]`         | `list[T]`   |
-| `Mapping[K, V]`       | `dict[K, V]`|
-| `Iterable[T]`         | `list[T]`   |
-| `Set[T]` (from `abc`) | `set[T]`    |
-
-Outputs are the opposite: return the concrete type so callers can mutate it freely.
-
-## Tooling
-
-This project runs mypy (or pyright). When you add a deliberate `# type: ignore[...]`, the error code is mandatory — `# type: ignore` with no code silences everything and lets future bugs slip through.
+- `Any` is a fallback, not a default: reach for a concrete type first, a `Protocol` second, `object` third, and `Any` only when a precise type would make the types lie.
+- Write `X | None`, never `Optional[X]`, and annotate a function called only for its side effects `-> None`.
+- A deliberate `# type: ignore` always names its code (`# type: ignore[arg-type]`) and carries a comment saying why no precise type is available; a bare one silences every error.
+- Identifier types (`NewType`) and named `Callable` aliases are `python-type-aliases`; collection types for inputs are `python-abstract-inputs`.
+- For which form each idiom takes on the repo's lowest supported Python, see python-version-idioms.md.

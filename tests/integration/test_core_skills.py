@@ -499,7 +499,8 @@ def test_reference_probe_lockfile_records_member_references_as_rules(
         if rule_id not in PROBE_INACTIVE_MEMBERS
     }
     assert rows == expected
-    # prU D5: no member is written under references/ any more (license copies live there, D19).
+    # prU D5: no member is written under references/ any more; references/ holds
+    # only documents and the license copies (D19).
     assert not [
         e.path
         for e in lockfile.entries

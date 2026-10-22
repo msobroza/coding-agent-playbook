@@ -199,7 +199,6 @@ LEGIBILITY_POINTERS: Final = (
 #: ships one removes it here; the F-02 final-state check needs this empty.
 PENDING_LEGIBILITY_TARGETS: Final = frozenset(
     {
-        "python-meaningful-names",
         "design-dry-yagni-kiss",
         "arch-predictable-project-tree",
         "pytest-first-properties",
