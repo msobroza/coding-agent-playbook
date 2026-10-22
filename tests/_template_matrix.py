@@ -40,7 +40,9 @@ LIBRARY_HELPER_FACTS: Final[Mapping[str, str]] = {
     "has_dependency": "dependencies",
 }
 #: The render helpers that test no library; with :data:`LIBRARY_HELPER_FACTS`, every helper.
-OTHER_HELPERS: Final = frozenset({"python_at_least", "framework_skill", "skill_active"})
+OTHER_HELPERS: Final = frozenset(
+    {"python_at_least", "framework_skill", "skill_active", "rule_active"}
+)
 #: Project metadata -> the values the matrix renders a template that reads it with.
 #: ``playbook init`` may record no description, so both sides of its branch render.
 METADATA_VARIANTS: Final[Mapping[str, tuple[str, ...]]] = {
