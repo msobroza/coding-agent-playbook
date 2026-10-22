@@ -76,7 +76,7 @@ class ConfigError(AppError):  # every domain error derives from the project base
 try:
     config = parse_config(path)
 except ConfigParseError as exc:
-    raise ConfigError(f"invalid configuration in {path!r}") from exc
+    raise ConfigError(f"invalid configuration in {path!r}: expected a TOML table, {exc}") from exc
 
 
 def main() -> int:
@@ -152,11 +152,11 @@ class InvoiceService:
 
 
 # Early return: guard clauses first, the main logic unindented
-def ship(order: Order | None) -> Shipment:
+def ship(order_id: OrderId, order: Order | None) -> Shipment:
     if order is None:
-        raise OrderNotFoundError("order is missing")
+        raise OrderNotFoundError(f"no order with id {order_id!r}")
     if not order.lines:
-        raise EmptyOrderError(order.id)
+        raise EmptyOrderError(f"order {order_id!r} has no lines; expected at least one")
     return Shipment.for_order(order)
 ```
 
