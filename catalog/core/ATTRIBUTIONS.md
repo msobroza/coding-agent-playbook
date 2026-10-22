@@ -30,6 +30,14 @@ credited by name only. No sentences or examples from the article are copied;
 the ideas are restated in the engine's own words as general clean-code
 principles.
 
+The domino-agents skill distills facts from the Domino Data Lab 6.2
+documentation (the agentic-systems, Apps, python-domino and environment
+variable pages) and ideas from the `simple_agent_api_only` example agent by
+Domino Data Lab (Apache-2.0, commit `eee728252c42fa660e65c2dccbea6ae4f679c04c`);
+both are credited by name only. Its rules restate those ideas in the engine's
+own words, with no sentences or code copied from either source, so they are
+listed under "Engine-written files".
+
 ## python-best-practices
 
 Source: the "python-best-practices" agent skills by Ludo Technologies LLC, tag v0.8.0.
@@ -176,6 +184,17 @@ that comes to hold vendored text moves from here into its source's table.
 ### design-patterns
 
 ### domino-agents
+
+- `SKILL.md`
+- `rules/domino-agent-llm-keys.md`
+- `rules/domino-agent-access-token.md`
+- `rules/domino-agent-endpoint-auth.md`
+- `rules/domino-agent-redact-traces.md`
+- `rules/domino-agent-app-factory.md`
+- `rules/domino-agent-chat-endpoint.md`
+- `rules/domino-agent-run-limits.md`
+- `rules/domino-agent-conversation-state.md`
+- `rules/domino-agent-logging.md`
 
 ### domino-apps
 
