@@ -1304,10 +1304,9 @@ lines):
 - L30 (v1.3.1): appended "Only the session driving the map appends to
   `map.md`; a research subagent writes only its own ticket file." (D16).
 - Path edits (document layout, D60, ADR 0006): the intro "live as markdown
-  files in
-  `.scratch/`" became "in `docs/specs/` and `docs/plans/`"; "One feature per
-  directory: `.scratch/<feature-slug>/`" became "One feature per slug, dated
-  when it is created: `YYYY-MM-DD-<feature-slug>`"; the spec
+  files in `.scratch/`" became "in `docs/specs/` and `docs/plans/`"; "One
+  feature per directory: `.scratch/<feature-slug>/`" became "One feature per
+  slug, dated when it is created: `YYYY-MM-DD-<feature-slug>`"; the spec
   `.scratch/<feature-slug>/spec.md` became
   `docs/specs/YYYY-MM-DD-<feature-slug>.md`; the tickets
   `.scratch/<feature-slug>/issues/<NN>-<slug>.md` became
@@ -1362,9 +1361,9 @@ guard line included. `references/` does not travel, so the three seed links
 dangle and the agent writes `docs/agents/*.md` from the prose alone, without the
 seeds' close, blocking and Wayfinding operations conventions, the document
 layout paths, the `.scratch/` and absolute-path rules, the domain-doc consumer
-rules and the label table. No
-licence copy travels and `disable-model-invocation` is dropped, but a Continue
-prompt is always started by the user. The always rule still reaches Continue as
+rules and the label table. No licence copy travels and
+`disable-model-invocation` is dropped, but a Continue prompt is always started
+by the user. The always rule still reaches Continue as
 its own `.continue/rules/` file.
 
 ### tdd
@@ -1631,10 +1630,10 @@ Upstream `skills/engineering/to-tickets/`; synced as
   line (D19).
 - Kept verbatim on purpose: L11 "If not, tell the user to run
   `/setup-matt-pocock-skills`." (human-facing, D17); L21 names the glossary
-  abstractly (no D21 edit); L63 "(GitHub, Linear, …)" names products, not CLIs,
-  and its native
-  blocking relationship now comes from the Blocking section setup records
-  (D13, D14); L65's "blockers are all done" reads as closed under the seed;
+  abstractly (no D21 edit); L63 "(GitHub, Linear, …)" names products, not
+  CLIs, and its native blocking relationship now comes from the Blocking
+  section setup records (D13, D14); L65's "blockers are all done" reads as
+  closed under the seed;
   L71's `# <NN>: <Ticket title>` already is the title heading and L77's
   `**Status:** ready-for-agent` is the bold line the seed's close section
   rewrites in place (D16); L105's "a prototype" is a common noun (D8); L17's

@@ -142,11 +142,10 @@ def _opt_out(repo: Path, *, adapters: tuple[str, ...] = SKILL_ADAPTERS) -> None:
 def _source_body(skill_id: str) -> str:
     """The vendored ``SKILL.md`` body (frontmatter stripped) of a pack skill, as synced.
 
-    The pack's text already names the default document layout and declares no
+    The plugin's text already names the default document layout and declares no
     ``[layout_aliases]`` (D61), so a repo with no ``[layout]`` gets it byte for byte.
     """
-    body = split_frontmatter((SKILLS_ROOT / skill_id / "SKILL.md").read_text(encoding="utf-8"))[1]
-    return body
+    return split_frontmatter((SKILLS_ROOT / skill_id / "SKILL.md").read_text(encoding="utf-8"))[1]
 
 
 # --- read-only: what an opted-in sync writes -----------------------------------

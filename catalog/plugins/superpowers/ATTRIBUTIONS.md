@@ -63,7 +63,7 @@ and the spec and plan paths that follow the engine's document layout:
   marks the pack as a spec-driven framework named `superpowers`. It declares
   no `[layout_aliases]`: the skills' own text names the document layout's
   default paths (next item).
-- **Document layout paths.** The pack writes specs and plans in the engine's
+- **Document layout paths.** The plugin writes specs and plans in the engine's
   shared document layout (`docs/specs/`, `docs/plans/`) instead of upstream's
   `docs/superpowers/specs/` and `docs/superpowers/plans/`, so `playbook sync`
   can move them to a repo's configured `[layout]`. Only the path strings
