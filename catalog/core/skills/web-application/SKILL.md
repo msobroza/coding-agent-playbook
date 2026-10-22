@@ -46,6 +46,11 @@ playbook:
       impact: MEDIUM
       summary: "Keep URLs, query parameters and generated docs predictable for clients."
       open_when: "A route's URL path, version prefix, query parameters, tags, summary or documented responses are added or renamed."
+  references:
+    - path: examples/fastapi-hotel-api
+      open_when: "Laying out a new FastAPI service, or copying one flow end to end from settings to repository, error table and tests."
+      applies_if:
+        has_framework: ["fastapi"]
 ---
 
 # Web application
