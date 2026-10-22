@@ -60,8 +60,9 @@ router = APIRouter(prefix="/invoices", dependencies=[Depends(get_current_user)])
 
 
 class NotFoundError(AppError):  # the project's base exception; mapped to 404 in one table
-    def __init__(self, resource: str) -> None:
-        super().__init__(f"{resource} not found")
+    def __init__(self, resource: str, resource_id: int) -> None:
+        super().__init__(f"{resource} {resource_id} not found")
+        self.resource_id = resource_id
 
 
 async def get_owned_invoice(session: AsyncSession, *, owner_id: int, invoice_id: int) -> Invoice:
@@ -71,7 +72,7 @@ async def get_owned_invoice(session: AsyncSession, *, owner_id: int, invoice_id:
         .options(selectinload(Invoice.lines))
     )
     if invoice is None:
-        raise NotFoundError("Invoice")  # same answer for "missing" and "not yours"
+        raise NotFoundError("Invoice", invoice_id)  # same for "missing" and "not yours"
     return invoice
 
 

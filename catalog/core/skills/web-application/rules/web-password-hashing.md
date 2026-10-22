@@ -50,9 +50,16 @@ async def authenticate(session: AsyncSession, email: str, password: str) -> User
 
 ```python
 import asyncio
+from dataclasses import dataclass
 
 from pwdlib import PasswordHash
 from pydantic import SecretStr
+
+
+@dataclass(frozen=True)
+class PasswordCheck:
+    valid: bool
+    updated_hash: str | None  # set when the stored hash used outdated parameters
 
 
 class PasswordHasher:
@@ -62,28 +69,29 @@ class PasswordHasher:
         self._hash = PasswordHash.recommended()  # Argon2id with current parameters
         self._dummy = self._hash.hash("dummy-password-for-timing")  # at startup, not import
 
-    async def hash(self, password: SecretStr) -> str:
+    async def hash_password(self, password: SecretStr) -> str:
         # Argon2 takes tens of milliseconds of CPU; keep it off the event loop
         return await asyncio.to_thread(self._hash.hash, password.get_secret_value())
 
-    async def verify(self, password: SecretStr, stored: str | None) -> tuple[bool, str | None]:
+    async def verify_password(self, password: SecretStr, stored: str | None) -> PasswordCheck:
         secret = password.get_secret_value()
         if stored is None:
             # Spend the same time as a real check so timing does not reveal valid emails
             await asyncio.to_thread(self._hash.verify, secret, self._dummy)
-            return False, None
-        return await asyncio.to_thread(self._hash.verify_and_update, secret, stored)
+            return PasswordCheck(valid=False, updated_hash=None)
+        valid, updated = await asyncio.to_thread(self._hash.verify_and_update, secret, stored)
+        return PasswordCheck(valid=valid, updated_hash=updated)
 
 
 async def authenticate(
     session: AsyncSession, hasher: PasswordHasher, email: str, password: SecretStr
 ) -> User | None:
     user = await session.scalar(select(User).where(User.email == email))
-    valid, updated_hash = await hasher.verify(password, user.password_hash if user else None)
-    if user is None or not valid:
+    check = await hasher.verify_password(password, user.password_hash if user else None)
+    if user is None or not check.valid:
         return None
-    if updated_hash is not None:  # stored hash used outdated parameters
-        user.password_hash = updated_hash
+    if check.updated_hash is not None:
+        user.password_hash = check.updated_hash
         await session.commit()
     return user
 ```

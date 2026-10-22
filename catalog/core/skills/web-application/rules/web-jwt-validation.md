@@ -62,7 +62,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
 def create_access_token(user_id: int, settings: Settings, now: datetime) -> str:
     claims = {
-        "sub": str(user_id),
+        "sub": str(user_id),  # PyJWT requires a string sub
         "iss": settings.jwt_issuer,
         "aud": settings.jwt_audience,
         "iat": now,
@@ -107,9 +107,8 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 
 ## Notes
 
-- Load the HS256 secret from typed settings as a `SecretStr` with `min_length=32` (pydantic-typed-settings in the python-coding skill); generate it with `secrets.token_urlsafe(32)`.
+- Load the HS256 secret from typed settings as a `SecretStr` with `min_length=32` (python-coding -> pydantic-typed-settings); generate it with `secrets.token_urlsafe(32)`.
 - When other services verify your tokens, use RS256 or ES256 so they only hold the public key; pin `algorithms=["RS256"]` and fetch keys with `jwt.PyJWKClient` from the issuer's JWKS endpoint.
 - JWTs cannot be revoked before `exp`. Keep access tokens short (5-15 minutes), load the user and check `is_active` on each request as above, and use refresh tokens or server-side sessions for long logins.
-- PyJWT requires `sub` to be a string: encode `str(user_id)` and convert back on decode.
 - When the project has no JWT library yet, propose adding PyJWT through the project's package manager, never unasked. With another JWT library (authlib, python-jose), pass the same pinned algorithm list and required claims.
 - If tokens travel in cookies instead of the `Authorization` header, set `HttpOnly`, `Secure`, and `SameSite`, and protect state-changing requests against CSRF.

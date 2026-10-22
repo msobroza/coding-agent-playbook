@@ -50,4 +50,72 @@ playbook:
 
 # Web application
 
-Practices for Python web backends, shown with FastAPI and SQLAlchemy: authenticating callers and authorizing every access to their data, querying and migrating the database safely, keeping the event loop free, shaping request and response schemas and the status codes failures map to, composing the app from a factory and explicit dependency providers, tracing each request through the logs, testing through the real app and database, and keeping URLs, query parameters and generated docs predictable. Line- and function-level Python conventions, Pydantic validation included, stay in the python-coding skill, and test code in general in the python-testing skill.
+Practices for Python web backends: authenticating callers and authorizing every access to their data, querying and migrating the database safely, keeping the event loop free, shaping request and response schemas and the status codes failures map to, composing the app from a factory and explicit dependency providers, tracing each request through the logs, testing through the real app and database, and keeping URLs, query parameters and generated docs predictable.
+
+Examples use one stack: FastAPI, SQLAlchemy with its async API, Alembic, Pydantic with pydantic-settings, httpx, PyJWT and pwdlib. The same rules apply to sync `def` endpoints with `Session`, and the security and database rules hold for Flask, Django and Starlette as well. Line- and function-level Python conventions, Pydantic validation included, stay in the python-coding skill, and test code in general in the python-testing skill; for web code this skill's rule wins where python-coding or python-testing overlap.
+
+## Quick Reference
+
+### Authorized query
+
+```python
+router = APIRouter(prefix="/invoices", dependencies=[Depends(get_current_user)])
+
+
+@router.get("/{invoice_id}")
+async def read_invoice(invoice_id: int, user: CurrentUser, session: SessionDep) -> InvoiceRead:
+    invoice = await session.scalar(
+        select(Invoice).where(Invoice.id == invoice_id, Invoice.owner_id == user.id)  # owner
+    )
+    if invoice is None:
+        raise NotFoundError("Invoice", invoice_id)  # mapped to 404 by one exception handler
+    return InvoiceRead.model_validate(invoice)
+```
+
+### Passwords and tokens
+
+```python
+hasher = PasswordHasher()  # Argon2id via pwdlib, built once by create_app and injected
+hashed = await hasher.hash_password(password)  # runs in a thread, off the event loop
+
+claims = jwt.decode(
+    token,
+    settings.jwt_secret.get_secret_value(),
+    algorithms=["HS256"],
+    audience=settings.jwt_audience,
+    issuer=settings.jwt_issuer,
+    options={"require": ["exp", "iat", "sub", "iss", "aud"]},
+)
+
+reset_token = secrets.token_urlsafe(32)  # store only its SHA-256 hash
+hmac.compare_digest(expected_signature.encode(), presented_signature.encode())
+```
+
+### Settings and CORS
+
+```python
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="APP_")
+
+    jwt_secret: SecretStr = Field(min_length=32)
+    jwt_issuer: str
+    jwt_audience: str
+    access_token_ttl_minutes: int = Field(default=15, gt=0, le=60)
+    cors_origins: list[str] = Field(default_factory=list)
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,  # never ["*"] with allow_credentials=True
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PATCH", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
+)
+```
+
+## See Also
+
+- python-coding: general Python rules; Pydantic validation, typed settings, dependency injection and error handling underlie several rules here.
+- python-architecture: the layers behind the routes and where the web boundary sits.
+- python-testing: test structure, fixtures and test doubles that endpoint tests still follow.
+- python-tooling: ruff, mypy and test-runner configuration; ruff's `S` rules catch several issues covered here.
