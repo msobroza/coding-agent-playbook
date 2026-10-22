@@ -57,10 +57,10 @@ On Domino 6.2 an LLM agent is an App with its own dashboard: one request functio
 
 ```python
 def create_app(settings: AgentSettings) -> FastAPI:
-    agent = build_agent(build_model(config, settings, http_client), config)
+    agent = build_agent(build_model(config, settings, model_client), config)
     tracer = select_tracer(settings)
     app = FastAPI(lifespan=lifespan)
-    app.state.ask = tracer.trace(REQUEST_SPAN_NAME)(make_ask(agent, deps, config))
+    app.state.ask = tracer.trace(REQUEST_SPAN_NAME)(make_ask(agent, AgentDeps(), config))
     return app
 ```
 

@@ -10,6 +10,7 @@ comparison must decide alone whenever the dependency names did not change.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Final
 
 import pytest
@@ -332,8 +333,9 @@ def test_a_new_domino_input_names_the_domino_gated_rule(
 ) -> None:
     """``domino_project`` was baked false; a marker or the committed key turns it on (D63).
 
-    The core Domino skills' members sort before the repo-local rule and the list
-    is capped, so the notice names a core Domino rule first.
+    The core Domino skills' members come before the repo-local ``domino-runs`` and
+    the named list is capped, so the notice names the first core Domino rule and
+    counts the rest, ``domino-runs`` included, as named or "and N more".
     """
     repo.write(rel, text)
     tool_input = {"file_path": str(repo.root / rel), "content": text}
@@ -341,7 +343,18 @@ def test_a_new_domino_input_names_the_domino_gated_rule(
     report = _post(repo, deps(), "Write", tool_input)
 
     [item] = report.trace.combined.context
-    assert 'now applicable but not synced yet: rule "domino-' in item
+    named = re.findall(r'rule "([a-z0-9-]+)" \(source "', item)
+    assert named[0] == "domino-agent-access-token", item
+    assert 'rule "domino-agent-access-token" (source "coding_agent_playbook")' in item
+    hidden = re.search(r" and (\d+) more\.", item)
+    # The repo's own layer is listed too, so this holds the core Domino rules and domino-runs.
+    domino_gated = {
+        rule.frontmatter.id
+        for rule in FileSystemArtifactSource(repo_root=repo.root).list_rules()
+        if "domino_project" in rule.frontmatter.applies_if
+    }
+    assert "domino-runs" in domino_gated
+    assert len(named) + (int(hidden.group(1)) if hidden else 0) == len(domino_gated), item
 
 
 @pytest.mark.parametrize(

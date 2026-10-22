@@ -68,7 +68,13 @@ def create_app(
     return app
 ```
 
-`asgi.py` is the only module that reads the environment: `app = create_app(AgentSettings())`.
+`asgi.py` is the only module that reads the environment, and it configures logging once:
+
+```python
+settings = AgentSettings()
+configure_logging(settings.log_level)
+app = create_app(settings)
+```
 
 ## Notes
 

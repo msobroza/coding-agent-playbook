@@ -1,7 +1,8 @@
 """Pins of core skill ``domino-agents`` (prU D52, D63, C-domino-agents-01).
 
 Every member gates on ``domino_project``, so the reference probe activates none
-and the skill is checked on the Domino probe instead (``domino_only``).
+and the skill is checked on the Domino probe instead (``probe="domino"``), which
+activates every member.
 """
 
 from __future__ import annotations
@@ -44,7 +45,7 @@ PINS: Final = CoreSkillPins(
     skill_id="domino-agents",
     where="Agent service code, launch script, agent config, evaluation Jobs and their tests",
     members=_MEMBERS,
-    probe_inactive=frozenset(_MEMBERS),
+    probe_inactive=frozenset(),
     section_ids=(
         "secrets",
         "service",
@@ -54,7 +55,7 @@ PINS: Final = CoreSkillPins(
         "a2a",
         "testing",
     ),
-    domino_only=True,
+    probe="domino",
     rules={
         "domino-agent-llm-keys": RulePin(
             applies_if=_DOMINO,

@@ -30,13 +30,14 @@ credited by name only. No sentences or examples from the article are copied;
 the ideas are restated in the engine's own words as general clean-code
 principles.
 
-The domino-agents skill distills facts from the Domino Data Lab 6.2
-documentation (the agentic-systems, Apps, python-domino and environment
-variable pages) and ideas from the `simple_agent_api_only` example agent by
-Domino Data Lab (Apache-2.0, commit `eee728252c42fa660e65c2dccbea6ae4f679c04c`);
-both are credited by name only. Its rules restate those ideas in the engine's
-own words, with no sentences or code copied from either source, so they are
-listed under "Engine-written files".
+The domino-agents skill's SKILL.md and rules distill facts from the Domino
+Data Lab 6.2 documentation (the agentic-systems, Apps, python-domino and
+environment variable pages), which carries no open license, and ideas from the
+`simple_agent_api_only` example agent by Domino Data Lab (Apache-2.0, commit
+`eee728252c42fa660e65c2dccbea6ae4f679c04c`). The rules restate those facts and
+ideas in the engine's own words, with no sentences or code copied, so they are
+listed under "Engine-written files", with the upstream files each one draws on
+and the upstream text they leave out.
 
 ## python-best-practices
 
@@ -195,6 +196,46 @@ that comes to hold vendored text moves from here into its source's table.
 - `rules/domino-agent-run-limits.md`
 - `rules/domino-agent-conversation-state.md`
 - `rules/domino-agent-logging.md`
+
+Upstream files each rule draws on (example-agent files by path and lines, 6.2
+documentation pages by guide and page id):
+
+- domino-agent-llm-keys: `ai_system_config.yaml` 1-33, `README.md` 289-296,
+  `dev_eval_simplest_agent.py` 154-164; api_guide/c5ef26, user_guide/baab29.
+- domino-agent-access-token: `README.md` 51-77, 366-370, 420-425,
+  `simplest_agent.py` 84-98, `chat_app.py` 136-137; admin_guide/71d6ad,
+  user_guide/40b91f, api_guide/c5ef26.
+- domino-agent-endpoint-auth: `simplest_agent.py` 80-109, `ai_system_config.yaml`
+  15-33 (the endpoint shape only); user_guide/e038f2, user_guide/5aedde.
+- domino-agent-redact-traces: `chat_app.py` 99-102; api_guide/c5ef26,
+  user_guide/da707d.
+- domino-agent-app-factory: `chat_app.py` 1-84, 121-133, 180-211,
+  `simplest_agent.py` 13-20, 112-128, `app.sh` 1-11, `static/app.js` 4-11;
+  user_guide/5aedde, user_guide/9d3c12.
+- domino-agent-chat-endpoint: `chat_app.py` 87-118, `README.md` 40-49, 81-103;
+  user_guide/5aedde, admin_guide/71d6ad.
+- domino-agent-run-limits: `simplest_agent.py` 116-121, `ai_system_config.yaml`
+  35-38; admin_guide/71d6ad.
+- domino-agent-conversation-state: `chat_app.py` 87-96, 110,
+  `ai_system_config.yaml` 38; user_guide/f46bdc, user_guide/b99d5d.
+- domino-agent-logging: `chat_app.py` 20-21, 115-118, 203-210,
+  `simplest_agent.py` 38, 65, `app.sh` 11, `dev_eval_simplest_agent.py` 31-38;
+  admin_guide/a9e507, user_guide/bb4b24.
+
+Upstream text these rules leave out (DROP, with the reason):
+
+- `ai_system_config.yaml` 15-33, 46-61: commented provider blocks with an
+  internal host and endpoint id, not reproduced (the endpoint URL moves to
+  settings), and unused alternative prompts.
+- `chat_app.py` 27-29, 136-146, 153-177: the static directory constants, the
+  UI-only platform-info route and the static catch-all go with the playground
+  UI; the catch-all's prefix-match check and its 200 for unknown paths are not
+  reproduced.
+- `static/app.js` 1-3, 12-103, 140-217, 234-625: playground UI code; only its
+  relative base-path idea (4-11) is used, as a Note of domino-agent-app-factory.
+- user_guide/5aedde: the page's FastAPI sample is not copied; it builds the
+  agent inside the traced function on every call, and domino-agent-app-factory
+  and domino-agent-endpoint-auth state the safe behavior instead.
 
 ### domino-apps
 

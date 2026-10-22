@@ -62,6 +62,7 @@ async def ask_agent(question: str) -> AgentAnswer:
     logger.info(
         "agent request answered",
         extra={
+            "request_id": current_request_id(),
             "message_chars": len(question),
             "tools": tools,
             "model_requests": result.usage().requests,
@@ -72,7 +73,7 @@ async def ask_agent(question: str) -> AgentAnswer:
 ```
 
 ```python
-# asgi.py: the entry point configures logging once, from settings
+# asgi.py: the only module that reads the environment configures logging once
 settings = AgentSettings()
 configure_logging(settings.log_level)
 app = create_app(settings)
@@ -80,6 +81,6 @@ app = create_app(settings)
 
 ## Notes
 
-- Logging set up once in each entry point on stdout is domino-app-logging (domino-apps) and domino-job-logging (domino-jobs); keeping secrets out of logs is domino-job-logging; request ids are fastapi-request-id-logging (web-application), where the repo uses FastAPI.
+- Logging set up once in each entry point on stdout is domino-app-logging (domino-apps) and domino-job-logging (domino-jobs); keeping secrets out of logs is domino-job-logging; request ids are fastapi-request-id-logging (web-application), where the repo uses FastAPI: its middleware sets the id that `current_request_id()` reads.
 - The agent example's logs.py writes JSON lines, one format among others.
 - See examples/simple-agent-api/app/logs.py and examples/simple-agent-api/app.sh.

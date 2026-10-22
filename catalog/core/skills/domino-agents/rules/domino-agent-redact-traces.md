@@ -47,15 +47,17 @@ class AgentAnswer(TypedDict):
     tools: list[str]
 
 
-def make_ask(agent: Agent[AgentDeps, str], deps: AgentDeps) -> AskAgent:
+def make_ask(agent: Agent[AgentDeps, str], deps: AgentDeps, config: AgentConfig) -> AskAgent:
+    limits = UsageLimits(request_limit=config.request_limit)
+
     async def ask_agent(question: str) -> AgentAnswer:
-        result = await agent.run(question, deps=deps)
+        result = await agent.run(question, deps=deps, usage_limits=limits)
         return {"answer": result.output, "tools": tool_names(result)}
 
     return ask_agent
 ```
 
-The agent's model client holds the token auth flow (domino-agent-endpoint-auth), so the traced function sees only the question.
+The agent's model client holds the token auth flow (domino-agent-endpoint-auth), so the traced function sees only the question; its run limits are domino-agent-run-limits.
 
 ## Notes
 

@@ -7,7 +7,7 @@ Priority = impact band floor (CRITICAL 20, HIGH 40, MEDIUM 60, LOW 80) + the rul
 
 Description (238 characters): Guides LLM agent services deployed on Domino 6.2. Covers secrets and tokens, agent service, configuration, tracing, evaluation, a2a protocol, testing. Use when building, tracing, evaluating or testing an LLM agent API that runs on Domino.
 
-`playbook.files`: Agent service code, launch script, agent config, evaluation Jobs and their tests (shortened from the generated phrase to fit the 80-character cap of validate)
+`playbook.files`: Agent service modules, its launch script and agent config, evaluation Jobs and their tests
 
 | # | Section | Impact | Summary | Open when |
 | --- | --- | --- | --- | --- |
