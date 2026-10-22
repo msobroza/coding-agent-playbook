@@ -36,6 +36,11 @@ playbook:
       impact: MEDIUM
       summary: "Publish pushed code on a pinned environment, share deliberately, preview and log the right way."
       open_when: "An App is published, republished or previewed in a workspace, its viewers are chosen, or App code adds logging."
+  references:
+    - path: references/app-troubleshooting.md
+      open_when: "An App never reaches Running, shows a blank page or a 404/502/504/413, loses data or sessions, or changed after a restart."
+      applies_if:
+        domino_project: true
 ---
 
 # Domino Apps
