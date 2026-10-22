@@ -3,7 +3,8 @@
 The two FastAPI rules re-homed by L0-15, plus the security rules vendored by
 C-web-application-01, the database and async I/O rules vendored by
 C-web-application-02 and the API design, app structure, observability and testing
-rules vendored by C-web-application-03 (mapping-web-application.md order).
+rules vendored by C-web-application-03 and the api-conventions rules vendored by
+C-web-application-04 at the mapping's priorities 63-65 (mapping-web-application.md order).
 """
 
 from __future__ import annotations
@@ -39,6 +40,9 @@ _DB_GLOBS: Final = (
 )
 #: The service-layer glob the mapping repeats.
 _SERVICE_GLOBS: Final = ("**/services/**/*.py",)
+#: The api-conventions rules list the provider and app-entry modules separately.
+_PROVIDER_FILES: Final = ("**/deps.py", "**/dependencies.py")
+_APP_FILES: Final = ("**/main.py", "**/app.py", "**/asgi.py")
 #: The route-module globs the mapping repeats across web-application rules.
 _ROUTE_GLOBS: Final = (
     "**/routers/**/*.py",
@@ -221,12 +225,40 @@ _OBSERVABILITY_AND_TESTING_RULES: Final = {
     ),
 }
 
+_API_CONVENTIONS_RULES: Final = {
+    "fastapi-query-parameters": RulePin(
+        applies_if=_FASTAPI,
+        globs=(*_ROUTE_GLOBS, *_PROVIDER_FILES),
+        priority=63,
+        name="FastAPI query parameters",
+        tags=("python", "fastapi", "api"),
+        section="api-conventions",
+    ),
+    "web-api-resource-naming": RulePin(
+        applies_if=_ANY_WEB_FRAMEWORK,
+        globs=(*_ROUTE_GLOBS, *_APP_FILES, *_PROVIDER_FILES),
+        priority=64,
+        name="Resource naming",
+        tags=("python", "web", "api"),
+        section="api-conventions",
+    ),
+    "fastapi-openapi-metadata": RulePin(
+        applies_if=_FASTAPI,
+        globs=_ROUTE_GLOBS,
+        priority=65,
+        name="FastAPI OpenAPI metadata",
+        tags=("python", "fastapi", "api"),
+        section="api-conventions",
+    ),
+}
+
 _RULES: Final = {
     **_DATABASE_RULES,
     **_ASYNC_IO_RULES,
     **_API_DESIGN_RULES,
     **_APP_STRUCTURE_RULES,
     **_OBSERVABILITY_AND_TESTING_RULES,
+    **_API_CONVENTIONS_RULES,
 }
 
 PINS: Final = CoreSkillPins(
@@ -256,6 +288,9 @@ PINS: Final = CoreSkillPins(
         "fastapi-request-id-logging",
         "fastapi-dependency-overrides",
         "sqlalchemy-test-rollback",
+        "fastapi-query-parameters",
+        "web-api-resource-naming",
+        "fastapi-openapi-metadata",
     ),
     # The reference probe has FastAPI, httpx and pytest but no SQLAlchemy or Alembic (D23).
     probe_inactive=frozenset(
