@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from tests._attributions import LICENSE_SHA256, license_copy_errors
+from tests._attributions import LICENSE_SHA256, license_copy_errors, write_tree
 from tests._catalog import CORE_ROOT
 
 if TYPE_CHECKING:
@@ -27,9 +27,7 @@ _PINS = {"up-source": hashlib.sha256(_NOTICE).hexdigest()}
 
 
 def _errors(tmp_path: Path, tree: dict[str, bytes]) -> list[str]:
-    for rel, body in tree.items():
-        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
-        (tmp_path / rel).write_bytes(body)
+    write_tree(tmp_path, tree)
     return license_copy_errors(tmp_path, _PINS)
 
 

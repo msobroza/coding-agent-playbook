@@ -10,7 +10,6 @@ each check here runs once on the shipped file and once on a synthetic tree.
 
 from __future__ import annotations
 
-import hashlib
 import textwrap
 from typing import TYPE_CHECKING
 
@@ -21,10 +20,13 @@ from tests._attributions import (
     SOURCE_PINS,
     Attributions,
     attribution_errors,
+    distill_action_errors,
+    distill_actions,
     load_core_attributions,
     parse_attributions,
+    write_tree,
 )
-from tests._catalog import CORE_ROOT
+from tests._catalog import CORE_SKILLS_ROOT
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -33,7 +35,6 @@ pytestmark = pytest.mark.catalog
 
 _PIN = "a" * 40
 _LICENSE = b"MIT License\n\nCopyright (c) 2026 Somebody\n"
-_LICENSE_SHA = hashlib.sha256(_LICENSE).hexdigest()
 
 _SYNTHETIC = textwrap.dedent(
     f"""\
@@ -82,20 +83,29 @@ def test_core_attributions_name_both_pins_and_drop_the_fresh_text_policy() -> No
     text = ATTRIBUTIONS_PATH.read_text(encoding="utf-8")
     assert "written fresh" not in text
     assert "bf64c51" not in text
-    assert {name: source.commit for name, source in load_core_attributions().sources.items()} == {
-        "python-best-practices": "fa0d3f58afb8bf56c028bb559e0e7bc1538e079a",
-        "python-clean-architecture": "9d627ca7bedbe0bb9e2fcf3c83d81814a6133dce",
-    }
     assert dict(SOURCE_PINS) == {
         "python-best-practices": "fa0d3f58afb8bf56c028bb559e0e7bc1538e079a",
         "python-clean-architecture": "9d627ca7bedbe0bb9e2fcf3c83d81814a6133dce",
     }
+    commits = {name: source.commit for name, source in load_core_attributions().sources.items()}
+    assert commits == dict(SOURCE_PINS)
 
 
 def test_core_attributions_list_engine_written_files_per_core_skill() -> None:
     """Every core skill has its own Engine-written list, so lanes never share one."""
-    on_disk = {p.name for p in (CORE_ROOT / "skills").iterdir() if p.is_dir()}
+    on_disk = {p.name for p in CORE_SKILLS_ROOT.iterdir() if p.is_dir()}
     assert on_disk <= set(load_core_attributions().engine_written)
+
+
+def test_core_attributions_list_no_distilled_rule_as_a_mapping_target() -> None:
+    """D78(15): a rule its mapping spec distills holds no upstream text, so no row maps to it."""
+    errors = distill_action_errors(load_core_attributions(), distill_actions())
+    assert errors == [], "\n".join(errors)
+
+
+def test_distill_actions_read_each_mapping_spec() -> None:
+    """Guard against a spec reader that silently finds no distilled rule."""
+    assert "rules/python-comments-why.md" in distill_actions()["python-coding"]
 
 
 # --------------------------------------------------------------------------- #
@@ -118,8 +128,39 @@ def test_parse_reads_sources_pins_rows_distilled_and_engine_written() -> None:
         ("skills/b.md", (), True),
     ]
     assert alpha.rows[1].changes == "Recommends a tool the engine does not adopt."
-    assert alpha.distilled == ["rules/d.md"]
-    assert parsed.engine_written == {"alpha": ["SKILL.md"]}
+    assert alpha.distilled == ("rules/d.md",)
+    assert parsed.engine_written == {"alpha": ("SKILL.md",)}
+
+
+@pytest.mark.parametrize(
+    ("line", "match"),
+    [
+        ("| `skills/c.md` | `rules/c.md` |", r":16: a mapping row needs 3 cells"),
+        ("| skills/c.md | `rules/c.md` | Changed. |", r":16: expected one `path` in backticks"),
+        ("| `skills/c.md` | rules/c.md | Changed. |", r":16: expected one `path` in backticks"),
+    ],
+)
+def test_parse_rejects_a_malformed_row(line: str, match: str) -> None:
+    text = _SYNTHETIC.replace("| `skills/b.md` | DROP", f"{line}\n| `skills/b.md` | DROP")
+    with pytest.raises(ValueError, match=match):
+        parse_attributions(text)
+
+
+@pytest.mark.parametrize(
+    ("text", "match"),
+    [
+        ("| `a.md` | `b.md` | Changed. |\n", r":1: a table row outside a source's skill"),
+        ("## src\n| `a.md` | `b.md` | Changed. |\n", r":2: a table row outside"),
+        ("## Engine-written files\n### s\n| `a.md` | `b.md` | x |\n", r":3: a table row outside"),
+        ("- `SKILL.md`\n", r":1: a listed file outside a skill: '- `SKILL.md`'"),
+        ("## Engine-written files\nCommit: `abc`\n", r":2: a Commit line belongs under a source"),
+        ("## src\n### s\nCommit: `abc`\n", r":3: a Commit line belongs under a source"),
+        ("### s\n", r":1: skill heading 's' before any section"),
+    ],
+)
+def test_parse_rejects_a_misplaced_line(text: str, match: str) -> None:
+    with pytest.raises(ValueError, match=match):
+        parse_attributions(text)
 
 
 #: The synthetic skill tree that :data:`_SYNTHETIC` describes exactly.
@@ -135,14 +176,9 @@ _TREE: dict[str, bytes] = {
 def _errors(
     tmp_path: Path, text: str = _SYNTHETIC, tree: dict[str, bytes] | None = None
 ) -> list[str]:
-    for rel, body in (_TREE if tree is None else tree).items():
-        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
-        (tmp_path / rel).write_bytes(body)
+    write_tree(tmp_path, _TREE if tree is None else tree)
     return attribution_errors(
-        parse_attributions(text),
-        tmp_path,
-        pins={"up-source": _PIN},
-        license_sha256={"up-source": _LICENSE_SHA},
+        parse_attributions(text), tmp_path, pins={"up-source": _PIN}, sources=("up-source",)
     )
 
 
@@ -231,8 +267,58 @@ def test_a_distilled_file_needs_no_license_copy(tmp_path: Path) -> None:
     assert _errors(tmp_path, text, tree) == []
 
 
-def test_a_changed_license_copy_fails(tmp_path: Path) -> None:
+def test_a_changed_license_copy_is_left_to_the_license_gate(tmp_path: Path) -> None:
+    """One home per check: the bytes are test_core_license_copies.py's, not this gate's."""
     tree = {**_TREE, "alpha/references/LICENSE.up-source": _LICENSE + b"\n"}
-    assert _errors(tmp_path, tree=tree) == [
-        "alpha/references/LICENSE.up-source: not byte-identical to up-source's license"
+    assert _errors(tmp_path, tree=tree) == []
+
+
+def test_a_file_both_distilled_and_mapped_fails(tmp_path: Path) -> None:
+    """D78(15): a distilled file is credited by name only, never with a change list."""
+    text = _SYNTHETIC.replace("- `rules/d.md`", "- `rules/d.md`\n- `rules/a.md`")
+    assert _errors(tmp_path, text) == [
+        "alpha/rules/a.md: listed as distilled and as a mapping target with a change list"
     ]
+
+
+def test_a_mapped_skill_without_a_directory_fails_once(tmp_path: Path) -> None:
+    text = _SYNTHETIC + "\n### gamma\n\n- `SKILL.md`\n- `rules/g.md`\n"
+    assert _errors(tmp_path, text) == [
+        "gamma: ATTRIBUTIONS.md lists its files, but core ships no such skill"
+    ]
+
+
+def test_an_empty_sub_section_for_a_skill_not_created_yet_passes(tmp_path: Path) -> None:
+    """A lane's seeded, empty sub-section is fine before its skill exists."""
+    assert _errors(tmp_path, _SYNTHETIC + "\n### gamma\n") == []
+
+
+def test_a_distill_action_listed_as_a_mapping_target_fails() -> None:
+    actions = {"alpha": {"rules/a.md", "rules/d.md"}, "beta": {"rules/a.md"}}
+    assert distill_action_errors(_parsed(), actions) == [
+        "alpha/rules/a.md: the mapping spec distills it, but a table row maps upstream text to it"
+    ]
+
+
+def test_a_distill_action_matches_a_jinja_target() -> None:
+    text = _SYNTHETIC.replace("`rules/a.md`, `references", "`rules/a.md.j2`, `references")
+    assert distill_action_errors(_parsed(text), {"alpha": {"rules/a.md"}}) == [
+        "alpha/rules/a.md: the mapping spec distills it, but a table row maps upstream text to it"
+    ]
+
+
+def test_distill_actions_read_the_action_column(tmp_path: Path) -> None:
+    write_tree(
+        tmp_path,
+        {
+            "mapping-alpha.md": (
+                "| Rule file | Section | Priority | Action | Est. lines |\n"
+                "| --- | --- | --- | --- | --- |\n"
+                "| `rules/a.md` | s (HIGH) | 1 | distill | 40 |\n"
+                "| `rules/b.md` | s (HIGH) | 2 | split-new | 40 |\n"
+                "| `references/c.md` | x | y | distill | z |\n"
+            ),
+            "mapping-beta.md": "No table.\n",
+        },
+    )
+    assert distill_actions(tmp_path) == {"alpha": frozenset({"rules/a.md"}), "beta": frozenset()}

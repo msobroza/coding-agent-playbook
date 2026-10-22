@@ -54,9 +54,16 @@ from typing import TYPE_CHECKING, Literal
 
 import pytest
 
-from tests._attributions import LICENSE_DIR, SOURCE_PINS, license_name, load_core_attributions
+from tests._attributions import (
+    SOURCE_PINS,
+    is_license_copy_path,
+    load_core_attributions,
+    write_tree,
+)
 from tests._catalog import (
     CORE_ROOT,
+    CORE_SKILLS_ROOT,
+    MARKDOWN_SUFFIXES,
     PRECOMMIT_TEMPLATE_DIR,
     REPO_ROOT,
     bundled_plugin_dirs,
@@ -89,11 +96,7 @@ _VENDORED_PLUGIN_GATES: dict[str, str] = {
 #: The engine-owned pre-commit template (engine wiring, not content) ships too.
 _PRECOMMIT_TEMPLATE_PREFIX = "templates/precommit/"
 
-#: The license copies a core skill ships in ``references/`` (D19): they name their source.
-_LICENSE_COPY_NAMES = frozenset(license_name(source) for source in SOURCE_PINS)
-_SKILLS_SUBDIR = "skills"
 _EXAMPLES_SUBDIR = "examples"
-_MARKDOWN_SUFFIXES = (".md", ".md.j2")
 
 _EVAL_SAMPLES_SUBDIR = "eval_samples"
 #: Per-sample fixture trees: ``eval_samples/<id>/setup/**`` and ``eval_samples/<id>/solution/**``.
@@ -192,7 +195,7 @@ def policy_for(rel: Path) -> ScanPolicy:
     ):
         # CC BY 4.0 requires the licence URI next to the derived fixtures.
         return ScanPolicy(urls=False, markers=True)
-    if rel.parts[0] == _SKILLS_SUBDIR:
+    if rel.parts[0] == CORE_SKILLS_ROOT.name:
         return _skill_policy(rel)
     return ScanPolicy(urls=True, markers=True)
 
@@ -200,10 +203,10 @@ def policy_for(rel: Path) -> ScanPolicy:
 def _skill_policy(rel: Path) -> ScanPolicy:
     """The checks for a file under ``skills/``: license copies, D38 and D78(13)."""
     parts = rel.parts
-    if len(parts) == 4 and parts[2] == LICENSE_DIR and parts[3] in _LICENSE_COPY_NAMES:
+    if is_license_copy_path(rel):
         # D19: the byte-identical MIT notice names its source.
         return ScanPolicy(urls=True, markers=False)
-    if rel.name.endswith(_MARKDOWN_SUFFIXES):
+    if rel.name.endswith(MARKDOWN_SUFFIXES):
         return ScanPolicy(urls=True, markers=True, reserved_hosts="in-fences")
     if len(parts) > 3 and parts[2] == _EXAMPLES_SUBDIR and rel.suffix == ".py":
         return ScanPolicy(urls=True, markers=True, reserved_hosts="anywhere")
@@ -573,9 +576,7 @@ def test_scan_targets_on_a_synthetic_tree(tmp_path: Path) -> None:
         "eval_samples/t/solution/negatives/wrong.md": "clean\n",
         "rules/.cache/junk.md": "https://example.org\n",
     }
-    for rel, body in files.items():
-        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
-        (tmp_path / rel).write_text(body, encoding="utf-8")
+    write_tree(tmp_path, files)
 
     violations = [v.render() for t in scan_targets(tmp_path) for v in scan_file(t)]
 
@@ -670,9 +671,7 @@ def test_a_license_copy_passes_the_marker_scan_only_in_a_skill_references_dir(
         "skills/s/LICENSE.python-best-practices": notice,
         "prompts/LICENSE.python-best-practices": notice,
     }
-    for rel, body in files.items():
-        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
-        (tmp_path / rel).write_text(body, encoding="utf-8")
+    write_tree(tmp_path, files)
 
     violations = [v.render() for t in scan_targets(tmp_path) for v in scan_file(t)]
 
