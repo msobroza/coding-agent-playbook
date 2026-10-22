@@ -4,7 +4,7 @@ name: domino-agents
 description: "Guides LLM agent services deployed on Domino 6.2."
 playbook:
   use_when: "building, tracing, evaluating or testing an LLM agent API that runs on Domino"
-  files: "Agent service modules, launch script, agent config, evaluation Jobs and tests"
+  files: "Agent service code, launch script, agent config, evaluation Jobs and their tests"
   sections:
     - id: secrets
       title: "Secrets and tokens"
@@ -56,12 +56,20 @@ On Domino 6.2 an LLM agent is an App with its own dashboard: its one request fun
 - Development evaluations run as Jobs inside `DominoRun`; a scheduled Job scores production traces out of band, never inside the request.
 
 ```python
-def create_app(settings: AgentSettings, *, tracer: Tracer) -> FastAPI:
-    model = build_model(settings)
-    agent = build_agent(model, settings.agent_config)
-    ask_agent = tracer.trace(REQUEST_SPAN_NAME)(make_ask(agent, settings))
-    app = FastAPI(lifespan=make_lifespan(agent, settings))
-    app.state.ask_agent = ask_agent
+def create_app(
+    settings: AgentSettings,
+    *,
+    model: Model | None = None,
+    token_provider: TokenProvider | None = None,
+    tracer: Tracer | None = None,
+) -> FastAPI:
+    clients = build_clients(settings, token_provider)
+    agent = build_agent(model or build_model(settings, clients.model), settings.agent_config)
+    tracer = tracer or select_tracer(settings)
+    a2a_app = build_a2a_app(agent, settings)
+    app = FastAPI(lifespan=make_lifespan(a2a_app, (clients.model, clients.token)))
+    app.state.ask_agent = tracer.trace(REQUEST_SPAN_NAME)(make_ask(agent, settings))
+    app.mount("/a2a", a2a_app)
     app.include_router(chat_router)
     return app
 ```

@@ -2,6 +2,7 @@
 id: domino-agent-fake-llm-tests
 name: Agent tests on a fake model
 description: "Pass a fake model into create_app, switch real model requests off for the run, build settings in code, and test routes through a TestClient context."
+version: 1
 scope: scoped
 section: testing
 priority: 63
@@ -19,7 +20,7 @@ tags: [python, domino, pytest]
 
 # Agent tests on a fake model
 
-Tests never call a real LLM, the Domino token endpoint or Domino itself. The model is a parameter of `create_app`: pydantic-ai's `TestModel` for shape checks, and `FunctionModel` to script which tool the model calls and what it answers. Real model requests are switched off for the whole run in `conftest.py` (`models.ALLOW_MODEL_REQUESTS = False`), so a test that forgets the fake fails instead of spending tokens. The token provider and the tracer are named fakes. Each test builds a fresh app from settings constructed in code, never from a `.env` file or the environment. Route tests use FastAPI's `TestClient` as a context manager so every lifespan runs, the A2A one included.
+Tests never call a real LLM, the Domino token endpoint or Domino itself. The model is a parameter of `create_app`: pydantic-ai's `TestModel` for shape checks, and `FunctionModel` to script which tool the model calls and what it answers. Real model requests are switched off for the whole run in `conftest.py` (`models.ALLOW_MODEL_REQUESTS = False`), so a test that forgets the fake fails instead of spending tokens. The token provider and the tracer are named fakes. Each test builds a fresh app from settings constructed in code, never from a `.env` file. Route tests use FastAPI's `TestClient` as a context manager so every lifespan runs, the A2A one included.
 
 Cover the answer path, a 422 on a bad body, a 502 with a generic body on a model error, a 504 when the run deadline passes, the request limit tripping, and one recorded span whose only input is the question.
 

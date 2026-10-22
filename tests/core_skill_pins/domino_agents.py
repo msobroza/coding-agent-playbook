@@ -20,7 +20,8 @@ _TEST_GLOBS: Final = (
 #: The A2A rules' globs.
 _A2A_GLOBS: Final = ("**/a2a.py", "**/*agent*.py", "**/main.py", "**/chat_app.py")
 #: The packages that bring an A2A server or client in (pydantic-ai's a2a extra pulls fasta2a).
-_A2A_DEPENDENCIES: Final = ["fasta2a", "a2a-sdk", "pydantic-ai", "pydantic-ai-slim"]
+#: A tuple, so the pins cannot share a mutable list; each gate takes its own list copy.
+_A2A_DEPENDENCIES: Final = ("fasta2a", "a2a-sdk", "pydantic-ai", "pydantic-ai-slim")
 
 _MEMBERS: Final = (
     "a2a-mount-lifespan",
@@ -32,8 +33,8 @@ _MEMBERS: Final = (
 
 PINS: Final = CoreSkillPins(
     skill_id="domino-agents",
-    platform="domino",
-    where="Agent service modules, launch script, agent config, evaluation Jobs and tests",
+    domino_only=True,
+    where="Agent service code, launch script, agent config, evaluation Jobs and their tests",
     members=_MEMBERS,
     probe_inactive=frozenset(_MEMBERS),
     section_ids=(
@@ -50,7 +51,7 @@ PINS: Final = CoreSkillPins(
             applies_if={
                 "domino_project": True,
                 "has_framework": ["fastapi"],
-                "any_dependency": _A2A_DEPENDENCIES,
+                "any_dependency": list(_A2A_DEPENDENCIES),
             },
             globs=_A2A_GLOBS,
             priority=60,
@@ -59,7 +60,7 @@ PINS: Final = CoreSkillPins(
             section="a2a",
         ),
         "a2a-agent-card": RulePin(
-            applies_if={"domino_project": True, "any_dependency": _A2A_DEPENDENCIES},
+            applies_if={"domino_project": True, "any_dependency": list(_A2A_DEPENDENCIES)},
             globs=_A2A_GLOBS,
             priority=61,
             name="A2A agent card",
@@ -67,7 +68,7 @@ PINS: Final = CoreSkillPins(
             section="a2a",
         ),
         "a2a-client-deadlines": RulePin(
-            applies_if={"domino_project": True, "any_dependency": _A2A_DEPENDENCIES},
+            applies_if={"domino_project": True, "any_dependency": list(_A2A_DEPENDENCIES)},
             globs=_A2A_GLOBS,
             priority=62,
             name="A2A client deadlines",

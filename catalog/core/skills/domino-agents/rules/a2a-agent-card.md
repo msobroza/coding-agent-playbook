@@ -2,6 +2,7 @@
 id: a2a-agent-card
 name: A2A agent card
 description: "Declare the agent card once: skills that match the real tools, the version from the agent config, and the published App URL plus /a2a from settings."
+version: 1
 scope: scoped
 section: a2a
 priority: 61

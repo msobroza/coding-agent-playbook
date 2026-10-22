@@ -52,9 +52,9 @@ class CoreSkillPins:
     ``probe_inactive`` holds the members the reference probe does not activate;
     ``section_ids`` lists the declared section ids in the order of the skill's
     mapping (``specs/prU-core-python-skills/mapping-<skill>.md``), ``()`` while
-    the skill declares none; ``platform`` names the ``platforms`` value whose
-    detector fact gates every member (prU D63: ``"domino"``), so the reference
-    probe emits no such skill and only that platform's probe does.
+    the skill declares none; ``domino_only`` marks a skill whose every member
+    gates on ``domino_project`` (prU D63): the reference probe writes none of
+    it, so the probe gates check it on the Domino probe instead.
 
     Example: ``CoreSkillPins("ml-data", "Model code", ("ml-vectorization",), frozenset(), {})``.
     """
@@ -65,7 +65,7 @@ class CoreSkillPins:
     probe_inactive: frozenset[str]
     rules: Mapping[str, RulePin]
     section_ids: tuple[str, ...] = ()
-    platform: str | None = None
+    domino_only: bool = False
 
 
 #: Core skills that take no member rules: no ``playbook:`` block, an authored "Use when".
@@ -88,5 +88,5 @@ def _discover_pins() -> tuple[CoreSkillPins, ...]:
 #: Every core skill with member rules, one entry per pins module, sorted by skill id.
 ALL_PINS: Final = _discover_pins()
 
-#: Core skills gated on a platform (prU D63): absent from the reference probe's output.
-PLATFORM_SKILL_IDS: Final = frozenset(pins.skill_id for pins in ALL_PINS if pins.platform)
+#: Core skills whose every member gates on ``domino_project`` (prU D63): absent off Domino.
+DOMINO_ONLY_SKILL_IDS: Final = frozenset(pins.skill_id for pins in ALL_PINS if pins.domino_only)

@@ -2,6 +2,7 @@
 id: a2a-mount-lifespan
 name: A2A mount and lifespan
 description: "Mount the A2A app from create_app and enter its lifespan from the parent's, so its task worker runs; one worker, one pod."
+version: 1
 scope: scoped
 section: a2a
 priority: 60
@@ -35,33 +36,47 @@ app.mount("/a2a", agent.to_a2a())  # its lifespan never runs: tasks stay "submit
 ## Good Example
 
 ```python
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator, Callable, Sequence
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
 import httpx
 from fastapi import FastAPI
 from starlette.applications import Starlette
 
 
-def make_lifespan(a2a_app: Starlette, clients: list[httpx.AsyncClient]):
+def make_lifespan(
+    a2a_app: Starlette, clients: Sequence[httpx.AsyncClient]
+) -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        async with a2a_app.router.lifespan_context(a2a_app):
-            yield
-        for client in clients:
-            await client.aclose()
+        try:
+            async with a2a_app.router.lifespan_context(a2a_app):
+                yield
+        finally:
+            for client in clients:
+                await client.aclose()
 
     return lifespan
 
 
-def create_app(settings: AgentSettings) -> FastAPI:
-    clients = build_clients(settings)
-    agent = build_agent(build_model(settings, clients.model), settings.agent_config)
+def create_app(
+    settings: AgentSettings,
+    *,
+    model: Model | None = None,
+    token_provider: TokenProvider | None = None,
+    tracer: Tracer | None = None,
+) -> FastAPI:
+    clients = build_clients(settings, token_provider)
+    agent = build_agent(model or build_model(settings, clients.model), settings.agent_config)
+    tracer = tracer or select_tracer(settings)
     a2a_app = build_a2a_app(agent, settings)
-    app = FastAPI(lifespan=make_lifespan(a2a_app, [clients.model, clients.token]))
+    app = FastAPI(lifespan=make_lifespan(a2a_app, (clients.model, clients.token)))
+    app.state.ask_agent = tracer.trace(REQUEST_SPAN_NAME)(make_ask(agent, settings))
     app.mount("/a2a", a2a_app)
     return app
 ```
+
+The `finally` closes the clients even when the A2A app's shutdown raises.
 
 ## Notes
 

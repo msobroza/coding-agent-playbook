@@ -23,13 +23,14 @@ import pytest
 from coding_agent_playbook.adapters.claude_code.hooks import CLAUDE_HEARTBEAT_LINE
 from coding_agent_playbook.adapters.claude_code.paths import CLAUDE_MD_PATH, CLAUDE_RULES_PATH
 from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
+from coding_agent_playbook.detector.facts import detect
 from coding_agent_playbook.rendering.formats import render_for
 from coding_agent_playbook.skills.document import where_entry, where_guidance_section
 from coding_agent_playbook.sync.render import render_artifacts
 from coding_agent_playbook.validation.context import SyncContext
 from tests._budget_probe import LISTING_MAX_CHARS, every_core_where_entry
 from tests._catalog import core_rules, core_skill_ids
-from tests.core_skill_pins import PLATFORM_SKILL_IDS
+from tests.core_skill_pins import DOMINO_ONLY_SKILL_IDS
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
 
 pytestmark = pytest.mark.catalog
@@ -72,9 +73,11 @@ def _emitted_descriptions(repo: Path) -> dict[str, str]:
     return descriptions
 
 
-def _core_descriptions(repo: Path, *, platform_skills: bool = False) -> dict[str, str]:
-    """The core skills' emitted descriptions; Domino-gated ones only on the Domino probe (D63)."""
-    core_ids = core_skill_ids() if platform_skills else core_skill_ids() - PLATFORM_SKILL_IDS
+def _core_descriptions(repo: Path) -> dict[str, str]:
+    """Each core skill the probe should write: Domino-only skills only on a Domino repo (D63)."""
+    core_ids = core_skill_ids()
+    if not detect(repo)["domino_project"]:
+        core_ids -= DOMINO_ONLY_SKILL_IDS
     emitted = _emitted_descriptions(repo)
     assert core_ids <= set(emitted), (
         f"the probe lacks core skills {sorted(core_ids - set(emitted))}"
@@ -199,10 +202,9 @@ def test_agents_md_guardrails_are_one_line_per_hook_with_an_advisory(
         assert check in ci_line, ci_line
 
 
-def _over_per_skill_cap(repo: Path, *, platform_skills: bool = False) -> dict[str, int]:
+def _over_per_skill_cap(repo: Path) -> dict[str, int]:
     """The core skills of ``repo`` whose description exceeds the per-skill cap, with lengths."""
-    descriptions = _core_descriptions(repo, platform_skills=platform_skills)
-    lengths = {sid: len(text) for sid, text in descriptions.items()}
+    lengths = {sid: len(text) for sid, text in _core_descriptions(repo).items()}
     return {sid: n for sid, n in lengths.items() if n > CORE_DESCRIPTION_MAX_CHARS}
 
 
@@ -232,7 +234,7 @@ def test_core_and_plugin_descriptions_total_within_7000_chars_d18(
 
 
 def test_domino_probe_each_core_description_within_300_chars(domino_probe_repo: Path) -> None:
-    over = _over_per_skill_cap(domino_probe_repo, platform_skills=True)
+    over = _over_per_skill_cap(domino_probe_repo)
     assert not over, f"core descriptions over {CORE_DESCRIPTION_MAX_CHARS} chars: {over}"
 
 
@@ -240,8 +242,7 @@ def test_domino_probe_core_descriptions_total_within_3400_chars_d59(
     domino_probe_repo: Path,
 ) -> None:
     """prU D59: the Domino descriptions stay full length, so this probe has its own cap."""
-    descriptions = _core_descriptions(domino_probe_repo, platform_skills=True)
-    total = sum(map(len, descriptions.values()))
+    total = sum(map(len, _core_descriptions(domino_probe_repo).values()))
     assert total <= DOMINO_CORE_DESCRIPTIONS_MAX_CHARS, (
         f"core descriptions total {total} chars on the Domino probe; prU D59 allows "
         f"{DOMINO_CORE_DESCRIPTIONS_MAX_CHARS}"

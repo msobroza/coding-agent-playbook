@@ -22,7 +22,7 @@ from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME
 from coding_agent_playbook.sync import pipeline as _sync
 from tests._catalog import TEST_FILE_GLOBS
 from tests.cli.hook_repo import CONFIG, GUARD_CONFIG, hook_deps
-from tests.core_skill_pins import PLATFORM_SKILL_IDS
+from tests.core_skill_pins import DOMINO_ONLY_SKILL_IDS
 from tests.fakes import FakeGitClient
 from tests.hook_runtime.fakes import FakeRuff, ruff_row
 from tests.hook_runtime.handlers.pack_repo import engine_hook, engine_rules
@@ -81,15 +81,15 @@ SOURCE_LINES: Final = [
 STATIC_CHECK_CONFIGS: Final = ("ruff.toml", ".ruff.toml", "mypy.ini", ".mypy.ini")
 
 
-def _reference_probe_rules() -> list[Rule]:
-    """Every core rule but the members of platform skills, which no marker turns on here (D63)."""
-    return [rule for rule in engine_rules() if rule.frontmatter.skill not in PLATFORM_SKILL_IDS]
+def _non_domino_rules() -> list[Rule]:
+    """Every core rule but the Domino-only skills' members, which this repo never renders (D63)."""
+    return [r for r in engine_rules() if r.frontmatter.skill not in DOMINO_ONLY_SKILL_IDS]
 
 
 @pytest.fixture
 def repo(pack_repo: PackRepo) -> PackRepo:
     """skill-nudge on, its table derived from the core rules a non-Domino repo renders."""
-    pack_repo.install_pack([HOOK_ID], rules=_reference_probe_rules())
+    pack_repo.install_pack([HOOK_ID], rules=_non_domino_rules())
     return pack_repo
 
 
@@ -282,7 +282,7 @@ def test_nudge_line_comes_before_lint_feedback(
     head = "def run():\n    return 1\n"
     pack_repo.write("pyproject.toml", '[tool.ruff.lint]\nselect = ["F"]\n')
     pack_repo.write(APP, head + "try:\n    run()\nexcept:\n    raise\n")
-    pack_repo.install_pack([HOOK_ID, LINT_HOOK_ID], rules=_reference_probe_rules())
+    pack_repo.install_pack([HOOK_ID, LINT_HOOK_ID], rules=_non_domino_rules())
     pin_ruff(pack_repo, ruff_program)
     ruff = FakeRuff(diagnostics=[ruff_row("E722", 5, "Do not use bare `except`")])
 
