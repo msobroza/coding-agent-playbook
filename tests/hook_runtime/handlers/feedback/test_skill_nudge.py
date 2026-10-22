@@ -66,11 +66,13 @@ def _line(skill_id: str) -> str:
 
 
 #: Every core skill with members, as in the reference probe (FastAPI + pytest + ML):
-#: ``**/*.py`` reaches ml-data, python-coding and python-tooling; tests reach python-testing.
-#: web-application ranks first on ``src/app.py``: fastapi-app-wiring's ``**/app.py`` is the
-#: most specific glob that matched (D41); the ``**/*.py`` ties keep config order.
+#: ``**/*.py`` reaches design-patterns, ml-data, python-coding and python-tooling; tests
+#: reach python-testing. web-application ranks first on ``src/app.py``: fastapi-app-wiring's
+#: ``**/app.py`` is the most specific glob that matched (D41); the ``**/*.py`` ties keep
+#: config order. Five lines fill the per-hook cap.
 SOURCE_LINES: Final = [
     _line("web-application"),
+    _line("design-patterns"),
     _line("ml-data"),
     _line("python-coding"),
     _line("python-tooling"),
@@ -120,9 +122,10 @@ def test_test_file_names_testing_and_coding_once_each(
     source = edit(repo, deps(), APP, state=state)
     again = edit(repo, deps(), TEST_APP, state=state)
 
-    # D41: tests/**/*.py ranks python-testing and web-application (fastapi-app-wiring) first.
-    assert context(first) == [_line("python-testing"), *SOURCE_LINES]
-    assert source.trace.combined.decision is Decision.NONE
+    # D41: tests/**/*.py ranks python-testing and web-application (fastapi-app-wiring) first;
+    # the five-line cap cuts python-tooling, which the next source edit then names.
+    assert context(first) == [_line("python-testing"), *SOURCE_LINES[:4]]
+    assert context(source) == SOURCE_LINES[4:]
     assert again.trace.combined.decision is Decision.NONE
 
 
@@ -337,6 +340,7 @@ def test_sync_derives_the_glob_table_from_the_rendered_member_rules(
     static_checks = ["**/*.py", "pyproject.toml", *STATIC_CHECK_CONFIGS]
     assert config == {
         "skills": [
+            {"id": "design-patterns", "globs": ["**/*.py"]},
             {"id": "python-coding", "globs": ["**/*.py"]},
             {"id": "python-tooling", "globs": static_checks},
         ]

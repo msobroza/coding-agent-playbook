@@ -5,7 +5,7 @@ working agreements, eight code-legibility principles, seven house-style bullets
 and the document layout (prU D61, D73). Everything else the old house
 style said moved to one of two ``python-coding`` members, ``python-data-shapes``
 and ``python-idioms`` (spec 6.5.4), and its class-design items later on to
-``python-classes-and-protocols`` (spec 9.8); the one-owner table below is the
+``design-composition-over-inheritance`` (spec 9.8, prU D46(1)); the one-owner table below is the
 "nothing silently lost" regression for those moves.
 """
 
@@ -36,7 +36,7 @@ HOUSE_STYLE: Final = "python-house-style"
 PROJECT_CONTEXT: Final = "project-context"
 DATA_SHAPES: Final = "python-data-shapes"
 IDIOMS: Final = "python-idioms"
-CLASSES: Final = "python-classes-and-protocols"
+COMPOSITION: Final = "design-composition-over-inheritance"
 LEGIBILITY: Final = "code-legibility"
 DOCUMENT_LAYOUT: Final = "document-layout"
 #: The always rules that route to no skill; code-legibility names one per line (D73).
@@ -62,7 +62,7 @@ D17_HOUSE_STYLE_PHRASES: Final = (
 )
 #: Each item that left the house style (spec 6.5.4) -> the one member rule that owns it now.
 #: The two class-design items moved on from python-idioms to python-classes-and-protocols
-#: with the python-best-practices distillation (spec 9.8).
+#: (spec 9.8) and then to design-composition-over-inheritance (prU D46(1)).
 MOVED_ITEM_OWNERS: Final = (
     ("three or more fields", DATA_SHAPES),
     ("parallel lists", DATA_SHAPES),
@@ -76,8 +76,8 @@ MOVED_ITEM_OWNERS: Final = (
     ("os.path", IDIOMS),
     ("count_lines", IDIOMS),
     ("split the function", IDIOMS),
-    ("composition over inheritance", CLASSES),
-    ("DeclarativeBase", CLASSES),
+    ("composition over inheritance", COMPOSITION),
+    ("DeclarativeBase", COMPOSITION),
     ("f-strings", IDIOMS),
     ("single quotes", IDIOMS),
     ("first-party", IDIOMS),
@@ -202,7 +202,6 @@ PENDING_LEGIBILITY_TARGETS: Final = frozenset(
         "python-early-return",
         "python-error-messages-with-context",
         "python-meaningful-names",
-        "design-single-responsibility",
         "design-dry-yagni-kiss",
         "arch-predictable-project-tree",
         "pytest-first-properties",
