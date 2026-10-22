@@ -40,6 +40,7 @@ from coding_agent_playbook.rendering.session import RenderSession, TemplateConte
 from coding_agent_playbook.skills.document import DescriptionOverflowError, emitted_frontmatter
 from coding_agent_playbook.skills.membership import compose_skills, undelivered_member_warning
 from coding_agent_playbook.skills.naming import skill_id_of
+from coding_agent_playbook.skills.sections import section_impacts
 from coding_agent_playbook.sync._hook_outputs import SyncHooks, resolve_sync_hooks
 
 if TYPE_CHECKING:
@@ -126,6 +127,7 @@ def render_artifacts(ctx: SyncContext) -> RenderedArtifacts:
         repo_root=ctx.repo_root,
         skills=ctx.skills_resolved,
         framework=enabled_framework(ctx.config.layers_enabled),
+        impacts=section_impacts(ctx.skills_resolved, ctx.rules_resolved),
     )
     prompts = filter_applies_if(ctx.prompts_resolved, ctx.facts, ctx.repo_root)
     rendered_rules = session.render_rules()

@@ -23,10 +23,12 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.skills.document import PLAYBOOK_BLOCK_KEY, playbook_block
+from coding_agent_playbook.skills.naming import skill_id_of
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
+    from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.artifacts.skill import Skill
 
 #: The ``playbook:`` key that holds a skill's ordered sections.
@@ -243,3 +245,62 @@ def _section(entry: Mapping[str, str]) -> SkillSection:
         summary=entry["summary"].strip(),
         open_when=entry["open_when"].strip(),
     )
+
+
+def section_impacts(skills: Iterable[Skill], rules: Iterable[Rule]) -> dict[str, Impact]:
+    """Each member rule's id mapped to its section's impact, for one render pass (D32).
+
+    A rule is listed when its ``skill`` names one of ``skills`` and its
+    ``section`` is one that skill declares. Always rules, members of sectionless
+    skills and rules naming an undeclared section are absent: their titles stay
+    as authored.
+
+    Example: ``section_impacts([python_testing], rules)["mock-monkeypatch"]`` -> ``Impact.HIGH``.
+    """
+    impacts_by_skill = {
+        skill_id_of(skill): {section.id: section.impact for section in skill_sections(skill)}
+        for skill in skills
+    }
+    impacts: dict[str, Impact] = {}
+    for rule in rules:
+        fm = rule.frontmatter
+        impact = impacts_by_skill.get(fm.skill or "", {}).get(fm.section or "")
+        if impact is not None:
+            impacts[fm.id] = impact
+    return impacts
+
+
+def with_impact_tag(body: str, impact: Impact) -> str:
+    """``body`` with `` [IMPACT]`` on its first ATX ``# `` heading outside code fences (D32).
+
+    Idempotent: a title already ending in an impact tag gets ``impact``'s tag in
+    its place, never a second one. A body without such a heading is unchanged.
+
+    Example: ``with_impact_tag("# Mocks\\n", Impact.HIGH)`` -> ``"# Mocks [HIGH]\\n"``.
+    """
+    lines = body.splitlines(keepends=True)
+    fence = ""
+    for index, line in enumerate(lines):
+        head = line.lstrip(" ")
+        indent = len(line) - len(head)
+        if fence:
+            if head.startswith(fence) and not head.strip().strip(fence[0]):
+                fence = ""
+            continue
+        if indent <= _MAX_MARKDOWN_INDENT and head.startswith(("```", "~~~")):
+            fence = head[: len(head) - len(head.lstrip(head[0]))]
+            continue
+        title = _TITLE.fullmatch(line.rstrip("\r\n")) if indent <= _MAX_MARKDOWN_INDENT else None
+        if title is not None:
+            ending = line[len(line.rstrip("\r\n")) :]
+            lines[index] = f"{title['heading']} [{impact.value}]{ending}"
+            return "".join(lines)
+    return body
+
+
+#: Up to three leading spaces still make a heading or a fence in CommonMark.
+_MAX_MARKDOWN_INDENT: Final = 3
+#: A level-one ATX heading; ``heading`` excludes a trailing impact tag already there.
+_TITLE: Final = re.compile(
+    rf"(?P<heading> {{0,3}}#[ \t]+\S.*?)(?:[ \t]+\[(?:{'|'.join(Impact)})\])?[ \t]*"
+)
