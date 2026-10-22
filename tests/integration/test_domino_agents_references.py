@@ -90,7 +90,9 @@ def test_domino_probe_lists_each_reference_with_its_open_when(domino_probe_repo:
         encoding="utf-8"
     )
     listed = skill_md.partition("## References and examples\n")[2]
-    lines = [line for line in listed.splitlines() if line.startswith("- [")]
+    # The section also lists examples/simple-agent-api (C-domino-agents-example);
+    # this test pins only the references/ entries and their order.
+    lines = [line for line in listed.splitlines() if line.startswith("- [references/")]
     assert lines == [f"- [{path}]({path}) — Open when: {text}" for path, text in _OPEN_WHEN.items()]
 
 
