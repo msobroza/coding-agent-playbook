@@ -21,9 +21,11 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
 
-#: The probe repo a core skill is checked on: the D5 reference probe, or the D59
-#: Domino probe for the Domino skills the reference probe never activates (prU D63).
-type ProbeKind = Literal["reference", "domino"]
+#: The probe repo a core skill is checked on: the D5 reference probe, the D59 Domino
+#: probe for the Domino skills the reference probe never activates (prU D63), or the
+#: authoring probe (the reference probe plus a ``playbook/`` layer) for the skills
+#: gated on ``playbook_layer`` (prU D70).
+type ProbeKind = Literal["reference", "domino", "authoring"]
 
 
 @dataclass(frozen=True)
@@ -55,8 +57,9 @@ class CoreSkillPins:
 
     ``members`` lists every member rule id in index order (priority, then id);
     ``probe`` names the probe repo the skill is checked on: ``"reference"`` (the D5
-    reference probe) or ``"domino"`` (the D59 Domino probe, for the Domino skills
-    the reference probe never activates; prU D63); ``probe_inactive`` holds the
+    reference probe), ``"domino"`` (the D59 Domino probe, for the Domino skills
+    the reference probe never activates; prU D63) or ``"authoring"`` (the reference
+    probe plus a ``playbook/`` layer, for ``playbook-creator``; prU D70); ``probe_inactive`` holds the
     members that probe does not activate;
     ``section_ids`` lists the declared section ids in the order of the skill's
     mapping (``specs/prU-core-python-skills/mapping-<skill>.md``), ``()`` while
@@ -75,7 +78,7 @@ class CoreSkillPins:
 
     @property
     def reference_probe_inactive(self) -> frozenset[str]:
-        """The members the reference probe does not activate: all of a Domino skill's."""
+        """The members the reference probe does not activate: all of a Domino or authoring skill's."""
         return self.probe_inactive if self.probe == "reference" else frozenset(self.members)
 
 
@@ -100,8 +103,16 @@ def _discover_pins() -> tuple[CoreSkillPins, ...]:
 ALL_PINS: Final = _discover_pins()
 #: The core skills only the Domino probe activates: their pins name ``probe="domino"``.
 DOMINO_SKILL_IDS: Final = frozenset(p.skill_id for p in ALL_PINS if p.probe == "domino")
+#: The core skills only the authoring probe activates: their pins name ``probe="authoring"``.
+AUTHORING_SKILL_IDS: Final = frozenset(p.skill_id for p in ALL_PINS if p.probe == "authoring")
 
 
-def skills_off_on_probe(probe: ProbeKind) -> frozenset[str]:
-    """The core skills ``probe`` never activates: the Domino ones on the reference probe."""
-    return frozenset() if probe == "domino" else DOMINO_SKILL_IDS
+def skills_off_probe(probe: ProbeKind) -> frozenset[str]:
+    """The pinned core skills ``probe`` never emits: those checked on another non-reference probe.
+
+    The Domino and authoring probes are each the reference probe plus one marker,
+    so each emits the reference skills and its own, never the other's.
+
+    Example: ``"domino-apps" in skills_off_probe("authoring")`` -> ``True``.
+    """
+    return frozenset(p.skill_id for p in ALL_PINS if p.probe not in ("reference", probe))

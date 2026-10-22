@@ -27,6 +27,7 @@ from coding_agent_playbook.adapters.claude_code._secret_native import (
 )
 from coding_agent_playbook.lockfile.model import Lockfile, compute_hash
 from coding_agent_playbook.sync import pipeline as _sync
+from tests._budget_probe import add_empty_playbook_layer
 from tests.cli.hook_repo import (
     CONFIG,
     GUARD_CONFIG,
@@ -119,6 +120,8 @@ def test_absent_hooks_table_is_byte_identical_and_prints_notice(
     pins = FakePinWriter()
     (tmp_path / "plain").mkdir()
     plain = make_synthetic_repo(tmp_path / "plain", config_text=CONFIG)
+    # The hook repo's hooks live in its playbook/ layer: the same layer keeps the facts equal.
+    add_empty_playbook_layer(plain)
     with_hooks = make_hook_repo(tmp_path / "hooks", make_synthetic_repo, hooks_table=None)
 
     assert _sync_repo(plain, tmp_path) == 0

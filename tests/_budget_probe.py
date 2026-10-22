@@ -161,6 +161,33 @@ def write_domino_probe(repo: Path) -> None:
         (repo / relative).write_text(text, encoding="utf-8")
 
 
+#: The consumer repo's own layer (prU D70): an empty ``playbook/`` turns ``playbook_layer`` on.
+AUTHORING_PROBE_LAYER: Final = "playbook"
+
+
+def add_empty_playbook_layer(repo: Path) -> None:
+    """Give ``repo`` an empty ``playbook/`` layer, which turns ``playbook_layer`` on (prU D70).
+
+    A no-op when the layer exists, so a repo whose hooks already live there keeps them.
+
+    Example: ``add_empty_playbook_layer(plain)`` keeps a plain repo's facts equal to a hook repo's.
+    """
+    (repo / AUTHORING_PROBE_LAYER).mkdir(exist_ok=True)
+
+
+def write_authoring_probe(repo: Path) -> None:
+    """The reference probe plus an empty ``playbook/`` layer (prU D70).
+
+    ``mkdir playbook`` is how a consumer repo starts its own layer, so the
+    detector reports ``playbook_layer`` and the ``playbook-creator`` skill
+    applies, without the engine's ``catalog/core`` (its engine-only rule stays off).
+
+    Example: ``write_authoring_probe(tmp_path)`` then ``init_and_sync_reference_probe(tmp_path)``.
+    """
+    write_reference_probe(repo)
+    add_empty_playbook_layer(repo)
+
+
 def reference_probe_facts(repo: Path) -> Facts:
     """The detector facts of a freshly written probe (rule renders in PR 5-8 size tests).
 

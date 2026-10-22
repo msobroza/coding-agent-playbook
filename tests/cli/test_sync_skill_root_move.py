@@ -33,6 +33,7 @@ from coding_agent_playbook.generated_output.gitignore import (
 from coding_agent_playbook.sync import pipeline as _sync
 from tests._catalog import core_skill_ids
 from tests.cli.test_sync_skills import _lock_paths, _skill_tree, _write_repo_local_skill
+from tests.core_skill_pins.playbook_creator import PINS as PLAYBOOK_CREATOR_PINS
 from tests.core_skill_pins.python_tooling import UNGATED_MEMBERS
 from tests.fakes import FakeGitClient
 from tests.plugins.superpowers_expectations import EXPECTED_SKILL_IDS, PLUGIN_NAME, consumer_config
@@ -93,10 +94,18 @@ _SYNTHETIC_PYTHON_CODING_MEMBERS = (
 )
 #: python-tooling's ungated members, active on the synthetic repo (no pytest, no uv.lock).
 _SYNTHETIC_PYTHON_TOOLING_MEMBERS = UNGATED_MEMBERS
+#: The playbook-creator members active on the synthetic repo: its ``playbook/`` layer turns
+#: ``playbook_layer`` on (prU D70), and it lacks ``catalog/core``, the engine-only gate's file.
+_SYNTHETIC_PLAYBOOK_CREATOR_MEMBERS = tuple(
+    rule_id
+    for rule_id in PLAYBOOK_CREATOR_PINS.members
+    if rule_id not in PLAYBOOK_CREATOR_PINS.probe_inactive
+)
 #: Every file the pre-v0.21 engine left under ``shared_skills/`` for ``_synced_then_rewound``:
 #: query-db's two, the core python-coding skill with one rule file per active member and its
-#: two upstream license copies (D19), and python-tooling with its four ungated members (no
-#: framework, no uv.lock) and the same two license copies.
+#: two upstream license copies (D19), python-tooling with its ungated members (no
+#: framework, no uv.lock) and the same two license copies, and playbook-creator with its
+#: members the repo's layer turns on.
 _OLD_TREE_FILES = frozenset(
     {
         "query-db/SKILL.md",
@@ -109,6 +118,11 @@ _OLD_TREE_FILES = frozenset(
         *(f"python-tooling/rules/{rule_id}.md" for rule_id in _SYNTHETIC_PYTHON_TOOLING_MEMBERS),
         "python-tooling/references/LICENSE.python-best-practices",
         "python-tooling/references/LICENSE.python-clean-architecture",
+        "playbook-creator/SKILL.md",
+        *(
+            f"playbook-creator/rules/{rule_id}.md"
+            for rule_id in _SYNTHETIC_PLAYBOOK_CREATOR_MEMBERS
+        ),
     }
 )
 

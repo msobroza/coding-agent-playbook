@@ -167,10 +167,12 @@ def test_sync_warns_when_no_enabled_adapter_delivers_member_rules(
 
     err_lines = capsys.readouterr().err.splitlines()
     # python-coding and python-tooling are core's: each has ungated members, so every
-    # synthetic repo has them.
+    # synthetic repo has them; playbook-creator's apply because the repo has a playbook/
+    # layer (prU D70).
     assert (
         "warning: no enabled adapter delivers scoped rules (only agents_md is on); skills "
-        f"python-coding, python-tooling, {_SKILL} reach no assistant: add claude_code, "
+        f"playbook-creator, python-coding, python-tooling, {_SKILL} reach no assistant: "
+        "add claude_code, "
         "opencode or shared_skills to adapters_enabled"
     ) in err_lines
     assert _WHERE_HEADING not in (repo / "AGENTS.md").read_text(encoding="utf-8")  # C7
