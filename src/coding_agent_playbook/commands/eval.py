@@ -39,6 +39,10 @@ Sub-modes:
   keeps its v1 text). The repo's ``prompts`` key is never read, so the opt-in
   eval comparison (D37) names each side's set explicitly.
 
+  ``--compare BASE_REF`` (D37, opt-in and paid; ``commands/_eval_compare.py``)
+  runs the eval tasks of the rule-including prompts on a checkout of
+  ``BASE_REF`` and of HEAD and prints a comparison table that flags regressions.
+
   Unlike ``playbook metrics``, there is **no ``--run-tests`` flag**: whether the
   execution evaluators (``coverage``/``test_pass_rate``) run is declared by the
   sample's own ``[metrics]`` block (``run_tests``), so the eval sample — not a CLI
@@ -55,6 +59,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.catalog.prompt_sets import DEFAULT_PROMPT_SET, PROMPT_SETS
+from coding_agent_playbook.commands._eval_compare import configure_compare, run_compare
 from coding_agent_playbook.commands._eval_enumerate import (
     _DEFAULT_RUNNER,
     _print_list,
@@ -131,6 +136,7 @@ def configure(parser: argparse.ArgumentParser) -> None:
         "the repo's prompts key is not read)",
     )
     _configure_scoring(parser)
+    configure_compare(parser)
 
 
 def _configure_scoring(parser: argparse.ArgumentParser) -> None:
@@ -168,6 +174,10 @@ def _configure_scoring(parser: argparse.ArgumentParser) -> None:
 
 def run(args: argparse.Namespace) -> int:
     repo_root = Path(getattr(args, "repo_root", None) or Path.cwd())
+
+    # ``--compare`` (D37) is opt-in and paid: it runs tasks on two checkouts.
+    if getattr(args, "compare", None) is not None:
+        return run_compare(args, repo_root)
 
     # ``--run`` is the only path that *executes* a sample; it has its own loading
     # (one sample by id) so it never pays for the full list+resolve unless the sample
