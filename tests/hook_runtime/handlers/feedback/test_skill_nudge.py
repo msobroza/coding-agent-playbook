@@ -62,13 +62,22 @@ def _install_six_skill_pack(pack_repo: PackRepo) -> None:
     pack_repo.install_pack([HOOK_ID], handler_config={HOOK_ID: {"skills": [*principle, testing]}})
 
 
-def _reference_probe_rules() -> list[Rule]:
-    """Every core rule but the Domino-gated ones: the reference probe has no Domino marker.
+#: Marker facts the reference probe lacks: the Domino skills gate on ``domino_project``
+#: (prU D63) and ``playbook-creator`` on ``playbook_layer`` (D70).
+_PROBE_ABSENT_FACTS: Final = ("domino_project", "playbook_layer")
 
-    The Domino skills' members all gate on ``domino_project`` (prU D63), so sync never
-    puts them in this repo's table; keeping them would change every line below.
+
+def _reference_probe_rules() -> list[Rule]:
+    """Every core rule but those gated on a marker the reference probe lacks.
+
+    Sync never puts the Domino skills' or ``playbook-creator``'s members in this
+    repo's table; keeping them would change every line below.
     """
-    return [rule for rule in engine_rules() if "domino_project" not in rule.frontmatter.applies_if]
+    return [
+        rule
+        for rule in engine_rules()
+        if not any(fact in rule.frontmatter.applies_if for fact in _PROBE_ABSENT_FACTS)
+    ]
 
 
 def _line(skill_id: str) -> str:

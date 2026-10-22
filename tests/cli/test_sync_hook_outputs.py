@@ -119,6 +119,9 @@ def test_absent_hooks_table_is_byte_identical_and_prints_notice(
     pins = FakePinWriter()
     (tmp_path / "plain").mkdir()
     plain = make_synthetic_repo(tmp_path / "plain", config_text=CONFIG)
+    # The hook repo's hooks live in its playbook/ layer, which turns playbook_layer on
+    # (prU D70); an empty layer here keeps the two repos' detector facts equal.
+    (plain / "playbook").mkdir(exist_ok=True)
     with_hooks = make_hook_repo(tmp_path / "hooks", make_synthetic_repo, hooks_table=None)
 
     assert _sync_repo(plain, tmp_path) == 0

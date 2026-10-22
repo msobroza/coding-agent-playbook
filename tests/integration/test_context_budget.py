@@ -29,7 +29,7 @@ from coding_agent_playbook.sync.render import render_artifacts
 from coding_agent_playbook.validation.context import SyncContext
 from tests._budget_probe import LISTING_MAX_CHARS, every_core_where_entry
 from tests._catalog import core_rules, core_skill_ids
-from tests.core_skill_pins import DOMINO_SKILL_IDS, ProbeKind
+from tests.core_skill_pins import ProbeKind, skills_off_probe
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
 
 pytestmark = pytest.mark.catalog
@@ -75,10 +75,11 @@ def _emitted_descriptions(repo: Path) -> dict[str, str]:
 def _core_descriptions(repo: Path, probe: ProbeKind = "reference") -> dict[str, str]:
     """The emitted descriptions of the core skills ``repo``'s ``probe`` must activate.
 
-    The Domino skills gate on ``domino_project`` (prU D63): the reference probe never
-    emits them, the Domino probe emits every core skill.
+    The Domino skills gate on ``domino_project`` (prU D63) and ``playbook-creator`` on
+    ``playbook_layer`` (D70): the reference probe emits neither, the Domino and
+    authoring probes each add their own.
     """
-    core_ids = core_skill_ids() if probe == "domino" else core_skill_ids() - DOMINO_SKILL_IDS
+    core_ids = core_skill_ids() - skills_off_probe(probe)
     emitted = _emitted_descriptions(repo)
     assert core_ids <= set(emitted), (
         f"the probe lacks core skills {sorted(core_ids - set(emitted))}"
@@ -258,6 +259,35 @@ def test_domino_probe_core_and_plugin_descriptions_within_7500_chars_d59(
     assert total <= DOMINO_LISTING_MAX_CHARS, (
         f"{len(descriptions)} skill descriptions total {total} on the Domino probe; prU D59 "
         f"allows {DOMINO_LISTING_MAX_CHARS}"
+    )
+
+
+def test_authoring_probe_each_core_description_within_300_chars(
+    authoring_probe_repo: Path,
+) -> None:
+    over = _over_per_skill_cap(authoring_probe_repo, "authoring")
+    assert not over, f"core descriptions over {CORE_DESCRIPTION_MAX_CHARS} chars: {over}"
+
+
+def test_authoring_probe_core_descriptions_total_within_2800_chars_d78(
+    authoring_probe_repo: Path,
+) -> None:
+    """prU D78(19): the authoring probe keeps the standard caps, with room left for forge."""
+    total = sum(map(len, _core_descriptions(authoring_probe_repo, "authoring").values()))
+    assert total <= CORE_DESCRIPTIONS_MAX_CHARS, (
+        f"core descriptions total {total} chars on the authoring probe; prU D54/D78 allows "
+        f"{CORE_DESCRIPTIONS_MAX_CHARS}"
+    )
+
+
+def test_authoring_probe_core_and_plugin_descriptions_within_7000_chars(
+    authoring_probe_repo: Path,
+) -> None:
+    descriptions = _emitted_descriptions(authoring_probe_repo)
+    total = sum(map(len, descriptions.values()))
+    assert total <= LISTING_MAX_CHARS, (
+        f"{len(descriptions)} skill descriptions total {total} on the authoring probe; prU D54 "
+        f"allows {LISTING_MAX_CHARS}"
     )
 
 

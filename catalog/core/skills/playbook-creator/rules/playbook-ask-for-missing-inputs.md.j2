@@ -1,0 +1,67 @@
+---
+id: playbook-ask-for-missing-inputs
+name: Ask for missing inputs
+description: "Before writing a playbook artifact, list what it needs and ask for any item you cannot answer from the request or the repo."
+version: 1
+scope: scoped
+globs:
+  - "catalog/**"
+  - "playbook/**"
+applies_if:
+  playbook_layer: true
+section: layers
+priority: 20
+tags: [playbook, layers]
+---
+
+# Ask for what an artifact needs before writing it
+
+## Description
+
+A rule, skill, hook, prompt, eval sample or plugin is read by agents in every repo that syncs its layer, so a guess baked into it misleads long after the change. Before writing one, list the facts it needs:
+
+- **Kind and layer**: which kind of artifact it is, and which layer owns it (the engine's core, a bundled plugin, an overlay package or this repo's `playbook/`).
+- **Skill and section**: the skill a rule joins and the section of that skill it belongs to, or that it is an always rule.
+- **Gate and impact**: the detector facts that decide where it renders (`applies_if`), and how much a violation costs (the section's impact sets its priority band).
+- **Source and license**: where the guidance comes from, and whether its license lets you copy text (vendored) or only restate ideas in your own words (distilled).
+
+Answer each item from the request, the repo and the existing layers first. When an item stays unknown, stop and ask before writing the file:
+{% if framework_skill('clarify') %}
+use the {{ framework_skill('clarify') }} skill to work through the open items with the user, one question at a time.
+{% else %}
+ask the user directly, one short question per open item, and wait for the answers.
+{% endif %}
+
+## Bad Example
+
+A new rule written straight from a one-line request, with a guessed home:
+
+```markdown
+---
+id: retry-budget
+name: Retry budget
+description: "Bound retries."
+scope: scoped
+priority: 50
+---
+```
+
+It names no skill or section, so validate fails it; it has no gate, so it would render in repos without the library it talks about; and its priority is the default nobody chose.
+
+## Good Example
+
+The checklist answered first, then the file:
+
+```markdown
+Kind: member rule, in playbook/skills/acme-billing/rules/acme-retry-budget.md
+Skill and section: acme-billing, section "effects" (HIGH, band 40-59)
+Gate: any_dependency [httpx, requests]; impact HIGH, priority 41
+Source: the team's incident review, written in our own words
+```
+
+## Notes
+
+- Ask once for all open items, not one file at a time; a short question costs less than a misplaced artifact.
+- Where each kind lives and which layer fits which audience: `playbook-layer-placement`.
+- The field-by-field skeletons for every kind are in rule-template.md, skill-template.md, hook-template.md, prompt-template.md, eval-sample-template.md and plugin-template.md.
+- Vendoring versus distilling, and what each needs recorded: `playbook-third-party-content`.

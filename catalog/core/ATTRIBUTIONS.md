@@ -42,6 +42,11 @@ not reproduced, and the facts are restated in the engine's own words. The
 use its facts or why it was dropped; a distilled source has no pin and no
 license copy.
 
+The playbook-creator skill is engine-written throughout: it restates the
+engine's own documentation and code (where each kind of artifact lives, how
+layers merge, the rule frontmatter, gates, templates and validation) and holds
+no upstream text, so every file of it is listed under "Engine-written files".
+
 ## python-best-practices
 
 Source: the "python-best-practices" agent skills by Ludo Technologies LLC, tag v0.8.0.
@@ -268,6 +273,18 @@ that comes to hold vendored text moves from here into its source's table.
 - `rules/ml-serialization-security.md.j2`
 
 ### playbook-creator
+
+- `SKILL.md`
+- `rules/playbook-ask-for-missing-inputs.md.j2`
+- `rules/playbook-layer-placement.md`
+- `rules/playbook-override-by-id.md`
+- `rules/playbook-rule-frontmatter.md`
+- `rules/playbook-rule-ids.md`
+- `rules/playbook-rule-gates.md`
+- `rules/playbook-rule-templates.md`
+- `rules/playbook-rule-body.md`
+- `rules/playbook-validate-and-sync.md`
+- `rules/playbook-engine-catalog-gate.md`
 
 ### playbook-guardrails
 

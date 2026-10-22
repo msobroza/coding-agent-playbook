@@ -154,6 +154,23 @@ def write_domino_probe(repo: Path) -> None:
         (repo / relative).write_text(text, encoding="utf-8")
 
 
+#: The consumer repo's own layer (prU D70): an empty ``playbook/`` turns ``playbook_layer`` on.
+AUTHORING_PROBE_LAYER: Final = "playbook"
+
+
+def write_authoring_probe(repo: Path) -> None:
+    """The reference probe plus an empty ``playbook/`` layer (prU D70).
+
+    ``mkdir playbook`` is how a consumer repo starts its own layer, so the
+    detector reports ``playbook_layer`` and the ``playbook-creator`` skill
+    applies, without the engine's ``catalog/core`` (its engine-only rule stays off).
+
+    Example: ``write_authoring_probe(tmp_path)`` then ``init_and_sync_reference_probe(tmp_path)``.
+    """
+    write_reference_probe(repo)
+    (repo / AUTHORING_PROBE_LAYER).mkdir()
+
+
 def reference_probe_facts(repo: Path) -> Facts:
     """The detector facts of a freshly written probe (rule renders in PR 5-8 size tests).
 

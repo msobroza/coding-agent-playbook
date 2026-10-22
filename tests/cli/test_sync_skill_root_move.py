@@ -33,6 +33,7 @@ from coding_agent_playbook.generated_output.gitignore import (
 from coding_agent_playbook.sync import pipeline as _sync
 from tests._catalog import core_skill_ids
 from tests.cli.test_sync_skills import _lock_paths, _skill_tree, _write_repo_local_skill
+from tests.core_skill_pins.playbook_creator import PINS as PLAYBOOK_CREATOR_PINS
 from tests.fakes import FakeGitClient
 from tests.plugins.superpowers_expectations import EXPECTED_SKILL_IDS, PLUGIN_NAME, consumer_config
 
@@ -67,10 +68,17 @@ _SYNTHETIC_PYTHON_CODING_MEMBERS = (
     "python-small-units",
     "python-typing",
 )
+#: The playbook-creator members active on the synthetic repo: its ``playbook/`` layer turns
+#: ``playbook_layer`` on (prU D70), and it lacks ``catalog/core``, the engine-only gate's file.
+_SYNTHETIC_PLAYBOOK_CREATOR_MEMBERS = tuple(
+    rule_id
+    for rule_id in PLAYBOOK_CREATOR_PINS.members
+    if rule_id not in PLAYBOOK_CREATOR_PINS.probe_inactive
+)
 #: Every file the pre-v0.21 engine left under ``shared_skills/`` for ``_synced_then_rewound``:
 #: query-db's two, the core python-coding skill with one rule file per active member and its
 #: two upstream license copies (D19), and python-tooling with its one ungated member (no
-#: framework, no uv.lock).
+#: framework, no uv.lock), and playbook-creator with its members the repo's layer turns on.
 _OLD_TREE_FILES = frozenset(
     {
         "query-db/SKILL.md",
@@ -81,6 +89,11 @@ _OLD_TREE_FILES = frozenset(
         "python-coding/references/LICENSE.python-clean-architecture",
         "python-tooling/SKILL.md",
         "python-tooling/rules/python-static-checks.md",
+        "playbook-creator/SKILL.md",
+        *(
+            f"playbook-creator/rules/{rule_id}.md"
+            for rule_id in _SYNTHETIC_PLAYBOOK_CREATOR_MEMBERS
+        ),
     }
 )
 
@@ -149,7 +162,8 @@ def test_first_sync_after_upgrade_moves_pristine_shared_skills_tree(
     assert _sync.execute(repo, git=FakeGitClient()) == 0
 
     # query-db's SKILL.md + run.py, python-coding's SKILL.md + its 19 rule files + its
-    # 2 license copies and python-tooling's SKILL.md + its 1 rule file: 26.
+    # 2 license copies, python-tooling's SKILL.md + its 1 rule file, and playbook-creator's
+    # SKILL.md + its active rule files.
     assert re.search(rf", {len(_OLD_TREE_FILES)} removed$", capsys.readouterr().out, re.MULTILINE)
     assert not (repo / _OLD_ROOT).exists()
     moved = repo / _NEW_ROOT / "query-db"

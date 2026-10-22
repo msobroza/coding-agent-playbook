@@ -156,6 +156,9 @@ def test_sync_without_hooks_table_keeps_opencode_tree_byte_identical(
 ) -> None:
     (tmp_path / "plain").mkdir()
     plain = make_synthetic_repo(tmp_path / "plain", config_text=CONFIG)
+    # The hook repo's hooks live in its playbook/ layer, which turns playbook_layer on
+    # (prU D70); an empty layer here keeps the two repos' detector facts equal.
+    (plain / "playbook").mkdir(exist_ok=True)
     with_hooks = _opencode_repo(tmp_path, make_synthetic_repo, hooks_table=None)
 
     assert _sync_repo(plain, tmp_path) == 0
