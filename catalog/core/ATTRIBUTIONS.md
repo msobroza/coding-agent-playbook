@@ -101,6 +101,12 @@ Distilled (credited by name only, no vendored text):
 
 | Upstream file | Core files | Changes |
 | --- | --- | --- |
+| `skills/web-application/rules/sec-object-authorization.md` | `rules/web-object-authorization.md` | Engine frontmatter (security section, any web framework gate); title without the impact tag; References dropped; the dated Top 10 ranking dropped; the Good example names its own aliases, model and schema and defines `NotFoundError` on the project base exception, mapped to 404 through `fastapi-error-boundaries`; cross-references become rule ids; a Note for the owner or tenant filter in any framework. |
+| `skills/web-application/rules/sec-jwt-validation.md` | `rules/web-jwt-validation.md` | Engine frontmatter (security section, any web framework gate); title without the impact tag; References dropped; the Good example names the Settings fields and aliases it uses; the install command and the library-history sentence become "propose adding PyJWT through the project's package manager, never unasked"; a sentence for other JWT libraries; the secret one-liner shortened; cross-references become rule names. |
+| `skills/web-application/rules/sec-password-hashing.md` | `rules/web-password-hashing.md` | Engine frontmatter (security section, any web framework gate); title without the impact tag; References dropped; the module-level hasher and import-time dummy hash become a `PasswordHasher` built by the composition root and passed to `authenticate`, taking `SecretStr`; the install line becomes a version-neutral proposal through the project's package manager; Notes on throttling, sign-up enumeration and Django's hasher setting; cross-references become rule ids. |
+| `skills/web-application/rules/sec-secure-tokens.md` | `rules/web-secure-tokens.md` | Engine frontmatter (security section, any web framework gate); title without the impact tag; References dropped; a comment names the two `User` columns the example writes; a Note for the same conditional update without SQLAlchemy; the S311 point stays Note text (no lint code); cross-references become rule ids. |
+| `skills/web-application/rules/sec-cors-origins.md` | `rules/web-cors-origins.md` | Engine frontmatter (security section, any web framework gate); title without the impact tag; References dropped; the Good example shows the settings field and the middleware inside `create_app(settings)` instead of pointing at other rules; origin examples with a scheme stay only inside the code block, the Notes describe them in prose; a Note for Django and Flask CORS extensions. |
+| `skills/web-application/rules/api-error-responses.md` | `rules/web-password-hashing.md` | Line 90 only so far: the sign-up account-enumeration point joins the password rule's "same error" Note, moved there from the error-boundary rule for size. |
 
 ## python-clean-architecture
 
@@ -162,6 +168,7 @@ Distilled (credited by name only, no vendored text):
 
 | Upstream file | Core files | Changes |
 | --- | --- | --- |
+| `skills/clean-architecture/references/rest-api-design.md` | `rules/web-password-hashing.md` | Lines 179-181 and 250-257 only so far: the rate-limiting idea becomes a Note (throttle login and reset endpoints at the proxy or with the project's limiter, limits read from settings and shared across instances); the third-party limiter recipe is dropped. |
 
 Distilled (credited by name only, no vendored text):
 

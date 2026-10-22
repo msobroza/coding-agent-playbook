@@ -1,4 +1,4 @@
-"""Pins of core skill ``web-application`` (prU D4, L0-15): the two FastAPI rules re-homed."""
+"""Pins of core skill ``web-application`` (prU D4, L0-15, C-web-application-01..04)."""
 
 from __future__ import annotations
 
@@ -10,6 +10,11 @@ PINS: Final = CoreSkillPins(
     skill_id="web-application",
     where="Web endpoints, database access and migrations",
     members=(
+        "web-object-authorization",
+        "web-jwt-validation",
+        "web-password-hashing",
+        "web-secure-tokens",
+        "web-cors-origins",
         "fastapi-error-boundaries",
         "fastapi-app-wiring",
     ),
