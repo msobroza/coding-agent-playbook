@@ -23,6 +23,7 @@ from coding_agent_playbook.sync import pipeline as _sync
 from tests._catalog import TEST_FILE_GLOBS
 from tests.cli.hook_repo import CONFIG, GUARD_CONFIG, hook_deps
 from tests.core_skill_pins import skills_off_probe
+from tests.core_skill_pins.python_documentation import PINS as DOCUMENTATION_PINS
 from tests.core_skill_pins.python_tooling import UNGATED_GLOBS
 from tests.fakes import FakeGitClient
 from tests.hook_runtime.fakes import FakeRuff, ruff_row
@@ -115,6 +116,15 @@ ARCHITECTURE_GLOBS: Final = [
     "**/services/**/*.py",
     "**/application/**/*.py",
 ]
+#: python-documentation's ungated members' globs, first seen in member id order.
+DOCUMENTATION_GLOBS: Final = tuple(
+    dict.fromkeys(
+        glob
+        for _, pin in sorted(DOCUMENTATION_PINS.rules.items())
+        if not pin.applies_if
+        for glob in pin.globs
+    )
+)
 
 
 @pytest.fixture
@@ -241,9 +251,18 @@ def test_notebook_edit_names_ml_data(
 def test_file_matching_no_skill_is_silent(
     repo: PackRepo, deps: Callable[..., RuntimeDeps], state: Path
 ) -> None:
-    report = edit(repo, deps(), "README.md", state=state)
+    report = edit(repo, deps(), "assets/logo.svg", state=state)
 
     assert report.trace.combined.decision is Decision.NONE
+
+
+def test_readme_edit_names_python_documentation(
+    repo: PackRepo, deps: Callable[..., RuntimeDeps], state: Path
+) -> None:
+    """prU D53: the README is python-documentation's, not a Python skill's."""
+    report = edit(repo, deps(), "README.md", state=state)
+
+    assert context(report) == [_line("python-documentation")]
 
 
 def test_out_of_repo_path_is_silent(
@@ -372,7 +391,9 @@ def test_sync_derives_the_glob_table_from_the_rendered_member_rules(
     """Only rules that pass ``applies_if`` reach the table: no pytest, no FastAPI, no ML here.
 
     python-tooling still appears, with the globs of its ungated members (Python files,
-    stubs and the ruff, mypy, pyright and pre-commit config files).
+    stubs and the ruff, mypy, pyright and pre-commit config files),
+    and python-documentation with its ungated members' globs, in member id order
+    (no CITATION.cff, so docs-citation-file's gate fails).
     """
     (tmp_path / "repo").mkdir()
     repo = make_synthetic_repo(tmp_path / "repo", config_text=CONFIG + "[hooks]\nenabled = true\n")
@@ -387,6 +408,7 @@ def test_sync_derives_the_glob_table_from_the_rendered_member_rules(
             {"id": "design-patterns", "globs": ["**/*.py"]},
             {"id": "python-architecture", "globs": ARCHITECTURE_GLOBS},
             {"id": "python-coding", "globs": ["**/*.py"]},
+            {"id": "python-documentation", "globs": list(DOCUMENTATION_GLOBS)},
             # A repo with neither pytest nor uv: python-tooling's ungated members' globs.
             {"id": "python-tooling", "globs": list(UNGATED_GLOBS)},
         ]

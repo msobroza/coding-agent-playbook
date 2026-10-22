@@ -34,6 +34,7 @@ from coding_agent_playbook.sync import pipeline as _sync
 from tests._catalog import CORE_SKILLS_ROOT, core_skill_ids
 from tests.cli.test_sync_skills import _lock_paths, _skill_tree, _write_repo_local_skill
 from tests.core_skill_pins.playbook_creator import PINS as PLAYBOOK_CREATOR_PINS
+from tests.core_skill_pins.python_documentation import PINS as DOCUMENTATION_PINS
 from tests.core_skill_pins.python_tooling import UNGATED_MEMBERS
 from tests.fakes import FakeGitClient
 from tests.plugins.superpowers_expectations import EXPECTED_SKILL_IDS, PLUGIN_NAME, consumer_config
@@ -101,6 +102,11 @@ _SYNTHETIC_PLAYBOOK_CREATOR_MEMBERS = tuple(
     for rule_id in PLAYBOOK_CREATOR_PINS.members
     if rule_id not in PLAYBOOK_CREATOR_PINS.probe_inactive
 )
+#: The python-documentation members active on the synthetic repo: the ungated ones (no
+#: CITATION.cff, no docs/conf.py, no mkdocs.yml).
+_SYNTHETIC_DOCUMENTATION_MEMBERS = tuple(
+    rule_id for rule_id, pin in DOCUMENTATION_PINS.rules.items() if not pin.applies_if
+)
 #: The ungated core skills' files, as sync writes them: every member of design-patterns and
 #: python-architecture is ungated, so the synthetic repo gets each whole skill directory
 #: (a ``.md.j2`` rule as ``.md``).
@@ -114,7 +120,8 @@ _SYNTHETIC_UNGATED_SKILL_FILES = tuple(
 #: query-db's two, the core python-coding skill with one rule file per active member and its
 #: two upstream license copies (D19), python-tooling with its ungated members (no
 #: framework, no uv.lock) and the same two license copies, playbook-creator with its
-#: members the repo's layer turns on, and the ungated design-patterns and python-architecture.
+#: members the repo's layer turns on, the ungated design-patterns and python-architecture,
+#: and python-documentation with its ungated members.
 _OLD_TREE_FILES = frozenset(
     {
         "query-db/SKILL.md",
@@ -133,6 +140,11 @@ _OLD_TREE_FILES = frozenset(
             for rule_id in _SYNTHETIC_PLAYBOOK_CREATOR_MEMBERS
         ),
         *_SYNTHETIC_UNGATED_SKILL_FILES,
+        "python-documentation/SKILL.md",
+        *(
+            f"python-documentation/rules/{rule_id}.md"
+            for rule_id in _SYNTHETIC_DOCUMENTATION_MEMBERS
+        ),
     }
 )
 
