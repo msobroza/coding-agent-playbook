@@ -1,7 +1,7 @@
 ---
 id: python-idioms
 name: Idioms
-description: "Keep os.path for legacy str APIs, use f-strings, group imports, split flag-driven functions, guard with early returns, and avoid star imports and shadowed builtins."
+description: "Keep os.path for legacy str APIs, use f-strings, group imports, split flag-driven functions, and avoid star imports and shadowed builtins."
 version: 1
 scope: scoped
 globs:
@@ -57,16 +57,4 @@ from myapp.orders import place_order  # first-party
 ## Small things reviewers flag
 
 - Don't shadow builtins (`list`, `dict`, `id`, `type`, `vars`) with local names.
-- Prefer an early `return` over deeply nested `if`/`else`. Give each guard clause one condition, use `continue` to skip an item inside a loop, and move a condition that combines several checks into a named predicate function.
-
-```python
-def is_billable(fee: ShippingFee) -> bool:
-    return fee.cents > 0 and not fee.waived and fee.region in BILLED_REGIONS
-
-
-def post_fees(fees: Iterable[ShippingFee], ledger: Ledger) -> None:
-    for fee in fees:
-        if not is_billable(fee):
-            continue
-        ledger.post(fee)
-```
+- Guard clauses and shallow nesting are covered in `python-early-return`.
