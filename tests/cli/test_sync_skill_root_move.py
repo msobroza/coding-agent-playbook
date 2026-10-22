@@ -31,7 +31,7 @@ from coding_agent_playbook.generated_output.gitignore import (
     apply_managed_block,
 )
 from coding_agent_playbook.sync import pipeline as _sync
-from tests._catalog import core_skill_ids
+from tests._catalog import CORE_SKILLS_ROOT, core_skill_ids
 from tests.cli.test_sync_skills import _lock_paths, _skill_tree, _write_repo_local_skill
 from tests.core_skill_pins.playbook_creator import PINS as PLAYBOOK_CREATOR_PINS
 from tests.fakes import FakeGitClient
@@ -75,6 +75,14 @@ _SYNTHETIC_PLAYBOOK_CREATOR_MEMBERS = tuple(
     for rule_id in PLAYBOOK_CREATOR_PINS.members
     if rule_id not in PLAYBOOK_CREATOR_PINS.probe_inactive
 )
+#: The core design-patterns skill's files, as sync writes them: every member is ungated,
+#: so the synthetic repo gets the whole skill directory (a ``.md.j2`` rule as ``.md``).
+_DESIGN_PATTERNS_DIR = CORE_SKILLS_ROOT / "design-patterns"
+_SYNTHETIC_DESIGN_PATTERNS_FILES = tuple(
+    "design-patterns/" + path.relative_to(_DESIGN_PATTERNS_DIR).as_posix().removesuffix(".j2")
+    for path in _DESIGN_PATTERNS_DIR.rglob("*")
+    if path.is_file()
+)
 #: Every file the pre-v0.21 engine left under ``shared_skills/`` for ``_synced_then_rewound``:
 #: query-db's two, the core python-coding skill with one rule file per active member and its
 #: two upstream license copies (D19), and python-tooling with its one ungated member (no
@@ -94,6 +102,7 @@ _OLD_TREE_FILES = frozenset(
             f"playbook-creator/rules/{rule_id}.md"
             for rule_id in _SYNTHETIC_PLAYBOOK_CREATOR_MEMBERS
         ),
+        *_SYNTHETIC_DESIGN_PATTERNS_FILES,
     }
 )
 
@@ -162,8 +171,8 @@ def test_first_sync_after_upgrade_moves_pristine_shared_skills_tree(
     assert _sync.execute(repo, git=FakeGitClient()) == 0
 
     # query-db's SKILL.md + run.py, python-coding's SKILL.md + its 19 rule files + its
-    # 2 license copies, python-tooling's SKILL.md + its 1 rule file, and playbook-creator's
-    # SKILL.md + its active rule files.
+    # 2 license copies, python-tooling's SKILL.md + its 1 rule file, playbook-creator's
+    # SKILL.md + its active rule files, and the whole design-patterns skill.
     assert re.search(rf", {len(_OLD_TREE_FILES)} removed$", capsys.readouterr().out, re.MULTILINE)
     assert not (repo / _OLD_ROOT).exists()
     moved = repo / _NEW_ROOT / "query-db"
