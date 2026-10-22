@@ -37,9 +37,15 @@ overdue_ids = [invoice.id for invoice in invoices if invoice.is_overdue]
 region_names = {region.code: region.name.title() for region in regions}
 active_customers = {order.customer_id for order in orders if order.is_open}
 
+ABSOLUTE_ZERO_CELSIUS: Final = -273.15
+
+accepted: list[Reading] = []
 for reading in readings:  # a loop: the body raises and records
     if reading.celsius < ABSOLUTE_ZERO_CELSIUS:
-        raise SensorFaultError(reading.sensor_id)
+        raise SensorFaultError(
+            f"sensor {reading.sensor_id} read {reading.celsius} C, "
+            f"below absolute zero ({ABSOLUTE_ZERO_CELSIUS} C)"
+        )
     accepted.append(reading)
 ```
 
@@ -48,6 +54,6 @@ for reading in readings:  # a loop: the body raises and records
 - Dict comprehensions `{key: value for ...}` and set comprehensions `{item for ...}` follow the same rule.
 - Count the clauses: `[cell for row in grid for cell in row if cell.is_alive]` has three (two `for`, one `if`), past the limit; write the loop, or extract a named generator function that yields the cells.
 - A comprehension that wraps over several lines is a hint that a loop or a helper function reads better.
-- Never use a comprehension for its side effects (`[print(x) for x in items]`); it builds a list nobody reads. Write the loop.
+- Never use a comprehension for its side effects (`[print(item) for item in items]`); it builds a list nobody reads. Write the loop.
 - When the result is consumed once by `sum`, `any`, `all`, `min`, `max` or `str.join`, pass a generator expression instead (`python-generators`).
 - In NumPy or pandas code, a comprehension still runs one Python step per element; use whole-array operations there (the ml-data skill).

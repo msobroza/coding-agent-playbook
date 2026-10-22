@@ -37,7 +37,8 @@ from pathlib import Path
 import httpx  # third-party
 
 from customers.models import Customer  # first-party, another package: absolute
-from .models import Contract  # first-party, the same package: relative is fine
+
+from .models import Contract  # the same package: relative is fine, in its own block
 ```
 
 ## Notes
@@ -45,5 +46,5 @@ from .models import Contract  # first-party, the same package: relative is fine
 - Import across packages with the absolute path from the project root. A relative import (`from .models import Contract`) is for a sibling module inside one package; one that climbs out of the top-level package fails with `ImportError`.
 - Default to `from package.module import Name`. Use `import package.module` when you use many of its names and the qualified name reads better.
 - Alias an import only for a widely known convention (`import numpy as np`, `import pandas as pd`) or a name that is too long; a private alias for a short name only hides it.
-- The order inside each group follows the repo's formatter and its isort settings (see ruff-format in the python-tooling skill); don't sort by hand against them.
+- The order inside each group follows the repo's formatter and its isort settings (see ruff-format in the python-tooling skill), which puts relative imports in a block of their own after first-party; don't sort by hand against them.
 - An import cycle is not fixed by moving the import into a function: move the shared dependency so the cycle disappears (arch-break-import-cycles in the python-architecture skill).

@@ -78,6 +78,8 @@ MOVED_ITEM_OWNERS: Final = (
     ("match the file", IDIOMS),
     ("os.path", IDIOMS),
     ("count_lines", IDIOMS),
+    # C-python-coding-06 moves this pin to python-function-signatures and drops the
+    # flag-split Note from python-idioms (mapping-python-coding.md, python-idioms row).
     ("split the function", IDIOMS),
     ("composition over inheritance", CLASSES),
     ("DeclarativeBase", CLASSES),

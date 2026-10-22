@@ -50,7 +50,7 @@ def billable_fees(fees: Iterable[ShippingFee]) -> list[ShippingFee]:
 
 class VehicleRegistry:
     def __init__(self, models: Iterable[VehicleModel]) -> None:
-        self._by_key = {(m.brand, m.model): m for m in models}  # indexed once
+        self._by_key = {(vehicle.brand, vehicle.model): vehicle for vehicle in models}
 
     def find(self, brand: str, model: str) -> VehicleModel | None:
         return self._by_key.get((brand, model))  # absence is a normal outcome here
@@ -73,7 +73,7 @@ def unique_tags(tags: Iterable[str]) -> list[str]:
   | A fixed set of valid options | an Enum, never bare strings (`python-enums`) |
 
 - Set members and dict keys must be hashable: strings, numbers, tuples of them, frozen dataclasses. A `frozenset` can itself be a dict key or a set member.
-- `list(set(items))` drops duplicates but loses the order; `list(dict.fromkeys(items))` keeps it.
+- `list(set(items))` loses the order; `dict.fromkeys`, as in `unique_tags`, keeps it.
 - A lookup that returns `None` for a missing key follows the absence convention; a key that must exist is indexed directly (`python-optional-keys`).
 - Start with the simplest collection that fits, and change it when the dominant operation changes: a list that starts being searched becomes a dict index.
 - Large numeric data belongs in arrays or frames, not lists of floats (the ml-data skill).

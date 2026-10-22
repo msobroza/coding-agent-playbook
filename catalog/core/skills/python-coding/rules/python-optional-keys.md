@@ -20,12 +20,12 @@ tags: [python, dict]
 ## Bad Example
 
 ```python
-def invoice_total(payload: dict[str, Any]) -> Decimal:
+def parse_invoice(payload: dict[str, Any]) -> InvoiceRequest:
     # a required key with a made-up default
     invoice_id = payload.get("invoice_id", "")
     # chained .get digs into nested data that must be present
     amount = payload.get("billing", {}).get("amount", "0")
-    return Decimal(amount)
+    return InvoiceRequest(invoice_id, Decimal(amount), note=payload.get("note"))
 ```
 
 ## Good Example
@@ -43,7 +43,9 @@ def parse_invoice(payload: Mapping[str, Any]) -> InvoiceRequest:
         invoice_id = payload["invoice_id"]
         amount = Decimal(payload["billing"]["amount"])
     except KeyError as exc:
-        raise InvalidInvoiceError(f"invoice payload lacks key {exc.args[0]!r}") from exc
+        raise InvalidInvoiceError(
+            f"invoice payload lacks key {exc.args[0]!r}; required: invoice_id, billing.amount"
+        ) from exc
     return InvoiceRequest(invoice_id, amount, note=payload.get("note"))  # optional key
 
 

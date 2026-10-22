@@ -31,6 +31,9 @@ total_cents = sum([fee.cents for fee in shipping_fees])  # an intermediate list
 ## Good Example
 
 ```python
+ABSOLUTE_ZERO_CELSIUS: Final = -273.15
+
+
 def read_readings(path: Path) -> Iterator[Reading]:
     with path.open(encoding="utf-8") as lines:
         for line in lines:  # a file object already yields one line at a time
@@ -38,7 +41,7 @@ def read_readings(path: Path) -> Iterator[Reading]:
 
 
 def faulty_sensors(readings: Iterable[Reading]) -> Iterator[str]:
-    return (r.sensor_id for r in readings if r.celsius < ABSOLUTE_ZERO_CELSIUS)
+    return (reading.sensor_id for reading in readings if reading.celsius < ABSOLUTE_ZERO_CELSIUS)
 
 
 total_cents = sum(fee.cents for fee in shipping_fees)  # no list on the way
@@ -50,5 +53,5 @@ has_overdue = any(invoice.is_overdue for invoice in invoices)  # stops at the fi
 - A generator can be consumed only once. Make a list when you walk the data more than once, or need `len`, indexing or slicing.
 - Yield typed records (a dataclass or NamedTuple), not dicts, so each stage of the pipeline is checked (`python-data-shapes`).
 - A generator function that opens a file keeps it open until the consumer finishes or closes the generator; consume it fully, or close it with `contextlib.closing`.
-- A generator expression passed as the only argument needs no extra parentheses: `sum(x.cents for x in fees)`.
+- A generator expression passed as the only argument needs no extra parentheses: `sum(fee.cents for fee in fees)`.
 - For async sources, an async generator streams the same way (`python-async-generators`).
