@@ -51,15 +51,20 @@ _SYNTHETIC_PYTHON_CODING_MEMBERS = (
     "python-classes-and-protocols",
     "python-context-managers",
     "python-custom-context-managers",
+    "python-custom-exceptions",
     "python-data-shapes",
     "python-dependency-injection",
     "python-docstrings",
+    "python-early-return",
+    "python-error-boundaries",
     "python-error-handling",
+    "python-error-messages-with-context",
     "python-idioms",
     "python-no-global-singletons",
     "python-parameterized-queries",
     "python-performance-idioms",
     "python-pure-core",
+    "python-small-units",
     "python-typing",
 )
 #: Every file the pre-v0.21 engine left under ``shared_skills/`` for ``_synced_then_rewound``:
@@ -143,8 +148,8 @@ def test_first_sync_after_upgrade_moves_pristine_shared_skills_tree(
 
     assert _sync.execute(repo, git=FakeGitClient()) == 0
 
-    # query-db's SKILL.md + run.py, python-coding's SKILL.md + its 11 rule files and
-    # python-tooling's SKILL.md + its 1 rule file: 16.
+    # query-db's SKILL.md + run.py, python-coding's SKILL.md + its 19 rule files + its
+    # 2 license copies and python-tooling's SKILL.md + its 1 rule file: 26.
     assert re.search(rf", {len(_OLD_TREE_FILES)} removed$", capsys.readouterr().out, re.MULTILINE)
     assert not (repo / _OLD_ROOT).exists()
     moved = repo / _NEW_ROOT / "query-db"

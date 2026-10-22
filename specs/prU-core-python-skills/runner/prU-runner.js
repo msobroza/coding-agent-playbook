@@ -42,7 +42,7 @@ function semaphore(n) {
   }
 }
 const slots = semaphore(PAR)
-const integrationLock = semaphore(1)
+const MAX_BATCH = 6  // tickets one integrator merges and gates together
 
 // ---- prompt pieces ----
 const TICKET_SOURCE = (t) => `Your ticket is ${t.id} (GitHub issue #${t.issue}): ${t.title}. Its full text (summary, files, tests, acceptance criteria, dependencies) is the section "${t.id}" of specs/prU-core-python-skills/tickets.md in the repository (content tickets follow that file's content-ticket template and their skill's mapping-<skill>.md). The design decisions are specs/prU-core-python-skills.md; the runbook is specs/prU-core-python-skills/implementation-runbook.md.`
@@ -105,6 +105,17 @@ const INTEG = {
   },
   required: ['integrated', 'integration_head', 'attempts', 'gate', 'fixes', 'cleanup', 'open_issues'],
 }
+const INTEG_BATCH = {
+  type: 'object',
+  properties: {
+    integration_head: { type: 'string' }, pushed: { type: 'boolean' }, attempts: { type: 'number' },
+    tickets: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, integrated: { type: 'boolean' }, note: { type: 'string' } }, required: ['id', 'integrated', 'note'] } },
+    gate: { type: 'array', items: { type: 'object', properties: { command: { type: 'string' }, result: { type: 'string' } }, required: ['command', 'result'] } },
+    fixes: { type: 'array', items: { type: 'string' } }, cleanup: { type: 'string' },
+    open_issues: { type: 'array', items: { type: 'string' } },
+  },
+  required: ['integration_head', 'pushed', 'attempts', 'tickets', 'gate', 'fixes', 'cleanup', 'open_issues'],
+}
 
 // ---- prompts ----
 const implementPrompt = (t) => `${IMPLEMENT_SKILL}
@@ -143,14 +154,22 @@ Return the structured result.`
 
 const LIGHT_TESTS = (py, range) => `run the LIGHT tests: list the changed files (/usr/bin/git diff --name-only ${range}); map each src/coding_agent_playbook/<pkg>/... to tests/<pkg>/ and each changed test file to its directory; run ${py} -m pytest -q -p no:cacheprovider --no-cov over those directories; add ${py} -m pytest -q -p no:cacheprovider --no-cov -m catalog when anything under catalog/ or tests/catalog changed, and tests/unit when SPEC.md, README.md, MIGRATION.md, CONTEXT.md or docs/ changed. ALWAYS also run ${py} -m pytest -q -p no:cacheprovider --no-cov tests/architecture tests/hook_runtime/test_import_budget.py: the import contracts and the hook import budgets break from changes anywhere, and a per-directory gate missed them before. One command per directory group, each with timeout 600000 (split a group that times out).`
 
-const integratePrompt = (t, sha) => `You are the INTEGRATOR for prU ticket ${t.id} (issue #${t.issue}) on machine ${M}. The owner (msobroza) said "start implementing", authorizing fast-forward pushes to ${BASE} only (never force-push, never main, no PRs, no issue edits). Another machine may integrate other tickets into the same branch at the same time.
-1. In your isolated worktree: /usr/bin/git fetch origin && /usr/bin/git checkout -B integrate-${t.id} origin/${BASE}. If a commit whose subject ends with "(#${t.issue})" is already on origin/${BASE}, stop: integrated=true, nothing to do.
-2. Check that origin/ticket/${t.id} is at ${sha} (if it moved, use the newer head and say so in open_issues). Run /usr/bin/git merge --squash origin/ticket/${t.id}; resolve conflicts keeping both sides' intent (import lists: union, then ruff --fix for I and F401; tests/cli/golden/cli_surface.json: never merge by hand, re-record it with ${venvOf('integrate-' + t.id)}/bin/python -m tests.cli.cli_surface after resolving the code, and review its diff). Commit ONE commit: subject = "${t.title} (#${t.issue})", body = a short summary then the line "Closes #${t.issue}". NEVER add Co-Authored-By or any trailer, never --author, never change git config, never sign.
-3. Light gate. From your worktree root: ${TOOLS}/overlay-venv.sh <your worktree's absolute path> ${venvOf('integrate-' + t.id)} ${SV}. Then ${SV}/bin/ruff check --no-cache . ; ${SV}/bin/ruff format --no-cache --check . ; PYTHONPATH=<worktree>/src ${SV}/bin/mypy ; then ${LIGHT_TESTS(venvOf('integrate-' + t.id) + '/bin/python', 'HEAD~1 HEAD')} Fix failures with small "fix: ..." commits (body ends "Refs: #${t.issue} (prU ${t.id})"); a failure that is pre-existing on origin/${BASE} goes to open_issues.
-4. Push with exactly: /usr/bin/git push origin HEAD:refs/heads/${BASE}. If it is rejected (someone pushed first): /usr/bin/git fetch origin && /usr/bin/git rebase origin/${BASE} (your local commits only; resolve conflicts as in step 2), rerun step 3's checks, push again. At most 4 attempts; report attempts.
-5. Cleanup: remove (/usr/bin/git worktree remove --force) only the worktrees whose branch is ticket/${t.id} or fix-${t.id} and whose status is clean, then delete those two local branches. If a removal is refused, leave it and say so in cleanup.
-${PYTHON('integrate-' + t.id)}
-Never write inside ${W}. Return the structured result (integrated=true only when the push succeeded or the squash commit was already there).`
+// One integrator merges every ticket waiting for integration (up to MAX_BATCH) and gates them
+// once: a single-ticket gate took ~25 min on an 8 GB machine, longer than the other machine's
+// push interval, so re-gating after each rejected push could loop for hours (2026-10-22).
+const batchIntegratePrompt = (batch, n) => {
+  const venv = venvOf(`integrate-${M}-${n}`)
+  const list = batch.map(b => ({ id: b.t.id, issue: b.t.issue, title: b.t.title, head: b.sha }))
+  return `You are the INTEGRATOR for a batch of ${batch.length} prU ticket(s) on machine ${M}. The owner (msobroza) said "start implementing", authorizing fast-forward pushes to ${BASE} only (never force-push, never main, no PRs, no issue edits). Another machine integrates into the same branch at the same time.
+Tickets, in this order (highest priority first): ${JSON.stringify(list, null, 1)}
+1. In your isolated worktree: /usr/bin/git fetch origin && /usr/bin/git checkout -B integrate-${M}-${n} origin/${BASE}. A ticket whose "(#<issue>)" commit is already on origin/${BASE} is done: integrated=true, note "already integrated".
+2. For each other ticket, in order: check origin/ticket/<id> (if its head is newer than the listed one, use it and say so in its note); /usr/bin/git merge --squash origin/ticket/<id>; resolve conflicts keeping both sides' intent (import lists: union, then ruff --fix for I and F401; tests/cli/golden/cli_surface.json: never merge by hand, re-record it with ${venv}/bin/python -m tests.cli.cli_surface after resolving the code, and review its diff); commit ONE commit per ticket: subject = "<title> (#<issue>)", body = a short summary then the line "Closes #<issue>". NEVER add Co-Authored-By or any trailer, never --author, never change git config, never sign. If a ticket cannot be merged after a real attempt, drop its partial merge (/usr/bin/git reset --hard HEAD), mark it integrated=false with the reason, and go on.
+3. Light gate, ONCE for the whole batch. From your worktree root: ${TOOLS}/overlay-venv.sh <your worktree's absolute path> ${venv} ${SV}. Then ${SV}/bin/ruff check --no-cache . ; ${SV}/bin/ruff format --no-cache --check . ; PYTHONPATH=<worktree>/src ${SV}/bin/mypy ; then ${LIGHT_TESTS(venv + '/bin/python', `origin/${BASE} HEAD`)} Fix failures with small "fix: ..." commits (body ends "Refs: prU integration batch ${M}-${n}"); a failure that is pre-existing on origin/${BASE} goes to open_issues. If one ticket breaks the gate and you cannot fix it quickly, rebuild the batch without it (/usr/bin/git reset --hard origin/${BASE}, redo step 2 for the others; never revert, because its "(#<issue>)" subject would stay in the history) and mark it integrated=false with the failure.
+4. Push with exactly: /usr/bin/git push origin HEAD:refs/heads/${BASE}. If it is rejected (the other machine pushed first): /usr/bin/git fetch origin && /usr/bin/git rebase origin/${BASE}. If the rebase applies WITHOUT conflicts, push again at once and do NOT rerun the gate: the commits you rebased onto passed their own gate, and the full suite at the end checks the combination. If it had conflicts, resolve them as in step 2, rerun ruff and only the tests of the conflicted files' directories, then push. At most 6 attempts; report attempts.
+5. Cleanup: for each integrated ticket, remove (/usr/bin/git worktree remove --force) only the worktrees whose branch is ticket/<id> or fix-<id> and whose status is clean, then delete those local branches. If a removal is refused, leave it and say so in cleanup.
+${PYTHON(`integrate-${M}-${n}`)}
+Never write inside ${W}. Return integration_head, pushed, attempts, and for EVERY ticket of the batch {id, integrated, note}: integrated=true only when its squash commit is on origin/${BASE} after your push, or was already there.`
+}
 
 const fullGatePrompt = () => `You are the FINAL GATE for prU on machine ${M}: run the full CI-parity gate once on the integration tip. Authorized: fast-forward pushes to ${BASE} only (never force-push, never main, no PRs, no issue edits).
 1. In your isolated worktree: /usr/bin/git fetch origin && /usr/bin/git checkout -B final-gate origin/${BASE}. Build the overlay: ${TOOLS}/overlay-venv.sh <your worktree's absolute path> ${venvOf('final-gate')} ${SV}.
@@ -186,16 +205,35 @@ async function ticketChain(t) {
   return integrateTicket(t, (fix && fix.head_sha) || impl.head_sha, { impl, reviews, fix })
 }
 
-async function integrateTicket(t, sha, earlier) {
-  await integrationLock.acquire(t.priority || 0)
-  try {
-    const integ = await agent(integratePrompt(t, sha), { label: `integrate:${t.id}`, phase: 'Integrate', agentType: 'general-purpose', effort: 'medium', isolation: 'worktree', schema: INTEG })
-    const ok = !!(integ && integ.integrated)
-    log(`${t.id}: ${ok ? 'integrated at ' + integ.integration_head : 'NOT integrated'}`)
-    return { t, status: ok ? 'integrated' : 'failed', stage: 'integrate', ...earlier, integ }
-  } finally {
-    integrationLock.release()
+// Tickets that finish review and fix queue here; whenever no integrator is running, the next
+// one takes the whole queue (highest priority first, up to MAX_BATCH), so integration keeps
+// pace with several implementers instead of serializing one ticket per gate.
+const integrationQueue = []
+let integrating = false
+let batchCount = 0
+function integrateTicket(t, sha, earlier) {
+  return new Promise(resolve => {
+    integrationQueue.push({ t, sha, earlier, resolve })
+    pumpIntegration()
+  })
+}
+
+async function pumpIntegration() {
+  if (integrating || integrationQueue.length === 0) return
+  integrating = true
+  integrationQueue.sort((a, b) => (b.t.priority || 0) - (a.t.priority || 0))
+  const batch = integrationQueue.splice(0, MAX_BATCH)
+  batchCount += 1
+  const res = await agent(batchIntegratePrompt(batch, batchCount), { label: `integrate:${batch.map(b => b.t.id).join('+')}`, phase: 'Integrate', agentType: 'general-purpose', effort: 'medium', isolation: 'worktree', schema: INTEG_BATCH })
+  for (const item of batch) {
+    const r = res && (res.tickets || []).find(x => x.id === item.t.id)
+    const ok = !!(r && r.integrated)
+    log(`${item.t.id}: ${ok ? 'integrated at ' + res.integration_head : 'NOT integrated' + (r ? ': ' + r.note : '')}`)
+    const integ = res ? { integration_head: res.integration_head, attempts: res.attempts, gate: res.gate, fixes: res.fixes, cleanup: res.cleanup, open_issues: [...(res.open_issues || []), ...(r && r.note ? [r.note] : [])] } : null
+    item.resolve({ t: item.t, status: ok ? 'integrated' : 'failed', stage: 'integrate', ...item.earlier, integ })
   }
+  integrating = false
+  pumpIntegration()
 }
 
 // ---- dependency-ordered scheduling ----
