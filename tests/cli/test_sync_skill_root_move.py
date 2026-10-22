@@ -50,24 +50,30 @@ _SYNTHETIC_PYTHON_CODING_MEMBERS = (
     "python-async",
     "python-classes-and-protocols",
     "python-context-managers",
+    "python-custom-context-managers",
     "python-data-shapes",
     "python-dependency-injection",
     "python-docstrings",
     "python-error-handling",
     "python-idioms",
+    "python-no-global-singletons",
+    "python-parameterized-queries",
     "python-performance-idioms",
     "python-pure-core",
     "python-typing",
 )
 #: Every file the pre-v0.21 engine left under ``shared_skills/`` for ``_synced_then_rewound``:
-#: query-db's two, the core python-coding skill with one rule file per active member, and
-#: python-tooling with its one ungated member (no framework, no uv.lock).
+#: query-db's two, the core python-coding skill with one rule file per active member and its
+#: two upstream license copies (D19), and python-tooling with its one ungated member (no
+#: framework, no uv.lock).
 _OLD_TREE_FILES = frozenset(
     {
         "query-db/SKILL.md",
         "query-db/scripts/run.py",
         "python-coding/SKILL.md",
         *(f"python-coding/rules/{rule_id}.md" for rule_id in _SYNTHETIC_PYTHON_CODING_MEMBERS),
+        "python-coding/references/LICENSE.python-best-practices",
+        "python-coding/references/LICENSE.python-clean-architecture",
         "python-tooling/SKILL.md",
         "python-tooling/rules/python-static-checks.md",
     }
