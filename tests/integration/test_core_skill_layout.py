@@ -20,10 +20,10 @@ from coding_agent_playbook.adapters.opencode import OpenCodeAdapter
 from coding_agent_playbook.adapters.shared_skills import SharedSkillsAdapter
 from tests._catalog import REPO_ROOT
 from tests._core_skill_layout import (
+    every_gate_problems,
     inventory_problems,
     link_problems,
     nesting_problems,
-    skill_layout_problems,
 )
 
 if TYPE_CHECKING:
@@ -35,6 +35,40 @@ pytestmark = pytest.mark.catalog
 
 _SKILL_MD: Final = "---\nid: demo\nname: demo\ndescription: Demo.\n---\n# Demo\n"
 _RULE: Final = "---\nid: demo-rule\nscope: scoped\n---\n# Demo rule\n"
+#: A member skill's SKILL.md whose playbook block lists its reference and its example.
+_MEMBER_SKILL_MD: Final = """\
+---
+id: demo
+name: demo
+description: Conventions for the demo models.
+playbook:
+  use_when: changing a demo model
+  files: Demo modules
+  references:
+    - path: references/x.md
+      open_when: Naming a demo model.
+    - path: examples/app
+      open_when: Wiring a demo app.
+      applies_if:
+        has_framework: [fastapi]
+---
+# Demo
+
+Open the reference the change needs.
+"""
+#: A complete member rule of the scratch skill, delivered from its rules/.
+_MEMBER_RULE: Final = """\
+---
+id: demo-rule
+name: Demo rule
+description: Follow the demo conventions.
+scope: scoped
+globs: ["src/demo/**/*.py"]
+priority: 50
+---
+# Demo rule
+
+"""
 
 
 def _scratch_skill(root: Path, files: dict[str, str], skill_id: str = "demo") -> Path:
@@ -46,23 +80,42 @@ def _scratch_skill(root: Path, files: dict[str, str], skill_id: str = "demo") ->
     return skill_dir
 
 
-def test_a_skill_with_references_scripts_examples_and_a_linking_rule_passes(
+def test_a_skill_with_references_scripts_examples_and_a_linking_rule_passes_every_gate(
     tmp_path: Path,
 ) -> None:
+    """The directory, SKILL.md and ``playbook validate`` gates all accept it (D47 listing too)."""
     skill_dir = _scratch_skill(
-        tmp_path,
+        tmp_path / "playbook" / "skills",
         {
             "references/x.md": "# X\n",
             "references/LICENSE.python-best-practices": "MIT\n",
             "scripts/y.py": "print('y')\n",
             "examples/app/pyproject.toml": "[project]\nname = 'app'\n",
             "examples/app/src/app/main.py": "x = 1\n",
-            "rules/demo-rule.md": _RULE + "See [x](../references/x.md).\n",
+            "rules/demo-rule.md": _MEMBER_RULE + "See [x](../references/x.md).\n",
         },
     )
-    (skill_dir / "SKILL.md").write_text(_SKILL_MD + "Read [x](references/x.md).\n", "utf-8")
+    (skill_dir / "SKILL.md").write_text(_MEMBER_SKILL_MD + "Read [x](references/x.md).\n", "utf-8")
 
-    assert skill_layout_problems(skill_dir) == []
+    assert every_gate_problems(skill_dir) == []
+
+
+def test_every_gate_names_a_references_file_no_entry_lists(tmp_path: Path) -> None:
+    """D47 through ``playbook validate``: an unlisted references/ file fails the scratch skill."""
+    skill_dir = _scratch_skill(
+        tmp_path / "playbook" / "skills",
+        {
+            "references/x.md": "# X\n",
+            "references/unlisted.md": "# U\n",
+            "examples/app/main.py": "x = 1\n",
+            "rules/demo-rule.md": _MEMBER_RULE,
+        },
+    )
+    (skill_dir / "SKILL.md").write_text(_MEMBER_SKILL_MD, "utf-8")
+
+    [problem] = every_gate_problems(skill_dir)
+
+    assert problem.startswith("validate: ") and "references/unlisted.md" in problem
 
 
 def test_a_rule_linking_into_another_skill_fails_naming_the_path(tmp_path: Path) -> None:
@@ -103,6 +156,7 @@ def test_a_dangling_link_fails(tmp_path: Path) -> None:
     [
         ("notes.md", "notes.md"),
         ("rules/README.txt", "README.txt"),
+        ("rules/README.md", "README.md"),
         ("references/data.json", "data.json"),
         ("references/deep/x.md", "deep"),
         ("scripts/run.sh", "run.sh"),
@@ -142,11 +196,15 @@ def test_ci_runs_every_core_example_in_its_own_environment() -> None:
     workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     job = workflow.partition("\n  core-examples:\n")[2].partition("\n  wheel-smoke:\n")[0]
     assert "'*/examples/*/pyproject.toml'" in job
-    assert 'uv run --directory "$example" --python "$PYTHON_VERSION" pytest' in job
+    assert 'uv run --directory "$example" pytest' in job
 
 
 @pytest.mark.parametrize("adapter", [ClaudeCodeAdapter, OpenCodeAdapter, SharedSkillsAdapter])
 def test_native_skill_roots_are_dot_directories(adapter: type[Adapter]) -> None:
-    """D48: pytest skips dot-directories, so a consumer's test run never collects a synced example."""
+    """D48: pytest skips dot-directories, so a consumer's test run never collects a synced example.
+
+    The ``agent_harness`` tree is not a dot-directory; its ``skills/conftest.py``
+    keeps pytest out instead (``tests/agent_harness/test_skill_examples.py``).
+    """
     root = adapter.native_skills_root
     assert root is not None and root.startswith("."), root

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final, Literal, TypedDict
 
 # Imported at run time: Skill.from_dict rebuilds member references from dicts.
 from coding_agent_playbook.artifacts.member_reference import MemberReference
@@ -12,6 +12,33 @@ from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+#: The name of one byte-copied skill subtree (SPEC §6.3, prU D48).
+type SideDirName = Literal["scripts", "references", "examples"]
+#: Every side dir name, in write order.
+SIDE_DIR_NAMES: Final[tuple[SideDirName, ...]] = ("scripts", "references", "examples")
+
+
+class SideDirs(TypedDict):
+    """A skill directory's side dirs as :class:`Skill` keyword arguments (``None`` when absent)."""
+
+    scripts_dir: Path | None
+    references_dir: Path | None
+    examples_dir: Path | None
+
+
+def side_dirs_at(skill_dir: Path) -> SideDirs:
+    """The side dirs present in ``skill_dir``, to pass as ``Skill(..., **side_dirs_at(skill_dir))``.
+
+    Example: for a dir holding only ``scripts/`` -> ``{"scripts_dir": skill_dir / "scripts",
+    "references_dir": None, "examples_dir": None}``.
+    """
+    present = {name: skill_dir / name for name in SIDE_DIR_NAMES if (skill_dir / name).is_dir()}
+    return SideDirs(
+        scripts_dir=present.get("scripts"),
+        references_dir=present.get("references"),
+        examples_dir=present.get("examples"),
+    )
 
 
 @dataclass(frozen=True)
@@ -69,16 +96,37 @@ class Skill:
     # whose applies_if failed; their files are neither listed nor written (D48, D58).
     withheld_paths: tuple[str, ...] = ()
 
-    def side_dirs(self) -> tuple[tuple[str, Path | None], ...]:
+    def side_dir(self, name: SideDirName) -> Path | None:
+        """The source dir of side dir ``name``; ``None`` when the skill has none.
+
+        Raises ``ValueError`` naming ``name`` and the allowed names for any other value.
+
+        Example: ``skill.side_dir("examples")`` -> ``skill.examples_dir``.
+        """
+        dirs: dict[str, Path | None] = {
+            "scripts": self.scripts_dir,
+            "references": self.references_dir,
+            "examples": self.examples_dir,
+        }
+        if name not in dirs:
+            raise ValueError(
+                f"unknown skill side dir {name!r}; expected one of {', '.join(SIDE_DIR_NAMES)}"
+            )
+        return dirs[name]
+
+    def side_dirs(self) -> tuple[tuple[SideDirName, Path | None], ...]:
         """The byte-copied subtrees, ``(name, source dir or None)``, in write order.
 
         Example: ``dict(skill.side_dirs())["examples"]`` -> ``skill.examples_dir``.
         """
-        return (
-            ("scripts", self.scripts_dir),
-            ("references", self.references_dir),
-            ("examples", self.examples_dir),
-        )
+        return tuple((name, self.side_dir(name)) for name in SIDE_DIR_NAMES)
+
+    def side_dir_home(self) -> Path | None:
+        """The directory holding the skill's side dirs: the parent of the first one present.
+
+        Example: with ``references_dir=Path("skills/x/references")`` -> ``Path("skills/x")``.
+        """
+        return next((path.parent for _, path in self.side_dirs() if path is not None), None)
 
     def is_withheld(self, relative: str) -> bool:
         """Whether sync must not write the file at skill-relative ``relative`` (D48, D58).
@@ -98,6 +146,9 @@ class Skill:
             for entry, held in (*listed, *withheld)
             if path == PurePosixPath(entry) or PurePosixPath(entry) in path.parents
         ]
+        # The deepest entry wins. Two entries of one depth name the same path, one
+        # listed and one withheld; max() then picks (depth, True), so a failed gate
+        # is never overridden by a passing twin.
         return max(covering)[1] if covering else False
 
     def to_prompt(self) -> Prompt:

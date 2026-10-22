@@ -8,8 +8,10 @@ in :meth:`finalize`, so ``HARNESS.md`` can index everything that was emitted.
 
 Layout (§B):
 
-- ``skills/<id>/SKILL.md`` (+ ``scripts/`` + ``references/``) and ``skills/SKILLS.md``;
-  the ``SKILL.md`` body ends with the generated rules index (prU D46.7).
+- ``skills/<id>/SKILL.md`` (+ ``scripts/`` + ``references/`` + ``examples/``) and
+  ``skills/SKILLS.md``; the ``SKILL.md`` body ends with the generated rules index
+  (prU D46.7). When an ``examples/`` is written, ``skills/conftest.py`` keeps a
+  consumer's pytest out of it (prU D48).
 - ``skills/<id>/rules/<rule-id>.md`` for each member rule of an emitted skill
   (prU D22, D5), written by :mod:`._emit_rules`.
 - ``prompts/<slash>/SKILL.md`` (skill-shaped leaf) and ``prompts/PROMPTS.md``;

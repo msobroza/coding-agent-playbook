@@ -48,7 +48,7 @@ from coding_agent_playbook.security.files import is_secret_file, user_home
 if TYPE_CHECKING:
     from pathlib import Path, PurePath
 
-    from coding_agent_playbook.artifacts.skill import Skill
+    from coding_agent_playbook.artifacts.skill import SideDirName, Skill
 
 #: Directory names whose whole subtree a sync never copies.
 SKIPPED_DIR_NAMES: frozenset[str] = frozenset({"__pycache__"})
@@ -119,20 +119,23 @@ def copyable_skill_files(src: Path | None, dst_root: Path) -> list[Path]:
     return copyable
 
 
-def published_skill_files(skill: Skill, name: str, dst_root: Path) -> list[tuple[Path, Path]]:
+def published_skill_files(
+    skill: Skill, name: SideDirName, dst_root: Path
+) -> list[tuple[Path, Path]]:
     """``(source file, destination)`` for each file of ``skill``'s side dir ``name`` a sync writes.
 
     :func:`copyable_skill_files` of the side dir (``scripts``, ``references`` or
     ``examples``), minus the files a ``playbook.references`` entry whose
     ``applies_if`` failed withholds (``Skill.is_withheld``, prU D48, D58).
-    ``[]`` when the skill has no such dir.
+    ``[]`` when the skill has no such dir; ``ValueError`` (from
+    ``Skill.side_dir``) for a name that is no side dir.
 
     Example::
 
         for src, dst in published_skill_files(skill, "examples", skill_dir / "examples"):
             ...  # copy src to dst
     """
-    src_root = dict(skill.side_dirs())[name]
+    src_root = skill.side_dir(name)
     if src_root is None:
         return []
     pairs = [(src, src.relative_to(src_root)) for src in copyable_skill_files(src_root, dst_root)]

@@ -105,3 +105,18 @@ def test_listed_references_are_the_entries_whose_applies_if_passes() -> None:
         ListedReference("references/guide.md", "Choosing a fake."),
         ListedReference("examples/booking-api", "Copying a test layout."),
     )
+    # prU D48, D58: the failed entries' paths are withheld, in declared order.
+    assert composed.withheld_paths == ("references/django.md",)
+
+
+def test_an_entry_validate_rejects_is_neither_listed_nor_withheld() -> None:
+    references = [
+        "references/bare.md",
+        {"path": "references/no-open-when.md"},
+        {"path": "references/gated.md", "open_when": "Gated.", "applies_if": {"x": 1}},
+    ]
+    rules = [_rule("mock-faithful", "mocking", 20)]
+    [composed] = compose_skills(
+        [_skill(references=references)], rules, rules, reference_applies=lambda _: False
+    )
+    assert (composed.listed_references, composed.withheld_paths) == ((), ("references/gated.md",))

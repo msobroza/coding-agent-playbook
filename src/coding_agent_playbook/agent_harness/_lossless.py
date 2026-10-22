@@ -21,7 +21,7 @@ from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
 from coding_agent_playbook.artifacts.member_reference import skill_member_location
 from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
-from coding_agent_playbook.artifacts.skill import Skill
+from coding_agent_playbook.artifacts.skill import Skill, side_dirs_at
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -179,16 +179,11 @@ def _skill_from_entry(path: Path, entry: ManifestEntry, source_package: str) -> 
     }
     rebuilt.update(entry.extra_frontmatter)
     restore_recorded_exec_bits(path, entry)
-    scripts_dir = path.parent / "scripts"
-    references_dir = path.parent / "references"
-    examples_dir = path.parent / "examples"
     return Skill(
         frontmatter=rebuilt,
         body=body,
-        scripts_dir=scripts_dir if scripts_dir.is_dir() else None,
-        references_dir=references_dir if references_dir.is_dir() else None,
-        examples_dir=examples_dir if examples_dir.is_dir() else None,
         source_package=source_package,
+        **side_dirs_at(path.parent),
     )
 
 

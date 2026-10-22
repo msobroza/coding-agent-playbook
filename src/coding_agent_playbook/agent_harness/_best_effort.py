@@ -21,7 +21,7 @@ from coding_agent_playbook.agent_harness.parser import parse_harness
 from coding_agent_playbook.artifacts.hook_schema import ADVISORY_RULE_PREFIX
 from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter, RuleScope
-from coding_agent_playbook.artifacts.skill import Skill
+from coding_agent_playbook.artifacts.skill import Skill, side_dirs_at
 from coding_agent_playbook.skills.document import strip_rules_index
 
 if TYPE_CHECKING:
@@ -104,9 +104,6 @@ def _best_effort_leaf(leaf: SkillLeaf, top: str, result: ImportResult, source_pa
         f"skill {skill_id!r}: extra frontmatter + script exec bits not recoverable "
         "without sidecar; using on-disk bits as-is"
     )
-    scripts_dir = leaf.path / "scripts"
-    references_dir = leaf.path / "references"
-    examples_dir = leaf.path / "examples"
     result.skills.append(
         Skill(
             frontmatter={
@@ -115,10 +112,8 @@ def _best_effort_leaf(leaf: SkillLeaf, top: str, result: ImportResult, source_pa
                 "description": leaf.description,
             },
             body=strip_rules_index(strip_sentinel(leaf.body)),
-            scripts_dir=scripts_dir if scripts_dir.is_dir() else None,
-            references_dir=references_dir if references_dir.is_dir() else None,
-            examples_dir=examples_dir if examples_dir.is_dir() else None,
             source_package=source_package,
+            **side_dirs_at(leaf.path),
         )
     )
     for item in leaf.rules:

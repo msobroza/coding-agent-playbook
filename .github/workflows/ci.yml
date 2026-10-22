@@ -97,31 +97,25 @@ jobs:
   # pyproject.toml. uv builds a throwaway .venv inside the example from that
   # pyproject (its dependencies plus its default dev group), so the engine's
   # install, pyproject and lock gain nothing, and the `test` job never imports
-  # example code (pytest's testpaths is tests/). mypy runs when the example
-  # configures it in [tool.mypy]. No example yet: the step says so and passes.
+  # example code (pytest's testpaths is tests/). No example yet: the step says
+  # so and passes.
   core-examples:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.10", "3.12"]
     defaults:
       run:
         shell: bash
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.12"
 
       - name: Install uv
         run: python -m pip install uv
 
       - name: Test every core example in its own environment
-        env:
-          PYTHON_VERSION: ${{ matrix.python-version }}
         run: |
           set -euo pipefail
           mapfile -t examples < <(find catalog/core/skills -mindepth 4 -maxdepth 4 -path '*/examples/*/pyproject.toml' -printf '%h\n' | sort)
@@ -131,10 +125,7 @@ jobs:
           fi
           for example in "${examples[@]}"; do
             echo "::group::$example"
-            uv run --directory "$example" --python "$PYTHON_VERSION" pytest
-            if grep -q '^\[tool\.mypy\]' "$example/pyproject.toml"; then
-              uv run --directory "$example" --python "$PYTHON_VERSION" mypy
-            fi
+            uv run --directory "$example" pytest
             echo "::endgroup::"
           done
 

@@ -28,7 +28,7 @@ from coding_agent_playbook.generated_output.source_files import copyable_skill_f
 from coding_agent_playbook.rendering.formats import with_sentinel_body
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterable, Sequence
     from pathlib import Path
 
     from coding_agent_playbook.artifacts.rule import Rule
@@ -130,18 +130,37 @@ def copy_scripts(
 
     Bytecode caches are skipped too (``generated_output.source_files.skill_subtree_files``).
     Returns their manifest ``ScriptEntry`` records (repo-relative, with the
-    source's exec bit) and the copied paths. Shared by skills and hooks.
+    source's exec bit) and the copied paths, through :func:`copy_script_files`.
 
     Example::
 
-        scripts, paths = copy_scripts(skill.scripts_dir, skill_dir / "scripts", repo_root)
+        scripts, paths = copy_scripts(hook.scripts_dir, hook_dir / "scripts", repo_root)
     """
     if source is None:
         return [], []
+    pairs = [
+        (src, dst_root / src.relative_to(source)) for src in copyable_skill_files(source, dst_root)
+    ]
+    return copy_script_files(pairs, repo_root)
+
+
+def copy_script_files(
+    pairs: Iterable[tuple[Path, Path]], repo_root: Path
+) -> tuple[list[manifest.ScriptEntry], list[Path]]:
+    """Byte-copy each ``(source, destination)`` pair, keeping the source's exec bit.
+
+    Returns their manifest ``ScriptEntry`` records (repo-relative, with the exec
+    bit) and the copied paths. A skill passes its published ``scripts/`` files
+    (``published_skill_files``), so a file a failed ``applies_if`` withholds is
+    never copied (prU D48, D58).
+
+    Example::
+
+        scripts, paths = copy_script_files(published_skill_files(skill, "scripts", dst), root)
+    """
     scripts: list[manifest.ScriptEntry] = []
     paths: list[Path] = []
-    for src in copyable_skill_files(source, dst_root):
-        dst = dst_root / src.relative_to(source)
+    for src, dst in pairs:
         executable = emitter.copy_script(src, dst)
         scripts.append(manifest.ScriptEntry(dst.relative_to(repo_root).as_posix(), executable))
         paths.append(dst)

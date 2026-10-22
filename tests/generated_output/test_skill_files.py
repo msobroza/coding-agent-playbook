@@ -1,5 +1,8 @@
 """Tests for the skill-subtree copy rule shared by every skill writer (SPEC §10.8).
 
+``published_skill_files`` is that rule minus the files a failed ``applies_if``
+withholds (prU D48, D58): the one list both skill writers copy.
+
 Regression for review finding 8: Python bytecode caches next to a skill's
 scripts (written by ``pip install`` byte-compilation or an in-process import)
 were synced into every consumer skill root and listed in the lockfile.
@@ -7,12 +10,15 @@ were synced into every consumer skill root and listed in the lockfile.
 
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path, PurePath
 
 import pytest
 
+from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.generated_output.source_files import (
     is_bytecode_cache,
+    published_skill_files,
     skill_subtree_files,
 )
 
@@ -58,3 +64,40 @@ def test_skill_subtree_files_judges_paths_relative_to_the_subtree(tmp_path: Path
     (src / "run.py").write_bytes(b"print('hi')\n")
 
     assert skill_subtree_files(src) == [src / "run.py"]
+
+
+def _skill_with_examples(tmp_path: Path, *withheld: str) -> Skill:
+    """A skill whose ``examples/`` holds ``app/main.py`` and ``cli/main.py``."""
+    examples = tmp_path / "examples"
+    for relative in ("app/main.py", "cli/main.py", "app/__pycache__/main.cpython-312.pyc"):
+        (examples / relative).parent.mkdir(parents=True, exist_ok=True)
+        (examples / relative).write_text("x = 1\n", encoding="utf-8")
+    skill = Skill({"id": "x"}, "", None, None, "pkg", examples_dir=examples)
+    return dataclasses.replace(skill, withheld_paths=withheld)
+
+
+def test_published_skill_files_pairs_each_copyable_file_with_its_destination(
+    tmp_path: Path,
+) -> None:
+    skill = _skill_with_examples(tmp_path)
+    dst = tmp_path / "out" / "examples"
+
+    pairs = published_skill_files(skill, "examples", dst)
+
+    assert pairs == [
+        (tmp_path / "examples" / "app" / "main.py", dst / "app" / "main.py"),
+        (tmp_path / "examples" / "cli" / "main.py", dst / "cli" / "main.py"),
+    ]
+
+
+def test_published_skill_files_drops_what_a_failed_gate_withholds(tmp_path: Path) -> None:
+    """prU D48, D58: the entry's path is skill-relative, so ``examples/cli`` covers cli/."""
+    skill = _skill_with_examples(tmp_path, "examples/cli")
+
+    pairs = published_skill_files(skill, "examples", tmp_path / "out")
+
+    assert [src.relative_to(tmp_path).as_posix() for src, _ in pairs] == ["examples/app/main.py"]
+
+
+def test_published_skill_files_is_empty_without_the_side_dir(tmp_path: Path) -> None:
+    assert published_skill_files(_skill_with_examples(tmp_path), "scripts", tmp_path) == []

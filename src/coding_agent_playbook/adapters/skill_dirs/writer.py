@@ -61,6 +61,7 @@ from typing import TYPE_CHECKING
 from coding_agent_playbook.adapters.skill_dirs.ownership import PriorOutput
 from coding_agent_playbook.artifacts.frontmatter import format_frontmatter
 from coding_agent_playbook.artifacts.member_reference import member_reference_path
+from coding_agent_playbook.artifacts.skill import SIDE_DIR_NAMES
 from coding_agent_playbook.generated_output.sentinel import has_sentinel
 from coding_agent_playbook.generated_output.source_files import published_skill_files
 from coding_agent_playbook.generated_output.symlinks import (
@@ -75,7 +76,7 @@ from coding_agent_playbook.skills.naming import skill_id_of
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from coding_agent_playbook.artifacts.skill import Skill
+    from coding_agent_playbook.artifacts.skill import SideDirName, Skill
 
 #: The primary file of a native skill directory.
 SKILL_FILENAME = "SKILL.md"
@@ -362,7 +363,7 @@ def _write_skill_files(
         return []
     skill_md.write_text(skill_md_text, encoding="utf-8")
     written = [skill_md]
-    for name, _ in skill.side_dirs():
+    for name in SIDE_DIR_NAMES:
         written.extend(_copy_subtree(skill, name, skill_dir, prior))
     written.extend(_write_member_references(skill, skill_dir, prior))
     return written
@@ -473,7 +474,9 @@ def _remove_existing(dst: Path) -> None:
     dst.unlink(missing_ok=True)
 
 
-def _copy_subtree(skill: Skill, name: str, skill_dir: Path, prior: PriorOutput) -> list[Path]:
+def _copy_subtree(
+    skill: Skill, name: SideDirName, skill_dir: Path, prior: PriorOutput
+) -> list[Path]:
     """Byte-copy every published file of ``skill``'s side dir ``name`` into ``skill_dir/name``.
 
     ``name`` is ``scripts``, ``references`` or ``examples`` (``shutil.copy2``).

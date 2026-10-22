@@ -21,7 +21,7 @@ from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
 from coding_agent_playbook.artifacts.prompt import Prompt
 from coding_agent_playbook.artifacts.rule import Rule, RuleLoadError
-from coding_agent_playbook.artifacts.skill import Skill
+from coding_agent_playbook.artifacts.skill import Skill, side_dirs_at
 from coding_agent_playbook.catalog._hook_walk import walk_hook_layer
 from coding_agent_playbook.catalog._skill_rules import (
     iter_md_files,
@@ -228,24 +228,20 @@ def _iter_skills(skills_root: Path, source_package: str) -> Iterator[Skill]:
 
     Each skill directory must contain ``SKILL.md`` (or ``SKILL.md.j2``).
     ``scripts/``, ``references/`` and ``examples/`` (prU D48) sibling
-    subdirectories are recorded on the Skill if present. A ``rules/`` subdirectory is not: its files are
-    rules, which :meth:`FileSystemArtifactSource.collect_rules` loads as
-    members of this skill (prU D5), never byte-copied.
+    subdirectories are recorded on the Skill if present. A ``rules/``
+    subdirectory is not: its files are rules, which
+    :meth:`FileSystemArtifactSource.collect_rules` loads as members of this
+    skill (prU D5), never byte-copied.
     """
     for skill_dir, skill_md in iter_skill_dirs(skills_root):
         text = skill_md.read_text(encoding="utf-8")
         frontmatter, body = split_frontmatter(text)
-        scripts_dir = skill_dir / "scripts"
-        references_dir = skill_dir / "references"
-        examples_dir = skill_dir / "examples"
         yield Skill(
             frontmatter=frontmatter,
             body=body,
-            scripts_dir=scripts_dir if scripts_dir.is_dir() else None,
-            references_dir=references_dir if references_dir.is_dir() else None,
             source_package=source_package,
             source_dir=skill_dir,
-            examples_dir=examples_dir if examples_dir.is_dir() else None,
+            **side_dirs_at(skill_dir),
         )
 
 
