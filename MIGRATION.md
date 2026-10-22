@@ -1,8 +1,11 @@
 # Migration guide
 
 > **Heads-up:** **v0.21** moves every scoped rule into a skill. A repo or overlay with its own
-> scoped rules must add `skill: <skill-id>` to each one, or `playbook sync` refuses them. Run
-> `playbook validate` before upgrading.
+> scoped rules must add `skill: <skill-id>` to each one, or `playbook sync` refuses them. A
+> repo-local rule that joins a core skill also needs `section:` and a priority inside that
+> section's impact band. Run `playbook validate` before upgrading. Member rules are now
+> written to `<skill>/rules/<rule-id>.md`, and four core rule ids are retired; see the
+> v0.21 TL;DR.
 >
 > **v0.20** (assistant lifecycle hooks, below) asks one thing of every
 > consumer: run `playbook validate` before upgrading, because `playbook sync` now
@@ -658,10 +661,13 @@ v0.21 is the skills-first release. It keeps only always rules in always-loaded
 context: every scoped rule names the one skill that owns its topic (`skill:` in
 its frontmatter), and the engine writes it as a reference inside that skill
 (design `specs/prS-skills-context.md`; decision record
-`docs/adr/0001-scoped-rules-are-delivered-as-skill-references.md`). Core now
-ships four skills: `python-coding`, `python-testing`, `python-tooling` and
+`docs/adr/0001-scoped-rules-are-delivered-as-skill-references.md`). Core
+ships the skills `python-coding`, `python-testing`, `python-tooling` and
 `ml-data`, plus `playbook-guardrails`, which holds the hooks' guardrail text
-when hooks are on. Each change of the release has a row in the table below, and a
+when hooks are on, and new skills built from vendored upstream guidance (see
+"New core skills"). Member rules live in their skill's `rules/` directory, in
+the catalog and in the output (`docs/adr/0005-member-rules-live-in-their-skills-rules-directory.md`),
+and each skill groups them into sections by impact. Each change of the release has a row in the table below, and a
 subsection after it when a row is not enough. The terms always rule, scoped
 rule, member rule, skill and reference mean what `CONTEXT.md` says. The SPEC
 changelog entry is v0.21.
@@ -684,14 +690,21 @@ changelog entry is v0.21.
 | A repo, overlay or bundled plugin whose scoped rules name a skill (`skill:`) | Nothing: the next `playbook sync` drops those rules from `AGENTS.md` and the Claude Code rules file and adds a generated `## Where guidance lives` section that names their skills. With only `agents_md` on (`adapters_enabled = []`), sync warns that they reach no assistant: add `claude_code`, `opencode` or `shared_skills`. See "AGENTS.md and the Claude Code rules file hold only always rules". |
 | Only using engine content (core, bundled plugins) | Nothing. The next `playbook sync` (the post-checkout hook runs it) rewrites `AGENTS.md` and the Claude Code rules file and adds the core skill directories. See "Scoped rules arrive as skill references". |
 | Overriding `project-context` or `python-house-style` by id | Nothing: your text keeps winning. Consider trimming it, since the engine's own text is now much shorter. See "The always text is shorter". |
-| Keeping your own scoped rules in `playbook/rules/` or an overlay | Add `skill: <skill-id>` to each before upgrading ("Add skill: to your own scoped rules"). Until then `playbook validate` fails and `playbook sync` refuses to run. |
+| Keeping your own scoped rules in `playbook/rules/` or an overlay | Add `skill: <skill-id>` to each before upgrading ("Add skill: to your own scoped rules"); a repo-local rule joining a core skill also needs `section:` and an in-band priority (row below). Until then `playbook validate` fails and `playbook sync` refuses to run. |
 | Tooling or prompts that match lint-feedback lines (`rule <id>: …`) | Accept the new `rule <id> (skill <skill>): …` prefix and the ` (rule <id>, skill <skill>)` suffix; the next `playbook sync` turns them on. See "Guardrails and lint feedback point at skills". |
 | A repo with hooks on (the new `skill-nudge` hook) | Nothing: the next `playbook sync` turns it on. To keep it off, add `disable = ["skill-nudge"]` to `[hooks]`. See "Guardrails and lint feedback point at skills". |
 | A repo with hooks on (the new `playbook-guardrails` skill) | Nothing: the next `playbook sync` writes it to `.opencode/skills/` and `.agents/skills/`, and settles it as a leftover once hooks are off. See "Guardrails and lint feedback point at skills". |
 | A repo with hooks on (the `AGENTS.md` Guardrails section) | Nothing: the next `playbook sync` turns each guardrail into one line. Overlay and repo-local hooks may add a `summary:` line to `HOOK.md`; without one they get the first sentence of their body. Tooling that reads the old `### <name>` blocks should read the skill. See "Guardrails and lint feedback point at skills". |
-| Any repo with Python code (distilled python-best-practices content) | Nothing but `playbook sync`: `python-coding` gains three references and six change text; with pytest, `python-testing` gains two and `pytest` changes text; `python-tooling` is now written in every Python repo, with up to four new references and a new (or, with FastAPI, reworded) "Where guidance lives" line; and with NumPy, pandas or polars, `ml-data` gains four references and its "Where guidance lives" line is reworded. An overlay or repo-local rule with one of the thirteen new ids now replaces the core rule. See "Distilled python-best-practices content". |
+| Any repo with Python code (vendored upstream guidance) | Nothing but `playbook sync`: the core skills' rules are split to one topic per file and grouped into sections, the kept ids' texts change, `python-tooling` is written in every Python repo and its "Where guidance lives" line reads `Tool configuration and pyproject.toml`, and each skill ships the upstream MIT notice as `references/LICENSE.*`. An overlay or repo-local rule with one of the new ids now replaces the core rule. See "Vendored upstream Python guidance". |
+| An overlay or repo-local rule that overrides `python-performance-idioms`, `python-classes-and-protocols`, `ml-dtypes-and-typing` or `ml-reproducibility-and-testing` | These ids are retired: your rule no longer overrides anything. Rename it to one of the successor ids the table lists, or keep it as a rule of its own with `skill:` and `section:`. See "Vendored upstream Python guidance". |
 | Only using engine prompts | Nothing: the next `playbook sync` rewrites every Claude Code and OpenCode command with an `includes_rules` list to open with a `## Before you start` block that names skills instead of carrying rule text; Continue prompts keep the text, now at the end. See "Prompts point at skills". |
 | A repo-local or overlay prompt that calls `{{ rule("<id>") }}` | Delete the call (and any hand-written `## Reference rules` heading around it) and keep the id in `includes_rules`. Until then `playbook validate` fails and `playbook sync` refuses to run. See "Prompts point at skills". |
+| Every repo with skills written (`claude_code`, `opencode` or `shared_skills` on) | Nothing: the next `playbook sync` writes each member rule as `<skill>/rules/<rule-id>.md` and deletes the unedited `<skill>/references/<rule-id>.md` copies an earlier v0.21 build wrote. With `agent_harness`, rules move from the root `references/` to `skills/<skill>/rules/`. See "Member rules move to rules/". |
+| A repo whose skill output has edited (or git-tracked) `references/<rule-id>.md` copies | The next `playbook sync` keeps them and, under `commit = true`, reports each one (`note: kept output …`). Move your additions into a repo-local override of that rule id, then delete the copy. See "Member rules move to rules/". |
+| A repo-local rule joining a core skill with `skill:` | Add `section:` with one of that skill's section ids and a `priority` inside the section's band (CRITICAL 20-39, HIGH 40-59, MEDIUM 60-79, LOW 80-99); `playbook validate` lists the sections. Overlay rules without `section:` only warn and land under "Other". See "Sections and impact bands". |
+| Any Python repo (new core skills) | Nothing: the next `playbook sync` adds `design-patterns`, `python-architecture` and `python-documentation`, `web-application` with a web framework, the Domino skills in a Domino project and `playbook-creator` in a repo with a playbook layer, each with a "Where guidance lives" line. See "New core skills". |
+| Continue users, or tooling that names `.continue/rules/NN-<id>.md` files | Nothing for Continue: the next `playbook sync` renames each scoped rule's file to its new priority and settles the old names. Tooling that names a file by number should use the new name. See "Continue file names follow the impact bands". |
+| A repo with hooks on (the new `document-layout-guard`) and every repo (the new always rules) | Nothing: the next `playbook sync` adds the `code-legibility` and `document-layout` always rules and turns the guard on. To keep the guard off, add `disable = ["document-layout-guard"]` to `[hooks]`. See "New always rules and the layout guard". |
 
 ### `package_manager` and per-key validation
 
@@ -940,8 +953,8 @@ Remove `"codex"` from `adapters_enabled`. Codex is served by `AGENTS.md` and
 A member rule, a scoped rule that names a skill in `skill:`, is no longer
 written into `AGENTS.md` or `.claude/rules/coding-agent-playbook.md`
 (`CLAUDE_RULES_PATH`). It reaches Claude Code, OpenCode and Codex as a
-reference of its skill, `<skills root>/<skill>/references/<rule-id>.md`, and
-Continue still gets it as its own rule file. Both files now carry the always
+rule file of its skill, `<skills root>/<skill>/rules/<rule-id>.md` (see
+"Member rules move to rules/"), and Continue still gets it as its own rule file. Both files now carry the always
 rules, then one generated `## Where guidance lives` section, byte-identical in
 the two, with one line per written skill that has member rules and a
 `playbook.files` phrase:
@@ -972,15 +985,16 @@ stderr instead of inlining them into `AGENTS.md`:
 
 ### Scoped rules arrive as skill references
 
-Core now ships four skills: `python-coding`, `python-testing`, `python-tooling`
-and `ml-data`. Each scoped rule in core names one of them, and is now
-`<skills root>/<skill>/references/<rule-id>.md`, listed in that skill's index,
-for example `.claude/skills/python-coding/references/python-typing.md`. A skill
+Every scoped rule in core belongs to one core skill (`python-coding`,
+`python-testing`, `python-tooling`, `ml-data` or one of the "New core skills"),
+and is now `<skills root>/<skill>/rules/<rule-id>.md`, listed in that skill's
+index, for example `.claude/skills/python-coding/rules/python-typing.md`. A skill
 is written only when at least one of its rules applies to the repo, so a repo
-without pytest has no `python-testing`. Rule ids, `lint_codes`, hook links and
-prompt `includes_rules` are unchanged; lint feedback now names the rule id and
-its skill (see "Guardrails and lint feedback point at skills"), so open that
-skill's reference with that id. The `python-coding` members have short display
+without pytest has no `python-testing`. The ids that hooks, `lint_codes` and
+prompt `includes_rules` name are kept (four other ids are retired, see "Vendored
+upstream Python guidance"); lint feedback now names the rule id and its skill
+(see "Guardrails and lint feedback point at skills"), so open that skill's rule
+with that id. The `python-coding` members have short display
 names (`Typing`, `Error handling`, …) because each name is its label in the
 skill's description, and `python-typing`, `python-error-handling`, `pytest` and
 `fastapi-app-wiring` have new one-line descriptions, because a description is
@@ -994,13 +1008,14 @@ before coding when the scope or approach is unclear, and report problems outside
 the task instead of fixing them in the same change. The kind now reads
 `(project kind: …)` and is still the detector's. The reminders "read existing
 code first", "prefer clarity over cleverness" and "keep changes minimal" are
-gone. `python-house-style` keeps eight bullets, four of them with a one-line
-reason; the rest moved to two new rules in `python-coding`:
+gone. `python-house-style` keeps seven bullets (its layout line moved to the
+new `code-legibility` rule, see "New always rules and the layout guard"), some
+with a one-line reason; the rest moved to two new rules in `python-coding`:
 `python-data-shapes` (records, frozen dataclasses, return shapes, constants) and
 `python-idioms` (paths, flag-driven functions, composition, strings, imports,
 small idioms). Neither always rule has a title heading of its own any more (the
 `## Project context` and `## Python house style` headings stay), and both are at
-`version: 2`. In a typical FastAPI + ML repo the two sections shrink from about
+`version: 3`. In a typical FastAPI + ML repo the two sections shrink from about
 690 words to about 230. An override of either always rule by id keeps its own
 text, and with it its old length.
 
@@ -1014,10 +1029,14 @@ globs: ["src/risk/**/*.py"]
 # after
 scope: scoped
 skill: python-coding
+section: effects
+priority: 58
 globs: ["src/risk/**/*.py"]
 ```
 
-Without it, `playbook validate` and `playbook sync` stop with:
+`python-coding` declares sections, so a repo-local rule that joins it also names
+one of them in `section:` and takes a priority inside that section's impact band
+(see "Sections and impact bands"). Without `skill:`, `playbook validate` and `playbook sync` stop with:
 
     scope 'scoped' needs a skill: put the file in that skill's rules/ directory (skills/<skill-id>/rules/), or add 'skill: <skill-id>' when the skill comes from another layer; known skills: design-patterns, domino-agents, domino-apps, ml-data, python-coding, python-testing, python-tooling, web-application
 
@@ -1026,29 +1045,36 @@ a skill of your own joins it. When the rule overrides a rule in core by id, the
 line ends with the skill the overridden rule named, for example
 `; the rule it overrides (coding_agent_playbook) names 'python-coding'`.
 
-Pick the skill by topic: `python-coding` for library-agnostic Python,
-`python-testing` for tests, `python-tooling` for one named framework or tool,
-`ml-data` for ML and data libraries. To keep a rule in a skill of your own, add
+Pick the skill by topic: `python-coding` for line- and function-level Python,
+Pydantic included, `python-testing` for tests, `python-tooling` for one named
+developer tool (linter, type checker, formatter, test settings, package
+manager), `ml-data` for ML and data libraries, `web-application` for web
+endpoints and their database, `design-patterns` for the shape of code inside a
+module, `python-architecture` for how modules depend on each other (see "New
+core skills"). To keep a rule in a skill of your own, add
 `playbook/skills/<id>/SKILL.md` with a capability sentence in `description` and
 a `playbook:` block (`use_when`, `files`); a skill without that block, such as a
 bundled plugin skill, cannot take rules. Always rules must not carry `skill:`.
 
 ### Continue and the new rules
 
-Continue still gets one rule file per rule and ignores `skill:`.
-`.continue/rules/` gains `44-python-data-shapes.md` and `58-python-idioms.md`;
-`00-project-context.md` and `10-python-house-style.md` get the shorter text.
-Seven rule files (`40-python-dependency-injection.md` and the other
-`python-coding` members) show their new short names, and four show their new
-descriptions.
+Continue still gets one rule file per rule, `NN-<rule-id>.md` with `NN` its
+priority, and ignores `skill:` and `section:`. `.continue/rules/` gains
+`python-data-shapes` and `python-idioms`; `00-project-context.md` and
+`10-python-house-style.md` get the shorter text. The `python-coding` members
+show their new short names, and four show their new descriptions. Every scoped
+rule's priority now follows its section's impact band, so every
+`.continue/rules/` file of a scoped rule changes its name (see "Continue file
+names follow the impact bands").
 Core skills are not turned into Continue prompts, so no
 `.continue/prompts/<core-skill>.md` is ever written.
 
 ### New output and the lockfile
 
-Each written core skill adds `<root>/<id>/SKILL.md` and `references/` under
-every enabled skills root, one lockfile entry per file (`kind = "skill"` for
-`SKILL.md`, `kind = "rule"` with the rule id for each reference, so the
+Each written core skill adds `<root>/<id>/SKILL.md` and `rules/` (plus
+`references/` for its free-form documents and license copies) under every
+enabled skills root, one lockfile entry per file (`kind = "skill"` for
+`SKILL.md`, `kind = "rule"` with the rule id for each rule file, so the
 generated-output guard points an editor at the rule) and, with
 `[output] commit = false`, one managed `.gitignore` line per skill directory.
 Nothing is removed. A hand-written skill directory of yours named
@@ -1058,7 +1084,7 @@ move it to `playbook/skills/python-coding/` to override the core skill (keep its
 
 ### Not changed (skill references)
 
-Rule ids and file names in `catalog/`, `lint_codes`, `linked_rule` hooks,
+The rule ids that hooks and prompts name, `lint_codes`, `linked_rule` hooks,
 prompt rendering (until "Prompts point at skills" below), the lockfile
 schema and Claude Code's `.claude/CLAUDE.md` stub.
 
@@ -1164,84 +1190,110 @@ so they gain `summary`. With
 OpenCode v2, whose plugin is the inert stub above, these lines and the Where
 section are what point at skills.
 
-### Distilled python-best-practices content
+### Vendored upstream Python guidance
 
-Core now distills a second outside source, the python-best-practices agent
-skills collection (MIT), credited in `catalog/core/ATTRIBUTIONS.md` only; its
-ideas are written fresh in the catalog's own words. There is nothing to do but
-`playbook sync`.
+Core now vendors two outside sources instead of writing their ideas fresh: the
+python-best-practices agent skills (Ludo Technologies LLC, MIT) and the
+python-clean-architecture Claude Code plugin (MKToronto, MIT), each at one pinned
+commit (decision record
+`docs/adr/0004-upstream-python-guidance-is-vendored-into-core.md`). The upstream
+text is the base of each rule, adapted to the engine's frontmatter and this
+repo's toolchain, with no URLs; `catalog/core/ATTRIBUTIONS.md` maps every
+upstream file to the core rules and references it became, or says why it was
+dropped. There is nothing to do but `playbook sync`; what changes:
 
-- **Three new `python-coding` references.** `python-performance-idioms`,
-  `python-async` (only in a repo that targets Python 3.11 or later) and
-  `python-classes-and-protocols`. The next sync writes them under every enabled
-  skills root, adds one lockfile entry per copy and names them in the skill's
-  description and index. With Continue enabled, `.continue/rules/` gains
-  `51-python-performance-idioms.md`, `53-python-async.md` and
-  `53-python-classes-and-protocols.md`.
-- **Six references change text.** `python-classes-and-protocols` takes over
-  the composition and framework-base-class bullets of `python-idioms`, whose
-  description no longer says "prefer composition"; `python-data-shapes` gains
-  `slots=True` for many small records; `python-error-handling`,
-  `python-typing`, `python-docstrings` and `python-dependency-injection` gain a
-  few bullets each. The prompts that inline these rules (`includes_rules`)
-  carry the new text too.
-- **Two new `python-testing` references** in a repo that uses pytest:
-  `pytest-test-doubles` (a named fake passed in like production is the default
-  double; autospec only at thin third-party seams; `monkeypatch` for the
-  environment, the working directory and code that cannot take a parameter
-  yet) and `pytest-fixtures` (scope, teardown, placement, names and factories).
-  They also match `**/conftest.py`. With Continue enabled, `.continue/rules/`
-  gains `61-pytest-test-doubles.md` and `63-pytest-fixtures.md`.
-- **`pytest` changes text.** Its fixture section and its `monkeypatch` clause
-  move to those two references, and it gains parametrize and
-  one-thing-per-test detail. The `generate-tests` prompt now recommends named
-  fakes instead of the `mocker` fixture, and the `pytest` text it inlines
-  changes with the rule.
-- **`python-tooling` in every Python repo, with four new references.**
-  `python-static-checks` (the repo's ruff and mypy settings are the contract) is
-  ungated, so the skill is now written even without FastAPI, and its line in
-  "Where guidance lives" reads `Tool configuration and framework wiring`
-  instead of naming FastAPI. The other three follow their gates:
-  `pytest-configuration` with pytest, `python-uv-workflow` in a repo with a
-  `uv.lock`, and `pydantic-boundaries` when `pydantic` is a declared dependency
-  (a FastAPI repo that gets Pydantic only through FastAPI does not get it). They
-  also match `pyproject.toml` and the ruff, mypy and pytest config files, so
-  with hooks on an edit of one of those files makes `skill-nudge` name
-  `python-tooling` (still at most once per session). With
-  Continue enabled, `.continue/rules/` gains `21-python-static-checks.md` and,
-  where their gates hold, `23-pytest-configuration.md`,
-  `28-python-uv-workflow.md` and `63-pydantic-boundaries.md`. Creating a
-  `uv.lock` by hand or with `uv lock` alone does not trigger the resync hook, so
-  the uv reference appears at the next `playbook sync`.
-- **Four new `ml-data` references** in a repo whose ML stack includes NumPy,
-  pandas or polars: `ml-vectorization`, `ml-data-transforms`,
-  `ml-dtypes-and-typing` and `ml-reproducibility-and-testing`. Each renders only
-  the NumPy, pandas and polars sections for the libraries the repo declares, and
-  they also match `**/*.ipynb`. A repo with torch alone gets none of them. With
-  Continue enabled, `.continue/rules/` gains `71-ml-data-transforms.md`,
-  `71-ml-vectorization.md`, `73-ml-dtypes-and-typing.md` and
-  `73-ml-reproducibility-and-testing.md`.
-- **`ml-data`'s texts are generic.** Its description, its `use_when` and its
-  "Where guidance lives" phrase now cover arrays and data frames as well as
-  models, so the `ml-data` line of that section in `AGENTS.md` and the Claude
-  Code rules file reads "Model, array and data-frame code: skill `ml-data`".
+- **License copies.** Each core skill that holds vendored text ships the MIT
+  notice it carries, byte for byte, as `references/LICENSE.python-best-practices`
+  and/or `references/LICENSE.python-clean-architecture`. The next sync writes
+  them under every enabled skills root next to the skill's rules, with one
+  lockfile entry each, like any other skill file; leave them in place when you
+  commit the output. Continue gets no license copy, since it receives rule files
+  only.
+- **One topic per rule.** The old multi-topic rules are split to one topic per
+  file of at most 100 lines. A split keeps the old id on the piece with the old
+  topic, so every id a hook (`linked_rule`), a prompt (`includes_rules`) or
+  `lint_codes` names still exists: `python-typing`, `python-error-handling`,
+  `python-docstrings`, `python-dependency-injection`, `python-pure-core`,
+  `pytest` and `ml-serialization-security`. Their bodies change, and so does the
+  text of the prompts that include them; eval scores taken before this release
+  are not directly comparable.
+- **Four ids are retired.** Each one's topics now live in the rules below, and
+  the retired id is never reused:
+
+  | Retired id | Its skill | Successor rules |
+  |---|---|---|
+  | `python-performance-idioms` | `python-coding` | `python-collection-choice`, `python-comprehensions`, `python-generators`, `python-optional-keys`, `python-str-join` |
+  | `python-classes-and-protocols` | `python-coding` | `python-protocols`, `python-properties` (`python-coding`); `design-single-responsibility`, `design-lightest-construct`, `design-composition-over-inheritance`, `design-liskov-substitution`, `design-interface-segregation`, `design-open-closed`, `design-dry-yagni-kiss` (`design-patterns`) |
+  | `ml-dtypes-and-typing` | `ml-data` | `ml-dtypes-at-load`, `ml-check-after-load`, `ml-frame-validation`, `ml-numpy-dtypes`, `ml-categorical-labels`, `ml-array-typing` |
+  | `ml-reproducibility-and-testing` | `ml-data` | `ml-seeded-randomness`, `ml-numeric-assertions` |
+
+  The next sync stops writing the retired rule files and settles the copies an
+  earlier sync wrote as leftovers. An overlay or repo-local rule with a retired
+  id no longer overrides anything: it becomes a rule of its own, which then
+  needs `skill:` (and, for a core skill, `section:`; see "Sections and impact
+  bands"). Give it one of the successor ids to keep overriding, or a new id.
+- **Sections.** Each of the four skills groups its rules into sections by
+  impact, and its index lists them CRITICAL first: `python-coding` has Error
+  handling, Code shape, Names, types, docs, Effects and resources, Asyncio,
+  Pydantic validation, Classes and data shapes, Control flow, and Idioms and
+  performance; `python-testing` has Mocking, Test Structure, Test Isolation,
+  Fixtures, Parametrization and Coverage; `python-tooling` has Linting, Type
+  checking, Formatting, Test configuration and Package management; `ml-data`
+  has Serialization Security, Vectorization, Indexing & Mutation, Dtypes &
+  validation, Reproducibility, Chaining style, Typing and Testing. Each skill's
+  description names its sections in its "Covers" clause.
+- **Rules change skill.** `pydantic-boundaries` moves from `python-tooling` to
+  `python-coding` (Pydantic validation), still gated on `pydantic` being a
+  declared dependency, so a FastAPI repo that gets Pydantic only through FastAPI
+  does not get it; `pydantic-typed-settings` needs `pydantic-settings`.
+  `fastapi-app-wiring` and `fastapi-error-boundaries` move from `python-tooling`
+  to the new `web-application` skill, still gated on FastAPI. Their files move
+  to the new skill's `rules/` directory in the output.
+- **`python-tooling` names tools only.** It holds the linter, type checker,
+  formatter, test-settings and uv rules, and is written in every Python repo,
+  because `python-static-checks` is ungated. Its line in "Where guidance lives"
+  reads `Tool configuration and pyproject.toml` (it read `Tool configuration and
+  framework wiring` in earlier v0.21 builds, and named FastAPI before them). Its
+  rules also match `pyproject.toml` and the ruff, mypy and pytest config files,
+  so with hooks on an edit of one of those files makes `skill-nudge` name
+  `python-tooling` (still at most once per session). Creating a `uv.lock` by
+  hand or with `uv lock` alone does not trigger the resync hook, so the uv rules
+  appear at the next `playbook sync`.
+- **Version branches instead of version gates.** `python-typing`,
+  `python-async` and the new asyncio rules no longer require Python 3.11: a repo
+  on 3.10 now gets them, and their examples render the form the repo's detected
+  Python version accepts (for example `TaskGroup` and `asyncio.timeout` from
+  3.11, `gather` and `wait_for` below it). Only the few rules whose topic does
+  not exist before 3.10, such as the `match` rules, keep a
+  `python_version: ">=3.10"` gate.
+- **Library gates in `ml-data`.** A repo whose ML stack includes NumPy, pandas
+  or polars gets the vectorization, mutation, dtype, reproducibility, chaining,
+  typing and testing rules for the libraries it declares; each renders only the
+  sections for those libraries, and they also match `**/*.ipynb`. A repo with
+  torch alone gets `ml-serialization-security` only. `ml-frame-validation` also
+  needs `pandera`. `ml-data`'s line of "Where guidance lives" reads "Model, array
+  and data-frame code: skill `ml-data`".
 - **`skill-nudge` covers notebooks.** It also matches `notebook_edit`, so a
   Claude Code notebook edit nudges `ml-data`: the next sync rewrites the
   managed `PostToolUse` entry of `.claude/settings.json`, whose matcher gains
   `NotebookEdit`. `playbook check` now labels the hook `degraded` on OpenCode,
   which has no notebook tool; OpenCode writes of `.py` and `.ipynb` files still
   nudge, and `playbook validate` reports no warning for it.
-- **Overrides.** An overlay or repo-local rule whose id is one of the thirteen new
-  ids now replaces the core rule, like any rule with the same id; `playbook
-  check` shows which one won. A repo-local override of `pytest` keeps its own
-  text, so the moved fixture and test-double guidance then lives only in the
-  two new references.
-- **Not changed.** Rule ids, gates and priorities of the existing rules; every
-  rule's `lint_codes`, so lint feedback reports exactly what it did before; the
-  always rules. `AGENTS.md` and the Claude Code rules file change only in their
-  `python-tooling` line of "Where guidance lives", which is new in a repo
-  without FastAPI and reworded in one with it, and in their reworded `ml-data`
-  line. `playbook sync --check` reports drift until the repo re-syncs, as for
+- **New gates.** Rules can gate on declared packages with two new `applies_if`
+  keys, which read runtime and dev dependencies alike (names PEP 503-normalized):
+  `has_dependency: [pydantic-settings]` holds when every listed package is
+  declared, `any_dependency: [sqlalchemy, alembic]` when at least one is. They
+  are open to overlay and repo-local rules, prompts and hooks too. The detector
+  reads `pyproject.toml` only, so in a repo that declares its dependencies in
+  Poetry tables or `requirements*.txt` these gates stay off.
+- **Overrides.** An overlay or repo-local rule whose id is one of the new ids
+  now replaces the core rule, like any rule with the same id; `playbook check`
+  shows which one won. A repo-local override of a kept id such as `pytest` keeps
+  its own text, so the guidance split out of it then lives only in the new
+  rules.
+- **Not changed.** The ids above that hooks, prompts and `lint_codes` name, and
+  every rule's `lint_codes`, so lint feedback reports exactly what it did
+  before. `playbook sync --check` reports drift until the repo re-syncs, as for
   any content upgrade.
 
 ### Prompts point at skills
@@ -1250,13 +1302,13 @@ ideas are written fresh in the catalog's own words. There is nothing to do but
 each harness gets them its own way. Claude Code and OpenCode commands carry no
 rule text: a command whose `includes_rules` lists an active scoped rule opens
 with a generated `## Before you start` block, before its first `##` section,
-naming the skill and the reference to read, for example in
+naming the skill and the rule file to read, for example in
 `.claude/commands/review.md`:
 
 ```markdown
 ## Before you start
 
-1. Load skill `python-coding` and read its references `references/python-typing.md`, `references/python-error-handling.md`.
+1. Load skill `python-coding` and read its rules `rules/python-typing.md`, `rules/python-error-handling.md`.
 2. For each file in scope, also load any other listed skill whose description matches it.
 ```
 
@@ -1319,7 +1371,7 @@ guidance silently: `includes_rules` must be a list of rule ids (a bare
 must name a rule in core, an enabled overlay or `playbook/rules/`, with a
 did-you-mean. A rule that `applies_if` filters out in your repo is still a
 valid id. `playbook render <prompt> --show-rules` now names each rule's
-delivery (`-> skill python-coding, references/python-typing.md`, `-> always
+delivery (`-> skill python-coding, rules/python-typing.md`, `-> always
 loaded`, `OMITTED`, `UNKNOWN`).
 
 No file is added or removed, so there are no orphans. The next sync rewrites
@@ -1337,6 +1389,186 @@ only the template search paths (`is_prompt_context` and `rule_registry` are
 gone), `render_for` takes `skill_references` and no longer `template_body`, and
 `renderer.appendix_rule_ids` and `harness.emitter.strip_leading_sentinel` are
 removed.
+
+### Member rules move to rules/
+
+Member rules now live in their skill's `rules/` directory, in the catalog and in
+the output (decision record
+`docs/adr/0005-member-rules-live-in-their-skills-rules-directory.md`). The next
+sync writes each one as `<skills root>/<skill>/rules/<rule-id>.md` under
+`.claude/skills/`, `.opencode/skills/` and `.agents/skills/`, with a
+`kind = "rule"` lockfile entry, and `references/` keeps only free-form
+documents and license copies. Earlier v0.21 builds wrote the same file as
+`<skills root>/<skill>/references/<rule-id>.md`. The first write-mode sync after
+the upgrade settles those copies through the lockfile leftover policy:
+
+- An old copy whose bytes still match and that git does not track is deleted,
+  with its lockfile row.
+- A copy you edited, or one git tracks, stays on disk and stays owned (still in
+  the lockfile). Under `commit = true` the sync lists it on stderr
+  (`note: kept output …`). Move what you added into a repo-local override of the
+  rule (same id), then delete the old copy.
+
+`agent_harness` follows: it used to write every scoped rule at the root of its
+tree as `references/<rule-id>.md`, routed by `references/REFERENCES.md`; it now
+writes each member of an emitted skill at `skills/<skill>/rules/<rule-id>.md`,
+and the next sync settles the old root copies the same way. `playbook
+import-harness` reads the new layout back.
+
+Generated text says "rules" for these files: each skill's index is a
+`## Rules` section, `playbook render <prompt> --show-rules` prints
+`-> skill python-coding, rules/python-typing.md`, and a prompt's
+`## Before you start` step reads:
+
+```markdown
+1. Load skill `python-coding` and read its rule `rules/python-typing.md`.
+```
+
+A `SKILL.md` of yours must not author a `## Rules` heading, because the engine
+generates it.
+
+In your own layers, a skill may now carry its rules the same way:
+`playbook/skills/<skill-id>/rules/<rule-id>.md` (or an overlay's
+`skills/<skill-id>/rules/`) belongs to that skill without `skill:`, must not
+name another skill in `skill:`, and must be named after its id;
+`playbook validate` fails otherwise, and also on two rules with one id in one
+layer. A scoped rule in `playbook/rules/` or an overlay's `rules/` keeps its
+free file name and names its skill with `skill:`.
+
+### Sections and impact bands
+
+Each sectioned skill declares an ordered list of sections in its `SKILL.md`
+`playbook.sections` (id, title, impact, a one-line summary and `open_when`),
+and each member rule names its section in `section:`. A rule's priority is its
+section's impact band plus its rank inside the section: CRITICAL 20-39, HIGH
+40-59, MEDIUM 60-79, LOW 80-99. These bands replace the old kind-based priority
+bands for members of sectioned skills. The skill's index renders one heading per
+section (`### Mocking [CRITICAL]`) with a table of its active rules, and each
+rule's title carries the `[IMPACT]` tag rendered from its section; a member of a
+sectioned skill must not write the tag itself.
+
+Every core skill that takes member rules declares sections, so a rule of yours
+that joins one with `skill:` must now say where it goes:
+
+- A repo-local rule (`playbook/rules/`) needs `section:` naming one of the
+  skill's sections, or `playbook validate` fails, and `playbook sync` refuses to
+  run:
+
+      FAIL playbook/rules/risk-models-specific.md.j2: skill 'python-coding' declares sections, so its member rule needs 'section:'; declared sections: errors, shape, types, effects, async, pydantic, classes, functions, idioms
+
+- Its `priority` must lie in that section's band:
+
+      FAIL playbook/rules/risk-models-specific.md.j2: priority 30 is outside the band of section 'effects' (HIGH): expected 40-59
+
+- An unknown section id fails the same way, listing the declared ones.
+- A rule from an overlay or a bundled plugin without `section:` only warns: it
+  is listed under an engine-generated "Other" section after the declared ones.
+  With `section:` it is checked like a repo-local rule.
+- `section:` on an always rule, or on a member of a skill that declares no
+  sections, is an error.
+
+v0.20 never asked for either key, so every repo-local rule written for v0.20
+that joins a core skill fails `playbook validate` until it gets both (see
+"Add skill: to your own scoped rules" for an example). A skill of your own may
+declare sections as well; until it does, its members need neither key.
+
+### New core skills
+
+Core adds skills built from the vendored guidance (see "Vendored upstream
+Python guidance"). As with the existing ones, a skill is written only when at
+least one of its rules applies to the repo, and its line in "Where guidance
+lives" is its `playbook.files` phrase:
+
+| Skill | Covers | Written when | Its "Where guidance lives" line |
+|---|---|---|---|
+| `web-application` | web backends shown with FastAPI and SQLAlchemy: security, database, async I/O, API design, app structure, observability, testing; ships a worked example app under `examples/` | any web framework is detected (FastAPI, Flask, Django, Starlette); its database rules also need SQLAlchemy or Alembic, its `fastapi-*` rules FastAPI | Web endpoints, database access and migrations: skill `web-application` |
+| `design-patterns` | the shape of code inside a module: responsibilities, abstractions and coupling, simplicity, smells and review, common and specialized patterns; ships `scripts/detect_smells.py` and `scripts/lcom4_clusters.py` | every Python repo | Python classes and modules under design or refactoring: skill `design-patterns` |
+| `python-architecture` | how modules depend on each other: layers and imports, ports, domain model, persistence, layer tests, project layout; ships `scripts/layer_map.py` | every Python repo; its persistence rules need SQLAlchemy or Alembic | Package layout, entry points and imports between layers: skill `python-architecture` |
+| `python-documentation` | documentation practice: docs in sync, design records, repository files, user docs, docs build | every Python repo; its Sphinx, MkDocs and citation rules need `docs/conf.py`, `mkdocs.yml` or `CITATION.cff` | README, changelog, CONTRIBUTING, CITATION.cff and docs/ pages: skill `python-documentation` |
+| `domino-apps` | Domino 6.2 Apps behind the platform proxy | the repo is a Domino project (the `domino_project` fact, or `platforms = ["domino"]` in the committed config) | Domino App code and its launch scripts (app.sh, start.sh): skill `domino-apps` |
+| `domino-jobs` | Domino 6.2 jobs, schedules, Launchers and Flows | as `domino-apps` | Job and Launcher entry scripts, requirements.txt, environment Dockerfile instructions and Domino dotfiles (.dominoresults, .dominoignore): skill `domino-jobs` |
+| `domino-agents` | LLM agent services on Domino 6.2 | as `domino-apps` | Agent service code, launch script, agent config, evaluation Jobs and their tests: skill `domino-agents` |
+| `playbook-creator` | authoring playbook content: layers, rules, validation, skills, hooks, prompts and eval samples, plugins and overlays | the repo has a playbook layer (the `playbook_layer` fact: a `catalog/` or `playbook/` directory, or an overlay package) | Playbook content in catalog/, playbook/ or an overlay's resources/: skill `playbook-creator` |
+
+The `python_design` bundled plugin's scripts return in `design-patterns` and
+`python-architecture` (see "Removed bundled plugin: python_design"). With hooks
+on, `skill-nudge` names the new skills too, still at most five lines per edit,
+so in a web or ML repo the first Python edit may name more skills than it fits
+and defer the rest to later edits. Each new skill is a new directory under
+every enabled skills root, with lockfile entries and, under `commit = false`,
+a managed `.gitignore` line, like the existing core skills (see "New output and
+the lockfile"); a hand-written skill directory of yours with one of these ids
+is left alone with a warning.
+
+### Continue file names follow the impact bands
+
+Continue names each rule file `NN-<rule-id>.md` after its priority. Every
+scoped rule now takes its priority from its section's band, so the next sync
+writes each kept id under a new name and settles the old file as a leftover
+(deleted when unedited and untracked, kept and owned otherwise):
+
+| Kept id | Before | After |
+|---|---|---|
+| `python-error-handling` | `55-python-error-handling.md` | `20-python-error-handling.md` |
+| `python-typing` | `50-python-typing.md` | `43-python-typing.md` |
+| `python-docstrings` | `56-python-docstrings.md` | `44-python-docstrings.md` |
+| `python-dependency-injection` | `40-python-dependency-injection.md` | `48-python-dependency-injection.md` |
+| `python-pure-core` | `42-python-pure-core.md` | `49-python-pure-core.md` |
+| `python-context-managers` | `56-python-context-managers.md` | `51-python-context-managers.md` |
+| `python-retries-and-timeouts` | `57-python-retries-and-timeouts.md` | `53-python-retries-and-timeouts.md` |
+| `python-async` | `53-python-async.md` | `55-python-async.md` |
+| `pydantic-boundaries` | `63-pydantic-boundaries.md` | `59-pydantic-boundaries.md` |
+| `python-data-shapes` | `44-python-data-shapes.md` | `60-python-data-shapes.md` |
+| `python-idioms` | `58-python-idioms.md` | `72-python-idioms.md` |
+| `pytest-test-doubles` | `61-pytest-test-doubles.md` | `20-pytest-test-doubles.md` |
+| `pytest` | `60-pytest.md` | `40-pytest.md` |
+| `pytest-fixtures` | `63-pytest-fixtures.md` | `48-pytest-fixtures.md` |
+| `python-static-checks` | `21-python-static-checks.md` | `20-python-static-checks.md` |
+| `pytest-configuration` | `23-pytest-configuration.md` | `42-pytest-configuration.md` |
+| `python-uv-workflow` | `28-python-uv-workflow.md` | `60-python-uv-workflow.md` |
+| `ml-serialization-security` | `30-ml-serialization-security.md` | `20-ml-serialization-security.md` |
+| `ml-vectorization` | `71-ml-vectorization.md` | `21-ml-vectorization.md` |
+| `ml-data-transforms` | `71-ml-data-transforms.md` | `23-ml-data-transforms.md` |
+| `fastapi-error-boundaries` | `61-fastapi-error-boundaries.md` | `41-fastapi-error-boundaries.md` |
+| `fastapi-app-wiring` | `60-fastapi-app-wiring.md` | `44-fastapi-app-wiring.md` |
+
+The retired ids' files (`51-python-performance-idioms.md`,
+`53-python-classes-and-protocols.md`, `73-ml-dtypes-and-typing.md`,
+`73-ml-reproducibility-and-testing.md`) are settled the same way, and each new
+rule that applies to the repo adds its own file. Tooling or Continue settings
+that name a rule file by its number should name the new one. The always rules
+keep `00-project-context.md` and `10-python-house-style.md`, and gain
+`05-code-legibility.md` and `15-document-layout.md`.
+
+### New always rules and the layout guard
+
+Two always rules join `project-context` and `python-house-style` in `AGENTS.md`,
+the Claude Code rules file and Continue:
+
+- `code-legibility` (priority 5, right after the project context): eight
+  language-neutral principles (small units, one responsibility, shallow
+  nesting, errors with context, searchable names, one home per piece of logic,
+  a predictable tree, F.I.R.S.T tests), each naming the skill and rule that hold
+  the detail when that rule is active in the repo.
+- `document-layout` (priority 15): where the glossary, decision records, specs,
+  plans and research live. It renders the repo's `[layout]` table, so with no
+  `[layout]` it names the default directories (`docs/specs/`, `docs/plans/`, …).
+
+`python-house-style` now holds seven conventions: its line about the repo's one
+layout axis moved to `code-legibility`. The always sections may now take up to
+450 words together (240 before); the 800-word always-loaded and 1,500-word
+`AGENTS.md` caps are unchanged. An override of either new rule by id keeps its
+own text.
+
+A new protect hook, `document-layout-guard` (tier `default`, so on whenever
+hooks are on, on Claude Code and OpenCode), denies writing a spec or plan into
+a framework's own folder (such as `docs/superpowers/`) or as a spec or plan file
+under `.scratch/`, and names the directory it belongs in. It reads the
+configured layout: a repo with `specs = "specs"` in `[layout]` may write
+`specs/x.md`. Its one-line summary joins the Guardrails section of `AGENTS.md`
+and its full text the `playbook-guardrails` skill, and the `✓ Hooks:` summary
+counts one more hook. To keep it off, add `disable = ["document-layout-guard"]`
+to `[hooks]`.
 
 ## v0.20 — Assistant lifecycle hooks (PR K)
 
