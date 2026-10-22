@@ -1,0 +1,111 @@
+---
+id: ml-frame-validation
+name: Frame validation with pandera
+description: "Where the repo already uses pandera, declare each frame's columns, dtypes and constraints once as a DataFrameModel and validate it lazily where the data enters."
+version: 1
+scope: scoped
+globs:
+  - "**/*.py"
+  - "**/*.ipynb"
+applies_if:
+  any_ml_stack: ["pandas", "polars"]
+  has_dependency: ["pandera"]
+section: dtypes
+priority: 42
+tags: [ml, pandas, polars, validation]
+---
+
+# Validate frames at boundaries with pandera
+
+## Description
+
+Tabular data from files, databases and APIs is untrusted in the same way request payloads are. A frame with a renamed column, a negative weight or duplicated keys usually does not crash; it produces plausible-looking wrong results. `pydantic-boundaries` (python-coding) covers scalar records; pandera is the equivalent for frames: declare column names, dtypes, nullability and value constraints once, validate where data enters, and pass typed frames inward.
+
+## Bad Example
+
+```python
+{% if has_ml_dep("pandas") %}
+def load_orders(path: Path) -> pd.DataFrame:
+    return pd.read_csv(path)  # hope the columns are what we expect
+
+
+def total_weight_kg(orders: pd.DataFrame) -> float:
+{% else %}
+def load_orders(path: Path) -> pl.DataFrame:
+    return pl.read_csv(path)  # hope the columns are what we expect
+
+
+def total_weight_kg(orders: pl.DataFrame) -> float:
+{% endif %}
+    # negative weights, missing values and duplicate order ids all flow through
+    return float(orders["weight_grams"].sum()) / 1000
+```
+
+## Good Example
+
+```python
+{% if has_ml_dep("pandas") %}
+import pandas as pd
+import pandera.pandas as pa
+from pandera.typing import DataFrame, Series
+
+
+class OrderSchema(pa.DataFrameModel):
+    order_id: Series[int] = pa.Field(unique=True)
+    customer_id: Series[str] = pa.Field(str_length={"min_value": 1})
+    weight_grams: Series[int] = pa.Field(gt=0)
+    status: Series[str] = pa.Field(isin=["pending", "paid", "cancelled"])
+    created_at: Series[pa.DateTime] = pa.Field(nullable=False)
+
+    class Config:
+        strict = True  # no unexpected columns
+
+
+def load_orders(path: Path) -> DataFrame[OrderSchema]:
+    orders = pd.read_csv(path, dtype={"customer_id": str})
+    created_at = pd.to_datetime(
+        orders["created_at"], format=TIMESTAMP_FORMAT, errors="raise"
+    )
+    return OrderSchema.validate(orders.assign(created_at=created_at), lazy=True)
+{% else %}
+import pandera.polars as pa
+import polars as pl
+from pandera.typing.polars import DataFrame
+
+
+class OrderSchema(pa.DataFrameModel):
+    order_id: int = pa.Field(unique=True)
+    customer_id: str = pa.Field(str_length={"min_value": 1})
+    weight_grams: int = pa.Field(gt=0)
+    status: str = pa.Field(isin=["pending", "paid", "cancelled"])
+    created_at: pl.Datetime = pa.Field(nullable=False)
+
+    class Config:
+        strict = True  # no unexpected columns
+
+
+def load_orders(path: Path) -> DataFrame[OrderSchema]:
+    orders = pl.read_csv(path).with_columns(
+        pl.col("created_at").str.to_datetime(TIMESTAMP_FORMAT)
+    )
+    return OrderSchema.validate(orders, lazy=True)
+{% endif %}
+
+
+@pa.check_types
+def total_weight_kg(orders: DataFrame[OrderSchema]) -> float:
+    return float(orders["weight_grams"].sum()) / 1000
+```
+
+## Notes
+
+- Validate once at the boundary (a load, an API response, an upstream pipeline stage), not inside every transformation. `DataFrame[Schema]` hints document which functions expect validated input: the model doubles as the type hint and the runtime validator, so keep no separate `TypedDict` of columns.
+- `strict = True` catches renamed or extra columns.
+- Be careful with coercion: it casts before checking, so a float column holding `1.9` passes an integer field as `1`. Leave it off for numeric columns, where a wrong dtype is a real error, and enable it per field (`pa.Field(coerce=True)`) only for a cast that loses nothing, such as text to a categorical.
+- Validate with `lazy=True` in pipelines, so one `SchemaErrors` report lists every failing column instead of stopping at the first.
+- Add cross-column rules with `@pa.dataframe_check` (an end date not before its start date) and custom column rules with `@pa.check("column")`.
+- A schema is also documentation: reviewers and agents can read the expected shape without opening a sample file.
+{% if has_ml_dep("pandas") and has_ml_dep("polars") %}
+- For polars frames, the same model comes from `pandera.polars`, with plain annotations (`int`, `str`, `pl.Datetime`) and `pandera.typing.polars.DataFrame` hints.
+{% endif %}
+- This rule applies because the repo already depends on pandera. Never add pandera to a repo without it; there, the hand-written check of `ml-check-after-load` does the job.

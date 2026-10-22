@@ -7,8 +7,8 @@ bounds every core scoped rule, rendered as sync renders it with the reference-pr
 facts (``tests/_budget_probe.py``), and counts after ``ruff format`` has laid out
 its code blocks. Those facts reach the ``pytest-asyncio`` branch of
 ``pytest``, the torch, NumPy, pandas and scikit-learn sections of
-``ml-serialization-security``, and the NumPy and pandas sections and the torch and
-scikit-learn seeding lines of the four array and data-frame members (spec 9.15,
+``ml-serialization-security``, the NumPy and pandas lines of the array and
+data-frame members and the torch and scikit-learn seeding lines (spec 9.15,
 12.3); the sanity test below pins each one. The probe declares no
 ``transformers`` and no ``polars``, pins one Python and one project description,
 so the bound is also applied to every distinct rendering of every scoped rule and
@@ -51,22 +51,34 @@ MATRIX_MEASURED_RULE_IDS: Final = sorted(
         *(rule_id for rule_id, rule in core_rules().items() if rule.is_templated),
     }
 )
-#: The four ml-data members for array and data-frame code (spec 9.6.1), sorted by id;
-#: each renders one section per library (``tests/unit/test_ml_data_rules.py``).
+#: The ml-data members gated on all three of NumPy, pandas and polars, sorted by id; each
+#: renders per-library lines only for the libraries declared (``tests/unit/test_ml_data_rules.py``).
 ML_ARRAY_RULE_IDS: Final = (
+    "ml-build-once",
+    "ml-check-after-load",
     "ml-data-transforms",
-    "ml-dtypes-and-typing",
+    "ml-dtypes-at-load",
     "ml-reproducibility-and-testing",
     "ml-vectorization",
 )
 #: Rule id -> text that only the probe's branch of its ``{% if %}`` renders.
 LONG_BRANCH_MARKERS: Final = (
     ("pytest", "This project has `pytest-asyncio` installed"),
-    ("ml-serialization-security", "## PyTorch checkpoints"),
-    ("ml-serialization-security", "## NumPy / array data"),
-    ("ml-serialization-security", "## pandas frames"),
-    ("ml-serialization-security", "## scikit-learn estimators"),
-    *((rule_id, heading) for rule_id in ML_ARRAY_RULE_IDS for heading in ("## NumPy", "## pandas")),
+    ("ml-serialization-security", "torch.load(path, weights_only=True)"),
+    ("ml-serialization-security", "np.load(path, allow_pickle=False)"),
+    ("ml-serialization-security", "pd.read_parquet(path)"),
+    ("ml-serialization-security", "same scikit-learn version"),
+    ("ml-vectorization", "parcels.iterrows()"),
+    ("ml-vectorization", "np.where(readings > ceiling"),
+    ("ml-build-once", "np.concatenate([load_chunk(path)"),
+    ("ml-build-once", "pd.concat(frames"),
+    ("ml-data-transforms", "np.minimum(readings, ceiling)"),
+    ("ml-data-transforms", 'users.dropna(subset=["email"], inplace=True)'),
+    ("ml-dtypes-at-load", "usecols=0, dtype=str"),
+    ("ml-dtypes-at-load", "pd.read_csv(path, parse_dates="),
+    ("ml-check-after-load", "frame.dtypes"),
+    ("ml-check-after-load", "array.shape[1] != dim"),
+    ("ml-categorical-labels", "REGION = pd.CategoricalDtype("),
     ("ml-reproducibility-and-testing", "torch.manual_seed"),
     ("ml-reproducibility-and-testing", "random_state=int("),
     ("ml-reproducibility-and-testing", "rng = np.random.default_rng(seed)"),

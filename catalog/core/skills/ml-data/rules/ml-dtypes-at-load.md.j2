@@ -1,0 +1,121 @@
+---
+id: ml-dtypes-at-load
+name: Dtypes at load
+description: "Decide types where data enters: every read names its columns and their dtypes, dates parse with an exact format that raises, and identifiers with leading zeros stay strings."
+version: 1
+scope: scoped
+globs:
+  - "**/*.py"
+  - "**/*.ipynb"
+applies_if:
+  any_ml_stack: ["numpy", "pandas", "polars"]
+section: dtypes
+priority: 40
+tags: [ml, dtypes, io]
+---
+
+# Specify dtypes when loading data
+
+## Description
+
+A dtype the library guessed is a bug waiting for the next input file. Inference is fragile: an identifier with leading zeros becomes an integer and loses them, a column with one blank cell turns into floats, and one unexpected value turns a numeric column into text. Treat loading as the point where raw bytes become typed data:
+
+- Every read names the columns it needs and the type of each; no later step re-casts a column it was handed.
+- Identifiers that can start with a zero (postcodes, account numbers, sensor serials) are strings, never integers.
+
+## Bad Example
+
+```python
+{% if has_ml_dep("numpy") %}
+# every column float64; serials lose their leading zeros
+readings = np.loadtxt(path, delimiter=",", skiprows=1)
+{% endif %}
+{% if has_ml_dep("pandas") %}
+transactions = pd.read_csv(path)
+# zip_code: "02134" -> 2134 (int64)
+# customer_id: int64 until one row is missing, then float64 with NaN
+# created_at: str, so the .dt accessor fails
+
+# created_at stays str when one row fails to parse, and no error is raised
+transactions = pd.read_csv(path, parse_dates=["created_at"])
+{% endif %}
+{% if has_ml_dep("polars") %}
+# guesses the format, and bad values become null
+transactions = pl.read_csv(path).with_columns(
+    pl.col("created_at").str.to_datetime(strict=False)
+)
+{% endif %}
+```
+
+## Good Example
+
+```python
+{% if has_ml_dep("numpy") %}
+serials = np.loadtxt(path, delimiter=",", skiprows=1, usecols=0, dtype=str)
+celsius = np.loadtxt(path, delimiter=",", skiprows=1, usecols=(1, 2), dtype=np.float64)
+{% endif %}
+{% if has_ml_dep("pandas") or has_ml_dep("polars") %}
+TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%S"
+{% endif %}
+{% if has_ml_dep("pandas") %}
+TRANSACTION_DTYPES = {
+    "customer_id": "Int64",  # nullable integer: a gap stays missing, no float cast
+    "zip_code": "string",  # keeps leading zeros
+    "amount_cents": "Int64",  # money as integer cents
+    "region": REGION,  # the shared categorical constant
+}
+
+
+def load_transactions(path: Path) -> pd.DataFrame:
+    transactions = pd.read_csv(
+        path,
+        usecols=[*TRANSACTION_DTYPES, "created_at"],
+        dtype=TRANSACTION_DTYPES,
+        na_values=["n.a.", "-"],
+    )
+    created_at = pd.to_datetime(
+        transactions["created_at"], format=TIMESTAMP_FORMAT, errors="raise"
+    )
+    return transactions.assign(created_at=created_at)
+{% endif %}
+{% if has_ml_dep("polars") %}
+{% if has_ml_dep("pandas") %}
+
+
+{% endif %}
+TRANSACTION_SCHEMA = {
+    "customer_id": pl.Int64,
+    "zip_code": pl.String,
+    "amount_cents": pl.Int64,
+}
+
+
+def load_transactions(path: Path) -> pl.DataFrame:
+    return pl.read_csv(
+        path,
+        columns=[*TRANSACTION_SCHEMA, "created_at"],
+        schema_overrides=TRANSACTION_SCHEMA,
+        null_values=["n.a.", "-"],
+    ).with_columns(pl.col("created_at").str.to_datetime(TIMESTAMP_FORMAT))
+{% endif %}
+```
+
+## Notes
+
+- Check the result right after loading, so a drift in the source fails fast instead of corrupting downstream numbers (`ml-check-after-load`).
+{% if has_ml_dep("numpy") %}
+- NumPy: `np.genfromtxt` takes the same `dtype=` and `usecols=` when cells can be missing. Dtypes at array creation and at function entry, and integer widths, are `ml-numpy-dtypes`.
+{% endif %}
+{% if has_ml_dep("pandas") or has_ml_dep("polars") %}
+- Dates go through a conversion that is given the exact format and raises on a value that does not match it, never one that guesses the format or turns bad values into missing ones (`errors="coerce"`, `strict=False`).
+- A column that may have gaps uses a nullable type, so a single missing value does not change the column's type.
+- Label columns with few distinct values take one shared categorical constant (`ml-categorical-labels`).
+- Prefer a typed format such as Parquet over CSV when you control the producer and the repo already has a Parquet engine: the schema travels with the data. Propose the engine, never add it.
+{% endif %}
+{% if has_ml_dep("pandas") %}
+- pandas: `parse_dates=` is best-effort: if any value fails to parse, the whole column silently stays text. Use `pd.to_datetime(column, format=..., errors="raise")` instead.
+- pandas: the nullable dtypes are `"Int64"`, `"boolean"` and `"string"`; NumPy-backed `int64` and `bool` cannot hold a missing value and are upcast. When the repo already depends on pyarrow, `dtype_backend="pyarrow"` gives Arrow-backed columns.
+{% endif %}
+{% if has_ml_dep("polars") %}
+- polars: every column is nullable; `schema_overrides=` and `columns=` declare what the read keeps, and `str.to_datetime` keeps `strict=True`, its default, so a malformed value raises.
+{% endif %}

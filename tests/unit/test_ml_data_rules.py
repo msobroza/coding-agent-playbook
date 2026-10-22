@@ -1,11 +1,14 @@
-"""The four ml-data members for array and data-frame code (specs/prS-skills-context.md 12).
+"""The ml-data members for array and data-frame code (specs/prS-skills-context.md 12, prU).
 
-They gate on ``any_ml_stack: [numpy, pandas, polars]`` (D9), one gate for the
-three libraries, so each renders one section per library the repo declares: a
-NumPy-only repo gets the NumPy parts and no data-frame guidance (R5-2). torch
-alone activates none of them, so a torch-only repo keeps
-``ml-serialization-security`` as ml-data's only member, and the resync golden
-for adding torch stays byte-identical.
+Most gate on ``any_ml_stack: [numpy, pandas, polars]`` (D9) and render each
+library's lines only when the repo declares it: a NumPy-only repo gets the NumPy
+lines and no data-frame guidance (R5-2). The members that speak of one kind of
+library gate on it (``ml-numpy-dtypes`` on NumPy, ``ml-loc-assignment`` on
+pandas, ``ml-categorical-labels`` on pandas or polars), and
+``ml-frame-validation`` also needs pandera, so it never mandates pandera
+(mapping-ml-data.md). torch alone activates none of them, so a torch-only repo
+keeps ``ml-serialization-security`` as ml-data's only member, and the resync
+golden for adding torch stays byte-identical.
 """
 
 from __future__ import annotations
@@ -33,9 +36,15 @@ _EVERY_BRANCH_LIBRARY: Final = ("numpy", "pandas", "polars", "scikit-learn", "to
 _RNG_DEFINITION: Final = "rng = np.random.default_rng(seed)"
 
 
-def _ml_facts(*libraries: str) -> Facts:
-    """Detector facts whose ``ml_stack`` declares exactly ``libraries``."""
-    return cast("Facts", {"ml_stack": dict.fromkeys(libraries, ">=1")})
+def _ml_facts(*libraries: str, dependencies: tuple[str, ...] = ()) -> Facts:
+    """Detector facts whose ``ml_stack`` declares exactly ``libraries``, plus ``dependencies``."""
+    return cast(
+        "Facts",
+        {
+            "ml_stack": dict.fromkeys(libraries, ">=1"),
+            "dependencies": dict.fromkeys((*libraries, *dependencies), ">=1"),
+        },
+    )
 
 
 def _active_ml_data_members(facts: Facts, repo_root: Path) -> list[str]:
@@ -45,25 +54,32 @@ def _active_ml_data_members(facts: Facts, repo_root: Path) -> list[str]:
 
 
 @pytest.mark.parametrize(
-    ("ml_stack", "active"),
+    ("ml_stack", "dependencies", "extra"),
     [
-        (("numpy",), True),
-        (("pandas",), True),
-        (("polars",), True),
-        (("torch",), False),
-        ((), False),
+        (("numpy",), (), ("ml-numpy-dtypes",)),
+        (("pandas",), (), ("ml-categorical-labels", "ml-loc-assignment")),
+        (("polars",), (), ("ml-categorical-labels",)),
+        (
+            ("pandas",),
+            ("pandera",),
+            ("ml-categorical-labels", "ml-frame-validation", "ml-loc-assignment"),
+        ),
+        (("polars",), ("pandera",), ("ml-categorical-labels", "ml-frame-validation")),
+        (("numpy",), ("pandera",), ("ml-numpy-dtypes",)),
     ],
 )
-def test_ml_data_rules_gate_on_numpy_pandas_polars(
-    ml_stack: tuple[str, ...], active: bool, tmp_path: Path
+def test_ml_data_rules_gate_on_the_libraries_they_speak_of(
+    ml_stack: tuple[str, ...], dependencies: tuple[str, ...], extra: tuple[str, ...], tmp_path: Path
 ) -> None:
-    members = _active_ml_data_members(_ml_facts(*ml_stack), tmp_path)
+    members = _active_ml_data_members(_ml_facts(*ml_stack, dependencies=dependencies), tmp_path)
 
-    distilled = [rule_id for rule_id in members if rule_id in ML_ARRAY_RULE_IDS]
-    assert distilled == (list(ML_ARRAY_RULE_IDS) if active else []), (
-        f"ml_stack {list(ml_stack)} activates {distilled}; expected "
-        f"{list(ML_ARRAY_RULE_IDS) if active else 'none'} of the four array rules"
+    assert members == sorted({*ML_ARRAY_RULE_IDS, *extra}), (
+        f"ml_stack {list(ml_stack)} with {list(dependencies)} activates {members}"
     )
+
+
+def test_no_array_library_activates_no_array_rule(tmp_path: Path) -> None:
+    assert _active_ml_data_members(_ml_facts(dependencies=("pandera",)), tmp_path) == []
 
 
 def test_torch_only_repo_keeps_serialization_as_the_only_ml_data_member(tmp_path: Path) -> None:
@@ -73,21 +89,54 @@ def test_torch_only_repo_keeps_serialization_as_the_only_ml_data_member(tmp_path
     assert members == ["ml-serialization-security"], f"torch alone activates {members}"
 
 
-def _section_rows() -> list[tuple[str, tuple[str, ...], str, str]]:
-    """(rule id, ml_stack, text that must render, text that must not) for each library."""
-    rows: list[tuple[str, tuple[str, ...], str, str]] = []
-    for rule_id in ML_ARRAY_RULE_IDS:
-        rows += [
-            (rule_id, ("pandas",), "## pandas", "## polars"),
-            (rule_id, ("polars",), "## polars", "## pandas"),
-            (rule_id, ("numpy",), "## NumPy", "## pandas"),
-            (rule_id, ("numpy",), "## NumPy", "## polars"),
-            (rule_id, ("pandas",), "## pandas", "## NumPy"),
-        ]
+#: Rule id -> library -> a line only that library's branch renders (mapping-ml-data.md).
+_LIBRARY_MARKERS: Final[dict[str, dict[str, str]]] = {
+    "ml-vectorization": {"numpy": "np.where(", "pandas": "iterrows", "polars": "map_elements"},
+    "ml-build-once": {"numpy": "np.concatenate(", "pandas": "pd.concat(", "polars": "pl.concat("},
+    "ml-data-transforms": {
+        "numpy": "np.minimum(",
+        "pandas": "inplace=True",
+        "polars": "insert_column",
+    },
+    "ml-dtypes-at-load": {
+        "numpy": "np.loadtxt(",
+        "pandas": "pd.read_csv(",
+        "polars": "schema_overrides=",
+    },
+    "ml-check-after-load": {
+        "numpy": "array.shape",
+        "pandas": "frame.dtypes",
+        "polars": "frame.schema",
+    },
+    "ml-frame-validation": {"pandas": "pandera.pandas", "polars": "pandera.polars"},
+    "ml-categorical-labels": {"pandas": "pd.CategoricalDtype(", "polars": "pl.Enum("},
+}
+
+
+def _library_rows() -> list[tuple[str, str, str, str]]:
+    """(rule id, the one declared library, its marker, another library's marker)."""
     return [
-        *rows,
-        ("ml-data-transforms", ("pandas",), ".loc", "pl.col"),
-        ("ml-data-transforms", ("polars",), "pl.col", ".loc"),
+        (rule_id, library, marker, other)
+        for rule_id, markers in _LIBRARY_MARKERS.items()
+        for library, marker in markers.items()
+        for other_library, other in markers.items()
+        if other_library != library
+    ]
+
+
+@pytest.mark.parametrize(("rule_id", "library", "present", "absent"), _library_rows())
+def test_each_library_renders_only_its_own_lines(
+    rule_id: str, library: str, present: str, absent: str
+) -> None:
+    body = render_core_rule(rule_id, _ml_facts(library))
+
+    assert present in body, f"{rule_id} with only {library} lacks {present!r}"
+    assert absent not in body, f"{rule_id} with only {library} renders {absent!r}"
+
+
+def _section_rows() -> list[tuple[str, tuple[str, ...], str, str]]:
+    """(rule id, ml_stack, text that must render, text that must not)."""
+    return [
         # Library-specific seeding lines follow their own library, inside the shared section.
         (
             "ml-reproducibility-and-testing",
@@ -98,6 +147,10 @@ def _section_rows() -> list[tuple[str, tuple[str, ...], str, str]]:
         ("ml-reproducibility-and-testing", ("numpy", "scikit-learn"), "random_state=", "torch."),
         # polars installs no NumPy, so a polars-only repo gets no NumPy generator.
         ("ml-reproducibility-and-testing", ("polars",), "seed=sample_seed", "np.random"),
+        # A polars-only repo gets no NumPy text from the library-neutral parts either.
+        ("ml-vectorization", ("polars",), "pl.when(", "np."),
+        ("ml-build-once", ("polars",), "pl.concat(", "np."),
+        ("ml-dtypes-at-load", ("numpy",), "dtype=", "read_csv"),
     ]
 
 
@@ -111,7 +164,7 @@ def test_library_sections_follow_the_ml_stack(
     assert absent not in body, f"{rule_id} with {list(ml_stack)} renders {absent!r}"
 
 
-@pytest.mark.parametrize("rule_id", ML_ARRAY_RULE_IDS)
+@pytest.mark.parametrize("rule_id", sorted({*ML_ARRAY_RULE_IDS, *_LIBRARY_MARKERS}))
 def test_ml_array_rule_fits_one_reference_read_with_every_library(rule_id: str) -> None:
     """The longest form: the probe declares no polars, so its size test misses that section."""
     body = render_core_rule(rule_id, _ml_facts(*_EVERY_BRANCH_LIBRARY))

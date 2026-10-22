@@ -1,0 +1,99 @@
+---
+id: ml-build-once
+name: Build once
+description: "Build arrays and frames once from collected pieces, a preallocated buffer or one generating call, never by appending inside a loop."
+version: 1
+scope: scoped
+globs:
+  - "**/*.py"
+  - "**/*.ipynb"
+applies_if:
+  any_ml_stack: ["numpy", "pandas", "polars"]
+section: vectorization
+priority: 22
+tags: [ml, numpy, pandas, polars, performance]
+---
+
+# Build arrays and frames once, not incrementally
+
+## Description
+
+Arrays and frames are fixed-size, contiguous buffers. Appending to one or concatenating onto it inside a loop allocates and copies the whole structure on every iteration, so the loop costs time quadratic in its length and churns memory. Collect the pieces in a Python list and construct the final object once, preallocate when the final size and dtype are known, or generate all the values in one call.
+
+## Bad Example
+
+```python
+{% if has_ml_dep("numpy") %}
+import numpy as np
+
+samples = np.array([])
+for _ in range(n_samples):
+    samples = np.append(samples, draw_sample())  # copies everything each pass
+{% endif %}
+{% if has_ml_dep("pandas") %}
+import pandas as pd
+
+results = pd.DataFrame(columns=["parcel_id", "score"])
+for parcel in parcels:
+    row = pd.DataFrame([{"parcel_id": parcel.id, "score": score(parcel)}])
+    results = pd.concat([results, row])  # copies the whole frame every iteration
+
+for parcel in parcels:
+    results.loc[len(results)] = [parcel.id, score(parcel)]  # grows by reallocating too
+{% endif %}
+{% if has_ml_dep("polars") %}
+import polars as pl
+
+readings = pl.DataFrame()
+for path in paths:
+    readings = readings.vstack(read_readings(path))  # copies on every pass
+{% endif %}
+```
+
+## Good Example
+
+```python
+{% if has_ml_dep("numpy") %}
+import numpy as np
+
+samples = rng.normal(size=n_samples)  # one call, from the injected generator
+
+totals = np.empty(len(paths), dtype=np.float64)  # known size and dtype: preallocate
+for index, path in enumerate(paths):
+    totals[index] = file_total(path)
+
+data = np.concatenate([load_chunk(path) for path in paths])  # unknown size: build once
+{% endif %}
+{% if has_ml_dep("pandas") %}
+import pandas as pd
+
+records = [{"parcel_id": parcel.id, "score": score(parcel)} for parcel in parcels]
+results = pd.DataFrame.from_records(records)
+
+frames = [
+    pd.read_csv(path, usecols=list(READING_DTYPES), dtype=READING_DTYPES)
+    for path in paths
+]
+combined = pd.concat(frames, ignore_index=True)
+{% endif %}
+{% if has_ml_dep("polars") %}
+import polars as pl
+
+frames = [pl.read_csv(path, schema_overrides=READING_SCHEMA) for path in paths]
+readings = pl.concat(frames)
+{% endif %}
+```
+
+## Notes
+
+- Prefer generating the whole result in one call over filling a buffer in a loop at all; random values come from the run's injected generator in one draw (`ml-seeded-randomness`).
+{% if has_ml_dep("numpy") %}
+- NumPy: a list of arrays becomes one array through `np.concatenate` or `np.stack`, called once; `np.arange` and `np.linspace` build ranges without a loop. Every preallocation names its dtype.
+{% endif %}
+{% if has_ml_dep("pandas") %}
+- pandas: `pd.DataFrame(records)` from a list of dicts infers dtypes once; declare them when inference is not what you want, as the reads above do (`ml-dtypes-at-load`). `pd.concat` accepts any iterable, so a generator expression works when the frames are large. Code that still grows a frame with `DataFrame.append`, which pandas no longer has, switches to the list-then-concat pattern.
+{% endif %}
+{% if has_ml_dep("polars") %}
+- polars: never `vstack` or concatenate inside a loop; gather the frames in a list and concatenate once.
+{% endif %}
+- For a stream that never ends, work in batches: accumulate a fixed number of rows in a list, turn each full batch into one frame (or write it to a Parquet file where the repo already has a Parquet engine; propose one, never add it), then clear the list.
