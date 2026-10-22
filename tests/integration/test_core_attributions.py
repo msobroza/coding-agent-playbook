@@ -5,8 +5,9 @@ provenance live in one file: one section per source with its D11 pin, and inside
 it one table per core skill mapping each upstream file to the core files it
 became, or to DROP with a reason. A per-skill ``Engine-written files`` list
 covers the files with no upstream text. A distilled source (prU D50) has no
-pin: its rows credit engine-written files by page, or DROP them. The parser is ``tests/_attributions.py``;
-each check here runs once on the shipped file and once on a synthetic tree.
+pin: its rows credit engine-written files by page, or DROP them. The parser is
+``tests/_attributions.py``; each check here runs once on the shipped file and once
+on a synthetic tree.
 """
 
 from __future__ import annotations

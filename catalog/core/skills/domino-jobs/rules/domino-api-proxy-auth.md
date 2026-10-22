@@ -83,6 +83,6 @@ def outside_client(settings: Settings) -> Domino:
 - Personal access tokens are short-lived and suit interactive use only.
 - Some 6.2 pages (the Run Jobs SDK example, the Airflow setup, an older wrapper page) still show API keys or token files: follow the authentication page instead.
 - python-domino retries connection errors `DOMINO_MAX_RETRIES` times (4 by default). Raw HTTP calls carry an explicit timeout and bounded, transient-only retries (`python-retries-and-timeouts`, python-coding skill).
-- Domino 6.2 needs dominodatalab 2.0 or later.
+- Domino 6.2 needs dominodatalab 2.0 or later (PyPI pairs 2.1 with Domino 6.3).
 - Newer releases may add authentication modes: re-check the authentication page when the deployment is upgraded.
 - Context and settings come from `domino-paths-from-env` and `domino-secrets-in-env-vars`.

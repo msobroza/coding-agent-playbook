@@ -93,4 +93,4 @@ def test_reads_git_based_flag(tmp_path: Path) -> None:
 - Where the repo uses pydantic-settings, the settings class of `pydantic-typed-settings` (python-coding skill) can own these fields.
 - Tests pass a mapping to `from_env`; where a test must set real environment variables, the python-testing skill shows how.
 - The 6.2 glossary names these variables but gives no values per project type, so log the resolved roots once at startup and check them on the first run on a deployment.
-- The where-outputs-go reference of this skill lists which variable gives each location.
+- where-outputs-go.md in this skill lists which variable gives each location.

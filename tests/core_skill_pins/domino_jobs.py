@@ -2,7 +2,10 @@
 
 Sections and priorities follow mapping-domino-jobs.md (prU D17). Every member
 gates on ``domino_project``, so the skill is checked on the Domino probe, which
-activates every member pinned here.
+activates every member pinned here; the tickets.md Domino note (the standard probe
+activates no Domino skill) takes the place of the content template's "at least one
+member active on the reference probe" line. ``where`` is shorter than the mapping's
+137-character ``playbook.files`` phrase, because ``playbook validate`` caps it at 80.
 """
 
 from __future__ import annotations

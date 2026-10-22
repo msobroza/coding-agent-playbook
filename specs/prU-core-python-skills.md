@@ -155,7 +155,6 @@ The per-file mapping and the tickets are generated from the verified mapping dat
 
 - Core has 28 rule files today (2 always, 26 scoped), not 27. pbp has 80 topic rules (85 counting `_sections.md`); pca has 48 references (25 plus 23 patterns).
 - A rendered core rule is capped at 100 lines and 750 words (`tests/unit/test_core_rule_shapes.py`); D3's "40-150 lines" must become "at most 100 lines".
-- `playbook validate` caps `playbook.files` at 80 characters, so domino-jobs ships "Domino Job and Launcher scripts, requirements.txt, environments and dotfiles" instead of the generated phrase in `mapping-domino-jobs.md` (137 characters); the mapping file stays as generated. Like every Domino skill, its pins set `probe = "domino"`: every member gates on `domino_project`, so the standard probe activates none of them (D63).
 - Fact-finding reports (session scratchpad, not committed): `engine-mechanics.md`, `blast-radius.md`, `pbp-mapping.md`, `pca-mapping.md`, `prior-decisions.md`.
 
 ## Open questions

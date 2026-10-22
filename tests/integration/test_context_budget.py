@@ -29,7 +29,7 @@ from coding_agent_playbook.sync.render import render_artifacts
 from coding_agent_playbook.validation.context import SyncContext
 from tests._budget_probe import LISTING_MAX_CHARS, every_core_where_entry
 from tests._catalog import core_rules, core_skill_ids
-from tests.core_skill_pins import DOMINO_SKILL_IDS, ProbeKind
+from tests.core_skill_pins import ProbeKind, skills_off_on_probe
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
 
 pytestmark = pytest.mark.catalog
@@ -78,7 +78,7 @@ def _core_descriptions(repo: Path, probe: ProbeKind = "reference") -> dict[str, 
     The Domino skills gate on ``domino_project`` (prU D63): the reference probe never
     emits them, the Domino probe emits every core skill.
     """
-    core_ids = core_skill_ids() if probe == "domino" else core_skill_ids() - DOMINO_SKILL_IDS
+    core_ids = core_skill_ids() - skills_off_on_probe(probe)
     emitted = _emitted_descriptions(repo)
     assert core_ids <= set(emitted), (
         f"the probe lacks core skills {sorted(core_ids - set(emitted))}"

@@ -10,6 +10,7 @@ comparison must decide alone whenever the dependency names did not change.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Final
 
 import pytest
@@ -46,6 +47,9 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.catalog
 
 HOOK_ID: Final = "resync-on-detector-input-change"
+#: The id of a rule the resync message names, and the count of the rows it leaves unnamed.
+_NAMED_RULE: Final = re.compile(r'\brule "([^"]+)" \(source "[^"]+"\)')
+_HIDDEN_ROWS: Final = re.compile(r" and (\d+) more\.")
 ML_RULE: Final = "ml-serialization-security"
 _BASE: Final = '[project]\nname = "demo"\ndependencies = ["fastapi>=0.110"]\n'
 _WITH_TORCH: Final = '[project]\nname = "demo"\ndependencies = ["fastapi>=0.110", "torch>=2"]\n'
@@ -328,27 +332,31 @@ def test_requirements_edit_naming_only_known_dependencies_is_silent(
     ids=["domino-marker", "platforms-key"],
 )
 def test_a_new_domino_input_names_the_domino_gated_rule(
-    repo: PackRepo,
-    deps: Callable[..., RuntimeDeps],
-    monkeypatch: pytest.MonkeyPatch,
-    rel: str,
-    text: str,
+    repo: PackRepo, deps: Callable[..., RuntimeDeps], rel: str, text: str
 ) -> None:
     """``domino_project`` was baked false; a marker or the committed key turns it on (D63).
 
-    The Domino skills' core rules gate on it too and sort before the repo-local
-    one, so the list is untruncated here and both kinds must be named.
+    The Domino skills' core rules gate on it too, so the message may name the
+    first few rows and count the rest ("and N more"): the named and counted rows
+    together are every Domino-gated rule, the repo-local one included.
     """
-    monkeypatch.setattr(resync, "_MAX_NAMED", 1000)
+    domino_gated = {
+        rule.frontmatter.id
+        for rule in FileSystemArtifactSource(repo_root=repo.root).list_rules()
+        if "domino_project" in rule.frontmatter.applies_if
+    }
+    assert "domino-runs" in domino_gated
     repo.write(rel, text)
     tool_input = {"file_path": str(repo.root / rel), "content": text}
 
     report = _post(repo, deps(), "Write", tool_input)
 
     [item] = report.trace.combined.context
-    assert 'rule "domino-runs" (source "<repo-local>")' in item, item
-    assert 'rule "domino-project-types" (source "coding_agent_playbook")' in item, item
-    assert " more." not in item, item
+    named = _NAMED_RULE.findall(item)
+    hidden = _HIDDEN_ROWS.search(item)
+    assert set(named) <= domino_gated, item
+    assert len(named) + (int(hidden.group(1)) if hidden else 0) == len(domino_gated), item
+    assert hidden or "domino-runs" in named, item
 
 
 @pytest.mark.parametrize(

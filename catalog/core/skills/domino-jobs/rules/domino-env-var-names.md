@@ -38,9 +38,12 @@ db-url=postgresql://db.example.com/sales           # not a valid name
 
 ```python
 import os
+import re
 from collections.abc import Mapping
 
 PREFIX = "ACME_CHURN_"
+NAME_SYNTAX = re.compile(r"[A-Za-z][A-Za-z0-9_]*")
+EXPECTED = f"{PREFIX}<NAME>: letters, digits and underscores, starting with a letter"
 RESERVED_NAMES = frozenset({"USER", "LOGNAME", "MLFLOW_TRACKING_URI"})
 RESERVED_PREFIXES = (
     "DOMINO_",
@@ -57,11 +60,15 @@ RESERVED_PREFIXES = (
 
 
 def check_variable_name(name: str) -> None:
+    if not NAME_SYNTAX.fullmatch(name):
+        raise ValueError(f"{name!r} is not a valid name; expected {EXPECTED}")
     if name in RESERVED_NAMES:
-        raise ValueError(f"{name} is reserved by Domino")
+        raise ValueError(f"{name!r} is reserved by Domino; expected {EXPECTED}")
     for prefix in RESERVED_PREFIXES:
         if name.startswith(prefix):
-            raise ValueError(f"{name} uses the reserved prefix {prefix}")
+            raise ValueError(f"{name!r} uses the reserved prefix {prefix}; expected {EXPECTED}")
+    if not name.startswith(PREFIX):
+        raise ValueError(f"{name!r} lacks the prefix {PREFIX}; expected {EXPECTED}")
 
 
 def setting(key: str, env: Mapping[str, str] | None = None) -> str | None:
@@ -73,8 +80,10 @@ def setting(key: str, env: Mapping[str, str] | None = None) -> str | None:
 import pytest
 
 
-@pytest.mark.parametrize("name", ["DOMINO_DB_URL", "CONDA_ENV", "MLFLOW_TRACKING_URI"])
-def test_reserved_names_are_rejected(name: str) -> None:
+@pytest.mark.parametrize(
+    "name", ["DOMINO_DB_URL", "CONDA_ENV", "MLFLOW_TRACKING_URI", "db-url", "DB_URL"]
+)
+def test_names_outside_the_prefix_are_rejected(name: str) -> None:
     with pytest.raises(ValueError, match=name):
         check_variable_name(name)
 ```

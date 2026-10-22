@@ -18,9 +18,10 @@ The file's shape (ADR 0004)::
 Core paths are relative to the skill directory; one ending in ``/`` covers every
 file under that directory (an example app). A distilled source's rows credit files
 that hold none of its text, so their targets stay engine-written or distilled, and
-one of its pages may feed several skills (one row per skill). :func:`attribution_errors` holds the
-D31 checks; the gates in ``tests/integration/test_core_attributions.py`` and
-``test_core_license_copies.py`` run them on the shipped tree.
+one of its pages may feed several skills (one row per skill).
+:func:`attribution_errors` holds the D31 checks; the gates in
+``tests/integration/test_core_attributions.py`` and ``test_core_license_copies.py``
+run them on the shipped tree.
 
 Example: ``load_core_attributions().sources["python-best-practices"].commit``
 -> ``"fa0d3f58afb8bf56c028bb559e0e7bc1538e079a"``.
@@ -141,6 +142,12 @@ class Source:
     skills: Mapping[str, SkillMapping]
     distilled: bool = False
 
+    def row_scope(self, skill: str) -> str:
+        """Where an upstream file may appear once: the whole source, or for a distilled
+        source each skill (one page may feed several skills), as ``name[/skill]``.
+        """
+        return f"{self.name}/{skill}" if self.distilled else self.name
+
 
 @dataclass(frozen=True)
 class Attributions:
@@ -222,15 +229,17 @@ class _Parser:
         if self._in_source():
             self.rows[self.section].setdefault(skill, [])
 
-    def _commit(self, sha: str, line: str, lineno: int) -> None:
+    def _require_source_level(self, kind: str, line: str, lineno: int) -> str:
+        """The current source's name; ``kind``'s line must sit under it, before any skill."""
         if not self._in_source() or self.skill is not None:
-            raise ValueError(f"{_where(lineno)}: a Commit line belongs under a source: {line!r}")
-        self.commits[str(self.section)] = sha
+            raise ValueError(f"{_where(lineno)}: a {kind} line belongs under a source: {line!r}")
+        return str(self.section)
+
+    def _commit(self, sha: str, line: str, lineno: int) -> None:
+        self.commits[self._require_source_level("Commit", line, lineno)] = sha
 
     def _distilled_form(self, line: str, lineno: int) -> None:
-        if not self._in_source() or self.skill is not None:
-            raise ValueError(f"{_where(lineno)}: a Form line belongs under a source: {line!r}")
-        self.distilled.add(str(self.section))
+        self.distilled.add(self._require_source_level("Form", line, lineno))
 
     def _row(self, line: str, lineno: int) -> None:
         cells = _row_cells(line)
@@ -326,14 +335,12 @@ def _pin_errors(parsed: Attributions, pins: Mapping[str, str]) -> list[str]:
 def _row_errors(parsed: Attributions) -> list[str]:
     errors = []
     for name, source in parsed.sources.items():
-        # A vendored file has one row per source; a distilled page, one per skill it feeds.
         seen: set[tuple[str, str]] = set()
         for skill, mapping in source.skills.items():
-            scope = skill if source.distilled else ""
+            scope = source.row_scope(skill)
             for row in mapping.rows:
                 if (scope, row.upstream) in seen:
-                    where = f"{name}/{skill}" if source.distilled else name
-                    errors.append(f"{where}: `{row.upstream}` appears in more than one row")
+                    errors.append(f"{scope}: `{row.upstream}` appears in more than one row")
                 seen.add((scope, row.upstream))
                 if not row.changes:
                     missing = "is dropped without a reason" if row.dropped else "lists no changes"
@@ -342,7 +349,9 @@ def _row_errors(parsed: Attributions) -> list[str]:
 
 
 def _mappings(parsed: Attributions, skill: str, *, distilled: bool = False) -> list[SkillMapping]:
-    """Every vendored (or, with ``distilled``, every distilled) source's sub-section for ``skill``."""
+    """Every vendored source's sub-section for ``skill``, or with ``distilled`` every
+    distilled source's.
+    """
     return [
         source.skills[skill]
         for source in parsed.sources.values()
@@ -466,8 +475,9 @@ def attribution_errors(
 ) -> list[str]:
     """Every D31 violation of ``parsed`` against the core skill tree at ``skills_root``.
 
-    Pins equal D11 (a distilled source, prU D50, carries none); every skill file (license copies aside) is a mapping target,
-    distilled or engine-written, and every listed file exists; a skill listing
+    Pins equal D11 (a distilled source, prU D50, carries none); every skill file
+    (license copies aside) is a mapping target, distilled or engine-written, and
+    every listed file exists; a skill listing
     files exists; no file is both engine-written and vendored, nor both distilled
     and a mapping target (D78(15)); an upstream file appears in at most one row per
     source; every row says what changed or, for DROP, why; a skill holding a

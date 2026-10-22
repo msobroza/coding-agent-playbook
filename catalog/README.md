@@ -32,14 +32,14 @@ catalog/
         └── skills/           one <dir>/SKILL.md per skill, plus scripts/, references/
 ```
 
-`core/` ships six skills, `python-coding`, `python-testing`, `python-tooling`,
-`ml-data`, `web-application` and `domino-jobs` (written only in Domino repos).
-Each one's member rules are rendered into its `rules/` directory from the
-scoped rules that name it. A seventh, `playbook-guardrails`, takes no rules:
-sync appends one section per enabled hook's guardrail text to its authored
-intro, so edit the hook's `HOOK.md` body, not the skill, to change a section.
-Only a skill that declares a `playbook:` block takes rules, so the skills of
-`superpowers` and `mattpocock_skills` own none. A bundled plugin may also hold `rules/`, `prompts/`,
+`core/` ships five skills, `python-coding`, `python-testing`, `python-tooling`,
+`ml-data` and `web-application`. Each one's member rules are rendered into its
+`rules/` directory from the scoped rules that name it. A sixth,
+`playbook-guardrails`, takes no rules: sync appends one section per enabled
+hook's guardrail text to its authored intro, so edit the hook's `HOOK.md`
+body, not the skill, to change a section. Only a skill that declares a
+`playbook:` block takes rules, so the skills of `superpowers` and
+`mattpocock_skills` own none. A bundled plugin may also hold `rules/`, `prompts/`,
 `hooks/` or `eval_samples/`, laid out exactly as in `core/`.
 
 The files at a layer root (`README.md`, `LICENSE`, `ATTRIBUTIONS.md`) sit

@@ -78,4 +78,4 @@ def save_outputs(ctx: JobContext, scores: pd.DataFrame, summary: dict[str, float
 - Flow tasks persist only `/workflow/outputs` (`domino-flow-task-io`); big or many files belong in Datasets (`domino-datasets-for-large-data`).
 - Domino Apps and endpoints persist nothing; the domino-apps skill covers App storage.
 - The 6.2 artifacts page suggests replacing `/mnt` with `DOMINO_WORKING_DIR`, which points at the code checkout in Git-based projects. Always resolve artifacts from `DOMINO_ARTIFACTS_DIR` instead (safe behavior where the docs disagree).
-- The where-outputs-go reference of this skill maps each kind of file to its location per project type.
+- where-outputs-go.md in this skill maps each kind of file to its location per project type.
