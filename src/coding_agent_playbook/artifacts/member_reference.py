@@ -43,7 +43,10 @@ class MemberReference:
     ``text`` is the whole file, identical in every skill root. ``name`` labels the
     member in its skill's Covers clause and index, ``description`` is its index
     line, ``globs`` feed the rule file's first line and ``source_package`` its
-    lockfile provenance.
+    lockfile provenance. ``section`` and ``impact`` place the member in its
+    skill's sectioned index (prU D17): its section's id and that section's
+    impact (``"CRITICAL"`` to ``"LOW"``); both ``None`` for a member of a skill
+    without sections, or for one listed under the engine's "Other" section (D42).
 
     Example: ``MemberReference("python-typing", ...).filename`` -> ``"python-typing.md"``.
     """
@@ -55,6 +58,8 @@ class MemberReference:
     globs: tuple[str, ...]
     text: str
     source_package: str
+    section: str | None = None
+    impact: str | None = None
 
     @property
     def filename(self) -> str:
@@ -77,6 +82,8 @@ class MemberReference:
             "globs": list(self.globs),
             "text": self.text,
             "source_package": self.source_package,
+            "section": self.section,
+            "impact": self.impact,
         }
 
     @classmethod
@@ -90,4 +97,7 @@ class MemberReference:
             globs=tuple(data["globs"]),
             text=data["text"],
             source_package=data["source_package"],
+            # A dict written before sections existed has neither key.
+            section=data.get("section"),
+            impact=data.get("impact"),
         )

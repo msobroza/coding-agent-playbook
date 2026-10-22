@@ -11,12 +11,17 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.artifacts.member_reference import MemberReference
+from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.skills.document import (
     DESCRIPTION_MAX_CHARS,
     DescriptionOverflowError,
     compose_description,
+    compose_sectioned_description,
     covered_member_count,
     covers_clause,
+    emitted_frontmatter,
+    sectioned_description,
     worst_case_description,
 )
 
@@ -186,3 +191,68 @@ def test_composing_without_members_is_an_error(
 ) -> None:
     with pytest.raises(ValueError, match=r"at least one member name, got \[\]"):
         compose("X.", [], None)
+
+
+# --- skills that declare sections (prU D17, D46.7) ---
+
+
+@pytest.mark.parametrize(
+    ("title", "label"),
+    [
+        ("Mocking", "mocking"),
+        ("Test Structure", "test structure"),
+        ("FastAPI wiring", "FastAPI wiring"),
+        ("HTTP errors", "HTTP errors"),
+        ("SQLAlchemy sessions", "SQLAlchemy sessions"),
+        ("CQRS and event sourcing", "CQRS and event sourcing"),
+        ("Async I/O", "async I/O"),
+    ],
+)
+def test_covers_clause_lowercases_section_titles_except_words_with_inner_capitals(
+    title: str, label: str
+) -> None:
+    assert sectioned_description("X.", [title], None) == f"X. Covers {label}."
+
+
+def test_sectioned_description_names_every_section_without_truncating() -> None:
+    titles = [f"Section number {index}" for index in range(12)]
+    text = sectioned_description("Test conventions.", titles, "editing tests")
+    assert " more." not in text
+    assert text == (
+        "Test conventions. Covers section number 0, section number 1, section number 2, "
+        "section number 3, section number 4, section number 5, section number 6, "
+        "section number 7, section number 8, section number 9, section number 10, "
+        "section number 11. Use when editing tests."
+    )
+
+
+def test_compose_sectioned_description_refuses_an_overflow() -> None:
+    titles = [f"Section number {index}" for index in range(20)]
+    with pytest.raises(DescriptionOverflowError, match="naming its sections") as caught:
+        compose_sectioned_description("Test conventions.", titles, "editing tests")
+    assert caught.value.length > DESCRIPTION_MAX_CHARS
+    assert compose_sectioned_description("X.", ["Mocking"], None) == "X. Covers mocking."
+
+
+def test_emitted_description_of_a_sectioned_skill_names_only_its_active_sections() -> None:
+    sections = [
+        {"id": section_id, "title": title, "impact": impact, "summary": "S.", "open_when": "O."}
+        for section_id, title, impact in (
+            ("mocking", "Mocking", "CRITICAL"),
+            ("fastapi", "FastAPI wiring", "HIGH"),
+            ("coverage", "Coverage", "MEDIUM"),
+        )
+    ]
+    frontmatter = {
+        "id": "python-testing",
+        "description": "Test conventions.",
+        "playbook": {"use_when": "editing tests", "sections": sections},
+    }
+    members = tuple(
+        MemberReference(rule_id, rule_id, "D.", 50, (), "t\n", "pkg", section=section)
+        for rule_id, section in (("mock-fake", "mocking"), ("app-client", "fastapi"))
+    )
+    skill = Skill(frontmatter, "", None, None, "pkg", members)
+    assert emitted_frontmatter(skill)["description"] == (
+        "Test conventions. Covers mocking, FastAPI wiring. Use when editing tests."
+    )

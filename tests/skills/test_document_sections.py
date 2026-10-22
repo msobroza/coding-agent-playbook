@@ -17,13 +17,13 @@ from coding_agent_playbook.skills.document import (
     WhereEntry,
     emitted_body,
     emitted_frontmatter,
-    playbook_block,
     render_member_reference,
     rules_index,
     skill_catalog_block,
     where_entry,
     where_guidance_section,
 )
+from coding_agent_playbook.skills.playbook_block import playbook_block
 
 TYPING_DESCRIPTION = (
     "Prefer a concrete type or a Protocol to Any, write X | None, and take abstract "

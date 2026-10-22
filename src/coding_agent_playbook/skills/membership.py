@@ -12,20 +12,34 @@ and passes through unchanged. See specs/prS-skills-context.md section 6.4.3.
 from __future__ import annotations
 
 import dataclasses
-from typing import TYPE_CHECKING, ClassVar, Final, Protocol
+from collections.abc import Callable, Mapping
+from typing import TYPE_CHECKING, Any, ClassVar, Final, Protocol, TypeGuard
 
 from coding_agent_playbook.artifacts.member_reference import MemberReference
-from coding_agent_playbook.skills.document import PLAYBOOK_BLOCK_KEY, render_member_reference
+from coding_agent_playbook.artifacts.skill import ListedReference
+from coding_agent_playbook.skills.document import render_member_reference
 from coding_agent_playbook.skills.naming import skill_id_of
+from coding_agent_playbook.skills.playbook_block import PLAYBOOK_BLOCK_KEY, playbook_block
+from coding_agent_playbook.skills.sections import REFERENCES_KEY, skill_sections
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping, Sequence
+    from collections.abc import Iterable, Sequence
 
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.artifacts.skill import Skill
+    from coding_agent_playbook.skills.sections import SkillSection
+
+#: Whether one ``playbook.references`` entry's ``applies_if`` mapping holds (D47, D58).
+#: Sync binds the detector facts (``detector.predicate.evaluate_predicate``).
+type ReferenceGate = Callable[[dict[str, Any]], bool]
 
 #: The built-in adapters that write skill references, named by the undelivered warning.
 _SKILL_REFERENCE_ADAPTERS: Final = "claude_code, opencode or shared_skills"
+
+
+def _every_reference_applies(_predicate: dict[str, Any]) -> bool:
+    """The default gate: with no facts at hand, every entry is listed."""
+    return True
 
 
 class MemberRuleDeliverer(Protocol):
@@ -69,7 +83,11 @@ def is_rule_skill(skill: Skill) -> bool:
 
 
 def compose_skills(
-    skills: Sequence[Skill], merged_rules: Sequence[Rule], active_rules: Sequence[Rule]
+    skills: Sequence[Skill],
+    merged_rules: Sequence[Rule],
+    active_rules: Sequence[Rule],
+    *,
+    reference_applies: ReferenceGate = _every_reference_applies,
 ) -> list[Skill]:
     """The skills to write, each with its active member rules attached.
 
@@ -79,12 +97,19 @@ def compose_skills(
     :class:`MemberReference` per active member, built from the Jinja-rendered
     rule. Membership comes from ``merged_rules`` (every layer merged, before
     ``applies_if``); ``active_rules`` (filtered, bodies rendered) decides which
-    members are on and supplies their text. Never mutates its inputs. Example::
+    members are on and supplies their text. Members are ordered by
+    ``(priority, id)``; in a skill that declares sections, by section first,
+    members in no declared section last (D17, D42). The skill's
+    ``listed_references`` are its ``playbook.references`` entries whose
+    ``applies_if`` passes ``reference_applies`` (D47). Never mutates its inputs.
+    Example::
 
         skills = compose_skills(ctx.skills_resolved, ctx.rules_resolved, rendered_rules)
     """
     active_by_id = {rule.frontmatter.id: rule for rule in active_rules}
-    composed = (_composed_skill(skill, merged_rules, active_by_id) for skill in skills)
+    composed = (
+        _composed_skill(skill, merged_rules, active_by_id, reference_applies) for skill in skills
+    )
     return [skill for skill in composed if skill is not None]
 
 
@@ -109,13 +134,18 @@ def active_skill_ids(
     )
 
 
-def member_reference(rule: Rule) -> MemberReference:
+def member_reference(rule: Rule, sections: Sequence[SkillSection] = ()) -> MemberReference:
     """``rule`` (body already rendered) as the reference its skill writes.
+
+    ``sections`` are its skill's declared sections: a member whose ``section:``
+    names one carries that section's id and impact; any other member carries
+    neither (a sectionless skill, or D42's "Other").
 
     Example: for the rendered ``python-typing`` rule, ``member_reference(rule).filename``
     -> ``"python-typing.md"``.
     """
     fm = rule.frontmatter
+    section = next((s for s in sections if s.id == fm.section), None)
     return MemberReference(
         rule_id=fm.id,
         name=fm.name,
@@ -124,6 +154,8 @@ def member_reference(rule: Rule) -> MemberReference:
         globs=tuple(fm.globs),
         text=render_member_reference(fm.id, fm.globs, rule.body),
         source_package=rule.source_package,
+        section=None if section is None else section.id,
+        impact=None if section is None else str(section.impact),
     )
 
 
@@ -151,15 +183,62 @@ def undelivered_member_warning(
 
 
 def _composed_skill(
-    skill: Skill, merged_rules: Sequence[Rule], active_by_id: Mapping[str, Rule]
+    skill: Skill,
+    merged_rules: Sequence[Rule],
+    active_by_id: Mapping[str, Rule],
+    reference_applies: ReferenceGate,
 ) -> Skill | None:
     """``skill`` as written: unchanged when plain, None without an active member."""
     if not _is_kept(skill, merged_rules, active_by_id):
         return None
     if not is_rule_skill(skill):
         return skill
+    sections = skill_sections(skill)
     active = _active_members(skill, merged_rules, active_by_id)
-    return dataclasses.replace(skill, member_references=tuple(map(member_reference, active)))
+    members = sorted(
+        (member_reference(rule, sections) for rule in active),
+        key=lambda member: _section_rank(member, sections),
+    )  # stable: (priority, id) order holds within a section
+    return dataclasses.replace(
+        skill,
+        member_references=tuple(members),
+        listed_references=_listed_references(skill, reference_applies),
+    )
+
+
+def _section_rank(member: MemberReference, sections: Sequence[SkillSection]) -> int:
+    """The index of ``member``'s section; members in no declared section come last (D42)."""
+    ids = [section.id for section in sections]
+    return ids.index(member.section) if member.section in ids else len(ids)
+
+
+def _listed_references(
+    skill: Skill, reference_applies: ReferenceGate
+) -> tuple[ListedReference, ...]:
+    """The ``playbook.references`` entries whose ``applies_if`` passes, in declared order (D47).
+
+    An entry validate would reject (not a mapping, no string ``path`` or
+    ``open_when``, an ``applies_if`` that is no mapping) is skipped.
+    """
+    entries = playbook_block(skill).get(REFERENCES_KEY)
+    if not isinstance(entries, list):
+        return ()
+    return tuple(
+        ListedReference(entry["path"], " ".join(entry["open_when"].split()))
+        for entry in entries
+        if _is_listable_entry(entry)
+        and ("applies_if" not in entry or reference_applies(dict(entry["applies_if"])))
+    )
+
+
+def _is_listable_entry(entry: object) -> TypeGuard[Mapping[str, Any]]:
+    """A mapping with string ``path`` and ``open_when`` and a mapping (or no) ``applies_if``."""
+    return (
+        isinstance(entry, Mapping)
+        and isinstance(entry.get("path"), str)
+        and isinstance(entry.get("open_when"), str)
+        and isinstance(entry.get("applies_if", {}), Mapping)
+    )
 
 
 def _is_kept(skill: Skill, merged_rules: Sequence[Rule], active_by_id: Mapping[str, Rule]) -> bool:

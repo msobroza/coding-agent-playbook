@@ -353,12 +353,21 @@ def test_reference_probe_emits_each_core_skill_within_budget(
     assert description.endswith(f"Use when {block['use_when']}.")
     assert description.count(" Use when ") == 1
     assert not _TRUNCATION_TAIL.search(description), f"{skill_id} truncates: {description!r}"
-    for rule in _probe_members(skill_id):
-        assert rule.frontmatter.name in description, f"{skill_id} omits {rule.frontmatter.name!r}"
+    members = _probe_members(skill_id)
+    if block.get("sections"):
+        # A sectioned skill's Covers clause names its active sections, not its members (D17).
+        covers = description.partition(" Covers ")[2].partition(". Use when ")[0]
+        active = {rule.frontmatter.section for rule in members}
+        assert len(covers.split(", ")) == len(active), f"{skill_id} covers {covers!r}"
+    else:
+        for rule in members:
+            name = rule.frontmatter.name
+            assert name in description, f"{skill_id} omits {name!r}"
     assert sorted(frontmatter) == ["description", "id", "name"]
-    index = body.partition("## Rules\n")[2]
-    lines = [line for line in index.splitlines() if line.startswith("- [")]
-    assert len(lines) == len(_probe_members(skill_id)), f"{skill_id} index: {lines}"
+    index = body.partition("## Rules\n")[2].partition("## References and examples")[0]
+    # A flat index lists one "- [" line per member, a sectioned one one "| [" table row.
+    lines = [line for line in index.splitlines() if line.startswith(("- [", "| ["))]
+    assert len(lines) == len(members), f"{skill_id} index: {lines}"
 
 
 def test_reference_probe_where_section_lists_every_core_skill(reference_probe_repo: Path) -> None:

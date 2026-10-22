@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.skills.document import PLAYBOOK_BLOCK_KEY, playbook_block
+from coding_agent_playbook.skills.playbook_block import PLAYBOOK_BLOCK_KEY, playbook_block
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -31,6 +31,8 @@ if TYPE_CHECKING:
 
 #: The ``playbook:`` key that holds a skill's ordered sections.
 SECTIONS_KEY: Final = "sections"
+#: The ``playbook:`` key that lists a skill's references and examples (D47).
+REFERENCES_KEY: Final = "references"
 #: How findings name the list: ``'playbook.sections'``.
 SECTIONS_FIELD: Final = f"'{PLAYBOOK_BLOCK_KEY}.{SECTIONS_KEY}'"
 #: The keys every section entry declares, all required (D17, D47's ``open_when``).

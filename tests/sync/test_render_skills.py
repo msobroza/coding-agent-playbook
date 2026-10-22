@@ -168,6 +168,54 @@ def test_render_artifacts_leaves_a_long_description_without_members_as_authored(
     assert skill.frontmatter["description"] == _OVERFLOWING_DESCRIPTION * 2
 
 
+_SECTIONED_SKILL = """\
+---
+id: risk-models
+name: risk-models
+description: Conventions for the risk models.
+playbook:
+  use_when: changing a risk model
+  files: Risk model modules
+  sections:
+    - id: naming
+      title: Naming
+      impact: HIGH
+      summary: Name models after what they price.
+      open_when: A model class or module is added or renamed.
+  references:
+    - path: references/glossary.md
+      open_when: Naming a new model.
+    - path: references/click-cli.md
+      open_when: Adding a command.
+      applies_if:
+        has_framework: [click]
+---
+# Risk models
+"""
+
+
+def test_render_artifacts_lists_only_the_references_whose_applies_if_passes(
+    tmp_path: Path, make_synthetic_repo: Callable[..., Path]
+) -> None:
+    """D47, D58: a reference gated on an absent framework is not listed (click is absent)."""
+    repo = make_synthetic_repo(tmp_path, config_text=_CONFIG.format(adapters='["claude_code"]'))
+    skill_dir = write_repo_member_skill(repo)
+    (skill_dir / "SKILL.md").write_text(_SECTIONED_SKILL, encoding="utf-8")
+    rule = write_repo_member_rule(repo, "risk-naming", priority=40)
+    rule.write_text(
+        rule.read_text(encoding="utf-8").replace("priority: 40", "priority: 40\nsection: naming"),
+        encoding="utf-8",
+    )
+
+    skills = render_artifacts(SyncContext.from_repo(repo)).skills
+
+    [skill] = [s for s in skills if s.frontmatter.get("id") == "risk-models"]
+    assert [ref.path for ref in skill.listed_references] == ["references/glossary.md"]
+    assert [(m.rule_id, m.section, m.impact) for m in skill.member_references] == [
+        ("risk-naming", "naming", "HIGH")
+    ]
+
+
 def test_report_description_overflow_prints_the_skill_and_the_outcome(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

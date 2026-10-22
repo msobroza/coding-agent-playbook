@@ -1212,6 +1212,7 @@ class Skill:
     source_package: str
     member_references: tuple[MemberReference, ...] = ()  # active member rules, set at sync
     source_dir: Path | None = None  # its directory, for validate (prU D47)
+    listed_references: tuple[ListedReference, ...] = ()  # gated playbook.references, set at sync
     ...
 
 
@@ -1228,6 +1229,8 @@ class MemberReference:  # one member rule, rendered as its skill's references/<r
     globs: tuple[str, ...]  # shown on the reference's first line
     text: str  # the whole file, identical in every skill root
     source_package: str  # lockfile provenance
+    section: str | None = None  # its section's id in a sectioned skill (prU D17), else None
+    impact: str | None = None  # that section's impact, "CRITICAL" to "LOW"
     # filename property, plus to_dict / from_dict; a Skill dict without the key still loads
 
 
@@ -2730,13 +2733,13 @@ The Agent Skills rule (v0.15) checks every resolved skill: it must declare a str
 | V8 | an unknown key in `playbook` | `FAIL skills/x (pkg): 'playbook' has unknown key 'when'; allowed keys: files, use_when, sections, references` |
 | V9 | `use_when` or `files` is not one non-empty line; `files` is over 80 chars or ends with a period | `FAIL skills/x (pkg): 'playbook.files' is 112 chars; keep it to one line of at most 80 chars without a trailing period (it becomes one line of 'Where guidance lives')` |
 | V10 | `use_when` starts with "Use when" (the engine adds it) | `FAIL skills/x (pkg): 'playbook.use_when' starts with 'Use when'; write only the condition (the engine adds 'Use when'), e.g. 'editing a Python module'` |
-| V11 | the worst-case composed description, the longest member name plus the `and <N-1> more` tail, is over 300 chars | `FAIL skills/python-coding (pkg): the composed description cannot fit 300 chars even when the Covers clause names one member: '<text>' is 312 chars; shorten 'description' (88 chars), 'playbook.use_when' (130 chars) or the longest member name (python-typing: 'Python typing conventions')` |
+| V11 | the worst-case composed description, the longest member name plus the `and <N-1> more` tail, is over 300 chars; for a skill that declares sections, the description whose Covers clause names every declared section (`... cannot fit 300 chars when the Covers clause names every declared section: '<text>' is 304 chars; shorten 'description' (40 chars), 'playbook.use_when' (60 chars) or the section titles`) | `FAIL skills/python-coding (pkg): the composed description cannot fit 300 chars even when the Covers clause names one member: '<text>' is 312 chars; shorten 'description' (88 chars), 'playbook.use_when' (130 chars) or the longest member name (python-typing: 'Python typing conventions')` |
 | V12 | a hand-written reference has a member's file name | `FAIL skills/python-coding (pkg): references/python-typing.md is hand-written in this skill but is also the rendered reference of member rule 'python-typing'; rename the hand-written file` |
 | V13 | the authored body has a line that is exactly `## References` | `FAIL skills/python-coding (pkg): the body has its own '## References' heading; the engine appends that section for member rules, so rename yours (e.g. '## Further reading')` |
 | V14 | `skill` names a skill without a `playbook:` block, such as a bundled plugin skill | `FAIL rules/x.md: skill 'brainstorming' (coding_agent_playbook.plugins.superpowers) declares no 'playbook:' block, so it cannot take member rules; name one that does (ml-data, python-coding, python-testing, python-tooling), or add a 'playbook:' block to a skill of your own (an override of a core skill must keep one)` |
 | W1 | a `playbook:` block without members: no rule in its `rules/` directory and none naming it | `warning: skills/x (pkg): declares 'playbook' but has no member rule (none in its rules/ directory, none naming it in 'skill:'); it is never written` |
 | W2 | member rules but no `playbook.files` | `warning: skills/x (pkg): has member rules but no 'playbook.files'; it is left out of the 'Where guidance lives' section` |
-| W3 | the full member list would be truncated | `warning: skills/python-coding (pkg): the composed description names 6 of 9 member rules within 300 chars ('... and 3 more'); shorten member names or the authored parts to list them all` |
+| W3 | the full member list would be truncated (never for a skill that declares sections: its Covers clause names sections and is not truncated) | `warning: skills/python-coding (pkg): the composed description names 6 of 9 member rules within 300 chars ('... and 3 more'); shorten member names or the authored parts to list them all` |
 
 **Skill sections and references (prU D17, D42, D46.8, D47).** A skill's `playbook:` block may declare an ordered `sections:` list (model in `skills/sections.py`: `Impact`, `IMPACT_BANDS`, `SkillSection`, `skill_sections`) and a `references:` list; `validation/_sections.py` and `validation/_skill_references.py` check both. Priority bands (CRITICAL 20-39, HIGH 40-59, MEDIUM 60-79, LOW 80-99) apply only to skills that declare sections, and a skill without sections (no `sections` key, or `sections: []`) reports nothing new. A declared section without members is no finding. Member checks wait until S1 accepts the list.
 
