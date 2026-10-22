@@ -4,11 +4,41 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 # Imported at run time: Skill.from_dict rebuilds member references from dicts.
 from coding_agent_playbook.artifacts.member_reference import MemberReference
 from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+
+@dataclass(frozen=True)
+class ListedReference:
+    """One ``playbook.references`` entry whose gate passed, listed by its skill (prU D47).
+
+    ``path`` is relative to the skill directory (``references/<file>`` or
+    ``examples/<file-or-dir>``); ``open_when`` is the one-line condition.
+
+    Example: ``ListedReference("references/guide.md", "Choosing a fake.")``.
+    """
+
+    path: str
+    open_when: str
+
+    def to_dict(self) -> dict[str, str]:
+        """Lossless dict form, the inverse of :meth:`from_dict`.
+
+        Example: ``ListedReference("references/a.md", "X.").to_dict()`` ->
+        ``{"path": "references/a.md", "open_when": "X."}``.
+        """
+        return {"path": self.path, "open_when": self.open_when}
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> ListedReference:
+        """Inverse of :meth:`to_dict`: ``ListedReference.from_dict(r.to_dict()) == r``."""
+        return cls(path=data["path"], open_when=data["open_when"])
 
 
 @dataclass
@@ -30,6 +60,9 @@ class Skill:
     # validate`` lists its references/ and examples/ files against
     # ``playbook.references`` (prU D47). None for a skill built in memory.
     source_dir: Path | None = None
+    # Set by compose_skills at sync: the playbook.references entries whose
+    # applies_if passed, listed under "References and examples" (prU D47).
+    listed_references: tuple[ListedReference, ...] = ()
 
     def to_prompt(self) -> Prompt:
         """Degrade this Skill to a Prompt.
@@ -69,6 +102,7 @@ class Skill:
             "source_package": self.source_package,
             "member_references": [member.to_dict() for member in self.member_references],
             "source_dir": None if self.source_dir is None else str(self.source_dir),
+            "listed_references": [ref.to_dict() for ref in self.listed_references],
         }
 
     @classmethod
@@ -78,6 +112,7 @@ class Skill:
         # A dict written before member references existed has no such key.
         members = data.get("member_references", ())
         source_dir = data.get("source_dir")
+        listed = data.get("listed_references", ())
         return cls(
             dict(data["frontmatter"]),
             data["body"],
@@ -86,4 +121,5 @@ class Skill:
             data["source_package"],
             tuple(MemberReference.from_dict(member) for member in members),
             None if source_dir is None else Path(source_dir),
+            tuple(ListedReference.from_dict(ref) for ref in listed),
         )

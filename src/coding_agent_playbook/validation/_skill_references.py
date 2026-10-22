@@ -19,8 +19,12 @@ from collections.abc import Callable, Mapping
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.skills.document import PLAYBOOK_BLOCK_KEY, playbook_block
-from coding_agent_playbook.skills.sections import declared_sections_value, one_line_phrase_problem
+from coding_agent_playbook.skills.playbook_block import PLAYBOOK_BLOCK_KEY, playbook_block
+from coding_agent_playbook.skills.sections import (
+    REFERENCES_KEY,
+    declared_sections_value,
+    one_line_phrase_problem,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -32,7 +36,6 @@ if TYPE_CHECKING:
 #: ``detector.predicate.evaluate_predicate``, whose job is to reject bad shapes.
 type PredicateCheck = Callable[[dict[str, Any]], object]
 
-REFERENCES_KEY: Final = "references"
 _FIELD: Final = f"'{PLAYBOOK_BLOCK_KEY}.{REFERENCES_KEY}'"
 _ENTRY_KEYS: Final = ("path", "open_when", "applies_if")
 _LISTED_DIRS: Final = ("references", "examples")

@@ -20,12 +20,16 @@ composition before ``playbook sync`` writes anything:
   members render to ``rules/``, so a hand-written ``references/`` file cannot
   collide with one); warnings for a block without members, in its ``rules/``
   directory or naming it (W1),
-  members without ``files`` (W2) and a truncated Covers clause (W3).
+  members without ``files`` (W2) and a truncated Covers clause (W3, sectionless
+  skills only).
 
 Every check runs over the merged sets and ignores ``applies_if``, so overlay
 authors and consumers see the same findings whatever the detector facts.
 V11 measures with ``skills.document.worst_case_description``, the bound sync's
 ``compose_description`` holds, so a skill that validates cannot make sync raise.
+A skill that declares sections names sections in its Covers clause, never
+truncated (prU D17): V11 measures ``sectioned_description`` over every declared
+section, the longest text sync's ``compose_sectioned_description`` can emit.
 
 The user-facing text is documented, not only coded: SPEC §12.6 lists every check
 with a sample line, and MIGRATION.md quotes V1 (:data:`SCOPED_RULE_NEEDS_SKILL_MESSAGE`,
@@ -43,9 +47,9 @@ from typing import TYPE_CHECKING, Final, TypeGuard
 from coding_agent_playbook.artifacts.member_reference import member_reference_path
 from coding_agent_playbook.skills.document import (
     DESCRIPTION_MAX_CHARS,
-    PLAYBOOK_BLOCK_KEY,
     covered_member_count,
     covers_clause,
+    sectioned_description,
     skill_catalog_block,
     worst_case_description,
 )
@@ -55,6 +59,8 @@ from coding_agent_playbook.skills.naming import (
     AGENT_SKILL_NAME_PATTERN,
     skill_id_of,
 )
+from coding_agent_playbook.skills.playbook_block import PLAYBOOK_BLOCK_KEY
+from coding_agent_playbook.skills.sections import skill_sections
 from coding_agent_playbook.validation.findings import (
     ValidationError,
     ValidationFindings,
@@ -301,8 +307,15 @@ def _use_when_prefix_problem(value: object) -> list[str]:
 
 
 def _overflow_problems(skill: Skill, members: Sequence[Rule]) -> list[str]:
-    """V11: even a one-name Covers clause with its ``and N-1 more`` tail is over the limit."""
+    """V11: even a one-name Covers clause with its ``and N-1 more`` tail is over the limit.
+
+    A skill that declares sections never truncates: its Covers clause names
+    sections, so V11 measures it naming every declared section (prU D17).
+    """
     parts = _ComposedParts.of(skill, members)
+    sections = skill_sections(skill)
+    if sections:
+        return _sectioned_overflow_problems(parts, [section.title for section in sections])
     worst = parts.worst_case()
     if len(worst) <= DESCRIPTION_MAX_CHARS:
         return []
@@ -310,6 +323,18 @@ def _overflow_problems(skill: Skill, members: Sequence[Rule]) -> list[str]:
         f"the composed description cannot fit {DESCRIPTION_MAX_CHARS} chars even when the "
         f"Covers clause names one member: '{worst}' is {len(worst)} chars; shorten "
         f"{_shorten_hint(parts, _longest_member(members))}"
+    ]
+
+
+def _sectioned_overflow_problems(parts: _ComposedParts, titles: Sequence[str]) -> list[str]:
+    """V11 for a sectioned skill: the description naming every declared section fits."""
+    text = sectioned_description(parts.description, titles, parts.use_when)
+    if len(text) <= DESCRIPTION_MAX_CHARS:
+        return []
+    return [
+        f"the composed description cannot fit {DESCRIPTION_MAX_CHARS} chars when the Covers "
+        f"clause names every declared section: '{text}' is {len(text)} chars; shorten "
+        f"{', '.join(_authored_hints(parts))} or the section titles"
     ]
 
 
@@ -344,11 +369,16 @@ def _longest_member(members: Sequence[Rule]) -> Rule:
 
 def _shorten_hint(parts: _ComposedParts, longest: Rule) -> str:
     """``'description' (N chars), 'playbook.use_when' (M chars) or the longest member name (…)``."""
+    fm = longest.frontmatter
+    return f"{', '.join(_authored_hints(parts))} or the longest member name ({fm.id}: '{fm.name}')"
+
+
+def _authored_hints(parts: _ComposedParts) -> list[str]:
+    """``'description' (N chars)`` and, when set, ``'playbook.use_when' (M chars)``."""
     hints = [f"'description' ({len(parts.description.strip())} chars)"]
     if parts.use_when is not None:
         hints.append(f"'{PLAYBOOK_BLOCK_KEY}.use_when' ({len(parts.use_when)} chars)")
-    fm = longest.frontmatter
-    return f"{', '.join(hints)} or the longest member name ({fm.id}: '{fm.name}')"
+    return hints
 
 
 def _rule_skill_warnings(skill: Skill, members: Sequence[Rule]) -> list[str]:
@@ -372,7 +402,13 @@ def _rule_skill_warnings(skill: Skill, members: Sequence[Rule]) -> list[str]:
 
 
 def _truncation_warning(skill: Skill, members: Sequence[Rule]) -> list[str]:
-    """W3 (D21): the full member list does not fit; silent when V11 already fails."""
+    """W3 (D21): the full member list does not fit; silent when V11 already fails.
+
+    Silent too for a skill that declares sections: its Covers clause names
+    sections and never truncates (prU D17).
+    """
+    if skill_sections(skill):
+        return []
     parts = _ComposedParts.of(skill, members)
     if len(parts.worst_case()) > DESCRIPTION_MAX_CHARS:
         return []

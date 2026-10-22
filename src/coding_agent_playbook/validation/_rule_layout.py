@@ -30,8 +30,8 @@ import yaml
 
 from coding_agent_playbook.catalog._skill_rules import find_skill_md, read_skill_md
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource, engine_package_of
-from coding_agent_playbook.skills.document import PLAYBOOK_BLOCK_KEY
 from coding_agent_playbook.skills.naming import skill_id_of
+from coding_agent_playbook.skills.playbook_block import PLAYBOOK_BLOCK_KEY
 from coding_agent_playbook.validation.findings import ValidationError
 
 if TYPE_CHECKING:

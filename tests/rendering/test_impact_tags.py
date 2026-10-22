@@ -15,12 +15,13 @@ from pathlib import Path
 
 import pytest
 
+from coding_agent_playbook.artifacts.impact import Impact
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.rendering.impact_tag import with_impact_tag
 from coding_agent_playbook.rendering.prompt_rule_delivery import includes_rules_appendix
 from coding_agent_playbook.rendering.session import RenderSession, TemplateContext
-from coding_agent_playbook.skills.sections import Impact, section_impacts
+from coding_agent_playbook.skills.sections import section_impacts
 from tests.member_skill_samples import SAMPLE_HIGH_SECTION, sample_sectioned_skill
 
 _FIXTURES = {

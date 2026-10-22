@@ -226,6 +226,56 @@ def test_v8_names_sections_and_references_as_allowed_keys() -> None:
     ]
 
 
+def _sections(*titles: str) -> list[dict[str, str]]:
+    return [
+        {"id": f"s{i}", "title": t, "impact": "LOW", "summary": "S.", "open_when": "O."}
+        for i, t in enumerate(titles)
+    ]
+
+
+def test_v11_measures_a_sectioned_description_over_every_declared_section() -> None:
+    """V11 counts every declared section, even one no member uses yet (D17, D18)."""
+    titles = [f"Section title number {index:02d}" for index in range(12)]
+    block = {**_BLOCK, "sections": _sections(*titles)}
+    member = _rule("python-typing")
+    member.frontmatter.section = "s0"
+
+    findings = check_rule_skills([member], [_skill("python-coding", block=block)])
+
+    [error] = findings.errors
+    assert error.message.startswith(
+        "the composed description cannot fit 300 chars when the Covers clause names every "
+        "declared section: 'Conventions. Covers section title number 00, "
+    )
+    assert error.message.endswith(
+        "shorten 'description' (12 chars), 'playbook.use_when' (19 chars) or the section titles"
+    )
+
+
+def test_v11_accepts_a_sectioned_description_that_fits() -> None:
+    block = {**_BLOCK, "sections": _sections("Mocking", "Fixtures")}
+    member = _rule("python-typing")
+    member.frontmatter.section = "s0"
+
+    findings = check_rule_skills([member], [_skill("python-coding", block=block)])
+
+    assert findings.errors == []
+    assert findings.warnings == []
+
+
+def test_w3_is_silent_for_a_sectioned_skill() -> None:
+    """Long member names never truncate a Covers clause that names sections."""
+    members = _long_named_members()
+    for rule in members:
+        rule.frontmatter.section = "s0"
+    block = {**_BLOCK, "sections": _sections("Mocking")}
+
+    findings = check_rule_skills(members, [_skill("python-coding", block=block)])
+
+    assert findings.errors == []
+    assert findings.warnings == []
+
+
 def test_sections_and_references_are_known_playbook_keys() -> None:
     block = {**_BLOCK, "sections": [], "references": []}
 

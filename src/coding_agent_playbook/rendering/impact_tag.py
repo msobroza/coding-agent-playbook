@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.skills.sections import Impact
+from coding_agent_playbook.artifacts.impact import Impact
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.artifacts.impact import Impact
 from coding_agent_playbook.evals.loader import load_eval_sample_from_dir
 from coding_agent_playbook.evals.prompting import (
     PromptResolutionError,
@@ -24,7 +25,6 @@ from coding_agent_playbook.evals.prompting import (
     render_prompt,
 )
 from coding_agent_playbook.evals.sample import EvalSample, SampleInvocation, SampleSetup
-from coding_agent_playbook.skills.sections import Impact
 from tests._catalog import CORE_ROOT
 
 if TYPE_CHECKING:

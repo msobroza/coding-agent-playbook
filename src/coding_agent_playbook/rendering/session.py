@@ -33,13 +33,13 @@ if TYPE_CHECKING:
     from jinja2 import Environment
 
     from coding_agent_playbook.artifacts.hook import Hook
+    from coding_agent_playbook.artifacts.impact import Impact
     from coding_agent_playbook.artifacts.prompt import Prompt
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.config.model import Config
     from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
-    from coding_agent_playbook.skills.sections import Impact
 
 #: What :meth:`RenderSession.open` does with an ``applies_if`` validate would reject.
 type MalformedPredicate = Literal["raise", "omit"]

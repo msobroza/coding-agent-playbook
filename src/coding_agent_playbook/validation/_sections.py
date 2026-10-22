@@ -38,12 +38,12 @@ import re
 from itertools import pairwise
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.artifacts.impact import Impact
 from coding_agent_playbook.catalog.layers import REPO_LOCAL_SOURCE
 from coding_agent_playbook.skills.membership import is_rule_skill, member_rules_of
 from coding_agent_playbook.skills.naming import skill_id_of
 from coding_agent_playbook.skills.sections import (
     SECTIONS_FIELD,
-    Impact,
     SkillSection,
     declared_sections_value,
     section_list_problems,
