@@ -34,9 +34,9 @@ User documentation (tutorials, how-to guides, reference, explanation) sits besid
 ## Bad Example
 
 ```text
-docs/brainstorms/order-export-spec.md      a spec in a framework's own folder
-.scratch/plan.md                           a plan where nobody will find it
-decisions/use-postgres.md                  an ADR outside docs/adr, with no number
+.scratch/order-export/spec.md     a spec where a framework's own text puts it
+.scratch/plan.md                  a plan where nobody will find it
+decisions/use-postgres.md         an ADR outside docs/adr, with no number
 ```
 
 ## Good Example

@@ -60,14 +60,14 @@ A hand-kept changelog:
 - Totals no longer drop orders placed at midnight UTC (#398).
 ```
 
-The same fix as a news fragment, in the directory the repo's config names:
+The breaking rename as a news fragment, in the directory the repo's config names:
 
 ```text
-changes/398.bugfix.md
-Totals no longer drop orders placed at midnight UTC.
+changes/412.bugfix.md
+`report build` takes `--output` instead of `--out`; rename the flag in your scripts.
 ```
 
-And as a conventional commit in a commitizen repo:
+And the same rename as a conventional commit in a commitizen repo:
 
 ```text
 fix(cli)!: rename --out to --output

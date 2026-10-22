@@ -115,7 +115,11 @@ def test_core_attributions_record_the_matforge_sections_and_drops() -> None:
     credited = {target for row in rows for target in row.targets}
     assert "rules/docs-changelog.md" in credited
     dropped = {row.upstream for row in rows if row.dropped}
-    assert "documentation-best-practices-scientific-python-packages#readme-badges" in dropped
+    assert {
+        "documentation-best-practices-scientific-python-packages#readme-badges",
+        "documentation-best-practices-scientific-python-packages#examples-and-doctests-errors",
+        "documentation-best-practices-scientific-python-packages#changelog-dates",
+    } <= dropped
 
 
 def test_core_attributions_list_engine_written_files_per_core_skill() -> None:

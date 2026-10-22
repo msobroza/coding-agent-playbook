@@ -22,6 +22,7 @@ from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME
 from coding_agent_playbook.sync import pipeline as _sync
 from tests._catalog import TEST_FILE_GLOBS
 from tests.cli.hook_repo import CONFIG, GUARD_CONFIG, hook_deps
+from tests.core_skill_pins.python_documentation import PINS as DOCUMENTATION_PINS
 from tests.fakes import FakeGitClient
 from tests.hook_runtime.fakes import FakeRuff, ruff_row
 from tests.hook_runtime.handlers.pack_repo import engine_hook, engine_rules
@@ -86,25 +87,13 @@ SOURCE_LINES: Final = [
     _line("python-tooling"),
 ]
 #: python-documentation's ungated members' globs, first seen in member id order.
-DOCUMENTATION_GLOBS: Final = (
-    "docs/architecture.md",
-    "CHANGELOG*",
-    "CHANGES*",
-    "HISTORY*",
-    "NEWS*",
-    "changelog.d/**",
-    "newsfragments/**",
-    "CONTRIBUTING*",
-    ".github/CONTRIBUTING*",
-    "docs/CONTRIBUTING*",
-    "docs/**",
-    "CONTEXT.md",
-    "CONTEXT-MAP.md",
-    ".scratch/**",
-    "README*",
-    "docs/adr/**",
-    "examples/**",
-    "*.rst",
+DOCUMENTATION_GLOBS: Final = tuple(
+    dict.fromkeys(
+        glob
+        for _, pin in sorted(DOCUMENTATION_PINS.rules.items())
+        if not pin.applies_if
+        for glob in pin.globs
+    )
 )
 #: The config files ``python-static-checks`` matches besides Python files and pyproject.
 STATIC_CHECK_CONFIGS: Final = ("ruff.toml", ".ruff.toml", "mypy.ini", ".mypy.ini")

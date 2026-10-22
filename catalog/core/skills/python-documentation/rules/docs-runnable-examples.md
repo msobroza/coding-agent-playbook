@@ -50,7 +50,7 @@ def mean_fee(fees: np.ndarray) -> float:
 from orders import load_orders, summarize
 
 report = summarize(load_orders("examples/orders.csv"))
-print(sorted(report.items()))
+print(sorted((name, round(value, 3)) for name, value in report.items()))
 # [('max', 20.0), ('mean', 12.333), ('min', 4.0)]
 ```
 
@@ -60,13 +60,14 @@ def mean_fee(fees: np.ndarray) -> float:
 
     >>> mean_fee(np.array([0.1, 0.1]))
     0.1
+    >>> # Skipped: fetch_fees needs the network.
     >>> mean_fee(fetch_fees("https://fees.example.com"))  # doctest: +SKIP
     """
     # Python float, so the repr reads 0.1 on every NumPy version.
     return round(float(fees.mean()), 3)
 ```
 
-The skipped line needs the network, so the runner skips it; say why next to every skip.
+The comment above the skipped line says why it is skipped; say why next to every skip.
 
 ## Notes
 

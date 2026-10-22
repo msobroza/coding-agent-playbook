@@ -66,7 +66,7 @@ Status: superseded by 0009-events-on-the-queue.md
 
 ## Notes
 
-- Number ADRs with the next free four-digit number and a lowercase kebab slug; the layout is `docs-document-layout`.
+- ADR numbers and file names follow `docs-document-layout`.
 - When the enabled framework ships its own ADR template, its headings win and the path stays docs/adr.
 - A domain term goes in the glossary, CONTEXT.md, not in an ADR (`docs-document-layout`).
 - Write an ADR only for a decision a later reader would question; a routine choice needs a commit message, not a record.

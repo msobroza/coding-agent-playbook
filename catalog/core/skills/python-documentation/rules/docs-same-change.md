@@ -57,9 +57,17 @@ git grep -n -e '--out' -- 'README*' docs examples
 +++ b/docs/how-to/export.md
 -Pass `--out` to choose the file name.
 +Pass `--output` to choose the file name.
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+ ## [Unreleased]
++
++### Changed
++
++- **Breaking:** `report build` takes `--output` instead of `--out`.
++  Rename the flag in your scripts (#412).
 ```
 
-The same change carries the changelog input the repo's mechanism expects, marking the rename as breaking (`docs-changelog`).
+The changelog hunk is the input a hand-kept changelog expects; a repo with news fragments or conventional commits takes it in that form instead (`docs-changelog`).
 
 ## Notes
 

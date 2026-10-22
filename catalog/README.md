@@ -37,10 +37,10 @@ catalog/
 one's member rules are rendered into its `rules/` directory from the scoped
 rules that name it. An eighth, `playbook-guardrails`, takes no rules: sync
 appends one section per enabled hook's guardrail text to its authored intro, so
-edit the hook's `HOOK.md` body, not the skill, to change a section. Only a skill that declares a
-`playbook:` block takes rules, so the skills of `superpowers` and
-`mattpocock_skills` own none. A bundled plugin may also hold `rules/`, `prompts/`,
-`hooks/` or `eval_samples/`, laid out exactly as in `core/`.
+edit the hook's `HOOK.md` body, not the skill, to change a section. Only a skill
+that declares a `playbook:` block takes rules, so the skills of `superpowers`
+and `mattpocock_skills` own none. A bundled plugin may also hold `rules/`,
+`prompts/`, `hooks/` or `eval_samples/`, laid out exactly as in `core/`.
 
 The files at a layer root (`README.md`, `LICENSE`, `ATTRIBUTIONS.md`) sit
 outside every kind directory, so sync never copies them into a consumer repo.
