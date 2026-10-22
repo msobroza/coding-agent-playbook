@@ -32,7 +32,7 @@ def process_item(item: Item) -> Result:
 
 
 def weekend_discount(price: Decimal) -> Decimal:
-    if datetime.now().weekday() == 5:  # hidden input: the wall clock
+    if datetime.now().weekday() >= calendar.SATURDAY:  # hidden input: the wall clock
         return price * Decimal("0.10")
     return Decimal("0")
 ```
@@ -40,6 +40,7 @@ def weekend_discount(price: Decimal) -> Decimal:
 ## Good Example
 
 ```python
+import calendar
 from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal
@@ -57,7 +58,7 @@ def calculate_result(item: Item) -> Result:  # pure: depends only on its argumen
 
 
 def weekend_discount(price: Decimal, today: date) -> Decimal:  # the caller supplies the date
-    return price * Decimal("0.10") if today.weekday() == 5 else Decimal("0")
+    return price * Decimal("0.10") if today.weekday() >= calendar.SATURDAY else Decimal("0")
 
 
 def mark_processed(item: Item) -> Item:  # a new value instead of a mutation

@@ -44,7 +44,8 @@ from collections.abc import Callable
 from decimal import Decimal
 from typing import Protocol
 
-SendConfirmation = Callable[[str], None]  # one behavior: a role-named alias
+ChargeCard = Callable[[Decimal], None]  # one behavior each: a role-named alias
+SendConfirmation = Callable[[str], None]
 
 
 class OrderStore(Protocol):  # declared by its consumer, only the methods it calls
@@ -55,7 +56,7 @@ class OrderProcessor:
     def __init__(
         self,
         store: OrderStore,
-        charge: Callable[[Decimal], None],
+        charge: ChargeCard,
         send_confirmation: SendConfirmation,
     ) -> None:
         self._store = store
@@ -84,6 +85,6 @@ def test_process_saves_and_confirms() -> None:
 - Never build an I/O collaborator as a default argument (`client: Client = Client()`): it is constructed once, at import, and hides the dependency.
 - Hand a callee the few values it uses (a base URL, a timeout), not the whole settings object.
 - Inject what varies: I/O, time, randomness and real variation points. `json.dumps` or a pure domain helper is called directly.
-- A test passes a named fake, a recording function or `lambda: True` through the same parameter production uses; needing to patch module globals means a dependency is still hidden. Testing use cases through fakes is `arch-test-use-cases-with-fakes`.
+- A test passes a named fake, a recording function or `lambda: True` through the same parameter production uses; a test that must patch module globals is the signal named in `python-no-global-singletons`. Testing use cases through fakes is `arch-test-use-cases-with-fakes`.
 - FastAPI dependency aliases use concrete `AsyncSession` / `httpx.AsyncClient` at the route edge; Protocols are for the app's own ports.
 - Where the concrete objects are built is `arch-composition-root`; module-level singletons and service locators are `python-no-global-singletons`.

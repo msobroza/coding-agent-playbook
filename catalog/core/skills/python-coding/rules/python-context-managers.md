@@ -11,7 +11,7 @@ priority: 51
 tags: [python, resources]
 ---
 
-# Resource management with with and async with
+# Resource management with `with` and `async with`
 
 ## Description
 
@@ -20,7 +20,7 @@ Files, DB connections and sessions, locks, sockets, HTTP clients and responses, 
 ## Bad Example
 
 ```python
-def fetch_users(db_path: str) -> list[User]:
+def fetch_users(db_path: Path) -> list[User]:
     connection = sqlite3.connect(db_path)
     rows = connection.execute("SELECT id, email FROM users").fetchall()  # if this raises...
     connection.close()  # ...this never runs
@@ -39,9 +39,10 @@ async def fetch_report(url: str) -> Report:
 
 ```python
 from contextlib import closing
+from pathlib import Path
 
 
-def fetch_users(db_path: str) -> list[User]:
+def fetch_users(db_path: Path) -> list[User]:
     with closing(sqlite3.connect(db_path)) as connection:
         rows = connection.execute("SELECT id, email FROM users").fetchall()
     return [User(*row) for row in rows]  # compute after the resource is released

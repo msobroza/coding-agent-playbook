@@ -53,7 +53,7 @@ class Workspace:
 
 ```python
 @contextmanager
-def connect(path: str) -> Iterator[sqlite3.Connection]:
+def connect(path: Path) -> Iterator[sqlite3.Connection]:
     connection = sqlite3.connect(path)
     try:
         yield connection
@@ -68,7 +68,7 @@ def fetch_blog(blog_id: str) -> Blog:
 
 
 class Workspace:  # configured and stateful, so a class
-    def __init__(self, db_path: str) -> None:
+    def __init__(self, db_path: Path) -> None:
         self._db_path = db_path
         self._resources = ExitStack()
 
@@ -85,8 +85,8 @@ class Workspace:  # configured and stateful, so a class
 
 ## Notes
 
-- `__exit__` returns `None`, so the exception propagates; never return `True` from it (`contextlib.suppress` is the explicit form). The async forms follow the same rules with `async with` and an `await` in the `finally`.
-- Temporary state changes restore the old value in the `finally`: `original = getattr(obj, attr)`, `setattr(...)`, then `yield` inside `try`/`finally`.
+- `__exit__` returns `None`, so the exception propagates (why it never returns `True` is in `python-context-managers`). The async forms follow the same rules with `async with` and an `await` in the `finally`.
+- A manager for a temporary state change (the restore-in-`finally` rule is in `python-context-managers`) saves `original = getattr(obj, attr)`, calls `setattr(...)`, then yields inside `try`/`finally` and restores `original` in the `finally`.
 - A timing manager records `time.perf_counter()` before the `yield` and logs the elapsed time through `logging` in the `finally`, never with `print`.
 - A manager does not commit a transaction for its caller; the commit-only-on-success transaction is in `python-context-managers`.
 - A `try`/`finally` written only to release a resource becomes a `with` block, on the resource's own context manager or an extracted one.

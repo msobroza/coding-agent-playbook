@@ -44,6 +44,10 @@ def retry(fn: Callable[..., T], retries: int = 3, delay: float = 1.0, **kwargs: 
 RETRYABLE_STATUS: Final = frozenset({429, 502, 503, 504})
 
 
+def build_quote_client(settings: Settings) -> httpx.Client:  # the timeout comes from settings
+    return httpx.Client(base_url=settings.quote_url, timeout=settings.http_timeout_seconds)
+
+
 def is_transient(exc: httpx.HTTPError) -> bool:
     if isinstance(exc, httpx.HTTPStatusError):
         return exc.response.status_code in RETRYABLE_STATUS
@@ -58,7 +62,12 @@ def get_quote(client: httpx.Client, sku: str, sleep: Callable[[float], None]) ->
             if not is_transient(exc):
                 raise
             logger.warning(
-                "quote fetch retry", extra={"attempt": attempt, "error": type(exc).__name__}
+                "quote fetch retry",
+                extra={
+                    "attempt": attempt,
+                    "delay": RETRY_DELAY_SECONDS,
+                    "error": type(exc).__name__,
+                },
             )
         sleep(RETRY_DELAY_SECONDS)
     return fetch_quote(client, sku)  # last attempt: its error propagates unchanged
