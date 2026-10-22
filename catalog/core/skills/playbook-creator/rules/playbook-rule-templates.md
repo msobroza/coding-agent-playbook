@@ -73,3 +73,4 @@ def with_name(self: T, name: str) -> T: ...
 - A pointer to another skill's file sits inside a branch that tests the same fact as that file's gate.
 - Read `layout` only where the text must name this repo's configured directory; elsewhere write the default path, which sync rewrites (`playbook-rule-body`).
 - Prompts list the rules they need in `includes_rules`; no template places another rule's text. The old inclusion helper is gone and validate rejects a body that calls it.
+- rule-template.md shows a full template.

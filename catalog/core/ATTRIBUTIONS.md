@@ -716,7 +716,15 @@ Upstream text these rules leave out (DROP, with the reason):
 
 ### playbook-creator
 
+`references/rule-template.md`, `references/skill-template.md`, `references/hook-template.md`, `references/prompt-template.md`, `references/eval-sample-template.md` and `references/plugin-template.md` are engine-written templates (D49, D70), not vendored.
+
 - `SKILL.md`
+- `references/eval-sample-template.md`
+- `references/hook-template.md`
+- `references/plugin-template.md`
+- `references/prompt-template.md`
+- `references/rule-template.md`
+- `references/skill-template.md`
 - `rules/playbook-ask-for-missing-inputs.md.j2`
 - `rules/playbook-layer-placement.md`
 - `rules/playbook-override-by-id.md`

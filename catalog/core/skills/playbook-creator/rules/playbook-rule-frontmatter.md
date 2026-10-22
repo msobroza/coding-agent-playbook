@@ -77,3 +77,4 @@ tags: [billing]
 
 - An always rule (`scope: always`) has no `skill`, `section` or `globs`, stays a few bullets because it is in every turn's context, and lives in the layer's `rules/` (core: `rules/always/NN-<id>.md`).
 - In the engine's core layer, add no new lint_codes until the pilot ends.
+- rule-template.md has every skeleton.
