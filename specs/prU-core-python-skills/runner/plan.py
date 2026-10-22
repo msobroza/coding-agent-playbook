@@ -224,6 +224,10 @@ def cmd_args(args: argparse.Namespace) -> int:
         chosen = [tickets[i] for i in args.only.split(",")]
     else:
         chosen = [t for t in tickets.values() if t.machine == args.machine and not t.integrated]
+    integrate_only = set(filter(None, (args.integrate_only or "").split(",")))
+    unpushed = sorted(i for i in integrate_only if not tickets[i].pushed)
+    if unpushed:
+        raise SystemExit(f"--integrate-only needs a pushed ticket branch; none for: {unpushed}")
     implement, implement_path = find_skill(args.skills_dir, "implement")
     review, review_path = find_skill(args.skills_dir, "code-review")
     out = {
@@ -252,6 +256,7 @@ def cmd_args(args: argparse.Namespace) -> int:
                 "deps": t.deps,
                 "existingBranch": t.pushed,
                 "priority": t.priority,
+                **({"startAt": "integrate"} if t.id in integrate_only else {}),
             }
             for t in sorted(chosen, key=lambda t: t.id)
         ],
@@ -346,6 +351,10 @@ def main(argv: list[str]) -> int:
     gen.add_argument("--shared-venv", required=True, help="absolute path of the shared venv")
     gen.add_argument("--skills-dir", help="dir holding implement/ and code-review/ SKILL.md")
     gen.add_argument("--full-gate", action="store_true", help="no tickets: run the full suite")
+    gen.add_argument(
+        "--integrate-only",
+        help="comma-separated ids whose pushed branch was already reviewed and fixed: integrate it",
+    )
     tracker = sub.add_parser("tracker-body", parents=[shared])
     tracker.add_argument("--current", required=True)
     clean = sub.add_parser("cleanup")

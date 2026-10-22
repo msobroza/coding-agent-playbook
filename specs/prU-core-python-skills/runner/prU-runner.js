@@ -166,6 +166,8 @@ Never write inside ${W}. Return the structured result (integrated = the gate is 
 
 // ---- one ticket, end to end ----
 async function ticketChain(t) {
+  // startAt 'integrate': an earlier run already implemented, reviewed and fixed it (plan.py --integrate-only).
+  if (t.startAt === 'integrate') return integrateTicket(t, 'its current head (reviewed and fixed in an earlier run)', {})
   await slots.acquire(t.priority || 0)
   let impl, reviews = [], fix = null
   try {
@@ -181,13 +183,16 @@ async function ticketChain(t) {
   } finally {
     slots.release()  // integration waits on its own lock, so the next ticket can start implementing
   }
-  const sha = (fix && fix.head_sha) || impl.head_sha
+  return integrateTicket(t, (fix && fix.head_sha) || impl.head_sha, { impl, reviews, fix })
+}
+
+async function integrateTicket(t, sha, earlier) {
   await integrationLock.acquire(t.priority || 0)
   try {
     const integ = await agent(integratePrompt(t, sha), { label: `integrate:${t.id}`, phase: 'Integrate', agentType: 'general-purpose', effort: 'medium', isolation: 'worktree', schema: INTEG })
     const ok = !!(integ && integ.integrated)
     log(`${t.id}: ${ok ? 'integrated at ' + integ.integration_head : 'NOT integrated'}`)
-    return { t, status: ok ? 'integrated' : 'failed', stage: 'integrate', impl, reviews, fix, integ }
+    return { t, status: ok ? 'integrated' : 'failed', stage: 'integrate', ...earlier, integ }
   } finally {
     integrationLock.release()
   }
