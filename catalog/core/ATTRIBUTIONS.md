@@ -81,7 +81,8 @@ overlays are written and validated) and holds no upstream text, so every file
 of it is listed under "Engine-written files".
 
 The python-documentation skill (its SKILL.md and every rule under its rules/
-directory, listed under "Engine-written files") distills ideas from two
+directory, listed under "Engine-written files", beside its engine-written
+decision guide) distills ideas from two
 matforge articles on documenting scientific Python packages and research
 software, which carry no open license; they are credited by name only and
 not vendored. No sentences or examples from the articles are copied, their
@@ -762,7 +763,10 @@ Upstream text these rules leave out (DROP, with the reason):
 
 ### python-documentation
 
+`references/which-document.md` is an internal decision guide (D49), not vendored.
+
 - `SKILL.md`
+- `references/which-document.md`
 - `rules/docs-same-change.md`
 - `rules/docs-runnable-examples.md`
 - `rules/docs-record-why.md`
