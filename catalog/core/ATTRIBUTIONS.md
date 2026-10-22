@@ -23,6 +23,13 @@ Core paths in the tables are relative to the skill directory
 that directory. Files the engine wrote with no upstream text are listed per
 skill under "Engine-written files" at the end.
 
+The code-legibility always rule (the eight principles it names, each pointing
+at the skill rule that holds its detail) distills ideas from Akita, "Clean Code
+para Agentes de IA" (2026-04-20), as reformulated by the engine's owner; it is
+credited by name only. No sentences or examples from the article are copied;
+the ideas are restated in the engine's own words as general clean-code
+principles.
+
 ## python-best-practices
 
 Source: the "python-best-practices" agent skills by Ludo Technologies LLC, tag v0.8.0.

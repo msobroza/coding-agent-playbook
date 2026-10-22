@@ -1,8 +1,8 @@
 ---
 id: python-house-style
 name: Python house style
-description: The eight Python conventions that hold in every file, new or edited.
-version: 2
+description: The seven Python conventions that hold in every file, new or edited.
+version: 3
 scope: always
 priority: 10
 tags: [always, python, style]
@@ -15,4 +15,3 @@ tags: [always, python, style]
 - Money is never `float`, which cannot hold most cent values exactly: use `Decimal` or integer minor units (cents).
 - Never write a bare `# noqa` or `# type: ignore`, which silences every code: name the code (`# noqa: E501`, `# type: ignore[arg-type]`) and add a comment saying why.
 - Wrap a third-party class instead of subclassing it to change its interface (framework base classes excepted).
-- Follow the repo's existing layout axis (layer-first or feature-first); never mix the two.

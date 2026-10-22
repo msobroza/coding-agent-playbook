@@ -34,8 +34,15 @@ from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
 pytestmark = pytest.mark.catalog
 
 ALWAYS_RULES_MAX_WORDS: Final = 800
-#: The two always sections alone, after the D17 rewrite (spec 6.10 item 3; 231 on the probe).
-ALWAYS_SECTIONS_MAX_WORDS: Final = 240
+#: The always sections alone (spec 6.10 item 3): 240 after the D17 rewrite, raised to 450 by
+#: prU D73 for the code-legibility and document-layout rules (D61); the 800 and 1,500 stay.
+ALWAYS_SECTIONS_MAX_WORDS: Final = 450
+ALWAYS_HEADINGS: Final = [
+    "## Code legibility",
+    "## Document layout",
+    "## Project context",
+    "## Python house style",
+]
 AGENTS_MD_MAX_WORDS: Final = 1500
 CORE_DESCRIPTION_MAX_CHARS: Final = 300
 #: prU D18 as amended by D54 (2,000 -> 2,400 -> 2,800); the per-skill cap above stays.
@@ -91,7 +98,7 @@ def _always_text(repo: Path, fmt: str) -> tuple[list[str], str]:
 def test_always_rules_within_800_words(reference_probe_repo: Path) -> None:
     """The always sections as AGENTS.md renders them (heading and ``---`` included), plus the map."""
     sections, where = _always_text(reference_probe_repo, "agents_md_section")
-    assert len(sections) == 2 and where, "two always rules and core skills in the probe"
+    assert len(sections) == len(ALWAYS_HEADINGS) and where, "the always rules and the map"
     total = sum(map(_words, sections)) + _words(where)
     assert total <= ALWAYS_RULES_MAX_WORDS, (
         f"always rules plus the Where section are {total} words; D5 allows {ALWAYS_RULES_MAX_WORDS}"
@@ -131,14 +138,14 @@ def test_every_core_where_entry_reads_templated_skill_md(tmp_path: Path) -> None
     ]
 
 
-def test_always_sections_within_240_words(reference_probe_repo: Path) -> None:
-    """``## Project context`` plus ``## Python house style``, without the map (D17)."""
+def test_always_sections_within_450_words(reference_probe_repo: Path) -> None:
+    """The four always sections, without the map (D17, as amended by prU D73)."""
     sections, _ = _always_text(reference_probe_repo, "agents_md_section")
     headings = sorted(section.splitlines()[0] for section in sections)
-    assert headings == ["## Project context", "## Python house style"], headings
+    assert headings == ALWAYS_HEADINGS, headings
     total = sum(map(_words, sections))
     assert total <= ALWAYS_SECTIONS_MAX_WORDS, (
-        f"the two always sections are {total} words; D17 allows {ALWAYS_SECTIONS_MAX_WORDS}"
+        f"the always sections are {total} words; prU D73 allows {ALWAYS_SECTIONS_MAX_WORDS}"
     )
 
 

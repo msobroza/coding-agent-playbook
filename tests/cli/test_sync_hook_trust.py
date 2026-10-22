@@ -207,6 +207,7 @@ def test_handler_approval_mirrors_the_runtime_record(repo: Path, tmp_path: Path)
         "validate-then-sync-on-canonical-edit",
         "resync-on-detector-input-change",
         "eval-sample-authoring-lint",
+        "document-layout-guard",
         "stop-drift-and-orphan-gate",
         "session-start-playbook-briefing",
         "stop-ci-parity-gate",

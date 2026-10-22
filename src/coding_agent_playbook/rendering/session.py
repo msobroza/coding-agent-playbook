@@ -141,8 +141,9 @@ class RenderSession:
         reject raises ``ValueError``, unless ``on_malformed_predicate="omit"``:
         ``playbook render`` runs no validate gate, so it drops that rule instead.
         ``skills`` (the merged skills) and ``framework`` (the enabled framework's
-        layer) feed ``framework_skill(role)`` and ``skill_active(name)`` (D74);
-        without them every role is ``""`` and no skill is active, which is what
+        layer) feed ``framework_skill(role)``, ``skill_active(name)`` (D74) and
+        ``rule_active(rule_id)`` (prU D73); without them every role is ``""`` and
+        no skill, nor any rule a skill owns, is active, which is what
         eval-sample prompts see (``evals.prompting._sample_session``).
         ``skills`` also map each member rule to its section's impact, once per
         pass (``skills.sections.section_impacts``): :meth:`render_rule` tags that
@@ -156,7 +157,9 @@ class RenderSession:
         # SPEC §9.4: has_framework and has_ml_dep read the facts from the globals.
         env.globals["_facts"] = dict(context.facts)
         env.globals["_framework_roles"] = framework_role_map(skills, framework)
-        env.globals["_active_skills"] = active_skill_ids(skills, rules, kept)
+        active_skills = active_skill_ids(skills, rules, kept)
+        env.globals["_active_skills"] = active_skills
+        env.globals["_active_rules"] = _reachable_rule_ids(kept, active_skills)
         return cls(kept, context, env, section_impacts(skills, rules))
 
     @property
@@ -262,6 +265,18 @@ def _applicable(
         return filter_applies_if(list(rules), facts, repo_root)
     # One rule at a time, so a malformed predicate drops its own rule only.
     return [rule for rule in rules if _passes_unless_malformed(rule, facts, repo_root)]
+
+
+def _reachable_rule_ids(kept: Sequence[Rule], active_skills: frozenset[str]) -> frozenset[str]:
+    """Ids ``rule_active`` reports: a kept rule with no skill, or whose skill renders (prU D73).
+
+    A pointer to a rule whose skill is dropped would send the reader nowhere.
+    """
+    return frozenset(
+        rule.frontmatter.id
+        for rule in kept
+        if rule.frontmatter.skill is None or rule.frontmatter.skill in active_skills
+    )
 
 
 def _passes_unless_malformed(rule: Rule, facts: Facts, repo_root: Path) -> bool:
