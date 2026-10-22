@@ -26,6 +26,7 @@ class RulePin:
     """A member rule's pinned frontmatter (spec 9.4.1 / 9.6.1); the file path is not pinned.
 
     ``version`` and ``lint_codes`` default to a distilled rule's values (D23: no ``lint_codes``).
+    ``section`` is the rule's ``section:`` key (prU D17); ``None`` leaves it unpinned.
 
     Example: ``RulePin({}, ("**/*.py",), 53, name="Asyncio", tags=("python", "async"))``.
     """
@@ -37,6 +38,7 @@ class RulePin:
     tags: tuple[str, ...]
     version: int = 1
     lint_codes: Mapping[str, object] = field(default_factory=dict)
+    section: str | None = None
 
 
 @dataclass(frozen=True)

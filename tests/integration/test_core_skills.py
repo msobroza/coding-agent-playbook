@@ -337,6 +337,8 @@ def test_pinned_rule_frontmatter(skill_id: str, rule_id: str) -> None:
     assert (front.applies_if, front.priority) == (pin.applies_if, pin.priority), rule_id
     assert tuple(front.tags) == pin.tags, f"{rule_id}: tags {front.tags}"
     assert front.lint_codes == pin.lint_codes, f"{rule_id} carries lint_codes {front.lint_codes}"
+    if pin.section is not None:
+        assert front.section == pin.section, f"{rule_id}: section {front.section!r}"
     assert front.description.endswith("."), f"{rule_id}: one-sentence description"
 
 

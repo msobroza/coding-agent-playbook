@@ -9,7 +9,8 @@ globs:
   - "**/conftest.py"
 applies_if:
   has_framework: ["pytest"]
-priority: 61
+section: mocking
+priority: 20
 tags: [python, testing, pytest, mocking]
 ---
 
