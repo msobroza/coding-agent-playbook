@@ -1,0 +1,84 @@
+---
+id: pytest-conftest
+name: Fixtures in the nearest conftest.py
+description: "Define each fixture where all its users live, in the test file or the nearest conftest.py, and keep shared fakes in an ordinary module that tests import, never from conftest.py."
+version: 1
+scope: scoped
+globs:
+  - "tests/**/*.py"
+  - "**/conftest.py"
+applies_if:
+  has_framework: ["pytest"]
+section: fixtures
+priority: 49
+tags: [python, testing, pytest, fixtures, conftest]
+---
+
+# Place Fixtures in the Nearest conftest.py
+
+## Description
+
+Define a fixture at the narrowest level where all its users live: in the test file itself if only that file uses it, in the nearest `conftest.py` if a directory shares it, and in the root `conftest.py` only for suite-wide resources. Dumping everything into the root conftest creates a grab-bag where nobody can tell which fixtures are safe to change, and every test pays the cost of reading hundreds of fixtures it never uses.
+
+## Bad Example
+
+```python
+# tests/conftest.py: an 800-line root conftest used by everything
+@pytest.fixture
+def webhook_payload() -> WebhookEvent:  # only used by tests/api/test_webhooks.py
+    ...
+
+
+@pytest.fixture
+def parsed_invoice_pdf() -> Invoice:  # only used by tests/pdf/test_parser.py
+    ...
+
+
+class FakeInvoiceStore:  # a shared fake defined in conftest.py ...
+    ...
+
+
+# ... and imported from it in tests/api/test_invoices.py
+from conftest import FakeInvoiceStore
+```
+
+## Good Example
+
+```
+tests/
+├── conftest.py            # suite-wide only: settings, the database session
+├── fakes.py               # shared fakes, imported explicitly
+├── api/
+│   ├── conftest.py        # api-wide: client, auth_headers
+│   └── test_webhooks.py   # webhook_payload defined here, its only user
+└── pdf/
+    ├── conftest.py        # pdf-wide: sample_pdf_dir
+    └── test_parser.py
+```
+
+```python
+# tests/api/conftest.py: shared by the API tests only
+@pytest.fixture
+def client(settings: Settings) -> ApiClient:
+    return ApiClient(create_app(settings))
+
+
+# tests/api/test_webhooks.py: a single-file fixture stays in the file
+from tests.fakes import FakeInvoiceStore
+
+
+@pytest.fixture
+def webhook_payload() -> WebhookEvent:
+    return WebhookEvent(kind="invoice.paid", invoice_id="inv-1", amount_cents=10_000)
+```
+
+## Notes
+
+- `conftest.py` fixtures are discovered automatically by every test at or below that directory: tests receive them by parameter name, with no import.
+- Never write `from conftest import ...`. A conftest is not an importable module of the suite; a class or helper several tests share lives in an ordinary module such as `tests/fakes.py`, imported explicitly, and a fixture may build it. How a fake behaves is the python-architecture skill's (arch-test-use-cases-with-fakes).
+- Promote a fixture upward only when a second location actually needs it.
+- Avoid redefining a fixture of the same name lower in the tree: which one a test gets then depends on where its file sits, which surprises readers.
+- `pytest --fixtures tests/api` lists every fixture visible from a directory, with the file that defines it.
+{% if has_framework("fastapi") %}
+- Worked example: web-application's hotel example (fastapi-hotel-api) keeps its fixtures in tests/conftest.py and its shared fakes in tests/fakes.py, an ordinary module the tests import explicitly.
+{% endif %}

@@ -1,0 +1,71 @@
+---
+id: pytest-fixtures
+name: pytest fixtures
+description: "Keep fixtures function-scoped unless a resource is expensive and immutable, tear down after yield, and name and type each fixture by what it returns."
+version: 1
+scope: scoped
+globs:
+  - "tests/**/*.py"
+  - "**/conftest.py"
+applies_if:
+  has_framework: ["pytest"]
+section: fixtures
+priority: 48
+tags: [python, testing, pytest, fixtures]
+---
+
+# Use the Narrowest Fixture Scope That Works
+
+## Description
+
+Fixtures default to function scope, a fresh value per test, and that should be your default too. Widen to `module` or `session` scope only for a resource that is expensive to build and effectively immutable, such as a database engine or a parsed tariff table, and give tests a function-scoped fixture on top of it that hands each one its own state. A mutable object shared across tests lets one test's leftovers change another test's result depending on the order the tests run in.
+
+## Bad Example
+
+```python
+@pytest.fixture(scope="session")  # shared for the whole run
+def cart() -> Cart:
+    return Cart()
+
+
+def test_add_item(cart: Cart) -> None:
+    cart.add(Item("apple", price_cents=100))
+    assert cart.total_cents() == 100  # passes
+
+
+def test_empty_cart_total_is_zero(cart: Cart) -> None:
+    assert cart.total_cents() == 0  # fails: the apple leaked from the previous test
+```
+
+## Good Example
+
+```python
+@pytest.fixture  # function scope: a fresh cart per test
+def cart() -> Cart:
+    return Cart()
+
+
+@pytest.fixture(scope="session")
+def tariff_table() -> Mapping[str, Decimal]:
+    # Parsed once for the whole run; the read-only view stops a test from editing it.
+    return MappingProxyType(load_tariffs(FIXTURES / "tariffs.csv"))
+
+
+@pytest.fixture
+def editable_tariffs(tariff_table: Mapping[str, Decimal]) -> dict[str, Decimal]:
+    # A fresh copy per test, so one test's edits never reach the next.
+    return dict(tariff_table)
+```
+
+## Notes
+
+- Pattern: an expensive resource at `session` scope plus a cheap function-scoped fixture that resets state for each test: a copy, a rolled-back transaction, a freshly seeded generator.
+- A database is the common case: a session-scoped engine and a per-test session rolled back after `yield`. The web-application skill (sqlalchemy-test-rollback) and the python-architecture skill own that fixture; follow theirs.
+- Teardown: write the setup, `yield` the value, then the cleanup. pytest runs the code after `yield` even when the test fails. Never combine `yield` and `request.addfinalizer` in one fixture: two teardown paths make the cleanup order hard to follow.
+- Name a fixture after what it returns (`tariff_table`, not `data`; `tmp_invoice_dir`, not `tmpdir`) and annotate the type it returns, `Iterator[T]` for a `yield` fixture.
+- Use `params=` on a fixture only when every test that uses it must run against each variant, such as two storage backends. Cases of a single test belong in pytest-parametrize.
+- Where a fixture lives is pytest-conftest's topic; variations of one object come from a factory (pytest-factory-fixtures).
+- `pytest --setup-show` prints when each fixture is set up and torn down: use it to audit scopes.
+{% if has_framework("fastapi") %}
+- Worked example: web-application's hotel example (fastapi-hotel-api), file tests/conftest.py, holds a session-scoped engine, a per-test session rolled back after `yield`, and a client fixture that clears its dependency overrides.
+{% endif %}
