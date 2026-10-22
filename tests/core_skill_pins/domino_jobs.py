@@ -1,4 +1,4 @@
-"""Pins of core skill ``domino-jobs`` (prU D51, D52, D63; C-domino-jobs-01).
+"""Pins of core skill ``domino-jobs`` (prU D50, D51, D52, D63, D65; C-domino-jobs-*).
 
 Sections and priorities follow mapping-domino-jobs.md (prU D17). Every member
 gates on ``domino_project``, so the skill is checked on the Domino probe, which
@@ -17,6 +17,8 @@ from tests.core_skill_pins import CoreSkillPins, RulePin
 _DOMINO: Final = {"domino_project": True}
 _TAGS: Final = ("python", "domino", "jobs")
 _SECTION: Final = "project-and-run-environment"
+#: The globs both Launcher rules share (mapping-domino-jobs.md).
+_LAUNCHER_GLOBS: Final = ("**/launcher*.py", "**/launcher*.sh", "**/launchers/**/*.py")
 
 PINS: Final = CoreSkillPins(
     skill_id="domino-jobs",
@@ -29,6 +31,14 @@ PINS: Final = CoreSkillPins(
         "domino-env-var-names",
         "domino-pinned-environments",
         "domino-environment-revisions",
+        "domino-job-exit-codes",
+        "domino-job-entry-point",
+        "domino-launcher-arguments",
+        "domino-launcher-uploads",
+        "domino-datasets-for-large-data",
+        "domino-run-scoped-writes",
+        "domino-dataset-snapshots",
+        "domino-materialize-external-data",
     ),
     probe_inactive=frozenset(),
     probe="domino",
@@ -103,6 +113,70 @@ PINS: Final = CoreSkillPins(
             name="Environment revisions",
             tags=_TAGS,
             section=_SECTION,
+        ),
+        "domino-job-exit-codes": RulePin(
+            applies_if=_DOMINO,
+            globs=("**/*.py", "**/*.sh"),
+            priority=27,
+            name="Domino job exit codes",
+            tags=_TAGS,
+            section="entry-points-and-exit-codes",
+        ),
+        "domino-job-entry-point": RulePin(
+            applies_if=_DOMINO,
+            globs=("**/*.py", "**/*.sh", "**/*.ipynb"),
+            priority=28,
+            name="Domino job entry point",
+            tags=_TAGS,
+            section="entry-points-and-exit-codes",
+        ),
+        "domino-launcher-arguments": RulePin(
+            applies_if=_DOMINO,
+            globs=_LAUNCHER_GLOBS,
+            priority=29,
+            name="Domino Launcher arguments",
+            tags=_TAGS,
+            section="entry-points-and-exit-codes",
+        ),
+        "domino-launcher-uploads": RulePin(
+            applies_if=_DOMINO,
+            globs=_LAUNCHER_GLOBS,
+            priority=30,
+            name="Domino Launcher uploads",
+            tags=_TAGS,
+            section="entry-points-and-exit-codes",
+        ),
+        "domino-datasets-for-large-data": RulePin(
+            applies_if=_DOMINO,
+            globs=("**/*.py", ".dominoignore"),
+            priority=40,
+            name="Domino Datasets for large data",
+            tags=_TAGS,
+            section="datasets",
+        ),
+        "domino-run-scoped-writes": RulePin(
+            applies_if=_DOMINO,
+            globs=("**/*.py",),
+            priority=41,
+            name="Domino run-scoped writes",
+            tags=_TAGS,
+            section="datasets",
+        ),
+        "domino-dataset-snapshots": RulePin(
+            applies_if=_DOMINO,
+            globs=("**/*.py",),
+            priority=42,
+            name="Domino dataset snapshots",
+            tags=_TAGS,
+            section="datasets",
+        ),
+        "domino-materialize-external-data": RulePin(
+            applies_if=_DOMINO,
+            globs=("**/*.py",),
+            priority=43,
+            name="Domino materialized external data",
+            tags=_TAGS,
+            section="datasets",
         ),
     },
 )

@@ -413,38 +413,50 @@ uses gain its files in their row.
 
 | Upstream file | Core files | Changes |
 | --- | --- | --- |
-| `user_guide/910370` | `SKILL.md`, `rules/domino-project-types.md` | Fact restated: a job in a Git-based project syncs only artifacts back; code edits are neither saved nor pushed. |
-| `user_guide/ccaee6` | `SKILL.md`, `rules/domino-project-types.md`, `rules/domino-paths-from-env.md` | Facts restated: the Git-based layout (code checkout as working directory, data, artifacts, imported folders). Not reproduced: the prose's /mnt/local dataset path, which contradicts the tree (code reads the variable instead). |
-| `user_guide/de4abb` | `SKILL.md`, `rules/domino-project-types.md`, `rules/domino-paths-from-env.md` | Facts restated: the DFS layout, its working directory and how importing a project moves it. |
-| `user_guide/b4f02f` | `rules/domino-project-types.md`, `rules/domino-secrets-in-env-vars.md` | Facts restated: what each project type tracks, a new revision per completed job, the store keeps every version, Apps and endpoints persist nothing. |
-| `user_guide/b4cb04` | `rules/domino-project-types.md` | Facts restated: the Finishing and Stopping states copy new and changed files back; Error means a platform failure. |
+| `user_guide/910370` | `SKILL.md`, `rules/domino-project-types.md`, `rules/domino-datasets-for-large-data.md` | Fact restated: a job in a Git-based project syncs only artifacts back; code edits are neither saved nor pushed. Facts restated: a Git-based job syncs only artifacts back and pushes no code; Git LFS is not supported. |
+| `user_guide/ccaee6` | `SKILL.md`, `rules/domino-project-types.md`, `rules/domino-paths-from-env.md` | Facts restated: the Git-based layout (code checkout as working directory, data, artifacts, imported folders). Not reproduced: the prose's /mnt/local dataset path, which contradicts the tree (code reads the variable instead). Facts restated in the Quick Reference: the Git-based layout (/mnt/code, /mnt/data, /mnt/artifacts). |
+| `user_guide/de4abb` | `SKILL.md`, `rules/domino-project-types.md`, `rules/domino-paths-from-env.md` | Facts restated: the DFS layout, its working directory and how importing a project moves it. Facts restated in the Quick Reference: the DFS working directory and what a DFS run syncs back. |
+| `user_guide/b4f02f` | `rules/domino-project-types.md`, `rules/domino-secrets-in-env-vars.md`, `rules/domino-datasets-for-large-data.md` | Facts restated: what each project type tracks, a new revision per completed job, the store keeps every version, Apps and endpoints persist nothing. Fact restated: sync is not designed for more than about 10 GB or 100,000 files. |
+| `user_guide/b4cb04` | `rules/domino-project-types.md`, `rules/domino-job-exit-codes.md`, `rules/domino-datasets-for-large-data.md`, `rules/domino-run-scoped-writes.md` | Facts restated: the Finishing and Stopping states copy new and changed files back; Error means a platform failure. Facts restated: Failed versus Error; Preparing copies project files; Stopping still syncs new and changed files. |
 | `user_guide/5b3b05` | `rules/domino-project-types.md` | Fact restated: changes are captured at completion whether the job succeeded or failed. |
-| `user_guide/56938d` | `rules/domino-project-types.md`, `rules/domino-paths-from-env.md` | Facts restated: where artifacts live per project type; variables instead of /mnt literals. Not reproduced: the tip to replace /mnt with DOMINO_WORKING_DIR, which breaks for Git-based artifacts. |
+| `user_guide/56938d` | `rules/domino-project-types.md`, `rules/domino-paths-from-env.md`, `rules/domino-datasets-for-large-data.md`, `rules/domino-materialize-external-data.md` | Facts restated: where artifacts live per project type; variables instead of /mnt literals. Not reproduced: the tip to replace /mnt with DOMINO_WORKING_DIR, which breaks for Git-based artifacts. Facts restated: the per-project file and per-file transfer limits; Datasets are mounted, not copied; cluster workers cannot see project files; TrainingSets persist versioned data frames. |
 | `user_guide/d8dde6` | `rules/domino-secrets-in-env-vars.md` | Facts restated: no secrets in source; project variables live in a secure store, are passed verbatim up to 64K and are readable by every collaborator. |
 | `user_guide/d7bac0` | `rules/domino-secrets-in-env-vars.md` | Contradiction noted: who may edit project variables; the rule validates values at startup instead of trusting either version. |
 | `user_guide/910b3a` | `rules/domino-secrets-in-env-vars.md` | Facts restated: user variables are visible only to their owner and injected only into that user's runs, never into models. |
 | `user_guide/9c4f82` | `rules/domino-secrets-in-env-vars.md`, `rules/domino-pinned-environments.md` | Facts restated: requirements.txt location and reinstall on every execution; private Git dependencies use the Git integration. |
 | `user_guide/aa15a8` | `rules/domino-secrets-in-env-vars.md` | Fact restated: removing a file from the store needs an administrator's full delete across all projects. |
 | `admin_guide/a9e507` | `rules/domino-secrets-in-env-vars.md` | Fact restated: execution logs are kept indefinitely. |
-| `user_guide/55fc89` | `rules/domino-paths-from-env.md`, `rules/domino-api-proxy-auth.md`, `rules/domino-env-var-names.md` | Facts restated: the injected path and identity variables, the deprecated API key and removed token file, no injected defaults in Model Manager. |
-| `user_guide/6942ab` | `SKILL.md`, `rules/domino-paths-from-env.md` | Fact restated: dataset mount paths per project type. |
-| `user_guide/e09156` | `SKILL.md`, `rules/domino-paths-from-env.md`, `rules/domino-environment-revisions.md` | Facts restated: DOMINO_IS_WORKFLOW_JOB, Flow task outputs and snapshot mounts, Flow environment and tier IDs and the revision specification with use_latest off. |
+| `user_guide/55fc89` | `rules/domino-paths-from-env.md`, `rules/domino-api-proxy-auth.md`, `rules/domino-env-var-names.md`, `SKILL.md` | Facts restated: the injected path and identity variables, the deprecated API key and removed token file, no injected defaults in Model Manager. Facts restated in the Quick Reference: the variables that tell the project type and a Flow task apart. |
+| `user_guide/6942ab` | `SKILL.md`, `rules/domino-paths-from-env.md`, `rules/domino-dataset-snapshots.md` | Fact restated: dataset mount paths per project type. Facts restated: snapshot paths by number for local, shared and imported datasets in DFS and Git-based projects; mount mode by role. |
+| `user_guide/e09156` | `SKILL.md`, `rules/domino-paths-from-env.md`, `rules/domino-environment-revisions.md`, `rules/domino-job-exit-codes.md`, `rules/domino-dataset-snapshots.md` | Facts restated: DOMINO_IS_WORKFLOW_JOB, Flow task outputs and snapshot mounts, Flow environment and tier IDs and the revision specification with use_latest off. Facts restated: a missing declared output fails a Flow task; Flows mount one snapshot per dataset at the plain path and refuse version 0. |
 | `user_guide/40b91f` | `rules/domino-api-proxy-auth.md` | Facts restated: service-account Bearer tokens from an environment variable, short-lived personal tokens, deprecated API keys, the in-run API proxy. |
-| `api_guide/c5ef26` | `rules/domino-api-proxy-auth.md`, `rules/domino-env-var-names.md`, `rules/domino-environment-revisions.md` | Facts restated: python-domino's authentication order, the proxy's HTTPS limitation, DOMINO_MAX_RETRIES and the other tuning variables, job_start's environment and tier arguments, the minimum client version. Not used: budgets, billing tags, files and blobs, App publishing and dataset upload helpers. |
+| `api_guide/c5ef26` | `rules/domino-api-proxy-auth.md`, `rules/domino-env-var-names.md`, `rules/domino-environment-revisions.md`, `rules/domino-job-exit-codes.md`, `rules/domino-run-scoped-writes.md` | Facts restated: python-domino's authentication order, the proxy's HTTPS limitation, DOMINO_MAX_RETRIES and the other tuning variables, job_start's environment and tier arguments, the minimum client version. Not used: budgets, billing tags, files and blobs, App publishing and dataset upload helpers. Facts restated: callers poll job status; stopping a job commits its results by default. Not used: budgets, billing tags, files and blobs, App publishing and the dataset upload helpers. |
 | `api_guide/d9cc25` | `rules/domino-api-proxy-auth.md` | Fact restated: with no authentication arguments the client detects the proxy. Not reproduced: its outdated token-file and API-key description. |
-| `user_guide/af97b7` | `rules/domino-api-proxy-auth.md`, `rules/domino-environment-revisions.md` | Facts restated: the job's default revision and the re-run options; the SDK example's API key is noted as outdated. Not used: UI-only parts (tagging, renaming, stopping from the Active tab, volume sizes, tier grouping, cluster attachment). |
+| `user_guide/af97b7` | `rules/domino-api-proxy-auth.md`, `rules/domino-environment-revisions.md`, `rules/domino-job-exit-codes.md`, `rules/domino-job-entry-point.md`, `rules/domino-dataset-snapshots.md` | Facts restated: the job's default revision and the re-run options; the SDK example's API key is noted as outdated. Not used: UI-only parts (tagging, renaming, stopping from the Active tab, volume sizes, tier grouping, cluster attachment). Facts restated: every non-zero exit fails the job; 'Publish after complete' republishes only after success; the command is a file name plus arguments, and the CLI's raw shell command mode bypasses the script; a job can take dataset snapshots at completion when AllowDatasetSnapshotsOnExecutionCompletion is enabled. Not reproduced: the status mapping shell snippet (it exits before its test). Not used: tagging, renaming, stopping from the Active tab, volume sizing, tier grouping and cluster attachment (UI-only). |
 | `user_guide/e4f67f` | `rules/domino-api-proxy-auth.md` | Contradiction noted: the Airflow setup stores a user API key; the rule follows the authentication page. |
 | `user_guide/6ac5a1` | `rules/domino-env-var-names.md` | Facts restated: four variable levels and their precedence, name syntax, reserved names and prefixes, the advice to use a company prefix. |
 | `user_guide/b60bf6` | `rules/domino-env-var-names.md` | Fact restated: compute-environment variables need ARG and ENV lines and a rebuild. |
 | `user_guide/813d89` | `rules/domino-env-var-names.md`, `rules/domino-pinned-environments.md` | Facts restated: Dockerfile instructions without FROM, install as root then back to ubuntu, exact pins, one pip install, the 127-layer limit, ARG versus ENV. |
 | `user_guide/0e4da9` | `rules/domino-pinned-environments.md`, `rules/domino-environment-revisions.md` | Facts restated: dependency files reinstall over the network on every execution; test new revisions before making them Active. |
 | `user_guide/5dd2c1` | `rules/domino-pinned-environments.md` | Facts restated: setup-script order and scope, the build cannot see project files or user variables; the two post-run script definitions are noted. |
-| `user_guide/fda6d8` | `rules/domino-pinned-environments.md` | Fact restated: explicit versions in one place. |
+| `user_guide/fda6d8` | `rules/domino-pinned-environments.md`, `rules/domino-job-entry-point.md` | Fact restated: explicit versions in one place. Fact restated: jobs, not workspaces, give the strongest reproducibility. |
 | `user_guide/f51038` | `rules/domino-environment-revisions.md` | Facts restated: each save adds a revision, the latest successful build becomes Active unless auto-assign is off, build propagation. |
-| `user_guide/5dce1f` | `rules/domino-environment-revisions.md` | Facts restated: a schedule uses the latest revision unless one is chosen; restricted projects. |
+| `user_guide/5dce1f` | `rules/domino-environment-revisions.md`, `rules/domino-job-exit-codes.md`, `rules/domino-run-scoped-writes.md` | Facts restated: a schedule uses the latest revision unless one is chosen; restricted projects. Facts restated: 'Update Domino endpoint' runs after completion with success unstated; without 'Run sequentially' runs overlap. |
 | `user_guide/e53646` | `rules/domino-environment-revisions.md` | Contradiction noted: whether re-running with the original version reuses the original environment. |
 | `user_guide/dba65c` | `rules/domino-environment-revisions.md` | Fact restated: the project's default tier and environment apply unless overridden. |
-| `user_guide/e6e601` | `rules/domino-environment-revisions.md` | Fact restated: a smaller hardware tier provisions faster. |
+| `user_guide/e6e601` | `rules/domino-environment-revisions.md`, `rules/domino-datasets-for-large-data.md` | Fact restated: a smaller hardware tier provisions faster. Fact restated: every execution copies all project files at start, Datasets excepted. |
+| `user_guide/5b84c5` | `rules/domino-job-exit-codes.md` | Fact restated: failure emails are sent by default. |
+| `user_guide/942549` | `rules/domino-job-entry-point.md`, `rules/domino-run-scoped-writes.md` | Facts restated: a job is a headless run of one file from the UI, a schedule, the CLI or the API; parallel runs get separate containers. |
+| `user_guide/a068c1` | `rules/domino-job-entry-point.md` | Facts restated: the interpreter follows the extension (.py with python -u, .sh with bash, .ipynb executed and saved over itself); custom handlers need an admin flag and two handler paths are given. Not used: the R, R Markdown, MATLAB, Perl, Julia, F#, SAS and Stata handlers and the custom-handler Dockerfile recipe (not Python job code). |
+| `user_guide/f4e1e3` | `rules/domino-job-entry-point.md`, `rules/domino-launcher-arguments.md`, `rules/domino-launcher-uploads.md` | Facts restated: a Launcher fills a command template and runs a job; values arrive single-quoted and unexpanded, files as paths, multi-selects comma-separated; uploads and every touched file become results; an email.html becomes the notification body. Not used: the JSON edit mode (private deployments only), the R parsing examples and the knitr, nbconvert and explainability tips. |
+| `user_guide/305721` | `rules/domino-datasets-for-large-data.md` | Fact restated: keep big data in Datasets. |
+| `user_guide/f7292e` | `rules/domino-datasets-for-large-data.md`, `rules/domino-run-scoped-writes.md` | Facts restated: .noLock skips file locking during sync, and files must not change while a sync runs. |
+| `user_guide/9355a5` | `rules/domino-datasets-for-large-data.md` | Facts restated: the project upload may time out above about 1,000 files; the dataset upload overwrites unless --fileUploadSetting (case-sensitive) says otherwise. |
+| `admin_guide/71d6ad` | `rules/domino-datasets-for-large-data.md` | Fact restated: copying project files into a run times out after 15 minutes by default. |
+| `user_guide/b99d5d` | `rules/domino-run-scoped-writes.md` | Fact restated: Domino does not serialize concurrent access to shared storage. |
+| `user_guide/dbdbff` | `rules/domino-dataset-snapshots.md` | Facts restated: snapshots are immutable copies whose creation time grows with size; no file may change while one is taken; a reassigned tag mounts only the most recently added. Not used: the UI and CLI snapshot and tagging workflows. |
+| `user_guide/0264e0` | `rules/domino-dataset-snapshots.md`, `rules/domino-materialize-external-data.md` | Facts restated: what the reproducibility engine records per run, including the snapshot used. |
+| `user_guide/e568d7` | `rules/domino-materialize-external-data.md` | Facts restated: databases, APIs, network drives and data sources are invisible to the reproducibility engine; materialize extracts; keep project-file results under 10 GB. |
 | `user_guide/e46d54` | DROP | Index page (environments); no fact beyond its children. |
 | `user_guide/db2820` | DROP | Long-running job notifications are a per-user UI preference; nothing for code to do. |
 | `user_guide/63ac71` | DROP | Saving artifacts through the workspace File Changes panel is an interactive workflow; the job persistence fact comes from user_guide/910370. |
@@ -461,7 +473,7 @@ uses gain its files in their row.
 | `admin_guide/ed1c08` | DROP | Registry credentials for external images: an administrator task. |
 | `admin_guide/de48cc` | DROP | User management index: an administrator topic with no job-code fact. |
 | `user_guide/0002fb` | DROP | Workspace management, linked from the job monitoring page by mistake; nothing for jobs. |
-| `user_guide/ac5c29` | DROP | MATLAB Launcher wrapper: nothing for Python repos. |
+| `user_guide/ac5c29` | DROP | MATLAB Launcher wrapper: nothing for Python repos beyond the Launcher argument rule. |
 
 ## Engine-written files
 
@@ -583,6 +595,14 @@ Upstream text these rules leave out (DROP, with the reason):
 - `rules/domino-env-var-names.md`
 - `rules/domino-pinned-environments.md`
 - `rules/domino-environment-revisions.md`
+- `rules/domino-job-exit-codes.md`
+- `rules/domino-job-entry-point.md`
+- `rules/domino-launcher-arguments.md`
+- `rules/domino-launcher-uploads.md`
+- `rules/domino-datasets-for-large-data.md`
+- `rules/domino-run-scoped-writes.md`
+- `rules/domino-dataset-snapshots.md`
+- `rules/domino-materialize-external-data.md`
 
 ### ml-data
 
