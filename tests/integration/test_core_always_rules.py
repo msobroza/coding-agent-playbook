@@ -38,6 +38,8 @@ DATA_SHAPES: Final = "python-data-shapes"
 IDIOMS: Final = "python-idioms"
 CLASSES: Final = "python-classes-and-protocols"
 EARLY_RETURN: Final = "python-early-return"
+#: Took the import items from python-idioms (prU C-python-coding-07).
+IMPORTS: Final = "python-imports"
 LEGIBILITY: Final = "code-legibility"
 DOCUMENT_LAYOUT: Final = "document-layout"
 #: The always rules that route to no skill; code-legibility names one per line (D73).
@@ -81,8 +83,8 @@ MOVED_ITEM_OWNERS: Final = (
     ("DeclarativeBase", CLASSES),
     ("f-strings", IDIOMS),
     ("single quotes", IDIOMS),
-    ("first-party", IDIOMS),
-    ("import *", IDIOMS),
+    ("first-party", IMPORTS),
+    ("import *", IMPORTS),
     ("shadow builtins", IDIOMS),
     ("early `return`", EARLY_RETURN),
     ("layout axis", LEGIBILITY),

@@ -49,6 +49,8 @@ _SKILL_ROOTS = (".claude/skills", ".opencode/skills", _NEW_ROOT)
 _SYNTHETIC_PYTHON_CODING_MEMBERS = (
     "python-async",
     "python-classes-and-protocols",
+    "python-collection-choice",
+    "python-comprehensions",
     "python-context-managers",
     "python-custom-context-managers",
     "python-custom-exceptions",
@@ -59,12 +61,15 @@ _SYNTHETIC_PYTHON_CODING_MEMBERS = (
     "python-error-boundaries",
     "python-error-handling",
     "python-error-messages-with-context",
+    "python-generators",
     "python-idioms",
+    "python-imports",
     "python-no-global-singletons",
+    "python-optional-keys",
     "python-parameterized-queries",
-    "python-performance-idioms",
     "python-pure-core",
     "python-small-units",
+    "python-str-join",
     "python-typing",
 )
 #: Every file the pre-v0.21 engine left under ``shared_skills/`` for ``_synced_then_rewound``:

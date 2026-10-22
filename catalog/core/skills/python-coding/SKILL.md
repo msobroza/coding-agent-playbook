@@ -66,5 +66,5 @@ The rules index in this file lists only the rules that apply to this repo, group
 - Code that touches files, the network, the clock or a database: dependency injection, pure core, context managers, timeouts and retries.
 - `async def` code, tasks or anything awaited: asyncio.
 - Parsing untrusted input or loading settings into models: Pydantic boundaries.
-- Loops over large or hot data, lookups and string building: performance idioms.
+- Imports, loops over large or hot data, lookups, dict defaults and string building: imports, collection choice, optional keys, comprehensions, generators, string joining.
 - Code that raises, catches or logs an exception: error handling.

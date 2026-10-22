@@ -1,10 +1,8 @@
 """Pins of core skill ``python-coding`` (prU L0-15): the moved rules in mapping sections.
 
-``pydantic-boundaries`` joins from python-tooling (D24). The retired ids
-``python-classes-and-protocols`` and ``python-performance-idioms`` have no
-mapping row and stay until their content lane retires them, in their
-successors' sections. ``python-performance-idioms`` takes 79, the MEDIUM band's
-one unmapped slot, so it ties with no mapped rule. The classes section's mapped
+``pydantic-boundaries`` joins from python-tooling (D24). The retired id
+``python-classes-and-protocols`` has no mapping row and stays until its content
+lane retires it, in its successors' section. The classes section's mapped
 rules fill every slot from 60 to 66, so ``python-classes-and-protocols`` keeps
 its successor ``python-protocols``'s 61 and sorts after it by id.
 
@@ -13,6 +11,12 @@ pinned at the mapping's priorities 48-54.
 
 ``python-early-return`` owns the guard-clause guidance and its pinned phrase, which
 left ``python-idioms`` so that one rule holds each topic.
+
+The idioms section is vendored (C-python-coding-07): its seven rules are pinned at
+the mapping's priorities 72-78. ``python-imports`` takes the import items from
+``python-idioms``, and the retired ``python-performance-idioms`` is gone, split into
+``python-collection-choice``, ``python-optional-keys``, ``python-comprehensions``,
+``python-generators`` and ``python-str-join``.
 """
 
 from __future__ import annotations
@@ -58,7 +62,12 @@ PINS: Final = CoreSkillPins(
         "python-data-shapes",
         "python-classes-and-protocols",
         "python-idioms",
-        "python-performance-idioms",
+        "python-imports",
+        "python-collection-choice",
+        "python-optional-keys",
+        "python-comprehensions",
+        "python-generators",
+        "python-str-join",
     ),
     probe_inactive=frozenset(),
     section_ids=(
@@ -178,12 +187,60 @@ PINS: Final = CoreSkillPins(
             tags=("python", "readability"),
             section="shape",
         ),
-        "python-performance-idioms": RulePin(
+        "python-idioms": RulePin(
             applies_if={},
             globs=_PY_FILES,
-            priority=79,
-            name="Performance idioms",
-            tags=("python", "performance"),
+            priority=72,
+            name="Idioms",
+            tags=("python", "style"),
+            section="idioms",
+        ),
+        "python-imports": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=73,
+            name="Imports",
+            tags=("python", "style", "imports"),
+            section="idioms",
+        ),
+        "python-collection-choice": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=74,
+            name="Collection choice",
+            tags=("python", "performance", "data-structures"),
+            section="idioms",
+        ),
+        "python-optional-keys": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=75,
+            name="Optional keys",
+            tags=("python", "dict"),
+            section="idioms",
+        ),
+        "python-comprehensions": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=76,
+            name="Comprehensions",
+            tags=("python", "performance", "loops"),
+            section="idioms",
+        ),
+        "python-generators": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=77,
+            name="Generators",
+            tags=("python", "performance", "memory"),
+            section="idioms",
+        ),
+        "python-str-join": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=78,
+            name="String joining",
+            tags=("python", "performance", "strings"),
             section="idioms",
         ),
         "python-async": RulePin(
