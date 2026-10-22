@@ -6,8 +6,10 @@ The skill declares sections (prU D17, L0-15), so the Covers clause names the
 sections whose members are active: the probe has no ``uv.lock``, so its
 description names linting, type checking, formatting and test configuration; the
 same probe with a ``uv.lock`` also names package management. The FastAPI rules moved to
-web-application and the Pydantic rule to python-coding (D24). The authored
-body's picker bullets name each member by the display name the index shows.
+web-application and the Pydantic rule to python-coding (D24). The authored body
+has no picker bullets (D47): the generated index routes to rules, and "References
+and examples" lists check-failures.md in every repo and uv-dependency-failures.md
+only in a uv project (C-python-tooling-refs).
 """
 
 from __future__ import annotations
@@ -18,7 +20,7 @@ from typing import TYPE_CHECKING, Final
 import pytest
 
 from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
-from tests._catalog import CORE_ROOT, core_rules
+from tests._catalog import CORE_ROOT
 from tests.core_skill_pins.python_tooling import PINS
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
 
@@ -64,29 +66,42 @@ def test_uv_lock_adds_the_uv_workflow_to_python_tooling(uv_reference_probe_repo:
         assert sorted(p.name for p in rules.iterdir()) == _UV_PROBE_RULES, root
 
 
-#: Member display name -> the picker label the body uses instead. ``pytest`` is also
-#: a rule id, which a SKILL.md body may not name (spec 6.5.5), so this one label is
-#: a phrase; python-testing drops its ``pytest`` prefixes for the same reason.
-_BODY_LABEL_FOR: Final = {"pytest configuration": "the test runner's configuration"}
+_CHECK_FAILURES: Final = "check-failures.md"
+_UV_FAILURES: Final = "uv-dependency-failures.md"
 
 
-def _picker_labels(body: str) -> list[str]:
-    """The reference labels of ``body``'s picker bullets: the text after each bullet's ": "."""
-    tails = (line.rsplit(": ", 1)[-1].rstrip(".") for line in body.splitlines() if line[:2] == "- ")
-    return [label for tail in tails for label in re.split(r", | and ", tail)]
+def _written_references(repo: Path, root: str) -> list[str]:
+    """The reference file names ``repo``'s python-tooling skill holds under ``root``."""
+    references = repo / root / "python-tooling" / "references"
+    return sorted(p.name for p in references.iterdir() if p.suffix == ".md")
 
 
-def test_python_tooling_pickers_use_member_display_names() -> None:
-    """Each picker bullet names a member by its index label, and every member is named.
+def _listed_references(repo: Path) -> list[str]:
+    """The reference file names the emitted SKILL.md lists under "References and examples"."""
+    skill_md = repo / ".claude" / "skills" / "python-tooling" / "SKILL.md"
+    listing = skill_md.read_text(encoding="utf-8").partition("## References and examples")[2]
+    return re.findall(r"\[references/([a-z0-9-]+\.md)\]", listing)
 
-    A descriptive phrase ("the package manager's workflow") leaves the agent to
-    guess which index line it means (review of ticket 21); only a name holding a
-    rule id gets a phrase, from ``_BODY_LABEL_FOR``.
-    """
+
+def test_reference_probe_ships_only_the_ungated_check_failures_guide(
+    reference_probe_repo: Path,
+) -> None:
+    """Without a ``uv.lock`` the uv guide is neither written nor listed (D29, D58(2))."""
+    for root in NATIVE_SKILL_ROOTS:
+        assert _written_references(reference_probe_repo, root) == [_CHECK_FAILURES], root
+    assert _listed_references(reference_probe_repo) == [_CHECK_FAILURES]
+
+
+def test_uv_lock_adds_the_uv_dependency_failures_guide(uv_reference_probe_repo: Path) -> None:
+    for root in NATIVE_SKILL_ROOTS:
+        written = _written_references(uv_reference_probe_repo, root)
+        assert written == [_CHECK_FAILURES, _UV_FAILURES], root
+    assert _listed_references(uv_reference_probe_repo) == [_CHECK_FAILURES, _UV_FAILURES]
+
+
+def test_python_tooling_body_leaves_rule_picking_to_the_generated_index() -> None:
+    """D47: the hand-written picker bullets go; the generated parts route to rules."""
     skill_md = CORE_ROOT / "skills" / "python-tooling" / "SKILL.md"
     _, body = split_frontmatter(skill_md.read_text(encoding="utf-8"))
-    rules = core_rules().values()
-    names = {r.frontmatter.name.lower() for r in rules if r.frontmatter.skill == "python-tooling"}
-    expected = sorted(_BODY_LABEL_FOR.get(name, name) for name in names)
-    labels = [label.lower() for label in _picker_labels(body)]
-    assert sorted(set(labels)) == expected, f"picker labels {labels}; expected {expected}"
+    assert "## Picking rules" not in body
+    assert "rules index" not in body

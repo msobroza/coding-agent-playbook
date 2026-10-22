@@ -577,6 +577,11 @@ Upstream text these rules leave out (DROP, with the reason):
 
 ### python-tooling
 
+`references/check-failures.md` and `references/uv-dependency-failures.md` are internal decision guides (D49), not vendored.
+
+- `references/check-failures.md`
+- `references/uv-dependency-failures.md`
+
 ### web-application
 
 `references/request-lifecycle.md` is an internal decision guide (D49), not vendored.

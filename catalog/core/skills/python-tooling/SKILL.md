@@ -31,6 +31,13 @@ playbook:
       impact: MEDIUM
       summary: "In a uv project, dependencies, the lock and the environment change only through uv."
       open_when: "A change adds, removes or upgrades a dependency, touches `uv.lock` or `[dependency-groups]`, or the lock check fails."
+  references:
+    - path: references/check-failures.md
+      open_when: "A check fails and its message names a ruff code, a mypy or pyright error code, a format diff or a pytest setting."
+    - path: references/uv-dependency-failures.md
+      open_when: "A uv command, CI's lock check or the dependency guard fails, or an import is missing from the project environment."
+      applies_if:
+        package_manager: uv
 ---
 
 # Python tooling
@@ -61,16 +68,6 @@ mypy                             # type check with the repo's settings
 ```
 
 The test suite runs with the command CI uses, with coverage where the repo measures it.
-
-## Picking rules
-
-The rules index in this file lists only the rules that apply to this repo, grouped by section, most important first, each with the one line it requires. Open every rule whose line matches the change and read it in full before writing code or editing configuration.
-
-- A lint finding, a suppression comment, a pre-commit hook or a check that fails only in CI: static checks, linting with ruff.
-- A type error, a stub file or type-checker settings: type checking with mypy.
-- Layout, line wrapping or import order: formatting with ruff.
-- Test-runner settings, markers, warning filters or coverage thresholds: the test runner's configuration.
-- Adding, removing or upgrading a dependency, the lockfile, or running project commands: uv workflow, declaring dependencies.
 
 ## See also
 
