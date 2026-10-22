@@ -28,9 +28,9 @@ Then, once per repo:
   label and domain configuration the other skills read. The plugin always rule
   (`mattpocock-skills-tracker`) points the agent at these files and asks it to
   tell you to run setup when a skill needs one that is missing.
-- Add `.scratch/` to the repo's `.gitignore`. The local issue tracker keeps its
-  maps and tickets in `.scratch/<slug>/`: untracked working state that is never
-  staged or committed.
+- Add `.scratch/` to the repo's `.gitignore`: it holds only throwaway
+  prototypes, untracked and never staged or committed. The local issue tracker
+  keeps its specs in `docs/specs/` and its maps and tickets in `docs/plans/`.
 
 ## User-invoked skills
 

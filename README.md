@@ -589,8 +589,9 @@ specs = "specs"
 `layout.specs`, and `playbook validate` prints each rewrite as
 `layout: <file>: docs/specs -> specs (<count>)`. A framework whose text uses
 other paths maps them with `[layout_aliases]` in its `framework.toml`; sync
-applies those under the default layout too (superpowers maps its
-`docs/superpowers/specs/` and `plans/` this way).
+applies those under the default layout too. The bundled superpowers and
+mattpocock frameworks need none: their text already names `docs/specs/` and
+`docs/plans/`.
 The always rule `document-layout` names the configured places in every
 always-loaded file, and the `document-layout-guard` hook denies a spec or plan
 written outside them (into `docs/superpowers` or as a spec or plan file under
@@ -685,9 +686,9 @@ Then, once per repo:
   tracker is local markdown, which needs no remote or CLI. The plugin always
   rule (`mattpocock-skills-tracker`) points the agent at these files and asks
   it to tell you to run setup when a skill needs one that is missing.
-- Add `.scratch/` to your `.gitignore`. The local tracker keeps its maps and
-  tickets in `.scratch/<slug>/`, working state that is never staged or
-  committed.
+- Add `.scratch/` to your `.gitignore`: it holds only throwaway prototypes,
+  never staged or committed. The local tracker keeps its specs in
+  `docs/specs/` and its maps and tickets in `docs/plans/`.
 - If you use the upstream Claude Code plugin of these skills, disable it in
   this repo, or each skill appears twice.
 

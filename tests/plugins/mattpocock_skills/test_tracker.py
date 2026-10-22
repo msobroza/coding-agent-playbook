@@ -95,7 +95,8 @@ NEW_TEXTS: Final[tuple[tuple[str, str, str], ...]] = (
         "SKILL.md",
         '> Explainer: The "issue tracker" is where issues live for this repo. Skills like '
         "`to-tickets` and `to-spec` read from and write to it. They need to know whether to write a "
-        "markdown file under `.scratch/` or follow some other workflow you describe. Pick the place "
+        "markdown file under `docs/specs/` or `docs/plans/` or follow some other workflow you describe. "
+        "Pick the place "
         "you actually track work for this repo.\n",
     ),
     (
@@ -107,7 +108,8 @@ NEW_TEXTS: Final[tuple[tuple[str, str, str], ...]] = (
     (
         SETUP,
         "SKILL.md",
-        "- **Local markdown**: issues live as files under `.scratch/<feature>/` in this repo (the "
+        "- **Local markdown**: issues live as files under `docs/plans/YYYY-MM-DD-<feature>/` in this "
+        "repo (the "
         "default; needs no remote or CLI)\n",
     ),
     (
@@ -217,7 +219,8 @@ NEW_TEXTS: Final[tuple[tuple[str, str, str], ...]] = (
     (
         SETUP,
         "references/issue-tracker-local.md",
-        "under a `## Comments` heading\n- `.scratch/` is untracked working state: never stage it in "
+        "under a `## Comments` heading\n- `.scratch/` holds only throwaway prototypes, never a spec, "
+        "ticket or map: never stage it in "
         "a commit\n- Worktrees do not contain untracked files: when you point a subagent or a "
         "worktree at a spec, ticket or map, give its absolute path in the main checkout\n\n",
     ),
@@ -257,8 +260,8 @@ NEW_TEXTS: Final[tuple[tuple[str, str, str], ...]] = (
     (
         SETUP,
         "references/issue-tracker-local.md",
-        "to the map's Decisions-so-far in `map.md`. Only the session driving the map appends to "
-        "`map.md`; a research subagent writes only its own ticket file.\n",
+        "to the map's Decisions-so-far in the map file. Only the session driving the map appends "
+        "to the map file; a research subagent writes only its own ticket file.\n",
     ),
     # to-tickets SKILL.md, change 3
     (

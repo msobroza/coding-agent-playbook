@@ -262,13 +262,22 @@ def test_framework_choice_problems_accepts_an_overlay_shipping_framework_toml(
     assert framework_choice_problems(package) == []
 
 
-def test_layout_aliases_merge_the_framework_layers_aliases() -> None:
-    aliases = layout_aliases(["coding_agent_playbook", _SUPERPOWERS, _MATTPOCOCK])
+def test_layout_aliases_merge_the_framework_layers_aliases(
+    make_package: Callable[..., str],
+) -> None:
+    acme = _overlay_with_framework_toml(
+        make_package,
+        'name = "acme"\ndescription = "A"\n[layout_aliases]\n"docs/acme/plans/" = "plans"\n',
+    )
 
-    assert aliases == {
-        "docs/superpowers/specs/": "specs",
-        "docs/superpowers/plans/": "plans",
-    }
+    aliases = layout_aliases(["coding_agent_playbook", acme, _SUPERPOWERS, _MATTPOCOCK])
+
+    assert aliases == {"docs/acme/plans/": "plans"}
+
+
+def test_the_bundled_frameworks_declare_no_layout_aliases() -> None:
+    """Their text names the document layout's default paths (D61, C-frameworks-layout)."""
+    assert layout_aliases([_SUPERPOWERS, _MATTPOCOCK]) == {}
 
 
 def test_layout_aliases_skip_a_framework_toml_that_does_not_parse(
@@ -282,15 +291,22 @@ def test_layout_aliases_skip_a_framework_toml_that_does_not_parse(
     assert layout_aliases([broken, _MATTPOCOCK]) == {}
 
 
-def test_config_layout_rewriter_joins_the_layout_and_the_framework_aliases() -> None:
-    config = Config.from_dict(_config_data(framework="superpowers", layout={"plans": "plans"}))
+def test_config_layout_rewriter_joins_the_layout_and_the_framework_aliases(
+    make_package: Callable[..., str],
+) -> None:
+    acme = _overlay_with_framework_toml(
+        make_package,
+        'name = "acme"\ndescription = "A"\n[layout_aliases]\n"docs/acme/specs/" = "specs"\n'
+        '"docs/acme/plans/" = "plans"\n',
+    )
+    config = Config.from_dict(_config_data(framework=acme, layout={"plans": "plans"}))
 
     rewriter = config.layout_rewriter()
 
     assert dict(rewriter.targets) == {
         "docs/plans": "plans",
-        "docs/superpowers/specs": "docs/specs",
-        "docs/superpowers/plans": "plans",
+        "docs/acme/specs": "docs/specs",
+        "docs/acme/plans": "plans",
     }
 
 

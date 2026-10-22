@@ -37,8 +37,6 @@ from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.config.files import FileSystemStateSource
-from coding_agent_playbook.config.framework import layout_aliases
-from coding_agent_playbook.config.layout import LayoutRewriter
 from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.sync import pipeline as _sync
 from tests.fakes import FakeGitClient
@@ -64,9 +62,6 @@ pytestmark = pytest.mark.catalog
 #: the sentinel HTML comment as the first body line, then one blank separator
 #: line (SPEC §6.3; ``rendering.formats.with_sentinel_body``).
 _SENTINEL_BODY_PREFIX = f"<!-- {SENTINEL} -->\n\n"
-
-#: The default document layout with the pack's own aliases: what sync rewrites (D71).
-_PACK_LAYOUT = LayoutRewriter.for_layout({}, aliases=layout_aliases([PLUGIN_NAME]))
 
 needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="git not on PATH")
 
@@ -147,11 +142,10 @@ def _opt_out(repo: Path, *, adapters: tuple[str, ...] = SKILL_ADAPTERS) -> None:
 def _source_body(skill_id: str) -> str:
     """The vendored ``SKILL.md`` body (frontmatter stripped) of a pack skill, as synced.
 
-    Sync maps the pack's ``[layout_aliases]`` (``docs/superpowers/plans/``) onto
-    the document layout (D71); every other byte is the vendored text.
+    The plugin's text already names the default document layout and declares no
+    ``[layout_aliases]`` (D61), so a repo with no ``[layout]`` gets it byte for byte.
     """
-    body = split_frontmatter((SKILLS_ROOT / skill_id / "SKILL.md").read_text(encoding="utf-8"))[1]
-    return _PACK_LAYOUT.rewrite(body)[0]
+    return split_frontmatter((SKILLS_ROOT / skill_id / "SKILL.md").read_text(encoding="utf-8"))[1]
 
 
 # --- read-only: what an opted-in sync writes -----------------------------------
@@ -169,10 +163,10 @@ def test_sync_writes_skill_md_faithfully(synced_pack_repo: Path, skill_id: str) 
     assert written_fm == {k: v for k, v in source_fm.items() if k != "capabilities"}
     assert written_fm["id"] == skill_id
     # Exactly the sentinel line is added; the vendored body after it is
-    # untouched, since the port's whole point is upstream fidelity, except for the
-    # pack's own spec and plan paths, which follow the document layout (D71).
+    # untouched: the source already names the document layout's spec and plan
+    # paths (D61), so a repo with the default layout gets it byte for byte.
     assert written_body.startswith(_SENTINEL_BODY_PREFIX)
-    assert written_body.removeprefix(_SENTINEL_BODY_PREFIX) == _PACK_LAYOUT.rewrite(source_body)[0]
+    assert written_body.removeprefix(_SENTINEL_BODY_PREFIX) == source_body
 
 
 @pytest.mark.parametrize("skill_id", sorted(EXPECTED_SKILL_IDS))
