@@ -94,16 +94,25 @@ def test_validate_reports_exactly_what_sync_rewrites(
     assert any(line.startswith("layout: AGENTS.md: ") for line in reported)
 
 
-def test_validate_reports_a_framework_alias_under_the_default_layout(
+def test_validate_reports_no_rewrite_for_a_bundled_framework_under_the_default_layout(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """superpowers names the default paths itself, so nothing is rewritten (D61)."""
+    _init_repo(tmp_path, framework="superpowers")
+
+    assert _layout_lines(tmp_path, capsys) == []
+
+
+def test_validate_reports_a_bundled_framework_plan_path_under_a_custom_layout(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     _init_repo(tmp_path, framework="superpowers")
+    _append_layout(tmp_path, 'plans = "plans"')
 
     lines = _layout_lines(tmp_path, capsys)
 
     assert any(
-        line.startswith("layout: .claude/skills/writing-plans/SKILL.md: docs/superpowers/plans ")
-        and " -> docs/plans (" in line
+        line.startswith("layout: .claude/skills/writing-plans/SKILL.md: docs/plans -> plans (")
         for line in lines
     )
 
