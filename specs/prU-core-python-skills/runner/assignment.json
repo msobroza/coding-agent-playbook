@@ -8,7 +8,7 @@
  ],
  "machines": {
   "A": {
-   "about": "the first machine (M1, 8 GB): the tickets it had started (L0-05..L0-10, L0-18, L0-20, L0-22, L0-23), docs, F-01 and the cross-lane content cluster",
+   "about": "the first machine (M1, 8 GB): the tickets it had started, docs, F-01, and the web-application, python-testing and python-architecture content (the lanes that depend on each other)",
    "tickets": [
     "L0-05",
     "L0-06",
@@ -27,15 +27,13 @@
     "L0-28"
    ],
    "lanes": [
-    "python-coding",
-    "python-tooling",
     "web-application",
     "python-testing",
     "python-architecture"
    ]
   },
   "B": {
-   "about": "the second, larger machine: the critical engine chain from L0-07 to L0-15/L0-16 (moved from A on 2026-10-22, owner's request, so the chain runs 6 at a time), L0-24 and the independent content lanes",
+   "about": "the second, larger machine: the critical engine chain L0-07, L0-11..L0-17, L0-24, the independent content lanes, and python-coding plus python-tooling (moved from A on 2026-10-22 to balance the remaining work)",
    "tickets": [
     "C-frameworks-layout",
     "C-prompts-v2",
@@ -56,7 +54,9 @@
     "domino-agents",
     "ml-data",
     "python-documentation",
-    "playbook-creator"
+    "playbook-creator",
+    "python-coding",
+    "python-tooling"
    ]
   }
  }
