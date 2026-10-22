@@ -34,7 +34,7 @@ A rule's frontmatter is static YAML, parsed before any template runs. Required: 
 | `priority` | An int 0-99 (default 50), inside the section's band when the skill has sections |
 | `globs` | The skill nudge on the first edit of a matching file, and Continue's attachment |
 | `applies_if` | The gate on detector facts (`playbook-rule-gates`) |
-| `lint_codes` | `{warn, when}`: ruff codes a linked lint hook reports against this rule |
+| `lint_codes` | `{warn, when}`: ruff codes a linked lint hook reports against this rule, as warnings only |
 | `version` | Bumped on a breaking change |
 
 A rule inside `skills/<x>/rules/` is a member of `<x>` by its directory: it never declares `skill:`.
@@ -76,6 +76,4 @@ tags: [billing]
 ## Notes
 
 - An always rule (`scope: always`) has no `skill`, `section` or `globs`, stays a few bullets because it is in every turn's context, and lives in the layer's `rules/` (core: `rules/always/NN-<id>.md`).
-- Sections and their priority bands: `playbook-skill-sections`.
 - In the engine's core layer, add no new lint_codes until the pilot ends.
-- rule-template.md has a commented skeleton for each kind of rule file.

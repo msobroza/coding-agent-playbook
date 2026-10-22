@@ -72,10 +72,10 @@ def _clarify_skill(skill_id: str) -> Skill:
         frontmatter={
             "id": skill_id,
             "name": skill_id,
-            "description": "d",
+            "description": "fake clarify skill",
             "capabilities": ["clarify"],
         },
-        body="b\n",
+        body="fake body\n",
         scripts_dir=None,
         references_dir=None,
         source_package=_FRAMEWORK,

@@ -64,4 +64,3 @@ applies_if:
 - An unknown key fails validate in every repo, whatever its facts.
 - `playbook check` prints this repo's facts and, for each skipped rule, the predicate that failed.
 - Lists belong in `applies_if`; the helpers that test one name live inside a template (`playbook-rule-templates`).
-- rule-template.md has the predicate table with an example per key.

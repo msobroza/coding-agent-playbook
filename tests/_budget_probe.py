@@ -158,6 +158,16 @@ def write_domino_probe(repo: Path) -> None:
 AUTHORING_PROBE_LAYER: Final = "playbook"
 
 
+def add_empty_playbook_layer(repo: Path) -> None:
+    """Give ``repo`` an empty ``playbook/`` layer, which turns ``playbook_layer`` on (prU D70).
+
+    A no-op when the layer exists, so a repo whose hooks already live there keeps them.
+
+    Example: ``add_empty_playbook_layer(plain)`` keeps a plain repo's facts equal to a hook repo's.
+    """
+    (repo / AUTHORING_PROBE_LAYER).mkdir(exist_ok=True)
+
+
 def write_authoring_probe(repo: Path) -> None:
     """The reference probe plus an empty ``playbook/`` layer (prU D70).
 
@@ -168,7 +178,7 @@ def write_authoring_probe(repo: Path) -> None:
     Example: ``write_authoring_probe(tmp_path)`` then ``init_and_sync_reference_probe(tmp_path)``.
     """
     write_reference_probe(repo)
-    (repo / AUTHORING_PROBE_LAYER).mkdir()
+    add_empty_playbook_layer(repo)
 
 
 def reference_probe_facts(repo: Path) -> Facts:

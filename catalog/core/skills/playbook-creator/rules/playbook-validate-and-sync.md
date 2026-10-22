@@ -52,6 +52,6 @@ playbook docs-check                            # before committing Markdown
 ## Notes
 
 - In an engine or overlay checkout without `.coding-agent-playbook.toml`, validate covers the engine's catalog, the checkout's `src/*/resources/` and `playbook/`, and names the consumer checks it skips.
-- Content files are Markdown, so the docs-check pre-commit hook also checks their relative links and Python code blocks; `docs-check-in-ci` in python-documentation owns that practice.
+- Content files are Markdown, so the docs-check pre-commit hook also checks their relative links and Python code blocks; run the same check in CI so a skipped hook cannot let a broken link through.
 - Under `commit = false`, `playbook sync --check-staged` refuses staged generated output.
 - The validate-then-sync-on-canonical-edit and eval-sample-authoring-lint hooks remind you after an edit.

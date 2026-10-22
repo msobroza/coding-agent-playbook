@@ -83,4 +83,3 @@ for _attempt in range(3):
 - No upstream source or author name outside ATTRIBUTIONS and the license copies.
 - No dropped-recommendation token anywhere, not even inside a prohibition: the engine's scan is a literal substring match.
 - A rule never includes another rule.
-- rule-template.md has the body skeleton.

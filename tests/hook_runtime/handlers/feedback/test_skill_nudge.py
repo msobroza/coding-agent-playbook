@@ -22,6 +22,7 @@ from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME
 from coding_agent_playbook.sync import pipeline as _sync
 from tests._catalog import TEST_FILE_GLOBS
 from tests.cli.hook_repo import CONFIG, GUARD_CONFIG, hook_deps
+from tests.core_skill_pins import skills_off_probe
 from tests.fakes import FakeGitClient
 from tests.hook_runtime.fakes import FakeRuff, ruff_row
 from tests.hook_runtime.handlers.pack_repo import engine_hook, engine_rules
@@ -62,22 +63,15 @@ def _install_six_skill_pack(pack_repo: PackRepo) -> None:
     pack_repo.install_pack([HOOK_ID], handler_config={HOOK_ID: {"skills": [*principle, testing]}})
 
 
-#: Marker facts the reference probe lacks: the Domino skills gate on ``domino_project``
-#: (prU D63) and ``playbook-creator`` on ``playbook_layer`` (D70).
-_PROBE_ABSENT_FACTS: Final = ("domino_project", "playbook_layer")
-
-
 def _reference_probe_rules() -> list[Rule]:
-    """Every core rule but those gated on a marker the reference probe lacks.
+    """Every core rule but the members of the skills the reference probe never emits.
 
-    Sync never puts the Domino skills' or ``playbook-creator``'s members in this
-    repo's table; keeping them would change every line below.
+    The Domino skills (prU D63) and ``playbook-creator`` (D70) gate on a marker the
+    reference probe lacks, so sync never puts their members in this repo's table;
+    keeping them would change every line below.
     """
-    return [
-        rule
-        for rule in engine_rules()
-        if not any(fact in rule.frontmatter.applies_if for fact in _PROBE_ABSENT_FACTS)
-    ]
+    off_probe = skills_off_probe("reference")
+    return [rule for rule in engine_rules() if rule.frontmatter.skill not in off_probe]
 
 
 def _line(skill_id: str) -> str:

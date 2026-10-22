@@ -21,6 +21,7 @@ from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from coding_agent_playbook.hooks.registrations.opencode import OPENCODE_SHIM_PATH
 from coding_agent_playbook.lockfile.model import Lockfile, compute_hash
 from coding_agent_playbook.sync import pipeline as _sync
+from tests._budget_probe import add_empty_playbook_layer
 from tests.cli.hook_repo import (
     CONFIG,
     GUARD_CONFIG,
@@ -156,9 +157,8 @@ def test_sync_without_hooks_table_keeps_opencode_tree_byte_identical(
 ) -> None:
     (tmp_path / "plain").mkdir()
     plain = make_synthetic_repo(tmp_path / "plain", config_text=CONFIG)
-    # The hook repo's hooks live in its playbook/ layer, which turns playbook_layer on
-    # (prU D70); an empty layer here keeps the two repos' detector facts equal.
-    (plain / "playbook").mkdir(exist_ok=True)
+    # The hook repo's hooks live in its playbook/ layer: the same layer keeps the facts equal.
+    add_empty_playbook_layer(plain)
     with_hooks = _opencode_repo(tmp_path, make_synthetic_repo, hooks_table=None)
 
     assert _sync_repo(plain, tmp_path) == 0

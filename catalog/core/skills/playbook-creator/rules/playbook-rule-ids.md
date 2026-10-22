@@ -26,7 +26,7 @@ A rule id is at once the override key, the file name and the handle that prompts
 
 - The file name minus `.md` or `.md.j2` equals the id for every rule inside a skill's `rules/`, in every layer, and for every rule of the engine's layers; an always rule may keep an `NN-` order prefix.
 - Ids are unique inside a layer: two files with one id fail validate, naming both.
-- The prefix names the owner: the library or tool that owns the topic (`pytest-`, `ruff-`, `mypy-`, `sqlalchemy-`, `fastapi-`, `pydantic-`), the skill family (`python-`, `design-`, `arch-`, `web-`, `ml-`), or an organization prefix in an overlay or `playbook/` (`acme-`), so a later engine id never collides with yours by accident.
+- The prefix names the owner: the library or tool that owns the topic (`pytest-`, `ruff-`, `mypy-`, `sqlalchemy-`, `fastapi-`, `pydantic-`), the skill family (`python-`, `design-`, `arch-`, `web-`, `ml-`, `docs-`, `domino-`, `a2a-`, `playbook-`), or an organization prefix in an overlay or `playbook/` (`acme-`), so a later engine id never collides with yours by accident.
 - No rule id starts with `guardrail-`, and no hook id equals a rule or prompt id.
 
 ## Bad Example

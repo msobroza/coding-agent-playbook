@@ -78,4 +78,3 @@ playbook/
 - Generated roots (`.claude/`, `.opencode/`, `.agents/`, `.continue/`, `AGENTS.md`, the agent_harness tree) are never edited by hand.
 - Content never goes into the engine's Python package; it lives in a layer.
 - After placing a file, run the loop in `playbook-validate-and-sync`.
-- Skeletons for each kind: rule-template.md and plugin-template.md.

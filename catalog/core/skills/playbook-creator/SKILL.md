@@ -77,5 +77,4 @@ Never edit generated output (`.claude/`, `.opencode/`, `.agents/`, `.continue/`,
 ## See also
 
 - playbook-guardrails: the guardrail text of every enabled hook.
-- python-documentation: the docs check and the document layout.
 - python-tooling: formatting the Python code blocks inside Markdown.

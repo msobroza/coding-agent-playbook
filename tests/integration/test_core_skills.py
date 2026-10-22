@@ -79,7 +79,7 @@ WHERE_FROM_PINS: Final[Mapping[str, str]] = {pins.skill_id: pins.where for pins 
 CORE_SKILLS: Final = sorted(PINS_BY_SKILL)
 #: Core skills checked on the reference probe, on the Domino probe (prU D59, D63) and
 #: on the authoring probe (prU D70).
-REFERENCE_PROBE_SKILLS: Final = sorted(set(PINS_BY_SKILL) - DOMINO_SKILL_IDS - AUTHORING_SKILL_IDS)
+REFERENCE_PROBE_SKILLS: Final = sorted(set(PINS_BY_SKILL) - skills_off_probe("reference"))
 DOMINO_PROBE_SKILLS: Final = sorted(DOMINO_SKILL_IDS)
 AUTHORING_PROBE_SKILLS: Final = sorted(AUTHORING_SKILL_IDS)
 #: Core members whose gate the reference probe fails (spec 9.6.2): a reference-probe
@@ -331,6 +331,16 @@ def test_each_scoped_core_rule_is_pinned_by_exactly_its_skill() -> None:
     assert not extra, f"pins name rules that are not scoped core rules: {extra}"
     dupes = sorted({rule_id for rule_id in pinned if pinned.count(rule_id) > 1})
     assert not dupes, f"pins list these member rules more than once: {dupes}"
+
+
+def test_skills_off_probe_keeps_each_marker_probe_to_its_own_skills() -> None:
+    """prU D63, D70: each marker probe adds its own skills and never another probe's."""
+    assert skills_off_probe("reference") == DOMINO_SKILL_IDS | AUTHORING_SKILL_IDS
+    assert skills_off_probe("domino") == AUTHORING_SKILL_IDS
+    assert skills_off_probe("authoring") == DOMINO_SKILL_IDS
+    assert {"domino-apps", "domino-agents"} <= skills_off_probe("authoring")
+    assert "playbook-creator" in skills_off_probe("domino")
+    assert "python-coding" not in skills_off_probe("reference")
 
 
 @pytest.mark.parametrize("pins", ALL_PINS, ids=lambda pins: pins.skill_id)

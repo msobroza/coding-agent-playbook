@@ -12,7 +12,7 @@ authoring variant adds an empty ``playbook/`` layer, which turns on the
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -25,26 +25,26 @@ from tests._budget_probe import (
 from tests.conftest import apply_hermetic_git_env
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
     from pathlib import Path
+
+    from tests.core_skill_pins import ProbeKind
+
+
+#: Each probe kind's writer: the reference probe, or it plus the kind's one marker.
+_PROBE_WRITERS: Final[Mapping[ProbeKind, Callable[[Path], None]]] = {
+    "reference": write_reference_probe,
+    "domino": write_domino_probe,
+    "authoring": write_authoring_probe,
+}
 
 
 def _synced_probe(
-    tmp_path_factory: pytest.TempPathFactory,
-    *,
-    uv_lock: bool,
-    domino: bool = False,
-    authoring: bool = False,
+    tmp_path_factory: pytest.TempPathFactory, *, uv_lock: bool, probe: ProbeKind = "reference"
 ) -> Path:
-    """A fresh probe after ``playbook init``; ``uv.lock``, Domino markers or a layer when asked."""
-    if domino:
-        repo = tmp_path_factory.mktemp("domino-probe")
-        write_domino_probe(repo)
-    elif authoring:
-        repo = tmp_path_factory.mktemp("authoring-probe")
-        write_authoring_probe(repo)
-    else:
-        repo = tmp_path_factory.mktemp("reference-probe")
-        write_reference_probe(repo)
+    """A fresh ``probe`` repo after ``playbook init``, with a ``uv.lock`` when asked."""
+    repo = tmp_path_factory.mktemp(f"{probe}-probe")
+    _PROBE_WRITERS[probe](repo)
     if uv_lock:
         (repo / "uv.lock").write_text("version = 1\n", encoding="utf-8")
     with pytest.MonkeyPatch.context() as patch:
@@ -86,7 +86,7 @@ def domino_probe_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
         skills = sorted(p.name for p in (domino_probe_repo / ".claude/skills").iterdir())
     """
-    return _synced_probe(tmp_path_factory, uv_lock=False, domino=True)
+    return _synced_probe(tmp_path_factory, uv_lock=False, probe="domino")
 
 
 @pytest.fixture(scope="module")
@@ -97,4 +97,4 @@ def authoring_probe_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
         skill_md = authoring_probe_repo / ".claude/skills/playbook-creator/SKILL.md"
     """
-    return _synced_probe(tmp_path_factory, uv_lock=False, authoring=True)
+    return _synced_probe(tmp_path_factory, uv_lock=False, probe="authoring")
