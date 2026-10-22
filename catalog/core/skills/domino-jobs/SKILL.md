@@ -4,7 +4,7 @@ name: domino-jobs
 description: "Guides Domino 6.2 jobs and the run basics Apps and agents share."
 playbook:
   use_when: "writing code a Domino job, schedule, Launcher or Flow runs"
-  files: "Domino job and Launcher scripts, requirements.txt and .domino* dotfiles"
+  files: "Domino Job and Launcher scripts, requirements.txt, environments and dotfiles"
   sections:
     - id: project-and-run-environment
       title: "Project and run environment"
@@ -45,33 +45,33 @@ playbook:
 
 # Domino jobs
 
-A Domino job is a headless run of one script in a fresh container, started from the UI, a schedule, a Launcher, the CLI, the API or a Flow. Nothing in the container survives the run except what the project type syncs back and what was written to a Dataset, and the script's exit status is the only verdict Domino, schedules and callers see. This skill targets Domino 6.2; where the documentation contradicts itself, the rule states the safe behavior.
+A Domino job is a headless run of one script in a fresh container, started from the UI, a schedule, a Launcher, the CLI, the API or a Flow. Nothing in that container survives the run except what the project type syncs back and what was written to a Dataset, so a job's code decides deliberately where every file goes, where its settings come from and what its exit status says.
 
-Its first section holds the run basics every Domino run shares: what persists, where paths, identity and secrets come from, how to reach the Domino API and which environment runs the code. The domino-apps and domino-agents skills point to those rules instead of restating them.
+This skill targets Domino 6.2; where the 6.2 documentation leaves a fact out or contradicts itself, the rule states the safe behavior and says so. Its first section holds the run basics that the domino-apps and domino-agents skills name by rule id instead of restating.
 
-## Quick Reference
+## Quick reference
 
 | | DFS project | Git-based project | Flow task |
 | --- | --- | --- | --- |
-| Working directory | `/mnt` | `/mnt/code` (the repo checkout) | as the project type, inputs under `/workflow/inputs` |
-| Persists after the run | every changed file not ignored by `.dominoignore` | only `/mnt/artifacts`; code edits are neither committed nor pushed | only the declared files under `/workflow/outputs` |
-| Datasets and snapshots | `/domino/datasets/local/<name>`, snapshots under `.../snapshots/<name>/<number>` | `/mnt/data/<name>`, snapshots under `/mnt/data/snapshots/<name>/<number>` | the chosen snapshot at the plain dataset path, read-only |
-| Tells the type apart | `DOMINO_IS_GIT_BASED` is not `"true"` | `DOMINO_IS_GIT_BASED` is `"true"` | `DOMINO_IS_WORKFLOW_JOB` is `"true"` |
+| Working directory | `/mnt` (`/mnt/<owner>/<project>` once another project is imported) | `/mnt/code`, the repository checkout | as its project type |
+| What persists after the run | every file under the working directory, minus `.dominoignore` matches | only the artifacts directory (`/mnt/artifacts`); code edits are lost | only the declared outputs under `/workflow/outputs` |
+| Datasets | mounted under the datasets directory, snapshots by number | mounted under the datasets directory, snapshots by number | one chosen snapshot per dataset, at the plain dataset path |
+| How code tells | `DOMINO_IS_GIT_BASED` is not `"true"` | `DOMINO_IS_GIT_BASED` is `"true"` | `DOMINO_IS_WORKFLOW_JOB` is `"true"` |
 
-Every job:
+Six musts for every job:
 
-- Exits non-zero on failure, and zero only after its outputs are complete.
-- Persists only through its project type's synced location or a Dataset.
-- Reads paths, run identity and secrets from environment variables, resolved once at startup.
-- Calls the Domino API through the run's API proxy, never with a key in the code.
-- Keeps big or many files in Datasets and reads snapshots when results must be reproducible.
-- Stays idempotent when a schedule, a retry or a re-run starts it again.
+- Exit non-zero on failure; Domino, schedules and callers read only the exit status.
+- Persist results only through the project type's synced location or a Dataset.
+- Read paths, identity and secrets from environment variables, once, at startup.
+- Call the Domino API through the run's API proxy, with no credential in the code.
+- Keep big data in Datasets, and read snapshots when results must be reproducible.
+- Make scheduled, re-run and retried jobs idempotent.
 
-## See Also
+## See also
 
-- python-coding: error handling, retries and timeouts, typed settings and Protocol seams.
-- python-testing: monkeypatch for the DOMINO_* variables.
+- python-coding: error handling, retries and timeouts, typed settings, Protocol seams.
+- python-testing: setting the DOMINO_* variables in tests.
 - python-tooling: dependency pins.
-- ml-data: seeded randomness and serialization security.
-- domino-apps: published Domino Apps.
-- domino-agents: agents built and evaluated on Domino.
+- ml-data: seeded randomness, serialization security.
+- domino-apps: Apps published on Domino.
+- domino-agents: agent services on Domino.

@@ -22,10 +22,10 @@ A Launcher is a web form that fills a command template's `${name}` placeholders 
 ## Bad Example
 
 ```python
-import os
 import sys
+from datetime import date
 
-start = os.path.expandvars(sys.argv[1])  # '$START_DATE' arrives literally
+start = date.fromisoformat(sys.argv[1])  # gets the literal '$START_DATE', not a date
 regions = sys.argv[2].split(" ")  # the multi-select is "north,south"
 top_n = int(sys.argv[3])  # "ten" ends in a bare traceback
 ```
@@ -42,9 +42,12 @@ REGIONS = frozenset({"north", "south", "east", "west"})
 
 def region_list(raw: str) -> list[str]:
     regions = [part.strip() for part in raw.split(",") if part.strip()]
+    allowed = ", ".join(sorted(REGIONS))
+    if not regions:
+        raise argparse.ArgumentTypeError(f"expected one or more of {allowed}, got {raw!r}")
     unknown = sorted(set(regions) - REGIONS)
-    if not regions or unknown:
-        raise argparse.ArgumentTypeError(f"unknown regions {unknown} in {raw!r}")
+    if unknown:
+        raise argparse.ArgumentTypeError(f"unknown regions {unknown}; expected {allowed}")
     return regions
 
 

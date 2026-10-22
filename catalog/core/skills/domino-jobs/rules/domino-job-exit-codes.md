@@ -44,19 +44,23 @@ import argparse
 import logging
 import sys
 from collections.abc import Sequence
+from enum import IntEnum
 
 logger = logging.getLogger(__name__)
-EXIT_OK = 0
-EXIT_BAD_INPUT = 2
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+class ExitCode(IntEnum):
+    OK = 0
+    BAD_INPUT = 2
+
+
+def main(argv: Sequence[str] | None = None) -> ExitCode:
     args = build_parser().parse_args(argv)  # argparse exits 2 on a bad flag
     if not args.snapshot.is_dir():
         logger.error("snapshot %s does not exist", args.snapshot)
-        return EXIT_BAD_INPUT
+        return ExitCode.BAD_INPUT
     write_scores(args.snapshot, args.output)  # unexpected errors propagate
-    return EXIT_OK  # reached only once the outputs are written
+    return ExitCode.OK  # reached only once the outputs are written
 
 
 if __name__ == "__main__":
@@ -80,7 +84,7 @@ exit "$status"
 
 ## Notes
 
-- An exception left to propagate prints its traceback in the User Output log and ends the process non-zero; `main` is the job's error boundary and logs an unexpected error at most once (python-error-boundaries and python-error-handling, python-coding).
+- An exception left to propagate prints its traceback in the User Output log and ends the process non-zero; `main` is the job's error boundary and logs an unexpected error at most once (`python-error-boundaries` and `python-error-handling`, python-coding skill).
 - The status mapping snippet in the 6.2 job documentation exits before its test runs, so write the mapping yourself as above.
 - Partial success is a failure: when some partitions fail, write the list of failed partitions to a result file and exit non-zero.
 - Validate a model before writing it: a schedule's "Update Domino endpoint" action runs after the job completes, and the 6.2 documentation does not say it waits for success.

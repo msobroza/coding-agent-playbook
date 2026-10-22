@@ -15,7 +15,7 @@ tags: [python, domino, jobs]
 
 # Domino run-scoped writes
 
-Several runs of one job can run at once against the same read-write datasets: a parameter sweep, two overlapping scheduled runs, a retry next to a slow first attempt. Domino does not serialize their writes (its documentation says so of shared storage; the same holds for runs), and a run that is stopped or killed mid-write still has its half-written files synced. Each run therefore writes under a directory keyed by `DOMINO_RUN_ID` or by its partition key, writes every file to a temporary name in the target directory and renames it into place with `os.replace`, and publishes a completion marker or a latest pointer last.
+Several runs of one job can run at once against the same read-write datasets: a parameter sweep, two overlapping scheduled runs, a retry next to a slow first attempt. Domino does not serialize their writes (its documentation says so of shared storage; assume the same for runs, which it does not address), and a run that is stopped or killed mid-write still has its half-written files synced. Each run therefore writes under a directory keyed by `DOMINO_RUN_ID` or by its partition key, writes every file to a temporary name in the target directory and renames it into place with `os.replace`, and publishes a completion marker or a latest pointer last.
 
 ## Bad Example
 

@@ -68,6 +68,6 @@ def train(ctx: JobContext, conn: Connection, *, since: date) -> Model:
 - Snapshot the extract so later runs can pin it (`domino-dataset-snapshots`); `run_dir` keys it by run (`domino-run-scoped-writes`).
 - The documentation advises keeping a result set persisted to project files under 10 GB, so larger extracts go to a dataset (`domino-datasets-for-large-data`).
 - A TrainingSet from the python-domino client is an alternative for versioned data frames.
-- Queries bind their parameters (python-parameterized-queries, python-coding); connection credentials come from environment variables (`domino-secrets-in-env-vars`).
+- Queries bind their parameters (`python-parameterized-queries`, python-coding skill); connection credentials come from environment variables (`domino-secrets-in-env-vars`).
 - Re-extracting the same partition must stay idempotent (`domino-idempotent-jobs`).
 - File I/O passes `encoding="utf-8"` wherever text is written or read.

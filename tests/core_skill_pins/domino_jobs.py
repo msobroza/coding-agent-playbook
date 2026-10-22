@@ -14,11 +14,10 @@ _DOMINO: Final = {"domino_project": True}
 _TAGS: Final = ("python", "domino", "jobs")
 #: The globs both Launcher rules share (mapping-domino-jobs.md).
 _LAUNCHER_GLOBS: Final = ("**/launcher*.py", "**/launcher*.sh", "**/launchers/**/*.py")
-_ENTRY: Final = "entry-points-and-exit-codes"
 
 PINS: Final = CoreSkillPins(
     skill_id="domino-jobs",
-    where="Domino job and Launcher scripts, requirements.txt and .domino* dotfiles",
+    where="Domino Job and Launcher scripts, requirements.txt, environments and dotfiles",
     members=(
         "domino-job-exit-codes",
         "domino-job-entry-point",
@@ -47,7 +46,7 @@ PINS: Final = CoreSkillPins(
             priority=27,
             name="Domino job exit codes",
             tags=_TAGS,
-            section=_ENTRY,
+            section="entry-points-and-exit-codes",
         ),
         "domino-job-entry-point": RulePin(
             applies_if=_DOMINO,
@@ -55,7 +54,7 @@ PINS: Final = CoreSkillPins(
             priority=28,
             name="Domino job entry point",
             tags=_TAGS,
-            section=_ENTRY,
+            section="entry-points-and-exit-codes",
         ),
         "domino-launcher-arguments": RulePin(
             applies_if=_DOMINO,
@@ -63,7 +62,7 @@ PINS: Final = CoreSkillPins(
             priority=29,
             name="Domino Launcher arguments",
             tags=_TAGS,
-            section=_ENTRY,
+            section="entry-points-and-exit-codes",
         ),
         "domino-launcher-uploads": RulePin(
             applies_if=_DOMINO,
@@ -71,7 +70,7 @@ PINS: Final = CoreSkillPins(
             priority=30,
             name="Domino Launcher uploads",
             tags=_TAGS,
-            section=_ENTRY,
+            section="entry-points-and-exit-codes",
         ),
         "domino-datasets-for-large-data": RulePin(
             applies_if=_DOMINO,

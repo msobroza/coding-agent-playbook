@@ -22,7 +22,7 @@ Domino runs a job's command in a fresh container with no terminal, whether the U
 ## Bad Example
 
 ```python
-# jobs/train.py, also scheduled as train.ipynb
+# jobs/train.py
 import sys
 
 SNAPSHOT = sys.argv[1]  # positional, read at import time
@@ -69,7 +69,7 @@ def test_dry_run_trains_without_saving(tmp_path: Path) -> None:
 
 ## Notes
 
-- `main` builds the settings, the job context and the clients once and passes them down (arch-composition-root, python-architecture).
+- `main` builds the settings, the job context and the clients once and passes them down (`arch-composition-root`, python-architecture skill).
 - The command runs from the working directory (`/mnt` in DFS projects, the code checkout in Git-based ones), so paths in the command are relative to the repo root.
 - The same command line must work from every launch surface; keep defaults in the parser, not in a schedule's command.
 - A notebook given as the command is executed and saved over itself on every run: keep notebooks for reports, not for job logic.

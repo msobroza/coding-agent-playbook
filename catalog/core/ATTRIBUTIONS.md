@@ -40,8 +40,8 @@ not reproduced, and the facts are restated in the engine's own words. The
 use its facts or why it was dropped; a distilled source has no pin and no
 license copy.
 
-The domino-jobs skill distills facts from the Domino Data Lab 6.2 user guide
-and its python-domino API guide in the same way: credited by name only, no
+The domino-jobs skill distills facts from the Domino Data Lab 6.2 user guide,
+admin guide and python-domino API guide in the same way: credited by name only, no
 sentences, code or shell snippets copied, its files listed under
 "Engine-written files" and its pages recorded in the `domino-docs` section.
 
@@ -247,7 +247,7 @@ uses gain its files in their row.
 | `user_guide/ccaee6` | `SKILL.md` | Facts restated in the Quick Reference: the Git-based layout (/mnt/code, /mnt/data, /mnt/artifacts). |
 | `user_guide/910370` | `SKILL.md`, `rules/domino-datasets-for-large-data.md` | Facts restated: a Git-based job syncs only artifacts back and pushes no code; Git LFS is not supported. |
 | `user_guide/55fc89` | `SKILL.md` | Facts restated in the Quick Reference: the variables that tell the project type and a Flow task apart. |
-| `user_guide/af97b7` | `rules/domino-job-exit-codes.md` | Facts restated: every non-zero exit fails the job; 'Publish after complete' republishes only after success. Not reproduced: the status mapping shell snippet (it exits before its test). Not used: tagging, renaming, stopping from the Active tab, volume sizing, tier grouping and cluster attachment (UI-only). |
+| `user_guide/af97b7` | `rules/domino-job-exit-codes.md`, `rules/domino-job-entry-point.md`, `rules/domino-dataset-snapshots.md` | Facts restated: every non-zero exit fails the job; 'Publish after complete' republishes only after success; the command is a file name plus arguments, and the CLI's raw shell command mode bypasses the script; a job can take dataset snapshots at completion when AllowDatasetSnapshotsOnExecutionCompletion is enabled. Not reproduced: the status mapping shell snippet (it exits before its test). Not used: tagging, renaming, stopping from the Active tab, volume sizing, tier grouping and cluster attachment (UI-only). |
 | `user_guide/b4cb04` | `rules/domino-job-exit-codes.md`, `rules/domino-datasets-for-large-data.md`, `rules/domino-run-scoped-writes.md` | Facts restated: Failed versus Error; Preparing copies project files; Stopping still syncs new and changed files. |
 | `user_guide/5dce1f` | `rules/domino-job-exit-codes.md`, `rules/domino-run-scoped-writes.md` | Facts restated: 'Update Domino endpoint' runs after completion with success unstated; without 'Run sequentially' runs overlap. |
 | `user_guide/5b84c5` | `rules/domino-job-exit-codes.md` | Fact restated: failure emails are sent by default. |
