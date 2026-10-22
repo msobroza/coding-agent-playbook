@@ -30,6 +30,12 @@ credited by name only. No sentences or examples from the article are copied;
 the ideas are restated in the engine's own words as general clean-code
 principles.
 
+The domino-agents rules distill facts from the Domino Data Lab 6.2
+documentation (the agentic-systems, python-domino, App and environment
+variable pages) and ideas from the simple_agent_api_only example agent by
+Domino Data Lab (Apache-2.0); both are credited by name only. No sentences
+or code are copied: each rule is written in the engine's own words.
+
 ## python-best-practices
 
 Source: the "python-best-practices" agent skills by Ludo Technologies LLC, tag v0.8.0.
@@ -176,6 +182,13 @@ that comes to hold vendored text moves from here into its source's table.
 ### design-patterns
 
 ### domino-agents
+
+- `SKILL.md`
+- `rules/a2a-agent-card.md`
+- `rules/a2a-client-deadlines.md`
+- `rules/a2a-mount-lifespan.md`
+- `rules/domino-agent-fake-domino-tests.md`
+- `rules/domino-agent-fake-llm-tests.md`
 
 ### domino-apps
 

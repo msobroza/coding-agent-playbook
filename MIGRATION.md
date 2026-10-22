@@ -1019,7 +1019,7 @@ globs: ["src/risk/**/*.py"]
 
 Without it, `playbook validate` and `playbook sync` stop with:
 
-    scope 'scoped' needs a skill: put the file in that skill's rules/ directory (skills/<skill-id>/rules/), or add 'skill: <skill-id>' when the skill comes from another layer; known skills: ml-data, python-coding, python-testing, python-tooling, web-application
+    scope 'scoped' needs a skill: put the file in that skill's rules/ directory (skills/<skill-id>/rules/), or add 'skill: <skill-id>' when the skill comes from another layer; known skills: domino-agents, ml-data, python-coding, python-testing, python-tooling, web-application
 
 The list names every skill that can take rules after your layers are merged, so
 a skill of your own joins it. When the rule overrides a rule in core by id, the

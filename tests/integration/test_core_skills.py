@@ -29,6 +29,8 @@ from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.config.files import FileSystemStateSource
+from coding_agent_playbook.detector.facts import detect
+from coding_agent_playbook.detector.predicate import evaluate_predicate
 from coding_agent_playbook.hooks.guardrails_skill import (
     GUARDRAILS_SKILL_ID,
     compose_guardrails_skill,
@@ -46,7 +48,12 @@ from tests._core_skill_layout import (
     nesting_problems,
     plain_markdown_problems,
 )
-from tests.core_skill_pins import ALL_PINS, PLAIN_CORE_SKILL_IDS, CoreSkillPins
+from tests.core_skill_pins import (
+    ALL_PINS,
+    PLAIN_CORE_SKILL_IDS,
+    PLATFORM_SKILL_IDS,
+    CoreSkillPins,
+)
 from tests.hook_runtime.handlers.pack_repo import engine_hook, engine_hook_paths
 from tests.hook_samples import resolved_hook
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
@@ -70,6 +77,8 @@ MEMBERSHIP_FROM_PINS: Final[Mapping[str, str]] = {
 #: Core skill with member rules -> its ``playbook.files`` phrase in "Where guidance lives".
 WHERE_FROM_PINS: Final[Mapping[str, str]] = {pins.skill_id: pins.where for pins in ALL_PINS}
 CORE_SKILLS: Final = sorted(PINS_BY_SKILL)
+#: Core skills the reference probe emits: every one not gated on a platform (prU D63).
+REFERENCE_PROBE_SKILLS: Final = sorted(set(CORE_SKILLS) - PLATFORM_SKILL_IDS)
 #: Core members whose gate the reference probe fails (spec 9.6.2).
 PROBE_INACTIVE_MEMBERS: Final = frozenset().union(*(pins.probe_inactive for pins in ALL_PINS))
 EVERY_CORE_SKILL: Final = sorted({*CORE_SKILLS, *PLAIN_CORE_SKILL_IDS})
@@ -369,11 +378,37 @@ def test_pins_modules_cover_exactly_the_core_skills_with_a_playbook_block() -> N
     assert core_rule_skill_ids() == CORE_SKILLS, "one tests/core_skill_pins module per such skill"
 
 
-@pytest.mark.parametrize("skill_id", CORE_SKILLS)
+@pytest.mark.parametrize("skill_id", REFERENCE_PROBE_SKILLS)
 def test_reference_probe_emits_each_core_skill_within_budget(
     reference_probe_repo: Path, skill_id: str
 ) -> None:
-    frontmatter, body = split_frontmatter(_probe_skill_md(reference_probe_repo, skill_id))
+    _assert_emitted_within_budget(reference_probe_repo, skill_id, _probe_members(skill_id))
+
+
+def test_reference_probe_emits_no_platform_skill(reference_probe_repo: Path) -> None:
+    """prU D63: a skill gated on a platform's fact stays out of a repo without its markers."""
+    emitted = {path.name for path in (reference_probe_repo / ".claude" / "skills").iterdir()}
+    assert not emitted & PLATFORM_SKILL_IDS
+
+
+@pytest.mark.parametrize("skill_id", sorted(PLATFORM_SKILL_IDS))
+def test_domino_probe_emits_each_platform_skill_within_budget(
+    domino_probe_repo: Path, skill_id: str
+) -> None:
+    """The Domino probe (prU D59) activates the members whose gates its facts pass."""
+    facts = detect(domino_probe_repo)
+    members = [
+        rule
+        for rule in _members(skill_id)
+        if evaluate_predicate(rule.frontmatter.applies_if, facts, repo_root=domino_probe_repo)
+    ]
+    assert members, f"the Domino probe activates no member of {skill_id}"
+    _assert_emitted_within_budget(domino_probe_repo, skill_id, members)
+
+
+def _assert_emitted_within_budget(repo: Path, skill_id: str, members: list[Rule]) -> None:
+    """``repo`` emits ``skill_id`` with a capped, composed description and one index line per member."""
+    frontmatter, body = split_frontmatter(_probe_skill_md(repo, skill_id))
     authored = _authored(skill_id)[0]
     block = authored["playbook"]
     assert isinstance(block, dict)
@@ -386,7 +421,6 @@ def test_reference_probe_emits_each_core_skill_within_budget(
     assert description.endswith(f"Use when {block['use_when']}.")
     assert description.count(" Use when ") == 1
     assert not _TRUNCATION_TAIL.search(description), f"{skill_id} truncates: {description!r}"
-    members = _probe_members(skill_id)
     if block.get("sections"):
         # A sectioned skill's Covers clause names its active sections, not its members (D17).
         covers = description.partition(" Covers ")[2].partition(". Use when ")[0].lower()
@@ -411,7 +445,8 @@ def test_reference_probe_where_section_lists_every_core_skill(reference_probe_re
     for relative in ("AGENTS.md", CLAUDE_RULES_PATH):
         text = (reference_probe_repo / relative).read_text(encoding="utf-8")
         assert text.count("## Where guidance lives") == 1, relative
-        for skill_id, files in WHERE_FROM_PINS.items():
+        for skill_id in REFERENCE_PROBE_SKILLS:
+            files = WHERE_FROM_PINS[skill_id]
             assert f"- {files}: skill `{skill_id}`" in text, f"{relative} lacks {skill_id}"
         assert "Lint feedback names a rule id" in text, relative
 
