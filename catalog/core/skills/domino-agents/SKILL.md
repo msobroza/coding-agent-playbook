@@ -41,6 +41,15 @@ playbook:
       impact: MEDIUM
       summary: "Fakes for the model, the token endpoint and the Domino SDK, so the suite runs without Domino or a live LLM."
       open_when: "A test exercises the agent, its routes, the token provider, the tracer or an evaluation Job without Domino or a real model."
+  references:
+    - path: references/agent-lifecycle.md
+      open_when: "Planning where agent code runs (workspace, Job, scheduled Job or deployed agent) or which SDK name a Domino release uses."
+      applies_if:
+        domino_project: true
+    - path: references/auth-by-call.md
+      open_when: "Code calls an LLM provider, a Domino-hosted model, another App or agent, or the Domino API, and the right credential is unclear."
+      applies_if:
+        domino_project: true
 ---
 
 # Domino agents
