@@ -9,9 +9,11 @@ every core scoped rule, rendered as sync renders it with the reference-probe fac
 ``ml-serialization-security``, and the NumPy and pandas sections and the torch and
 scikit-learn seeding lines of the four array and data-frame members (spec 9.15,
 12.3); the sanity test below pins each one. The probe declares no
-``transformers``, so the Hugging Face section of ``ml-serialization-security`` is
-not rendered and the bound does not measure it, and no ``polars``, so
-``tests/unit/test_ml_data_rules.py`` bounds the four members' polars form.
+``transformers`` and no ``polars``, and pins one Python, so the bound is also
+applied over the fact matrix (prU D40, ``tests/_budget_probe.py``
+:func:`~tests._budget_probe.fact_matrix`): Python 3.10 to 3.13 crossed with every
+on/off combination of the libraries a rule's template tests, each distinct
+rendering measured once.
 """
 
 from __future__ import annotations
@@ -20,7 +22,7 @@ from typing import TYPE_CHECKING, Final
 
 import pytest
 
-from tests._budget_probe import reference_probe_facts, render_core_rule
+from tests._budget_probe import distinct_renderings, reference_probe_facts, render_core_rule
 from tests._catalog import core_rules
 
 if TYPE_CHECKING:
@@ -80,6 +82,14 @@ def assert_fits_one_reference_read(rule_id: str, body: str, rendered_with: str) 
 def test_core_scoped_rule_fits_one_reference_read(rule_id: str, probe_facts: Facts) -> None:
     body = render_core_rule(rule_id, probe_facts)
     assert_fits_one_reference_read(rule_id, body, "the reference-probe facts")
+
+
+@pytest.mark.parametrize("rule_id", SCOPED_CORE_RULE_IDS)
+def test_every_distinct_rendering_of_a_core_scoped_rule_fits_one_reference_read(
+    rule_id: str,
+) -> None:
+    for body, facts in distinct_renderings(core_rules()[rule_id]).items():
+        assert_fits_one_reference_read(rule_id, body, f"the fact-matrix facts {facts}")
 
 
 @pytest.mark.parametrize(("rule_id", "marker"), LONG_BRANCH_MARKERS)
