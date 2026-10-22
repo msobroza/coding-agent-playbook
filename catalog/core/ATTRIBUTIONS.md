@@ -42,6 +42,17 @@ not reproduced, and the facts are restated in the engine's own words. The
 use its facts or why it was dropped; a distilled source has no pin and no
 license copy.
 
+The python-documentation skill (its SKILL.md and every rule under its rules/
+directory, listed under "Engine-written files") distills ideas from the
+matforge article on documentation best practices for scientific Python
+packages and its companion practical guide to research software
+documentation, which carry no open license; they are credited by name only
+and not vendored. No sentences or examples from them are copied. The
+four-kinds model of user documentation those articles follow, Diataxis, is
+credited here by name, with no text taken from it. The `matforge` section
+below records, per article section, the files that use its ideas or why it
+was dropped.
+
 ## python-best-practices
 
 Source: the "python-best-practices" agent skills by Ludo Technologies LLC, tag v0.8.0.
@@ -237,6 +248,33 @@ uses gain its files in their row.
 | `user_guide/ccaee6` | DROP | The Git-based /mnt layout is domino-jobs' shared basics. |
 | `support_kb/docs-lifecycle` | DROP | Docs lifecycle and the client compatibility matrix: provenance facts, not rule text. |
 
+## matforge
+
+Source: the matforge article on documentation best practices for scientific Python packages and its companion practical guide, cited by article and section.
+Form: distilled (credited by name only, not vendored; no open license).
+
+Each row names the files that restate a section's ideas in the engine's own
+words; those files stay under "Engine-written files". Sections a later lane
+uses gain its files in their row.
+
+### python-documentation
+
+| Upstream file | Core files | Changes |
+| --- | --- | --- |
+| `documentation-best-practices-scientific-python-packages (structure: the four types)` | `rules/docs-page-kinds.md` | Ideas restated: tutorial, how-to guide, reference and explanation, each kept in its own place. |
+| `research-software-documentation-practical-guide-scientists (structure)` | `rules/docs-page-kinds.md` | Ideas restated: do not cram every kind into the README; ask who reads and what they need. |
+| `documentation-best-practices-scientific-python-packages (toolchain: Sphinx)` | `rules/sphinx-api-reference.md` | Ideas restated: autodoc extracts the API from docstrings, napoleon reads the docstring styles, roles catch renames. |
+| `documentation-best-practices-scientific-python-packages (structure: reference)` | `rules/sphinx-api-reference.md` | Idea restated: reference is complete, exact and built from docstrings. |
+| `research-software-documentation-practical-guide-scientists (toolchain)` | `rules/mkdocs-api-reference.md` | Context only: MkDocs as the simple Markdown-site option; the plugin specifics are engine-written. |
+| `documentation-best-practices-scientific-python-packages (docs-as-code)` | `rules/docs-check-in-ci.md`, `rules/sphinx-docs-build.md`, `rules/mkdocs-docs-build.md` | Ideas restated: docs get the quality bar of code, are built and checked on every push, and a broken link is a bug. |
+| `documentation-best-practices-scientific-python-packages (workflow: CI)` | `rules/docs-check-in-ci.md`, `rules/sphinx-docs-build.md`, `rules/mkdocs-docs-build.md` | Ideas restated: build and check the docs in CI and check links; the repo's own command replaces the article's sample. |
+| `documentation-best-practices-scientific-python-packages (toolchain: Sphinx setup)` | DROP | sphinx-quickstart, the theme, the hosting service, versioned hosting and the math extension are imposed tools or hosting setup (D67, D10); the Sphinx rules follow conf.py as it is. |
+| `documentation-best-practices-scientific-python-packages (workflow: pre-commit config)` | DROP | Its example names a hook repository that could not be confirmed to exist, and markdownlint or doc8 would be imposed tools (D46.5); the docs check runs them only where their config exists. |
+| `documentation-best-practices-scientific-python-packages (workflow: CI sample)` | DROP | The sample workflow pins an outdated checkout action, installs with pip (D29) and deploys to a docs host; the rules run the repo's own command instead. |
+| `research-software-documentation-practical-guide-scientists (toolchain: Doxygen)` | DROP | C and C++ and mixed-language docs are outside Python repos. |
+| `engine: docs-practices section 4 (docs-cross-references)` | DROP | Folded into the Notes of sphinx-api-reference and mkdocs-api-reference (roles, intersphinx, autorefs) instead of a separate rule. |
+| `engine: docs-practices section 4 (sphinx-docs-config, mkdocs-docs-config)` | DROP | Their points are split between the two API-reference rules and the two build rules; separate config rules would repeat them. |
+
 ## Engine-written files
 
 Files written for the engine with no upstream text, per core skill. A file
@@ -282,6 +320,14 @@ that comes to hold vendored text moves from here into its source's table.
 - `rules/python-small-units.md`
 
 ### python-documentation
+
+- `SKILL.md`
+- `rules/docs-page-kinds.md`
+- `rules/sphinx-api-reference.md`
+- `rules/mkdocs-api-reference.md`
+- `rules/docs-check-in-ci.md`
+- `rules/sphinx-docs-build.md`
+- `rules/mkdocs-docs-build.md`
 
 ### python-testing
 

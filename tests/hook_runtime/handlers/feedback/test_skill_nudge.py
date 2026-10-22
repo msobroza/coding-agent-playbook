@@ -203,9 +203,18 @@ def test_notebook_edit_names_ml_data(
 def test_file_matching_no_skill_is_silent(
     repo: PackRepo, deps: Callable[..., RuntimeDeps], state: Path
 ) -> None:
-    report = edit(repo, deps(), "README.md", state=state)
+    report = edit(repo, deps(), "notes.txt", state=state)
 
     assert report.trace.combined.decision is Decision.NONE
+
+
+def test_readme_edit_nudges_python_documentation(
+    repo: PackRepo, deps: Callable[..., RuntimeDeps], state: Path
+) -> None:
+    """prU D53: the docs check rule's ``README*`` glob puts the README under the docs skill."""
+    report = edit(repo, deps(), "README.md", state=state)
+
+    assert context(report) == [_line("python-documentation")]
 
 
 def test_out_of_repo_path_is_silent(
@@ -334,7 +343,8 @@ def test_sync_derives_the_glob_table_from_the_rendered_member_rules(
     """Only rules that pass ``applies_if`` reach the table: no pytest, no FastAPI, no ML here.
 
     python-tooling still appears, with the globs of its one ungated member,
-    python-static-checks (Python files plus the ruff and mypy config files).
+    python-static-checks (Python files plus the ruff and mypy config files), and
+    python-documentation with its ungated page-kinds and docs-check rules' globs.
     """
     (tmp_path / "repo").mkdir()
     repo = make_synthetic_repo(tmp_path / "repo", config_text=CONFIG + "[hooks]\nenabled = true\n")
@@ -348,6 +358,7 @@ def test_sync_derives_the_glob_table_from_the_rendered_member_rules(
     assert config == {
         "skills": [
             {"id": "python-coding", "globs": ["**/*.py"]},
+            {"id": "python-documentation", "globs": ["docs/**", "README*", "*.rst"]},
             {"id": "python-tooling", "globs": static_checks},
         ]
     }
