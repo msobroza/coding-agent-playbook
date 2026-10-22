@@ -5,7 +5,7 @@ Tooling that implements the prU tickets with coding agents, on one or two machin
 | File | Role |
 | --- | --- |
 | `prU-runner.js` | The workflow script. It runs a list of tickets in dependency order. Each ticket is implemented, reviewed by the code-review skill's two sub-agents, fixed, then squash-merged into `integration/core-python-skills` with a light gate. With `fullGate`, it runs the chunked full suite instead. |
-| `plan.py` | Builds the runner's arguments and reports ticket status, from `tickets.md`, `ticket-issues.json`, `assignment.json` and the commits on `origin`. |
+| `plan.py` | Builds the runner's arguments and reports ticket status, from `tickets.md`, `ticket-issues.json`, `assignment.json` and the commits on `origin`. It reads those files from `origin/integration/core-python-skills`, so a reassignment pushed by either machine applies on the next `plan.py` call without pulling (`--local` reads this checkout instead, to try an edit before pushing it). Each ticket gets a priority: the number of unfinished tickets that wait on it, on either machine. |
 | `assignment.json` | Which machine owns which ticket. Never run a ticket on both machines. |
 | `ticket-issues.json` | Ticket id to GitHub issue number, and the tracker issue. |
 | `tools/overlay-venv.sh` | A pip-less test interpreter per worktree (see "Test interpreters" in the runbook). |
@@ -28,11 +28,11 @@ Then start the Workflow tool with `scriptPath` set to the absolute path of `prU-
 When the run returns:
 
 - **`integrated`**: done. Refresh the tracker: fetch its body with `gh issue view 176 --repo msobroza/coding-agent-playbook --json body -q .body > now.md`, run `plan.py tracker-body --current now.md > new.md`, then `gh issue edit --repo msobroza/coding-agent-playbook 176 --body-file new.md`. Keep `--repo` first: the allow rules match the command's beginning. This is idempotent, so either machine can run it.
-- **`blocked`**: the ticket waits for a ticket of the other machine. Poll `plan.py status --machine B` every 15 minutes and start a new run when tickets become ready.
+- **`blocked`**: the ticket waits for a ticket of the other machine. Poll `plan.py status --machine B` every 5 minutes and start a new run as soon as tickets become ready.
 - **`failed`**: read the run's journal, then fix the ticket by hand or rerun it with `plan.py args --only <id>`.
 - **Cleanup**: run `plan.py cleanup` (a dry run), then `plan.py cleanup --apply`, only when no run is active on this machine; right after a run ends, add `--idle-minutes 0`. Changes that already exist in a pushed commit count as nothing to lose: an implementer's worktree shows them when the fix agent pushes the ticket from elsewhere.
 
-`--parallel` is the number of tickets in flight at once. Use 2 on an 8 GB machine, and 6–8 with 32 GB of RAM and 10 or more cores. The workflow itself runs at most min(16, cores - 2) agents at once.
+The runner gives free slots, and the integration lock, to the ready ticket with the highest priority, so the chain that unblocks the most work never queues behind a leaf ticket. `--parallel` is the number of tickets in flight at once. Use 2 on an 8 GB machine, and 6–8 with 32 GB of RAM and 10 or more cores. The workflow itself runs at most min(16, cores - 2) agents at once.
 
 ## The last steps (machine A)
 

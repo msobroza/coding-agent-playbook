@@ -10,7 +10,10 @@ Stdlib only, Python 3.10+. Run from the repository root:
         --scratch /abs/scratch --shared-venv /abs/venv > /abs/scratch/args.json
     python3 specs/prU-core-python-skills/runner/plan.py args --full-gate ... > args.json
     python3 specs/prU-core-python-skills/runner/plan.py tracker-body --current now.md > new.md
-    python3 specs/prU-core-python-skills/runner/plan.py cleanup [--apply]
+    python3 specs/prU-core-python-skills/runner/plan.py cleanup [--apply] [--idle-minutes 0]
+
+The spec files are read from origin's integration branch, so a pushed reassignment
+applies on both machines at once; --local reads this checkout instead.
 """
 
 from __future__ import annotations
@@ -25,7 +28,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-TICKETS_MD = HERE.parent / "tickets.md"
+REPO_ROOT = HERE.parents[2]
+SPEC_DIR = "specs/prU-core-python-skills"
 BASE = "integration/core-python-skills"
 ID = r"(?:L0|C|D|F)-[\w-]+"
 GIT_TIMEOUT_S = 120
@@ -43,6 +47,7 @@ class Ticket:
     pushed: bool = False
     machine: str = ""
     blocked_by: list[str] = field(default_factory=list)
+    priority: int = 0
 
 
 def git(*args: str) -> str:
@@ -114,7 +119,6 @@ def assign(tickets: dict[str, Ticket], assignment: dict) -> None:
 
 def load_state(tickets: dict[str, Ticket], assignment: dict) -> None:
     """Mark integrated and pushed tickets from origin; compute what blocks the rest."""
-    git("fetch", "-q", "origin", BASE)
     subjects = git("log", "--format=%s", f"origin/{BASE}")
     merged = {int(n) for n in re.findall(r"\(#(\d+)\)\s*$", subjects, re.M)}
     heads = git("ls-remote", "origin", "refs/heads/ticket/*")
@@ -126,12 +130,46 @@ def load_state(tickets: dict[str, Ticket], assignment: dict) -> None:
         t.blocked_by = [d for d in t.deps if not tickets[d].integrated]
 
 
+def set_priorities(tickets: dict[str, Ticket]) -> None:
+    """Priority = how many unfinished tickets wait on a ticket, directly or not.
+
+    The runner starts and integrates the highest first, so the chain that unblocks the
+    most work (the other machine's included) never queues behind a leaf ticket.
+    """
+    children: dict[str, set[str]] = {tid: set() for tid in tickets}
+    for t in tickets.values():
+        for dep in t.deps:
+            children[dep].add(t.id)
+    below: dict[str, set[str]] = {}
+
+    def descendants(tid: str) -> set[str]:
+        if tid not in below:
+            below[tid] = set().union(*({c} | descendants(c) for c in children[tid]))
+        return below[tid]
+
+    for t in tickets.values():
+        t.priority = sum(1 for d in descendants(t.id) if not tickets[d].integrated)
+
+
+def read_spec(rel: str, local: bool) -> str:
+    """A prU spec file from origin's integration branch (or this checkout with --local).
+
+    Reading origin means a reassignment pushed by either machine applies at once,
+    without pulling.
+    """
+    if local:
+        return (REPO_ROOT / SPEC_DIR / rel).read_text(encoding="utf-8")
+    return git("show", f"origin/{BASE}:{SPEC_DIR}/{rel}")
+
+
 def load(args: argparse.Namespace) -> tuple[dict[str, Ticket], dict, dict]:
-    meta = json.loads((HERE / "ticket-issues.json").read_text(encoding="utf-8"))
-    assignment = json.loads((HERE / "assignment.json").read_text(encoding="utf-8"))
-    tickets = parse_tickets(TICKETS_MD.read_text(encoding="utf-8"), meta["issues"])
+    git("fetch", "-q", "origin", BASE)
+    meta = json.loads(read_spec("runner/ticket-issues.json", args.local))
+    assignment = json.loads(read_spec("runner/assignment.json", args.local))
+    tickets = parse_tickets(read_spec("tickets.md", args.local), meta["issues"])
     assign(tickets, assignment)
     load_state(tickets, assignment)
+    set_priorities(tickets)
     return tickets, assignment, meta
 
 
@@ -148,7 +186,8 @@ def cmd_status(args: argparse.Namespace) -> int:
         for t in sorted(group, key=lambda t: t.id):
             extra = f" waits for {', '.join(t.blocked_by)}" if state == "waiting" else ""
             flag = " [branch pushed]" if t.pushed else ""
-            print(f"  {t.id:28} #{t.issue:<4} machine {t.machine or '-'}{flag}{extra}")
+            head = f"  {t.id:28} #{t.issue:<4} machine {t.machine or '-'} priority {t.priority:<3}"
+            print(f"{head}{flag}{extra}")
     return 0
 
 
@@ -212,6 +251,7 @@ def cmd_args(args: argparse.Namespace) -> int:
                 "title": t.title,
                 "deps": t.deps,
                 "existingBranch": t.pushed,
+                "priority": t.priority,
             }
             for t in sorted(chosen, key=lambda t: t.id)
         ],
@@ -292,9 +332,13 @@ def cmd_cleanup(args: argparse.Namespace) -> int:
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = parser.add_subparsers(dest="cmd", required=True)
-    status = sub.add_parser("status")
+    shared = argparse.ArgumentParser(add_help=False)
+    shared.add_argument(
+        "--local", action="store_true", help="read the spec files from this checkout, not origin"
+    )
+    status = sub.add_parser("status", parents=[shared])
     status.add_argument("--machine")
-    gen = sub.add_parser("args")
+    gen = sub.add_parser("args", parents=[shared])
     gen.add_argument("--machine", default="")
     gen.add_argument("--only", help="comma-separated ticket ids instead of the machine's share")
     gen.add_argument("--parallel", type=int, default=3)
@@ -302,7 +346,7 @@ def main(argv: list[str]) -> int:
     gen.add_argument("--shared-venv", required=True, help="absolute path of the shared venv")
     gen.add_argument("--skills-dir", help="dir holding implement/ and code-review/ SKILL.md")
     gen.add_argument("--full-gate", action="store_true", help="no tickets: run the full suite")
-    tracker = sub.add_parser("tracker-body")
+    tracker = sub.add_parser("tracker-body", parents=[shared])
     tracker.add_argument("--current", required=True)
     clean = sub.add_parser("cleanup")
     clean.add_argument("--apply", action="store_true")

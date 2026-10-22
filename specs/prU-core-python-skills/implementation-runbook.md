@@ -87,7 +87,9 @@ The `Closes #N` lines close each issue only when the final PR merges into `main`
 Two machines can implement tickets at the same time, each on its own share. `runner/assignment.json` gives each ticket to machine A or B (content tickets by skill lane), and each machine runs only its own share. Only the `web-application`, `python-testing` and `python-architecture` content tickets depend on another lane, so they stay together on one machine; the other machine's tickets then wait only for engine tickets.
 
 - Each machine integrates its own tickets into the one integration branch, with fast-forward pushes; the integrator rebases and retries when the other machine pushed first.
-- A ticket that waits for one of the other machine's tickets comes back as `blocked`; poll `plan.py status --machine <M>` and start a new run once it is ready.
+- A ticket that waits for one of the other machine's tickets comes back as `blocked`; poll `plan.py status --machine <M>` every 5 minutes and start a new run once it is ready.
+- `plan.py` reads `tickets.md` and `assignment.json` from origin, so a pushed reassignment applies to both machines at once. On 2026-10-22 the critical engine chain (L0-07, L0-11 to L0-17) moved to machine B, which runs 6 tickets at once, while machine A kept the tickets it had started.
+- Each ticket's priority is the number of unfinished tickets waiting on it; the runner starts and integrates the highest first.
 - Both machines refresh the tracker with `plan.py tracker-body`, which ticks from the integration branch, so concurrent refreshes converge.
 - Moving work between machines is a commit to `assignment.json`; a ticket never runs on both.
 - Machine A runs the full gate and F-02 at the end.

@@ -25,13 +25,20 @@ const CODE_REVIEW_SKILL = args.skills.codeReview
 const tickets = args.tickets || []
 const DONE = new Set(args.done || [])
 
-// ---- small async primitives (a counting semaphore; a mutex is a semaphore of 1) ----
+// ---- small async primitives: a counting semaphore that hands a freed slot to the
+// waiter with the highest priority (plan.py: how many unfinished tickets wait on this
+// one), first come first served among equals; a mutex is a semaphore of 1 ----
 function semaphore(n) {
   let free = n
+  let arrival = 0
   const waiting = []
   return {
-    acquire: () => new Promise(resolve => { if (free > 0) { free--; resolve() } else waiting.push(resolve) }),
-    release: () => { const next = waiting.shift(); if (next) next(); else free++ },
+    acquire: (priority = 0) => new Promise(resolve => {
+      if (free > 0) { free--; resolve(); return }
+      waiting.push({ priority, order: arrival++, resolve })
+      waiting.sort((a, b) => b.priority - a.priority || a.order - b.order)
+    }),
+    release: () => { const next = waiting.shift(); if (next) next.resolve(); else free++ },
   }
 }
 const slots = semaphore(PAR)
@@ -159,7 +166,7 @@ Never write inside ${W}. Return the structured result (integrated = the gate is 
 
 // ---- one ticket, end to end ----
 async function ticketChain(t) {
-  await slots.acquire()
+  await slots.acquire(t.priority || 0)
   let impl, reviews = [], fix = null
   try {
     impl = await agent(implementPrompt(t), { label: `implement:${t.id}`, phase: 'Implement', agentType: 'general-purpose', effort: 'medium', isolation: 'worktree', schema: IMPL })
@@ -175,7 +182,7 @@ async function ticketChain(t) {
     slots.release()  // integration waits on its own lock, so the next ticket can start implementing
   }
   const sha = (fix && fix.head_sha) || impl.head_sha
-  await integrationLock.acquire()
+  await integrationLock.acquire(t.priority || 0)
   try {
     const integ = await agent(integratePrompt(t, sha), { label: `integrate:${t.id}`, phase: 'Integrate', agentType: 'general-purpose', effort: 'medium', isolation: 'worktree', schema: INTEG })
     const ok = !!(integ && integ.integrated)
@@ -205,7 +212,9 @@ function run(id) {
   return p
 }
 
-const results = await Promise.all(tickets.map(t => run(t.id)))
+// Highest priority first, so the first free slots go to the critical chain.
+const order = [...tickets].sort((a, b) => (b.priority || 0) - (a.priority || 0))
+const results = await Promise.all(order.map(t => run(t.id)))
 let gate = null
 if (args.fullGate) {
   phase('Full gate')

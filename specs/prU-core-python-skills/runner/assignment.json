@@ -1,23 +1,61 @@
 {
  "about": "Which machine implements which prU ticket. Lanes are content skills (C-<lane>-NN, -refs, -example); explicit ticket ids win over lanes. Only content tickets of web-application, python-testing and python-architecture depend on another lane, so they stay on one machine. Edit this file (and commit it) to move work between machines; never run a ticket on both.",
- "integrated_without_squash": ["L0-00"],
- "orchestrator_only": ["F-02"],
+ "integrated_without_squash": [
+  "L0-00"
+ ],
+ "orchestrator_only": [
+  "F-02"
+ ],
  "machines": {
   "A": {
-   "about": "the first machine (M1, 8 GB): the engine chain, docs, F-01 and the cross-lane content cluster",
+   "about": "the first machine (M1, 8 GB): the tickets it had started (L0-05..L0-10, L0-18, L0-20, L0-22, L0-23), docs, F-01 and the cross-lane content cluster",
    "tickets": [
-    "L0-05", "L0-06", "L0-07", "L0-08", "L0-09", "L0-10", "L0-11", "L0-12", "L0-13", "L0-14",
-    "L0-15", "L0-16", "L0-17", "L0-18", "L0-20", "L0-22", "L0-23",
-    "D-01", "D-02", "D-03", "D-04", "F-01"
+    "L0-05",
+    "L0-06",
+    "L0-08",
+    "L0-09",
+    "L0-10",
+    "L0-18",
+    "L0-20",
+    "L0-22",
+    "L0-23",
+    "D-01",
+    "D-02",
+    "D-03",
+    "D-04",
+    "F-01"
    ],
-   "lanes": ["python-coding", "python-tooling", "web-application", "python-testing", "python-architecture"]
+   "lanes": [
+    "python-coding",
+    "python-tooling",
+    "web-application",
+    "python-testing",
+    "python-architecture"
+   ]
   },
   "B": {
-   "about": "the second, larger machine: the independent content lanes (they start once L0-15 and L0-16 are integrated) and L0-24, ready now",
-   "tickets": ["L0-24", "C-frameworks-layout", "C-prompts-v2"],
+   "about": "the second, larger machine: the critical engine chain from L0-07 to L0-15/L0-16 (moved from A on 2026-10-22, owner's request, so the chain runs 6 at a time), L0-24 and the independent content lanes",
+   "tickets": [
+    "C-frameworks-layout",
+    "C-prompts-v2",
+    "L0-07",
+    "L0-11",
+    "L0-12",
+    "L0-13",
+    "L0-14",
+    "L0-15",
+    "L0-16",
+    "L0-17",
+    "L0-24"
+   ],
    "lanes": [
-    "design-patterns", "domino-apps", "domino-jobs", "domino-agents",
-    "ml-data", "python-documentation", "playbook-creator"
+    "design-patterns",
+    "domino-apps",
+    "domino-jobs",
+    "domino-agents",
+    "ml-data",
+    "python-documentation",
+    "playbook-creator"
    ]
   }
  }
