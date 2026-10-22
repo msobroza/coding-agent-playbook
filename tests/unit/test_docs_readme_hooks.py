@@ -1,6 +1,6 @@
-"""Docs-consistency guard: the README documents the lifecycle-hooks release (prK §H Track K11).
+"""Docs-consistency guard: the user docs document the lifecycle-hooks release (prK §H Track K11).
 
-The README is a consumer's first stop, so it must name what PR K shipped: the
+The user docs are a consumer's first stop, so they must name what PR K shipped: the
 pre-commit ids, every lifecycle hook with its tier and where it is enforced,
 the CLI subcommands, the dispatcher in the architecture overview, the caveats
 SPEC §10.3.2 and §10.6 record, the metrics and a ``playbook ci`` job that never
@@ -10,6 +10,9 @@ frontmatter, ``cli.parser._SUBCOMMANDS``, ``CI_STEPS``, the escape-hatch variabl
 the metric families, the OpenCode floor), so a hook, command, step or metric
 that lands undocumented fails here. Prose-only: the tests read markdown and
 parse frontmatter and config snippets; they never run engine behaviour.
+
+Since prU D55 the README is a short user README and its former sections live,
+unchanged, in the ``docs/`` pages of :data:`USER_DOC_PAGES`; the pins read those pages.
 """
 
 from __future__ import annotations
@@ -54,8 +57,20 @@ _HEADING = re.compile(r"^(#{1,6}) ")
 _PR_TITLE_EXPR = "${{ github.event.pull_request.title }}"
 
 
-def _readme() -> str:
-    return (_ROOT / "README.md").read_text(encoding="utf-8")
+#: The pages that hold the README's former sections (prU D55), in reading order.
+USER_DOC_PAGES = (
+    "docs/overview.md",
+    "docs/setup.md",
+    "docs/skills.md",
+    "docs/hooks.md",
+    "docs/checks.md",
+)
+
+
+def _user_docs() -> str:
+    """Every page of :data:`USER_DOC_PAGES`, joined; each page opens with its own ``#`` title."""
+    pages = (_ROOT / page for page in USER_DOC_PAGES)
+    return "\n".join(page.read_text(encoding="utf-8") for page in pages)
 
 
 def _headings(text: str) -> list[tuple[int, int, str]]:
@@ -72,11 +87,11 @@ def _headings(text: str) -> list[tuple[int, int, str]]:
 
 
 def _section(heading: str) -> str:
-    """The README section under the heading line ``heading``, up to the next one of its level or above."""
-    text = _readme()
+    """The user-docs section under the heading line ``heading``, up to the next one of its level or above."""
+    text = _user_docs()
     heads = _headings(text)
     starts = [(offset, level) for offset, level, line in heads if line == heading]
-    assert starts, f"README has no {heading!r} heading"
+    assert starts, f"the user docs have no {heading!r} heading"
     start, level = starts[0]
     end = next((at for at, lvl, _ in heads if at > start and lvl <= level), len(text))
     return text[start:end]
@@ -121,7 +136,7 @@ def _enforced_on(hook: HookFrontmatter) -> str:
 
 
 def test_readme_separates_precommit_and_lifecycle_hooks() -> None:
-    lines = [line for _, _, line in _headings(_readme())]
+    lines = [line for _, _, line in _headings(_user_docs())]
     assert "### Pre-commit hooks" in lines
     assert _LIFECYCLE in lines
     assert "### Hooks" not in lines
@@ -240,7 +255,7 @@ def _parse_policy(document: dict[str, Any]) -> set[str]:
 
 def test_readme_policy_snippets_parse_with_the_engine_parsers() -> None:
     seen: set[str] = set()
-    for block in _blocks(_readme(), "toml"):
+    for block in _blocks(_user_docs(), "toml"):
         seen |= _parse_policy(tomllib.loads(block))
     assert seen == {"hooks", "guardrails", "metrics"}
 

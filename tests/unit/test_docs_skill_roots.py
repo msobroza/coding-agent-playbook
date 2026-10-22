@@ -15,7 +15,7 @@ from pathlib import Path
 
 from coding_agent_playbook.commands._init_adapters import DEFAULT_ADAPTERS
 from tests.unit.test_docs_lifecycle_hooks_spec import _spec_section
-from tests.unit.test_docs_readme_hooks import _readme, _section
+from tests.unit.test_docs_readme_hooks import _section, _user_docs
 
 _ROOT = Path(__file__).resolve().parents[2]
 _INIT_DEFAULT_MARKER = "# the init default"
@@ -46,8 +46,8 @@ def test_spec_10_8_names_the_shared_root_and_its_retired_location() -> None:
 
 def test_documented_init_default_matches_the_code() -> None:
     spec = (_ROOT / "SPEC.md").read_text(encoding="utf-8")
-    documented = [*_marked_init_defaults(spec), *_marked_init_defaults(_readme())]
-    assert len(documented) >= 3, documented  # SPEC §11.5, README config + superpowers
+    documented = [*_marked_init_defaults(spec), *_marked_init_defaults(_user_docs())]
+    assert len(documented) >= 3, documented  # SPEC §11.5, docs config + superpowers
     assert all(adapters == list(DEFAULT_ADAPTERS) for adapters in documented), documented
 
 

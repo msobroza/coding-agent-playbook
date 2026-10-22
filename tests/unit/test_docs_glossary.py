@@ -21,7 +21,7 @@ import pytest
 
 from tests._catalog import CATALOG_ROOT, REPO_ROOT, TEST_FILE_GLOBS, core_rule_skill_ids
 from tests.unit.test_docs_lifecycle_hooks_spec import _spec_section
-from tests.unit.test_docs_readme_hooks import _blocks
+from tests.unit.test_docs_readme_hooks import USER_DOC_PAGES, _blocks
 from tests.unit.test_docs_readme_hooks import _section as _readme_section
 
 _CONTEXT_MD = REPO_ROOT / "CONTEXT.md"
@@ -29,7 +29,7 @@ _CONTEXT_MD = REPO_ROOT / "CONTEXT.md"
 #: The wording the docs used while core shipped no skills (before v0.21).
 _NO_SKILLS_CLAIM = re.compile(r"ships no skills|ships none")
 #: The docs that describe what core ships, by repo-relative path.
-_CORE_DOCS = ("README.md", "catalog/README.md", "SPEC.md")
+_CORE_DOCS = ("README.md", "catalog/README.md", "SPEC.md", *USER_DOC_PAGES)
 
 #: A citation of SPEC section 3: "§3" or "Section 3", but not "§3.1" or "§30".
 _SECTION_3_CITATION = re.compile(r"(?:§|Section )3(?![0-9]|\.[0-9])")
@@ -129,7 +129,7 @@ def test_catalog_readme_add_a_rule_lists_the_shared_test_file_globs() -> None:
 def test_no_doc_says_core_ships_no_skills(doc: str) -> None:
     lines = (REPO_ROOT / doc).read_text(encoding="utf-8").splitlines()
     stale = [f"{n}: {line}" for n, line in enumerate(lines, 1) if _NO_SKILLS_CLAIM.search(line)]
-    assert not stale, f"{doc} still says something ships no skills (core ships four): {stale}"
+    assert not stale, f"{doc} still says something ships no skills (core ships eight): {stale}"
 
 
 def test_readme_architecture_names_skill_references() -> None:
