@@ -23,6 +23,8 @@ _CROSS_SKILL_RE: Final = re.compile(
     r"\b([a-z][a-z0-9-]*)'s `?([a-z0-9-]+`?(?:(?:, | and )`?[a-z0-9-]+`?)*)"
 )
 _LIST_SEPARATOR_RE: Final = re.compile(r", | and ")
+#: A backticked rule-id-shaped token: ``design-strategy`` in backticks.
+_BACKTICKED_ID_RE: Final = re.compile(r"`([a-z0-9]+(?:-[a-z0-9]+)+)`")
 #: A mapping spec's rule-table row: ``| `rules/<id>.md[.j2]` | ...``.
 _SPEC_RULE_PATH_RE: Final = re.compile(r"^\| `rules/([a-z0-9-]+)\.md(?:\.j2)?` \|", re.MULTILINE)
 
@@ -36,6 +38,11 @@ def references_block(skill_root: Path) -> list[dict[str, Any]]:
     entries = frontmatter["playbook"].get("references", [])
     assert isinstance(entries, list), entries
     return [entry for entry in entries if str(entry["path"]).startswith("references/")]
+
+
+def reference_text(skill_root: Path, path: str) -> str:
+    """The text of one of a skill's files, ``path`` relative to its root."""
+    return (skill_root / path).read_text(encoding="utf-8")
 
 
 def shipped_rule_ids(skill_root: Path) -> set[str]:
@@ -67,3 +74,13 @@ def known_rule_ids(skill: str) -> set[str]:
     if not (root / "rules").is_dir():
         return planned
     return planned | shipped_rule_ids(root)
+
+
+def backticked_ids(text: str) -> set[str]:
+    """Every rule-id-shaped token ``text`` writes in backticks."""
+    return set(_BACKTICKED_ID_RE.findall(text))
+
+
+def names_a_rule(text: str, rule_ids: set[str]) -> bool:
+    """True when ``text`` names one of ``rule_ids`` in backticks, or another skill's rule."""
+    return bool(backticked_ids(text) & rule_ids or cross_skill_mentions(text))

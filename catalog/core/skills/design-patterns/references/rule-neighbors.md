@@ -31,6 +31,7 @@ Find the situation in a table, then open both named rules: each owns only the pa
 | A wrapper around a third-party client | design-adapter: fitting its shape to your interface and translating its errors | python-coding's python-retries-and-timeouts: timeouts and bounded retries |
 | A vague or misleading name | design-name-for-intent: sibling symmetry and verbs that match behavior | python-coding's python-meaningful-names: names a search finds |
 | A class with one method and no state | design-lightest-construct: a function before a class | python-coding's python-small-units: how long that function may grow |
+| Choosing a dataclass, a plain class or a dict for a record | design-lightest-construct: which construct, function, module, dataclass or class, the code needs | python-coding's python-data-shapes: how the record is shaped once that construct is chosen |
 
 ## Shared with python-architecture
 

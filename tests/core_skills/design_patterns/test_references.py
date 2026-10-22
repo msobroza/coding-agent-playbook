@@ -17,8 +17,11 @@ import pytest
 
 from tests._catalog import core_skill_root
 from tests.core_skills._references import (
+    backticked_ids,
     cross_skill_mentions,
     known_rule_ids,
+    names_a_rule,
+    reference_text,
     references_block,
     shipped_rule_ids,
 )
@@ -150,19 +153,15 @@ LINT_GUARDRAILS: Final = "references/lint-guardrails.md"
 _RULE_ID_LIKE_RE: Final = re.compile(r"\bdesign-[a-z0-9-]*[a-z0-9]\b")
 #: The skill's own name has the rule-id prefix but is no rule.
 _NOT_A_RULE: Final = frozenset({"design-patterns"})
-_BACKTICKED_ID_RE: Final = re.compile(r"`([a-z0-9]+(?:-[a-z0-9]+)+)`")
 #: A bare reference file name in a rule body: ``rule-neighbors.md``.
 _BARE_REFERENCE_RE: Final = re.compile(r"\b([a-z0-9]+(?:-[a-z0-9]+)*\.md)\b")
+#: D47's see line: the last Notes bullet ends ": see <reference>.md".
+_SEE_LINE_RE: Final = re.compile(r": see [a-z0-9-]+\.md")
 _NOTES_RE: Final = re.compile(r"^## Notes\n(.*?)(?=^## |\Z)", re.MULTILINE | re.DOTALL)
 _HEADING_RE: Final = re.compile(r"^### ([a-z0-9-]+)$", re.MULTILINE)
 _NUMBERED_ITEM_RE: Final = re.compile(r"^\d+\. .*$", re.MULTILINE)
 #: The smell-id cell of a lint-guardrails row: ``| `E722` | bare except | `bare-except` | ...``.
 _LINT_SMELL_CELL_RE: Final = re.compile(r"^\| `[^|]+` \| [^|]+ \| ([^|]+) \|", re.MULTILINE)
-
-
-def _reference_text(path: str) -> str:
-    """The text of one of the skill's files: ``_reference_text(CHECKLIST)``."""
-    return (SKILL_ROOT / path).read_text(encoding="utf-8")
 
 
 def _rule_text(rule_id: str) -> str:
@@ -179,14 +178,9 @@ def _last_notes_bullet(rule_id: str) -> str:
     return bullets[-1]
 
 
-def _names_a_rule(text: str, rule_ids: set[str]) -> bool:
-    """True when ``text`` names one of ``rule_ids`` in backticks, or another skill's rule."""
-    return bool(set(_BACKTICKED_ID_RE.findall(text)) & rule_ids or cross_skill_mentions(text))
-
-
 def _smell_sections() -> dict[str, str]:
     """The smell catalog's ``### <smell id>`` entries: id -> the entry's text."""
-    text = _reference_text(SMELL_CATALOG)
+    text = reference_text(SKILL_ROOT, SMELL_CATALOG)
     heads = list(_HEADING_RE.finditer(text))
     ends = [head.start() for head in heads[1:]] + [len(text)]
     return {head.group(1): text[head.end() : end] for head, end in zip(heads, ends, strict=True)}
@@ -208,7 +202,7 @@ def test_every_reference_file_is_listed() -> None:
 
 @pytest.mark.parametrize("path", list(ROUTES_TO))
 def test_reference_names_every_rule_it_routes_to(path: str) -> None:
-    text = _reference_text(path)
+    text = reference_text(SKILL_ROOT, path)
 
     missing = [rule_id for rule_id in ROUTES_TO[path] if rule_id not in text]
 
@@ -217,7 +211,7 @@ def test_reference_names_every_rule_it_routes_to(path: str) -> None:
 
 @pytest.mark.parametrize("path", list(ROUTES_TO))
 def test_reference_names_only_rule_ids_the_skill_ships(path: str) -> None:
-    named = set(_RULE_ID_LIKE_RE.findall(_reference_text(path))) - _NOT_A_RULE
+    named = set(_RULE_ID_LIKE_RE.findall(reference_text(SKILL_ROOT, path))) - _NOT_A_RULE
 
     unknown = sorted(named - shipped_rule_ids(SKILL_ROOT))
 
@@ -227,7 +221,7 @@ def test_reference_names_only_rule_ids_the_skill_ships(path: str) -> None:
 @pytest.mark.parametrize("path", list(ROUTES_TO))
 def test_reference_names_only_rules_other_skills_ship_or_plan(path: str) -> None:
     """A "<skill>'s <id>" pointer names a rule that skill ships or its mapping plans."""
-    mentions = cross_skill_mentions(_reference_text(path))
+    mentions = cross_skill_mentions(reference_text(SKILL_ROOT, path))
 
     dangling = sorted(
         (skill, rule) for skill, rule in mentions if rule not in known_rule_ids(skill)
@@ -237,14 +231,14 @@ def test_reference_names_only_rules_other_skills_ship_or_plan(path: str) -> None
 
 
 def test_internal_guide_stays_within_the_d49_budget() -> None:
-    lines = _reference_text(INTERNAL_GUIDE).count("\n")
+    lines = reference_text(SKILL_ROOT, INTERNAL_GUIDE).count("\n")
 
     assert lines <= INTERNAL_GUIDE_MAX_LINES, f"{INTERNAL_GUIDE} is {lines} lines"
 
 
 @pytest.mark.parametrize("path", list(ROUTES_TO))
 def test_long_reference_opens_with_a_table_of_contents(path: str) -> None:
-    text = _reference_text(path)
+    text = reference_text(SKILL_ROOT, path)
     if text.count("\n") <= TOC_THRESHOLD_LINES:
         pytest.skip(f"{path} is short enough to need no table of contents")
 
@@ -259,7 +253,7 @@ def test_rule_notes_end_with_their_see_line(rule_id: str) -> None:
 
     missing = [name for name in SEE_LINES[rule_id] if name not in last]
 
-    assert "see" in last, f"{rule_id}: last Notes bullet is no see line: {last!r}"
+    assert _SEE_LINE_RE.search(last), f"{rule_id}: last Notes bullet is no see line: {last!r}"
     assert missing == [], f"{rule_id}: last Notes bullet does not name {missing}"
 
 
@@ -292,28 +286,29 @@ def test_smell_catalog_has_an_entry_for_every_scanner_smell(smell_model: ModuleT
 
 def test_every_smell_entry_names_its_owning_rule() -> None:
     rule_ids = shipped_rule_ids(SKILL_ROOT)
+    sections = _smell_sections()
 
     orphans = sorted(
-        smell for smell, entry in _smell_sections().items() if not _names_a_rule(entry, rule_ids)
+        smell for smell, entry in sections.items() if not names_a_rule(entry, rule_ids)
     )
 
-    assert _smell_sections(), f"{SMELL_CATALOG} has no ### <smell id> entries"
+    assert sections, f"{SMELL_CATALOG} has no ### <smell id> entries"
     assert orphans == [], f"{SMELL_CATALOG} entries name no owning rule: {orphans}"
 
 
-def test_every_checklist_item_names_a_rule() -> None:
-    items = _NUMBERED_ITEM_RE.findall(_reference_text(CHECKLIST))
+def test_every_checklist_itemnames_a_rule() -> None:
+    items = _NUMBERED_ITEM_RE.findall(reference_text(SKILL_ROOT, CHECKLIST))
     rule_ids = shipped_rule_ids(SKILL_ROOT)
 
-    bare = [item for item in items if not _names_a_rule(item, rule_ids)]
+    bare = [item for item in items if not names_a_rule(item, rule_ids)]
 
     assert items, f"{CHECKLIST} has no numbered items"
     assert bare == [], f"{CHECKLIST} items name no rule: {bare}"
 
 
 def test_lint_guardrails_name_only_catalogued_smell_ids() -> None:
-    cells = _LINT_SMELL_CELL_RE.findall(_reference_text(LINT_GUARDRAILS))
-    smells = {smell for cell in cells for smell in _BACKTICKED_ID_RE.findall(cell)}
+    cells = _LINT_SMELL_CELL_RE.findall(reference_text(SKILL_ROOT, LINT_GUARDRAILS))
+    smells = {smell for cell in cells for smell in backticked_ids(cell)}
 
     uncatalogued = sorted(smells - set(_smell_sections()))
 
