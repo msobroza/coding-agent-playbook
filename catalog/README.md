@@ -32,12 +32,12 @@ catalog/
         └── skills/           one <dir>/SKILL.md per skill, plus scripts/, references/
 ```
 
-`core/` ships five skills, `python-coding`, `python-testing`, `python-tooling`,
-`ml-data` and `web-application`. Each one's member rules are rendered into its
-`rules/` directory from the scoped rules that name it. A sixth,
-`playbook-guardrails`, takes no rules: sync appends one section per enabled
-hook's guardrail text to its authored intro, so edit the hook's `HOOK.md`
-body, not the skill, to change a section. Only a skill that declares a
+`core/` ships six skills, `python-coding`, `python-testing`, `python-tooling`,
+`ml-data`, `web-application` and `domino-jobs`. Each one's member rules are
+rendered into its `rules/` directory from the scoped rules that name it. A
+seventh, `playbook-guardrails`, takes no rules: sync appends one section per
+enabled hook's guardrail text to its authored intro, so edit the hook's
+`HOOK.md` body, not the skill, to change a section. Only a skill that declares a
 `playbook:` block takes rules, so the skills of `superpowers` and
 `mattpocock_skills` own none. A bundled plugin may also hold `rules/`, `prompts/`,
 `hooks/` or `eval_samples/`, laid out exactly as in `core/`.
@@ -88,10 +88,11 @@ the consumer's `playbook/`) replaces an artifact with the same `id`.
 3. For a scoped rule, pick the skill by topic: `python-coding` when no library
    is needed (Pydantic validation included), `python-testing` for tests,
    `python-tooling` for one named developer tool, `web-application` for web
-   backends, `ml-data` for ML and data libraries. When that skill declares
-   `sections:` in its `playbook:` block, name one of its section ids in the
-   rule's `section:` (`playbook validate` fails without one) and pick a
-   `priority` in that section's impact band (CRITICAL 20-39, HIGH 40-59,
+   backends, `ml-data` for ML and data libraries, `domino-jobs` for code
+   Domino jobs run. When that skill declares `sections:` in its `playbook:`
+   block, name one of its section ids in the rule's `section:`
+   (`playbook validate` fails without one) and pick a `priority` in that
+   section's impact band (CRITICAL 20-39, HIGH 40-59,
    MEDIUM 60-79, LOW 80-99). Write `description` as the one actionable line
    the skill's index shows for the rule, and keep `name` a short topic label
    (`Typing`, `Error handling`). The skill's "Covers ..." clause names its

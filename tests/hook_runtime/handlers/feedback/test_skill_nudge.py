@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
+    from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
     from tests.hook_payloads import HookPayloadCase
     from tests.hook_runtime.handlers.pack_repo import PackRepo
@@ -61,6 +62,15 @@ def _install_six_skill_pack(pack_repo: PackRepo) -> None:
     pack_repo.install_pack([HOOK_ID], handler_config={HOOK_ID: {"skills": [*principle, testing]}})
 
 
+def _reference_probe_rules() -> list[Rule]:
+    """Every core rule but the Domino-gated ones: the reference probe has no Domino marker.
+
+    The Domino skills' members all gate on ``domino_project`` (prU D63), so sync never
+    puts them in this repo's table; keeping them would change every line below.
+    """
+    return [rule for rule in engine_rules() if "domino_project" not in rule.frontmatter.applies_if]
+
+
 def _line(skill_id: str) -> str:
     return f"Conventions for this file: skill {skill_id}."
 
@@ -81,8 +91,8 @@ STATIC_CHECK_CONFIGS: Final = ("ruff.toml", ".ruff.toml", "mypy.ini", ".mypy.ini
 
 @pytest.fixture
 def repo(pack_repo: PackRepo) -> PackRepo:
-    """skill-nudge on, its table derived from every core rule (all five member skills)."""
-    pack_repo.install_pack([HOOK_ID], rules=engine_rules())
+    """skill-nudge on, its table derived from every core rule outside the Domino skills."""
+    pack_repo.install_pack([HOOK_ID], rules=_reference_probe_rules())
     return pack_repo
 
 
@@ -275,7 +285,7 @@ def test_nudge_line_comes_before_lint_feedback(
     head = "def run():\n    return 1\n"
     pack_repo.write("pyproject.toml", '[tool.ruff.lint]\nselect = ["F"]\n')
     pack_repo.write(APP, head + "try:\n    run()\nexcept:\n    raise\n")
-    pack_repo.install_pack([HOOK_ID, LINT_HOOK_ID], rules=engine_rules())
+    pack_repo.install_pack([HOOK_ID, LINT_HOOK_ID], rules=_reference_probe_rules())
     pin_ruff(pack_repo, ruff_program)
     ruff = FakeRuff(diagnostics=[ruff_row("E722", 5, "Do not use bare `except`")])
 

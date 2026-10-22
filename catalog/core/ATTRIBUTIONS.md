@@ -30,6 +30,15 @@ credited by name only. No sentences or examples from the article are copied;
 the ideas are restated in the engine's own words as general clean-code
 principles.
 
+The domino-jobs skill (its SKILL.md and every rule under its rules/
+directory, listed under "Engine-written files") distills facts from the
+Domino Data Lab 6.2 user and API documentation, which carries no open
+license; it is credited by name only and not vendored. No sentences or
+examples from the documentation are copied, and the facts are restated in
+the engine's own words. The `domino-docs` section below records, per
+documentation page, the files that use its facts or why it was dropped; a
+distilled source has no pin and no license copy.
+
 ## python-best-practices
 
 Source: the "python-best-practices" agent skills by Ludo Technologies LLC, tag v0.8.0.
@@ -180,6 +189,51 @@ Distilled (credited by name only, no vendored text):
 - `rules/fastapi-app-wiring.md`
 - `rules/fastapi-error-boundaries.md`
 
+## domino-docs
+
+Source: the Domino Data Lab 6.2 user, API and admin documentation, cited by page id.
+Form: distilled (credited by name only, not vendored; no open license).
+
+Each row names the files that restate a page's facts in the engine's own
+words; those files stay under "Engine-written files". Pages a later lane
+uses gain its files in their row.
+
+### domino-jobs
+
+| Upstream file | Core files | Changes |
+| --- | --- | --- |
+| `user_guide/ccaee6` | `SKILL.md` | Fact restated: the Git-based layout (/mnt/code as the working directory, /mnt/data, /mnt/artifacts). |
+| `user_guide/de4abb` | `SKILL.md` | Facts restated: the DFS layout, the working directory moving to /mnt/<owner>/<project> with imports, local datasets under /domino/datasets/local. |
+| `user_guide/910370` | `SKILL.md` | Fact restated: a job in a Git-based project syncs only artifacts back; code changes are not saved. |
+| `user_guide/6942ab` | `SKILL.md` | Facts restated: dataset and snapshot mount paths per project type. |
+| `user_guide/e09156` | `SKILL.md` | Facts restated: Flow task outputs under /workflow/outputs, one snapshot per dataset at the plain path, DOMINO_IS_WORKFLOW_JOB as the switch. |
+| `user_guide/af97b7` | `SKILL.md` | Fact restated: every non-zero exit fails the job. Not used: the UI-only parts (tagging, renaming, stopping from the Active tab, volume sizes, Nexus tier grouping, cluster attachment). |
+| `user_guide/40b91f` | `SKILL.md` | Fact restated: the API proxy adds the run's credentials to Domino API calls. |
+| `user_guide/fda6d8` | `rules/domino-run-manifest.md` | Facts restated: jobs over workspaces for the strongest reproducibility; seeds and intermediate state persisted as files; a fixed-format summary per run; explicit package versions. Not reproduced: the tip to pickle generator state (JSON instead, D6). |
+| `user_guide/0264e0` | `rules/domino-run-manifest.md` | Fact restated: what the reproducibility engine records per run (code, data, environment revision, command, results). |
+| `user_guide/5b3b05` | `rules/domino-run-manifest.md` | Facts restated: results are captured for every launch surface; cite the job number with numbers used outside Domino. |
+| `user_guide/55fc89` | `SKILL.md`, `rules/domino-run-manifest.md` | Facts restated: the run identity variables and the boolean flags delivered as text. |
+| `user_guide/e53646` | `rules/domino-run-manifest.md` | Contradiction noted: its re-run environment semantics differ from the Run Jobs table, so the manifest records the revision passed in. |
+| `user_guide/da707d` | `rules/domino-mlflow-tracking.md` | Facts restated: experiments are created only in code and appear after the first logged run; names are unique across the deployment; jobs over workspaces; autolog or manual logging; child runs; the multipart upload option. Not used: agentic-system experiments (domino-agents) and the UI steps for viewing and comparing runs; its sample, which passes a placeholder name, is not copied. |
+| `user_guide/6ac5a1` | `rules/domino-mlflow-tracking.md` | Fact restated: MLFLOW_TRACKING_URI is a reserved name. |
+| `api_guide/c5ef26` | `rules/domino-mlflow-tracking.md` | Fact restated: MLFLOW_TRACKING_URI is set in every execution. Not used here: the budgets, billing tags, files and blobs, App publishing and dataset upload helpers. |
+| `user_guide/5b84c5` | `rules/domino-mlflow-tracking.md` | Fact restated: MLflow is the recommended way to record job metrics. |
+| `user_guide/ca786d` | DROP | Index page (Manage a DFS project); no fact beyond its children. |
+| `user_guide/a8e081` | DROP | Index page (Work with Projects). |
+| `user_guide/716281` | DROP | Index page (Configure a Project). |
+| `user_guide/1c333d` | DROP | Index page (Reference). |
+| `user_guide/30b067` | DROP | Index page (Domino CLI); the CLI facts come from user_guide/9355a5. |
+| `user_guide/85722a` | DROP | Troubleshooting index; its sync pointer is covered through user_guide/f7292e and its import-path advice concerns workspaces. |
+| `user_guide/5d0521` | DROP | Restates the Git-based layout already taken from user_guide/ccaee6 and user_guide/910370. |
+| `user_guide/b9d997` | DROP | Docs lifecycle: informs the 6.2 target and this credit only; no rule. |
+| `legal/terms-of-use` | DROP | Terms of use: the basis for distilling instead of vendoring; no rule content. |
+| `user_guide/66b789` | DROP | Model variables apply to deployed models, which no Domino skill covers. |
+| `admin_guide/ed1c08` | DROP | Registry credentials for external images: an administrator task. |
+| `admin_guide/de48cc` | DROP | User management index: an administrator topic with no job-code fact. |
+| `user_guide/0002fb` | DROP | Workspace management, linked from the job monitoring page by mistake; nothing for jobs. |
+| `user_guide/db2820` | DROP | Long-running job notifications are a per-user UI preference; nothing for code to do. |
+| `user_guide/63ac71` | DROP | Saving artifacts through the workspace File Changes panel is an interactive workflow; the job persistence fact comes from user_guide/910370. |
+
 ## Engine-written files
 
 Files written for the engine with no upstream text, per core skill. A file
@@ -192,6 +246,10 @@ that comes to hold vendored text moves from here into its source's table.
 ### domino-apps
 
 ### domino-jobs
+
+- `SKILL.md`
+- `rules/domino-run-manifest.md`
+- `rules/domino-mlflow-tracking.md`
 
 ### ml-data
 
