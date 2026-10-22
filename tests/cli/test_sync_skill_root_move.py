@@ -118,7 +118,7 @@ _SYNTHETIC_UNGATED_SKILL_FILES = tuple(
 )
 #: Every file the pre-v0.21 engine left under ``shared_skills/`` for ``_synced_then_rewound``:
 #: query-db's two, the core python-coding skill with one rule file per active member and its
-#: two upstream license copies (D19), python-tooling with its ungated members (no
+#: references (its two upstream license copies, D19, and its guides), python-tooling with its ungated members (no
 #: framework, no uv.lock) and the same two license copies, playbook-creator with its
 #: members the repo's layer turns on, the ungated design-patterns and python-architecture,
 #: and python-documentation with its ungated members.
@@ -128,8 +128,10 @@ _OLD_TREE_FILES = frozenset(
         "query-db/scripts/run.py",
         "python-coding/SKILL.md",
         *(f"python-coding/rules/{rule_id}.md" for rule_id in _SYNTHETIC_PYTHON_CODING_MEMBERS),
-        "python-coding/references/LICENSE.python-best-practices",
-        "python-coding/references/LICENSE.python-clean-architecture",
+        *(
+            f"python-coding/references/{path.name}"
+            for path in (CORE_SKILLS_ROOT / "python-coding" / "references").iterdir()
+        ),
         "python-tooling/SKILL.md",
         *(f"python-tooling/rules/{rule_id}.md" for rule_id in _SYNTHETIC_PYTHON_TOOLING_MEMBERS),
         "python-tooling/references/LICENSE.python-best-practices",
