@@ -67,16 +67,21 @@ def _line(skill_id: str) -> str:
 
 #: Every core skill with members, as in the reference probe (FastAPI + pytest + ML):
 #: ``**/*.py`` reaches ml-data, python-coding and python-tooling; tests reach python-testing.
-#: python-tooling ranks first on ``src/app.py``: fastapi-app-wiring's ``**/app.py`` is the
+#: web-application ranks first on ``src/app.py``: fastapi-app-wiring's ``**/app.py`` is the
 #: most specific glob that matched (D41); the ``**/*.py`` ties keep config order.
-SOURCE_LINES: Final = [_line("python-tooling"), _line("ml-data"), _line("python-coding")]
+SOURCE_LINES: Final = [
+    _line("web-application"),
+    _line("ml-data"),
+    _line("python-coding"),
+    _line("python-tooling"),
+]
 #: The config files ``python-static-checks`` matches besides Python files and pyproject.
 STATIC_CHECK_CONFIGS: Final = ("ruff.toml", ".ruff.toml", "mypy.ini", ".mypy.ini")
 
 
 @pytest.fixture
 def repo(pack_repo: PackRepo) -> PackRepo:
-    """skill-nudge on, its table derived from every core rule (all four member skills)."""
+    """skill-nudge on, its table derived from every core rule (all five member skills)."""
     pack_repo.install_pack([HOOK_ID], rules=engine_rules())
     return pack_repo
 
@@ -115,7 +120,7 @@ def test_test_file_names_testing_and_coding_once_each(
     source = edit(repo, deps(), APP, state=state)
     again = edit(repo, deps(), TEST_APP, state=state)
 
-    # D41: tests/**/*.py ranks python-testing and python-tooling (fastapi-app-wiring) first.
+    # D41: tests/**/*.py ranks python-testing and web-application (fastapi-app-wiring) first.
     assert context(first) == [_line("python-testing"), *SOURCE_LINES]
     assert source.trace.combined.decision is Decision.NONE
     assert again.trace.combined.decision is Decision.NONE

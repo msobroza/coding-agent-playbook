@@ -8,7 +8,8 @@ globs:
   - "**/*.py"
 applies_if:
   has_framework: ["fastapi"]
-priority: 61
+section: api-design
+priority: 41
 tags: [python, fastapi, errors]
 ---
 

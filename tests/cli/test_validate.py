@@ -457,7 +457,7 @@ def test_validate_warns_about_skill_files_sync_never_copies(
 
 _UNKNOWN_FACT_RULE = (
     "---\nid: bad\nname: Bad\ndescription: bad\nscope: scoped\n"
-    "skill: python-coding\napplies_if:\n  orm_version: '>=2'\n---\nBody\n"
+    "skill: python-coding\nsection: types\napplies_if:\n  orm_version: '>=2'\n---\nBody\n"
 )
 
 
@@ -602,7 +602,7 @@ def test_validate_fails_on_a_scoped_rule_added_under_the_engine_rules_dir(
     stray.parent.mkdir(parents=True)
     stray.write_text(
         "---\nid: python-stray\nname: Stray\ndescription: d\nscope: scoped\n"
-        "skill: python-coding\n---\nBody\n",
+        "skill: python-coding\nsection: types\n---\nBody\n",
         encoding="utf-8",
     )
     (tmp_path / "consumer").mkdir()

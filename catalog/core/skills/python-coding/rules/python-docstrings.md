@@ -6,7 +6,8 @@ version: 1
 scope: scoped
 globs:
   - "**/*.py"
-priority: 56
+section: types
+priority: 44
 tags: [python, docs]
 lint_codes:
   warn: [D100, D101, D102, D103, D104, D105, D106, D107]

@@ -6,7 +6,8 @@ version: 1
 scope: scoped
 globs:
   - "**/*.py"
-priority: 40
+section: effects
+priority: 48
 tags: [python, design, di]
 ---
 

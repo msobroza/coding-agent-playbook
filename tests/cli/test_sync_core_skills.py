@@ -1,11 +1,11 @@
 """End-to-end ``playbook sync`` of the core skills in a synthetic repo (spec 6.10 items 7, C7).
 
-Core ships ``python-coding``, ``python-testing``, ``python-tooling`` and
-``ml-data``; each is written only while one of its member rules passes
-``applies_if`` (ADR 0001). ``python-testing``'s members all need pytest, so the
-skill follows the ``pytest`` dependency in and out of the repo. ``python-tooling``
-has an ungated member (``python-static-checks``), so it stays while its two
-FastAPI references follow ``fastapi``. The "Where guidance lives" map in
+Core ships ``python-coding``, ``python-testing``, ``python-tooling``,
+``ml-data`` and ``web-application``; each is written only while one of its
+member rules passes ``applies_if`` (ADR 0001). ``python-testing``'s members all
+need pytest, so the skill follows the ``pytest`` dependency in and out of the
+repo. ``python-tooling`` has an ungated member (``python-static-checks``), so it
+stays, while ``web-application``'s two FastAPI rules follow ``fastapi``. The "Where guidance lives" map in
 ``AGENTS.md`` names only skills a sync writes, so it is absent when no enabled
 adapter has a native skill root.
 """
@@ -27,9 +27,11 @@ if TYPE_CHECKING:
 
 _TOOLING = "python-tooling"
 _TESTING: Final = "python-testing"
-#: python-tooling's ungated member, written in every synthetic repo, and the FastAPI pair.
+_WEB: Final = "web-application"
+#: python-tooling's ungated member, written in every synthetic repo, and web-application's
+#: FastAPI pair.
 _STATIC_CHECKS: Final = ["python-static-checks.md"]
-_FASTAPI_REFERENCES: Final = ["fastapi-app-wiring.md", "fastapi-error-boundaries.md"]
+_FASTAPI_RULES: Final = ["fastapi-app-wiring.md", "fastapi-error-boundaries.md"]
 
 _CONFIG = """\
 schema_version = 1
@@ -70,7 +72,7 @@ def _skill_lock_paths(repo: Path, skill_id: str) -> list[str]:
     return sorted(entry.path for entry in lockfile.entries if f"/{skill_id}/" in entry.path)
 
 
-def _references(repo: Path, root: str, skill_id: str) -> list[str]:
+def _rule_files(repo: Path, root: str, skill_id: str) -> list[str]:
     """The sorted file names in ``repo/<root>/<skill_id>/rules/``."""
     return sorted(p.name for p in (repo / root / skill_id / "rules").iterdir())
 
@@ -94,7 +96,7 @@ def test_python_testing_follows_the_pytest_dependency_in_and_out(
     _set_dependencies(repo, '["click", "pytest"]')
     assert _sync.run(_ns(repo)) == 0
     for root in NATIVE_SKILL_ROOTS:
-        assert "pytest.md" in _references(repo, root, _TESTING), root
+        assert "pytest.md" in _rule_files(repo, root, _TESTING), root
     assert "skill `python-testing`" in (repo / "AGENTS.md").read_text(encoding="utf-8")
 
     _set_dependencies(repo, '["click"]')
@@ -104,26 +106,33 @@ def test_python_testing_follows_the_pytest_dependency_in_and_out(
     assert "skill `python-testing`" not in (repo / "AGENTS.md").read_text(encoding="utf-8")
 
 
-def test_fastapi_references_follow_the_fastapi_dependency_in_and_out(
+def test_fastapi_rules_follow_the_fastapi_dependency_in_and_out(
     tmp_path: Path, make_synthetic_repo: Callable[..., Path]
 ) -> None:
-    """python-tooling stays for its ungated static-checks member; the FastAPI pair comes and goes."""
+    """python-tooling stays for its ungated static-checks member; web-application, holding
+    only the FastAPI pair so far (prU L0-15), comes and goes with ``fastapi``."""
     repo = _synthetic_skill_repo(tmp_path, make_synthetic_repo)
     assert _sync.run(_ns(repo)) == 0
     for root in NATIVE_SKILL_ROOTS:
-        assert _references(repo, root, _TOOLING) == _STATIC_CHECKS, root
+        assert _rule_files(repo, root, _TOOLING) == _STATIC_CHECKS, root
+        assert not (repo / root / _WEB).exists(), root
 
     _set_dependencies(repo, '["click", "fastapi"]')
     assert _sync.run(_ns(repo)) == 0
     for root in NATIVE_SKILL_ROOTS:
-        assert _references(repo, root, _TOOLING) == _FASTAPI_REFERENCES + _STATIC_CHECKS, root
+        assert _rule_files(repo, root, _TOOLING) == _STATIC_CHECKS, root
+        assert _rule_files(repo, root, _WEB) == _FASTAPI_RULES, root
+    assert "skill `web-application`" in (repo / "AGENTS.md").read_text(encoding="utf-8")
 
     _set_dependencies(repo, '["click"]')
     assert _sync.run(_ns(repo)) == 0
     for root in NATIVE_SKILL_ROOTS:
-        assert _references(repo, root, _TOOLING) == _STATIC_CHECKS, root
-    assert [path for path in _skill_lock_paths(repo, _TOOLING) if "fastapi" in path] == []
-    assert "skill `python-tooling`" in (repo / "AGENTS.md").read_text(encoding="utf-8")
+        assert _rule_files(repo, root, _TOOLING) == _STATIC_CHECKS, root
+        assert not (repo / root / _WEB).exists(), root
+    assert _skill_lock_paths(repo, _WEB) == []
+    agents_md = (repo / "AGENTS.md").read_text(encoding="utf-8")
+    assert "skill `python-tooling`" in agents_md
+    assert "skill `web-application`" not in agents_md
 
 
 @pytest.mark.parametrize("adapters", ["[]", '["continue"]'], ids=["agents-md-only", "continue"])

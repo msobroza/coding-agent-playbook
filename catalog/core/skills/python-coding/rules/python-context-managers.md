@@ -6,7 +6,8 @@ version: 1
 scope: scoped
 globs:
   - "**/*.py"
-priority: 56
+section: effects
+priority: 51
 tags: [python, resources]
 ---
 

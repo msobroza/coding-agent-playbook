@@ -2,10 +2,12 @@
 
 ``python-static-checks`` is ungated, so ``python-tooling`` is written in every Python
 repo and its authored texts are generic, while the Covers clause follows the gates.
-The probe has no ``uv.lock``, so its description names five members (223
-characters); the same probe with a ``uv.lock`` also names the uv workflow (236).
-Both texts are the spec's, pinned verbatim. The authored body's picker bullets
-name each member by the display name the index and the Covers clause show.
+The skill declares sections (prU D17, L0-15), so the Covers clause names the
+sections whose members are active: the probe has no ``uv.lock``, so its
+description names linting and test configuration; the same probe with a
+``uv.lock`` also names package management. The FastAPI rules moved to
+web-application and the Pydantic rule to python-coding (D24). The authored
+body's picker bullets name each member by the display name the index shows.
 """
 
 from __future__ import annotations
@@ -24,22 +26,17 @@ if TYPE_CHECKING:
 
 pytestmark = pytest.mark.catalog
 
-_SENTENCE: Final = "Conventions tied to a named tool or framework."
-_USE_WHEN: Final = "Use when editing tool configuration or code wired to a framework."
-#: The spec 11 intro text: the five members the probe activates, in (priority, id) order.
-PROBE_DESCRIPTION: Final = (
-    f"{_SENTENCE} Covers Static checks, pytest configuration, FastAPI app wiring, "
-    f"FastAPI error boundaries, Pydantic boundaries. {_USE_WHEN}"
+_SENTENCE: Final = "Conventions for the developer tools the repo already runs."
+_USE_WHEN: Final = (
+    "Use when fixing lint or type-check findings, editing tool settings, or changing dependencies."
 )
-#: With a ``uv.lock`` the uv workflow (priority 28) joins after pytest configuration (23).
+#: The probe activates the linting and test-configuration sections, in declared order.
+PROBE_DESCRIPTION: Final = f"{_SENTENCE} Covers linting, test configuration. {_USE_WHEN}"
+#: With a ``uv.lock`` the uv workflow's package-management section joins last.
 UV_PROBE_DESCRIPTION: Final = (
-    f"{_SENTENCE} Covers Static checks, pytest configuration, uv workflow, FastAPI app "
-    f"wiring, FastAPI error boundaries, Pydantic boundaries. {_USE_WHEN}"
+    f"{_SENTENCE} Covers linting, test configuration, package management. {_USE_WHEN}"
 )
 _UV_PROBE_RULES: Final = [
-    "fastapi-app-wiring.md",
-    "fastapi-error-boundaries.md",
-    "pydantic-boundaries.md",
     "pytest-configuration.md",
     "python-static-checks.md",
     "python-uv-workflow.md",
@@ -53,7 +50,7 @@ def _tooling_description(repo: Path) -> str:
     return str(frontmatter["description"])
 
 
-def test_reference_probe_python_tooling_names_its_five_active_members(
+def test_reference_probe_python_tooling_names_its_active_sections(
     reference_probe_repo: Path,
 ) -> None:
     assert _tooling_description(reference_probe_repo) == PROBE_DESCRIPTION

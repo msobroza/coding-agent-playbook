@@ -389,11 +389,13 @@ def test_reference_probe_emits_each_core_skill_within_budget(
     members = _probe_members(skill_id)
     if block.get("sections"):
         # A sectioned skill's Covers clause names its active sections, not its members (D17).
-        covers = description.partition(" Covers ")[2].partition(". Use when ")[0]
-        # Only declared sections are named: a member in D42's Other adds no name.
+        covers = description.partition(" Covers ")[2].partition(". Use when ")[0].lower()
+        # Only declared sections are named: a member in D42's Other adds no name. A title
+        # may hold commas ("Names, types, docs"), so each title is looked up, not counted.
         declared = {section["id"] for section in block["sections"]}
         active = {rule.frontmatter.section for rule in members} & declared
-        assert len(covers.split(", ")) == len(active), f"{skill_id} covers {covers!r}"
+        named = {s["id"] for s in block["sections"] if str(s["title"]).lower() in covers}
+        assert named == active, f"{skill_id} covers {covers!r}"
     else:
         for rule in members:
             name = rule.frontmatter.name
@@ -475,7 +477,7 @@ def test_reference_probe_writes_no_continue_prompt_for_a_member_skill(
     assert [s for s in CORE_SKILLS if (prompts / f"{s}.md").exists()] == []
 
 
-@pytest.mark.parametrize("file_name", ["44-python-data-shapes.md", "58-python-idioms.md"])
+@pytest.mark.parametrize("file_name", ["60-python-data-shapes.md", "72-python-idioms.md"])
 def test_reference_probe_continue_gets_the_two_new_rule_files(
     reference_probe_repo: Path, file_name: str
 ) -> None:

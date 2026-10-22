@@ -6,7 +6,8 @@ version: 1
 scope: scoped
 globs:
   - "**/*.py"
-priority: 44
+section: classes
+priority: 60
 tags: [python, design, data]
 ---
 
