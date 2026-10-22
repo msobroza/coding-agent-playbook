@@ -252,6 +252,16 @@ def test_an_upstream_file_mapped_twice_fails(tmp_path: Path) -> None:
     assert _errors(tmp_path, text) == ["up-source: `skills/a.md` appears in more than one row"]
 
 
+def test_an_upstream_file_may_feed_several_skills_one_row_each(tmp_path: Path) -> None:
+    beta = "### beta\n\n| Upstream file | Core files | Changes |\n| --- | --- | --- |\n"
+    twice = _SYNTHETIC.replace(
+        "## Engine-written files",
+        beta + "| `skills/a.md` | DROP | Not beta material. |\n\n## Engine-written files",
+        1,
+    )
+    assert _errors(tmp_path, twice) == []
+
+
 def test_a_file_both_engine_written_and_mapped_fails(tmp_path: Path) -> None:
     text = _SYNTHETIC.replace("- `SKILL.md`", "- `SKILL.md`\n- `rules/a.md`")
     assert _errors(tmp_path, text) == [
