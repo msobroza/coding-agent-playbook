@@ -8,7 +8,8 @@ globs:
   - "**/*.py"
 applies_if:
   any_framework: ["requests", "httpx", "aiohttp"]
-priority: 57
+section: effects
+priority: 53
 tags: [python, network, resilience]
 ---
 

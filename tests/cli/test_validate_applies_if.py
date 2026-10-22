@@ -31,7 +31,7 @@ def _write_rule(repo: Path, rule_id: str, applies_if_yaml: str) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         f"---\nid: {rule_id}\nname: R\ndescription: d\nscope: scoped\n"
-        f"skill: python-coding\napplies_if:\n{applies_if_yaml}---\nBody\n",
+        f"skill: python-coding\nsection: types\napplies_if:\n{applies_if_yaml}---\nBody\n",
         encoding="utf-8",
     )
     return path

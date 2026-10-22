@@ -495,7 +495,7 @@ def _write_member_rule(repo: Path, rule_id: str, body: str, *, applies_if: str =
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
         f"---\nid: {rule_id}\nname: {rule_id.title()}\ndescription: A house rule.\n"
-        f"scope: scoped\nskill: python-coding\nglobs:\n  - '**/*.py'\n{applies_if}"
+        f"scope: scoped\nskill: python-coding\nsection: types\nglobs:\n  - '**/*.py'\n{applies_if}"
         f"priority: 50\n---\n{body}",
         encoding="utf-8",
     )

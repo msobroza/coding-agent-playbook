@@ -15,7 +15,8 @@ globs:
   - "tests/**/*.py"
 applies_if:
   has_framework: ["fastapi"]
-priority: 60
+section: app-structure
+priority: 44
 tags: [python, fastapi]
 ---
 

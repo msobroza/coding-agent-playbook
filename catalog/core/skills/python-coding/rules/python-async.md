@@ -8,7 +8,8 @@ globs:
   - "**/*.py"
 applies_if:
   python_version: ">=3.11"
-priority: 53
+section: async
+priority: 55
 tags: [python, async, concurrency]
 ---
 

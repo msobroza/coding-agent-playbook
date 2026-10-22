@@ -12,7 +12,8 @@ globs:
   - "**/conftest.py"
 applies_if:
   has_framework: ["pytest"]
-priority: 23
+section: test-configuration
+priority: 42
 tags: [python, tooling, pytest]
 ---
 

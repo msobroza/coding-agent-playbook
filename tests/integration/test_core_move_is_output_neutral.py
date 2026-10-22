@@ -1,7 +1,7 @@
 """prU L0-07: moving the core-layer scoped rules into their skills changes no synced byte.
 
-Temporary, until L0-15 gives the moved rules sections and priorities (it then
-deletes this module and its digest list, F-02). The reference probe's synced
+Temporary: L0-15 gave the moved rules sections and priorities and re-recorded
+the digests; F-02 deletes this module and its digest list. The reference probe's synced
 core-skill files (each adapter's ``skills/<core skill>/SKILL.md`` and
 ``rules/**``), its Continue rules and its ``AGENTS.md`` must hash to the
 digests committed in ``tests/fixtures/core_move_probe_digests.json``, which

@@ -73,6 +73,7 @@ Distilled (credited by name only, no vendored text):
 - `rules/python-dependency-injection.md`
 - `rules/python-data-shapes.md`
 - `rules/python-idioms.md`
+- `rules/pydantic-boundaries.md`
 
 ### python-testing
 
@@ -95,7 +96,6 @@ Distilled (credited by name only, no vendored text):
 - `rules/python-static-checks.md`
 - `rules/pytest-configuration.md`
 - `rules/python-uv-workflow.md`
-- `rules/pydantic-boundaries.md`
 
 ### web-application
 
@@ -158,15 +158,15 @@ Distilled (credited by name only, no vendored text):
 | Upstream file | Core files | Changes |
 | --- | --- | --- |
 
-Distilled (credited by name only, no vendored text):
-
-- `rules/fastapi-app-wiring.md`
-- `rules/fastapi-error-boundaries.md`
-
 ### web-application
 
 | Upstream file | Core files | Changes |
 | --- | --- | --- |
+
+Distilled (credited by name only, no vendored text):
+
+- `rules/fastapi-app-wiring.md`
+- `rules/fastapi-error-boundaries.md`
 
 ## Engine-written files
 
@@ -209,3 +209,5 @@ that comes to hold vendored text moves from here into its source's table.
 - `SKILL.md`
 
 ### web-application
+
+- `SKILL.md`

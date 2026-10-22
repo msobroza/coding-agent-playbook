@@ -11,7 +11,8 @@ globs:
   - ".ruff.toml"
   - "mypy.ini"
   - ".mypy.ini"
-priority: 21
+section: linting
+priority: 20
 tags: [python, tooling, ruff, mypy]
 ---
 

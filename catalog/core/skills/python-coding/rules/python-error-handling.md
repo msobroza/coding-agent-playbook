@@ -6,7 +6,8 @@ version: 1
 scope: scoped
 globs:
   - "**/*.py"
-priority: 55
+section: errors
+priority: 20
 tags: [python, errors]
 lint_codes:
   warn: [E722, BLE001, S110, S112, B904, TRY400, TRY401, S101]

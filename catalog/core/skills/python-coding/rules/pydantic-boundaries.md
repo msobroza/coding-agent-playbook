@@ -8,7 +8,8 @@ globs:
   - "**/*.py"
 applies_if:
   has_framework: ["pydantic"]
-priority: 63
+section: pydantic
+priority: 59
 tags: [python, pydantic, validation]
 ---
 

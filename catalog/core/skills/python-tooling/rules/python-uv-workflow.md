@@ -8,7 +8,8 @@ globs:
   - "pyproject.toml"
 applies_if:
   package_manager: uv
-priority: 28
+section: package-management
+priority: 60
 tags: [python, tooling, uv]
 ---
 

@@ -1,11 +1,12 @@
 """End-to-end ``playbook sync`` of the gated python-tooling references (specs/prS-skills-context.md 11.3).
 
 ``python-tooling`` has one ungated member, ``python-static-checks``, so the skill is
-written in every Python repo. Its other distilled members follow their gates: the
-uv workflow reference needs a ``uv.lock`` (``package_manager: uv``), and the
-Pydantic boundaries reference a declared ``pydantic`` dependency
-(``has_framework: ["pydantic"]``). Each test syncs a synthetic repo with the
-``claude_code`` adapter only and reads the rule ids the skill holds as rule files.
+written in every Python repo. Its other members follow their gates: the uv
+workflow reference needs a ``uv.lock`` (``package_manager: uv``). The Pydantic
+boundaries rule moved to ``python-coding`` (prU D24, L0-15) and keeps its gate,
+a declared ``pydantic`` dependency (``has_framework: ["pydantic"]``). Each test
+syncs a synthetic repo with the ``claude_code`` adapter only and reads the rule
+ids a skill holds as rule files.
 """
 
 from __future__ import annotations
@@ -46,11 +47,18 @@ def _python_repo(root: Path, make_synthetic_repo: Callable[..., Path], **extras:
     return make_synthetic_repo(root, config_text=_CONFIG, **extras)
 
 
+def _skill_rule_ids(repo: Path, skill_id: str) -> list[str]:
+    """The sorted rule ids synced ``repo``'s ``skill_id`` holds as rule files; ``[]`` if unwritten."""
+    rules = repo / ".claude" / "skills" / skill_id / "rules"
+    if not rules.is_dir():
+        return []
+    return sorted(path.name.removesuffix(".md") for path in rules.iterdir())
+
+
 def _synced_tooling_references(repo: Path) -> list[str]:
     """Sync ``repo`` and return the sorted rule ids ``python-tooling`` holds as rule files."""
     assert _sync.run(argparse.Namespace(repo_root=str(repo), check=False)) == 0
-    references = repo.joinpath(*_TOOLING_REFERENCES)
-    return sorted(path.name.removesuffix(".md") for path in references.iterdir())
+    return _skill_rule_ids(repo, "python-tooling")
 
 
 def test_python_tooling_exists_in_a_plain_python_repo(
@@ -61,9 +69,9 @@ def test_python_tooling_exists_in_a_plain_python_repo(
 
     assert _synced_tooling_references(repo) == ["python-static-checks"]
     skill_md = repo.joinpath(*_TOOLING_REFERENCES).parent / "SKILL.md"
-    assert "Covers Static checks." in skill_md.read_text(encoding="utf-8")
+    assert "Covers linting." in skill_md.read_text(encoding="utf-8")
     agents_md = (repo / "AGENTS.md").read_text(encoding="utf-8")
-    assert "- Tool configuration and framework wiring: skill `python-tooling`" in agents_md
+    assert "- Tool configuration and pyproject.toml: skill `python-tooling`" in agents_md
 
 
 def test_uv_workflow_reference_only_in_uv_repos(
@@ -81,7 +89,11 @@ def test_uv_workflow_reference_only_in_uv_repos(
 def test_pydantic_boundaries_needs_declared_pydantic(
     tmp_path: Path, make_synthetic_repo: Callable[..., Path]
 ) -> None:
-    """R5-3: a FastAPI repo that gets Pydantic only transitively gets no Pydantic reference."""
+    """R5-3: a FastAPI repo that gets Pydantic only transitively gets no Pydantic rule.
+
+    The rule lives in python-coding now; the FastAPI rules in web-application, and
+    python-tooling holds neither.
+    """
     declared = _python_repo(
         tmp_path / "declared", make_synthetic_repo, pyproject_extras={"dependencies": ["pydantic"]}
     )
@@ -89,7 +101,8 @@ def test_pydantic_boundaries_needs_declared_pydantic(
         tmp_path / "transitive", make_synthetic_repo, pyproject_extras={"dependencies": ["fastapi"]}
     )
 
-    assert _PYDANTIC_BOUNDARIES in _synced_tooling_references(declared)
-    fastapi_only = _synced_tooling_references(transitive)
-    assert "fastapi-app-wiring" in fastapi_only
-    assert _PYDANTIC_BOUNDARIES not in fastapi_only
+    assert _PYDANTIC_BOUNDARIES not in _synced_tooling_references(declared)
+    assert _PYDANTIC_BOUNDARIES in _skill_rule_ids(declared, "python-coding")
+    assert _synced_tooling_references(transitive) == ["python-static-checks"]
+    assert "fastapi-app-wiring" in _skill_rule_ids(transitive, "web-application")
+    assert _PYDANTIC_BOUNDARIES not in _skill_rule_ids(transitive, "python-coding")
