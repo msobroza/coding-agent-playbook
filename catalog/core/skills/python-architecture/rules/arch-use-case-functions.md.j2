@@ -15,7 +15,7 @@ tags: [python, architecture, use-cases]
 
 ## Description
 
-The application layer holds one function per use case, or a small class when several use cases share collaborators. A use case loads what it needs through ports it receives as parameters, lets the domain decide, persists the outcome and commits, so it owns the transaction boundary. It computes derived values (a booking's price is nights times the room rate), enforces the rules and returns a typed record. It never imports a database module, the web framework or the engine module.
+The application layer holds one function per use case, or a small class when several use cases share collaborators. A use case loads what it needs through ports it receives as parameters, lets the domain decide and saves the outcome through those ports. It computes derived values (a booking's price is nights times the room rate), enforces the rules and returns a typed record. It never imports a database module, the web framework or the engine module.
 
 Handlers on the interface side stay thin: accept the input, call exactly one use case, map the result or the domain error to a response or an exit code. When a screen needs the results of two use cases, add a use case that orchestrates them instead of orchestrating in the handler.
 
@@ -61,7 +61,6 @@ def handle_booking_requested(message: BookingRequested, services: Services) -> N
 - Warning signs in a use case: `import fastapi`, `import click`, `HTTPException`, a call to a session factory, reading `os.environ`.
 - Ids, dates and clocks arrive as parameters (`new_id`, `today`), so tests compare literal records; hidden clocks and ids are the python-coding skill's python-pure-core rule.
 - Money is integer cents or `Decimal`, never `float`.
-- The commit belongs to the use case too: when it writes through several repositories, it calls the unit of work's `commit()` once at the end (arch-unit-of-work).
 - The async form awaits the same ports: `room = await rooms.get(request.room_id)`; the rest of the use case is unchanged.
 - FastAPI routes follow the same split in the web-application skill's fastapi-thin-routes rule.
 {% if has_framework("fastapi") %}

@@ -99,11 +99,7 @@ Stepping back down is a valid finding too: a repository with one implementation 
 
 ### Checking the layers
 
-The skill's `layer_map.py` script (in its `scripts/` directory, stdlib only, Python 3.10 or later) sorts a project's modules into these layers and reports imports that point the wrong way and import cycles. Every hit is a candidate: open the importing line and confirm it before reporting it.
-
-```bash
-python3 <this skill's directory>/scripts/layer_map.py . --json
-```
+The skill's layer_map.py script sorts a project's modules into these layers and reports imports that point the wrong way and import cycles. Every hit is a candidate: open the importing line and confirm it before reporting it.
 
 ## See also
 

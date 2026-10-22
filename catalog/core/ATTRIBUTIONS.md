@@ -546,6 +546,10 @@ Upstream text these rules leave out (DROP, with the reason):
 
 ### python-architecture
 
+- `scripts/_layer_cycles.py`
+- `scripts/_layer_imports.py`
+- `scripts/_layer_model.py`
+- `scripts/_layer_rules.py`
 - `scripts/layer_map.py`
 
 ### python-coding
