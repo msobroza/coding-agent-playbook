@@ -18,7 +18,7 @@ tags: [python, architecture, layout]
 
 A good tree lets one path predict its neighbors. If `app/routers/bookings.py` exists, a reader can expect `app/operations/bookings.py` and `tests/routers/test_bookings.py` without listing a directory. When files are named ad hoc or piled into one folder, every lookup turns into a search or a directory listing. That slows down a new teammate, and it costs a coding agent time and tokens on every task: in a repo with no conventions it has to infer one by exploring, and it pays for that exploration again until it has.
 
-- Keep the repo's existing root package. A new project puts its code in one package, under `src/<package>/` or at the root, never as loose modules beside `pyproject.toml`.
+- Keep the repo's existing root package. A new project puts its code in one package under `src/<package>/`, never as loose modules beside `pyproject.toml`.
 - Mirror the package tree in `tests/`, so each module's tests sit at the matching path.
 - Keep the conventional directories of the framework the repo uses, such as a web app's routers, schemas and operations modules, instead of inventing new names for the same roles.
 - Put engineering documents where the document layout says (the glossary, decision records, specs and plans), not in new top-level folders.
@@ -60,6 +60,5 @@ project/
 
 ## Notes
 
-- Move a misplaced module in its own change, so the move is easy to review and to revert.
 - The axis inside the package (layer-first or feature-first) is arch-one-layout-axis; generic package names such as utils and helpers are arch-no-junk-drawer-packages.
 - Where specs, plans and decision records go is the python-documentation skill's docs-document-layout rule.

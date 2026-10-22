@@ -52,24 +52,34 @@ class ToolState:
     on_loan_to: UUID | None = None
 
 
+@dataclass(frozen=True)
+class StreamHistory:
+    events: tuple[ToolEvent, ...]
+    version: int
+
+
 def apply(state: ToolState, event: ToolEvent) -> ToolState:
-    if isinstance(event, ToolLent):
-        return replace(state, on_loan_to=event.member_id)
-    return replace(state, on_loan_to=None)
+    match event:
+        case ToolLent():
+            return replace(state, on_loan_to=event.member_id)
+        case ToolReturned():
+            return replace(state, on_loan_to=None)
+        case _:
+            assert_never(event)  # a new event type fails the type check here
 
 
 class ToolEventStore(Protocol):
-    def load(self, tool_id: UUID) -> tuple[list[ToolEvent], int]: ...  # events, version
+    def load(self, tool_id: UUID) -> StreamHistory: ...
     def append(self, tool_id: UUID, events: Sequence[ToolEvent], expected_version: int) -> None: ...
 
 
 def lend_tool(
     store: ToolEventStore, tool_id: UUID, member_id: UUID, due_on: date, clock: Clock
 ) -> None:
-    history, version = store.load(tool_id)
-    state = reduce(apply, history, ToolState())
+    history = store.load(tool_id)
+    state = reduce(apply, history.events, ToolState())
     event = lend(state, tool_id, member_id, due_on, clock())
-    store.append(tool_id, [event], expected_version=version)
+    store.append(tool_id, [event], expected_version=history.version)
 ```
 
 ## Notes
