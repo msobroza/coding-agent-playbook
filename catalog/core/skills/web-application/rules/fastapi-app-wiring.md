@@ -1,18 +1,17 @@
 ---
 id: fastapi-app-wiring
 name: FastAPI app wiring
-description: "Build collaborators in Depends providers and lifespan resources, use async def only for async I/O, and override dependencies in tests."
+description: "Build the FastAPI app in a create_app(settings) factory, acquire long-lived resources in its lifespan and release them after yield, and let only the ASGI entrypoint read the environment."
 version: 1
 scope: scoped
 globs:
-  - "**/routers/**/*.py"
-  - "**/routes/**/*.py"
-  - "**/api/**/*.py"
   - "**/main.py"
   - "**/app.py"
-  - "**/dependencies.py"
+  - "**/asgi.py"
   - "**/deps.py"
-  - "tests/**/*.py"
+  - "**/dependencies.py"
+  - "**/settings.py"
+  - "**/config.py"
 applies_if:
   has_framework: ["fastapi"]
 section: app-structure
@@ -20,33 +19,90 @@ priority: 44
 tags: [python, fastapi]
 ---
 
-# FastAPI app wiring
+# Build the app in a factory and manage resources in its lifespan
 
-In a FastAPI app the dependency system is the composition root. When every session, client and repository comes from a provider, handlers stay thin and tests swap any collaborator without patching.
+## Description
 
-## Providers
+In a FastAPI app the factory and its dependency system are the composition root. A module-level `engine = create_async_engine(...)`, `client = httpx.AsyncClient()` and `app = FastAPI()` mean that importing a module reads the environment and opens resources, every test shares one global app, and clients are never closed. Build the app in `create_app(settings)`. Create long-lived resources (the database engine, HTTP client pools, loaded models) in an async context manager passed as `FastAPI(lifespan=...)` and release them after its `yield`; never use the deprecated `@app.on_event`. Hand them to routes through a provider that reads `request.app.state`, never through module globals. Only the ASGI entrypoint calls the factory and reads the environment.
 
-- Build per-request collaborators (database sessions, repositories, API clients) in provider functions injected with `Depends`. Endpoint bodies never call `SessionLocal()` or instantiate an adapter.
-- Declare each dependency once as an `Annotated` alias typed as the Protocol the operation consumes, e.g. `Rooms = Annotated[RoomRepository, Depends(get_rooms)]`, and reuse the alias across routes.
-- Write session providers as `yield` dependencies that close the session in `finally` (or yield inside `with Session(engine)`). Chain providers (session, then repository) so the wiring lives in one module.
+## Bad Example
 
-## Lifespan
+```python
+# app/main.py: reads the environment and builds a pool at import time
+engine = create_async_engine(os.environ["DATABASE_URL"])
+http_client = httpx.AsyncClient()  # never closed
 
-- Create long-lived resources (HTTP client pools, loaded models) in an async context manager passed as `FastAPI(lifespan=...)` and release them after its `yield`. Never use `@app.on_event`.
-- Hand them to routes through a provider that reads `request.app.state` (or the lifespan state), not through module globals.
+app = FastAPI()
 
-## Cross-cutting request concerns
 
-- Resolve the current user, tenant or shared pagination parameters in one provider each. A handler that uses the value declares it through the provider's `Annotated` alias.
-- `APIRouter(dependencies=[...])` discards return values: attach only providers run for their effect there, such as an auth check that raises. A provider declared in both places still runs once per request.
-- Never re-read headers or tokens inside handler bodies.
+@app.on_event("startup")  # deprecated
+async def startup() -> None:
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+```
 
-## async def or def
+## Good Example
 
-- Use `async def` only when the handler or dependency awaits async I/O. Use plain `def` for sync libraries and CPU work: FastAPI runs those in a threadpool.
-- Never call a blocking client, `time.sleep` or `thread.join()` inside an `async def` route or dependency; it stalls every in-flight request on the event loop. Expose background warm-up through a non-blocking readiness check instead of waiting on it.
-- `asyncio.run()` inside an `async def` raises `RuntimeError` because a loop is already running; await the coroutine instead.
+```python
+# app/main.py
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
-## Tests
+import httpx
+from fastapi import FastAPI
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-- Set `app.dependency_overrides[get_rooms] = lambda: FakeRoomRepository()` inside a fixture and call `app.dependency_overrides.clear()` on teardown. Never assign overrides at import time, where they leak into every other test.
+from app.routers import invoices, users
+from app.settings import Settings
+
+
+def create_app(settings: Settings) -> FastAPI:
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        engine = create_async_engine(settings.database_url.get_secret_value())
+        try:
+            async with httpx.AsyncClient(
+                base_url=settings.payments_base_url,
+                timeout=httpx.Timeout(settings.payments_timeout_s, connect=3.0),
+            ) as payments_client:
+                app.state.sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
+                app.state.payments_client = payments_client
+                yield
+        finally:
+            await engine.dispose()
+
+    app = FastAPI(lifespan=lifespan)
+    app.state.settings = settings
+    app.include_router(users.router)
+    app.include_router(invoices.router)
+    return app
+
+
+# app/deps.py
+def get_settings(request: Request) -> Settings:
+    settings: Settings = request.app.state.settings
+    return settings
+
+
+SettingsDep = Annotated[Settings, Depends(get_settings)]
+```
+
+```python
+# app/asgi.py: the only module that reads the environment
+from app.main import create_app
+from app.settings import Settings
+
+app = create_app(Settings())  # a ValidationError lists every missing or invalid field
+```
+
+## Notes
+
+- Web apps build the DB engine in the app factory or lifespan; scripts and CLIs may still build it at import time.
+- The settings class itself, and the ban on a module-level `settings = Settings()`, are the python-coding skill's pydantic-typed-settings rule. A cached `get_settings()` works with overrides, but its instance can be imported from anywhere; constructing settings once in the entrypoint keeps them injected.
+- Serve a cheap, unauthenticated `/health` liveness route. Deeper checks (database, upstream services) go to a separate readiness route that reports background warm-up without waiting on it.
+- With many resources, `contextlib.AsyncExitStack` keeps the lifespan flat.
+- The lifespan runs once per worker process: with four workers, each process has its own engine and pool.
+- Keep `Base.metadata.create_all` out of startup; the schema is `alembic-migrations`'.
+- Tests build `Settings(...)` with test values and pass it to `create_app`, with no environment patching (see `fastapi-dependency-overrides`).
+- The factory only calls `include_router`; router prefixes and tags are `web-api-resource-naming`'s. Providers are `fastapi-dependency-providers`', and `async def` versus `def` is `fastapi-no-blocking-calls`'.
+- Worked example: the hotel example's app/main.py (`create_app(settings)`, the lifespan, the error table) and app/asgi.py.

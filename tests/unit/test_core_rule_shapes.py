@@ -70,6 +70,9 @@ LONG_BRANCH_MARKERS: Final = (
     ("ml-reproducibility-and-testing", "torch.manual_seed"),
     ("ml-reproducibility-and-testing", "random_state=int("),
     ("ml-reproducibility-and-testing", "rng = np.random.default_rng(seed)"),
+    # D27(4): the probe has pytest-asyncio; the AnyIO branches are measured over the matrix.
+    ("fastapi-dependency-overrides", "This project has `pytest-asyncio`"),
+    ("sqlalchemy-test-rollback", '@pytest_asyncio.fixture(scope="session", loop_scope="session")'),
 )
 
 

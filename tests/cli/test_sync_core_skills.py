@@ -5,7 +5,7 @@ Core ships ``python-coding``, ``python-testing``, ``python-tooling``,
 member rules passes ``applies_if`` (ADR 0001). ``python-testing``'s members all
 need pytest, so the skill follows the ``pytest`` dependency in and out of the
 repo. ``python-tooling`` has an ungated member (``python-static-checks``), so it
-stays, while ``web-application``'s two FastAPI rules follow ``fastapi``. The "Where guidance lives" map in
+stays, while ``web-application``'s rules follow ``fastapi``. The "Where guidance lives" map in
 ``AGENTS.md`` names only skills a sync writes, so it is absent when no enabled
 adapter has a native skill root.
 """
@@ -29,9 +29,18 @@ _TOOLING = "python-tooling"
 _TESTING: Final = "python-testing"
 _WEB: Final = "web-application"
 #: python-tooling's ungated member, written in every synthetic repo, and web-application's
-#: FastAPI pair.
+#: members a FastAPI repo without pytest or SQLAlchemy activates.
 _STATIC_CHECKS: Final = ["python-static-checks.md"]
-_FASTAPI_RULES: Final = ["fastapi-app-wiring.md", "fastapi-error-boundaries.md"]
+_FASTAPI_RULES: Final = [
+    "fastapi-app-wiring.md",
+    "fastapi-dependency-providers.md",
+    "fastapi-error-boundaries.md",
+    "fastapi-request-id-logging.md",
+    "fastapi-thin-routes.md",
+    "web-api-pagination.md",
+    "web-api-schemas.md",
+    "web-http-methods.md",
+]
 
 _CONFIG = """\
 schema_version = 1
@@ -109,8 +118,8 @@ def test_python_testing_follows_the_pytest_dependency_in_and_out(
 def test_fastapi_rules_follow_the_fastapi_dependency_in_and_out(
     tmp_path: Path, make_synthetic_repo: Callable[..., Path]
 ) -> None:
-    """python-tooling stays for its ungated static-checks member; web-application, holding
-    only the FastAPI pair so far (prU L0-15), comes and goes with ``fastapi``."""
+    """python-tooling stays for its ungated static-checks member; web-application, whose
+    members all need a web framework, comes and goes with ``fastapi``."""
     repo = _synthetic_skill_repo(tmp_path, make_synthetic_repo)
     assert _sync.run(_ns(repo)) == 0
     for root in NATIVE_SKILL_ROOTS:

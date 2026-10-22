@@ -1,0 +1,124 @@
+---
+id: sqlalchemy-test-rollback
+name: SQLAlchemy test rollback
+description: "Run persistence and endpoint tests against the production database engine, with the schema built once and each test inside an outer transaction rolled back afterwards."
+version: 1
+scope: scoped
+globs:
+  - "tests/**/*.py"
+applies_if:
+  any_framework: ["fastapi", "flask", "django", "starlette"]
+  any_dependency: ["sqlalchemy", "alembic"]
+  has_framework: ["pytest"]
+section: testing
+priority: 62
+tags: [python, sqlalchemy, testing]
+---
+
+# Run database tests in a rolled-back transaction
+
+## Description
+
+A mocked `AsyncSession` only proves that code calls `add()` and `commit()`, not that queries, constraints and eager loading work, and SQLite standing in for PostgreSQL hides dialect differences. Run tests against the production database engine, create the schema once per test session, and wrap each test in an outer transaction that is rolled back afterwards. With `join_transaction_mode="create_savepoint"`, code under test can `commit()` as usual: it acts on a SAVEPOINT, and the outer rollback discards everything.
+
+## Bad Example
+
+```python
+@pytest.fixture
+def session() -> AsyncMock:
+    return AsyncMock(spec=AsyncSession)  # every query "succeeds"; constraints never run
+
+
+@pytest.fixture(autouse=True)
+def schema() -> Iterator[None]:
+    engine = create_engine(IN_MEMORY_SQLITE_URL)  # not the production engine
+    Base.metadata.create_all(engine)  # rebuilt for every test
+    yield
+    Base.metadata.drop_all(engine)
+```
+
+## Good Example
+
+```python
+# tests/conftest.py: User is the app's ORM model; FIXED_HASH, a precomputed hash string.
+import os
+from collections.abc import AsyncIterator, Awaitable, Callable
+
+import pytest
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
+
+MakeUser = Callable[..., Awaitable[User]]
+{% if has_framework("pytest-asyncio") %}
+
+
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
+{% elif has_framework("fastapi") or has_framework("starlette") or has_framework("httpx") %}
+
+
+@pytest.fixture(scope="session")
+def anyio_backend() -> str:
+    return "asyncio"  # one loop for the session-scoped engine and every test
+
+
+@pytest.fixture(scope="session")
+{% else %}
+
+
+@pytest.fixture(scope="session")
+{% endif %}
+async def engine() -> AsyncIterator[AsyncEngine]:
+    engine = create_async_engine(os.environ["TEST_DATABASE_URL"])  # not at import
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
+    yield engine
+    await engine.dispose()
+
+
+{% if has_framework("pytest-asyncio") %}
+@pytest_asyncio.fixture
+{% else %}
+@pytest.fixture
+{% endif %}
+async def session(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
+    async with engine.connect() as conn:
+        transaction = await conn.begin()
+        session = AsyncSession(
+            bind=conn, join_transaction_mode="create_savepoint", expire_on_commit=False
+        )
+        try:
+            yield session  # commit() and rollback() in app code act on a SAVEPOINT
+        finally:
+            await session.close()
+            await transaction.rollback()  # nothing from this test survives
+
+
+@pytest.fixture
+def make_user(session: AsyncSession) -> MakeUser:
+    async def _make(*, email: str = "alice@example.com", password_hash: str = FIXED_HASH) -> User:
+        user = User(email=email, password_hash=password_hash)  # no hasher call
+        session.add(user)
+        await session.flush()  # assigns user.id without committing
+        return user
+
+    return _make
+```
+
+## Notes
+
+- Unit tests use fakes; persistence and endpoint tests use the real engine in a rolled-back transaction. This fixture serves the persistence and endpoint tests; the unit-test side is the python-testing skill's pytest-test-doubles rule and the python-architecture skill's arch-test-use-cases-with-fakes rule.
+{% if has_framework("pytest-asyncio") %}
+- The session-scoped engine and the tests must share one event loop: mark database tests `@pytest.mark.asyncio(loop_scope="session")`, the loop scope of the engine fixture.
+{% elif has_framework("fastapi") or has_framework("starlette") or has_framework("httpx") %}
+- The session-scoped `anyio_backend` fixture keeps one event loop for the engine and every test; mark database tests `@pytest.mark.anyio`.
+{% else %}
+- Async fixtures need an async test plugin: propose adding `pytest-asyncio`, only with the team's agreement. The same fixture shape works with a sync `Session` (`engine.connect()`, `conn.begin()`, `Session(bind=conn, join_transaction_mode="create_savepoint")`).
+{% endif %}
+- Start PostgreSQL in CI with a service container or `docker compose` (`testcontainers[postgres]` is a proposal, never added unasked). Never point `TEST_DATABASE_URL` at a shared development or production database.
+- `create_all` is fine for the test schema; CI still runs `alembic upgrade head` or `alembic check` so migrations match the models (`alembic-migrations`).
+- Code that opens its own sessions from `app.state.sessionmaker`, such as background jobs, bypasses the override; pass the session in, or bind a test sessionmaker to the same connection.
+- Tests of real concurrency (row locks, isolation levels) cannot share one connection; run them against a separate database and clean up by truncating tables.
+- Factory fixtures take keyword-only parameters and flush, never commit. Pass relationships at construction (`lines=[...]`); a `lazy="raise"` collection cannot be read on a flushed object without an explicit load (`sqlalchemy-eager-loading`).
+{% if has_framework("fastapi") %}
+- Worked example: the hotel example's tests/conftest.py and tests/test_repositories.py.
+{% endif %}

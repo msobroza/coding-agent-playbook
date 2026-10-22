@@ -39,6 +39,7 @@ from coding_agent_playbook.skills.naming import agent_skill_issues
 from tests._budget_probe import reference_probe_facts, render_core_rule
 from tests._catalog import CORE_ROOT, core_rule_paths, core_rule_skill_ids, core_rules
 from tests._core_skill_layout import (
+    LICENSE_COPY_NAMES,
     NOT_THIRD_PERSON,
     description_problems,
     inventory_problems,
@@ -114,6 +115,11 @@ def _is_core_member_rule(path: str, subdir: str = "rules") -> bool:
     """Whether repo-relative ``path`` is ``<root>/<core skill>/<subdir>/<file>``."""
     parts = path.split("/")
     return len(parts) >= 3 and parts[-2] == subdir and parts[-3] in WHERE_FROM_PINS
+
+
+def _file_name(path: str) -> str:
+    """The last segment of repo-relative POSIX ``path``."""
+    return path.rpartition("/")[2]
 
 
 def _probe_skill_md(repo: Path, skill_id: str) -> str:
@@ -464,8 +470,11 @@ def test_reference_probe_lockfile_records_member_references_as_rules(
         if rule_id not in PROBE_INACTIVE_MEMBERS
     }
     assert rows == expected
-    # prU D5: no member is written under references/ any more.
-    assert not [e.path for e in lockfile.entries if _is_core_member_rule(e.path, "references")]
+    # prU D5: no member is written under references/ any more; the D19 license copies are.
+    under_references = [
+        e.path for e in lockfile.entries if _is_core_member_rule(e.path, "references")
+    ]
+    assert [path for path in under_references if _file_name(path) not in LICENSE_COPY_NAMES] == []
 
 
 def test_reference_probe_writes_no_continue_prompt_for_a_member_skill(
