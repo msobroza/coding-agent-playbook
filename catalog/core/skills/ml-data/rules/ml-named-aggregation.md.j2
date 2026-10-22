@@ -20,7 +20,6 @@ tags: [ml, pandas, polars, groupby, style]
 
 An aggregation that produces nested or generated column names needs flattening, renaming and guessing about order afterwards, and a per-group Python function runs a Python loop over the groups for what a built-in reducer computes in compiled code. Declare each output column's name, its source column and its reducer in one place, so the result is a flat frame with the names the next step reads.{% if has_ml_dep("pandas") %} In pandas that is named aggregation, `agg(new_name=("column", "reducer"))`.{% endif %}{% if has_ml_dep("polars") %} In polars it is one expression per output column, ending in `.alias(...)`.{% endif %}
 
-
 ## Bad Example
 
 ```python
@@ -58,7 +57,7 @@ summary = parcels.groupby("region", as_index=False, observed=True).agg(
 )
 # columns: region, total_kg, mean_kg, parcels, first_scan
 
-# A custom reducer fits the same shape
+# Fallback, only for a reducer with no built-in name: a lambda runs per group
 summary = parcels.groupby("region", as_index=False, observed=True).agg(
     p95_kg=("weight_kg", lambda weights: weights.quantile(0.95)),
 )

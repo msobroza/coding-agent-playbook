@@ -3,9 +3,9 @@
 The distilled members gate on ``any_ml_stack: [numpy, pandas, polars]`` (D9), one
 gate for the three libraries, so each renders one section per library the repo
 declares: a NumPy-only repo gets the NumPy parts and no data-frame guidance
-(R5-2). The vendored members (prU C-ml-data-02) gate on the libraries their
-topic exists in (mapping-ml-data.md) and select each library's lines inside one
-Bad and one Good Example. torch alone activates none of them, so a torch-only
+(R5-2). The vendored members gate on the libraries their topic exists in
+(mapping-ml-data.md) and select each library's lines inside one Bad and one Good
+Example. torch alone activates none of them, so a torch-only
 repo keeps ``ml-serialization-security`` as ml-data's only member, and the
 resync golden for adding torch stays byte-identical.
 """
@@ -20,7 +20,8 @@ import pytest
 from coding_agent_playbook.detector.predicate import filter_applies_if
 from tests._budget_probe import render_core_rule
 from tests._catalog import core_rules
-from tests.unit.test_core_rule_shapes import ML_ARRAY_RULE_IDS, assert_fits_one_reference_read
+from tests.core_skill_pins.ml_data import PINS
+from tests.unit.test_core_rule_shapes import ML_SECTIONED_RULE_IDS, assert_fits_one_reference_read
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -29,18 +30,25 @@ if TYPE_CHECKING:
 
 pytestmark = pytest.mark.catalog
 
-#: Every library one of the four rules branches on: their longest rendered form.
+#: Every library an ml-data array or frame rule branches on: their longest form.
 _EVERY_BRANCH_LIBRARY: Final = ("numpy", "pandas", "polars", "scikit-learn", "torch")
 #: The line that says where the run's ``rng`` comes from (ml-seeded-randomness).
 _RNG_DEFINITION: Final = "rng = np.random.default_rng(seed)"
-#: Vendored member -> the ml_stack libraries its gate names (mapping-ml-data.md).
-VENDORED_RULE_GATES: Final = {
-    "ml-seeded-randomness": ("numpy", "pandas", "polars"),
-    "ml-method-chaining": ("pandas", "polars"),
-    "ml-named-aggregation": ("pandas", "polars"),
-    "ml-array-typing": ("numpy", "pandas"),
-    "ml-numeric-assertions": ("numpy", "pandas", "polars"),
-}
+#: The vendored members: one Bad and one Good Example hold every library's lines.
+VENDORED_RULE_IDS: Final = (
+    "ml-array-typing",
+    "ml-method-chaining",
+    "ml-named-aggregation",
+    "ml-numeric-assertions",
+    "ml-seeded-randomness",
+)
+
+
+def _gate_libraries(rule_id: str) -> list[str]:
+    """The ml_stack libraries named by ``rule_id``'s pinned gate (its ``any_ml_stack``)."""
+    libraries = PINS.rules[rule_id].applies_if["any_ml_stack"]
+    assert isinstance(libraries, list), f"{rule_id} pins any_ml_stack as {libraries!r}"
+    return [str(library) for library in libraries]
 
 
 def _ml_facts(*libraries: str) -> Facts:
@@ -69,10 +77,10 @@ def test_ml_data_rules_gate_on_numpy_pandas_polars(
 ) -> None:
     members = _active_ml_data_members(_ml_facts(*ml_stack), tmp_path)
 
-    distilled = [rule_id for rule_id in members if rule_id in ML_ARRAY_RULE_IDS]
-    assert distilled == (list(ML_ARRAY_RULE_IDS) if active else []), (
+    distilled = [rule_id for rule_id in members if rule_id in ML_SECTIONED_RULE_IDS]
+    assert distilled == (list(ML_SECTIONED_RULE_IDS) if active else []), (
         f"ml_stack {list(ml_stack)} activates {distilled}; expected "
-        f"{list(ML_ARRAY_RULE_IDS) if active else 'none'} of the four array rules"
+        f"{list(ML_SECTIONED_RULE_IDS) if active else 'none'} of the sectioned rules"
     )
 
 
@@ -83,22 +91,22 @@ def test_torch_only_repo_keeps_serialization_as_the_only_ml_data_member(tmp_path
     assert members == ["ml-serialization-security"], f"torch alone activates {members}"
 
 
-@pytest.mark.parametrize("rule_id", sorted(VENDORED_RULE_GATES))
+@pytest.mark.parametrize("rule_id", VENDORED_RULE_IDS)
 @pytest.mark.parametrize("library", ["numpy", "pandas", "polars", "torch"])
 def test_vendored_member_gates_on_its_libraries(rule_id: str, library: str, tmp_path: Path) -> None:
     members = _active_ml_data_members(_ml_facts(library), tmp_path)
 
     active = rule_id in members
-    assert active == (library in VENDORED_RULE_GATES[rule_id]), (
+    assert active == (library in _gate_libraries(rule_id)), (
         f"{rule_id} active={active} with ml_stack [{library}]; its gate names "
-        f"{list(VENDORED_RULE_GATES[rule_id])}"
+        f"{_gate_libraries(rule_id)}"
     )
 
 
 def _section_rows() -> list[tuple[str, tuple[str, ...], str, str]]:
     """(rule id, ml_stack, text that must render, text that must not) for each library."""
     rows: list[tuple[str, tuple[str, ...], str, str]] = []
-    for rule_id in ML_ARRAY_RULE_IDS:
+    for rule_id in ML_SECTIONED_RULE_IDS:
         rows += [
             (rule_id, ("pandas",), "## pandas", "## polars"),
             (rule_id, ("polars",), "## polars", "## pandas"),
@@ -115,6 +123,9 @@ def _section_rows() -> list[tuple[str, tuple[str, ...], str, str]]:
         ("ml-seeded-randomness", ("numpy", "scikit-learn"), "random_state=", "torch."),
         ("ml-seeded-randomness", ("pandas",), "frame.sample(", "pl."),
         ("ml-seeded-randomness", ("numpy",), "SeedSequence", "frame.sample("),
+        # Review fix: the holdout sample draws from its own child, not the split's stream.
+        ("ml-seeded-randomness", ("pandas",), "random_state=sample_rng", "random_state=split_rng"),
+        ("ml-seeded-randomness", ("numpy",), "rng.spawn(2)", "sample_rng"),
         # polars installs no NumPy, so a polars-only repo gets no NumPy generator.
         ("ml-seeded-randomness", ("polars",), "seed=sample_seed", "np.random"),
         # The vendored members select each library's lines inside one Bad and one Good Example.
@@ -140,12 +151,21 @@ def test_library_sections_follow_the_ml_stack(
     assert absent not in body, f"{rule_id} with {list(ml_stack)} renders {absent!r}"
 
 
-@pytest.mark.parametrize("rule_id", [*ML_ARRAY_RULE_IDS, *sorted(VENDORED_RULE_GATES)])
+@pytest.mark.parametrize("rule_id", [*ML_SECTIONED_RULE_IDS, *VENDORED_RULE_IDS])
 def test_ml_array_rule_fits_one_reference_read_with_every_library(rule_id: str) -> None:
     """The longest form: the probe declares no polars, so its size test misses that section."""
     body = render_core_rule(rule_id, _ml_facts(*_EVERY_BRANCH_LIBRARY))
 
     assert_fits_one_reference_read(rule_id, body, f"ml_stack {list(_EVERY_BRANCH_LIBRARY)}")
+
+
+@pytest.mark.parametrize("rule_id", VENDORED_RULE_IDS)
+def test_vendored_member_puts_one_blank_line_before_each_heading(rule_id: str) -> None:
+    """Review fix: two templates left a second blank line before ``## Bad Example``."""
+    body = render_core_rule(rule_id, _ml_facts(*_EVERY_BRANCH_LIBRARY))
+
+    doubled = re.search(r"\n\n\n(## [^\n]*)", body)
+    assert doubled is None, f"{rule_id} renders two blank lines before {doubled and doubled[1]!r}"
 
 
 @pytest.mark.parametrize(

@@ -86,5 +86,4 @@ def top_routes(routes: pd.DataFrame, n: int) -> pd.DataFrame:
 {% endif %}
 {% if has_ml_dep("pandas") %}
 - pandas: without pandas-stubs, mypy treats pandas objects as `Any` and checks nothing about them. If the repo lacks the stubs, propose adding them to the dev dependencies; never add them unasked.
-- pandas: where the repo already uses pandera, its schema model is the frame's type hint and validator at once (ml-frame-validation); keep no separate `TypedDict` of columns.
 {% endif %}

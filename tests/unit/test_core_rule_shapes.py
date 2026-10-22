@@ -54,7 +54,7 @@ MATRIX_MEASURED_RULE_IDS: Final = sorted(
 #: The ml-data members for array and data-frame code (spec 9.6.1) that still render one
 #: ``## <library>`` section per library, sorted by id (``tests/unit/test_ml_data_rules.py``).
 #: The vendored members (prU D7) put their library lines inside one Bad and one Good Example.
-ML_ARRAY_RULE_IDS: Final = (
+ML_SECTIONED_RULE_IDS: Final = (
     "ml-data-transforms",
     "ml-dtypes-and-typing",
     "ml-vectorization",
@@ -66,7 +66,11 @@ LONG_BRANCH_MARKERS: Final = (
     ("ml-serialization-security", "## NumPy / array data"),
     ("ml-serialization-security", "## pandas frames"),
     ("ml-serialization-security", "## scikit-learn estimators"),
-    *((rule_id, heading) for rule_id in ML_ARRAY_RULE_IDS for heading in ("## NumPy", "## pandas")),
+    *(
+        (rule_id, heading)
+        for rule_id in ML_SECTIONED_RULE_IDS
+        for heading in ("## NumPy", "## pandas")
+    ),
     ("ml-seeded-randomness", "torch.manual_seed"),
     ("ml-seeded-randomness", "random_state=int("),
     ("ml-seeded-randomness", "rng = np.random.default_rng(seed)"),

@@ -20,7 +20,6 @@ tags: [ml, pandas, polars, style]
 
 A sequence of column assignments and filters on a reassigned frame interleaves reads and writes, forces the reader to track which columns exist at each line, and invites reuse of a half-transformed frame. A chain makes the transformation one expression: inputs at the top, output at the bottom, every step visible.{% if has_ml_dep("pandas") %} In pandas, chain `assign`, `.loc[lambda ...]`, `rename` and `pipe`, which inserts your own functions without breaking the chain.{% endif %}{% if has_ml_dep("polars") %} In polars, chain expressions inside `filter`, `with_columns`, `select` and `group_by`, starting lazily and collecting once.{% endif %}
 
-
 ## Bad Example
 
 ```python

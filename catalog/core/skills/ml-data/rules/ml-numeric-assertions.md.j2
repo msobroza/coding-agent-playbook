@@ -81,7 +81,7 @@ def test_summarize() -> None:
 {% endif %}
 def test_daily_totals() -> None:
     expected = pl.DataFrame({"day": [1, 2], "total_kg": [3.5, 0.0]})
-    polars.testing.assert_frame_equal(daily_totals(events), expected, abs_tol=1e-9)
+    polars.testing.assert_frame_equal(daily_totals(events), expected)
 {% endif %}
 ```
 

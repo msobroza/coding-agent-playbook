@@ -1,11 +1,10 @@
-"""Pins of core skill ``ml-data`` (spec 9.6.2): serialization plus four array and frame rules.
+"""Pins of core skill ``ml-data`` (spec 9.6.2): serialization plus array and frame rules.
 
 Sections and priorities follow mapping-ml-data.md (prU D17, L0-16; the priority
 formula is on :class:`RulePin`). The retired id ``ml-dtypes-and-typing`` stays
 until its content lane retires it, filed under its first successor's section and
-priority (``ml-dtypes-at-load``). C-ml-data-02 retired ``ml-reproducibility-and-testing``
-into ``ml-seeded-randomness`` and ``ml-numeric-assertions``, and vendored the
-reproducibility, chaining style, typing and testing sections.
+priority (``ml-dtypes-at-load``). Each member gates on the ml_stack libraries its
+topic exists in; the gates here are the one place those libraries are pinned.
 """
 
 from __future__ import annotations
@@ -94,7 +93,7 @@ PINS: Final = CoreSkillPins(
             globs=_ML_FILES,
             priority=45,
             name="Seeded randomness",
-            tags=("ml", "numpy", "reproducibility", "random"),
+            tags=("ml", "numpy", "pandas", "polars", "reproducibility", "random"),
             section="reproducibility",
         ),
         "ml-method-chaining": RulePin(
