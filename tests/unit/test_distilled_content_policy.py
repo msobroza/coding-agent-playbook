@@ -71,7 +71,6 @@ MOVED_GUIDANCE_OWNERS: Final = (
 #: ``test_pending_owners_are_not_shipped_yet`` fails until it does.
 PENDING_OWNERS: Final[Mapping[str, tuple[str, str, str]]] = {
     "pytest-monkeypatch": ("monkeypatch", "pytest-test-doubles", "C-python-testing-01"),
-    "pytest-conftest": ("from conftest import", "pytest-fixtures", "C-python-testing-02"),
 }
 #: The ``generate-tests`` prompt's line on doubles (spec H18): named fakes come first (D8).
 _GENERATE_TESTS_PROMPT: Final = CORE_ROOT / "prompts" / "generate-tests.md.j2"
