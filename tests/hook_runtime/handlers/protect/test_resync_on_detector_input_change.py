@@ -17,6 +17,7 @@ import pytest
 from coding_agent_playbook.artifacts.rule import Rule
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.detector import facts as detector
+from coding_agent_playbook.hook_runtime.dispatch.caps import OutputCaps
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.handlers.protect import (
@@ -337,9 +338,11 @@ def test_a_new_domino_input_names_the_domino_gated_rule(
     """``domino_project`` was baked false; a marker or the committed key turns it on (D63).
 
     The Domino skills' core rules (Apps, jobs, agents) gate on it too and sort before the repo-local
-    one, so the list is untruncated here and both kinds must be named.
+    one, so the list is untruncated here (neither the name cap nor the field-character cap, which
+    the full Domino rule list outgrows) and both kinds must be named.
     """
     monkeypatch.setattr(resync, "_MAX_NAMED", 1000)
+    monkeypatch.setattr(OutputCaps, "FIELD_CHARS", 100_000)
     repo.write(rel, text)
     tool_input = {"file_path": str(repo.root / rel), "content": text}
 
