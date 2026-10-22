@@ -386,7 +386,7 @@ Acceptance:
 
 Lane lane0, size S, depends on L0-03, L0-04, L0-07, L0-11, L0-12, L0-13, L0-14, L0-17, L0-18; decisions D4, D17, D18, D21.
 
-Same as L0-15 for python-testing (pytest, pytest-fixtures, pytest-test-doubles) and ml-data (ml-data-transforms, ml-dtypes-and-typing, ml-reproducibility-and-testing, ml-serialization-security, ml-vectorization): playbook blocks with every mapping section, section: keys and priorities from the full mapping order; gates unchanged (ml-serialization-security keeps its torch/scikit-learn gate, which the hook ml-unsafe-deserialization-guard inherits). Retired ids stay until the content lane retires them, in the section the mapping gives their successor.
+Same as L0-15 for python-testing (pytest, pytest-fixtures, pytest-test-doubles) and ml-data (ml-data-transforms, ml-dtypes-and-typing, ml-reproducibility-and-testing, ml-serialization-security, ml-vectorization): playbook blocks with every mapping section, section: keys and priorities from the full mapping order; gates unchanged (ml-serialization-security keeps its torch/scikit-learn gate, which the hook ml-unsafe-deserialization-guard inherits). Retired ids stay until the content lane retires them, in the section the mapping gives their successor; a retired id split into several successors takes the section and priority of its first successor in mapping order (ml-dtypes-and-typing: ml-dtypes-at-load, dtypes 40; ml-reproducibility-and-testing: ml-seeded-randomness, reproducibility 45), and the tie with that successor sorts by id.
 
 - `catalog/core/skills/{python-testing,ml-data}/SKILL.md and rules/*`: playbook blocks; section: and priority
 - `tests/core_skill_pins/python_testing.py, ml_data.py`: members in index order, where phrases

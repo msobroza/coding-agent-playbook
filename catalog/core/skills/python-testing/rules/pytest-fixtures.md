@@ -9,7 +9,8 @@ globs:
   - "**/conftest.py"
 applies_if:
   has_framework: ["pytest"]
-priority: 63
+section: fixtures
+priority: 48
 tags: [python, testing, pytest, fixtures]
 ---
 
