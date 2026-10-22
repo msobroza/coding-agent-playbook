@@ -76,8 +76,9 @@ distilled source has no pin and no license copy.
 
 The playbook-creator skill is engine-written throughout: it restates the
 engine's own documentation and code (where each kind of artifact lives, how
-layers merge, the rule frontmatter, gates, templates and validation) and holds
-no upstream text, so every file of it is listed under "Engine-written files".
+layers merge, and how rules, skills, hooks, prompts, eval samples, plugins and
+overlays are written and validated) and holds no upstream text, so every file
+of it is listed under "Engine-written files".
 
 ## python-best-practices
 
@@ -670,6 +671,15 @@ Upstream text these rules leave out (DROP, with the reason):
 - `rules/playbook-rule-body.md`
 - `rules/playbook-validate-and-sync.md`
 - `rules/playbook-engine-catalog-gate.md`
+- `rules/playbook-skill-sections.md`
+- `rules/playbook-skill-md.md`
+- `rules/playbook-skill-files.md`
+- `rules/playbook-hook-definition.md`
+- `rules/playbook-hook-guardrails.md`
+- `rules/playbook-prompt-frontmatter.md`
+- `rules/playbook-eval-samples.md`
+- `rules/playbook-plugin-layout.md`
+- `rules/playbook-third-party-content.md`
 
 ### playbook-guardrails
 

@@ -7,12 +7,13 @@ The uv variant adds only a ``uv.lock``, the one input that turns on the gated
 ``python-uv-workflow`` member (spec 9.6.2). The Domino variant adds the
 reliable Domino marker, the worst case of the prU D59 description caps. The
 authoring variant adds an empty ``playbook/`` layer, which turns on the
-``playbook-creator`` skill (prU D70).
+``playbook-creator`` skill (prU D70). ``probe_repo`` picks one of them by the
+test's ``probe`` parameter, so a check written once runs on every probe kind.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Final, cast
 
 import pytest
 
@@ -30,8 +31,7 @@ if TYPE_CHECKING:
 
     from tests.core_skill_pins import ProbeKind
 
-
-#: Each probe kind's writer: the reference probe, or it plus the kind's one marker.
+#: Probe kind -> the writer of its source tree (prU D5, D59, D70).
 _PROBE_WRITERS: Final[Mapping[ProbeKind, Callable[[Path], None]]] = {
     "reference": write_reference_probe,
     "domino": write_domino_probe,
@@ -40,9 +40,12 @@ _PROBE_WRITERS: Final[Mapping[ProbeKind, Callable[[Path], None]]] = {
 
 
 def _synced_probe(
-    tmp_path_factory: pytest.TempPathFactory, *, uv_lock: bool, probe: ProbeKind = "reference"
+    tmp_path_factory: pytest.TempPathFactory,
+    probe: ProbeKind = "reference",
+    *,
+    uv_lock: bool = False,
 ) -> Path:
-    """A fresh ``probe`` repo after ``playbook init``, with a ``uv.lock`` when asked."""
+    """A fresh ``probe`` after ``playbook init``, plus a ``uv.lock`` when asked."""
     repo = tmp_path_factory.mktemp(f"{probe}-probe")
     _PROBE_WRITERS[probe](repo)
     if uv_lock:
@@ -64,7 +67,7 @@ def reference_probe_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
         agents_md = (reference_probe_repo / "AGENTS.md").read_text(encoding="utf-8")
     """
-    return _synced_probe(tmp_path_factory, uv_lock=False)
+    return _synced_probe(tmp_path_factory)
 
 
 @pytest.fixture(scope="module")
@@ -86,7 +89,7 @@ def domino_probe_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
         skills = sorted(p.name for p in (domino_probe_repo / ".claude/skills").iterdir())
     """
-    return _synced_probe(tmp_path_factory, uv_lock=False, probe="domino")
+    return _synced_probe(tmp_path_factory, "domino")
 
 
 @pytest.fixture(scope="module")
@@ -97,4 +100,16 @@ def authoring_probe_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
         skill_md = authoring_probe_repo / ".claude/skills/playbook-creator/SKILL.md"
     """
-    return _synced_probe(tmp_path_factory, uv_lock=False, probe="authoring")
+    return _synced_probe(tmp_path_factory, "authoring")
+
+
+@pytest.fixture
+def probe_repo(request: pytest.FixtureRequest, probe: ProbeKind) -> Path:
+    """The synced repo of the test's ``probe`` parameter: ``<probe>_probe_repo``; read-only.
+
+    Example::
+
+        @pytest.mark.parametrize("probe", PROBE_KINDS)
+        def test_x(probe: ProbeKind, probe_repo: Path) -> None: ...
+    """
+    return cast("Path", request.getfixturevalue(f"{probe}_probe_repo"))

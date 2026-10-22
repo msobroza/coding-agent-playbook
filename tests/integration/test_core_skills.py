@@ -51,7 +51,9 @@ from tests.core_skill_pins import (
     AUTHORING_SKILL_IDS,
     DOMINO_SKILL_IDS,
     PLAIN_CORE_SKILL_IDS,
+    PROBE_KINDS,
     CoreSkillPins,
+    ProbeKind,
     skills_off_probe,
 )
 from tests.hook_runtime.handlers.pack_repo import engine_hook, engine_hook_paths
@@ -77,14 +79,16 @@ MEMBERSHIP_FROM_PINS: Final[Mapping[str, str]] = {
 #: Core skill with member rules -> its ``playbook.files`` phrase in "Where guidance lives".
 WHERE_FROM_PINS: Final[Mapping[str, str]] = {pins.skill_id: pins.where for pins in ALL_PINS}
 CORE_SKILLS: Final = sorted(PINS_BY_SKILL)
-#: Core skills checked on the reference probe, on the Domino probe (prU D59, D63) and
-#: on the authoring probe (prU D70).
-REFERENCE_PROBE_SKILLS: Final = sorted(set(PINS_BY_SKILL) - skills_off_probe("reference"))
-DOMINO_PROBE_SKILLS: Final = sorted(DOMINO_SKILL_IDS)
-AUTHORING_PROBE_SKILLS: Final = sorted(AUTHORING_SKILL_IDS)
+#: (probe, skill id) of every core skill with members, checked on the probe its pins
+#: name: the reference probe, the Domino probe (prU D59, D63) or the authoring probe (D70).
+SKILLS_BY_PROBE: Final = [
+    pytest.param(pins.probe, pins.skill_id, id=f"{pins.probe}-{pins.skill_id}") for pins in ALL_PINS
+]
 #: Core members whose gate the reference probe fails (spec 9.6.2): a reference-probe
 #: skill's ``probe_inactive`` and every member of a Domino- or authoring-probe skill.
-PROBE_INACTIVE_MEMBERS: Final = frozenset().union(*(p.reference_probe_inactive for p in ALL_PINS))
+PROBE_INACTIVE_MEMBERS: Final = frozenset().union(
+    *(p.probe_inactive if p.probe == "reference" else p.members for p in ALL_PINS)
+)
 EVERY_CORE_SKILL: Final = sorted({*CORE_SKILLS, *PLAIN_CORE_SKILL_IDS})
 #: (skill id, rule id) of every rule a pins module pins the frontmatter of.
 PINNED_RULES: Final = sorted((p.skill_id, rule_id) for p in ALL_PINS for rule_id in p.rules)
@@ -393,27 +397,12 @@ def test_pins_modules_cover_exactly_the_core_skills_with_a_playbook_block() -> N
     assert core_rule_skill_ids() == CORE_SKILLS, "one tests/core_skill_pins module per such skill"
 
 
-@pytest.mark.parametrize("skill_id", REFERENCE_PROBE_SKILLS)
-def test_reference_probe_emits_each_core_skill_within_budget(
-    reference_probe_repo: Path, skill_id: str
+@pytest.mark.parametrize(("probe", "skill_id"), SKILLS_BY_PROBE)
+def test_probe_emits_each_core_skill_within_budget(
+    probe: ProbeKind, probe_repo: Path, skill_id: str
 ) -> None:
-    _assert_emitted_within_budget(reference_probe_repo, skill_id)
-
-
-@pytest.mark.parametrize("skill_id", DOMINO_PROBE_SKILLS)
-def test_domino_probe_emits_each_domino_skill_within_budget(
-    domino_probe_repo: Path, skill_id: str
-) -> None:
-    """prU D63: the Domino skills are checked on the probe that activates them."""
-    _assert_emitted_within_budget(domino_probe_repo, skill_id)
-
-
-@pytest.mark.parametrize("skill_id", AUTHORING_PROBE_SKILLS)
-def test_authoring_probe_emits_each_authoring_skill_within_budget(
-    authoring_probe_repo: Path, skill_id: str
-) -> None:
-    """prU D70: the skills gated on ``playbook_layer`` are checked on the probe with one."""
-    _assert_emitted_within_budget(authoring_probe_repo, skill_id)
+    """Each core skill is checked on the probe that activates it (prU D63, D70)."""
+    _assert_emitted_within_budget(probe_repo, skill_id)
 
 
 def _assert_emitted_within_budget(repo: Path, skill_id: str) -> None:
@@ -452,21 +441,10 @@ def _assert_emitted_within_budget(repo: Path, skill_id: str) -> None:
     assert len(lines) == len(members), f"{skill_id} index: {lines}"
 
 
-def test_reference_probe_where_section_lists_every_core_skill(reference_probe_repo: Path) -> None:
-    _assert_where_section_lists(reference_probe_repo, REFERENCE_PROBE_SKILLS)
-
-
-def test_domino_probe_where_section_lists_every_core_skill(domino_probe_repo: Path) -> None:
-    """prU D63: the Domino probe is the reference probe plus markers, so it adds the Domino skills."""
-    _assert_where_section_lists(
-        domino_probe_repo, sorted(set(CORE_SKILLS) - skills_off_probe("domino"))
-    )
-
-
-def test_authoring_probe_where_section_lists_its_core_skills(authoring_probe_repo: Path) -> None:
-    """prU D70: the authoring probe is the reference probe plus a ``playbook/`` layer."""
-    skills = sorted(set(CORE_SKILLS) - skills_off_probe("authoring"))
-    _assert_where_section_lists(authoring_probe_repo, skills)
+@pytest.mark.parametrize("probe", PROBE_KINDS)
+def test_probe_where_section_lists_its_core_skills(probe: ProbeKind, probe_repo: Path) -> None:
+    """The Domino and authoring probes are the reference probe plus one marker (prU D63, D70)."""
+    _assert_where_section_lists(probe_repo, sorted(set(CORE_SKILLS) - skills_off_probe(probe)))
 
 
 def _assert_where_section_lists(repo: Path, skill_ids: list[str]) -> None:
