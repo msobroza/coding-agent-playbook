@@ -10,7 +10,7 @@ How prU is implemented, and how to resume after any interruption (a lost session
 | What to build, per skill | `specs/prU-core-python-skills/mapping-<skill>.md` |
 | Every ticket, its waves and the content-ticket template | `specs/prU-core-python-skills/tickets.md` |
 | Glossary and decision records | `CONTEXT.md`, `docs/adr/0001`-`0008` |
-| Progress | GitHub tracker issue #176 (one checkbox per ticket), ticket issues #177-#263 and #264 (L0-27, D80) |
+| Progress | GitHub tracker issue #176 (one checkbox per ticket), ticket issues #177-#263, #264 (L0-27, D80) and #265 (L0-28) |
 | Integrated work | branch `integration/core-python-skills` |
 | One ticket's work before integration | branch `ticket/<id>` (for example `ticket/L0-01`) |
 | The runner, the planner and the machine split (temporary, deleted by F-02) | `specs/prU-core-python-skills/runner/` |

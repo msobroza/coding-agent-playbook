@@ -617,6 +617,20 @@ Acceptance:
 - `git grep -n -E 'ctx\.samples|--samples' -- src README.md SPEC.md` finds only the alias, its message and changelog entries older than v0.21.
 - The CLI surface golden test passes.
 
+### L0-28: fix(config): rewrite layout paths idempotently when a configured path extends its default
+
+Lane lane0, size S, depends on L0-23, L0-22; decisions D71.
+
+Reported by L0-22's implementer: the layout rewriter (config/layout.py LayoutRewriter.rewrite, used by sync/_layout_outputs.py and validation/layout_report.py) maps default document-layout paths to the configured ones in one pass. When a configured path starts with its own default (for example [layout] specs = "docs/specs/v2" with the default docs/specs), text that already holds the configured path, such as the rendered document-layout always rule, may become docs/specs/v2/v2. Confirm it with a failing test first; if it cannot happen, the ticket only adds the regression test.
+
+- `src/coding_agent_playbook/config/layout.py`: match a default path only where it is not already the start of the configured path; rewriting its own output changes nothing
+- test `tests/config (layout), tests/sync (layout outputs)`: a configured path that extends its default; rewrite(rewrite(x)) == rewrite(x); the document-layout rule renders the configured path once
+
+Acceptance:
+- A test with specs = "docs/specs/v2" shows no doubled segment after sync.
+- Rewriting is idempotent on every layout key.
+- The layout adapter's existing tests pass.
+
 ### D-01: docs(spec): describe rules inside skills, sections and the priority policy
 
 Lane docs, size M, depends on L0-10, L0-15, L0-16; decisions D5, D17, D21, D22, ADR 0005, D79.
@@ -670,6 +684,8 @@ In the untagged v0.21 section: subsections and TL;DR rows for member rules now r
 - `tests/unit/test_docs_migration_skills.py`: pinned phrases
 - test `tests/unit/test_docs_migration_skills.py`: passes with the new phrases; the V1 quote stays computed
 
+Also from L0-22: entries for the two new always rules (code-legibility, document-layout), the house style's seven bullets and the layout guard hook that is now on by default.
+
 Acceptance:
 - MIGRATION.md names every retired id with its successor and every new core skill.
 - The TL;DR has rows for consumers with edited references/ copies and for repo-local rules joining a core skill.
@@ -705,6 +721,7 @@ Final-state tests, then the full CI-parity gate and one PR from integration/core
 
 Acceptance:
 - specs/prU-core-python-skills/runner/ no longer exists.
+- PENDING_LEGIBILITY_TARGETS in tests/integration/test_core_always_rules.py is empty: every rule the code-legibility always rule names exists (L0-22; each content lane removes its own entries).
 - ruff check ., ruff format --check ., mypy and pytest -q pass on Python 3.12 and 3.13 in fresh environments without the metrics extra.
 - The wheel's _catalog/ equals git ls-files catalog and init in an empty scratch repo prints no warning line.
 - Final-state tests pass: no empty declared section, no retired id, every upstream file has one row, every core skill active on the probe.
