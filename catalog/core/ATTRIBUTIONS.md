@@ -40,6 +40,11 @@ not reproduced, and the facts are restated in the engine's own words. The
 use its facts or why it was dropped; a distilled source has no pin and no
 license copy.
 
+The domino-jobs skill distills facts from the Domino Data Lab 6.2 user guide
+and its python-domino API guide in the same way: credited by name only, no
+sentences, code or shell snippets copied, its files listed under
+"Engine-written files" and its pages recorded in the `domino-docs` section.
+
 ## python-best-practices
 
 Source: the "python-best-practices" agent skills by Ludo Technologies LLC, tag v0.8.0.
@@ -234,6 +239,38 @@ uses gain its files in their row.
 | `user_guide/ccaee6` | DROP | The Git-based /mnt layout is domino-jobs' shared basics. |
 | `support_kb/docs-lifecycle` | DROP | Docs lifecycle and the client compatibility matrix: provenance facts, not rule text. |
 
+### domino-jobs
+
+| Upstream file | Core files | Changes |
+| --- | --- | --- |
+| `user_guide/de4abb` | `SKILL.md` | Facts restated in the Quick Reference: the DFS working directory and what a DFS run syncs back. |
+| `user_guide/ccaee6` | `SKILL.md` | Facts restated in the Quick Reference: the Git-based layout (/mnt/code, /mnt/data, /mnt/artifacts). |
+| `user_guide/910370` | `SKILL.md`, `rules/domino-datasets-for-large-data.md` | Facts restated: a Git-based job syncs only artifacts back and pushes no code; Git LFS is not supported. |
+| `user_guide/55fc89` | `SKILL.md` | Facts restated in the Quick Reference: the variables that tell the project type and a Flow task apart. |
+| `user_guide/af97b7` | `rules/domino-job-exit-codes.md` | Facts restated: every non-zero exit fails the job; 'Publish after complete' republishes only after success. Not reproduced: the status mapping shell snippet (it exits before its test). Not used: tagging, renaming, stopping from the Active tab, volume sizing, tier grouping and cluster attachment (UI-only). |
+| `user_guide/b4cb04` | `rules/domino-job-exit-codes.md`, `rules/domino-datasets-for-large-data.md`, `rules/domino-run-scoped-writes.md` | Facts restated: Failed versus Error; Preparing copies project files; Stopping still syncs new and changed files. |
+| `user_guide/5dce1f` | `rules/domino-job-exit-codes.md`, `rules/domino-run-scoped-writes.md` | Facts restated: 'Update Domino endpoint' runs after completion with success unstated; without 'Run sequentially' runs overlap. |
+| `user_guide/5b84c5` | `rules/domino-job-exit-codes.md` | Fact restated: failure emails are sent by default. |
+| `user_guide/e09156` | `SKILL.md`, `rules/domino-job-exit-codes.md`, `rules/domino-dataset-snapshots.md` | Facts restated: a missing declared output fails a Flow task; Flows mount one snapshot per dataset at the plain path and refuse version 0. |
+| `api_guide/c5ef26` | `rules/domino-job-exit-codes.md`, `rules/domino-run-scoped-writes.md` | Facts restated: callers poll job status; stopping a job commits its results by default. Not used: budgets, billing tags, files and blobs, App publishing and the dataset upload helpers. |
+| `user_guide/942549` | `rules/domino-job-entry-point.md`, `rules/domino-run-scoped-writes.md` | Facts restated: a job is a headless run of one file from the UI, a schedule, the CLI or the API; parallel runs get separate containers. |
+| `user_guide/a068c1` | `rules/domino-job-entry-point.md` | Facts restated: the interpreter follows the extension (.py with python -u, .sh with bash, .ipynb executed and saved over itself); custom handlers need an admin flag and two handler paths are given. Not used: the R, R Markdown, MATLAB, Perl, Julia, F#, SAS and Stata handlers and the custom-handler Dockerfile recipe (not Python job code). |
+| `user_guide/f4e1e3` | `rules/domino-job-entry-point.md`, `rules/domino-launcher-arguments.md`, `rules/domino-launcher-uploads.md` | Facts restated: a Launcher fills a command template and runs a job; values arrive single-quoted and unexpanded, files as paths, multi-selects comma-separated; uploads and every touched file become results; an email.html becomes the notification body. Not used: the JSON edit mode (private deployments only), the R parsing examples and the knitr, nbconvert and explainability tips. |
+| `user_guide/fda6d8` | `rules/domino-job-entry-point.md` | Fact restated: jobs, not workspaces, give the strongest reproducibility. |
+| `user_guide/56938d` | `rules/domino-datasets-for-large-data.md`, `rules/domino-materialize-external-data.md` | Facts restated: the per-project file and per-file transfer limits; Datasets are mounted, not copied; cluster workers cannot see project files; TrainingSets persist versioned data frames. |
+| `user_guide/b4f02f` | `rules/domino-datasets-for-large-data.md` | Fact restated: sync is not designed for more than about 10 GB or 100,000 files. |
+| `user_guide/e6e601` | `rules/domino-datasets-for-large-data.md` | Fact restated: every execution copies all project files at start, Datasets excepted. |
+| `user_guide/305721` | `rules/domino-datasets-for-large-data.md` | Fact restated: keep big data in Datasets. |
+| `user_guide/f7292e` | `rules/domino-datasets-for-large-data.md`, `rules/domino-run-scoped-writes.md` | Facts restated: .noLock skips file locking during sync, and files must not change while a sync runs. |
+| `user_guide/9355a5` | `rules/domino-datasets-for-large-data.md` | Facts restated: the project upload may time out above about 1,000 files; the dataset upload overwrites unless --fileUploadSetting (case-sensitive) says otherwise. |
+| `admin_guide/71d6ad` | `rules/domino-datasets-for-large-data.md` | Fact restated: copying project files into a run times out after 15 minutes by default. |
+| `user_guide/b99d5d` | `rules/domino-run-scoped-writes.md` | Fact restated: Domino does not serialize concurrent access to shared storage. |
+| `user_guide/6942ab` | `SKILL.md`, `rules/domino-dataset-snapshots.md` | Facts restated: snapshot paths by number for local, shared and imported datasets in DFS and Git-based projects; mount mode by role. |
+| `user_guide/dbdbff` | `rules/domino-dataset-snapshots.md` | Facts restated: snapshots are immutable copies whose creation time grows with size; no file may change while one is taken; a reassigned tag mounts only the most recently added. Not used: the UI and CLI snapshot and tagging workflows. |
+| `user_guide/0264e0` | `rules/domino-dataset-snapshots.md`, `rules/domino-materialize-external-data.md` | Facts restated: what the reproducibility engine records per run, including the snapshot used. |
+| `user_guide/e568d7` | `rules/domino-materialize-external-data.md` | Facts restated: databases, APIs, network drives and data sources are invisible to the reproducibility engine; materialize extracts; keep project-file results under 10 GB. |
+| `user_guide/ac5c29` | DROP | MATLAB Launcher wrapper: nothing for Python repos beyond the Launcher argument rule. |
+
 ## Engine-written files
 
 Files written for the engine with no upstream text, per core skill. A file
@@ -258,6 +295,16 @@ that comes to hold vendored text moves from here into its source's table.
 - `rules/domino-app-endpoint-auth.md`
 
 ### domino-jobs
+
+- `SKILL.md`
+- `rules/domino-job-exit-codes.md`
+- `rules/domino-job-entry-point.md`
+- `rules/domino-launcher-arguments.md`
+- `rules/domino-launcher-uploads.md`
+- `rules/domino-datasets-for-large-data.md`
+- `rules/domino-run-scoped-writes.md`
+- `rules/domino-dataset-snapshots.md`
+- `rules/domino-materialize-external-data.md`
 
 ### ml-data
 
