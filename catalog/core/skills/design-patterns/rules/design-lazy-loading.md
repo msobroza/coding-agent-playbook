@@ -41,10 +41,14 @@ def get_model() -> Model:
     return Model.load(MODEL_PATH)  # loaded on first use, then reused
 
 
+Mode = Literal["batch", "stream"]
+LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR"]
+
+
 @dataclass(frozen=True)
 class Settings:
-    mode: str
-    level: str
+    mode: Mode
+    level: LogLevel
 
 
 @functools.cache
@@ -77,4 +81,4 @@ def read_batches(path: Path, batch_size: int = 1000) -> Iterator[list[Event]]:
 - Lazy initialization reached from several threads needs a lock around the first load.
 - A generator computes values only as they are consumed: `next(...)` or a `break` stops the work at the first match.
 - Not when the value is always needed, is small and fast, or when failing at startup is better than failing on first use.
-- Per-instance lazy values with `functools.cached_property`, and why a cache decorator does not belong on a method, are python-properties in the python-coding skill; streaming with generators in general is python-generators there.
+- Per-instance lazy values with `functools.cached_property`, and why a cache decorator does not belong on a method, are `python-properties` in the python-coding skill; streaming with generators in general is `python-generators` there.

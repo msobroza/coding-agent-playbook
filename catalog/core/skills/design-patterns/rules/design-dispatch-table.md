@@ -82,5 +82,5 @@ class ParserRegistry:
 - Unpacking config with `**options` ties JSON keys to parameter names, so a renamed parameter becomes a runtime `TypeError`; parse the config into a typed record and pass explicit arguments.
 - When each key needs its own creation logic, map it to a small creator function (`Callable[[], PaymentProcessor]`) instead of a ready instance.
 - Use `functools.singledispatch` when the key is the argument's type rather than a value.
-- Not when the keys are a closed `Enum` used in one place: an exhaustive `match` reads better there, and a mapping keyed by the `Enum` itself is design-open-closed's.
-- When other packages add the keys, loading them is design-plugin-loading; when each value is an algorithm the caller picks, see design-strategy.
+- Not when the keys are a closed `Enum` used in one place: an exhaustive `match` reads better there, and a mapping keyed by the `Enum` itself is `design-open-closed`'s.
+- When other packages add the keys, loading them is `design-plugin-loading`; when each value is an algorithm the caller picks, see `design-strategy`.

@@ -66,7 +66,10 @@ def load_plugin(name: str, registry: ExporterRegistry) -> None:
 
 def load_installed_plugins(registry: ExporterRegistry) -> None:
     for entry_point in entry_points(group="reports.exporters"):
-        register = entry_point.load()  # each distribution names its register function
+        try:
+            register = entry_point.load()  # each distribution names its register function
+        except (ImportError, AttributeError) as error:
+            raise PluginLoadError(f"plugin {entry_point.name!r} failed to load") from error
         register(registry)
 
 
@@ -86,4 +89,4 @@ Each plugin module exposes one function, `def register(registry: ExporterRegistr
 - A plugin that fails to load raises an error that names it; never skip it with a logged warning, or a missing variant surfaces far from its cause.
 - `@runtime_checkable` Protocol checks confirm only that the method names exist, so a plugin with wrong signatures passes them; the type checker on the plugin's `register` function is the real conformance check.
 - Not when every variant lives in this repository: a dispatch table is enough, and explicit imports are simpler to trace. Avoid plugins on hot paths and between features that depend on each other.
-- Looking up a registered variant, the unknown-key error and validating the config record are design-dispatch-table's; a plugin often supplies a strategy (design-strategy) or adapts a vendor API to your Protocol (design-adapter).
+- Looking up a registered variant, the unknown-key error and validating the config record are `design-dispatch-table`'s; a plugin often supplies a strategy (`design-strategy`) or adapts a vendor API to your Protocol (`design-adapter`).

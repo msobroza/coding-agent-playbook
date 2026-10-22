@@ -34,7 +34,7 @@ def register_user(name: str, email: str) -> User:
 @dataclass(frozen=True)
 class UserRegistered:
     user_id: UserId
-    email: str
+    email: EmailAddress  # a value object, never a bare str
     occurred_at: datetime  # aware UTC, from the injected clock
 
 
@@ -55,7 +55,7 @@ class EventDispatcher:  # built once in the entry point, passed to publishers
 
 
 def register_user(
-    name: str, email: str, *, users: UserStore, events: EventDispatcher, clock: Clock
+    name: str, email: EmailAddress, *, users: UserStore, events: EventDispatcher, clock: Clock
 ) -> User:
     user = users.create(name, email)
     events.publish(UserRegistered(user.id, user.email, occurred_at=clock()))
@@ -76,5 +76,4 @@ events.subscribe(UserRegistered, send_welcome_email)
 - Name events in the past tense as frozen dataclasses, with an aware UTC `occurred_at` (`datetime.now(timezone.utc)` behind the injected clock).
 - Register once in the entry point, or make `subscribe` ignore a handler it already has: running setup twice otherwise handles every event twice.
 - Decide the failure policy explicitly: let handler errors propagate, or isolate each handler and log with `logger.exception`; never swallow them silently.
-- Not when there is one side effect with one caller: call it directly. A single reaction the caller passes in is design-callback.
-- Choosing between Observer, Mediator and a pub/sub dispatcher, or wiring handler modules to a dispatcher: see observer-mediator-pubsub.md.
+- Not when there is one side effect with one caller: call it directly. A single reaction the caller passes in is `design-callback`.

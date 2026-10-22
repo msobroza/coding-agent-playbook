@@ -33,18 +33,23 @@ apply_discount(0.2, 100.0)  # wrong argument order, type-checks fine
 ## Good Example
 
 ```python
+MINOR_UNITS: Final[Mapping[str, int]] = {"EUR": 2, "USD": 2, "JPY": 0}
+
+
 @dataclass(frozen=True)
 class Money:
     amount: Decimal
-    currency: str
+    currency: str  # ISO 4217 code
 
     def __post_init__(self) -> None:
+        if self.currency not in MINOR_UNITS:
+            raise ValueError(f"unknown currency {self.currency!r}; known: {sorted(MINOR_UNITS)}")
         if self.amount < 0:
             raise ValueError(f"amount must not be negative, got {self.amount}")
 
     def times(self, factor: Decimal) -> Money:
-        cents = (self.amount * factor).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        return Money(cents, self.currency)
+        step = Decimal(1).scaleb(-MINOR_UNITS[self.currency])  # 0.01 for EUR, 1 for JPY
+        return Money((self.amount * factor).quantize(step, rounding=ROUND_HALF_UP), self.currency)
 
 
 @dataclass(frozen=True)
@@ -70,4 +75,4 @@ apply_discount(Money(Decimal("100.00"), "EUR"), Rate(Decimal("0.2")))
 - Subclassing `int`, `float` or `str` for a value type loses the type on arithmetic and string methods (`Meters(3) + 1` is a plain `int`); prefer a frozen dataclass once operations matter.
 - Grow the type with methods and operators as rules accumulate; keep it immutable, so an operation returns a new value.
 - Not for values with no rules and no risk of confusion, or for intermediate results inside one function.
-- How to validate in `__post_init__` is python-dataclass-post-init, and `NewType` for identifiers that need only a static distinction (no runtime check) is python-type-aliases, both in the python-coding skill; this rule decides when a primitive earns a value type.
+- How to validate in `__post_init__` is `python-dataclass-post-init`, and `NewType` for identifiers that need only a static distinction (no runtime check) is `python-type-aliases`, both in the python-coding skill; this rule decides when a primitive earns a value type.
