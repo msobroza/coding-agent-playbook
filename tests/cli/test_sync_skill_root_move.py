@@ -31,7 +31,7 @@ from coding_agent_playbook.generated_output.gitignore import (
     apply_managed_block,
 )
 from coding_agent_playbook.sync import pipeline as _sync
-from tests._catalog import core_skill_ids
+from tests._catalog import CORE_SKILLS_ROOT, core_skill_ids
 from tests.cli.test_sync_skills import _lock_paths, _skill_tree, _write_repo_local_skill
 from tests.core_skill_pins.playbook_creator import PINS as PLAYBOOK_CREATOR_PINS
 from tests.core_skill_pins.python_tooling import UNGATED_MEMBERS
@@ -101,11 +101,20 @@ _SYNTHETIC_PLAYBOOK_CREATOR_MEMBERS = tuple(
     for rule_id in PLAYBOOK_CREATOR_PINS.members
     if rule_id not in PLAYBOOK_CREATOR_PINS.probe_inactive
 )
+#: The ungated core skills' files, as sync writes them: every member of design-patterns and
+#: python-architecture is ungated, so the synthetic repo gets each whole skill directory
+#: (a ``.md.j2`` rule as ``.md``).
+_SYNTHETIC_UNGATED_SKILL_FILES = tuple(
+    f"{skill_id}/" + path.relative_to(CORE_SKILLS_ROOT / skill_id).as_posix().removesuffix(".j2")
+    for skill_id in ("design-patterns", "python-architecture")
+    for path in (CORE_SKILLS_ROOT / skill_id).rglob("*")
+    if path.is_file()
+)
 #: Every file the pre-v0.21 engine left under ``shared_skills/`` for ``_synced_then_rewound``:
 #: query-db's two, the core python-coding skill with one rule file per active member and its
 #: two upstream license copies (D19), python-tooling with its ungated members (no
-#: framework, no uv.lock) and the same two license copies, and playbook-creator with its
-#: members the repo's layer turns on.
+#: framework, no uv.lock) and the same two license copies, playbook-creator with its
+#: members the repo's layer turns on, and the ungated design-patterns and python-architecture.
 _OLD_TREE_FILES = frozenset(
     {
         "query-db/SKILL.md",
@@ -123,6 +132,7 @@ _OLD_TREE_FILES = frozenset(
             f"playbook-creator/rules/{rule_id}.md"
             for rule_id in _SYNTHETIC_PLAYBOOK_CREATOR_MEMBERS
         ),
+        *_SYNTHETIC_UNGATED_SKILL_FILES,
     }
 )
 

@@ -160,14 +160,14 @@ def test_test_file_names_testing_and_coding_once_each(
     source = edit(repo, deps(), APP, state=state)
     again = edit(repo, deps(), TEST_APP, state=state)
 
-    # D41: tests/**/*.py ranks python-testing and web-application first, then the
-    # ``**/*.py`` ties in config order; the five-line cap cuts python-coding and
-    # python-tooling, which the next source edit then names.
+    # D41: tests/**/*.py ranks python-testing, ml-data (ml-numeric-assertions) and
+    # web-application first, then the ``**/*.py`` ties in config order; the five-line
+    # cap cuts python-coding and python-tooling, which the next source edit then names.
     assert context(first) == [
         _line("python-testing"),
+        _line("ml-data"),
         _line("web-application"),
         _line("design-patterns"),
-        _line("ml-data"),
         _line("python-architecture"),
     ]
     assert context(source) == [_line("python-coding"), CUT_SOURCE_LINE]
