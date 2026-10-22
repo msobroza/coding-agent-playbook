@@ -20,6 +20,7 @@ from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME
 from coding_agent_playbook.sync import pipeline as _sync
+from tests._catalog import TEST_FILE_GLOBS
 from tests.cli.hook_repo import CONFIG, GUARD_CONFIG, hook_deps
 from tests.fakes import FakeGitClient
 from tests.hook_runtime.fakes import FakeRuff, ruff_row
@@ -42,7 +43,22 @@ HOOK_ID: Final = "skill-nudge"
 LINT_HOOK_ID: Final = "error-handling-lint-feedback"
 APP: Final = "src/app.py"
 TEST_APP: Final = "tests/test_app.py"
+#: Principle skills that match every Python file, as eight core skills would (D41).
+PRINCIPLE_SKILLS: Final = (
+    "python-coding",
+    "design-patterns",
+    "python-architecture",
+    "python-documentation",
+    "ml-data",
+)
 NOTEBOOK: Final = "notebooks/explore.ipynb"
+
+
+def _install_six_skill_pack(pack_repo: PackRepo) -> None:
+    """Five ``**/*.py`` principle skills, then python-testing on the shared test-file set."""
+    principle = [{"id": skill_id, "globs": ["**/*.py"]} for skill_id in PRINCIPLE_SKILLS]
+    testing = {"id": "python-testing", "globs": list(TEST_FILE_GLOBS)}
+    pack_repo.install_pack([HOOK_ID], handler_config={HOOK_ID: {"skills": [*principle, testing]}})
 
 
 def _line(skill_id: str) -> str:
@@ -51,7 +67,9 @@ def _line(skill_id: str) -> str:
 
 #: Every core skill with members, as in the reference probe (FastAPI + pytest + ML):
 #: ``**/*.py`` reaches ml-data, python-coding and python-tooling; tests reach python-testing.
-SOURCE_LINES: Final = [_line("ml-data"), _line("python-coding"), _line("python-tooling")]
+#: python-tooling ranks first on ``src/app.py``: fastapi-app-wiring's ``**/app.py`` is the
+#: most specific glob that matched (D41); the ``**/*.py`` ties keep config order.
+SOURCE_LINES: Final = [_line("python-tooling"), _line("ml-data"), _line("python-coding")]
 #: The config files ``python-static-checks`` matches besides Python files and pyproject.
 STATIC_CHECK_CONFIGS: Final = ("ruff.toml", ".ruff.toml", "mypy.ini", ".mypy.ini")
 
@@ -97,9 +115,47 @@ def test_test_file_names_testing_and_coding_once_each(
     source = edit(repo, deps(), APP, state=state)
     again = edit(repo, deps(), TEST_APP, state=state)
 
-    assert context(first) == [*SOURCE_LINES[:2], _line("python-testing"), SOURCE_LINES[2]]
+    # D41: tests/**/*.py ranks python-testing and python-tooling (fastapi-app-wiring) first.
+    assert context(first) == [_line("python-testing"), *SOURCE_LINES]
     assert source.trace.combined.decision is Decision.NONE
     assert again.trace.combined.decision is Decision.NONE
+
+
+@pytest.mark.parametrize(
+    "test_file",
+    ["tests/test_x.py", "tests/helpers.py", "tests/unit/factories.py"],
+    ids=["name-glob", "tests-dir-glob", "nested-tests-dir-glob"],
+)
+def test_test_file_edit_ranks_testing_first_and_keeps_the_five_line_cap(
+    pack_repo: PackRepo, deps: Callable[..., RuntimeDeps], state: Path, test_file: str
+) -> None:
+    """D41: six skills match, the most specific glob ranks first, ties keep config order."""
+    _install_six_skill_pack(pack_repo)
+
+    report = edit(pack_repo, deps(), test_file, state=state)
+
+    assert context(report) == [
+        _line("python-testing"),
+        _line("python-coding"),
+        _line("design-patterns"),
+        _line("python-architecture"),
+        _line("python-documentation"),
+    ]
+
+
+def test_cut_skill_shows_on_the_next_matching_edit(
+    pack_repo: PackRepo, deps: Callable[..., RuntimeDeps], state: Path
+) -> None:
+    """D41 keeps the cap and the rank picks the line it cuts; the cut skill is not lost.
+
+    The cap burns no dedupe key, so the sixth skill reaches the next edit.
+    """
+    _install_six_skill_pack(pack_repo)
+    edit(pack_repo, deps(), "tests/test_x.py", state=state)
+
+    report = edit(pack_repo, deps(), APP, state=state)
+
+    assert context(report) == [_line("ml-data")]
 
 
 def test_new_session_nudges_again(

@@ -60,6 +60,15 @@ RETIRED_RULE_IDS: Final[Mapping[str, str]] = {
     "ml-dtypes-and-typing": "ml-data",
     "ml-reproducibility-and-testing": "ml-data",
 }
+#: The glob set every test-related rule must use (prU D41), as catalog/README.md
+#: "Add a rule" lists it: the docs pin and the skill nudge tests read it from here.
+TEST_FILE_GLOBS: Final = (
+    "**/test_*.py",
+    "**/*_test.py",
+    "**/tests/**/*.py",
+    "**/conftest.py",
+    "**/fakes.py",
+)
 
 
 def bundled_plugin_dirs() -> list[Path]:

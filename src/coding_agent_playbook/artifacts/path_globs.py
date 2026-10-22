@@ -17,12 +17,20 @@ from __future__ import annotations
 import re
 import sys
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-__all__ = ["FOLDING_PLATFORMS", "GlobSet", "compile_globs", "fold_key", "glob_to_regex"]
+__all__ = [
+    "FOLDING_PLATFORMS",
+    "GlobSet",
+    "GlobSpecificity",
+    "compile_globs",
+    "fold_key",
+    "glob_specificity",
+    "glob_to_regex",
+]
 
 #: Platforms whose default filesystems compare names case-insensitively (§D.2.4 step 6).
 FOLDING_PLATFORMS = frozenset({"darwin", "win32"})
@@ -81,8 +89,7 @@ def glob_to_regex(pattern: str) -> str:
         >>> glob_to_regex(".env*")
         '(?:.*/)?\\\\.env[^/]*'
     """
-    if pattern.endswith("/"):
-        pattern += "**"
+    pattern = _expanded(pattern)
     pieces: list[str] = []
     index = 0
     while index < len(pattern):
@@ -90,6 +97,46 @@ def glob_to_regex(pattern: str) -> str:
         pieces.append(piece)
     body = "".join(pieces)
     return body if "/" in pattern else _ANY_DIRS + body
+
+
+class GlobSpecificity(NamedTuple):
+    """How narrow a glob is, as a sort key: the smaller key is the more specific glob.
+
+    ``wildcards`` counts the ``*``, ``?``, ``[...]`` and trailing ``**`` tokens that
+    stand in for part of a name; ``neg_literal`` is minus the count of literal
+    characters; ``any_dirs`` counts the ``**/`` prefixes (an implicit one for a
+    pattern with no ``/``). A ``**/`` only says "at any depth", so it weighs least:
+    ``**/tests/**/*.py`` names a narrower set than ``**/*.py`` (D41,
+    specs/prU-core-python-skills.md).
+    """
+
+    wildcards: int
+    neg_literal: int
+    any_dirs: int
+
+
+def glob_specificity(pattern: str) -> GlobSpecificity:
+    """The :class:`GlobSpecificity` of ``pattern``, read with the matcher's own token walk.
+
+    Example::
+
+        >>> sorted(["**/*.py", "**/conftest.py", "src/"], key=glob_specificity)
+        ['**/conftest.py', 'src/', '**/*.py']
+    """
+    pattern = _expanded(pattern)
+    wildcards = literal = 0
+    any_dirs = 0 if "/" in pattern else 1
+    index = 0
+    while index < len(pattern):
+        piece, after = _translate_at(pattern, index)
+        if piece == _ANY_DIRS:
+            any_dirs += 1
+        elif piece == re.escape(pattern[index]):
+            literal += 1
+        else:
+            wildcards += 1
+        index = after
+    return GlobSpecificity(wildcards, -literal, any_dirs)
 
 
 def fold_key(text: str, platform: str) -> str:
@@ -109,6 +156,11 @@ def fold_key(text: str, platform: str) -> str:
     import unicodedata  # only the folding platforms pay for it (§D.1)
 
     return unicodedata.normalize("NFC", text).casefold()
+
+
+def _expanded(pattern: str) -> str:
+    """``pattern`` with a trailing ``/`` spelled out as ``/**`` (everything under it)."""
+    return pattern + "**" if pattern.endswith("/") else pattern
 
 
 def _prepared(pattern: str, platform: str, home: str | None) -> str:

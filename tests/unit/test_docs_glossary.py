@@ -19,7 +19,7 @@ import re
 
 import pytest
 
-from tests._catalog import CATALOG_ROOT, REPO_ROOT, core_rule_skill_ids
+from tests._catalog import CATALOG_ROOT, REPO_ROOT, TEST_FILE_GLOBS, core_rule_skill_ids
 from tests.unit.test_docs_lifecycle_hooks_spec import _spec_section
 from tests.unit.test_docs_readme_hooks import _blocks
 from tests.unit.test_docs_readme_hooks import _section as _readme_section
@@ -115,6 +115,14 @@ def test_catalog_readme_add_a_rule_documents_skill() -> None:
     assert "`skill:`" in add_a_rule, "catalog/README.md 'Add a rule' must document 'skill:'"
     missing = [i for i in core_rule_skill_ids() if f"`{i}`" not in add_a_rule]
     assert not missing, f"'Add a rule' must name every core skill a rule may name: {missing}"
+
+
+def test_catalog_readme_add_a_rule_lists_the_shared_test_file_globs() -> None:
+    """D41 (specs/prU-core-python-skills.md): one glob set for every test-related rule."""
+    text = (CATALOG_ROOT / "README.md").read_text(encoding="utf-8")
+    add_a_rule = text[text.index("## Add a rule") : text.index("## Add a prompt")]
+    missing = [g for g in TEST_FILE_GLOBS if f"`{g}`" not in add_a_rule]
+    assert not missing, f"'Add a rule' must list the shared test-file globs: {missing}"
 
 
 @pytest.mark.parametrize("doc", _CORE_DOCS)
