@@ -47,8 +47,15 @@ async def get_invoice(id: UUID) -> InvoiceRead: ...
 async def delete_invoice(id: UUID) -> None: ...
 
 
-@router.get("/invoice/{id}/line_items")  # snake_case here, kebab-case elsewhere
+@router.get("/invoice/{id}/line_items")  # snake_case here, camelCase above
 async def list_lines(id: UUID) -> list[InvoiceLineRead]: ...
+
+
+v2 = APIRouter(prefix="/v2")  # a whole new version only to add an optional `memo` field
+
+
+@v2.get("/invoices")
+async def list_invoices_v2() -> list[InvoiceReadWithMemo]: ...
 ```
 
 ## Good Example
@@ -58,8 +65,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, FastAPI
 
-# InvoiceRead, InvoiceLineRead, PaymentCreate and PaymentRead are the API schemas;
-# Settings is the app's typed settings class.
+# InvoiceRead, InvoiceLineRead, PaymentCreate and PaymentRead are the API schemas.
 router = APIRouter(prefix="/invoices")  # the prefix matches the resource
 
 
@@ -84,7 +90,7 @@ async def list_invoice_lines(invoice_id: UUID) -> list[InvoiceLineRead]: ...
 async def pay_invoice(invoice_id: UUID, payment: PaymentCreate) -> PaymentRead: ...
 
 
-def create_app(settings: Settings) -> FastAPI:
+def create_app() -> FastAPI:
     app = FastAPI()
     app.include_router(router, prefix="/v1")  # the version is a path prefix
     return app

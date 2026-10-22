@@ -54,8 +54,10 @@ from fastapi import APIRouter, Query
 # ClockDep is the app's injected clock (now() returns an aware UTC datetime);
 # TransactionRead and ConversionRead are the response models.
 router = APIRouter(prefix="/transactions", tags=["transactions"])
+conversions = APIRouter(prefix="/conversions", tags=["conversions"])
 
 TransactionStatus = Literal["pending", "settled", "failed"]
+CurrencyCode = Annotated[str, Query(pattern=r"^[A-Z]{3}$")]  # ISO 4217, e.g. "EUR"
 
 
 @router.get("")
@@ -71,10 +73,10 @@ async def list_transactions(
     ...
 
 
-@router.get("/conversions")
+@conversions.get("")
 async def convert(
-    from_currency: Annotated[str, Query(min_length=3, max_length=3)],
-    to_currency: Annotated[str, Query(min_length=3, max_length=3)],
+    from_currency: CurrencyCode,
+    to_currency: CurrencyCode,
     amount: Annotated[Decimal, Query(gt=0)],
 ) -> ConversionRead: ...
 ```

@@ -1,6 +1,6 @@
-"""Pins of core skill ``web-application`` (prU D4, L0-15): the two FastAPI rules re-homed.
+"""Pins of core skill ``web-application`` (prU D4, L0-15): its members and their frontmatter.
 
-The api-conventions section is vendored (C-web-application-04): its three rules are
+L0-15 re-homed the two FastAPI rules (error boundaries, app wiring). The api-conventions section is vendored (C-web-application-04): its three rules are
 pinned at the mapping's priorities 63-65.
 """
 
@@ -21,6 +21,8 @@ _ROUTE_FILES: Final = (
 )
 _PROVIDER_FILES: Final = ("**/deps.py", "**/dependencies.py")
 _APP_FILES: Final = ("**/main.py", "**/app.py", "**/asgi.py")
+#: A FastAPI-specific rule's gate.
+_FASTAPI_ONLY: Final = {"has_framework": ["fastapi"]}
 #: prU D23: a web-application rule that is not FastAPI-specific gates on any web framework.
 _ANY_WEB_FRAMEWORK: Final = {"any_framework": ["fastapi", "flask", "django", "starlette"]}
 
@@ -47,7 +49,7 @@ PINS: Final = CoreSkillPins(
     ),
     rules={
         "fastapi-error-boundaries": RulePin(
-            applies_if={"has_framework": ["fastapi"]},
+            applies_if=_FASTAPI_ONLY,
             globs=("**/*.py",),
             priority=41,
             name="FastAPI error boundaries",
@@ -55,7 +57,7 @@ PINS: Final = CoreSkillPins(
             section="api-design",
         ),
         "fastapi-app-wiring": RulePin(
-            applies_if={"has_framework": ["fastapi"]},
+            applies_if=_FASTAPI_ONLY,
             globs=(
                 "**/routers/**/*.py",
                 "**/routes/**/*.py",
@@ -72,7 +74,7 @@ PINS: Final = CoreSkillPins(
             section="app-structure",
         ),
         "fastapi-query-parameters": RulePin(
-            applies_if={"has_framework": ["fastapi"]},
+            applies_if=_FASTAPI_ONLY,
             globs=(*_ROUTE_FILES, *_PROVIDER_FILES),
             priority=63,
             name="FastAPI query parameters",
@@ -88,7 +90,7 @@ PINS: Final = CoreSkillPins(
             section="api-conventions",
         ),
         "fastapi-openapi-metadata": RulePin(
-            applies_if={"has_framework": ["fastapi"]},
+            applies_if=_FASTAPI_ONLY,
             globs=_ROUTE_FILES,
             priority=65,
             name="FastAPI OpenAPI metadata",
