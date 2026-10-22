@@ -369,11 +369,21 @@ def test_pins_modules_cover_exactly_the_core_skills_with_a_playbook_block() -> N
     assert core_rule_skill_ids() == CORE_SKILLS, "one tests/core_skill_pins module per such skill"
 
 
+def _emitting_probe(request: pytest.FixtureRequest, skill_id: str) -> Path:
+    """The synced probe that writes ``skill_id``: the Domino probe for a Domino-only skill."""
+    domino = PINS_BY_SKILL[skill_id].domino_only
+    probe: Path = request.getfixturevalue("domino_probe_repo" if domino else "reference_probe_repo")
+    return probe
+
+
 @pytest.mark.parametrize("skill_id", CORE_SKILLS)
 def test_reference_probe_emits_each_core_skill_within_budget(
-    reference_probe_repo: Path, skill_id: str
+    request: pytest.FixtureRequest, skill_id: str
 ) -> None:
-    frontmatter, body = split_frontmatter(_probe_skill_md(reference_probe_repo, skill_id))
+    """Each core skill on the probe that activates it: the Domino probe for Domino skills."""
+    frontmatter, body = split_frontmatter(
+        _probe_skill_md(_emitting_probe(request, skill_id), skill_id)
+    )
     authored = _authored(skill_id)[0]
     block = authored["playbook"]
     assert isinstance(block, dict)
@@ -386,7 +396,10 @@ def test_reference_probe_emits_each_core_skill_within_budget(
     assert description.endswith(f"Use when {block['use_when']}.")
     assert description.count(" Use when ") == 1
     assert not _TRUNCATION_TAIL.search(description), f"{skill_id} truncates: {description!r}"
-    members = _probe_members(skill_id)
+    # The Domino probe is the reference probe plus Domino markers, so a Domino-only
+    # skill's members are active there exactly when their other gates hold on it.
+    domino = PINS_BY_SKILL[skill_id].domino_only
+    members = _members(skill_id) if domino else _probe_members(skill_id)
     if block.get("sections"):
         # A sectioned skill's Covers clause names its active sections, not its members (D17).
         covers = description.partition(" Covers ")[2].partition(". Use when ")[0].lower()
@@ -407,13 +420,17 @@ def test_reference_probe_emits_each_core_skill_within_budget(
     assert len(lines) == len(members), f"{skill_id} index: {lines}"
 
 
-def test_reference_probe_where_section_lists_every_core_skill(reference_probe_repo: Path) -> None:
+def test_reference_probe_where_section_lists_every_core_skill(
+    request: pytest.FixtureRequest,
+) -> None:
+    """Each core skill in the map of the probe that activates it (Domino skills: Domino probe)."""
     for relative in ("AGENTS.md", CLAUDE_RULES_PATH):
-        text = (reference_probe_repo / relative).read_text(encoding="utf-8")
-        assert text.count("## Where guidance lives") == 1, relative
         for skill_id, files in WHERE_FROM_PINS.items():
+            probe = _emitting_probe(request, skill_id)
+            text = (probe / relative).read_text(encoding="utf-8")
+            assert text.count("## Where guidance lives") == 1, relative
             assert f"- {files}: skill `{skill_id}`" in text, f"{relative} lacks {skill_id}"
-        assert "Lint feedback names a rule id" in text, relative
+            assert "Lint feedback names a rule id" in text, relative
 
 
 def test_reference_probe_writes_the_guardrails_skill_to_opencode_and_agents_roots_only(

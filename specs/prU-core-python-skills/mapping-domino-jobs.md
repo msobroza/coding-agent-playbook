@@ -7,7 +7,7 @@ Priority = impact band floor (CRITICAL 20, HIGH 40, MEDIUM 60, LOW 80) + the rul
 
 Description (284 characters): Guides Domino 6.2 jobs and the run basics Apps and agents share. Covers project and run environment, entry points and exit codes, datasets, scheduling and launching, flow tasks, results and metrics, reproducibility. Use when writing code a Domino job, schedule, Launcher or Flow runs.
 
-`playbook.files`: Job and Launcher entry scripts, requirements.txt, environment Dockerfile instructions and Domino dotfiles (.dominoresults, .dominoignore)
+`playbook.files`: Job and Launcher scripts, requirements.txt and Domino dotfiles (shortened from the generated phrase to fit the 80-character cap of validate)
 
 | # | Section | Impact | Summary | Open when |
 | --- | --- | --- | --- | --- |

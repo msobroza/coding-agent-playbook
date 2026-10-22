@@ -30,6 +30,15 @@ credited by name only. No sentences or examples from the article are copied;
 the ideas are restated in the engine's own words as general clean-code
 principles.
 
+The domino-jobs skill (its SKILL.md and every rule under its rules/
+directory, listed under "Engine-written files") distills facts from the
+Domino Data Lab 6.2 user guide and its API guide, which carry no open
+license; they are credited by name only and not vendored (D50). No sentences
+or examples from the documentation are copied: the facts are restated in the
+engine's own words, every example is new, and where the documentation
+contradicts itself the rules state the safe behavior. A distilled source has
+no pin and no license copy.
+
 ## python-best-practices
 
 Source: the "python-best-practices" agent skills by Ludo Technologies LLC, tag v0.8.0.
@@ -192,6 +201,18 @@ that comes to hold vendored text moves from here into its source's table.
 ### domino-apps
 
 ### domino-jobs
+
+- `SKILL.md`
+- `rules/domino-job-schedules.md`
+- `rules/domino-idempotent-jobs.md`
+- `rules/domino-spot-checkpoints.md`
+- `rules/domino-launch-jobs-from-code.md`
+- `rules/domino-flow-task-io.md`
+- `rules/domino-flow-task-purity.md`
+- `rules/domino-job-results.md`
+- `rules/domino-job-logging.md`
+- `rules/domino-job-stats-file.md`
+- `rules/domino-job-email-report.md`
 
 ### ml-data
 

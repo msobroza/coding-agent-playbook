@@ -330,14 +330,18 @@ def test_requirements_edit_naming_only_known_dependencies_is_silent(
 def test_a_new_domino_input_names_the_domino_gated_rule(
     repo: PackRepo, deps: Callable[..., RuntimeDeps], rel: str, text: str
 ) -> None:
-    """``domino_project`` was baked false; a marker or the committed key turns it on (D63)."""
+    """``domino_project`` was baked false; a marker or the committed key turns it on (D63).
+
+    The core Domino skills' members sort before the repo-local rule and the list
+    is capped, so the notice names a core Domino rule first.
+    """
     repo.write(rel, text)
     tool_input = {"file_path": str(repo.root / rel), "content": text}
 
     report = _post(repo, deps(), "Write", tool_input)
 
     [item] = report.trace.combined.context
-    assert 'rule "domino-runs" (source "<repo-local>")' in item
+    assert 'now applicable but not synced yet: rule "domino-' in item
 
 
 @pytest.mark.parametrize(

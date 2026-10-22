@@ -23,12 +23,14 @@ import pytest
 from coding_agent_playbook.adapters.claude_code.hooks import CLAUDE_HEARTBEAT_LINE
 from coding_agent_playbook.adapters.claude_code.paths import CLAUDE_MD_PATH, CLAUDE_RULES_PATH
 from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
+from coding_agent_playbook.detector.facts import detect
 from coding_agent_playbook.rendering.formats import render_for
 from coding_agent_playbook.skills.document import where_entry, where_guidance_section
 from coding_agent_playbook.sync.render import render_artifacts
 from coding_agent_playbook.validation.context import SyncContext
 from tests._budget_probe import LISTING_MAX_CHARS, every_core_where_entry
 from tests._catalog import core_rules, core_skill_ids
+from tests.core_skill_pins import ALL_PINS
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
 
 pytestmark = pytest.mark.catalog
@@ -47,6 +49,8 @@ AGENTS_MD_MAX_WORDS: Final = 1500
 CORE_DESCRIPTION_MAX_CHARS: Final = 300
 #: prU D18 as amended by D54 (2,000 -> 2,400 -> 2,800); the per-skill cap above stays.
 CORE_DESCRIPTIONS_MAX_CHARS: Final = 2800
+#: Core skills whose every member gates on ``domino_project``: absent from the standard probe.
+DOMINO_ONLY_SKILL_IDS: Final = frozenset(pins.skill_id for pins in ALL_PINS if pins.domino_only)
 #: prU D59: the Domino probe's own caps, the worst case once the Domino skills apply.
 DOMINO_CORE_DESCRIPTIONS_MAX_CHARS: Final = 3400
 DOMINO_LISTING_MAX_CHARS: Final = 7500
@@ -72,7 +76,10 @@ def _emitted_descriptions(repo: Path) -> dict[str, str]:
 
 
 def _core_descriptions(repo: Path) -> dict[str, str]:
+    """Each core skill the probe should write: Domino-only skills only on a Domino repo (D63)."""
     core_ids = core_skill_ids()
+    if not detect(repo)["domino_project"]:
+        core_ids -= DOMINO_ONLY_SKILL_IDS
     emitted = _emitted_descriptions(repo)
     assert core_ids <= set(emitted), (
         f"the probe lacks core skills {sorted(core_ids - set(emitted))}"
