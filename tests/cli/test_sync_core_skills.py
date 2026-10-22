@@ -5,7 +5,7 @@ Core ships ``python-coding``, ``python-testing``, ``python-tooling``,
 member rules passes ``applies_if`` (ADR 0001). ``python-testing``'s members all
 need pytest, so the skill follows the ``pytest`` dependency in and out of the
 repo. ``python-tooling`` has an ungated member (``python-static-checks``), so it
-stays, while ``web-application``'s two FastAPI rules follow ``fastapi``. The "Where guidance lives" map in
+stays, while ``web-application``'s rules follow ``fastapi``. The "Where guidance lives" map in
 ``AGENTS.md`` names only skills a sync writes, so it is absent when no enabled
 adapter has a native skill root.
 """
@@ -19,30 +19,48 @@ import pytest
 
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.config.files import FileSystemStateSource
+from tests.core_skill_pins.web_application import PINS as WEB_PINS
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
     from pathlib import Path
 
 _TOOLING = "python-tooling"
 _TESTING: Final = "python-testing"
 _WEB: Final = "web-application"
 #: python-tooling's ungated member, written in every synthetic repo, and web-application's
-#: members a FastAPI repo without SQLAlchemy or httpx gets: the members gated on FastAPI
-#: alone (the httpx and SQLAlchemy members need more, D23) and the security rules gated on
-#: any web framework (prU C-web-application-01, -02), sorted by file name.
+#: members a FastAPI repo without pytest or SQLAlchemy activates.
 _STATIC_CHECKS: Final = ["python-static-checks.md"]
-_FASTAPI_RULES: Final = [
-    "fastapi-app-wiring.md",
-    "fastapi-error-boundaries.md",
-    "fastapi-no-blocking-calls.md",
-    "web-cors-origins.md",
-    "web-jwt-validation.md",
-    "web-object-authorization.md",
-    "web-password-hashing.md",
-    "web-secure-tokens.md",
-]
+#: The gate keys a FastAPI repo without pytest or SQLAlchemy can satisfy.
+_FRAMEWORK_GATE_KEYS: Final = frozenset({"has_framework", "any_framework"})
+
+
+def _needs_only_fastapi(applies_if: Mapping[str, object]) -> bool:
+    """Whether a member gated by ``applies_if`` is active in a FastAPI-only repo."""
+    required = applies_if.get("has_framework", [])
+    return set(applies_if) <= _FRAMEWORK_GATE_KEYS and required in ([], ["fastapi"])
+
+
+#: The security rules (prU C-web-application-01) gate on any web framework but pin no
+#: frontmatter, so ``WEB_PINS.rules`` does not list them.
+_SECURITY_RULES: Final = (
+    "web-cors-origins",
+    "web-jwt-validation",
+    "web-object-authorization",
+    "web-password-hashing",
+    "web-secure-tokens",
+)
+_FASTAPI_RULES: Final = sorted(
+    [
+        *(f"{rule_id}.md" for rule_id in _SECURITY_RULES),
+        *(
+            f"{rule_id}.md"
+            for rule_id, pin in WEB_PINS.rules.items()
+            if _needs_only_fastapi(pin.applies_if)
+        ),
+    ]
+)
 
 _CONFIG = """\
 schema_version = 1
