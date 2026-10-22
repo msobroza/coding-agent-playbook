@@ -337,7 +337,8 @@ def test_sync_derives_the_glob_table_from_the_rendered_member_rules(
     """Only rules that pass ``applies_if`` reach the table: no pytest, no FastAPI, no ML here.
 
     python-tooling still appears, with the globs of its one ungated member,
-    python-static-checks (Python files plus the ruff and mypy config files).
+    python-static-checks (Python files plus the ruff and mypy config files), and
+    python-testing with its ungated pytest-first-properties on the shared test-file set.
     """
     (tmp_path / "repo").mkdir()
     repo = make_synthetic_repo(tmp_path / "repo", config_text=CONFIG + "[hooks]\nenabled = true\n")
@@ -352,6 +353,7 @@ def test_sync_derives_the_glob_table_from_the_rendered_member_rules(
         "skills": [
             {"id": "design-patterns", "globs": ["**/*.py"]},
             {"id": "python-coding", "globs": ["**/*.py"]},
+            {"id": "python-testing", "globs": list(TEST_FILE_GLOBS)},
             {"id": "python-tooling", "globs": static_checks},
         ]
     }
