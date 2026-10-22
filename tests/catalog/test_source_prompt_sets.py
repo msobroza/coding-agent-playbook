@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.artifacts.prompt import Prompt
+from coding_agent_playbook.catalog.prompt_sets import prompt_set_dirs
 from coding_agent_playbook.catalog.skill_rules import iter_md_files
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 
@@ -57,13 +58,14 @@ def test_v2_keeps_the_engine_prompt_ids_and_their_order(tmp_path: Path) -> None:
     assert [p.frontmatter.id for p in v2] == [p.frontmatter.id for p in v1]
 
 
-def test_without_a_v2_set_the_listing_is_the_walk_list_prompts_did_before_prompt_sets(
+def test_the_default_listing_is_the_walk_list_prompts_did_before_prompt_sets(
     tmp_path: Path,
 ) -> None:
     """ "Byte-identical to today": before D76, ``list_prompts`` built one prompt per
     ``*.md``/``*.md.j2`` file under each layer's ``prompts/``, layer by layer; the
     render path after it is unchanged. Pinned on every real catalog layer plus a
-    repo-local one, none of which has a ``prompts/v2/`` yet."""
+    repo-local one without a ``prompts/v2/``; the walk leaves out the set
+    directories a layer has (core's v2 set, prU C-prompts-v2), as v1 always does."""
     prompts = tmp_path / "playbook" / "prompts"
     _write_prompt(prompts / "tidy-up.md", "tidy-up", "v1 tidy\n")
     _write_prompt(prompts / "nested" / "explain-it.md", "explain-it", "v1 explain\n")
@@ -72,7 +74,7 @@ def test_without_a_v2_set_the_listing_is_the_walk_list_prompts_did_before_prompt
     before_prompt_sets = [
         Prompt.from_markdown(md, label)
         for label, root in source.layer_roots("prompts")
-        for md in iter_md_files(root)
+        for md in iter_md_files(root, skip=prompt_set_dirs(root))
     ]
 
     assert [(p.source_path, p.body) for p in source.list_prompts()] == [
@@ -91,8 +93,8 @@ def test_prompt_set_layers_name_what_each_set_leaves_unrendered(tmp_path: Path) 
 
     def _unrendered(prompt_set: PromptSet) -> dict[str, str]:
         source = FileSystemArtifactSource(repo_root=tmp_path, prompt_set=prompt_set)
-        [layer] = source.prompt_set_layers()
-        assert layer.set_dir == tmp_path / "playbook" / "prompts" / "v2"
+        set_dir = tmp_path / "playbook" / "prompts" / "v2"
+        [layer] = [layer for layer in source.prompt_set_layers() if layer.set_dir == set_dir]
         return {p.frontmatter.id: p.body for p in layer.unrendered}
 
     assert _unrendered("v1") == {"tidy-up": "v2 tidy\n", "orphan": "v2 orphan\n"}
