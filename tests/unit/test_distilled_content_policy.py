@@ -72,8 +72,7 @@ MOVED_GUIDANCE_OWNERS: Final = (
 #: ships, and that lane. The lane that creates the owner deletes its row here
 #: (tickets.md, content-ticket template step 1), and
 #: ``test_pending_owners_are_not_shipped_yet`` fails until it does.
-PENDING_OWNERS: Final[Mapping[str, tuple[str, str, str]]] = {
-}
+PENDING_OWNERS: Final[Mapping[str, tuple[str, str, str]]] = {}
 #: The ``generate-tests`` prompt's line on doubles (spec H18): named fakes come first (D8).
 _GENERATE_TESTS_PROMPT: Final = CORE_ROOT / "prompts" / "generate-tests.md.j2"
 
