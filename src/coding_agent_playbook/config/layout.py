@@ -200,5 +200,19 @@ class LayoutRewriter:
         )
 
     def _pattern(self) -> re.Pattern[str]:
-        alternatives = "|".join(re.escape(source) for source in sorted(self.targets, key=len)[::-1])
+        alternatives = "|".join(
+            self._alternative(source) for source in sorted(self.targets, key=len)[::-1]
+        )
         return re.compile(f"{_PATH_START}(?:{alternatives}){_PATH_END}")
+
+    def _alternative(self, source: str) -> str:
+        """``source`` as a regex that skips text already holding its own target.
+
+        prU L0-28: when the target extends its source (``docs/specs`` ->
+        ``docs/specs/v2``), ``docs/specs/v2/x`` must stay as it is, or a second
+        rewrite (and the rendered document-layout rule) would read ``docs/specs/v2/v2``.
+        """
+        target = self.targets[source]
+        if not target.startswith(f"{source}/"):
+            return re.escape(source)
+        return f"{re.escape(source)}(?!{re.escape(target[len(source) :])}{_PATH_END})"

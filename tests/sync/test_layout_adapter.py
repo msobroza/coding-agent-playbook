@@ -210,6 +210,28 @@ def test_a_changed_key_rewrites_core_overlay_and_framework_files(
     _sync_ok(tmp_path, check=True)
 
 
+def test_a_path_extending_its_default_is_written_once(
+    tmp_path: Path, make_package: Callable[..., str]
+) -> None:
+    """prU L0-28: ``specs = "docs/specs/v2"`` never becomes ``docs/specs/v2/v2``."""
+    overlay = _overlay(make_package, "acme_nested")
+    _init_repo(tmp_path, framework="mattpocock")
+    _set_config(
+        tmp_path,
+        head=f'framework = "mattpocock"\noverlays_enabled = ["{overlay}"]',
+        layout='specs = "docs/specs/v2"',
+    )
+
+    _sync_ok(tmp_path)
+
+    assert _texts_mentioning(tmp_path, "docs/specs/v2/v2") == []
+    agents = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
+    assert "Specs, designs and PRDs in `docs/specs/v2/YYYY-MM-DD-<slug>.md`" in agents
+    assert "docs/specs/v2/**/*.md" in _nudge_globs(tmp_path)
+    _sync_ok(tmp_path)
+    _sync_ok(tmp_path, check=True)
+
+
 def test_a_framework_alias_maps_its_own_prefix(
     tmp_path: Path, make_package: Callable[..., str]
 ) -> None:
