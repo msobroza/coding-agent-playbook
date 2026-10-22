@@ -90,4 +90,4 @@ def test_run_task_writes_the_model(tmp_path: Path) -> None:
 - Output names must match the task's declared outputs exactly; keep them as constants shared with the flow definition.
 - For a local run, create the input files (or use the plugin's setup helper) rather than editing paths in the task.
 - Standalone-mode paths come from domino-paths-from-env; side effects and retries are domino-flow-task-purity.
-- The where-outputs-go reference in this skill shows the Flow column next to the standalone ones.
+- where-outputs-go.md in this skill shows the Flow column next to the standalone ones.

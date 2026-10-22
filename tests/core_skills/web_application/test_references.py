@@ -3,7 +3,8 @@
 prU C-web-application-refs: the mapping (specs/prU-core-python-skills/mapping-
 web-application.md, "References") names three references, each with an open-when
 line, a gate and the rule ids it routes to. D47 lists each in ``playbook.references``;
-D49 caps the internal decision guide at 120 lines.
+D49 caps the internal decision guide at 120 lines. The routes are read from the
+mapping through ``tests._mapping_references``, which the other skills' refs tests share.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from typing import Final
 import pytest
 
 from tests._catalog import core_skill_root
+from tests._mapping_references import mapped_references, missing_rule_ids
 from tests.core_skills._references import (
     INTERNAL_GUIDE_MAX_LINES,
     cross_skill_mentions,
@@ -37,76 +39,13 @@ MAPPED_GATES: Final = {
     "references/api-review-checklist.md": _ANY_WEB_FRAMEWORK,
     "references/request-lifecycle.md": _FASTAPI,
 }
-#: The mapping's "Routes to" column: the rule ids each reference must name.
+#: The mapping's "Routes to" column, read from the mapping: the rule ids each reference names.
 ROUTES_TO: Final = {
-    "references/add-an-endpoint.md": [
-        "web-api-schemas",
-        "sqlalchemy-2-style",
-        "alembic-migrations",
-        "fastapi-dependency-providers",
-        "fastapi-thin-routes",
-        "web-http-methods",
-        "web-api-resource-naming",
-        "web-api-pagination",
-        "fastapi-query-parameters",
-        "web-object-authorization",
-        "sqlalchemy-transaction-boundary",
-        "fastapi-error-boundaries",
-        "fastapi-openapi-metadata",
-        "fastapi-app-wiring",
-        "fastapi-dependency-overrides",
-        "sqlalchemy-test-rollback",
-    ],
-    "references/api-review-checklist.md": [
-        "web-http-methods",
-        "web-api-resource-naming",
-        "fastapi-error-boundaries",
-        "web-api-schemas",
-        "web-api-pagination",
-        "fastapi-query-parameters",
-        "fastapi-openapi-metadata",
-        "fastapi-dependency-providers",
-        "fastapi-thin-routes",
-        "web-object-authorization",
-        "web-jwt-validation",
-        "web-password-hashing",
-        "web-cors-origins",
-        "fastapi-app-wiring",
-        "fastapi-request-id-logging",
-        "httpx-shared-client",
-        "alembic-migrations",
-        "sqlalchemy-session-per-request",
-    ],
-    "references/request-lifecycle.md": [
-        "fastapi-app-wiring",
-        "web-cors-origins",
-        "httpx-shared-client",
-        "alembic-migrations",
-        "fastapi-request-id-logging",
-        "fastapi-dependency-providers",
-        "sqlalchemy-session-per-request",
-        "web-jwt-validation",
-        "web-object-authorization",
-        "fastapi-thin-routes",
-        "web-api-schemas",
-        "fastapi-query-parameters",
-        "web-api-pagination",
-        "web-http-methods",
-        "web-api-resource-naming",
-        "fastapi-no-blocking-calls",
-        "sqlalchemy-transaction-boundary",
-        "sqlalchemy-2-style",
-        "sqlalchemy-eager-loading",
-        "sqlalchemy-bound-parameters",
-        "web-password-hashing",
-        "web-secure-tokens",
-        "fastapi-error-boundaries",
-        "fastapi-openapi-metadata",
-        "fastapi-dependency-overrides",
-        "sqlalchemy-test-rollback",
-    ],
+    path: reference.routes_to
+    for path, reference in mapped_references("web-application").items()
+    if path in MAPPED_GATES
 }
-#: D49: an engine-written decision guide is at most 120 lines.
+#: The engine-written decision guide D49 budgets.
 INTERNAL_GUIDE: Final = "references/request-lifecycle.md"
 #: A token shaped like one of this skill's rule ids (their prefixes).
 _RULE_ID_LIKE_RE: Final = re.compile(
@@ -134,7 +73,7 @@ def test_skill_lists_each_mapped_reference_with_its_gate_in_mapping_order() -> N
 def test_reference_names_every_rule_it_routes_to(path: str) -> None:
     text = reference_text(SKILL_ROOT, path)
 
-    missing = [rule_id for rule_id in ROUTES_TO[path] if rule_id not in text]
+    missing = missing_rule_ids(text, ROUTES_TO[path])
 
     assert missing == [], f"{path} does not name {missing}"
 
