@@ -110,6 +110,15 @@ def test_core_attributions_record_the_domino_docs_drops_per_page() -> None:
     assert "user_guide/55fc89" in {row.upstream for row in rows if not row.dropped}
 
 
+def test_core_attributions_record_the_domino_jobs_pages_and_drops() -> None:
+    """prU D50: domino-jobs credits each page its rules restate and drops the rest."""
+    rows = load_core_attributions().sources["domino-docs"].skills["domino-jobs"].rows
+    used = {row.upstream: row.targets for row in rows if not row.dropped}
+    assert "rules/domino-job-schedules.md" in used["user_guide/5dce1f"]
+    assert "rules/domino-launch-jobs-from-code.md" in used["api_guide/c5ef26"]
+    assert "user_guide/db2820" in {row.upstream for row in rows if row.dropped}
+
+
 def test_core_attributions_list_engine_written_files_per_core_skill() -> None:
     """Every core skill has its own Engine-written list, so lanes never share one."""
     on_disk = {p.name for p in CORE_SKILLS_ROOT.iterdir() if p.is_dir()}
