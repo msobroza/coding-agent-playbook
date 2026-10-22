@@ -18,12 +18,13 @@ import coding_agent_playbook as _engine
 from coding_agent_playbook.artifacts.identity import template_source
 from coding_agent_playbook.config.layout import resolve_layout
 from coding_agent_playbook.detector.predicate import filter_applies_if
+from coding_agent_playbook.rendering.impact_tag import with_impact_tag
 from coding_agent_playbook.rendering.jinja import build_environment, render_sandboxed
 from coding_agent_playbook.rendering.prompt_rule_delivery import includes_rules_appendix
 from coding_agent_playbook.rendering.rule_registry import RuleRegistryImpl
 from coding_agent_playbook.skills.capabilities import framework_role_map
 from coding_agent_playbook.skills.membership import active_skill_ids
-from coding_agent_playbook.skills.sections import with_impact_tag
+from coding_agent_playbook.skills.sections import section_impacts
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -133,7 +134,6 @@ class RenderSession:
         on_malformed_predicate: MalformedPredicate = "raise",
         skills: Sequence[Skill] = (),
         framework: str | None = None,
-        impacts: Mapping[str, Impact] | None = None,
     ) -> RenderSession:
         """Filter ``rules`` by ``applies_if`` once; build the environment and the registry from them.
 
@@ -144,10 +144,10 @@ class RenderSession:
         layer) feed ``framework_skill(role)`` and ``skill_active(name)`` (D74);
         without them every role is ``""`` and no skill is active, which is what
         eval-sample prompts see (``evals.prompting._sample_session``).
-        ``impacts`` (``skills.sections.section_impacts``, computed once per pass)
-        tags each listed rule's title with its section's ``[IMPACT]`` in
-        :meth:`render_rule` (D32); the registry, so every ``Reference rules``
-        appendix, stays untagged (D46(8)).
+        ``skills`` also map each member rule to its section's impact, once per
+        pass (``skills.sections.section_impacts``): :meth:`render_rule` tags that
+        rule's title with ``[IMPACT]`` (D32), while the registry, so every
+        ``Reference rules`` appendix, stays untagged (D46(8)).
 
         Example: ``RenderSession.open([], context, repo_root=repo).render_rule(rule)``.
         """
@@ -157,7 +157,7 @@ class RenderSession:
         env.globals["_facts"] = dict(context.facts)
         env.globals["_framework_roles"] = framework_role_map(skills, framework)
         env.globals["_active_skills"] = active_skill_ids(skills, rules, kept)
-        return cls(kept, context, env, impacts or {})
+        return cls(kept, context, env, section_impacts(skills, rules))
 
     @property
     def registry(self) -> RuleRegistryImpl:

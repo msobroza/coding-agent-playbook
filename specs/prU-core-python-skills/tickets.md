@@ -297,17 +297,17 @@ Acceptance:
 
 ### L0-12: feat(rendering): render the [IMPACT] tag in each member rule's title
 
-Lane lane0, size S, depends on L0-09; decisions D32, D17, D30.
+Lane lane0, size S, depends on L0-09; decisions D32, D17, D30, D46(8).
 
-D32: the tag in '# Title [IMPACT]' comes from the rule's section, never from the source. Add section_impacts(skills, rules) -> {rule_id: impact} in skills/sections.py and an impacts mapping on RenderSession.open (rendering/session.py:107-128) that appends ' [IMPACT]' to the first ATX '# ' heading outside code fences of each listed rule's rendered body, so the skill rules/ files, Continue's rule files, agent_harness rule files and every prompt's 'Reference rules' appendix agree. Callers: sync/render.py render_artifacts (:120) and evals/prompting.py _task_session (:152-163), which loads the source's skills for it; commands/render.py shows the tag for render <rule-id>.
+D32: the tag in '# Title [IMPACT]' comes from the rule's section, never from the source. Add section_impacts(skills, rules) -> {rule_id: impact} in skills/sections.py; RenderSession.open (rendering/session.py:107-128) computes it from the skills and rules it already receives, and render_rule appends ' [IMPACT]' (rendering/impact_tag.py) to the first ATX '# ' heading outside code fences of each listed rule's rendered body, so the skill rules/ files and Continue's rule files agree. D46(8): the registry stays untagged, so no prompt or eval 'Reference rules' appendix (including agent_harness's inline prompt leaves) carries the tag; evals/prompting.py passes no skills and needs no change. Callers: sync/render.py render_artifacts (:120) and commands/render.py, which shows the tag for render <rule-id>.
 
-- `src/coding_agent_playbook/skills/sections.py, rendering/session.py, sync/render.py, evals/prompting.py, commands/render.py`: impacts map computed once per render pass and applied after Jinja
+- `src/coding_agent_playbook/skills/sections.py, rendering/impact_tag.py, rendering/session.py`: impacts map computed once per render pass and applied after Jinja
 - test `tests/rendering/test_impact_tags.py`: new: first heading only, never inside a fence, idempotent, absent for always rules and sectionless skills
-- test `tests/evals/test_prompting.py`: the appendix body carries the tag for a sectioned fixture skill; every shipped task still renders strictly (:55-62)
+- test `tests/evals/test_prompting.py`: no shipped sample's appendix carries an [IMPACT] tag (D46(8)); every shipped sample still renders strictly (:55-62)
 - test `tests/adapters/test_continue.py`: the Continue rule file shows the tag
 
 Acceptance:
-- For a member of a HIGH section, rules/<id>.md, .continue/rules/NN-<id>.md and the eval appendix all show '# <Title> [HIGH]'.
+- For a member of a HIGH section, rules/<id>.md and .continue/rules/NN-<id>.md show '# <Title> [HIGH]'.
 - No rule source contains the tag (S7 enforces it).
 - Prompt and eval appendices render no [IMPACT] tag; they stay byte-identical while D16 freezes prompts (D46.8).
 

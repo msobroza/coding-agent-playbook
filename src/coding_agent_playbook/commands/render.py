@@ -29,7 +29,6 @@ from coding_agent_playbook.rendering.formats import BUILTIN_FORMATS, FORMAT_ALIA
 from coding_agent_playbook.rendering.jinja import TemplateSecurityError
 from coding_agent_playbook.rendering.rule_registry import skill_reference_of
 from coding_agent_playbook.rendering.session import RenderSession, TemplateContext
-from coding_agent_playbook.skills.sections import section_impacts
 from coding_agent_playbook.sync.render import report_sandbox_violation, report_template_error
 from coding_agent_playbook.validation.context import SyncContext
 
@@ -271,7 +270,6 @@ def _run_session(ctx: SyncContext) -> RenderSession:
         on_malformed_predicate="omit",
         skills=ctx.skills_resolved,
         framework=enabled_framework(ctx.config.layers_enabled),
-        impacts=section_impacts(ctx.skills_resolved, ctx.rules_resolved),
     )
 
 

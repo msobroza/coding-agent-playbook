@@ -2,31 +2,27 @@
 
 The tag in ``# Title [IMPACT]`` comes from the rule's section, never from the
 source: ``skills.sections.section_impacts`` maps each member rule to its
-section's impact once per render pass, and ``RenderSession.render_rule``
-appends the tag to the first ATX ``# `` heading outside code fences, after Jinja.
-Prompt and eval appendices render through the registry and stay untagged.
+section's impact once per render pass (``RenderSession.open`` derives it from
+the skills it is given), and ``RenderSession.render_rule`` appends the tag
+(``rendering.impact_tag.with_impact_tag``) to the first ATX ``# `` heading
+outside code fences, after Jinja. Prompt and eval appendices render through the
+registry and stay untagged.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import pytest
 
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill
+from coding_agent_playbook.rendering.impact_tag import with_impact_tag
 from coding_agent_playbook.rendering.prompt_rule_delivery import includes_rules_appendix
 from coding_agent_playbook.rendering.session import RenderSession, TemplateContext
-from coding_agent_playbook.skills.sections import Impact, section_impacts, with_impact_tag
+from coding_agent_playbook.skills.sections import Impact, section_impacts
+from tests.member_skill_samples import SAMPLE_HIGH_SECTION, sample_sectioned_skill
 
-_MOCKING = {
-    "id": "mocking",
-    "title": "Mocking",
-    "impact": "HIGH",
-    "summary": "Fakes at the boundary.",
-    "open_when": "Replacing a collaborator in a test.",
-}
 _FIXTURES = {
     "id": "fixtures",
     "title": "Fixtures",
@@ -37,12 +33,11 @@ _FIXTURES = {
 _CONTEXT = TemplateContext(facts={"frameworks": {}}, project_name="demo", engine_version="1.0")
 
 
-def _skill(skill_id: str, block: dict[str, Any]) -> Skill:
-    return Skill({"id": skill_id, "playbook": block}, "# Body\n", None, None, "pkg")
-
-
-_TESTING = _skill("python-testing", {"use_when": "testing", "sections": [_MOCKING, _FIXTURES]})
-_CODING = _skill("python-coding", {"use_when": "coding"})
+_TESTING = sample_sectioned_skill("python-testing", SAMPLE_HIGH_SECTION, _FIXTURES)
+#: A skill that declares no sections.
+_CODING = Skill(
+    {"id": "python-coding", "playbook": {"use_when": "coding"}}, "# Body\n", None, None, "pkg"
+)
 
 
 def _rule(
@@ -125,20 +120,43 @@ def test_a_body_without_a_title_is_unchanged() -> None:
     assert with_impact_tag("Plain text.\n", Impact.HIGH) == "Plain text.\n"
 
 
+def test_a_closing_hash_sequence_gives_way_to_the_tag() -> None:
+    """CommonMark: '# Title #' is the heading 'Title'; its closing #s are not content."""
+    assert with_impact_tag("# Title ##\n", Impact.HIGH) == "# Title [HIGH]\n"
+    assert with_impact_tag("# C#\n", Impact.HIGH) == "# C# [HIGH]\n"
+
+
+def test_an_indented_heading_keeps_its_indent_up_to_three_spaces() -> None:
+    assert with_impact_tag("   # Title\n", Impact.LOW) == "   # Title [LOW]\n"
+    assert with_impact_tag("    # Code\n", Impact.LOW) == "    # Code\n"
+
+
+def test_a_fence_closer_indented_four_spaces_does_not_close_the_fence() -> None:
+    """CommonMark: a closing fence takes at most three spaces of indent."""
+    body = "```\n    ```\n# still code\n```\n# Title\n"
+
+    assert with_impact_tag(body, Impact.HIGH) == "```\n    ```\n# still code\n```\n# Title [HIGH]\n"
+
+
+def test_a_shorter_or_other_marker_does_not_close_the_fence() -> None:
+    body = "````\n```\n~~~~\n# still code\n````\n# Title\n"
+
+    assert with_impact_tag(body, Impact.HIGH).endswith("````\n# Title [HIGH]\n")
+
+
 # --------------------------------------------------------------------------- #
-# RenderSession: the impacts mapping, applied after Jinja
+# RenderSession: impacts derived from its skills, applied after Jinja
 # --------------------------------------------------------------------------- #
 
 
-def _session(rules: list[Rule], impacts: dict[str, Impact]) -> RenderSession:
-    return RenderSession.open(rules, _CONTEXT, repo_root=Path("."), impacts=impacts)
+def _session(rules: list[Rule], skills: list[Skill]) -> RenderSession:
+    return RenderSession.open(rules, _CONTEXT, repo_root=Path("."), skills=skills)
 
 
 def test_render_rule_tags_a_listed_member_after_jinja() -> None:
     templated = _rule("mock-monkeypatch", "# Mocks in {{ project_name }}\n\nBody.\n")
     plain = _rule("fixture-scope", section="fixtures")
-    impacts = section_impacts([_TESTING], [templated, plain])
-    session = _session([templated, plain], impacts)
+    session = _session([templated, plain], [_TESTING])
 
     rendered = {rule.frontmatter.id: rule.body for rule in session.render_rules()}
 
@@ -146,15 +164,16 @@ def test_render_rule_tags_a_listed_member_after_jinja() -> None:
     assert rendered["fixture-scope"].splitlines()[0] == "# Monkeypatch [LOW]"
 
 
-def test_rules_absent_from_impacts_render_unchanged() -> None:
+def test_rules_without_a_sectioned_skill_render_unchanged() -> None:
     always = _rule("always-rule", "# Always\n", skill=None, section=None)
     sectionless = _rule("typing", "# Typing\n", skill="python-coding", section=None)
-    session = _session([always, sectionless], section_impacts([_CODING], [always, sectionless]))
+    session = _session([always, sectionless], [_TESTING, _CODING])
 
     assert [rule.body for rule in session.render_rules()] == ["# Always\n", "# Typing\n"]
 
 
-def test_without_impacts_nothing_is_tagged() -> None:
+def test_without_skills_nothing_is_tagged() -> None:
+    """Eval-sample sessions pass no skills, so their rules stay untagged (D46(8))."""
     session = RenderSession.open([_rule("mock-monkeypatch")], _CONTEXT, repo_root=Path("."))
 
     assert session.render_rules()[0].body.startswith("# Monkeypatch\n")
@@ -162,8 +181,7 @@ def test_without_impacts_nothing_is_tagged() -> None:
 
 def test_the_reference_rules_appendix_stays_untagged() -> None:
     """D46(8): prompt and eval appendices carry no [IMPACT] tag."""
-    rule = _rule("mock-monkeypatch")
-    session = _session([rule], section_impacts([_TESTING], [rule]))
+    session = _session([_rule("mock-monkeypatch")], [_TESTING])
     session.render_rules()
 
     appendix = includes_rules_appendix(["mock-monkeypatch"], session.registry)

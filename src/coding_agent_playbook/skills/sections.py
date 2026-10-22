@@ -263,44 +263,9 @@ def section_impacts(skills: Iterable[Skill], rules: Iterable[Rule]) -> dict[str,
     }
     impacts: dict[str, Impact] = {}
     for rule in rules:
-        fm = rule.frontmatter
-        impact = impacts_by_skill.get(fm.skill or "", {}).get(fm.section or "")
+        frontmatter = rule.frontmatter
+        impacts_by_section = impacts_by_skill.get(frontmatter.skill or "", {})
+        impact = impacts_by_section.get(frontmatter.section or "")
         if impact is not None:
-            impacts[fm.id] = impact
+            impacts[frontmatter.id] = impact
     return impacts
-
-
-def with_impact_tag(body: str, impact: Impact) -> str:
-    """``body`` with `` [IMPACT]`` on its first ATX ``# `` heading outside code fences (D32).
-
-    Idempotent: a title already ending in an impact tag gets ``impact``'s tag in
-    its place, never a second one. A body without such a heading is unchanged.
-
-    Example: ``with_impact_tag("# Mocks\\n", Impact.HIGH)`` -> ``"# Mocks [HIGH]\\n"``.
-    """
-    lines = body.splitlines(keepends=True)
-    fence = ""
-    for index, line in enumerate(lines):
-        head = line.lstrip(" ")
-        indent = len(line) - len(head)
-        if fence:
-            if head.startswith(fence) and not head.strip().strip(fence[0]):
-                fence = ""
-            continue
-        if indent <= _MAX_MARKDOWN_INDENT and head.startswith(("```", "~~~")):
-            fence = head[: len(head) - len(head.lstrip(head[0]))]
-            continue
-        title = _TITLE.fullmatch(line.rstrip("\r\n")) if indent <= _MAX_MARKDOWN_INDENT else None
-        if title is not None:
-            ending = line[len(line.rstrip("\r\n")) :]
-            lines[index] = f"{title['heading']} [{impact.value}]{ending}"
-            return "".join(lines)
-    return body
-
-
-#: Up to three leading spaces still make a heading or a fence in CommonMark.
-_MAX_MARKDOWN_INDENT: Final = 3
-#: A level-one ATX heading; ``heading`` excludes a trailing impact tag already there.
-_TITLE: Final = re.compile(
-    rf"(?P<heading> {{0,3}}#[ \t]+\S.*?)(?:[ \t]+\[(?:{'|'.join(Impact)})\])?[ \t]*"
-)
