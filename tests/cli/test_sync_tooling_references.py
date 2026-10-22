@@ -1,8 +1,8 @@
 """End-to-end ``playbook sync`` of the gated python-tooling member rules (specs/prS-skills-context.md 11.3).
 
-``python-tooling`` has one ungated member, ``python-static-checks``, so the skill is
-written in every Python repo. Its other members follow their gates: the uv
-workflow rule needs a ``uv.lock`` (``package_manager: uv``). The Pydantic
+``python-tooling`` has four ungated members (static checks, ruff lint, mypy and
+ruff format), so the skill is written in every Python repo. Its other members follow
+their gates: the two uv rules need a ``uv.lock`` (``package_manager: uv``). The Pydantic
 boundaries rule moved to ``python-coding`` (prU D24, L0-15) and keeps its gate,
 a declared ``pydantic`` dependency (``has_framework: ["pydantic"]``). Each test
 syncs a synthetic repo with the ``claude_code`` adapter only and reads the rule
@@ -40,6 +40,8 @@ _SKILLS_DIR: Final = (".claude", "skills")
 _TOOLING: Final = "python-tooling"
 _UV_WORKFLOW: Final = "python-uv-workflow"
 _PYDANTIC_BOUNDARIES: Final = "pydantic-boundaries"
+#: python-tooling's ungated members, sorted: written in every Python repo.
+_UNGATED: Final = ["mypy-type-checking", "python-static-checks", "ruff-format", "ruff-lint"]
 
 
 def _python_repo(root: Path, make_synthetic_repo: Callable[..., Path], **extras: object) -> Path:
@@ -65,12 +67,14 @@ def _synced_tooling_rule_ids(repo: Path) -> list[str]:
 def test_python_tooling_exists_in_a_plain_python_repo(
     tmp_path: Path, make_synthetic_repo: Callable[..., Path]
 ) -> None:
-    """No framework and no uv.lock: the ungated static-checks member alone writes the skill."""
+    """No framework and no uv.lock: the four ungated members alone write the skill."""
     repo = _python_repo(tmp_path / "plain", make_synthetic_repo)
 
-    assert _synced_tooling_rule_ids(repo) == ["python-static-checks"]
+    assert _synced_tooling_rule_ids(repo) == _UNGATED
     skill_md = repo.joinpath(*_SKILLS_DIR, _TOOLING, "SKILL.md")
-    assert "Covers linting." in skill_md.read_text(encoding="utf-8")
+    # The frontmatter folds the long description; compare its words.
+    words = " ".join(skill_md.read_text(encoding="utf-8").split())
+    assert "Covers linting, type checking, formatting." in words
     agents_md = (repo / "AGENTS.md").read_text(encoding="utf-8")
     assert "- Tool configuration and pyproject.toml: skill `python-tooling`" in agents_md
 
@@ -104,6 +108,6 @@ def test_pydantic_boundaries_needs_declared_pydantic(
 
     assert _PYDANTIC_BOUNDARIES not in _synced_tooling_rule_ids(declared)
     assert _PYDANTIC_BOUNDARIES in _skill_rule_ids(declared, "python-coding")
-    assert _synced_tooling_rule_ids(transitive) == ["python-static-checks"]
+    assert _synced_tooling_rule_ids(transitive) == _UNGATED
     assert "fastapi-app-wiring" in _skill_rule_ids(transitive, "web-application")
     assert _PYDANTIC_BOUNDARIES not in _skill_rule_ids(transitive, "python-coding")

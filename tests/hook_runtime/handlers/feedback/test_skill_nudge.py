@@ -85,8 +85,20 @@ SOURCE_LINES: Final = [
     _line("python-coding"),
     _line("python-tooling"),
 ]
-#: The config files ``python-static-checks`` matches besides Python files and pyproject.
-STATIC_CHECK_CONFIGS: Final = ("ruff.toml", ".ruff.toml", "mypy.ini", ".mypy.ini")
+#: python-tooling's globs in a repo with neither pytest nor uv: its four ungated members'
+#: (static checks, ruff lint, mypy, ruff format), each glob once, in first-seen order
+#: over the members sorted by id.
+UNGATED_TOOLING_GLOBS: Final = (
+    "**/*.py",
+    "**/*.pyi",
+    "pyproject.toml",
+    "mypy.ini",
+    ".mypy.ini",
+    "pyrightconfig.json",
+    "ruff.toml",
+    ".ruff.toml",
+    ".pre-commit-config.yaml",
+)
 
 
 @pytest.fixture
@@ -333,8 +345,8 @@ def test_sync_derives_the_glob_table_from_the_rendered_member_rules(
 ) -> None:
     """Only rules that pass ``applies_if`` reach the table: no pytest, no FastAPI, no ML here.
 
-    python-tooling still appears, with the globs of its one ungated member,
-    python-static-checks (Python files plus the ruff and mypy config files).
+    python-tooling still appears, with the globs of its ungated members (Python files,
+    stubs and the ruff, mypy, pyright and pre-commit config files).
     """
     (tmp_path / "repo").mkdir()
     repo = make_synthetic_repo(tmp_path / "repo", config_text=CONFIG + "[hooks]\nenabled = true\n")
@@ -344,11 +356,10 @@ def test_sync_derives_the_glob_table_from_the_rendered_member_rules(
     hooks = json.loads((repo / GUARD_CONFIG).read_bytes())["hooks"]
     config = hooks[HOOK_ID]["handlers"]["post_tool_use"]["config"]
     assert rc == 0
-    static_checks = ["**/*.py", "pyproject.toml", *STATIC_CHECK_CONFIGS]
     assert config == {
         "skills": [
             {"id": "python-coding", "globs": ["**/*.py"]},
-            {"id": "python-tooling", "globs": static_checks},
+            {"id": "python-tooling", "globs": list(UNGATED_TOOLING_GLOBS)},
         ]
     }
 

@@ -67,10 +67,17 @@ _SYNTHETIC_PYTHON_CODING_MEMBERS = (
     "python-small-units",
     "python-typing",
 )
+#: python-tooling's ungated members, active on the synthetic repo (no pytest, no uv.lock).
+_SYNTHETIC_PYTHON_TOOLING_MEMBERS = (
+    "mypy-type-checking",
+    "python-static-checks",
+    "ruff-format",
+    "ruff-lint",
+)
 #: Every file the pre-v0.21 engine left under ``shared_skills/`` for ``_synced_then_rewound``:
 #: query-db's two, the core python-coding skill with one rule file per active member and its
-#: two upstream license copies (D19), and python-tooling with its one ungated member (no
-#: framework, no uv.lock).
+#: two upstream license copies (D19), and python-tooling with its four ungated members (no
+#: framework, no uv.lock) and the same two license copies.
 _OLD_TREE_FILES = frozenset(
     {
         "query-db/SKILL.md",
@@ -80,7 +87,9 @@ _OLD_TREE_FILES = frozenset(
         "python-coding/references/LICENSE.python-best-practices",
         "python-coding/references/LICENSE.python-clean-architecture",
         "python-tooling/SKILL.md",
-        "python-tooling/rules/python-static-checks.md",
+        *(f"python-tooling/rules/{rule_id}.md" for rule_id in _SYNTHETIC_PYTHON_TOOLING_MEMBERS),
+        "python-tooling/references/LICENSE.python-best-practices",
+        "python-tooling/references/LICENSE.python-clean-architecture",
     }
 )
 
@@ -149,7 +158,8 @@ def test_first_sync_after_upgrade_moves_pristine_shared_skills_tree(
     assert _sync.execute(repo, git=FakeGitClient()) == 0
 
     # query-db's SKILL.md + run.py, python-coding's SKILL.md + its 19 rule files + its
-    # 2 license copies and python-tooling's SKILL.md + its 1 rule file: 26.
+    # 2 license copies and python-tooling's SKILL.md + its 4 rule files + its 2 license
+    # copies: 31.
     assert re.search(rf", {len(_OLD_TREE_FILES)} removed$", capsys.readouterr().out, re.MULTILINE)
     assert not (repo / _OLD_ROOT).exists()
     moved = repo / _NEW_ROOT / "query-db"
