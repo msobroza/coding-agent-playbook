@@ -28,7 +28,7 @@ After editing docs, run it and fix every finding before finishing. A tool it rep
 
 ## Bad Example
 
-A renamed page leaves a broken link and an unparsable block, and both are pushed past the hook:
+A renamed page leaves a broken link and an unparsable block, and both are pushed past the pre-commit hook:
 
 ````markdown
 See [the install guide](docs/instal.md).
@@ -68,10 +68,10 @@ The CI job runs the same command next to the existing test step and publishes no
 
 ## Notes
 
-- A failing hook is fixed, never bypassed: python-tooling's static-checks rule (python-static-checks) says the same for every check.
+- A failing pre-commit hook is fixed, never bypassed: python-tooling's static-checks rule (python-static-checks) says the same for every check.
 - Switching the check off is the user's guardrail setting (playbook-guardrails), not a fix.
 - The check parses code blocks but does not run them; running examples is `docs-runnable-examples`.
 - Where the repo builds docs with Sphinx or MkDocs, that tool's build rule in this skill says how to run the build as CI does.
 - Build output (`_build/`, `site/`) is never committed.
-- A docs lint hook the repo already runs is a finding to fix; no hook, linter or link checker is added unasked.
+- A finding from a docs linter the repo already runs is fixed; no pre-commit hook, linter or link checker is added unasked.
 - A whole-site external link check is the repo's own job where it has one.

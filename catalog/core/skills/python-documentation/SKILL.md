@@ -29,13 +29,13 @@ playbook:
     - id: docs-build
       title: "Docs build"
       impact: MEDIUM
-      summary: "The docs check and the docs build run as the commit hook and CI run them, and new warnings are fixed, not silenced."
+      summary: "The docs check and the docs build run as the pre-commit hook and CI run them, and new warnings are fixed, not silenced."
       open_when: "`playbook docs-check`, the docs build or a link check fails or warns, or conf.py, mkdocs.yml or a docs CI job changes."
 ---
 
 # Python documentation
 
-This skill covers the prose documentation of a Python repo: the README, the changelog, the contributing guide, the citation file, the user docs under docs/ and the design records that explain why the code is shaped the way it is. Docstrings belong to python-coding's docstring rule; this skill names that rule where docstrings matter and never repeats it. Every command comes from the repo's own docs tool, CI job and package manager, and no docs tool, theme, host, doctest runner or hook is added unasked. Engineering documents follow one layout: the default paths unless the repo's `[layout]` table renames them.
+This skill covers the prose documentation of a Python repo: the README, the changelog, the contributing guide, the citation file, the user docs under docs/ and the design records that explain why the code is shaped the way it is. Docstrings belong to python-coding's docstring rule; this skill names that rule where docstrings matter and never repeats it. Every command comes from the repo's own docs tool, CI job and package manager, and no docs tool, theme, host, doctest runner or pre-commit hook is added unasked. Engineering documents follow one layout: the default paths unless the repo's `[layout]` table renames them.
 
 ## Quick reference
 

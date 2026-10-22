@@ -138,3 +138,19 @@ def test_readme_architecture_names_skill_references() -> None:
     diagram = blocks[0]
     for token in ("skills/<id>/", "Where guidance lives"):
         assert token in diagram, f"README architecture block lacks {token!r}"
+
+
+#: A "hook" not preceded by "pre-commit " (CONTEXT.md, Hook: avoid bare "hook" for the git kind).
+_BARE_HOOK = re.compile(r"(?<!pre-commit )\bhooks?\b", re.IGNORECASE)
+
+
+def test_python_documentation_says_pre_commit_hook_for_the_git_kind() -> None:
+    """The docs skill only talks about git hooks, so every "hook" in it is a pre-commit hook."""
+    skill_dir = CATALOG_ROOT / "core" / "skills" / "python-documentation"
+    bare = [
+        f"{path.relative_to(skill_dir).as_posix()}:{n}: {line}"
+        for path in sorted(skill_dir.rglob("*.md"))
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if _BARE_HOOK.search(line)
+    ]
+    assert not bare, f"say 'pre-commit hook', never a bare 'hook' (CONTEXT.md): {bare}"

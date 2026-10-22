@@ -45,7 +45,7 @@ mkdocs build --strict
 ```
 
 ```text
-WARNING -  Doc file 'how-to/export.md' contains a link 'reference/order.md', but the target 'how-to/reference/order.md' is not found among documentation files.
+WARNING -  Doc file 'how-to/export.md' contains a link 'reference/orders.md', but the target 'how-to/reference/orders.md' is not found among documentation files.
 ```
 
 ```markdown

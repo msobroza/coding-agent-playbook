@@ -66,8 +66,8 @@ The tutorial's first steps, each runnable and each ending in a visible result:
 
 ## Notes
 
-- A decision record is an ADR, not an explanation page; recording decisions is a design-records topic of this skill.
-- The README is an entry point that links into these pages, not a fifth kind that holds all four.
+- A decision record is an ADR, not an explanation page (docs-record-why).
+- The README is an entry point that links into these pages, not a fifth kind that holds all four (docs-readme-essentials).
 - A new feature usually needs a how-to guide plus its reference entry; change the tutorial only when the first-run path changes.
 - The reference build belongs to the repo's tool: where the repo uses Sphinx or MkDocs, this skill's API reference rule for that tool says how to register a new module.
 - Ask who reads the page and what they need right now; the answer picks the kind.
