@@ -182,6 +182,8 @@ def test_a_path_extending_its_default_is_not_doubled() -> None:
 
 @pytest.mark.parametrize("key", LAYOUT_KEYS)
 def test_rewriting_is_idempotent_on_every_layout_key(key: str) -> None:
+    # File keys (CONTEXT.md/v2) are not plausible layouts; they are kept so the guard
+    # regex is exercised on every default, dotted file names included.
     default = LAYOUT_DEFAULTS[key]
     rewriter = LayoutRewriter.for_layout({key: f"{default}/v2"})
     once, _ = rewriter.rewrite(f"see {default}, {default}/a.md and ./{default}/b\n")
@@ -198,4 +200,13 @@ def test_an_alias_extending_its_source_is_not_doubled() -> None:
     once, _ = rewriter.rewrite("docs/acme/plans/x.md")
 
     assert once == "docs/acme/plans/v2/x.md"
+    assert rewriter.rewrite(once) == (once, ())
+
+
+def test_a_path_extending_another_remapped_default_is_not_rewritten_again() -> None:
+    rewriter = LayoutRewriter.for_layout({"specs": "docs/plans/specs", "plans": "plans"})
+
+    once, _ = rewriter.rewrite("docs/specs/x.md and docs/plans/y.md")
+
+    assert once == "docs/plans/specs/x.md and plans/y.md"
     assert rewriter.rewrite(once) == (once, ())

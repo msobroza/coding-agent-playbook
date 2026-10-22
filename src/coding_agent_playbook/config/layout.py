@@ -201,18 +201,32 @@ class LayoutRewriter:
 
     def _pattern(self) -> re.Pattern[str]:
         alternatives = "|".join(
-            self._alternative(source) for source in sorted(self.targets, key=len)[::-1]
+            self._unrewritten_source_regex(source) for source in sorted(self.targets, key=len)[::-1]
         )
         return re.compile(f"{_PATH_START}(?:{alternatives}){_PATH_END}")
 
-    def _alternative(self, source: str) -> str:
-        """``source`` as a regex that skips text already holding its own target.
+    def _unrewritten_source_regex(self, source: str) -> str:
+        """``source`` as a regex that skips text already holding a target that extends it.
 
-        prU L0-28: when the target extends its source (``docs/specs`` ->
+        prU L0-28: when a target extends the source (``docs/specs`` ->
         ``docs/specs/v2``), ``docs/specs/v2/x`` must stay as it is, or a second
         rewrite (and the rendered document-layout rule) would read ``docs/specs/v2/v2``.
+        Every target counts, not only the source's own: with ``specs =
+        "docs/plans/specs"`` and ``plans = "plans"``, ``docs/plans/specs/x`` is
+        already rewritten and must not become ``plans/specs/x``. A target equal to
+        another key's source (``specs = "docs/plans"`` with ``plans`` moved) stays
+        ambiguous and is out of scope.
         """
-        target = self.targets[source]
-        if not target.startswith(f"{source}/"):
+        tails = sorted(
+            {
+                target[len(source) :]
+                for target in self.targets.values()
+                if target.startswith(f"{source}/")
+            },
+            key=len,
+            reverse=True,
+        )
+        if not tails:
             return re.escape(source)
-        return f"{re.escape(source)}(?!{re.escape(target[len(source) :])}{_PATH_END})"
+        guard = "|".join(re.escape(tail) for tail in tails)
+        return f"{re.escape(source)}(?!(?:{guard}){_PATH_END})"
