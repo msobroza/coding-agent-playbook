@@ -11,9 +11,14 @@ from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.rendering.formats import render_for, with_sentinel_body
+from coding_agent_playbook.rendering.session import RenderSession, TemplateContext
 from tests.fakes import FakeRuleRegistry
 from tests.hook_samples import resolved_hook
-from tests.member_skill_samples import sample_member_reference, sample_member_skill
+from tests.member_skill_samples import (
+    sample_member_reference,
+    sample_member_skill,
+    sample_sectioned_skill,
+)
 
 
 def _make_rule(
@@ -368,3 +373,25 @@ def test_cleanup_reads_the_frontmatter_first_sentinel_like_every_scanner(
 
     assert deleted == [stale]
     assert claimed.is_file()
+
+
+def test_a_sectioned_member_rule_file_shows_its_impact_tag(tmp_path: Path) -> None:
+    """D32: the rendered rule Continue writes reads '# <Title> [HIGH]' for a HIGH member."""
+    plain = _make_rule(rule_id="mock-monkeypatch", globs=["**/*.py"], body="# Monkeypatch\n")
+    member = dataclasses.replace(
+        plain,
+        frontmatter=dataclasses.replace(
+            plain.frontmatter, skill="python-testing", section="mocking"
+        ),
+    )
+    session = RenderSession.open(
+        [member],
+        TemplateContext(facts={"frameworks": {}}, project_name="demo", engine_version="1.0"),
+        repo_root=tmp_path,
+        skills=[sample_sectioned_skill()],
+    )
+
+    [written] = ContinueAdapter().write_rule(session.render_rules()[0], repo_root=tmp_path)
+
+    assert written == tmp_path / ".continue" / "rules" / "50-mock-monkeypatch.md"
+    assert "\n# Monkeypatch [HIGH]\n" in written.read_text(encoding="utf-8")

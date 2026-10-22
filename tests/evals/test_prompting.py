@@ -24,6 +24,7 @@ from coding_agent_playbook.evals.prompting import (
     render_prompt,
 )
 from coding_agent_playbook.evals.sample import EvalSample, SampleInvocation, SampleSetup
+from coding_agent_playbook.skills.sections import Impact
 from tests._catalog import CORE_ROOT
 
 if TYPE_CHECKING:
@@ -60,6 +61,14 @@ def test_every_shipped_sample_prompt_renders_strictly(sample_dir: Path) -> None:
     assert not prompt.startswith(f"[prompt:{sample.prompt_id}]")  # not the placeholder
     if sample.invocation.prompt_args:
         assert prompt.rstrip().endswith(sample.invocation.prompt_args)
+
+
+@pytest.mark.parametrize("sample_dir", _shipped_sample_dirs(), ids=lambda p: p.name)
+def test_shipped_sample_appendices_carry_no_impact_tag(sample_dir: Path) -> None:
+    """D46(8): a member rule's ``[IMPACT]`` title tag never reaches an eval appendix."""
+    sample = load_eval_sample_from_dir(sample_dir, source_package=_ENGINE)
+    prompt = render_prompt(sample, strict=True)
+    assert not any(f" [{impact.value}]" in prompt for impact in Impact)
 
 
 def test_reference_appendix_inlines_the_included_rule() -> None:

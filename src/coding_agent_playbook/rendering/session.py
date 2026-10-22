@@ -18,11 +18,13 @@ import coding_agent_playbook as _engine
 from coding_agent_playbook.artifacts.identity import template_source
 from coding_agent_playbook.config.layout import resolve_layout
 from coding_agent_playbook.detector.predicate import filter_applies_if
+from coding_agent_playbook.rendering.impact_tag import with_impact_tag
 from coding_agent_playbook.rendering.jinja import build_environment, render_sandboxed
 from coding_agent_playbook.rendering.prompt_rule_delivery import includes_rules_appendix
 from coding_agent_playbook.rendering.rule_registry import RuleRegistryImpl
 from coding_agent_playbook.skills.capabilities import framework_role_map
 from coding_agent_playbook.skills.membership import active_skill_ids
+from coding_agent_playbook.skills.sections import section_impacts
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -37,6 +39,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.config.model import Config
     from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
+    from coding_agent_playbook.skills.sections import Impact
 
 #: What :meth:`RenderSession.open` does with an ``applies_if`` validate would reject.
 type MalformedPredicate = Literal["raise", "omit"]
@@ -106,9 +109,16 @@ class RenderSession:
         rules = session.render_rules()
     """
 
-    def __init__(self, rules: list[Rule], context: TemplateContext, env: Environment) -> None:
+    def __init__(
+        self,
+        rules: list[Rule],
+        context: TemplateContext,
+        env: Environment,
+        impacts: Mapping[str, Impact],
+    ) -> None:
         """Hold what :meth:`open` built; call :meth:`open` instead."""
         self._rules = rules
+        self._impacts = dict(impacts)
         self._context = context.as_dict()
         self._env = env
         # RS-D8: an included rule renders with the facts only, never the full context.
@@ -134,6 +144,10 @@ class RenderSession:
         layer) feed ``framework_skill(role)`` and ``skill_active(name)`` (D74);
         without them every role is ``""`` and no skill is active, which is what
         eval-sample prompts see (``evals.prompting._sample_session``).
+        ``skills`` also map each member rule to its section's impact, once per
+        pass (``skills.sections.section_impacts``): :meth:`render_rule` tags that
+        rule's title with ``[IMPACT]`` (D32), while the registry, so every
+        ``Reference rules`` appendix, stays untagged (D46(8)).
 
         Example: ``RenderSession.open([], context, repo_root=repo).render_rule(rule)``.
         """
@@ -143,7 +157,7 @@ class RenderSession:
         env.globals["_facts"] = dict(context.facts)
         env.globals["_framework_roles"] = framework_role_map(skills, framework)
         env.globals["_active_skills"] = active_skill_ids(skills, rules, kept)
-        return cls(kept, context, env)
+        return cls(kept, context, env, section_impacts(skills, rules))
 
     @property
     def registry(self) -> RuleRegistryImpl:
@@ -163,12 +177,18 @@ class RenderSession:
     def render_rule(self, rule: Rule) -> Rule:
         """``rule`` rendered whatever its ``applies_if`` (``playbook render <rule-id>``).
 
+        After Jinja, a rule in the session's ``impacts`` gets its section's
+        ``[IMPACT]`` on its title (D32).
+
         Example: ``session.render_rule(rule).body`` -> ``"Project demo ..."``.
         """
-        if not rule.is_templated:
-            return rule
-        body = self._render(rule.template_body, self._context, template_source(rule))
-        return dataclasses.replace(rule, body=body)
+        body = rule.body
+        if rule.is_templated:
+            body = self._render(rule.template_body, self._context, template_source(rule))
+        impact = self._impacts.get(rule.frontmatter.id)
+        if impact is not None:
+            body = with_impact_tag(body, impact)
+        return rule if body == rule.body else dataclasses.replace(rule, body=body)
 
     def render_prompt(self, prompt: Prompt) -> Prompt:
         """The body rendered with ``input_variables`` names masked, for an adapter's format.

@@ -23,10 +23,12 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.skills.document import PLAYBOOK_BLOCK_KEY, playbook_block
+from coding_agent_playbook.skills.naming import skill_id_of
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
+    from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.artifacts.skill import Skill
 
 #: The ``playbook:`` key that holds a skill's ordered sections.
@@ -243,3 +245,27 @@ def _section(entry: Mapping[str, str]) -> SkillSection:
         summary=entry["summary"].strip(),
         open_when=entry["open_when"].strip(),
     )
+
+
+def section_impacts(skills: Iterable[Skill], rules: Iterable[Rule]) -> dict[str, Impact]:
+    """Each member rule's id mapped to its section's impact, for one render pass (D32).
+
+    A rule is listed when its ``skill`` names one of ``skills`` and its
+    ``section`` is one that skill declares. Always rules, members of sectionless
+    skills and rules naming an undeclared section are absent: their titles stay
+    as authored.
+
+    Example: ``section_impacts([python_testing], rules)["mock-monkeypatch"]`` -> ``Impact.HIGH``.
+    """
+    impacts_by_skill = {
+        skill_id_of(skill): {section.id: section.impact for section in skill_sections(skill)}
+        for skill in skills
+    }
+    impacts: dict[str, Impact] = {}
+    for rule in rules:
+        frontmatter = rule.frontmatter
+        impacts_by_section = impacts_by_skill.get(frontmatter.skill or "", {})
+        impact = impacts_by_section.get(frontmatter.section or "")
+        if impact is not None:
+            impacts[frontmatter.id] = impact
+    return impacts

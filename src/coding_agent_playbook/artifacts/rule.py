@@ -62,8 +62,8 @@ class RuleFrontmatter:
     # so a rule without it keeps byte-identical markdown.
     skill: str | None = None
     # The section of its skill's rule index this rule files under (prU D21);
-    # rendered nowhere yet. ``_without_empty`` drops None, so a rule without it
-    # keeps byte-identical markdown.
+    # its impact tags the rendered title (D32). ``_without_empty`` drops None,
+    # so a rule without it keeps byte-identical markdown.
     section: str | None = None
 
     def __post_init__(self) -> None:
