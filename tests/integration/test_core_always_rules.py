@@ -203,11 +203,7 @@ LEGIBILITY_POINTERS: Final = (
 #: C-python-coding-*, C-design-patterns-*, C-python-architecture-*, C-python-testing-*).
 #: Until then ``rule_active`` hides its pointer, so the rule never names it. A lane that
 #: ships one removes it here; the F-02 final-state check needs this empty.
-PENDING_LEGIBILITY_TARGETS: Final = frozenset(
-    {
-        "pytest-first-properties",
-    }
-)
+PENDING_LEGIBILITY_TARGETS: Final[frozenset[str]] = frozenset()
 #: A pointer renders only when ``rule_active`` resolves it, so none dangles (D73).
 _GUARDED_POINTER: Final = re.compile(
     r"\{% if rule_active\('([a-z0-9-]+)'\) %\} \(`([a-z0-9-]+)` -> `([a-z0-9-]+)`\)\{% endif %\}\.$"

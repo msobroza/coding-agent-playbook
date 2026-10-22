@@ -24,6 +24,7 @@ from jinja2.defaults import DEFAULT_NAMESPACE
 from coding_agent_playbook.artifacts.rule import Rule
 from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE
 from coding_agent_playbook.rendering.jinja import build_environment
+from tests._budget_probe import render_rule
 from tests._catalog import core_rules
 from tests._template_matrix import (
     LIBRARY_HELPER_FACTS,
@@ -33,6 +34,7 @@ from tests._template_matrix import (
     distinct_renderings,
     fact_matrix,
     library_switches,
+    matrix_points,
     metadata_matrix,
     ruff_formatted,
     string_version_comparisons,
@@ -213,6 +215,24 @@ def test_every_branch_of_a_core_template_renders(rule_id: str) -> None:
     assert distinct_renderings(core_rules()[rule_id])
 
 
+def _bodies_by_fastapi(rule: Rule) -> tuple[set[str], set[str]]:
+    """The bodies ``rule`` renders with FastAPI on, and those it renders with it off.
+
+    Compares every matrix point, not the first point behind each body: a branch that
+    FastAPI shares with other libraries (pytest's AnyIO mark: FastAPI, Starlette or
+    httpx) is first reached with FastAPI off, yet still renders apart from FastAPI off.
+
+    Example: ``_bodies_by_fastapi(core_rules()["pytest"])`` -> two different sets.
+    """
+    with_fastapi: set[str] = set()
+    without_fastapi: set[str] = set()
+    for point in matrix_points(rule.template_body):
+        body = render_rule(rule, point.facts, point.metadata)
+        held = "fastapi" in point.facts.get("frameworks", {})
+        (with_fastapi if held else without_fastapi).add(body)
+    return with_fastapi, without_fastapi
+
+
 def test_every_fastapi_pointer_branch_renders_with_fastapi_on_and_off() -> None:
     """D48 pointer rules: each one's FastAPI switch is reached, and both sides render apart."""
     pointer_ids = [
@@ -226,8 +246,7 @@ def test_every_fastapi_pointer_branch_renders_with_fastapi_on_and_off() -> None:
         assert ("has_framework", "fastapi") in library_switches(rule.template_body), (
             f"{rule_id}: points at FastAPI outside a literal has_framework('fastapi') branch"
         )
-        sides = {
-            "fastapi" in point.facts.get("frameworks", {})
-            for point in distinct_renderings(rule).values()
-        }
-        assert sides == {False, True}, f"{rule_id}: FastAPI on and off render the same body"
+        with_fastapi, without_fastapi = _bodies_by_fastapi(rule)
+        assert with_fastapi != without_fastapi, (
+            f"{rule_id}: FastAPI on and off render the same body"
+        )
