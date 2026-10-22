@@ -1,19 +1,22 @@
-"""Every scoped rule in core fits one reference read (specs/prS-skills-context.md 9.4.5, 9.15).
+"""Every scoped rule and every rule template in core fits one reference read (spec 9.4.5, 9.15).
 
 A scoped rule reaches the agent as one reference of its skill, opened in a single
 read. 100 lines is the Agent Skills threshold above which a reference needs a
-table of contents, and 750 words keeps one reference to one topic, so CI bounds
-every core scoped rule, rendered as sync renders it with the reference-probe facts
-(``tests/_budget_probe.py``). Those facts reach the ``pytest-asyncio`` branch of
+table of contents, and 750 words keeps one reference to one topic (prU D20), so CI
+bounds every core scoped rule, rendered as sync renders it with the reference-probe
+facts (``tests/_budget_probe.py``), and counts after ``ruff format`` has laid out
+its code blocks. Those facts reach the ``pytest-asyncio`` branch of
 ``pytest``, the torch, NumPy, pandas and scikit-learn sections of
 ``ml-serialization-security``, and the NumPy and pandas sections and the torch and
 scikit-learn seeding lines of the four array and data-frame members (spec 9.15,
 12.3); the sanity test below pins each one. The probe declares no
-``transformers`` and no ``polars``, and pins one Python, so the bound is also
-applied over the fact matrix (prU D40, ``tests/_budget_probe.py``
-:func:`~tests._budget_probe.fact_matrix`): Python 3.10 to 3.13 crossed with every
-on/off combination of the libraries a rule's template tests, each distinct
-rendering measured once.
+``transformers`` and no ``polars``, pins one Python and one project description,
+so the bound is also applied to every distinct rendering of every scoped rule and
+every ``.md.j2`` rule over its matrix (prU D40, ``tests/_template_matrix.py``):
+Python 3.10 to 3.13 crossed with every on/off combination of the libraries its
+template tests and with each project metadata variant it reads. This is the one
+size check over the matrix; ``tests/unit/test_core_rule_template_matrix.py`` checks
+that the matrix reaches every branch.
 """
 
 from __future__ import annotations
@@ -22,8 +25,9 @@ from typing import TYPE_CHECKING, Final
 
 import pytest
 
-from tests._budget_probe import distinct_renderings, reference_probe_facts, render_core_rule
+from tests._budget_probe import reference_probe_facts, render_core_rule
 from tests._catalog import core_rules
+from tests._template_matrix import distinct_renderings, ruff_formatted
 
 if TYPE_CHECKING:
     from coding_agent_playbook.detector.facts import Facts
@@ -34,6 +38,13 @@ REFERENCE_MAX_LINES: Final = 100
 REFERENCE_MAX_WORDS: Final = 750
 SCOPED_CORE_RULE_IDS: Final = sorted(
     rule_id for rule_id, rule in core_rules().items() if rule.frontmatter.scope == "scoped"
+)
+#: Every rule the matrix measures: the scoped rules and the always rules with a template.
+MATRIX_MEASURED_RULE_IDS: Final = sorted(
+    {
+        *SCOPED_CORE_RULE_IDS,
+        *(rule_id for rule_id, rule in core_rules().items() if rule.is_templated),
+    }
 )
 #: The four ml-data members for array and data-frame code (spec 9.6.1), sorted by id;
 #: each renders one section per library (``tests/unit/test_ml_data_rules.py``).
@@ -66,13 +77,17 @@ def probe_facts(tmp_path_factory: pytest.TempPathFactory) -> Facts:
 def assert_fits_one_reference_read(rule_id: str, body: str, rendered_with: str) -> None:
     """Fail, naming the rule and its size, when ``body`` exceeds 100 lines or 750 words.
 
-    ``rendered_with`` names the facts ``body`` was rendered with, for the message.
+    Counted on :func:`~tests._template_matrix.ruff_formatted` ``body`` (D20: after
+    ruff format). ``rendered_with`` names the facts ``body`` was rendered with, for
+    the message.
 
     Example: ``assert_fits_one_reference_read("pytest", body, "the reference-probe facts")``.
     """
-    lines, words = len(body.splitlines()), len(body.split())
+    formatted = ruff_formatted(body)
+    lines, words = len(formatted.splitlines()), len(formatted.split())
     assert lines <= REFERENCE_MAX_LINES and words <= REFERENCE_MAX_WORDS, (
-        f"{rule_id}: renders {lines} lines / {words} words with {rendered_with}; "
+        f"{rule_id}: renders {lines} lines / {words} words (after ruff format) with "
+        f"{rendered_with}; "
         f"expected at most {REFERENCE_MAX_LINES} lines and {REFERENCE_MAX_WORDS} words "
         "(split it or move detail to another member)"
     )
@@ -84,12 +99,18 @@ def test_core_scoped_rule_fits_one_reference_read(rule_id: str, probe_facts: Fac
     assert_fits_one_reference_read(rule_id, body, "the reference-probe facts")
 
 
-@pytest.mark.parametrize("rule_id", SCOPED_CORE_RULE_IDS)
-def test_every_distinct_rendering_of_a_core_scoped_rule_fits_one_reference_read(
-    rule_id: str,
-) -> None:
-    for body, facts in distinct_renderings(core_rules()[rule_id]).items():
-        assert_fits_one_reference_read(rule_id, body, f"the fact-matrix facts {facts}")
+@pytest.mark.parametrize("rule_id", MATRIX_MEASURED_RULE_IDS)
+def test_every_distinct_rendering_of_a_core_rule_fits_one_reference_read(rule_id: str) -> None:
+    for body, point in distinct_renderings(core_rules()[rule_id]).items():
+        assert_fits_one_reference_read(rule_id, body, f"the matrix {point}")
+
+
+def test_the_cap_counts_code_blocks_as_ruff_format_lays_them_out() -> None:
+    call = "result = compute(" + ", ".join(f"argument_{index}" for index in range(12)) + ")"
+    body = "Prose.\n\n```python\n" + call + "\n```\n" + "line\n" * 94
+    assert len(body.splitlines()) == 99
+    with pytest.raises(AssertionError, match="after ruff format"):
+        assert_fits_one_reference_read("probe", body, "a synthetic body")
 
 
 @pytest.mark.parametrize(("rule_id", "marker"), LONG_BRANCH_MARKERS)

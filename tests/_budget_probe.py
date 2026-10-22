@@ -15,13 +15,9 @@ render pass sync opens, so the size and content tests read what sync would write
 from __future__ import annotations
 
 import argparse
-import itertools
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, cast
-
-from jinja2 import nodes
-from jinja2.sandbox import SandboxedEnvironment
+from typing import TYPE_CHECKING, Final
 
 import coding_agent_playbook
 from coding_agent_playbook.commands import init as _init
@@ -198,112 +194,6 @@ def render_rule(rule: Rule, facts: Facts, metadata: Mapping[str, object] | None 
     # No rule to filter, so no has_file path to anchor: the session renders one rule.
     session = RenderSession.open((), context, repo_root=Path())
     return session.render_rule(rule).body
-
-
-#: prU D40: example code targets 3.10 as the lowest branch; the matrix renders each minor.
-MATRIX_PYTHON_VERSIONS: Final = ("3.10", "3.11", "3.12", "3.13")
-#: Library helper -> the fact it reads (``rendering.jinja.build_environment``).
-_LIBRARY_HELPER_FACTS: Final[Mapping[str, str]] = {
-    "has_framework": "frameworks",
-    "has_ml_dep": "ml_stack",
-    "has_dependency": "dependencies",
-}
-_ORDERING_OPS: Final[Mapping[str, str]] = {"gt": ">", "gteq": ">=", "lt": "<", "lteq": "<="}
-
-
-def library_switches(template: str) -> tuple[tuple[str, str], ...]:
-    """Every ``(helper, library)`` a template tests, sorted: its literal library-helper calls.
-
-    Example: ``library_switches('{% if has_ml_dep("torch") %}x{% endif %}')`` ->
-    ``(("has_ml_dep", "torch"),)``.
-    """
-    found = {
-        (call.node.name, call.args[0].value)
-        for call in _parse(template).find_all(nodes.Call)
-        if isinstance(call.node, nodes.Name)
-        and call.node.name in _LIBRARY_HELPER_FACTS
-        and len(call.args) == 1
-        and isinstance(call.args[0], nodes.Const)
-        and isinstance(call.args[0].value, str)
-    }
-    return tuple(sorted(found))
-
-
-def fact_matrix(template: str) -> list[Facts]:
-    """The facts a template renders with: each matrix Python crossed with its libraries on/off.
-
-    Every on/off combination of :func:`library_switches` (each in the fact its
-    helper reads) for each of :data:`MATRIX_PYTHON_VERSIONS`. No other fact is
-    set beyond ``project_kind``, which ``detect`` always reports, so a template
-    that reads an undetected fact without a guard fails to render.
-
-    Example: ``len(fact_matrix('{% if has_framework("fastapi") %}x{% endif %}'))`` -> 8.
-    """
-    libraries = library_switches(template)
-    matrix: list[Facts] = []
-    for version in MATRIX_PYTHON_VERSIONS:
-        for switches in itertools.product((False, True), repeat=len(libraries)):
-            facts: dict[str, object] = {"python_version": version, "project_kind": "python-unknown"}
-            for (helper, library), on in zip(libraries, switches, strict=True):
-                if on:
-                    held = facts.setdefault(_LIBRARY_HELPER_FACTS[helper], {})
-                    cast("dict[str, str]", held)[library] = "1.0"
-            matrix.append(cast("Facts", facts))
-    return matrix
-
-
-def distinct_renderings(rule: Rule) -> dict[str, Facts]:
-    """Each distinct body ``rule`` renders over its :func:`fact_matrix`, with the first facts behind it.
-
-    Raises what the render raises, e.g. ``jinja2.UndefinedError`` naming a
-    variable that is undefined in any branch the matrix reaches.
-
-    Example: ``len(distinct_renderings(core_rules()["python-typing"]))`` -> 2.
-    """
-    renderings: dict[str, Facts] = {}
-    for facts in fact_matrix(rule.template_body):
-        renderings.setdefault(render_rule(rule, facts), facts)
-    return renderings
-
-
-def string_version_comparisons(template: str) -> list[str]:
-    """Each ordering comparison of ``python_version`` or a string literal in ``template``.
-
-    Strings order character by character (``"3.9" > "3.12"``), so a version
-    branch goes through ``python_at_least`` (prU D40). Each finding reads like
-    the template's condition, with string literals single-quoted.
-
-    Example: ``string_version_comparisons('{% if python_version >= "3.11" %}{% endif %}')``
-    -> ``["python_version >= '3.11'"]``.
-    """
-    found: list[str] = []
-    for compare in _parse(template).find_all(nodes.Compare):
-        operands = [compare.expr, *(operand.expr for operand in compare.ops)]
-        ordering = any(operand.op in _ORDERING_OPS for operand in compare.ops)
-        if ordering and any(_is_version_text(operand) for operand in operands):
-            parts = [_describe(compare.expr)]
-            for operand in compare.ops:
-                parts += [_ORDERING_OPS.get(operand.op, operand.op), _describe(operand.expr)]
-            found.append(" ".join(parts))
-    return found
-
-
-def _parse(template: str) -> nodes.Template:
-    return SandboxedEnvironment().parse(template)
-
-
-def _is_version_text(node: nodes.Node) -> bool:
-    if isinstance(node, nodes.Name):
-        return node.name == "python_version"
-    return isinstance(node, nodes.Const) and isinstance(node.value, str)
-
-
-def _describe(node: nodes.Node) -> str:
-    if isinstance(node, nodes.Name):
-        return node.name
-    if isinstance(node, nodes.Const):
-        return repr(node.value)
-    return type(node).__name__
 
 
 def every_core_where_entry(skills_root: Path = CORE_ROOT / "skills") -> list[WhereEntry]:
