@@ -2,7 +2,8 @@
 
 C-python-architecture-01 creates the skill with its seven sections and the eight rules
 of the layers, boundaries and domain sections; C-python-architecture-02 adds the ten
-persistence and layer-test rules; later lanes append theirs.
+persistence and layer-test rules; C-python-architecture-03 adds the seven rules of the
+layout and read-models sections; later lanes append theirs.
 """
 
 from __future__ import annotations
@@ -40,6 +41,24 @@ _TESTS: Final = (
 )
 #: The SQLAlchemy rules activate on either detected framework (prU D23).
 _SQLALCHEMY: Final = {"any_framework": ["sqlalchemy", "alembic"]}
+_READ_MODELS: Final = (
+    "**/queries/**/*.py",
+    "**/queries.py",
+    "**/read_models/**/*.py",
+    "**/projections/**/*.py",
+    "**/projections.py",
+    "**/services/**/*.py",
+    "**/application/**/*.py",
+)
+_EVENTS: Final = (
+    "**/events/**/*.py",
+    "**/events.py",
+    "**/event_store.py",
+    "**/eventstore/**/*.py",
+    "**/domain/**/*.py",
+    "**/projections/**/*.py",
+    "**/services/**/*.py",
+)
 
 PINS: Final = CoreSkillPins(
     skill_id="python-architecture",
@@ -63,6 +82,13 @@ PINS: Final = CoreSkillPins(
         "arch-contract-tests-for-fakes",
         "arch-tests-by-layer",
         "arch-make-legacy-testable",
+        "arch-predictable-project-tree",
+        "arch-one-layout-axis",
+        "arch-no-junk-drawer-packages",
+        "arch-cqrs",
+        "arch-read-model-projections",
+        "arch-event-sourcing",
+        "arch-event-store",
     ),
     # The reference probe has no SQLAlchemy or Alembic.
     probe_inactive=frozenset({"sqlalchemy-engine-and-session-scope", "sqlalchemy-repositories"}),
@@ -275,6 +301,72 @@ PINS: Final = CoreSkillPins(
             name="Make legacy code testable",
             tags=("python", "architecture", "testing"),
             section="testing",
+        ),
+        "arch-predictable-project-tree": RulePin(
+            applies_if={},
+            globs=(*_PY, "pyproject.toml"),
+            priority=60,
+            name="Predictable project tree",
+            tags=("python", "architecture", "layout"),
+            section="layout",
+        ),
+        "arch-one-layout-axis": RulePin(
+            applies_if={},
+            globs=("**/__init__.py",),
+            priority=61,
+            name="One layout axis",
+            tags=("python", "architecture", "layout"),
+            section="layout",
+        ),
+        "arch-no-junk-drawer-packages": RulePin(
+            applies_if={},
+            globs=(
+                "**/utils/**/*.py",
+                "**/utils.py",
+                "**/helpers/**/*.py",
+                "**/helpers.py",
+                "**/common/**/*.py",
+                "**/common.py",
+                "**/managers/**/*.py",
+                "**/misc.py",
+                "**/__init__.py",
+            ),
+            priority=62,
+            name="No junk-drawer packages",
+            tags=("python", "architecture", "layout"),
+            section="layout",
+        ),
+        "arch-cqrs": RulePin(
+            applies_if={},
+            globs=_READ_MODELS,
+            priority=80,
+            name="CQRS",
+            tags=("python", "architecture", "cqrs"),
+            section="read-models",
+        ),
+        "arch-read-model-projections": RulePin(
+            applies_if={},
+            globs=_READ_MODELS,
+            priority=81,
+            name="Read model projections",
+            tags=("python", "architecture", "cqrs"),
+            section="read-models",
+        ),
+        "arch-event-sourcing": RulePin(
+            applies_if={},
+            globs=_EVENTS,
+            priority=82,
+            name="Event sourcing",
+            tags=("python", "architecture", "event-sourcing"),
+            section="read-models",
+        ),
+        "arch-event-store": RulePin(
+            applies_if={},
+            globs=_EVENTS,
+            priority=83,
+            name="Event store",
+            tags=("python", "architecture", "event-sourcing"),
+            section="read-models",
         ),
     },
 )

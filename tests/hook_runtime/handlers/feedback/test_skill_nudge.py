@@ -96,10 +96,13 @@ SOURCE_LINES: Final = [
 #: The source skill the five-line cap cuts from the first edit of ``src/app.py``.
 CUT_SOURCE_LINE: Final = _line("python-tooling")
 #: python-architecture's ungated member globs, first occurrence in rule-file order:
-#: Python files, the composition-root file names (arch-composition-root), the use-case
-#: packages and workers (arch-effects-after-commit), the persistence modules
-#: (arch-persistence-steps, arch-repository-port), the domain packages, the shared
-#: test-file globs (D41) and the unit-of-work modules.
+#: Python files, the composition-root file names (arch-composition-root), the read-model
+#: packages (arch-cqrs), the use-case packages and workers (arch-effects-after-commit), the
+#: event packages (arch-event-sourcing), the domain packages, the generic package names and
+#: package inits (arch-no-junk-drawer-packages), the persistence modules
+#: (arch-persistence-steps), pyproject.toml (arch-predictable-project-tree), the ports
+#: (arch-repository-port), the domain modules, the shared test-file globs (D41) and the
+#: unit-of-work modules.
 ARCHITECTURE_GLOBS: Final = [
     "**/*.py",
     "**/main.py",
@@ -111,14 +114,33 @@ ARCHITECTURE_GLOBS: Final = [
     "**/bootstrap.py",
     "**/wiring.py",
     "**/cli.py",
+    "**/queries/**/*.py",
+    "**/queries.py",
+    "**/read_models/**/*.py",
+    "**/projections/**/*.py",
+    "**/projections.py",
     "**/services/**/*.py",
+    "**/application/**/*.py",
     "**/use_cases/**/*.py",
     "**/usecases/**/*.py",
-    "**/application/**/*.py",
     "**/operations/**/*.py",
     "**/worker.py",
     "**/workers/**/*.py",
     "**/outbox.py",
+    "**/events/**/*.py",
+    "**/events.py",
+    "**/event_store.py",
+    "**/eventstore/**/*.py",
+    "**/domain/**/*.py",
+    "**/utils/**/*.py",
+    "**/utils.py",
+    "**/helpers/**/*.py",
+    "**/helpers.py",
+    "**/common/**/*.py",
+    "**/common.py",
+    "**/managers/**/*.py",
+    "**/misc.py",
+    "**/__init__.py",
     "**/db/**/*.py",
     "**/db.py",
     "**/repositories/**/*.py",
@@ -129,8 +151,8 @@ ARCHITECTURE_GLOBS: Final = [
     "**/infra/**/*.py",
     "**/adapters/**/*.py",
     "**/storage/**/*.py",
+    "pyproject.toml",
     "**/ports.py",
-    "**/domain/**/*.py",
     "**/models/**/*.py",
     "**/entities/**/*.py",
     "**/domain.py",

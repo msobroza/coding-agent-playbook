@@ -205,7 +205,6 @@ LEGIBILITY_POINTERS: Final = (
 #: ships one removes it here; the F-02 final-state check needs this empty.
 PENDING_LEGIBILITY_TARGETS: Final = frozenset(
     {
-        "arch-predictable-project-tree",
         "pytest-first-properties",
     }
 )
