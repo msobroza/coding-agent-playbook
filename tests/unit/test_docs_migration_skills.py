@@ -13,7 +13,8 @@ import re
 import pytest
 
 from coding_agent_playbook.validation._skills import SCOPED_RULE_NEEDS_SKILL_MESSAGE
-from tests._catalog import core_rule_skill_ids
+from tests._catalog import CORE_SKILLS_ROOT, RETIRED_RULE_IDS, core_rule_skill_ids, core_rules
+from tests._markdown import markdown_section
 from tests.unit.test_docs_migration_hooks import _migration
 
 _V021_HEADING = re.compile(r"^## v0\.21\b.*$", re.MULTILINE)
@@ -22,12 +23,15 @@ _TABLE_SEPARATOR = re.compile(r"\|(\s*:?-{3,}:?\s*\|)+")
 
 
 def _v021_section() -> str:
-    """The v0.21 section: its heading up to the next ``## `` heading."""
+    """The v0.21 section, up to the next ``## `` heading outside a code fence.
+
+    Fence-aware because the section quotes generated markdown (``## Before you
+    start`` inside a fenced block), which is no release heading.
+    """
     text = _migration()
     heading = _V021_HEADING.search(text)
     assert heading is not None, "MIGRATION.md has no '## v0.21' section"
-    end = text.find("\n## ", heading.end())
-    return text[heading.start() : end if end > 0 else len(text)]
+    return markdown_section(text, heading.start())
 
 
 def _tldr_table(section: str) -> list[str]:
@@ -65,22 +69,94 @@ def test_migration_v0_21_tldr_names_the_glossary_move() -> None:
         "Where guidance lives",
         "CLAUDE_RULES_PATH",
         "python-coding",
-        "44-python-data-shapes.md",
-        "58-python-idioms.md",
         "playbook validate",
-        "Distilled python-best-practices content",
-        "53-python-classes-and-protocols.md",
-        "61-pytest-test-doubles.md",
-        "63-pytest-fixtures.md",
-        "21-python-static-checks.md",
-        "Tool configuration and framework wiring",
-        "71-ml-vectorization.md",
-        "73-ml-reproducibility-and-testing.md",
         "NotebookEdit",
+        # Member rules render at <skill>/rules/<id>.md (D5, ADR 0005, D22).
+        "rules/<rule-id>.md",
+        "note: kept output",
+        "skills/<skill>/rules/<rule-id>.md",
+        # Sections and impact bands (D17, S4, S6).
+        "section:",
+        "is outside the band of section",
+        "declares sections, so its member rule needs 'section:'",
+        # Vendored upstream guidance (D1, D19, ADR 0004) and the new gates (D23).
+        "Vendored upstream Python guidance",
+        "LICENSE.python-best-practices",
+        "LICENSE.python-clean-architecture",
+        "has_dependency",
+        "any_dependency",
+        # The gates read root requirements files too (D78(2)).
+        "`requirements*.txt` files",
+        "Tool configuration and pyproject.toml",
+        # L0-22: the new always rules and the layout guard.
+        "code-legibility",
+        "document-layout",
+        "document-layout-guard",
+        "holds seven conventions",
     ],
 )
 def test_migration_v0_21_covers_topic(phrase: str) -> None:
     assert phrase in _v021_section(), f"the v0.21 MIGRATION section never mentions {phrase!r}"
+
+
+#: Kept ids whose Continue file is renamed because its priority follows the bands.
+_RENAMED_CONTINUE_IDS = (
+    "python-data-shapes",
+    "python-idioms",
+    "pytest-test-doubles",
+    "pytest-fixtures",
+    "python-static-checks",
+    "ml-vectorization",
+    "fastapi-app-wiring",
+)
+
+
+@pytest.mark.parametrize("rule_id", _RENAMED_CONTINUE_IDS)
+def test_migration_v0_21_names_the_new_continue_file(rule_id: str) -> None:
+    """The new name is built from the catalog's priority, the one home of it."""
+    name = f"{core_rules()[rule_id].frontmatter.priority:02d}-{rule_id}.md"
+    assert f"`{name}`" in _v021_section(), f"the v0.21 section never names Continue file {name!r}"
+
+
+def test_migration_v0_21_does_not_say_the_gates_read_pyproject_only() -> None:
+    """The detector also reads root requirements files (D78(2)), so the gates do too."""
+    assert "reads `pyproject.toml` only" not in _v021_section()
+
+
+def _successor_cell(row: str) -> str:
+    """The third cell (the successors) of a ``| retired | skill | successors |`` row."""
+    cells = [cell.strip() for cell in row.strip().strip("|").split("|")]
+    return cells[2] if len(cells) >= 3 else ""
+
+
+@pytest.mark.parametrize("rule_id", sorted(RETIRED_RULE_IDS))
+def test_migration_v0_21_names_each_retired_id_with_its_successors(rule_id: str) -> None:
+    """A table row opens with the retired id and names at least one successor id (D21)."""
+    rows = [
+        line
+        for line in (raw.strip() for raw in _v021_section().splitlines())
+        if line.startswith(f"| `{rule_id}` |") and re.search(r"`[a-z0-9-]+`", _successor_cell(line))
+    ]
+    assert rows, f"no v0.21 table row names retired id {rule_id!r} with its successors"
+
+
+@pytest.mark.parametrize(
+    "skill_id", sorted(p.name for p in CORE_SKILLS_ROOT.iterdir() if p.is_dir())
+)
+def test_migration_v0_21_names_every_core_skill(skill_id: str) -> None:
+    assert f"`{skill_id}`" in _v021_section(), f"the v0.21 section never names skill {skill_id!r}"
+
+
+@pytest.mark.parametrize(
+    ("marker", "reason"),
+    [
+        ("references/", "consumers with edited references/ copies of member rules"),
+        ("joining a core skill", "repo-local rules joining a sectioned core skill"),
+    ],
+)
+def test_migration_v0_21_tldr_has_row_for(marker: str, reason: str) -> None:
+    rows = [row for row in _tldr_table(_v021_section())[2:] if marker in row]
+    assert rows, f"the v0.21 TL;DR table needs a row for {reason}"
 
 
 def test_migration_quotes_the_engine_skill_required_message() -> None:

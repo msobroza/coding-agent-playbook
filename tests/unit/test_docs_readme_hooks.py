@@ -14,7 +14,6 @@ parse frontmatter and config snippets; they never run engine behaviour.
 
 from __future__ import annotations
 
-import re
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -43,14 +42,13 @@ from coding_agent_playbook.metrics_gate.policy import (
     resolve_metric_selection,
 )
 from tests._catalog import CORE_ROOT
+from tests._markdown import FENCE, markdown_headings, markdown_section
 from tests.unit.test_docs_lifecycle_hooks_cli import _metric_names, _precommit_ids
 from tests.unit.test_docs_lifecycle_hooks_spec import _HOOK_INVARIANTS
 
 _ROOT = Path(__file__).resolve().parents[2]
 _HOOKS_ROOT = CORE_ROOT / "hooks"
 _LIFECYCLE = "## Assistant lifecycle hooks"
-_FENCE = re.compile(r"^\s*```(\w*)\s*$")
-_HEADING = re.compile(r"^(#{1,6}) ")
 _PR_TITLE_EXPR = "${{ github.event.pull_request.title }}"
 
 
@@ -58,28 +56,12 @@ def _readme() -> str:
     return (_ROOT / "README.md").read_text(encoding="utf-8")
 
 
-def _headings(text: str) -> list[tuple[int, int, str]]:
-    """``(offset, level, line)`` of every heading outside fenced code (``# x`` in a block is not one)."""
-    found: list[tuple[int, int, str]] = []
-    fenced, offset = False, 0
-    for line in text.splitlines(keepends=True):
-        if _FENCE.match(line):
-            fenced = not fenced
-        elif not fenced and (match := _HEADING.match(line)):
-            found.append((offset, len(match.group(1)), line.rstrip("\n")))
-        offset += len(line)
-    return found
-
-
 def _section(heading: str) -> str:
     """The README section under the heading line ``heading``, up to the next one of its level or above."""
     text = _readme()
-    heads = _headings(text)
-    starts = [(offset, level) for offset, level, line in heads if line == heading]
+    starts = [offset for offset, _, line in markdown_headings(text) if line == heading]
     assert starts, f"README has no {heading!r} heading"
-    start, level = starts[0]
-    end = next((at for at, lvl, _ in heads if at > start and lvl <= level), len(text))
-    return text[start:end]
+    return markdown_section(text, starts[0])
 
 
 def _blocks(text: str, language: str) -> list[str]:
@@ -88,7 +70,7 @@ def _blocks(text: str, language: str) -> list[str]:
     current: list[str] | None = None
     indent = 0
     for line in text.splitlines():
-        match = _FENCE.match(line)
+        match = FENCE.match(line)
         if match and current is None and match.group(1) == language:
             current, indent = [], len(line) - len(line.lstrip())
         elif match and current is not None:
@@ -121,7 +103,7 @@ def _enforced_on(hook: HookFrontmatter) -> str:
 
 
 def test_readme_separates_precommit_and_lifecycle_hooks() -> None:
-    lines = [line for _, _, line in _headings(_readme())]
+    lines = [line for _, _, line in markdown_headings(_readme())]
     assert "### Pre-commit hooks" in lines
     assert _LIFECYCLE in lines
     assert "### Hooks" not in lines

@@ -27,6 +27,7 @@ from coding_agent_playbook.grading.execution_checks import CoverageCheck
 from coding_agent_playbook.sync._dispatch import LOCKFILE_SCHEMA
 from coding_agent_playbook.sync._hook_outputs import HOOKS_NOTICE
 from coding_agent_playbook.sync.pipeline import _ABORT_OUTCOME
+from tests._markdown import markdown_section
 
 _ROOT = Path(__file__).resolve().parents[2]
 _V020 = "## v0.20 — Assistant lifecycle hooks (PR K)"
@@ -65,9 +66,7 @@ def _migration() -> str:
 
 def _v020_section() -> str:
     text = _migration()
-    start = text.index(_V020)
-    end = text.find("\n## ", start + len(_V020))
-    return text[start : end if end > 0 else len(text)]
+    return markdown_section(text, text.index(_V020))
 
 
 def _release_versions(text: str) -> list[tuple[int, int]]:

@@ -725,6 +725,7 @@ Acceptance:
 - ruff check ., ruff format --check ., mypy and pytest -q pass on Python 3.12 and 3.13 in fresh environments without the metrics extra.
 - The wheel's _catalog/ equals git ls-files catalog and init in an empty scratch repo prints no warning line.
 - Final-state tests pass: no empty declared section, no retired id, every upstream file has one row, every core skill active on the probe.
+- MIGRATION.md's v0.21 claims hold on the final tree, including D-04's "Version branches instead of version gates": python-typing, python-async and the asyncio rules carry no python_version ">=3.11" gate (D40).
 - Exactly one PR into main exists with a Conventional Commits title; it is not merged by the agent; if forge #170 merged first, this branch was rebased and its counts, known-skills quote and budgets re-checked (D36).
 
 ## Content tickets
