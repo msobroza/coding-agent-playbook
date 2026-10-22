@@ -4,7 +4,7 @@ Tooling that implements the prU tickets with coding agents, on one or two machin
 
 | File | Role |
 | --- | --- |
-| `prU-runner.js` | The workflow script. It runs a list of tickets in dependency order. Each ticket is implemented, reviewed by the code-review skill's two sub-agents, fixed, then squash-merged into `integration/core-python-skills` with a light gate. With `fullGate`, it runs the chunked full suite instead. |
+| `prU-runner.js` | The workflow script. It runs a list of tickets in dependency order. Each ticket is implemented, reviewed by the code-review skill's two sub-agents and fixed; tickets that finish queue for integration, and one integrator at a time squash-merges the whole queue (up to 6 tickets, one commit each), runs the light gate once for the batch and pushes, without re-running the gate after a conflict-free rebase. With `fullGate`, it runs the chunked full suite instead. |
 | `plan.py` | Builds the runner's arguments and reports ticket status, from `tickets.md`, `ticket-issues.json`, `assignment.json` and the commits on `origin`. It reads those files from `origin/integration/core-python-skills`, so a reassignment pushed by either machine applies on the next `plan.py` call without pulling (`--local` reads this checkout instead, to try an edit before pushing it). Each ticket gets a priority: the number of unfinished tickets that wait on it, on either machine. |
 | `assignment.json` | Which machine owns which ticket. Never run a ticket on both machines. |
 | `ticket-issues.json` | Ticket id to GitHub issue number, and the tracker issue. |
