@@ -16,7 +16,10 @@ import pytest
 
 from coding_agent_playbook.config.layout import LAYOUT_DEFAULTS
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
-from coding_agent_playbook.hook_runtime.handlers.protect.document_layout_guard import DEFAULT_DIRS
+from coding_agent_playbook.hook_runtime.handlers.protect.document_layout_guard import (
+    DEFAULT_DIRS,
+    _document_kind,
+)
 from tests.hook_runtime.handlers.pack_repo import engine_hook
 
 if TYPE_CHECKING:
@@ -76,7 +79,9 @@ def test_a_plan_in_the_plans_directory_passes(
         ("docs/superpowers/specs/2026-01-02-login-design.md", "docs/specs/YYYY-MM-DD-<slug>.md"),
         (".scratch/login/spec.md", "docs/specs/YYYY-MM-DD-<slug>.md"),
         (".scratch/login/issues/01-form.md", "docs/plans/YYYY-MM-DD-<slug>.md"),
-        ("docs/superpowers/notes.md", "Write specs to docs/specs/ and plans to docs/plans/."),
+        (".scratch/login/prd.md", "docs/specs/YYYY-MM-DD-<slug>.md"),
+        (".scratch/login/login-design.md", "docs/specs/YYYY-MM-DD-<slug>.md"),
+        (".scratch/login/2026-01-02-login-plan.md", "docs/plans/YYYY-MM-DD-<slug>.md"),
     ],
 )
 def test_misplaced_documents_name_their_directory(
@@ -91,7 +96,14 @@ def test_misplaced_documents_name_their_directory(
 
 
 @pytest.mark.parametrize(
-    "rel", [".scratch/proto/app.py", ".scratch/proto/map.md", "docs/specs/2026-01-02-x.md"]
+    "rel",
+    [
+        ".scratch/proto/app.py",
+        ".scratch/proto/map.md",
+        "docs/specs/2026-01-02-x.md",
+        # D61 blocks specs and plans only: a framework folder's other files pass.
+        "docs/superpowers/notes.md",
+    ],
 )
 def test_prototypes_and_layout_documents_pass(
     pack_repo: PackRepo, deps: Callable[..., RuntimeDeps], rel: str
@@ -156,6 +168,38 @@ def test_blank_directories_fall_back_to_the_defaults(
 
     assert decision is Decision.DENY
     assert "docs/plans/YYYY-MM-DD-<slug>.md" in reason
+
+
+def test_configured_directories_lose_surrounding_slashes(
+    pack_repo: PackRepo, deps: Callable[..., RuntimeDeps]
+) -> None:
+    repo = _install(pack_repo, {"plans_dir": " /work/plans/ ", "blocked_dirs": ["/drafts/"]})
+
+    allowed = _verdict(_write(repo, deps(), "work/plans/x.md"))
+    blocked = _verdict(_write(repo, deps(), "drafts/plans/x.md"))
+
+    assert allowed[0] is Decision.NONE
+    assert blocked[0] is Decision.DENY
+    assert "Write plans to work/plans/YYYY-MM-DD-<slug>.md." in blocked[1]
+
+
+@pytest.mark.parametrize(
+    ("rel", "kind"),
+    [
+        ("a/plans/x.md", "plan"),
+        ("a/tickets/01.md", "plan"),
+        ("a/specs/x.md", "spec"),
+        ("a/x-plan.md", "plan"),
+        ("a/issues.md", "plan"),
+        ("a/spec.md", "spec"),
+        ("a/prd.md", "spec"),
+        ("a/2026-01-02-login-design.md", "spec"),
+        ("a/notes.md", None),
+        ("a/planning.md", None),
+    ],
+)
+def test_document_kind_reads_folders_then_file_name_words(rel: str, kind: str | None) -> None:
+    assert _document_kind(rel) == kind
 
 
 def test_folder_case_is_folded_on_darwin(

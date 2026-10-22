@@ -3,13 +3,13 @@
 Default tier, ``pre_tool_use``. A spec-driven framework writes its specs and plans
 where its own text says (``docs/superpowers/plans/``, ``.scratch/<slug>/spec.md``);
 the repo keeps them in one layout whatever the framework (D60). The guard denies a
-write that lands in a known other location and names the directory it belongs in:
+spec or plan (``spec.md``, ``*-design.md``, ``prd.md``, ``plan.md``, anything under a
+``specs/``, ``plans/``, ``issues/`` or ``tickets/`` folder) written to a known other
+location, and names the directory it belongs in (D61):
 
-- anything under a ``blocked_dirs`` entry (a framework's own folder, by default
-  ``docs/superpowers``);
-- a spec or plan file (``spec.md``, ``*-design.md``, ``plan.md``, anything under an
-  ``issues/`` or ``tickets/`` folder) under ``scratch_dir``, which holds only
-  throwaway prototypes.
+- under a ``blocked_dirs`` entry (a framework's own folder, by default
+  ``docs/superpowers``); other files there, such as notes, pass;
+- under ``scratch_dir``, which holds only throwaway prototypes.
 
 A write inside the configured ``specs_dir`` or ``plans_dir`` always passes, even
 when that directory lies inside a blocked one. The directories are the handler
@@ -60,12 +60,13 @@ DEFAULT_DIRS: Final[Mapping[str, str]] = MappingProxyType(
     {"specs_dir": "docs/specs", "plans_dir": "docs/plans", "scratch_dir": ".scratch"}
 )
 
-#: What a misplaced document is: a spec, a plan, or (in a blocked folder) unknown.
-type DocumentKind = Literal["spec", "plan", "document"]
+#: What a misplaced document is.
+type DocumentKind = Literal["spec", "plan"]
 
-_PLAN_FOLDERS: Final = frozenset({"plans", "plan", "issues", "tickets"})
+#: A folder or file-name word that marks a plan (its tickets included).
+_PLAN_MARKERS: Final = frozenset({"plans", "plan", "issues", "tickets"})
 _SPEC_FOLDERS: Final = frozenset({"specs", "spec"})
-_PLAN_WORDS: Final = frozenset({"plan", "plans", "tickets", "issues"})
+#: Words a spec's file name carries: superpowers writes ``<date>-<topic>-design.md``.
 _SPEC_WORDS: Final = frozenset({"spec", "specs", "prd", "design"})
 _WORD_SPLIT: Final = re.compile(r"[-_.\s]+")
 _PATH_CHARS: Final = 80
@@ -102,44 +103,42 @@ def document_layout_guard(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerRes
     for path in _targets(ev, ctx):
         if path.repo_rel is None or path.sibling_worktree:
             continue
-        kind = misplaced_kind(fold_key(path.repo_rel, ctx.platform), folded)
+        kind = _misplaced_kind(fold_key(path.repo_rel, ctx.platform), folded)
         if kind is not None:
             return _deny(ctx, path.repo_rel, kind, raw)
     return None
 
 
-def misplaced_kind(rel: str, layout: _Layout) -> DocumentKind | None:
-    """What ``rel`` (repo-relative, POSIX) is when it lies outside the layout, else ``None``.
+def _misplaced_kind(rel: str, layout: _Layout) -> DocumentKind | None:
+    """What ``rel`` (repo-relative, POSIX) is when it is a spec or plan outside the layout.
 
     Example::
 
-        >>> misplaced_kind("docs/superpowers/plans/x.md", _layout({}))
+        >>> _misplaced_kind("docs/superpowers/plans/x.md", _layout({}))
         'plan'
     """
-    if _under(rel, layout.specs) or _under(rel, layout.plans):
+    if not rel.endswith(".md") or _under(rel, layout.specs) or _under(rel, layout.plans):
         return None
-    if any(_under(rel, blocked) for blocked in layout.blocked):
-        return document_kind(rel) or "document"
-    if _under(rel, layout.scratch) and rel.endswith(".md"):
-        return document_kind(rel)
+    if any(_under(rel, blocked) for blocked in layout.blocked) or _under(rel, layout.scratch):
+        return _document_kind(rel)
     return None
 
 
-def document_kind(rel: str) -> Literal["spec", "plan"] | None:
+def _document_kind(rel: str) -> DocumentKind | None:
     """Whether ``rel`` names a spec or a plan, by its folders first, then its file name.
 
     Example::
 
-        >>> document_kind(".scratch/feature/issues/01-login.md"), document_kind("a/spec.md")
+        >>> _document_kind(".scratch/feature/issues/01-login.md"), _document_kind("a/spec.md")
         ('plan', 'spec')
     """
     folders = set(rel.split("/")[:-1])
-    if folders & _PLAN_FOLDERS:
+    if folders & _PLAN_MARKERS:
         return "plan"
     if folders & _SPEC_FOLDERS:
         return "spec"
     words = set(_WORD_SPLIT.split(posixpath.splitext(posixpath.basename(rel))[0]))
-    if words & _PLAN_WORDS:
+    if words & _PLAN_MARKERS:
         return "plan"
     if words & _SPEC_WORDS:
         return "spec"
@@ -191,11 +190,8 @@ def _under(rel: str, directory: str) -> bool:
 
 def _deny(ctx: HandlerContext, rel: str, kind: DocumentKind, layout: _Layout) -> HandlerResult:
     """The deny: the path and what it is, then the directory it belongs in."""
-    where = {
-        "spec": f"Write specs to {layout.specs}/YYYY-MM-DD-<slug>.md.",
-        "plan": f"Write plans to {layout.plans}/YYYY-MM-DD-<slug>.md.",
-        "document": f"Write specs to {layout.specs}/ and plans to {layout.plans}/.",
-    }[kind]
+    home = layout.specs if kind == "spec" else layout.plans
+    where = f"Write {kind}s to {home}/YYYY-MM-DD-<slug>.md."
     head = f"{quote_data(rel, _PATH_CHARS)} is a {kind} outside the document layout."
     return HandlerResult(
         decision=Decision.DENY,

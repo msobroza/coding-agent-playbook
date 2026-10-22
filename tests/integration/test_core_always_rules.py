@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Final, cast
 import pytest
 
 import coding_agent_playbook
+from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.config.layout import resolve_layout
 from coding_agent_playbook.rendering.session import RenderSession, TemplateContext
@@ -25,6 +26,8 @@ from tests._budget_probe import reference_probe_facts, render_core_rule
 from tests._catalog import core_rules, core_skill_ids
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from coding_agent_playbook.detector.facts import Facts
 
 pytestmark = pytest.mark.catalog
@@ -191,7 +194,8 @@ LEGIBILITY_POINTERS: Final = (
 )
 #: Targets whose rule a wave 7 content lane still has to ship (prU tickets
 #: C-python-coding-*, C-design-patterns-*, C-python-architecture-*, C-python-testing-*).
-#: A lane that ships one removes it here; the F-02 final-state check needs this empty.
+#: Until then ``rule_active`` hides its pointer, so the rule never names it. A lane that
+#: ships one removes it here; the F-02 final-state check needs this empty.
 PENDING_LEGIBILITY_TARGETS: Final = frozenset(
     {
         "python-small-units",
@@ -204,7 +208,11 @@ PENDING_LEGIBILITY_TARGETS: Final = frozenset(
         "pytest-first-properties",
     }
 )
-_POINTER: Final = re.compile(r"\(`([a-z0-9-]+)` -> `([a-z0-9-]+)`\)\.?$")
+#: A pointer renders only when ``rule_active`` resolves it, so none dangles (D73).
+_GUARDED_POINTER: Final = re.compile(
+    r"\{% if rule_active\('([a-z0-9-]+)'\) %\} \(`([a-z0-9-]+)` -> `([a-z0-9-]+)`\)\{% endif %\}\.$"
+)
+_POINTER: Final = re.compile(r" \(`([a-z0-9-]+)` -> `([a-z0-9-]+)`\)\.$")
 
 
 def test_code_legibility_names_eight_principles_each_with_its_skill_and_rule() -> None:
@@ -212,8 +220,58 @@ def test_code_legibility_names_eight_principles_each_with_its_skill_and_rule() -
     assert len(bullets) == len(LEGIBILITY_POINTERS), bullets
     for bullet, (phrase, skill, rule) in zip(bullets, LEGIBILITY_POINTERS, strict=True):
         assert phrase in bullet, f"{phrase!r} not in {bullet!r}"
-        match = _POINTER.search(bullet)
-        assert match is not None and match.groups() == (skill, rule), bullet
+        match = _GUARDED_POINTER.search(bullet)
+        assert match is not None and match.groups() == (rule, skill, rule), bullet
+
+
+def _legibility_target(skill_id: str, rule_id: str) -> tuple[Skill, Rule]:
+    """A plain skill (always rendered) and its one ungated member ``rule_id``."""
+    skill = Skill(
+        frontmatter={"id": skill_id, "name": skill_id, "description": "d"},
+        body="b\n",
+        scripts_dir=None,
+        references_dir=None,
+        source_package="coding_agent_playbook",
+    )
+    frontmatter = RuleFrontmatter(
+        id=rule_id, name=rule_id, description="d", scope="scoped", globs=["**/*.py"], skill=skill_id
+    )
+    return skill, Rule(frontmatter, "r\n", "r\n", False, None, "coding_agent_playbook")
+
+
+def _render_legibility(targets: Sequence[tuple[str, str]]) -> list[str]:
+    """code-legibility's bullets as sync renders them when exactly ``targets`` ship."""
+    pairs = [_legibility_target(skill, rule) for skill, rule in targets]
+    context = TemplateContext(
+        facts=cast("Facts", {}),
+        project_name="demo",
+        engine_version=coding_agent_playbook.__version__,
+    )
+    session = RenderSession.open(
+        [rule for _, rule in pairs],
+        context,
+        repo_root=Path(),
+        skills=[skill for skill, _ in pairs],
+    )
+    return _bullets(session.render_rule(core_rules()[LEGIBILITY]).body)
+
+
+def test_code_legibility_renders_every_pointer_once_its_rule_ships() -> None:
+    bullets = _render_legibility([(skill, rule) for _, skill, rule in LEGIBILITY_POINTERS])
+
+    pointers = [_POINTER.search(bullet) for bullet in bullets]
+    assert [m.groups() if m else None for m in pointers] == [
+        (skill, rule) for _, skill, rule in LEGIBILITY_POINTERS
+    ], bullets
+
+
+def test_code_legibility_names_no_pointer_to_a_missing_rule() -> None:
+    """D73 "the names never dangle": a target not yet shipped keeps its principle only."""
+    bullets = _render_legibility([])
+
+    assert len(bullets) == len(LEGIBILITY_POINTERS), bullets
+    assert not any("->" in bullet for bullet in bullets), bullets
+    assert all(bullet.endswith(".") for bullet in bullets), bullets
 
 
 @pytest.mark.parametrize(("skill", "rule_id"), [(s, r) for _, s, r in LEGIBILITY_POINTERS])

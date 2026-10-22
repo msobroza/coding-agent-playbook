@@ -77,3 +77,29 @@ def test_without_a_framework_every_role_is_empty() -> None:
 
 def test_a_session_opened_without_skills_knows_none() -> None:
     assert _render() == "clarify=;verify=;coding=False;data=False;plain=False"
+
+
+_RULE_TEMPLATE = (
+    "page={{ rule_active('page') }};"
+    "typing={{ rule_active('typing') }};"
+    "pandas={{ rule_active('pandas') }};"
+    "absent={{ rule_active('absent') }}"
+)
+
+
+def _render_rule_flags(**session_args: Any) -> str:
+    page = _rule("page", _RULE_TEMPLATE, scope="always")
+    rules = [page, *_RULES[1:]]
+    session = RenderSession.open(rules, _CONTEXT, repo_root=Path("/nowhere"), **session_args)
+    return session.render_rule(page).body
+
+
+def test_rule_active_needs_the_rule_kept_and_its_skill_rendered() -> None:
+    """prU D73: a ``skill -> rule`` pointer renders only when both resolve."""
+    body = _render_rule_flags(skills=_SKILLS, framework=_FRAMEWORK)
+
+    assert body == "page=True;typing=True;pandas=False;absent=False"
+
+
+def test_rule_active_is_false_for_a_skill_member_when_no_skill_renders() -> None:
+    assert _render_rule_flags() == "page=True;typing=False;pandas=False;absent=False"
