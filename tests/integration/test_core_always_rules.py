@@ -201,7 +201,6 @@ PENDING_LEGIBILITY_TARGETS: Final = frozenset(
         "python-small-units",
         "python-early-return",
         "python-error-messages-with-context",
-        "python-meaningful-names",
         "design-single-responsibility",
         "design-dry-yagni-kiss",
         "arch-predictable-project-tree",

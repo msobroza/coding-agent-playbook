@@ -22,8 +22,12 @@ PINS: Final = CoreSkillPins(
     where="Any Python file",
     members=(
         "python-error-handling",
+        "python-meaningful-names",
         "python-typing",
         "python-docstrings",
+        "python-comments-why",
+        "python-abstract-inputs",
+        "python-type-aliases",
         "python-dependency-injection",
         "python-pure-core",
         "python-context-managers",
@@ -48,6 +52,64 @@ PINS: Final = CoreSkillPins(
         "idioms",
     ),
     rules={
+        "python-meaningful-names": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=42,
+            name="Meaningful names",
+            tags=("python", "naming"),
+            section="types",
+        ),
+        "python-typing": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=43,
+            name="Typing",
+            tags=("python", "typing"),
+            lint_codes={
+                "warn": ["ANN001", "ANN201", "ANN401", "B006", "PGH003", "UP007", "UP045"],
+                "when": [
+                    {
+                        "applies_if": {"python_version": ">=3.12"},
+                        "warn": ["UP040", "UP046", "UP047"],
+                    }
+                ],
+            },
+            section="types",
+        ),
+        "python-docstrings": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=44,
+            name="Docstrings",
+            tags=("python", "docs"),
+            lint_codes={"warn": ["D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107"]},
+            section="types",
+        ),
+        "python-comments-why": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=45,
+            name="Comments that say why",
+            tags=("python", "docs"),
+            section="types",
+        ),
+        "python-abstract-inputs": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=46,
+            name="Abstract inputs",
+            tags=("python", "typing"),
+            section="types",
+        ),
+        "python-type-aliases": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=47,
+            name="Type aliases",
+            tags=("python", "typing"),
+            section="types",
+        ),
         "python-performance-idioms": RulePin(
             applies_if={},
             globs=_PY_FILES,

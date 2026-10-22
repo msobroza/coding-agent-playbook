@@ -28,7 +28,14 @@ at the skill rule that holds its detail) distills ideas from Akita, "Clean Code
 para Agentes de IA" (2026-04-20), as reformulated by the engine's owner; it is
 credited by name only. No sentences or examples from the article are copied;
 the ideas are restated in the engine's own words as general clean-code
-principles.
+principles. The rationale of python-coding's `rules/python-meaningful-names.md`
+(names that a search finds, the grep test) distills the same article the same
+way.
+
+python-coding's `rules/python-comments-why.md` distills one idea from the
+matforge article on documentation best practices (comments that give the
+reason), together with the engine owner's standing instruction to comment why,
+not what; it is credited by name only and copies no text.
 
 ## python-best-practices
 
@@ -61,6 +68,8 @@ Distilled (credited by name only, no vendored text):
 
 | Upstream file | Core files | Changes |
 | --- | --- | --- |
+| `skills/coding-standards/rules/doc-type-hints.md` | `rules/python-typing.md.j2`, `rules/python-abstract-inputs.md`, `rules/python-type-aliases.md` | python-typing: the skeleton (Description, Bad/Good, Notes), widened from public APIs to every signature, `include_disabled` made keyword-only, the Bad/Good cut to `find_user`; engine frontmatter and lint codes, the generics and `Self` template branches (D40), the Any ladder, mutable defaults with `ClassVar` and named ignore codes added. python-abstract-inputs: the abstract-collections Note (54). python-type-aliases: the domain-alias Note (55), as NewType ids. The References list is dropped. |
+| `skills/coding-standards/rules/doc-docstring.md` | `rules/python-docstrings.md` | The skeleton (Description, Bad/Good, Notes); the Good Example gains the required usage example, keeps Google sections as optional, makes `capture` keyword-only and is trimmed to one function plus a class line; engine frontmatter and lint codes, the definition of public, the four accepted example forms and units and limits added. The References list is dropped. |
 
 Distilled (credited by name only, no vendored text):
 
@@ -68,8 +77,6 @@ Distilled (credited by name only, no vendored text):
 - `rules/python-async.md`
 - `rules/python-classes-and-protocols.md`
 - `rules/python-error-handling.md`
-- `rules/python-typing.md.j2`
-- `rules/python-docstrings.md`
 - `rules/python-dependency-injection.md`
 - `rules/python-data-shapes.md`
 - `rules/python-idioms.md`
@@ -131,6 +138,9 @@ review-architecture, make-testable, characterize, review and refactor prompts.
 
 | Upstream file | Core files | Changes |
 | --- | --- | --- |
+| `skills/clean-architecture/references/types-and-type-hints.md` | `rules/python-typing.md.j2`, `rules/python-abstract-inputs.md`, `rules/python-type-aliases.md` | python-typing: the Optional section (155-181) became two Notes (the pipe form instead of Optional, `-> None` for side-effect functions); the 3.12 generic-alias section (441-528) became the template's 3.12 branch with one generic `type` alias, without the float `PriceMap` money alias and the float generic-strategy `Order`; "annotate every function" (608-625) became the Description, its `list[dict[str, float]]` invoice replaced by pbp's typed `find_user`. python-abstract-inputs: the "overly specific types" trade-off (559-562, 579-594) became the Description and the Bad/Good pair, with string ids instead of float prices; the "broadest appropriate type" table (722-732) became the Notes table. python-type-aliases: the Callable section (201-314) became the skeleton, its int discount strategies rewritten as Decimal fee rules (no float money) and joined by NewType ids; "keep type definitions readable" (669-696) became the nested-type Note. Dropped: the type-system theory and hint tutorial (1-154), the float side-by-side (182-200), the cryptic-errors trade-off (529-558) and the int-vs-float `compute_pay` example (563-578), which shows money as float; every course-credit line. |
+| `skills/clean-architecture/references/code-quality.md` | `rules/python-meaningful-names.md`, `rules/python-typing.md.j2` | python-meaningful-names: rule 2 "no vague identifiers" (21-32) became the Bad/Good names and the generic-words Note, rule 21 "no misleading method names" (330-346) the verb Note and the `add_line_item` example; rule 20's review angle (313-329) is left to design-name-for-intent. python-typing: rule 14 "no mutable default arguments" (202-217) confirms the mutable-default paragraph, its untyped `items: list` typed and its fix written as an explicit copy. |
+| `commands/make-pythonic.md` | `rules/python-type-aliases.md` | The "single-method abstract class -> Callable alias" row (18) became one Note, limited to a real seam; the command's process and argument text are not carried. |
 
 Distilled (credited by name only, no vendored text):
 
@@ -141,7 +151,6 @@ Distilled (credited by name only, no vendored text):
 - `rules/python-classes-and-protocols.md`
 - `rules/python-context-managers.md`
 - `rules/python-retries-and-timeouts.md`
-- `rules/python-typing.md.j2`
 - `rules/python-error-handling.md`
 
 ### python-testing
@@ -197,6 +206,7 @@ that comes to hold vendored text moves from here into its source's table.
 ### python-coding
 
 - `SKILL.md`
+- `rules/python-comments-why.md`
 
 ### python-documentation
 

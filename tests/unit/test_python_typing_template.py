@@ -18,7 +18,8 @@ if TYPE_CHECKING:
 
 pytestmark = pytest.mark.catalog
 
-_PEP_695_MARKER = "use **PEP 695** generic syntax"
+_PEP_695_MARKER = "PEP 695 syntax"
+_SELF_MARKER = "from typing import Self"
 _TEMPLATE = CORE_ROOT / "skills" / "python-coding" / "rules" / "python-typing.md.j2"
 
 
@@ -37,3 +38,20 @@ def test_python_typing_renders_the_typevar_branch_without_python_version() -> No
 
 def test_python_typing_template_never_compares_python_version_as_a_string() -> None:
     assert "python_version >=" not in _TEMPLATE.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("version", "self_type"),
+    [("3.10", False), ("3.11", True), ("3.12", True), ("3.13", True)],
+)
+def test_python_typing_returns_self_from_311_and_a_bound_typevar_below(
+    version: str, self_type: bool
+) -> None:
+    facts: Facts = {"python_version": version}
+    assert (_SELF_MARKER in render_core_rule("python-typing", facts)) is self_type
+
+
+def test_python_typing_renders_the_310_forms_without_python_version() -> None:
+    body = render_core_rule("python-typing", {})
+    assert _SELF_MARKER not in body
+    assert 'bound="' in body
