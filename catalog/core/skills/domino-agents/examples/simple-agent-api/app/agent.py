@@ -95,13 +95,9 @@ def build_agent(model: Model, config: AgentConfig, *, rng: random.Random) -> Age
 
 def tool_names(messages: Sequence[ModelMessage]) -> list[str]:
     """The tools the model called in ``messages``, in call order, each named once."""
-    names: list[str] = []
-    for message in messages:
-        if isinstance(message, ModelResponse):
-            for part in message.parts:
-                if isinstance(part, ToolCallPart) and part.tool_name not in names:
-                    names.append(part.tool_name)
-    return names
+    parts = (part for m in messages if isinstance(m, ModelResponse) for part in m.parts)
+    calls = (part.tool_name for part in parts if isinstance(part, ToolCallPart))
+    return list(dict.fromkeys(calls))
 
 
 def model_request_count(messages: Sequence[ModelMessage]) -> int:

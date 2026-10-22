@@ -20,7 +20,6 @@ from pydantic import (
     Field,
     SecretStr,
     ValidationError,
-    model_validator,
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -44,7 +43,8 @@ class AgentSettings(BaseSettings):
     domino_api_host: str | None = Field(default=None, validation_alias="DOMINO_API_HOST")
     domino_api_proxy: str | None = Field(default=None, validation_alias="DOMINO_API_PROXY")
     endpoint_base_url: AnyHttpUrl | None = None
-    token_url: str = ""
+    # None: derived from DOMINO_API_PROXY (see access_token_url).
+    token_url: AnyHttpUrl | None = None
     token_ttl_seconds: float = Field(default=60.0, gt=0)
     http_timeout_seconds: float = Field(default=30.0, gt=0)
     public_url: AnyHttpUrl = AnyHttpUrl("http://localhost:8888")
@@ -66,18 +66,19 @@ class AgentSettings(BaseSettings):
         """True inside a Domino workspace, Job or App: Domino sets DOMINO_API_HOST there."""
         return bool(self.domino_api_host)
 
-    @model_validator(mode="after")
-    def _derive_token_url(self) -> "AgentSettings":
-        """Default the token URL to DOMINO_API_PROXY's access-token path, adding a scheme."""
-        if not self.token_url:
-            if self.domino_api_proxy:
-                proxy = self.domino_api_proxy.rstrip("/")
-                # A bare host:port gets the plain-HTTP scheme of the run-local proxy.
-                base = proxy if "://" in proxy else urlunsplit(("http", proxy, "", "", ""))
-                self.token_url = f"{base}/access-token"
-            else:
-                self.token_url = DEFAULT_TOKEN_URL
-        return self
+    @property
+    def access_token_url(self) -> str:
+        """The token URL: set explicitly, else DOMINO_API_PROXY's access-token path, else the default.
+
+        A bare host:port proxy gets the plain-HTTP scheme of the run-local proxy.
+        """
+        if self.token_url is not None:
+            return str(self.token_url)
+        if not self.domino_api_proxy:
+            return DEFAULT_TOKEN_URL
+        proxy = self.domino_api_proxy.rstrip("/")
+        base = proxy if "://" in proxy else urlunsplit(("http", proxy, "", "", ""))
+        return f"{base}/access-token"
 
 
 class ModelConfig(BaseModel):

@@ -7,7 +7,9 @@ watermark (or a configured lookback on the first run), pages through every trace
 of the request span until no page token comes back, skips traces that already hold
 this Job's metrics, logs the reference-free scores back to each trace, and only
 then writes the window end to the watermark file atomically. A rerun after a crash
-scores nothing twice.
+scores nothing twice. The overlap must be at least the agent config's run
+deadline (agent.timeout_seconds), or a request still running at a window's end
+could finish outside both windows; the Job refuses to start otherwise.
 
     python -m evals.prod_eval --agent-id <id> --agent-version <version>
 """
@@ -24,7 +26,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from app.logs import configure_logging
-from app.settings import AgentSettings
+from app.settings import AgentSettings, RunConfig, load_agent_config
 from app.tracing import REQUEST_SPAN_NAME
 from evals.evaluators import PRODUCTION_METRICS, score_answer
 from evals.trace_store import DominoTraceStore, TracePage, TraceQuery, TraceStore
@@ -42,6 +44,10 @@ class ProdEvalConfig:
     agent_version: str | None
     lookback: timedelta
     overlap: timedelta
+
+
+class ProdEvalSetupError(ValueError):
+    """The flags and settings do not describe a runnable Job; says what to set."""
 
 
 class WatermarkError(RuntimeError):
@@ -113,37 +119,61 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def main(
-    argv: Sequence[str] | None = None,
-    *,
-    store: TraceStore | None = None,
-    clock: Callable[[], datetime] = _utc_now,
-) -> int:
-    """Score new production traces; agent id, version and watermark come from settings or flags."""
-    parser = argparse.ArgumentParser(description="Score the agent's new production traces.")
-    parser.add_argument("--agent-id", default=None)
-    parser.add_argument("--agent-version", default=None)
-    parser.add_argument("--watermark", type=Path, default=None)
-    args = parser.parse_args(argv)
-
-    settings = AgentSettings()
-    configure_logging(settings.log_level)
+def resolve_config(
+    args: argparse.Namespace, settings: AgentSettings, run: RunConfig
+) -> ProdEvalConfig:
+    """The Job's config: flags win over settings, and the overlap covers the run deadline."""
     agent_id = args.agent_id or settings.agent_id
-    watermark_path = args.watermark or settings.watermark_path
     if not agent_id:
-        parser.error("set --agent-id or SIMPLE_AGENT_AGENT_ID")
-    if watermark_path is None:
-        parser.error("set --watermark or SIMPLE_AGENT_WATERMARK_PATH (a dataset path)")
-    config = ProdEvalConfig(
+        raise ProdEvalSetupError("set --agent-id or SIMPLE_AGENT_AGENT_ID")
+    if settings.trace_overlap_seconds < run.timeout_seconds:
+        raise ProdEvalSetupError(
+            f"SIMPLE_AGENT_TRACE_OVERLAP_SECONDS ({settings.trace_overlap_seconds:g}) must be at"
+            f" least the run deadline agent.timeout_seconds ({run.timeout_seconds:g})"
+        )
+    return ProdEvalConfig(
         agent_id=agent_id,
         agent_version=args.agent_version or settings.agent_version,
         lookback=timedelta(hours=settings.lookback_hours),
         overlap=timedelta(seconds=settings.trace_overlap_seconds),
     )
-    scored = score_new_traces(
-        store or DominoTraceStore(), WatermarkFile(watermark_path), config, now=clock()
-    )
-    logger.info("scored production traces", extra={"scored": scored, "agent_id": agent_id})
+
+
+def resolve_watermark(args: argparse.Namespace, settings: AgentSettings) -> WatermarkFile:
+    """The watermark file from --watermark or settings; a dataset path is required."""
+    path: Path | None = args.watermark or settings.watermark_path
+    if path is None:
+        raise ProdEvalSetupError("set --watermark or SIMPLE_AGENT_WATERMARK_PATH (a dataset path)")
+    return WatermarkFile(path)
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Score the agent's new production traces.")
+    parser.add_argument("--agent-id", default=None)
+    parser.add_argument("--agent-version", default=None)
+    parser.add_argument("--watermark", type=Path, default=None)
+    return parser
+
+
+def main(
+    argv: Sequence[str] | None = None,
+    *,
+    settings: AgentSettings | None = None,
+    store: TraceStore | None = None,
+    clock: Callable[[], datetime] = _utc_now,
+) -> int:
+    """Score new production traces; agent id, version and watermark come from settings or flags."""
+    parser = _parser()
+    args = parser.parse_args(argv)
+    settings = settings or AgentSettings()
+    configure_logging(settings.log_level)
+    try:
+        config = resolve_config(args, settings, load_agent_config(settings.config_path).agent)
+        watermark = resolve_watermark(args, settings)
+    except ProdEvalSetupError as exc:
+        parser.error(str(exc))
+    scored = score_new_traces(store or DominoTraceStore(), watermark, config, now=clock())
+    logger.info("scored production traces", extra={"scored": scored, "agent_id": config.agent_id})
     return 0
 
 

@@ -82,6 +82,23 @@ async def test_a_timeout_retries_once_then_raises_without_the_token(
         assert SECRET not in repr(tokens)
 
 
+async def test_a_client_error_is_not_retried() -> None:
+    calls: list[httpx.Request] = []
+
+    def forbidden(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        return httpx.Response(403)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(forbidden)) as client:
+        tokens = LocalAccessTokenProvider(client, TOKEN_URL, ttl_seconds=60.0, clock=FakeClock())
+
+        with pytest.raises(TokenUnavailableError) as raised:
+            await tokens.token()
+
+    assert len(calls) == 1
+    assert not raised.value.transient
+
+
 async def test_no_token_value_reaches_the_logs(caplog: pytest.LogCaptureFixture) -> None:
     async with provider(TokenEndpoint(), FakeClock()) as tokens:
         caplog.set_level(logging.DEBUG)

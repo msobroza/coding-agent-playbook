@@ -5,7 +5,9 @@ philosophy_line otherwise, then answers with the line the tool returned.
 FakeTokenProvider hands out numbered tokens; RecordingTracer stands in for
 add_tracing and DominoRun and records spans; FakeTraceStore serves pages of
 traces with page tokens, like the SDK's search, and records the evaluations
-logged. make_settings builds settings in code.
+logged; FakeDominoSdk puts stand-ins for the SDK's own modules in sys.modules, so
+the real trace-store adapter runs without the SDK. make_settings builds settings
+in code.
 """
 
 import asyncio
@@ -13,11 +15,14 @@ import contextlib
 import dataclasses
 import functools
 import inspect
+import sys
 from collections.abc import Awaitable, Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import ModuleType, SimpleNamespace
 from typing import Any, TypeVar, cast
 
+import pytest
 from pydantic import SecretStr
 from pydantic_ai.messages import (
     ModelMessage,
@@ -46,6 +51,7 @@ SCIENCE_WORDS = ("planet", "star", "atom", "density", "mass", "photosynthesis", 
 def make_settings(config_path: Path = SHIPPED_CONFIG, **overrides: Any) -> AgentSettings:
     """Settings built in code: no .env file, outside Domino, a placeholder provider key.
 
+    conftest unsets every variable the settings read, so only these values count.
     ``Any``: the overrides go straight to the settings model, which validates them.
     """
     values: dict[str, Any] = {
@@ -61,12 +67,11 @@ def make_settings(config_path: Path = SHIPPED_CONFIG, **overrides: Any) -> Agent
 
 
 def latest_prompt(messages: list[ModelMessage]) -> str:
-    for message in reversed(messages):
-        if isinstance(message, ModelRequest):
-            for part in message.parts:
-                if isinstance(part, UserPromptPart) and isinstance(part.content, str):
-                    return part.content
-    return ""
+    """The text of the last user prompt in ``messages``; empty when there is none."""
+    parts = (part for m in messages if isinstance(m, ModelRequest) for part in m.parts)
+    prompts = [p.content for p in parts if isinstance(p, UserPromptPart)]
+    texts = [prompt for prompt in prompts if isinstance(prompt, str)]
+    return texts[-1] if texts else ""
 
 
 def _tool_return(messages: list[ModelMessage]) -> str | None:
@@ -248,3 +253,49 @@ class FakeTraceStore:
         """Each trace id once per time it was scored (its first metric marks a scoring)."""
         first_metric = self.logged[0][1] if self.logged else None
         return [trace_id for trace_id, name, _ in self.logged if name == first_metric]
+
+
+def sdk_trace(
+    trace_id: str, spans: Mapping[str, Mapping[str, object]], evaluations: tuple[str, ...] = ()
+) -> SimpleNamespace:
+    """A trace as the SDK's search returns it: spans by name with their outputs, evaluations."""
+    return SimpleNamespace(
+        id=trace_id,
+        spans=[SimpleNamespace(name=name, outputs=outputs) for name, outputs in spans.items()],
+        evaluation_results=[SimpleNamespace(name=name) for name in evaluations],
+    )
+
+
+@dataclass
+class FakeDominoSdk:
+    """Stands in for domino.agents.tracing and domino.agents.logging in sys.modules.
+
+    search_agent_traces returns one page of ``traces``; both calls raise ``error``
+    when it is set, and each call's keyword arguments are recorded.
+    """
+
+    traces: list[SimpleNamespace] = field(default_factory=list)
+    page_token: str | None = None
+    error: Exception | None = None
+    searches: list[dict[str, object]] = field(default_factory=list)
+    logged: list[dict[str, object]] = field(default_factory=list)
+
+    def search_agent_traces(self, **query: object) -> SimpleNamespace:
+        self.searches.append(query)
+        if self.error is not None:
+            raise self.error
+        return SimpleNamespace(data=self.traces, page_token=self.page_token)
+
+    def log_evaluation(self, **evaluation: object) -> None:
+        if self.error is not None:
+            raise self.error
+        self.logged.append(evaluation)
+
+    def install(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Put the two SDK modules in sys.modules for the rest of the test."""
+        tracing = ModuleType("domino.agents.tracing")
+        vars(tracing).update(search_agent_traces=self.search_agent_traces)
+        logging_module = ModuleType("domino.agents.logging")
+        vars(logging_module).update(log_evaluation=self.log_evaluation)
+        monkeypatch.setitem(sys.modules, "domino.agents.tracing", tracing)
+        monkeypatch.setitem(sys.modules, "domino.agents.logging", logging_module)

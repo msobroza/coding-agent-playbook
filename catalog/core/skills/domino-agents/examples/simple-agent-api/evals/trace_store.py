@@ -4,7 +4,9 @@ The production evaluation Job reads traces and logs scores only through
 TraceStore, as typed records; DominoTraceStore is the one adapter that imports
 the SDK (lazily). It picks the request span by its shared name instead of the
 first span, reads only public fields, and copies the names of the evaluations a
-trace already holds, so the Job can skip traces it scored before.
+trace already holds, so the Job can skip traces it scored before. Any SDK failure
+leaves it as TraceStoreError naming the agent or the trace, so the Job stops
+before it advances its watermark.
 """
 
 import logging
@@ -66,14 +68,17 @@ class DominoTraceStore:
     def search(self, query: TraceQuery, page_token: str | None) -> TracePage:
         from domino.agents.tracing import search_agent_traces
 
-        response = search_agent_traces(
-            agent_id=query.agent_id,
-            agent_version=query.agent_version,
-            trace_name=query.trace_name,
-            start_time=query.start,
-            end_time=query.end,
-            page_token=page_token,
-        )
+        try:
+            response = search_agent_traces(
+                agent_id=query.agent_id,
+                agent_version=query.agent_version,
+                trace_name=query.trace_name,
+                start_time=query.start,
+                end_time=query.end,
+                page_token=page_token,
+            )
+        except Exception as exc:
+            raise TraceStoreError(f"searching the traces of agent {query.agent_id} failed") from exc
         records = [record for trace in response.data if (record := _to_record(trace))]
         token = response.page_token
         return TracePage(tuple(records), str(token) if token else None)
@@ -81,7 +86,10 @@ class DominoTraceStore:
     def log_evaluation(self, trace_id: str, name: str, value: float) -> None:
         from domino.agents.logging import log_evaluation
 
-        log_evaluation(trace_id=trace_id, name=name, value=value)
+        try:
+            log_evaluation(trace_id=trace_id, name=name, value=value)
+        except Exception as exc:
+            raise TraceStoreError(f"logging {name} on trace {trace_id} failed") from exc
 
 
 class _SpanSummary(Protocol):

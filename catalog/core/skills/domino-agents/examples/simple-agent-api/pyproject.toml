@@ -21,8 +21,8 @@ dependencies = [
 
 [project.optional-dependencies]
 # The Domino Standard Environment provides the agent SDK; install this extra only
-# in a custom image or to trace a local run. CI never installs it: the SDK
-# adapters run only through fakes there.
+# in a custom Domino image (outside Domino tracing stays off either way). CI never
+# installs it: the SDK adapters run only through fakes there.
 domino = ["dominodatalab[agents]>=2.0"]
 
 [dependency-groups]

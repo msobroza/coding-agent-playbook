@@ -29,7 +29,15 @@ class AccessTokenProvider(Protocol):
 
 
 class TokenUnavailableError(RuntimeError):
-    """The access-token endpoint did not answer; carries the URL, never a token."""
+    """The access-token endpoint did not answer; carries the URL, never a token.
+
+    ``transient`` says whether one more try is worth it (a timeout, a broken
+    connection or a 5xx answer).
+    """
+
+    def __init__(self, url: str, *, transient: bool) -> None:
+        super().__init__(f"no access token from {url}")
+        self.transient = transient
 
 
 def _is_transient(exc: httpx.HTTPError) -> bool:
@@ -78,21 +86,21 @@ class LocalAccessTokenProvider:
     async def _fetch_with_one_retry(self) -> str:
         try:
             return await self._fetch()
-        except httpx.HTTPError as exc:
-            if not _is_transient(exc):
-                raise TokenUnavailableError(f"no access token from {self._url}") from exc
+        except TokenUnavailableError as exc:
+            if not exc.transient:
+                raise
             logger.warning(
                 "access token fetch failed; retrying once",
-                extra={"token_url": self._url, "error": type(exc).__name__},
+                extra={"token_url": self._url, "error": type(exc.__cause__).__name__},
             )
-        try:
-            return await self._fetch()
-        except httpx.HTTPError as exc:
-            raise TokenUnavailableError(f"no access token from {self._url}") from exc
+        return await self._fetch()
 
     async def _fetch(self) -> str:
-        response = await self._client.get(self._url)
-        response.raise_for_status()
+        try:
+            response = await self._client.get(self._url)
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise TokenUnavailableError(self._url, transient=_is_transient(exc)) from exc
         return response.text.strip()
 
 

@@ -9,7 +9,7 @@ from pydantic_ai.exceptions import ModelHTTPError
 from pydantic_ai.messages import ModelMessage, ModelResponse
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
-from evals import dev_eval
+from evals import dev_eval, prod_eval
 from evals.evaluators import (
     ANSWER_CHARS,
     ANSWERED,
@@ -19,8 +19,15 @@ from evals.evaluators import (
     dev_span_evaluator,
 )
 from evals.prod_eval import ProdEvalConfig, WatermarkError, WatermarkFile, score_new_traces
-from evals.trace_store import TraceRecord, TraceStoreError
+from evals.trace_store import (
+    DominoTraceStore,
+    TracePage,
+    TraceQuery,
+    TraceRecord,
+    TraceStoreError,
+)
 from tests.fakes import (
+    FakeDominoSdk,
     FakeSpan,
     FakeTraceStore,
     RecordingTracer,
@@ -28,6 +35,7 @@ from tests.fakes import (
     make_settings,
     scripted_model,
     scripted_response,
+    sdk_trace,
 )
 
 NOW = datetime(2026, 5, 4, 12, 0, tzinfo=timezone.utc)
@@ -192,6 +200,120 @@ def test_the_shipped_questions_carry_a_label_per_case() -> None:
 
     assert len(cases) >= 20
     assert {case.expected_tool for case in cases} == {"science_line", "philosophy_line"}
+
+
+def test_the_domino_trace_store_scores_the_request_span_and_skips_a_trace_without_one(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    sdk = FakeDominoSdk(
+        traces=[
+            sdk_trace(
+                "t1",
+                {
+                    "dev_eval_case": {},
+                    "ask_agent": {"answer": "A line.", "tools": ["science_line"]},
+                },
+                evaluations=("answered",),
+            ),
+            sdk_trace("t2", {"other_span": {"answer": "x"}}),
+        ],
+        page_token="next",
+    )
+    sdk.install(monkeypatch)
+    query = TraceQuery("agent-1", "7", "ask_agent", NOW - timedelta(hours=1), NOW)
+
+    page = DominoTraceStore().search(query, None)
+
+    assert page == TracePage(
+        (TraceRecord("t1", "A line.", ("science_line",), frozenset({"answered"})),), "next"
+    )
+    [search] = sdk.searches
+    assert (search["agent_id"], search["trace_name"], search["page_token"]) == (
+        "agent-1",
+        "ask_agent",
+        None,
+    )
+    warnings = [r.getMessage() for r in caplog.records if r.name == "evals.trace_store"]
+    assert warnings == ["trace has no request span"]
+
+
+def test_the_domino_trace_store_logs_an_evaluation_by_trace_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sdk = FakeDominoSdk()
+    sdk.install(monkeypatch)
+
+    DominoTraceStore().log_evaluation("t1", ANSWERED, 1.0)
+
+    assert sdk.logged == [{"trace_id": "t1", "name": ANSWERED, "value": 1.0}]
+
+
+def test_an_sdk_failure_leaves_the_trace_store_as_its_own_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    FakeDominoSdk(error=ConnectionError("tracking server down")).install(monkeypatch)
+    store = DominoTraceStore()
+    query = TraceQuery("agent-1", None, "ask_agent", NOW - timedelta(hours=1), NOW)
+
+    with pytest.raises(TraceStoreError, match="agent-1"):
+        store.search(query, None)
+    with pytest.raises(TraceStoreError, match="t1"):
+        store.log_evaluation("t1", ANSWERED, 1.0)
+
+
+def test_prod_eval_main_scores_with_flags_over_settings_and_advances_the_watermark(
+    tmp_path: Path,
+) -> None:
+    store = FakeTraceStore(pages=[[trace("t1")]])
+    watermark = tmp_path / "wm.json"
+    settings = make_settings(agent_id="from-settings", agent_version="3")
+
+    code = prod_eval.main(
+        ["--agent-id", "agent-1", "--watermark", str(watermark)],
+        settings=settings,
+        store=store,
+        clock=lambda: NOW,
+    )
+
+    assert code == 0
+    [query] = store.queries
+    assert (query.agent_id, query.agent_version) == ("agent-1", "3")
+    assert store.scored_ids() == ["t1"]
+    assert WatermarkFile(watermark).read() == NOW
+
+
+@pytest.mark.parametrize(
+    ("argv", "overlap_seconds", "message"),
+    [
+        (["--watermark", "wm.json"], 300.0, "--agent-id or SIMPLE_AGENT_AGENT_ID"),
+        (["--agent-id", "agent-1"], 300.0, "--watermark or SIMPLE_AGENT_WATERMARK_PATH"),
+        (
+            ["--agent-id", "agent-1", "--watermark", "wm.json"],
+            60.0,
+            "SIMPLE_AGENT_TRACE_OVERLAP_SECONDS (60) must be at least the run deadline",
+        ),
+    ],
+    ids=["no-agent-id", "no-watermark", "overlap-below-the-deadline"],
+)
+def test_prod_eval_main_refuses_to_start_naming_what_to_set(
+    argv: list[str],
+    overlap_seconds: float,
+    message: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    store = FakeTraceStore(pages=[[trace("t1")]])
+
+    with pytest.raises(SystemExit) as exited:
+        prod_eval.main(
+            argv,
+            settings=make_settings(trace_overlap_seconds=overlap_seconds),
+            store=store,
+            clock=lambda: NOW,
+        )
+
+    assert exited.value.code == 2
+    assert message in capsys.readouterr().err
+    assert store.queries == []
 
 
 def test_the_domino_trace_store_reads_the_sdk() -> None:

@@ -26,7 +26,7 @@ from pydantic_ai.models import Model
 
 from app.agent import AgentAnswer, AskAgent
 from app.logs import configure_logging
-from app.main import build_runtime
+from app.main import AgentRuntime, build_runtime
 from app.settings import AgentSettings
 from app.tracing import REQUEST_SPAN_NAME, Tracer, select_tracer
 from evals.evaluators import dev_span_evaluator
@@ -80,6 +80,21 @@ async def run_cases(run_case: CaseRunner, cases: Sequence[Case]) -> int:
     return failed
 
 
+async def evaluate(runtime: AgentRuntime, run_case: CaseRunner, cases: Sequence[Case]) -> int:
+    """Run every case, then close the runtime's clients; return how many cases raised."""
+    try:
+        return await run_cases(run_case, cases)
+    finally:
+        await runtime.aclose()
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Development evaluation of the agent.")
+    parser.add_argument("questions", type=Path)
+    parser.add_argument("--max-rows", type=int, default=None)
+    return parser
+
+
 def main(
     argv: Sequence[str] | None = None,
     *,
@@ -88,11 +103,7 @@ def main(
     tracer: Tracer | None = None,
 ) -> int:
     """Evaluate the agent on the question file; 1 when any case failed, else 0."""
-    parser = argparse.ArgumentParser(description="Development evaluation of the agent.")
-    parser.add_argument("questions", type=Path)
-    parser.add_argument("--max-rows", type=int, default=None)
-    args = parser.parse_args(argv)
-
+    args = _parser().parse_args(argv)
     settings = settings or AgentSettings()
     configure_logging(settings.log_level)
     tracer = tracer or select_tracer(settings)
@@ -100,15 +111,8 @@ def main(
     runtime = build_runtime(settings, model=model)
     ask = tracer.trace(REQUEST_SPAN_NAME)(runtime.ask)
     run_case = tracer.trace(CASE_SPAN_NAME, evaluator=dev_span_evaluator)(make_run_case(ask))
-
-    async def evaluate() -> int:
-        try:
-            return await run_cases(run_case, cases)
-        finally:
-            await runtime.aclose()
-
     with tracer.evaluation_run(settings.config_path, settings.experiment_name):
-        failed = asyncio.run(evaluate())
+        failed = asyncio.run(evaluate(runtime, run_case, cases))
     logger.info("evaluation finished", extra={"cases": len(cases), "failed": failed})
     return 1 if failed else 0
 

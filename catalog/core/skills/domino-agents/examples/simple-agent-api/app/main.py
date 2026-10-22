@@ -1,10 +1,9 @@
 # Changed from Domino Data Lab's simple_agent_api_only example (Apache-2.0); see README.md.
 """The composition root: create_app(settings) builds the whole agent service once.
 
-Nothing happens at import. create_app builds the HTTP clients (with timeouts from
-settings), the token provider (only for a Domino-hosted model endpoint), the
-model, the agent, the traced request function and the A2A sub-app, stores them on
-app.state and mounts /a2a. The lifespan runs the A2A app's own lifespan (its task
+Nothing happens at import. create_app builds the model with its HTTP clients and
+auth (app/llm.py, per provider), the agent, the traced request function and the
+A2A sub-app, stores them on app.state and mounts /a2a. The lifespan runs the A2A app's own lifespan (its task
 worker) and closes both clients afterwards. The error table turns the agent's own
 failures into 502 and 504 with fixed bodies; anything else stays a 500.
 """
@@ -30,13 +29,8 @@ from starlette.applications import Starlette
 from app.a2a import A2A_PATH, build_a2a_app
 from app.agent import AskAgent, build_agent, make_ask
 from app.chat import router as chat_router
-from app.domino_token import (
-    AccessTokenProvider,
-    DominoTokenAuth,
-    LocalAccessTokenProvider,
-    TokenUnavailableError,
-)
-from app.llm import ModelSetupError, build_model
+from app.domino_token import AccessTokenProvider, TokenUnavailableError
+from app.llm import ChatModel, build_model
 from app.settings import AgentConfig, AgentSettings, load_agent_config
 from app.tracing import REQUEST_SPAN_NAME, Tracer, select_tracer
 
@@ -79,36 +73,18 @@ def build_runtime(
 ) -> AgentRuntime:
     """Build the agent from the config file and settings; no I/O happens here.
 
-    A Domino-hosted endpoint gets a model client whose auth flow sets the rotating
-    token; the token provider is the injected one or, inside Domino, one that reads
-    the run's access-token endpoint.
+    The model, its clients and its auth come from app/llm.py, unless a test injects
+    the model; a Domino-hosted endpoint uses the injected token provider or, inside
+    Domino, one that reads the run's access-token endpoint.
     """
     config = load_agent_config(settings.config_path)
-    timeout = httpx.Timeout(settings.http_timeout_seconds)
-    token_client = httpx.AsyncClient(timeout=timeout)
-    auth: httpx.Auth | None = None
-    if config.model.provider == "domino-endpoint":
-        tokens = token_provider or _local_token_provider(settings, token_client)
-        auth = DominoTokenAuth(tokens)
-    model_client = httpx.AsyncClient(timeout=timeout, auth=auth)
-    agent = build_agent(
-        model or build_model(config, settings, model_client),
-        config,
-        rng=rng or random.Random(),
+    chat = (
+        ChatModel(model, ())
+        if model is not None
+        else build_model(config, settings, token_provider=token_provider)
     )
-    return AgentRuntime(config, agent, make_ask(agent, config), (model_client, token_client))
-
-
-def _local_token_provider(
-    settings: AgentSettings, client: httpx.AsyncClient
-) -> AccessTokenProvider:
-    if not settings.in_domino:
-        raise ModelSetupError(
-            "the domino-endpoint provider runs only inside Domino: DOMINO_API_HOST is not set"
-        )
-    return LocalAccessTokenProvider(
-        client, settings.token_url, ttl_seconds=settings.token_ttl_seconds
-    )
+    agent = build_agent(chat.model, config, rng=rng or random.Random())
+    return AgentRuntime(config, agent, make_ask(agent, config), chat.clients)
 
 
 def _lifespan(
@@ -156,6 +132,19 @@ def _add_cors(app: FastAPI, origins: Sequence[str]) -> None:
         )
 
 
+def _add_service_routes(app: FastAPI) -> None:
+    """The cheap health check and the docs page, both outside the OpenAPI schema."""
+
+    @app.get("/health", include_in_schema=False)
+    async def health() -> dict[str, str]:
+        return {"status": "ok"}
+
+    @app.get("/docs", include_in_schema=False)
+    async def docs() -> HTMLResponse:
+        # A relative openapi URL, so the docs work under the App's path prefix.
+        return get_swagger_ui_html(openapi_url="openapi.json", title=f"{app.title} - docs")
+
+
 def create_app(
     settings: AgentSettings,
     *,
@@ -168,7 +157,6 @@ def create_app(
     runtime = build_runtime(settings, model=model, token_provider=token_provider, rng=rng)
     tracer = tracer or select_tracer(settings)
     a2a_app = build_a2a_app(runtime.agent, runtime.config, settings)
-
     app = FastAPI(
         title="Simple agent API",
         description="Answers questions with one short line, over REST and A2A.",
@@ -182,15 +170,6 @@ def create_app(
     _install_error_table(app)
     _add_cors(app, settings.cors_origins)
     app.include_router(chat_router)
-
-    @app.get("/health", include_in_schema=False)
-    async def health() -> dict[str, str]:
-        return {"status": "ok"}
-
-    @app.get("/docs", include_in_schema=False)
-    async def docs() -> HTMLResponse:
-        # A relative openapi URL, so the docs work under the App's path prefix.
-        return get_swagger_ui_html(openapi_url="openapi.json", title=f"{app.title} - docs")
-
+    _add_service_routes(app)
     app.mount(A2A_PATH, a2a_app)
     return app

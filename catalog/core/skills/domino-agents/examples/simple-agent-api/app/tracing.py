@@ -4,9 +4,9 @@ Only this module (and evals/trace_store.py) imports the SDK, lazily, so the App,
 the Jobs and the tests run without it. DominoTracer applies ``add_tracing``
 directly to the request function, with pydantic-ai autologging, and opens
 ``DominoRun`` for a development evaluation; NoOpTracer returns the function
-unchanged and a null context. select_tracer decides once: inside Domino a missing
-SDK fails at startup naming the package, outside Domino tracing is off with one
-warning.
+unchanged and a null context. select_tracer decides once, on settings.in_domino:
+inside Domino the SDK traces and a missing SDK fails at startup naming the
+package; outside Domino tracing is off with one warning, installed SDK or not.
 """
 
 import contextlib
@@ -101,10 +101,10 @@ def sdk_installed() -> bool:
 def select_tracer(
     settings: AgentSettings, *, sdk_available: Callable[[], bool] = sdk_installed
 ) -> Tracer:
-    """DominoTracer when the SDK is installed; inside Domino its absence is a startup error."""
-    if sdk_available():
-        return DominoTracer()
-    if settings.in_domino:
+    """DominoTracer inside Domino, where a missing SDK is a startup error; else NoOpTracer."""
+    if not settings.in_domino:
+        logger.warning("outside Domino; tracing is off", extra={"package": SDK_PACKAGE})
+        return NoOpTracer()
+    if not sdk_available():
         raise RuntimeError(f"the Domino agent SDK is missing: install {SDK_PACKAGE}")
-    logger.warning("Domino agent SDK not installed; tracing is off", extra={"package": SDK_PACKAGE})
-    return NoOpTracer()
+    return DominoTracer()

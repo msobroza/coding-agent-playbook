@@ -154,8 +154,7 @@ def test_the_example_ships_exactly_its_25_files() -> None:
 
 def test_the_apache_license_copy_is_byte_identical() -> None:
     digest = hashlib.sha256(LICENSE_COPY.read_bytes()).hexdigest()
-    assert digest == "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
-    assert LICENSE_SHA256["simple-agent-api"] == digest
+    assert digest == LICENSE_SHA256["simple-agent-api"]
 
 
 @pytest.mark.parametrize("rel", ADAPTED_FILES)

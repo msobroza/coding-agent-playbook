@@ -52,7 +52,7 @@ export SIMPLE_AGENT_LOG_LEVEL=INFO
 uv run uvicorn app.asgi:app --port 8888
 ```
 
-Outside Domino the token provider is off (no Authorization header is sent to a model endpoint) and tracing is off with one warning.
+Outside Domino tracing is off with one warning, even with the agent SDK installed, and the `domino-endpoint` provider refuses to start: it needs the rotating token of a Domino run. A missing provider key or endpoint URL fails at startup, naming the variable.
 
 As a Domino App: publish the project with `app.sh` as the launch script. Set `OPENAI_API_KEY` as a project environment variable, and `SIMPLE_AGENT_PUBLIC_URL` to the App's published URL once it is known, so the A2A card points callers to it. Keep the App at one pod (maximum pods 1): the A2A tasks live in the memory of the one process.
 
@@ -102,9 +102,9 @@ Other agents use A2A at the App URL plus `/a2a/` and read the card at `/a2a/.wel
 
 The request function is `ask_agent(question: str) -> {"answer": str, "tools": list[str]}`, traced under the span name `ask_agent` (`REQUEST_SPAN_NAME`). That name, the parameter name and the two keys are a contract: the evaluators and the production Job read them, so change them together.
 
-The development evaluation runs every row of `sample_questions.csv` inside one `DominoRun`. Each row goes through `run_case(question_id, question, expected_tool)`, traced as `dev_eval_case` with `dev_span_evaluator`, which calls the same traced `ask_agent` the App serves. The evaluator scores `answered`, `single_tool`, `answer_chars` and, from the row's label, `tool_match`. Cases run one after another; a case that raises is logged with its id, and the Job exits 1 when any case failed. The questions include off-topic rows and one prompt-injection attempt.
+The development evaluation runs every row of `sample_questions.csv` inside one `DominoRun`. Each row goes through `run_case(question_id, question, expected_tool)`, traced as `dev_eval_case` with `dev_span_evaluator`, which calls the same traced `ask_agent` the App serves. The evaluator scores `answered`, `single_tool`, `answer_chars` and, from the row's label, `tool_match`. Cases run one after another; a case that raises is logged with its id, and the Job exits 1 when any case failed. The questions include off-topic rows.
 
-The production evaluation fixes its window end when it starts, begins `SIMPLE_AGENT_TRACE_OVERLAP_SECONDS` (at least the run deadline) before the stored watermark, or `SIMPLE_AGENT_LOOKBACK_HOURS` back on the first run, and pages through `search_agent_traces` until no page token comes back. It reads the `ask_agent` span of each trace, skips traces that already hold its metrics, logs `answered`, `single_tool` and `answer_chars` with `log_evaluation`, and writes the new watermark atomically only after every page succeeded. A corrupt watermark file stops the Job with its path.
+The production evaluation fixes its window end when it starts, begins `SIMPLE_AGENT_TRACE_OVERLAP_SECONDS` before the stored watermark (the Job refuses to start when the overlap is shorter than the config's `agent.timeout_seconds`), or `SIMPLE_AGENT_LOOKBACK_HOURS` back on the first run, and pages through `search_agent_traces` until no page token comes back. It reads the `ask_agent` span of each trace, skips traces that already hold its metrics, logs `answered`, `single_tool` and `answer_chars` with `log_evaluation`, and writes the new watermark atomically only after every page succeeded. A corrupt watermark file stops the Job with its path.
 
 User questions and answers are recorded in traces by design; nothing secret is: the token and the provider key never reach a traced parameter or return value, and the logs carry sizes, tool names and latencies, not the conversation.
 
@@ -115,7 +115,7 @@ uv run pytest
 uv run mypy
 ```
 
-The suite needs no Domino, no provider key and no network. `tests/conftest.py` switches real model requests off and builds settings in code; `tests/fakes.py` holds a scripted model that picks a tool by keyword, a token provider with numbered tokens, a recording tracer that stands in for `add_tracing` and `DominoRun`, and a trace store that serves pages with page tokens. The token tests run against an `httpx.MockTransport` endpoint and a fake clock. The `domino` extra is never installed in CI, so the one test of the real SDK adapter is skipped there.
+The suite needs no Domino, no provider key and no network. `tests/conftest.py` switches real model requests off and builds settings in code; `tests/fakes.py` holds a scripted model that picks a tool by keyword, a token provider with numbered tokens, a recording tracer that stands in for `add_tracing` and `DominoRun`, a trace store that serves pages with page tokens, and stand-ins for the SDK's own modules, so the real trace-store adapter runs too. Every test unsets the variables the settings read, so a developer's shell cannot change a result. The token tests run against an `httpx.MockTransport` endpoint and a fake clock. The `domino` extra is never installed in CI, so the one test that imports the real SDK is skipped there.
 
 ## Which file shows which rule
 
