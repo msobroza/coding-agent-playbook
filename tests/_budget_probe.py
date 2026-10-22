@@ -30,6 +30,7 @@ from tests._catalog import CORE_ROOT, core_rules, core_skills
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.detector.facts import Facts
 
 #: prU D18 as amended by D54 (6,000 -> 6,500 -> 7,000): core plus EACH bundled plugin's
@@ -162,18 +163,28 @@ def render_core_rule(
 ) -> str:
     """The body of core rule ``rule_id`` rendered as sync renders it, with ``facts``.
 
-    A render session like ``render_artifacts``' (facts, then the project
-    metadata, then the installed engine version). ``metadata`` replaces the
-    probe's ``project_name`` and empty ``project_description``, or any fact such
-    as ``project_kind``, for tests that pin how an always rule renders them. The
-    rule renders whatever its ``applies_if``. Raises ``KeyError`` naming the id
-    when core ships no such rule.
+    :func:`render_rule` on the core rule with that id. Raises ``KeyError``
+    naming the id when core ships no such rule.
 
     Example: ``render_core_rule("project-context", facts, {"project_name": "demo"})``.
     """
     rules = core_rules()
     if rule_id not in rules:
         raise KeyError(f"core ships no rule {rule_id!r}; expected one of {sorted(rules)}")
+    return render_rule(rules[rule_id], facts, metadata)
+
+
+def render_rule(rule: Rule, facts: Facts, metadata: Mapping[str, object] | None = None) -> str:
+    """The body of ``rule`` rendered as sync renders it, with ``facts``.
+
+    A render session like ``render_artifacts``' (facts, then the project
+    metadata, then the installed engine version). ``metadata`` replaces the
+    probe's ``project_name`` and empty ``project_description``, or any fact such
+    as ``project_kind``, for tests that pin how an always rule renders them. The
+    rule renders whatever its ``applies_if``.
+
+    Example: ``render_rule(core_rules()["pytest"], {"python_version": "3.12"})``.
+    """
     context = TemplateContext(
         facts=facts,
         project_name=REFERENCE_PROBE_NAME,
@@ -182,7 +193,7 @@ def render_core_rule(
     )
     # No rule to filter, so no has_file path to anchor: the session renders one rule.
     session = RenderSession.open((), context, repo_root=Path())
-    return session.render_rule(rules[rule_id]).body
+    return session.render_rule(rule).body
 
 
 def every_core_where_entry(skills_root: Path = CORE_ROOT / "skills") -> list[WhereEntry]:
