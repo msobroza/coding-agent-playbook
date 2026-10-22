@@ -1,0 +1,84 @@
+---
+id: python-async
+name: Asyncio
+description: "Run independent awaits together, inspect every partial result, give the group one deadline, and never block the event loop."
+version: 1
+scope: scoped
+globs:
+  - "**/*.py"
+section: async
+priority: 55
+tags: [python, async, concurrency]
+---
+
+# Run independent awaits together
+
+## Description
+
+Awaiting independent calls one after another adds up their wait times; started together, they finish in the time of the slowest one. An `async def` also stalls every other task on the loop whenever it blocks, so keep concurrency explicit, bounded and cancellable.
+
+{% if python_at_least("3.11") %}
+- When you need every result, use `asyncio.TaskGroup`: the first failure cancels the remaining tasks and the group raises an `ExceptionGroup`. Handle it with `except*` clauses that name the types you can recover from.
+{% else %}
+- When you need every result, `await asyncio.gather(...)` with the default `return_exceptions=False`: the first exception propagates to the caller. The other awaitables are not cancelled and keep running in the background; when they must stop on the first failure, own them as tasks and cancel them in `finally` (`python-async-tasks`).
+{% endif %}
+- Use `asyncio.gather(..., return_exceptions=True)` only when partial results are useful. Then inspect every result: re-raise an `asyncio.CancelledError` first, because it is a `BaseException` and not an `Exception`, and log each other failure with `exc_info` at the per-item boundary (`python-error-handling`).
+- Await one call after another only when it needs the previous result.
+
+## Bad Example
+
+```python
+async def load_dashboard(client: BillingClient, customer_id: str) -> Dashboard:
+    invoices = await client.invoices(customer_id)  # waits...
+    limit = await client.credit_limit(customer_id)  # ...then waits again
+    return Dashboard(invoices=invoices, credit_limit=limit)
+```
+
+## Good Example
+
+```python
+{% if python_at_least("3.11") %}
+async def load_dashboard(client: BillingClient, customer_id: str) -> Dashboard:
+    async with asyncio.timeout(DASHBOARD_TIMEOUT_SECONDS):  # one deadline for the group
+        async with asyncio.TaskGroup() as group:
+            invoices = group.create_task(client.invoices(customer_id))
+            limit = group.create_task(client.credit_limit(customer_id))
+    return Dashboard(invoices=invoices.result(), credit_limit=limit.result())
+{% else %}
+async def load_dashboard(client: BillingClient, customer_id: str) -> Dashboard:
+    invoices, limit = await asyncio.wait_for(  # one deadline; it cancels both calls
+        asyncio.gather(client.invoices(customer_id), client.credit_limit(customer_id)),
+        timeout=DASHBOARD_TIMEOUT_SECONDS,
+    )
+    return Dashboard(invoices=invoices, credit_limit=limit)
+{% endif %}
+
+
+async def collect_quotes(carriers: Sequence[Carrier], parcel: Parcel) -> list[Quote]:
+    results = await asyncio.gather(
+        *(carrier.quote(parcel) for carrier in carriers), return_exceptions=True
+    )
+    quotes: list[Quote] = []
+    for carrier, result in zip(carriers, results, strict=True):
+        if isinstance(result, asyncio.CancelledError):
+            raise result  # cancellation is not data
+        if isinstance(result, Exception):
+            logger.warning("quote failed", extra={"carrier": carrier.name}, exc_info=result)
+            continue
+        quotes.append(result)
+    return quotes
+```
+
+## Notes
+
+{% if python_at_least("3.11") %}
+- Bound the wait of a group with `async with asyncio.timeout(<setting>)`, as above; on expiry it cancels the work inside and raises the builtin `TimeoutError`.
+{% else %}
+- Bound the wait of a group with `asyncio.wait_for(<awaitable>, timeout=<setting>)`, as above. Up to 3.10 it raises `asyncio.TimeoutError`, which `except TimeoutError` does not catch, so name `asyncio.TimeoutError`.
+{% endif %}
+- The timeout on each single outbound call belongs to `python-retries-and-timeouts`, when the repo uses requests, httpx or aiohttp.
+- Keep the loop free. Inside `async def`, never call `time.sleep` (await `asyncio.sleep`), a blocking HTTP client or database driver, a blocking file read or a CPU-heavy loop. Move blocking I/O off the loop with `await asyncio.to_thread(...)` and CPU-bound work to a process pool. Blocking calls in web routes are the web-application skill's fastapi-no-blocking-calls rule.
+- Call `asyncio.run(main())` once, at the program's entry point, never from code that already runs on a loop.
+- A call without `await` returns a coroutine object, not the result; mypy flags the wrong type and the runtime warns that the coroutine was never awaited.
+- Never swallow `asyncio.CancelledError`: a task that catches it and carries on cannot be stopped. Release what you hold in `finally` or `async with` (`python-context-managers`), then let it propagate.
+- Tasks that outlive the call are `python-async-tasks`; many calls to one service are `python-async-fanout`.
