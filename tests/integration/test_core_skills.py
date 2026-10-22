@@ -70,8 +70,14 @@ MEMBERSHIP_FROM_PINS: Final[Mapping[str, str]] = {
 #: Core skill with member rules -> its ``playbook.files`` phrase in "Where guidance lives".
 WHERE_FROM_PINS: Final[Mapping[str, str]] = {pins.skill_id: pins.where for pins in ALL_PINS}
 CORE_SKILLS: Final = sorted(PINS_BY_SKILL)
-#: Core members whose gate the reference probe fails (spec 9.6.2).
-PROBE_INACTIVE_MEMBERS: Final = frozenset().union(*(pins.probe_inactive for pins in ALL_PINS))
+#: Core skills checked on the reference probe, and on the Domino probe (prU D59, D63).
+REFERENCE_PROBE_SKILLS: Final = sorted(p.skill_id for p in ALL_PINS if p.probe == "reference")
+DOMINO_PROBE_SKILLS: Final = sorted(p.skill_id for p in ALL_PINS if p.probe == "domino")
+#: Core members whose gate the reference probe fails (spec 9.6.2): a reference-probe
+#: skill's ``probe_inactive`` and every member of a Domino-probe skill.
+PROBE_INACTIVE_MEMBERS: Final = frozenset().union(
+    *(p.probe_inactive if p.probe == "reference" else p.members for p in ALL_PINS)
+)
 EVERY_CORE_SKILL: Final = sorted({*CORE_SKILLS, *PLAIN_CORE_SKILL_IDS})
 #: (skill id, rule id) of every rule a pins module pins the frontmatter of.
 PINNED_RULES: Final = sorted((p.skill_id, rule_id) for p in ALL_PINS for rule_id in p.rules)
@@ -106,8 +112,9 @@ def _members(skill_id: str) -> list[Rule]:
 
 
 def _probe_members(skill_id: str) -> list[Rule]:
-    """The members of ``skill_id`` the reference probe activates."""
-    return [r for r in _members(skill_id) if r.frontmatter.id not in PROBE_INACTIVE_MEMBERS]
+    """The members of ``skill_id`` its own probe (``CoreSkillPins.probe``) activates."""
+    inactive = PINS_BY_SKILL[skill_id].probe_inactive
+    return [r for r in _members(skill_id) if r.frontmatter.id not in inactive]
 
 
 def _is_core_member_rule(path: str, subdir: str = "rules") -> bool:
@@ -369,11 +376,24 @@ def test_pins_modules_cover_exactly_the_core_skills_with_a_playbook_block() -> N
     assert core_rule_skill_ids() == CORE_SKILLS, "one tests/core_skill_pins module per such skill"
 
 
-@pytest.mark.parametrize("skill_id", CORE_SKILLS)
+@pytest.mark.parametrize("skill_id", REFERENCE_PROBE_SKILLS)
 def test_reference_probe_emits_each_core_skill_within_budget(
     reference_probe_repo: Path, skill_id: str
 ) -> None:
-    frontmatter, body = split_frontmatter(_probe_skill_md(reference_probe_repo, skill_id))
+    _assert_emitted_within_budget(reference_probe_repo, skill_id)
+
+
+@pytest.mark.parametrize("skill_id", DOMINO_PROBE_SKILLS)
+def test_domino_probe_emits_each_domino_skill_within_budget(
+    domino_probe_repo: Path, skill_id: str
+) -> None:
+    """prU D63: the Domino skills are checked on the probe that activates them."""
+    _assert_emitted_within_budget(domino_probe_repo, skill_id)
+
+
+def _assert_emitted_within_budget(repo: Path, skill_id: str) -> None:
+    """``repo``'s emitted ``skill_id``: description shape and budget, index of its probe members."""
+    frontmatter, body = split_frontmatter(_probe_skill_md(repo, skill_id))
     authored = _authored(skill_id)[0]
     block = authored["playbook"]
     assert isinstance(block, dict)
@@ -408,10 +428,20 @@ def test_reference_probe_emits_each_core_skill_within_budget(
 
 
 def test_reference_probe_where_section_lists_every_core_skill(reference_probe_repo: Path) -> None:
+    _assert_where_section_lists(reference_probe_repo, REFERENCE_PROBE_SKILLS)
+
+
+def test_domino_probe_where_section_lists_every_core_skill(domino_probe_repo: Path) -> None:
+    """prU D63: the Domino probe is the reference probe plus markers, so it lists them all."""
+    _assert_where_section_lists(domino_probe_repo, CORE_SKILLS)
+
+
+def _assert_where_section_lists(repo: Path, skill_ids: list[str]) -> None:
     for relative in ("AGENTS.md", CLAUDE_RULES_PATH):
-        text = (reference_probe_repo / relative).read_text(encoding="utf-8")
+        text = (repo / relative).read_text(encoding="utf-8")
         assert text.count("## Where guidance lives") == 1, relative
-        for skill_id, files in WHERE_FROM_PINS.items():
+        for skill_id in skill_ids:
+            files = WHERE_FROM_PINS[skill_id]
             assert f"- {files}: skill `{skill_id}`" in text, f"{relative} lacks {skill_id}"
         assert "Lint feedback names a rule id" in text, relative
 

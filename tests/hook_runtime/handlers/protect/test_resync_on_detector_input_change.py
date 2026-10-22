@@ -10,6 +10,7 @@ comparison must decide alone whenever the dependency names did not change.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Final
 
 import pytest
@@ -330,14 +331,18 @@ def test_requirements_edit_naming_only_known_dependencies_is_silent(
 def test_a_new_domino_input_names_the_domino_gated_rule(
     repo: PackRepo, deps: Callable[..., RuntimeDeps], rel: str, text: str
 ) -> None:
-    """``domino_project`` was baked false; a marker or the committed key turns it on (D63)."""
+    """``domino_project`` was baked false; a marker or the committed key turns it on (D63).
+
+    The Domino skills' core rules gate on it too and may fill the truncated list
+    before the repo-local one, so any Domino-gated rule named proves the gate flipped.
+    """
     repo.write(rel, text)
     tool_input = {"file_path": str(repo.root / rel), "content": text}
 
     report = _post(repo, deps(), "Write", tool_input)
 
     [item] = report.trace.combined.context
-    assert 'rule "domino-runs" (source "<repo-local>")' in item
+    assert re.search(r'rule "domino-[a-z-]+" \(source "', item), item
 
 
 @pytest.mark.parametrize(
