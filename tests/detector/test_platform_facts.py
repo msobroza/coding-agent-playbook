@@ -21,7 +21,7 @@ from coding_agent_playbook.detector.requirements_files import (
     REQUIREMENTS_MAX_BYTES,
     root_requirement_names,
 )
-from tests._budget_probe import write_domino_probe, write_reference_probe
+from tests._budget_probe import write_authoring_probe, write_domino_probe, write_reference_probe
 
 _DOMINO_GATE = {"domino_project": True}
 _ENGINE_REPO = Path(__file__).resolve().parents[2]
@@ -137,6 +137,17 @@ def test_nested_requirements_files_are_not_read(tmp_path: Path) -> None:
     facts = detect(tmp_path)
 
     assert "dependencies" not in facts
+    assert facts["domino_project"] is False
+
+
+def test_authoring_probe_turns_the_playbook_layer_gate_on_and_leaves_domino_off(
+    tmp_path: Path,
+) -> None:
+    write_authoring_probe(tmp_path)
+
+    facts = detect(tmp_path)
+
+    assert facts["playbook_layer"] is True
     assert facts["domino_project"] is False
 
 

@@ -37,10 +37,10 @@ catalog/
 member rules are rendered into its `rules/` directory from the scoped rules that
 name it. An eighth, `playbook-guardrails`, takes no rules: sync appends one
 section per enabled hook's guardrail text to its authored intro, so edit the
-hook's `HOOK.md` body, not the skill, to change a section. Only a skill that declares a
-`playbook:` block takes rules, so the skills of `superpowers` and
-`mattpocock_skills` own none. A bundled plugin may also hold `rules/`, `prompts/`,
-`hooks/` or `eval_samples/`, laid out exactly as in `core/`.
+hook's `HOOK.md` body, not the skill, to change a section. Only a skill that
+declares a `playbook:` block takes rules, so the skills of `superpowers` and
+`mattpocock_skills` own none. A bundled plugin may also hold `rules/`,
+`prompts/`, `hooks/` or `eval_samples/`, laid out exactly as in `core/`.
 
 The files at a layer root (`README.md`, `LICENSE`, `ATTRIBUTIONS.md`) sit
 outside every kind directory, so sync never copies them into a consumer repo.
@@ -89,11 +89,11 @@ the consumer's `playbook/`) replaces an artifact with the same `id`.
    is needed (Pydantic validation included), `python-testing` for tests,
    `python-tooling` for one named developer tool, `web-application` for web
    backends, `ml-data` for ML and data libraries, `domino-apps` for Apps
-   served on Domino, `playbook-creator` for authoring playbook content. When that skill declares `sections:` in its `playbook:`
-   block, name one of its section ids in the rule's `section:`
-   (`playbook validate` fails without one) and pick a `priority` in that
-   section's impact band (CRITICAL 20-39, HIGH 40-59,
-   MEDIUM 60-79, LOW 80-99). Write `description` as the one actionable line
+   served on Domino, `playbook-creator` for authoring playbook content.
+   When that skill declares `sections:` in its `playbook:` block, name one of
+   its section ids in the rule's `section:` (`playbook validate` fails without
+   one) and pick a `priority` in that section's impact band (CRITICAL 20-39,
+   HIGH 40-59, MEDIUM 60-79, LOW 80-99). Write `description` as the one actionable line
    the skill's index shows for the rule, and keep `name` a short topic label
    (`Typing`, `Error handling`). The skill's "Covers ..." clause names its
    active sections when it declares any, and its member rules' names

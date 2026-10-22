@@ -16,7 +16,7 @@ descriptions still ride every turn.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -29,8 +29,11 @@ from coding_agent_playbook.sync.render import render_artifacts
 from coding_agent_playbook.validation.context import SyncContext
 from tests._budget_probe import LISTING_MAX_CHARS, every_core_where_entry
 from tests._catalog import core_rules, core_skill_ids
-from tests.core_skill_pins import ProbeKind, skills_off_probe
+from tests.core_skill_pins import PROBE_KINDS, ProbeKind, skills_off_probe
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 pytestmark = pytest.mark.catalog
 
@@ -51,6 +54,14 @@ CORE_DESCRIPTIONS_MAX_CHARS: Final = 2800
 #: prU D59: the Domino probe's own caps, the worst case once the Domino skills apply.
 DOMINO_CORE_DESCRIPTIONS_MAX_CHARS: Final = 3400
 DOMINO_LISTING_MAX_CHARS: Final = 7500
+#: Probe kind -> (core descriptions cap, core plus plugin listing cap): the standard
+#: caps (D18 as amended by D54), the Domino probe's own (D59), and the standard ones
+#: again on the authoring probe, with room left for forge (D78(19)).
+PROBE_DESCRIPTION_CAPS: Final[Mapping[ProbeKind, tuple[int, int]]] = {
+    "reference": (CORE_DESCRIPTIONS_MAX_CHARS, LISTING_MAX_CHARS),
+    "domino": (DOMINO_CORE_DESCRIPTIONS_MAX_CHARS, DOMINO_LISTING_MAX_CHARS),
+    "authoring": (CORE_DESCRIPTIONS_MAX_CHARS, LISTING_MAX_CHARS),
+}
 _GUARDRAILS_HEADING: Final = "## Guardrails"
 
 
@@ -210,84 +221,30 @@ def _over_per_skill_cap(repo: Path, probe: ProbeKind = "reference") -> dict[str,
     return {sid: n for sid, n in lengths.items() if n > CORE_DESCRIPTION_MAX_CHARS}
 
 
-def test_each_core_description_within_300_chars(reference_probe_repo: Path) -> None:
-    over = _over_per_skill_cap(reference_probe_repo)
+@pytest.mark.parametrize("probe", PROBE_KINDS)
+def test_each_core_description_within_300_chars(probe: ProbeKind, probe_repo: Path) -> None:
+    over = _over_per_skill_cap(probe_repo, probe)
     assert not over, f"core descriptions over {CORE_DESCRIPTION_MAX_CHARS} chars: {over}"
 
 
-def test_core_descriptions_total_within_2800_chars_d18(reference_probe_repo: Path) -> None:
-    """prU D18 as amended by D54, on the standard probe."""
-    total = sum(map(len, _core_descriptions(reference_probe_repo).values()))
-    assert total <= CORE_DESCRIPTIONS_MAX_CHARS, (
-        f"core descriptions total {total} chars; prU D18/D54 allows {CORE_DESCRIPTIONS_MAX_CHARS}"
-    )
+@pytest.mark.parametrize("probe", PROBE_KINDS)
+def test_core_descriptions_total_within_the_probe_cap(probe: ProbeKind, probe_repo: Path) -> None:
+    """prU D18/D54 on the standard and authoring probes, D59's own cap on the Domino probe."""
+    cap = PROBE_DESCRIPTION_CAPS[probe][0]
+    total = sum(map(len, _core_descriptions(probe_repo, probe).values()))
+    assert total <= cap, f"core descriptions total {total} chars on the {probe} probe; cap {cap}"
 
 
-def test_core_and_plugin_descriptions_total_within_7000_chars_d18(
-    reference_probe_repo: Path,
+@pytest.mark.parametrize("probe", PROBE_KINDS)
+def test_core_and_plugin_descriptions_total_within_the_probe_listing_cap(
+    probe: ProbeKind, probe_repo: Path
 ) -> None:
     """Every bundled plugin counts: the D24 lint exemption does not shrink the listing."""
-    descriptions = _emitted_descriptions(reference_probe_repo)
+    cap = PROBE_DESCRIPTION_CAPS[probe][1]
+    descriptions = _emitted_descriptions(probe_repo)
     total = sum(map(len, descriptions.values()))
-    assert total <= LISTING_MAX_CHARS, (
-        f"{len(descriptions)} skill descriptions total {total}; prU D18/D54 allows "
-        f"{LISTING_MAX_CHARS}"
-    )
-
-
-def test_domino_probe_each_core_description_within_300_chars(domino_probe_repo: Path) -> None:
-    over = _over_per_skill_cap(domino_probe_repo, "domino")
-    assert not over, f"core descriptions over {CORE_DESCRIPTION_MAX_CHARS} chars: {over}"
-
-
-def test_domino_probe_core_descriptions_total_within_3400_chars_d59(
-    domino_probe_repo: Path,
-) -> None:
-    """prU D59: the Domino descriptions stay full length, so this probe has its own cap."""
-    total = sum(map(len, _core_descriptions(domino_probe_repo, "domino").values()))
-    assert total <= DOMINO_CORE_DESCRIPTIONS_MAX_CHARS, (
-        f"core descriptions total {total} chars on the Domino probe; prU D59 allows "
-        f"{DOMINO_CORE_DESCRIPTIONS_MAX_CHARS}"
-    )
-
-
-def test_domino_probe_core_and_plugin_descriptions_within_7500_chars_d59(
-    domino_probe_repo: Path,
-) -> None:
-    descriptions = _emitted_descriptions(domino_probe_repo)
-    total = sum(map(len, descriptions.values()))
-    assert total <= DOMINO_LISTING_MAX_CHARS, (
-        f"{len(descriptions)} skill descriptions total {total} on the Domino probe; prU D59 "
-        f"allows {DOMINO_LISTING_MAX_CHARS}"
-    )
-
-
-def test_authoring_probe_each_core_description_within_300_chars(
-    authoring_probe_repo: Path,
-) -> None:
-    over = _over_per_skill_cap(authoring_probe_repo, "authoring")
-    assert not over, f"core descriptions over {CORE_DESCRIPTION_MAX_CHARS} chars: {over}"
-
-
-def test_authoring_probe_core_descriptions_total_within_2800_chars_d78(
-    authoring_probe_repo: Path,
-) -> None:
-    """prU D78(19): the authoring probe keeps the standard caps, with room left for forge."""
-    total = sum(map(len, _core_descriptions(authoring_probe_repo, "authoring").values()))
-    assert total <= CORE_DESCRIPTIONS_MAX_CHARS, (
-        f"core descriptions total {total} chars on the authoring probe; prU D54/D78 allows "
-        f"{CORE_DESCRIPTIONS_MAX_CHARS}"
-    )
-
-
-def test_authoring_probe_core_and_plugin_descriptions_within_7000_chars(
-    authoring_probe_repo: Path,
-) -> None:
-    descriptions = _emitted_descriptions(authoring_probe_repo)
-    total = sum(map(len, descriptions.values()))
-    assert total <= LISTING_MAX_CHARS, (
-        f"{len(descriptions)} skill descriptions total {total} on the authoring probe; prU D54 "
-        f"allows {LISTING_MAX_CHARS}"
+    assert total <= cap, (
+        f"{len(descriptions)} skill descriptions total {total} on the {probe} probe; cap {cap}"
     )
 
 

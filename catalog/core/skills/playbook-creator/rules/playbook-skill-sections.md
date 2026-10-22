@@ -76,7 +76,7 @@ priority: 40
 
 - The impact tag in each rendered rule title and index heading comes from the section.
 - A rule from another layer that joins without `section:` warns and lands in an engine-made Other section, listed last.
-- A declared section with no active member in a repo is simply not shown; core pins every declared section to a member in a test.
+- A declared section with no active member in a repo is simply not shown, so an empty section hides silently: give each declared section a member before the skill ships.
 - Skills without sections (outside core) keep a flat index and free priorities, but a skill past about five rules reads better with sections.
 - Inserting a rule renumbers the rest of its band; a band holds 20 ranks.
 - skill-template.md has a full `playbook:` block with sections.

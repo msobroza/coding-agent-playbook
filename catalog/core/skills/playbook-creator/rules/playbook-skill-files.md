@@ -27,7 +27,7 @@ tags: [playbook, skills]
 
 A skill directory holds only `SKILL.md`, `rules/`, the references directory, `scripts/` and `examples/`. Sync renders `rules/` and copies the other three.
 
-- **References.** Plain Markdown copied byte for byte (no template syntax, no priority), one level deep, with a table of contents above 100 lines. An engine-written navigation guide routes situations to rule ids, never repeats a rule body and stays within 120 lines.
+- **References.** Plain Markdown copied byte for byte (no template syntax, no priority), one level deep, with a table of contents above 100 lines. An engine-written decision guide routes situations to rule ids, never repeats a rule body and stays within 120 lines.
 - **Listing.** Each reference file and each example app directory has one `playbook.references` entry with `path`, `open_when` and an optional `applies_if`. A gated entry is neither listed nor written in a repo whose facts fail it. License copies are the one exemption.
 - **Scripts.** Stdlib-only Python valid on 3.10, executable, printing results (JSON) for the agent to judge, exiting 2 on a usage error. Core skills ship only `.py` scripts: a shell script or a third-party CLI would be an imposed tool.
 - **Examples.** A small complete app under `examples/<app>/` with its own `pyproject.toml`, its tests and a README mapping each file to the rule ids it demonstrates.

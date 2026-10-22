@@ -20,7 +20,7 @@ tags: [playbook, hooks]
 
 ## Description
 
-A hook's body is its guardrail text, read wherever the hook cannot run: it becomes the hook's section of the playbook-guardrails skill, Continue's guardrail rule file and the agent_harness advisory. Its `summary` is its one line in `AGENTS.md`, and in the Claude Code rules file where Claude Code cannot run it: 1-120 characters, one line, no template syntax, keeping the point (what to run or do instead). Write the body as imperative guidance with the fix, not as a description of the mechanism.
+A hook's body is its guardrail text, read wherever the hook cannot run: it becomes the hook's section of the playbook-guardrails skill, Continue's guardrail rule file and the agent_harness guardrail text. Its `summary` is its one line in `AGENTS.md`, and in the Claude Code rules file where Claude Code cannot run it: 1-120 characters, one line, no template syntax, keeping the point (what to run or do instead). Write the body as imperative guidance with the fix, not as a description of the mechanism.
 
 A hook that blocks or checks something reproducible gets a **guard twin**: a command running the same judge, so pre-commit and CI enforce it without an agent session. In the engine the twin is a playbook subcommand (`playbook docs-check`, `playbook scan-secrets` and `playbook check-deps` are twins); in an overlay, a console script of its package; in `playbook/`, a script the repo runs. Wire it as a `repo: local`, `language: system` pre-commit hook filtered to the files it checks.
 
@@ -67,6 +67,6 @@ Its guard twin in `.pre-commit-config.yaml`:
 ## Notes
 
 - `[hooks] advisory = false` turns the guardrail text off.
-- In the engine every hook has a test module under tests/hook_runtime/handlers/<pack>/ and a manifest row, and every core hook with a body declares `summary`.
+- In the engine every hook has a test module under tests/hook_runtime/handlers/<category>/ and a manifest row, and every core hook with a body declares `summary`.
 - The document-layout guard hook and docs-check are worked examples of a guard and its twin.
 - hook-template.md shows the pre-commit wiring.

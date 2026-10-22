@@ -27,7 +27,7 @@ Frontmatter:
 
 The engine composes the listed description as `<description> Covers <active section titles>. Use when <use_when>.`, at most 300 characters with every declared section counted.
 
-Body: a `# Title`, a short intro (what the skill is for and its scope), a `## Quick Reference`, and `## See Also` naming related skills in plain text. After it the engine appends "How to use this skill", the rules index grouped by section and "References and examples".
+Body: a `# Title`, a short intro (what the skill is for and its scope), a `## Quick reference`, and `## See also` naming related skills in plain text. After it the engine appends "How to use this skill", the rules index grouped by section and "References and examples".
 
 ## Bad Example
 
@@ -73,12 +73,12 @@ playbook:
 How Acme code computes, stores and shows money and invoices. Payment
 provider integrations live in the acme-payments skill.
 
-## Quick Reference
+## Quick reference
 
 - Amounts are decimals with a currency, never floats.
 - Round once, at the invoice line, half-even.
 
-## See Also
+## See also
 
 - acme-payments: provider calls and webhooks.
 ```
