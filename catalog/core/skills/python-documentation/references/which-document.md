@@ -16,7 +16,7 @@ Never add a docs tool, theme, host, test runner or pre-commit hook to follow a r
 | A changed dev command, tool or CI job | CONTRIBUTING | docs-contributing-guide |
 | An edited example or docstring example | Run it as written, or through the repo's doctest command | docs-runnable-examples |
 | A deprecation | A Deprecated changelog entry, with a `DeprecationWarning` in the code | docs-changelog |
-| A release | The release heading, or the repo's release tool; the version and date in CITATION.cff | docs-changelog; docs-citation-file where the repo has a CITATION.cff |
+| A release | The release heading, or the repo's release tool; the version and date in CITATION.cff, where the repo has one | docs-changelog; docs-citation-file where the repo has a CITATION.cff |
 | Any docs edit, before committing | `playbook docs-check`, with every finding fixed | docs-check-in-ci |
 
 ## A piece of reasoning
@@ -47,7 +47,7 @@ Never add a docs tool, theme, host, test runner or pre-commit hook to follow a r
 
 ## Never, whatever the row
 
-- Create a changelog, CONTRIBUTING, CITATION.cff or `docs/architecture.md` unasked: propose it to the user instead.
+- Create a changelog, CONTRIBUTING, CITATION.cff or `docs/architecture.md` unasked: propose it to the user instead (project-context).
 - Hand-edit a generated changelog section or generated API stubs.
 - Rewrite an accepted ADR: a new ADR supersedes it.
 - Bypass a failing docs check.

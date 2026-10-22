@@ -21,6 +21,7 @@ from tests.core_skills._references import (
     guide_line_count,
     reference_text,
     references_block,
+    rule_id_like_names,
     skill_md_parts,
     skill_rule_ids,
 )
@@ -47,11 +48,8 @@ ROUTES_TO: Final = (
 )
 #: The rules whose mapping row carries ``see: references/which-document.md``.
 RULES_SEEING_THE_GUIDE: Final = ("docs-same-change", "docs-document-layout", "docs-page-kinds")
-#: A token shaped like one of this skill's rule ids (their prefixes), not part of a
-#: file name such as ``which-document.md`` or a command such as ``playbook docs-check``.
-_RULE_ID_LIKE_RE: Final = re.compile(
-    r"(?<![\w.-])(?:docs|sphinx|mkdocs)-[a-z0-9-]*[a-z0-9](?![\w.-])"
-)
+#: The prefixes of this skill's rule ids.
+_RULE_ID_PREFIXES: Final = ("docs", "sphinx", "mkdocs")
 #: Names with those prefixes that are no rule id: the engine's docs-check command.
 _NOT_RULE_IDS: Final = frozenset({"docs-check"})
 
@@ -62,7 +60,7 @@ def _rule_id_like_names(text: str) -> set[str]:
     >>> sorted(_rule_id_like_names("which-document.md, docs-changelog; playbook docs-check"))
     ['docs-changelog']
     """
-    return set(_RULE_ID_LIKE_RE.findall(text)) - _NOT_RULE_IDS
+    return rule_id_like_names(text, _RULE_ID_PREFIXES, _NOT_RULE_IDS)
 
 
 def test_skill_lists_the_guide_ungated_with_its_open_when_line() -> None:

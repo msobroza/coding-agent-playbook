@@ -21,6 +21,7 @@ from tests._attributions import MAPPING_SPECS_DIR
 from tests._catalog import core_skill_root
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from pathlib import Path
 
 #: D49: an engine-written decision guide is at most 120 lines.
@@ -109,3 +110,20 @@ def backticked_ids(text: str) -> set[str]:
 def names_a_rule(text: str, rule_ids: set[str]) -> bool:
     """True when ``text`` names one of ``rule_ids`` in backticks, or another skill's rule."""
     return bool(backticked_ids(text) & rule_ids or cross_skill_mentions(text))
+
+
+def rule_id_like_names(
+    text: str, prefixes: Iterable[str], excluded: Iterable[str] = frozenset()
+) -> set[str]:
+    """The names ``text`` mentions shaped like a rule id with one of ``prefixes``.
+
+    A token inside a file name or a longer hyphenated word is no mention, and the
+    ``excluded`` names (a skill's own name, an engine command) are left out:
+
+    >>> sorted(rule_id_like_names("which-document.md, docs-changelog; docs-check", ["docs"],
+    ...                           excluded={"docs-check"}))
+    ['docs-changelog']
+    """
+    alternatives = "|".join(re.escape(prefix) for prefix in prefixes)
+    pattern = rf"(?<![\w.-])(?:{alternatives})-[a-z0-9-]*[a-z0-9](?![\w.-])"
+    return set(re.findall(pattern, text)) - set(excluded)

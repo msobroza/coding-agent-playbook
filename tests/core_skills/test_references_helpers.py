@@ -13,6 +13,7 @@ from tests.core_skills._references import (
     cross_skill_mentions,
     known_rule_ids,
     names_a_rule,
+    rule_id_like_names,
     skill_rule_ids,
 )
 
@@ -80,3 +81,26 @@ def test_names_a_rule_accepts_an_own_rule_or_another_skills_rule() -> None:
     assert names_a_rule("see `design-strategy`", rule_ids)
     assert names_a_rule("python-coding's python-data-shapes", rule_ids)
     assert not names_a_rule("see `design-callback` and design-strategy", rule_ids)
+
+
+def test_rule_id_like_names_takes_tokens_with_the_given_prefixes() -> None:
+    text = "docs-changelog and sphinx-api-reference, not python-async"
+
+    assert rule_id_like_names(text, ("docs", "sphinx")) == {
+        "docs-changelog",
+        "sphinx-api-reference",
+    }
+
+
+def test_rule_id_like_names_skips_file_names_and_longer_hyphenated_words() -> None:
+    text = "see which-document.md and docs-guide.md; x-docs-changelog; docs-changelog"
+
+    assert rule_id_like_names(text, ("docs", "which")) == {"docs-changelog"}
+
+
+def test_rule_id_like_names_leaves_out_the_excluded_names() -> None:
+    text = "python-coding's python-async; `playbook docs-check`"
+
+    named = rule_id_like_names(text, ("python", "docs"), excluded={"python-coding", "docs-check"})
+
+    assert named == {"python-async"}
