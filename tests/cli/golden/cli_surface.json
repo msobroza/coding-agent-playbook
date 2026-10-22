@@ -702,6 +702,69 @@
           "required": false,
           "help": "--run output format (default: text)",
           "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--compare"
+          ],
+          "dest": "compare",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "opt-in and paid: run the eval samples of the rule-including prompts on BASE_REF and on HEAD and compare them (needs the agent's credentials)",
+          "metavar": "BASE_REF"
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--base-prompt-set"
+          ],
+          "dest": "base_prompt_set",
+          "nargs": null,
+          "const": null,
+          "default": "v1",
+          "type": null,
+          "choices": [
+            "v1",
+            "v2"
+          ],
+          "required": false,
+          "help": "--compare: prompt set the base side grades (default: v1; --prompt-set picks HEAD's)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--compare-runs"
+          ],
+          "dest": "compare_runs",
+          "nargs": null,
+          "const": null,
+          "default": 3,
+          "type": "int",
+          "choices": null,
+          "required": false,
+          "help": "--compare: runs per eval sample on each side (default: 3)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--compare-out"
+          ],
+          "dest": "compare_out",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "--compare: directory for the checkouts and every run's JSON report (default: a new temporary directory)",
+          "metavar": null
         }
       ],
       "exclusive_groups": [

@@ -697,8 +697,8 @@ Lane final, size S, depends on L0-15, L0-16, L0-24; decisions D30, D37, D76.
 
 D30 as amended in round 5: no paid eval run in this effort. Add one opt-in way (off by default; a flag on the existing eval runner or a manual CI input, whichever fits the runner) to run the eval tasks of the seven prompts whose included rule bodies change (review, refactor, make-testable, review-architecture, generate-tests, characterize, security-review) on a base ref and on HEAD, and report the comparison. Either side can also name a prompt set (D76): the option passes `playbook eval <id> --run --prompt-set v1|v2` (L0-24) per side, so v1 and v2 compare on one ref. Defaults: 3 samples per task on each ref with the same model; a regression is a mean score drop above 0.05 on any task, or a task that passes on the base failing in 2 of 3 samples. It is not a merge gate.
 
-- `<scratchpad>/evals/{main,integration}/*.json`: reports, not committed
-- test `real eval runs`: 12 tasks x 2 branches x 3 samples
+- `<compare-out>/reports/{base,head}/<eval-sample>-<n>.json`: reports, not committed (`--compare-out` points it at the scratchpad)
+- test `real eval runs`: 12 eval samples x 2 branches x 3 runs, deferred to the owner under D37 (no paid run in this effort); the hermetic tests drive the `fake` runner
 
 Acceptance:
 - The option is off by default; CI and the final gate never run it.
