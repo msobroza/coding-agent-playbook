@@ -35,6 +35,8 @@ pytestmark = pytest.mark.catalog
 HOUSE_STYLE: Final = "python-house-style"
 PROJECT_CONTEXT: Final = "project-context"
 DATA_SHAPES: Final = "python-data-shapes"
+#: Took the frozen-is-shallow items from python-data-shapes (prU C-python-coding-05).
+FROZEN_DATACLASSES: Final = "python-frozen-dataclasses"
 IDIOMS: Final = "python-idioms"
 EARLY_RETURN: Final = "python-early-return"
 COMPOSITION: Final = "design-composition-over-inheritance"
@@ -69,8 +71,8 @@ MOVED_ITEM_OWNERS: Final = (
     ("parallel lists", DATA_SHAPES),
     ("NamedTuple", DATA_SHAPES),
     ("@property", DATA_SHAPES),
-    ("frozenset", DATA_SHAPES),
-    ("builder", DATA_SHAPES),
+    ("frozenset", FROZEN_DATACLASSES),
+    ("builder", FROZEN_DATACLASSES),
     ("Final", DATA_SHAPES),
     ("settings object", DATA_SHAPES),
     ("match the file", IDIOMS),

@@ -1,7 +1,7 @@
 ---
 id: python-classes-and-protocols
 name: Classes and protocols
-description: "Give each class one reason to change; pick the lightest construct, attributes before properties, composition before inheritance, small Protocols, substitutable subtypes, and abstractions only once earned."
+description: "Give each class one reason to change; pick the lightest construct, composition before inheritance, substitutable subtypes, small interfaces, and abstractions only once earned."
 version: 1
 scope: scoped
 globs:
@@ -29,10 +29,7 @@ A class earns its place when it keeps state together with the behavior that prot
 
 ## Attributes, then properties
 
-- Expose plain attributes, not `get_x()` and `set_x()` methods.
-- When an attribute later needs validation, turn it into a `@property` with a setter; callers stay unchanged. Values computed from other fields are covered in `python-data-shapes`.
-- Keep properties cheap. For an expensive computed value on a class without `__slots__`, use `functools.cached_property`.
-- Never decorate a method with `functools.lru_cache`: the cache holds a reference to `self`, so it keeps instances alive long after their last use (until they age out of the cache).
+Attributes before getters and setters, and cheap properties, are covered in `python-properties`.
 
 ## Composition first
 
@@ -56,9 +53,7 @@ class ArchivingBlobStore(LocalBlobStore):  # avoid: inherits every method it nev
 
 ## Protocol or ABC
 
-- A `typing.Protocol` describes "anything with these methods": keep it small and name it for the role (`InvoiceSender`, not `IEmailService`). Where to declare it is covered in `python-dependency-injection`.
-- An ABC fits when subclasses share implementation, or must override a hook the base class calls.
-- `@runtime_checkable` lets `isinstance` confirm that the method names exist, not that their signatures match.
+Choosing between a `Callable` alias, a small role-named Protocol and an ABC is covered in `python-protocols`.
 
 ## Substitutable subtypes
 

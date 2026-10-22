@@ -18,6 +18,9 @@ The asyncio and pydantic sections are vendored (C-python-coding-04): the four
 async rules take 55-58 and the six pydantic rules share the HIGH band's last
 slot, 59, so they sort by id. ``pydantic-typed-settings`` gates on
 pydantic-settings, which the reference probe does not declare.
+
+The classes section is vendored (C-python-coding-05): its seven rules are
+pinned at the mapping's priorities 60-66.
 """
 
 from __future__ import annotations
@@ -74,6 +77,12 @@ PINS: Final = CoreSkillPins(
         "pydantic-typed-settings",
         "python-data-shapes",
         "python-classes-and-protocols",
+        "python-protocols",
+        "python-properties",
+        "python-frozen-dataclasses",
+        "python-enums",
+        "python-dataclass-post-init",
+        "python-hide-internal-state",
         "python-idioms",
         "python-performance-idioms",
     ),
@@ -252,6 +261,62 @@ PINS: Final = CoreSkillPins(
             name="Type aliases",
             tags=("python", "typing"),
             section="types",
+        ),
+        "python-data-shapes": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=60,
+            name="Data shapes",
+            tags=("python", "design", "data"),
+            section="classes",
+        ),
+        "python-protocols": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=61,
+            name="Protocols",
+            tags=("python", "design", "typing"),
+            section="classes",
+        ),
+        "python-properties": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=62,
+            name="Properties",
+            tags=("python", "design", "oop"),
+            section="classes",
+        ),
+        "python-frozen-dataclasses": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=63,
+            name="Frozen dataclasses",
+            tags=("python", "design", "data"),
+            section="classes",
+        ),
+        "python-enums": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=64,
+            name="Enums for closed sets",
+            tags=("python", "design", "typing"),
+            section="classes",
+        ),
+        "python-dataclass-post-init": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=65,
+            name="Dataclass post-init",
+            tags=("python", "design", "data"),
+            section="classes",
+        ),
+        "python-hide-internal-state": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=66,
+            name="Hide internal state",
+            tags=("python", "design", "oop"),
+            section="classes",
         ),
         "python-performance-idioms": RulePin(
             applies_if={},
