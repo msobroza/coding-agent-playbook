@@ -275,6 +275,29 @@ def test_hook_path_tables_follow_a_custom_layout(
     _sync_ok(tmp_path, check=True)
 
 
+@pytest.mark.parametrize(
+    ("layout", "expected"),
+    [
+        ("", ("docs/specs", "docs/plans", ".scratch")),
+        ('specs = "specs"\nplans = "work/plans"\nscratch = "tmp"', ("specs", "work/plans", "tmp")),
+    ],
+)
+def test_the_document_layout_guard_reads_the_configured_directories(
+    tmp_path: Path, layout: str, expected: tuple[str, str, str]
+) -> None:
+    """prU L0-22 (D71): the guard's directories are the repo's ``[layout]``, D60 by default."""
+    _init_repo(tmp_path, framework="superpowers")
+    _set_config(tmp_path, head='framework = "superpowers"', layout=layout)
+
+    _sync_ok(tmp_path)
+
+    config = json.loads((tmp_path / _GUARD_CONFIG).read_text(encoding="utf-8"))
+    [handler] = config["hooks"]["document-layout-guard"]["handlers"].values()
+    keys = ("specs_dir", "plans_dir", "scratch_dir")
+    assert tuple(handler["config"][key] for key in keys) == expected
+    assert handler["config"]["blocked_dirs"] == ["docs/superpowers"]
+
+
 def test_the_lockfile_hashes_the_rewritten_bytes(
     tmp_path: Path, make_package: Callable[..., str]
 ) -> None:

@@ -1,0 +1,13 @@
+---
+id: document-layout
+name: Document layout
+description: Where the glossary, decision records, specs, plans and research live in this repo, whatever the framework.
+version: 1
+scope: always
+priority: 15
+tags: [always, docs]
+---
+
+- Glossary in `{{ layout.glossary }}` (map in `{{ layout.context_map }}`), decision records in `{{ layout.adr }}/NNNN-slug.md`, the architecture in `{{ layout.architecture }}`.
+- Specs, designs and PRDs in `{{ layout.specs }}/YYYY-MM-DD-<slug>.md`; plans in `{{ layout.plans }}/YYYY-MM-DD-<slug>.md`, their tickets in `{{ layout.plans }}/YYYY-MM-DD-<slug>/NN-<ticket>.md`; research in `{{ layout.research }}/<slug>.md`; framework setup notes in `{{ layout.agents }}/`.
+- `{{ layout.scratch }}/` (uncommitted) holds only throwaway prototypes: never put a spec or plan there or in a framework's own folder.

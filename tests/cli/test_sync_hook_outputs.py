@@ -151,6 +151,7 @@ def test_first_sync_writes_every_hook_output(synced: Path) -> None:
         "dependency-allowlist-guard",
         "destructive-command-guard",
         "docstring-nonregression",
+        "document-layout-guard",
         "error-handling-lint-feedback",
         "eval-sample-authoring-lint",
         "exfil-channel-guard",
@@ -404,7 +405,7 @@ def test_summary_lines_counts_and_hand_edit_warning(
     repo = make_hook_repo(tmp_path / "repo", make_synthetic_repo)
     assert _sync_repo(repo, tmp_path) == 0
     out = capsys.readouterr().out
-    # guard-x, guard-ext and the engine pack's twenty-eight default-tier hooks on here (seven
+    # guard-x, guard-ext and the engine pack's twenty-nine default-tier hooks on here (eight
     # protect, the Stop coordinator, four of its stage hooks (K6, K10), block-precommit-bypass,
     # post-edit-ruff-format, prompt-write-scope-guard, the error-handling and typing lint
     # hooks, toolchain-missing-hint (K7), the three secret hooks, the two Bash guards and the
@@ -422,9 +423,9 @@ def test_summary_lines_counts_and_hand_edit_warning(
     # UserPromptSubmit, finding #6), and each native deny row (secrets and destructive
     # prefixes) one more.
     native = sum(len(rows) for rows in _native_rows().values())
-    assert "✓ Hooks: 30 enabled, 14 skipped (" in out
-    assert "claude_code: 30 enforced" in out
-    assert "continue: 25 advisory" in out
+    assert "✓ Hooks: 31 enabled, 14 skipped (" in out
+    assert "claude_code: 31 enforced" in out
+    assert "continue: 26 advisory" in out
     updated = f"{len(ENGINE_PACK_EVENTS) + native} managed entries updated, 0 removed"
     assert f"✓ {SETTINGS}: {updated} (user keys untouched)" in out
 

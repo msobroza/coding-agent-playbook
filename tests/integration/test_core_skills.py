@@ -325,7 +325,12 @@ def test_always_core_rules_name_no_skill() -> None:
     always = {
         i: r.frontmatter.skill for i, r in core_rules().items() if r.frontmatter.scope == "always"
     }
-    assert always == {"project-context": None, "python-house-style": None}
+    assert always == {
+        "project-context": None,
+        "code-legibility": None,
+        "python-house-style": None,
+        "document-layout": None,
+    }
 
 
 def test_every_core_member_skill_has_a_core_member() -> None:

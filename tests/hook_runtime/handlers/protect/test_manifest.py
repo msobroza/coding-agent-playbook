@@ -49,6 +49,7 @@ PROTECT_PACK: dict[str, PackRow] = {
         "default", ("post_tool_use",), ("context", "none"), "open"
     ),
     "guard-eval-fixtures": PackRow("opt-in", ("pre_tool_use",), ("ask", "none"), "open"),
+    "document-layout-guard": PackRow("default", ("pre_tool_use",), ("deny", "none"), "open"),
     "stop-drift-and-orphan-gate": PackRow("default", ("stop",), ("deny", "none"), "open"),
     "session-start-playbook-briefing": PackRow(
         "default", ("session_start",), ("context", "none"), "open"

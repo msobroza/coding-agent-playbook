@@ -9,7 +9,7 @@ playbook:
 
 # Python coding
 
-Library-agnostic conventions for Python code in this repo. The always-loaded Python house style keeps its eight rules; each rule in this skill owns one other topic, with its reasons and examples.
+Library-agnostic conventions for Python code in this repo. The always-loaded Python house style keeps its seven rules; each rule in this skill owns one other topic, with its reasons and examples.
 
 ## Picking rules
 

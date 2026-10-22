@@ -230,10 +230,12 @@ coding-agent-playbook/
 │   ├── README.md                           # contributor guide: where each kind lives, how to add one
 │   ├── core/                               # the engine layer, always on (Section 6.3.3 for its skills)
 │   │   ├── ATTRIBUTIONS.md
-│   │   ├── rules/                          # the shipped inventory: 2 always rules, 26 scoped
+│   │   ├── rules/                          # the shipped inventory: 4 always rules, 26 scoped
 │   │   │   ├── always/
-│   │   │   │   ├── 00-project-context.md.j2      # uses {{ project_name }}
-│   │   │   │   └── 10-python-house-style.md      # plain markdown, no vars: eight bullets
+│   │   │   │   ├── 00-project-context.md.j2      # uses {{ project_name }} and framework_skill('clarify')
+│   │   │   │   ├── 05-code-legibility.md         # eight principles, each naming its skill -> rule (prU D73)
+│   │   │   │   ├── 10-python-house-style.md      # plain markdown, no vars: seven bullets
+│   │   │   │   └── 15-document-layout.md.j2      # renders {{ layout.* }} (prU D61, D71)
 │   │   │   ├── languages/python/                 # python-coding members in priority order, then two python-tooling members
 │   │   │   │   ├── dependency-injection.md       # 40
 │   │   │   │   ├── pure-core.md                  # 42
@@ -1949,7 +1951,9 @@ Continue loads rules in lexicographical order, so the file name controls priorit
 | Priority | Used for |
 | --- | --- |
 | `00` | Project context (project name, kind, top-level description) |
-| `10` | Python house style (the eight always-loaded conventions) |
+| `05` | Code legibility (eight language-neutral principles, prU D73) |
+| `10` | Python house style (the seven always-loaded conventions) |
+| `15` | Document layout (where specs, plans and decision records live, prU D61) |
 | `20` | Tooling baseline (ruff, mypy, pytest, package manager) |
 | `30` | Compliance and security (overlay territory) |
 | `40`-`59` | Language-specific scoped rules (dependency injection, pure core, data shapes, typing, performance idioms, asyncio, classes and protocols, error handling, idioms) |
@@ -3497,7 +3501,7 @@ tests/fixtures/golden/continue/python-typing/
 Test asserts the adapter output matches `output.md` byte-for-byte. Update via `pytest --snapshot-update`.
 ### 16.3 Integration tests
 `tests/integration/test_end_to_end.py` builds a synthetic consumer repo in a `tmp_path`, runs the full `playbook init` → `playbook sync` flow, and asserts the resulting file tree matches expectations.
-The **reference probe** (`tests/_budget_probe.py`, synced once per module by `tests/integration/conftest.py`: a FastAPI + ML service with a pytest suite and a notebook, hooks on, the `superpowers` bundled plugin, the adapters `claude_code`, `opencode`, `shared_skills` and `continue`) carries two gates. `tests/integration/test_context_budget.py` enforces the context budget: the always rules plus the Where map at most 800 words, the two always sections alone at most 240, `AGENTS.md` before its Guardrails section at most 1,500 (the whole file is a strict xfail until the guardrails shrink to one line each), each core skill description at most 300 characters, core descriptions at most 2,000 in total, core plus every bundled plugin at most 6,000. `tests/integration/test_core_skills.py` pins the core skill inventory, each scoped rule's owning skill, the description shape, the Where phrases, plain-markdown bodies within 500 lines with references one level deep, and the emitted skills on the probe; plugin skills are exempt from its static checks, because their vendored or distilled text fails them as written. `tests/integration/test_core_always_rules.py` reads the catalog, not the probe: it pins the eight house-style bullets, the two project-context reminders and one owner, `python-data-shapes`, `python-idioms` or `python-classes-and-protocols`, for every item that left the house style. Two more gates render core rules with the probe's detector facts (`reference_probe_facts`, `render_core_rule`): `tests/unit/test_core_rule_shapes.py` bounds every core scoped rule to 100 lines and 750 words, the size one reference read takes in, and `tests/unit/test_distilled_content_policy.py` keeps distilled content within the D8 import policy (no dropped recommendation in a core rule or prompt, one owner per moved topic, a credit for every distilled rule).
+The **reference probe** (`tests/_budget_probe.py`, synced once per module by `tests/integration/conftest.py`: a FastAPI + ML service with a pytest suite and a notebook, hooks on, the `superpowers` bundled plugin, the adapters `claude_code`, `opencode`, `shared_skills` and `continue`) carries two gates. `tests/integration/test_context_budget.py` enforces the context budget: the always rules plus the Where map at most 800 words, the always sections alone at most 450 (240 for the two D17 sections, raised by prU D73 for `code-legibility` and `document-layout`), `AGENTS.md` before its Guardrails section at most 1,500 (the whole file is a strict xfail until the guardrails shrink to one line each), each core skill description at most 300 characters, core descriptions at most 2,000 in total, core plus every bundled plugin at most 6,000. `tests/integration/test_core_skills.py` pins the core skill inventory, each scoped rule's owning skill, the description shape, the Where phrases, plain-markdown bodies within 500 lines with references one level deep, and the emitted skills on the probe; plugin skills are exempt from its static checks, because their vendored or distilled text fails them as written. `tests/integration/test_core_always_rules.py` reads the catalog, not the probe: it pins the eight house-style bullets, the two project-context reminders and one owner, `python-data-shapes`, `python-idioms` or `python-classes-and-protocols`, for every item that left the house style. Two more gates render core rules with the probe's detector facts (`reference_probe_facts`, `render_core_rule`): `tests/unit/test_core_rule_shapes.py` bounds every core scoped rule to 100 lines and 750 words, the size one reference read takes in, and `tests/unit/test_distilled_content_policy.py` keeps distilled content within the D8 import policy (no dropped recommendation in a core rule or prompt, one owner per moved topic, a credit for every distilled rule).
 ### 16.4 CI
 GitHub Actions (`.github/workflows/ci.yml`, ubuntu, Python 3.12 and 3.13) runs the tools directly rather than through pre-commit, installed with pip and first-party actions only:
 1. `python -m pip install -e ".[dev]"` (no `metrics` extra: the gate must pass without radon)

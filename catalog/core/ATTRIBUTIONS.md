@@ -50,3 +50,17 @@ settings) were left out.
 All of this text was written fresh for this engine. No sentences, examples or
 code from the collection are copied; only the underlying ideas are reused,
 restated in the engine's own words and adapted to its rule format.
+
+## Code legibility for agents
+
+Source: Akita, "Clean Code para Agentes de IA" (2026-04-20), as reformulated by
+the engine's owner; credited by name only.
+
+The following artifacts distill ideas from that article:
+
+- Rules: code-legibility (the always rule naming eight principles, each with
+  the skill rule that holds its detail).
+
+All of this text was written fresh for this engine. No sentences or examples
+from the article are copied; only the underlying ideas are reused, restated in
+the engine's own words as general clean-code principles.

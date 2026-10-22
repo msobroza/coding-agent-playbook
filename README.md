@@ -591,6 +591,10 @@ specs = "specs"
 other paths maps them with `[layout_aliases]` in its `framework.toml`; sync
 applies those under the default layout too (superpowers maps its
 `docs/superpowers/specs/` and `plans/` this way).
+The always rule `document-layout` names the configured places in every
+always-loaded file, and the `document-layout-guard` hook denies a spec or plan
+written outside them (into `docs/superpowers` or as a spec or plan file under
+`.scratch/`) with the directory it belongs in.
 
 Use these top-level keys: they are the only ones the engine reads. Put them
 at the top of the file, above the first `[table]` header: the file
@@ -934,6 +938,7 @@ API). Everywhere else, the hook's guidance reaches the assistant as text.
 | `session-start-playbook-briefing` | `default` | Claude Code; checked on OpenCode | Prove the guards answer (one `PLAYBOOK-GUARDS: OK` heartbeat line) and report playbook anomalies at session start. |
 | `eval-sample-authoring-lint` | `default` | Claude Code, OpenCode | Parse and trial-compile an edited eval sample; never runs it. |
 | `guard-eval-fixtures` | `opt-in` | Claude Code, OpenCode | Ask before editing a committed eval sample's frozen `setup/` fixtures. |
+| `document-layout-guard` | `default` | Claude Code, OpenCode | Deny a spec or plan written into a framework's own folder (`docs/superpowers`) or under `.scratch/`, naming the `[layout]` directory it belongs in. |
 
 #### Verify before done
 
