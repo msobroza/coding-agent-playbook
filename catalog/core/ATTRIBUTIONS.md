@@ -43,14 +43,19 @@ not reproduced, and the facts are restated in the engine's own words. The
 use its facts or why it was dropped; a distilled source has no pin and no
 license copy.
 
-The domino-agents skill's SKILL.md and rules distill facts from the Domino
-Data Lab 6.2 documentation (the agentic-systems, Apps, python-domino and
-environment variable pages), which carries no open license, and ideas from the
-`simple_agent_api_only` example agent by Domino Data Lab (Apache-2.0, commit
-`eee728252c42fa660e65c2dccbea6ae4f679c04c`). The rules restate those facts and
-ideas in the engine's own words, with no sentences or code copied, so they are
-listed under "Engine-written files", with the upstream files each one draws on
-and the upstream text they leave out.
+The domino-agents skill's SKILL.md and rules draw on two sources, each
+credited by name only. The Domino Data Lab 6.2 documentation (the
+agentic-systems user guide pages, the Apps pages, the python-domino agents API
+guide and the environment variable reference) carries no open license, so its
+facts are distilled (D50): restated in the engine's own words, with no sentence
+or code copied. Domino Data Lab's `simple_agent_api_only` example agent is
+Apache-2.0 licensed (commit `eee728252c42fa660e65c2dccbea6ae4f679c04c`); the
+rules take only ideas from it, with no sentence or code copied, so they hold no
+upstream text. Neither source has a pinned section above, so the rules are
+listed under "Engine-written files", with the upstream files the secrets and
+service rules draw on and the upstream text they leave out; the adapted example
+app, which does hold that repository's code, is credited with its license copy
+and change list when it is vendored.
 
 ## python-best-practices
 
@@ -291,9 +296,18 @@ that comes to hold vendored text moves from here into its source's table.
 - `rules/domino-agent-run-limits.md`
 - `rules/domino-agent-conversation-state.md`
 - `rules/domino-agent-logging.md`
+- `rules/domino-agent-settings.md`
+- `rules/domino-agent-config-file.md`
+- `rules/domino-agent-trace-entrypoint.md`
+- `rules/domino-agent-manual-spans.md`
+- `rules/domino-agent-sdk-names.md`
+- `rules/domino-agent-dev-eval-job.md`
+- `rules/domino-agent-evaluators.md`
+- `rules/domino-agent-eval-out-of-band.md`
+- `rules/domino-agent-prod-eval-watermark.md`
 
-Upstream files each rule draws on (example-agent files by path and lines, 6.2
-documentation pages by guide and page id):
+Upstream files each secrets and service rule draws on (example-agent files by
+path and lines, 6.2 documentation pages by guide and page id):
 
 - domino-agent-llm-keys: `ai_system_config.yaml` 1-33, `README.md` 289-296,
   `dev_eval_simplest_agent.py` 154-164; api_guide/c5ef26, user_guide/baab29.

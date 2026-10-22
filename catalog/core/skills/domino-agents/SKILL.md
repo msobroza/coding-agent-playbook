@@ -45,7 +45,7 @@ playbook:
 
 # Domino agents
 
-On Domino 6.2 an LLM agent is an App with its own dashboard: one request function handles each user request under `add_tracing`, and evaluation Jobs measure its quality. App hosting basics belong to the domino-apps skill, shared project basics (secrets, paths, Jobs) to domino-jobs, and generic web practice to web-application; this skill holds only what an agent adds. Domino repos also get a runnable agent example to copy from.
+On Domino 6.2 an LLM agent is an App with its own dashboard: one request function handles each user request under `add_tracing`, and evaluation Jobs measure its quality before and after it is deployed. App hosting basics belong to the domino-apps skill, shared project basics (secrets, paths, Jobs) to domino-jobs, and generic web practice to web-application; this skill holds only what an agent adds. Domino repos also get a runnable agent example to copy from.
 
 ## Quick Reference
 
@@ -57,6 +57,7 @@ On Domino 6.2 an LLM agent is an App with its own dashboard: one request functio
 
 ```python
 def create_app(settings: AgentSettings) -> FastAPI:
+    config = load_agent_config(settings.config_path)
     agent = build_agent(build_model(config, settings, model_client), config)
     tracer = select_tracer(settings)
     app = FastAPI(lifespan=lifespan)
