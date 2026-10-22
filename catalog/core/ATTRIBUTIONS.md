@@ -30,6 +30,16 @@ credited by name only. No sentences or examples from the article are copied;
 the ideas are restated in the engine's own words as general clean-code
 principles.
 
+The domino-apps skill (its SKILL.md and every rule under its rules/
+directory, listed under "Engine-written files") distills facts from the
+Domino Data Lab 6.2 user and admin documentation, which carries no open
+license; it is credited by name only and not vendored. No sentences or
+examples from the documentation are copied, its unsafe example settings are
+not reproduced, and the facts are restated in the engine's own words. The
+`domino-docs` section below records, per documentation page, the files that
+use its facts or why it was dropped; a distilled source has no pin and no
+license copy.
+
 ## python-best-practices
 
 Source: the "python-best-practices" agent skills by Ludo Technologies LLC, tag v0.8.0.
@@ -168,6 +178,42 @@ Distilled (credited by name only, no vendored text):
 - `rules/fastapi-app-wiring.md`
 - `rules/fastapi-error-boundaries.md`
 
+## domino-docs
+
+Source: the Domino Data Lab 6.2 user and admin documentation, cited by page id.
+Form: distilled (credited by name only, not vendored; no open license).
+
+Each row names the files that restate a page's facts in the engine's own
+words; those files stay under "Engine-written files". Pages a later lane
+uses gain its files in their row.
+
+### domino-apps
+
+| Upstream file | Core files | Changes |
+| --- | --- | --- |
+| `user_guide/9d3c12` | `SKILL.md`, `rules/domino-app-publish-from-commit.md`, `rules/domino-app-deployment-record.md` | Facts restated: the launch contract; launch file, environment, hardware tier and code branch define an App, each App pinning its own environment version and tier. |
+| `user_guide/6a2215` | `SKILL.md` | Facts restated in the Quick Reference: the injected headers and DOMINO_RUN_HOST_PATH. |
+| `user_guide/b99d5d` | `SKILL.md`, `rules/domino-app-proxy-limits.md`, `rules/domino-app-logging.md` | Facts restated: runtime file writes do not persist; large data and durable outputs such as logs belong in Datasets, databases or object storage. |
+| `admin_guide/71d6ad` | `SKILL.md`, `rules/domino-app-proxy-limits.md` | Facts restated: the run pod proxy's 300 s connect and read timeouts and the 25 MiB body-size default, all admin-configurable (the body cap applying to Apps is marked as inferred). |
+| `user_guide/a29497` | `rules/domino-app-production-server.md` | Facts restated: the Flask and Dash built-in server is single-threaded and not meant for more than about ten concurrent users; serve with gunicorn workers. Not reproduced: the debug-on launch scripts (unsafe). Not used: the stale claim that Apps never scale horizontally and the sizing arithmetic. |
+| `user_guide/aec000` | `rules/domino-app-external-resources.md` | Facts restated: a content security policy or iframe restriction blocks outside fonts, APIs and pages unless allowlisted; diagnose in the browser console and restart the App after the allowlist changes. |
+| `admin_guide/6469bf` | `rules/domino-app-external-resources.md`, `rules/domino-app-sharing-mode.md` | Facts restated: the App CSP flag defaults off, the iframe flag on, and flag changes need no restart; an admin permission can admit anonymous viewers. |
+| `user_guide/2c3a33` | `rules/domino-app-external-resources.md`, `rules/domino-app-publish-from-commit.md`, `rules/domino-app-workspace-preview.md` | Facts restated: file-system projects sync files only after the workspace saves and stops; preview through the workspace proxy, publish on 8888. Not reproduced (unsafe): usage statistics switched on, CORS and XSRF protection off, unpinned installs. |
+| `user_guide/cd0095` | `rules/domino-app-publish-from-commit.md`, `rules/domino-app-deployment-record.md`, `rules/domino-app-sharing-mode.md` | Facts restated: a Git-based App runs the branch or revision chosen at publish time; the per-App settings of the publish dialog; sharing modes and access requests, collaborators as editors. |
+| `user_guide/910370` | `rules/domino-app-publish-from-commit.md` | Facts restated: code must be pushed to be seen; no Git LFS. |
+| `user_guide/bb4b24` | `rules/domino-app-publish-from-commit.md`, `rules/domino-app-logging.md` | Facts restated: each publish snapshots environment, file references and code paths with no rollback or diff; App stdout and stderr go into the execution logs and support bundle. |
+| `user_guide/b04682` | `rules/domino-app-deployment-record.md`, `rules/domino-app-sharing-mode.md` | Practices restated: one branch and environment per stage, clone environments instead of editing them, tag versions; review permissions on publish, describe audience, data and limits, give a team contact. |
+| `user_guide/f46bdc` | `rules/domino-app-deployment-record.md`, `rules/domino-app-logging.md` | Facts restated: autoscaling settings persist across launches; the logs of all pods are interleaved into one log. |
+| `user_guide/cb9195` | `rules/domino-app-sharing-mode.md` | Facts restated: edit rights come from project collaboration; view rights are Restricted or open to anyone in Domino, with discoverable Restricted Apps and access requests. |
+| `user_guide/2c01ae` | `rules/domino-app-workspace-preview.md` | Facts restated: a workspace exposes one port, 80 and 9000 are reserved; the server proxy path is built from the project owner, project name and run id. |
+| `admin_guide/a9e507` | `rules/domino-app-logging.md` | Fact restated: execution logs are kept indefinitely. |
+| `user_guide/71635d` | DROP | Section landing page: one-line pointers to child pages, nothing actionable. |
+| `user_guide/e92082` | DROP | R-only Shiny walkthrough; its 0.0.0.0:8888 fact is restated from a537c2. |
+| `user_guide/5aedde` | DROP | Agent deployment, tracing and runs belong to the domino-agents skill. |
+| `user_guide/d95a3c` | DROP | Reserved project files are detector markers and domino-jobs results material, not App guidance. |
+| `user_guide/ccaee6` | DROP | The Git-based /mnt layout is domino-jobs' shared basics. |
+| `support_kb/docs-lifecycle` | DROP | Docs lifecycle and the client compatibility matrix: provenance facts, not rule text. |
+
 ## Engine-written files
 
 Files written for the engine with no upstream text, per core skill. A file
@@ -178,6 +224,16 @@ that comes to hold vendored text moves from here into its source's table.
 ### domino-agents
 
 ### domino-apps
+
+- `SKILL.md`
+- `rules/domino-app-production-server.md`
+- `rules/domino-app-proxy-limits.md`
+- `rules/domino-app-external-resources.md`
+- `rules/domino-app-publish-from-commit.md`
+- `rules/domino-app-deployment-record.md`
+- `rules/domino-app-sharing-mode.md`
+- `rules/domino-app-workspace-preview.md`
+- `rules/domino-app-logging.md`
 
 ### domino-jobs
 
