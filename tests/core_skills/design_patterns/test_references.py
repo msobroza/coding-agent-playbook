@@ -25,6 +25,7 @@ from tests.core_skills._references import (
     names_a_rule,
     reference_text,
     references_block,
+    rule_id_like_names,
     skill_rule_ids,
 )
 
@@ -150,8 +151,8 @@ SEE_LINES: Final = {
 SMELL_CATALOG: Final = "references/smell-catalog.md"
 CHECKLIST: Final = "references/quality-checklist.md"
 LINT_GUARDRAILS: Final = "references/lint-guardrails.md"
-#: A token shaped like one of this skill's rule ids.
-_RULE_ID_LIKE_RE: Final = re.compile(r"\bdesign-[a-z0-9-]*[a-z0-9]\b")
+#: The prefix of this skill's rule ids.
+_RULE_ID_PREFIXES: Final = ("design",)
 #: The skill's own name has the rule-id prefix but is no rule.
 _NOT_A_RULE: Final = frozenset({"design-patterns"})
 #: A bare reference file name in a rule body: ``rule-neighbors.md``.
@@ -212,7 +213,7 @@ def test_reference_names_every_rule_it_routes_to(path: str) -> None:
 
 @pytest.mark.parametrize("path", list(ROUTES_TO))
 def test_reference_names_only_rule_ids_the_skill_ships(path: str) -> None:
-    named = set(_RULE_ID_LIKE_RE.findall(reference_text(SKILL_ROOT, path))) - _NOT_A_RULE
+    named = rule_id_like_names(reference_text(SKILL_ROOT, path), _RULE_ID_PREFIXES, _NOT_A_RULE)
 
     unknown = sorted(named - skill_rule_ids(SKILL_ROOT))
 

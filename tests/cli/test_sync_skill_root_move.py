@@ -122,7 +122,7 @@ _SYNTHETIC_UNGATED_SKILL_FILES = tuple(
 #: framework, no uv.lock) with the same two license copies and its ungated check-failures
 #: guide (the uv guide gates on a uv.lock), playbook-creator with its
 #: members the repo's layer turns on, the ungated design-patterns and python-architecture,
-#: and python-documentation with its ungated members.
+#: and python-documentation with its ungated members and its decision guide.
 _OLD_TREE_FILES = frozenset(
     {
         "query-db/SKILL.md",
@@ -145,6 +145,7 @@ _OLD_TREE_FILES = frozenset(
         ),
         *_SYNTHETIC_UNGATED_SKILL_FILES,
         "python-documentation/SKILL.md",
+        "python-documentation/references/which-document.md",
         *(
             f"python-documentation/rules/{rule_id}.md"
             for rule_id in _SYNTHETIC_DOCUMENTATION_MEMBERS

@@ -76,4 +76,4 @@ The changelog hunk is the input a hand-kept changelog expects; a repo with news 
 - An accepted ADR is a record, not live documentation: a new ADR supersedes it and it is never rewritten (`docs-record-why`).
 - Stale docs outside the change are reported to the user, not fixed in the same diff.
 - Before finishing: docstrings updated (python-docstrings, python-coding skill); edited examples run (`docs-runnable-examples`); the README updated for a user-facing change (`docs-readme-essentials`); changelog input written (`docs-changelog`); the docs check passes (`docs-check-in-ci`).
-- The which-document reference in this skill routes a change to every file it must touch.
+- Every file a change must touch, by the kind of change: see which-document.md.

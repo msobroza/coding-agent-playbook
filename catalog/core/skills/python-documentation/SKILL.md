@@ -31,6 +31,9 @@ playbook:
       impact: MEDIUM
       summary: "The docs check and the docs build run as the pre-commit hook and CI run them, and new warnings are fixed, not silenced."
       open_when: "`playbook docs-check`, the docs build or a link check fails or warns, or conf.py, mkdocs.yml or a docs CI job changes."
+  references:
+    - path: references/which-document.md
+      open_when: "A change needs documenting and it is unclear which file, page kind or docs/ path it belongs in."
 ---
 
 # Python documentation

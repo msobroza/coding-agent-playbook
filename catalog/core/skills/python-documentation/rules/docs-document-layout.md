@@ -70,4 +70,4 @@ docs/
 - A document found at another path is reported to the user, not moved, unless the user asks.
 - Where the repo builds docs with Sphinx or MkDocs, these engineering directories are kept out of the user build.
 - What each kind of document holds: decision records in `docs-record-why`, the overview in `docs-architecture-overview`.
-- The which-document reference in this skill maps a piece of writing to its path.
+- The path for each piece of writing: see which-document.md.
