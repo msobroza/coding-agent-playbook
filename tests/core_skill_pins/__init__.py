@@ -52,7 +52,9 @@ class CoreSkillPins:
     ``probe_inactive`` holds the members the reference probe does not activate;
     ``section_ids`` lists the declared section ids in the order of the skill's
     mapping (``specs/prU-core-python-skills/mapping-<skill>.md``), ``()`` while
-    the skill declares none.
+    the skill declares none; ``domino_only`` marks a skill whose every member
+    gates on ``domino_project`` (prU D63): the reference probe writes none of
+    it, so the probe gates check it on the Domino probe instead.
 
     Example: ``CoreSkillPins("ml-data", "Model code", ("ml-vectorization",), frozenset(), {})``.
     """
@@ -63,6 +65,7 @@ class CoreSkillPins:
     probe_inactive: frozenset[str]
     rules: Mapping[str, RulePin]
     section_ids: tuple[str, ...] = ()
+    domino_only: bool = False
 
 
 #: Core skills that take no member rules: no ``playbook:`` block, an authored "Use when".

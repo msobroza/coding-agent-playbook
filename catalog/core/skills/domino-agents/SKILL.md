@@ -4,7 +4,7 @@ name: domino-agents
 description: "Guides LLM agent services deployed on Domino 6.2."
 playbook:
   use_when: "building, tracing, evaluating or testing an LLM agent API that runs on Domino"
-  files: "Agent service, its launch script and agent config, evaluation Jobs and tests"
+  files: "Agent service code, launch script, agent config, evaluation Jobs and their tests"
   sections:
     - id: secrets
       title: "Secrets and tokens"
@@ -56,8 +56,6 @@ On Domino 6.2 an LLM agent is an App with its own dashboard: one request functio
 - Development evaluations run as Jobs inside `DominoRun`; production traces are scored out of band by a scheduled Job that logs results back.
 
 ```python
-from collections.abc import Awaitable, Callable
-
 from fastapi import FastAPI
 
 
@@ -65,9 +63,7 @@ def create_app(settings: AgentSettings) -> FastAPI:
     config = load_agent_config(settings.config_path)
     agent = build_agent(build_model(config, settings), config)
     tracer = select_tracer(settings)
-    ask: Callable[[str], Awaitable[AgentAnswer]] = tracer.trace(REQUEST_SPAN_NAME)(
-        make_ask(agent, config)
-    )
+    ask: AskAgent = tracer.trace(REQUEST_SPAN_NAME)(make_ask(agent, AgentDeps(), config))
     app = FastAPI()
     app.state.ask = ask
     return app

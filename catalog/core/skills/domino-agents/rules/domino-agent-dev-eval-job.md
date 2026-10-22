@@ -44,12 +44,27 @@ The cap is a module global, progress goes to `print`, the counter looks for a ke
 
 ```python
 import argparse
+import asyncio
 import csv
 import logging
 import sys
+from collections.abc import Awaitable, Callable, Sequence
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+CaseRunner = Callable[[str, str, str], Awaitable[object]]
+
+
+async def run_cases(run_case: CaseRunner, cases: Sequence[dict[str, str]]) -> int:
+    """Run each case in turn and return how many raised."""
+    failed = 0
+    for case in cases:
+        try:
+            await run_case(case["id"], case["question"], case["expected_tool"])
+        except Exception:
+            logger.exception("case failed", extra={"case_id": case["id"]})
+            failed += 1
+    return failed
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -64,14 +79,8 @@ def main(argv: list[str] | None = None) -> int:
     with args.questions.open(encoding="utf-8", newline="") as handle:
         cases = list(csv.DictReader(handle))[: args.max_rows]
 
-    failed = 0
     with tracer.evaluation_run(settings.config_path, settings.experiment_name):
-        for case in cases:
-            try:
-                run_case(case["id"], case["question"], case["expected_tool"])
-            except Exception:
-                logger.exception("case failed", extra={"case_id": case["id"]})
-                failed += 1
+        failed = asyncio.run(run_cases(run_case, cases))
     return 1 if failed else 0
 
 
@@ -79,11 +88,11 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-`build_dev_eval` builds the agent through the App's own builders and wraps `run_case` with `tracer.trace(name, evaluator=dev_span_evaluator)`.
+`build_dev_eval` builds the agent through the App's own builders and wraps the async `run_case`, which awaits the traced request function, with `tracer.trace(name, evaluator=dev_span_evaluator)`.
 
 ## Notes
 
 - Run the cases one after another in one thread: the 6.2 reference's thread-safety sentence contradicts itself while it allows parallel work inside one run, so the safe behavior is one `DominoRun` per thread.
 - The deployed agent loads the agent config at the commit this run compared (`domino-agent-config-file`); scoring functions are `domino-agent-evaluators`.
 - Entry point, exit codes, snapshots and experiment names are domino-job-entry-point, domino-job-exit-codes, domino-dataset-snapshots and domino-mlflow-tracking (domino-jobs).
-- The example's evals/dev_eval.py and sample_questions.csv show the Job and its questions.
+- See examples/simple-agent-api/evals/dev_eval.py and examples/simple-agent-api/sample_questions.csv.

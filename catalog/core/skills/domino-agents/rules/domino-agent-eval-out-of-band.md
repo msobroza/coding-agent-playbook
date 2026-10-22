@@ -44,7 +44,7 @@ Every request now waits for, and pays for, a second model call, and the judge se
 
 ```python
 # app/main.py, inside create_app: the request path carries no evaluator.
-ask = tracer.trace(REQUEST_SPAN_NAME)(make_ask(agent, deps))
+ask = tracer.trace(REQUEST_SPAN_NAME)(make_ask(agent, deps, config))
 ```
 
 ```python
@@ -63,22 +63,24 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     settings = AgentSettings()
     configure_logging(settings.log_level)
-    store = select_trace_store(settings)
-    scored = score_new_traces(
-        store,
+    eval_config = ProdEvalConfig(
         agent_id=args.agent_id or settings.agent_id,
         agent_version=args.agent_version or settings.agent_version,
-        watermark=WatermarkFile(settings.watermark_path),
-        now=lambda: datetime.now(timezone.utc),
+    )
+    scored = score_new_traces(
+        select_trace_store(settings),
+        WatermarkFile(settings.watermark_path),
+        eval_config,
+        now=datetime.now(timezone.utc),
     )
     logger.info("scored traces", extra={"count": scored})
     return 0
 ```
 
-`score_new_traces` pages through the traces from a watermark and calls `score_answer` from the shared evaluators; its loop is `domino-agent-prod-eval-watermark`.
+`score_new_traces(store, watermark, eval_config, now)` pages through the traces from the watermark and calls `score_answer` from the shared evaluators; its loop is `domino-agent-prod-eval-watermark`.
 
 ## Notes
 
 - The schedule and its overlap choice are domino-job-schedules, and rerun safety is domino-idempotent-jobs (domino-jobs).
 - Trace selection, paging and the watermark are `domino-agent-prod-eval-watermark`; the metric functions are `domino-agent-evaluators`.
-- The example's evals/prod_eval.py is the production Job.
+- See examples/simple-agent-api/evals/prod_eval.py.

@@ -41,9 +41,12 @@ The flag and the URL are module constants every module re-derives, the path conc
 
 ```python
 from pathlib import Path
+from typing import Literal
 
 from pydantic import AnyHttpUrl, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+Provider = Literal["openai", "domino-endpoint"]
 
 
 class AgentSettings(BaseSettings):
@@ -51,7 +54,7 @@ class AgentSettings(BaseSettings):
 
     domino_api_host: str | None = Field(default=None, validation_alias="DOMINO_API_HOST")
     domino_api_proxy: str | None = Field(default=None, validation_alias="DOMINO_API_PROXY")
-    provider: str = "openai"
+    provider: Provider = "openai"
     openai_api_key: SecretStr | None = Field(default=None, validation_alias="OPENAI_API_KEY")
     endpoint_base_url: AnyHttpUrl | None = None
     agent_id: str | None = None
@@ -78,4 +81,4 @@ The entry point builds `AgentSettings()` once and passes it down; `create_app`, 
 - One settings module read once and passed down is domino-paths-from-env, and variable names and reserved prefixes are domino-env-var-names (both domino-jobs).
 - Where the repo uses pydantic-settings, the mechanics are pydantic-typed-settings (python-coding).
 - The provider key itself is `domino-agent-llm-keys`; the agent's model choices live in the config file (`domino-agent-config-file`).
-- The example's app/settings.py holds the full settings class.
+- See examples/simple-agent-api/app/settings.py for the full settings class.

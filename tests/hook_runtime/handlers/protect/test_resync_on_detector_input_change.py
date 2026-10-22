@@ -53,10 +53,8 @@ _DOCKER_RULE: Final = (
     "---\nid: docker-hygiene\nname: Docker hygiene\ndescription: Pin base images.\n"
     "scope: always\napplies_if:\n  has_dockerfile: true\n---\nPin base images.\n"
 )
-#: Its id sorts before the core ``domino-*`` rules the same change turns on: the
-#: message names the first eight rows by id, then counts the rest.
 _DOMINO_RULE: Final = (
-    "---\nid: a-domino-runs\nname: Domino runs\ndescription: Write run outputs.\n"
+    "---\nid: domino-runs\nname: Domino runs\ndescription: Write run outputs.\n"
     "scope: always\napplies_if:\n  domino_project: true\n---\nWrite run outputs.\n"
 )
 
@@ -104,7 +102,7 @@ def _synced(repo: PackRepo, pyproject: str = _BASE, *, auto_sync: bool = False) 
     repo.write("pyproject.toml", pyproject)
     local = [
         repo.write("playbook/rules/docker-hygiene.md", _DOCKER_RULE),
-        repo.write("playbook/rules/a-domino-runs.md", _DOMINO_RULE),
+        repo.write("playbook/rules/domino-runs.md", _DOMINO_RULE),
     ]
     source = FileSystemArtifactSource(repo_root=repo.root)
     rules = [*source.list_rules(), *(Rule.from_markdown(p, "<repo-local>") for p in local)]
@@ -332,14 +330,18 @@ def test_requirements_edit_naming_only_known_dependencies_is_silent(
 def test_a_new_domino_input_names_the_domino_gated_rule(
     repo: PackRepo, deps: Callable[..., RuntimeDeps], rel: str, text: str
 ) -> None:
-    """``domino_project`` was baked false; a marker or the committed key turns it on (D63)."""
+    """``domino_project`` was baked false; a marker or the committed key turns it on (D63).
+
+    The core Domino skills' members sort before the repo-local rule and the list
+    is capped, so the notice names a core Domino rule first.
+    """
     repo.write(rel, text)
     tool_input = {"file_path": str(repo.root / rel), "content": text}
 
     report = _post(repo, deps(), "Write", tool_input)
 
     [item] = report.trace.combined.context
-    assert 'rule "a-domino-runs" (source "<repo-local>")' in item
+    assert 'now applicable but not synced yet: rule "domino-' in item
 
 
 @pytest.mark.parametrize(

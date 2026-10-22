@@ -82,4 +82,4 @@ The production Job calls `score_answer` only, under the same metric names.
 - A placeholder scorer is not an evaluation: leave the metric out until it measures something.
 - The 6.2 SDK runs inline evaluators during development; production scoring happens out of band (`domino-agent-eval-out-of-band`).
 - The span keys come from the request function's contract (`domino-agent-trace-entrypoint`).
-- The example's evals/evaluators.py holds the scorers and the adapter.
+- See examples/simple-agent-api/evals/evaluators.py.

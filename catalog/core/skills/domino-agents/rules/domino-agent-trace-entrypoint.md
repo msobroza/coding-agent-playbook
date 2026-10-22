@@ -20,7 +20,7 @@ tags: [python, domino, agents, tracing]
 
 ## Description
 
-Exactly one function handles a user request end to end, and `add_tracing` sits directly on it, with no other decorator in between. It opens the span (a new trace when none is open) and records the function's inputs and outputs, which is what production monitoring, the Traces tab and every evaluator read back. Take the span name from one shared constant and pass `autolog_frameworks` naming the agent framework. The parameters are the request's data (the question) and the return value is a small typed mapping (answer, tools): those names and keys are a contract with evaluators and dashboards. The App and the development evaluation call the same function under the same name, so their traces compare. Collaborators (agent, deps, limits) arrive through a closure built in the composition root, never as parameters.
+Exactly one function handles a user request end to end, and `add_tracing` sits directly on it, with no other decorator in between. It opens the span (a new trace when none is open) and records the function's inputs and outputs, which is what production monitoring, the Traces tab and every evaluator read back. Take the span name from one shared constant and pass `autolog_frameworks` naming the agent framework. The parameters are the request's data (the question) and the return value is a small typed mapping (answer, tools): those names and keys are a contract with evaluators and dashboards. The App and the development evaluation call the same function under the same name, so their traces compare. Collaborators (the agent, its deps and the config that holds the run limits) arrive through a closure built in the composition root, never as parameters.
 
 ## Bad Example
 
@@ -51,16 +51,21 @@ class AgentAnswer(TypedDict):
     tools: list[str]
 
 
-def make_ask(agent: Agent[Deps, str], deps: Deps) -> Callable[[str], Awaitable[AgentAnswer]]:
+AskAgent = Callable[[str], Awaitable[AgentAnswer]]
+
+
+def make_ask(agent: Agent[AgentDeps, str], deps: AgentDeps, config: AgentConfig) -> AskAgent:
+    limits = UsageLimits(request_limit=config.request_limit)
+
     async def ask_agent(question: str) -> AgentAnswer:
-        result = await agent.run(question, deps=deps)
+        result = await agent.run(question, deps=deps, usage_limits=limits)
         return {"answer": result.output, "tools": tool_names(result)}
 
     return ask_agent
 
 
 # in create_app, once:
-ask = tracer.trace(REQUEST_SPAN_NAME)(make_ask(agent, deps))
+ask = tracer.trace(REQUEST_SPAN_NAME)(make_ask(agent, deps, config))
 ```
 
 The tracer seam applies `add_tracing(name=REQUEST_SPAN_NAME, autolog_frameworks=["pydantic_ai"])` inside Domino and returns the function unchanged elsewhere.
@@ -70,4 +75,4 @@ The tracer seam applies `add_tracing(name=REQUEST_SPAN_NAME, autolog_frameworks=
 - Renaming the parameter or a returned key breaks the evaluators and the production Job; change them together.
 - The 6.2 user guide says `add_tracing` alone captures production traces; the SDK reference also offers `init_tracing`, which needs `DOMINO_AGENT_IS_PROD` and `DOMINO_APP_ID`. Follow the user guide and check the deployment before relying on `init_tracing`.
 - Secrets never become a parameter or a returned key (`domino-agent-redact-traces`); the tracer seam is `domino-agent-sdk-names`.
-- The example's app/agent.py and app/tracing.py implement the contract.
+- See examples/simple-agent-api/app/agent.py and examples/simple-agent-api/app/tracing.py.

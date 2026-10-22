@@ -30,12 +30,17 @@ credited by name only. No sentences or examples from the article are copied;
 the ideas are restated in the engine's own words as general clean-code
 principles.
 
-The domino-agents rules distill facts from the Domino Data Lab 6.2
-documentation (the agentic-systems user guide pages, the python-domino agents
-API guide and the environment variable reference) and ideas from Domino Data
-Lab's simple_agent_api_only example repository. They are credited by name
-only: the documentation carries no open license, so no sentence or code is
-copied, and every rule restates the facts in the engine's own words.
+The domino-agents skill draws on two sources, each credited by name only. The
+Domino Data Lab 6.2 documentation (the agentic-systems user guide pages, the
+python-domino agents API guide and the environment variable reference) carries
+no open license, so its facts are distilled (D50): restated in the engine's own
+words, with no sentence or code copied. Domino Data Lab's `simple_agent_api_only`
+example agent is Apache-2.0 licensed; the skill's rules take only ideas from it,
+with no sentence or code copied, so they hold no upstream text. Neither source
+has a pinned section above, so the distilled rules are listed under
+"Engine-written files"; the adapted example app, which does hold that
+repository's code, is credited with its license copy and change list when it is
+vendored.
 
 ## python-best-practices
 

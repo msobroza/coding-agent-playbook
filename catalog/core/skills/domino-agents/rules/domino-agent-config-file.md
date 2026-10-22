@@ -42,15 +42,18 @@ The file is read at import into a raw dict, and two keys the run records never r
 
 ```python
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+Provider = Literal["openai", "domino-endpoint"]
 
 
 class AgentConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    provider: str
+    provider: Provider
     model_name: str = Field(min_length=1)
     temperature: float = Field(ge=0, le=2)
     max_tokens: int = Field(gt=0)
@@ -73,11 +76,34 @@ def load_agent_config(path: Path) -> AgentConfig:
         raise AgentConfigError(f"invalid agent config {path}: {exc}") from exc
 ```
 
-A test builds the model settings from a config and asserts that each key arrives there, so a key that only gets logged fails it.
+A test per key proves it reaches the run, so a key that only gets logged fails:
+
+```python
+from pydantic_ai.settings import ModelSettings
+
+
+def build_model_settings(config: AgentConfig) -> ModelSettings:
+    return ModelSettings(
+        temperature=config.temperature,
+        max_tokens=config.max_tokens,
+        timeout=config.timeout_seconds,
+    )
+
+
+def test_config_keys_reach_the_model_settings(tmp_path: Path) -> None:
+    path = tmp_path / "agent_config.yaml"
+    path.write_text(VALID_CONFIG_YAML, encoding="utf-8")  # temperature 0.2, max_tokens 512
+
+    model_settings = build_model_settings(load_agent_config(path))
+
+    assert model_settings == {"temperature": 0.2, "max_tokens": 512, "timeout": 30.0}
+```
+
+The other keys get the same test where they land: the agent (retries, system prompt), its usage limits and the history trim.
 
 ## Notes
 
 - The deployed agent loads the file at the commit the evaluation compared (`domino-agent-dev-eval-job`).
 - Provider keys and endpoint hosts never go in this file (`domino-agent-llm-keys`); the path comes from settings (`domino-agent-settings`).
 - Where the repo uses pydantic, validation at this boundary is pydantic-boundaries (python-coding).
-- The example's agent_config.yaml and app/settings.py show the file and its loader.
+- See examples/simple-agent-api/agent_config.yaml and examples/simple-agent-api/app/settings.py.

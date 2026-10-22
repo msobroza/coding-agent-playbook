@@ -45,31 +45,36 @@ def run() -> int:
 
 ```python
 def score_new_traces(
-    store: TraceStore, wm: WatermarkFile, cfg: ProdEvalConfig, now: datetime
+    store: TraceStore, watermark: WatermarkFile, eval_config: ProdEvalConfig, now: datetime
 ) -> int:
-    start = wm.read() or now - cfg.lookback  # read() is None when the file is missing
-    start -= cfg.overlap
+    first_run_start = now - eval_config.lookback
+    start = (watermark.read() or first_run_start) - eval_config.overlap  # None: first run
     scored, token = 0, None
     while True:
-        page = store.search(cfg.agent_id, cfg.agent_version, REQUEST_SPAN_NAME, start, now, token)
-        for trace in page.traces:
-            if METRIC_NAMES <= trace.evaluation_names:
-                continue  # scored by an earlier run
-            for name, value in score_answer(trace.answer, trace.tools).items():
-                store.log_evaluation(trace.trace_id, name, value)
-            scored += 1
+        page = store.search(
+            eval_config.agent_id, eval_config.agent_version, REQUEST_SPAN_NAME, start, now, token
+        )
+        scored += score_page(store, page)
         token = page.page_token
         if token is None:
             break
-    wm.write(now)  # temp file, then os.replace
+    watermark.write(now)  # temp file, then os.replace
     return scored
+
+
+def score_page(store: TraceStore, page: TracePage) -> int:
+    unscored = [t for t in page.traces if not METRIC_NAMES <= t.evaluation_names]
+    for trace in unscored:
+        for name, value in score_answer(trace.answer, trace.tools).items():
+            store.log_evaluation(trace.trace_id, name, value)
+    return len(unscored)
 ```
 
-`now` is aware UTC, taken once by the caller; `DominoTraceStore` maps the SDK's `SearchTracesResponse` and `TraceSummary` to these typed records.
+`now` is aware UTC, taken once by the caller; `ProdEvalConfig` holds the agent id and version, the lookback and the overlap, and `DominoTraceStore` maps the SDK's `SearchTracesResponse` and `TraceSummary` to these typed records.
 
 ## Notes
 
 - Whether `start_time` is inclusive and how naive datetimes are read is not documented, so the safe behavior is aware UTC, an overlapping window and skipping traces already scored.
 - Dataset paths come from the environment, never literals (domino-paths-from-env); the atomic replace follows domino-run-scoped-writes and skipping finished work follows domino-idempotent-jobs (all domino-jobs).
 - Scheduling and the evaluator-free request path are `domino-agent-eval-out-of-band`.
-- The example's evals/prod_eval.py and evals/trace_store.py hold the loop and the store adapter.
+- See examples/simple-agent-api/evals/prod_eval.py and examples/simple-agent-api/evals/trace_store.py.

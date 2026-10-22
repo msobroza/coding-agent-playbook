@@ -1,7 +1,8 @@
 """Pins of core skill ``domino-agents`` (prU D4, D50, D63; mapping-domino-agents.md).
 
 Every member gates on ``domino_project``, so the standard reference probe activates
-none of them (D63): they are all probe-inactive, and the Domino probe turns them on.
+none of them (D63): they are all probe-inactive, and the skill is ``domino_only``, so
+the probe gates check it on the Domino probe instead.
 """
 
 from __future__ import annotations
@@ -41,9 +42,10 @@ _MEMBERS: Final = (
 
 PINS: Final = CoreSkillPins(
     skill_id="domino-agents",
-    where="Agent service, its launch script and agent config, evaluation Jobs and tests",
+    where="Agent service code, launch script, agent config, evaluation Jobs and their tests",
     members=_MEMBERS,
     probe_inactive=frozenset(_MEMBERS),
+    domino_only=True,
     section_ids=(
         "secrets",
         "service",

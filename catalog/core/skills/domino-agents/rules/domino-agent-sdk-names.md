@@ -65,7 +65,7 @@ class DominoTracer:
 
 def select_tracer(settings: AgentSettings) -> Tracer:
     try:
-        import domino.agents.tracing  # noqa: F401
+        import domino.agents.tracing  # noqa: F401  # probe only: is the SDK installed
     except ImportError as exc:
         if settings.in_domino:
             raise RuntimeError("install dominodatalab[agents] in the Domino environment") from exc
@@ -82,4 +82,4 @@ def select_tracer(settings: AgentSettings) -> Tracer:
 - The 6.2 SDK reference names the summary-metric argument `custom_summary_metrics`, while newer material spells it `aggregated_metrics`: check the installed signature before passing it.
 - `MLFLOW_TRACKING_URI` is never set in code (domino-env-var-names, domino-jobs); pinning the environment is domino-pinned-environments (domino-jobs).
 - Tests use a recording fake of the seam (`domino-agent-fake-domino-tests`).
-- The example's app/tracing.py and pyproject.toml show the seam and the optional extra.
+- See examples/simple-agent-api/app/tracing.py and examples/simple-agent-api/pyproject.toml.

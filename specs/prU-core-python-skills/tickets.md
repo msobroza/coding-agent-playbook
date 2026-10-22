@@ -759,7 +759,7 @@ Acceptance:
 - Every rendered rule is at most 100 lines and 750 words with both the reference-probe facts and the every-gate-on facts.
 - Every priority lies in its section's band and follows the mapping order; the index renders the sections in declared order.
 - The composed description with every declared section is at most 300 chars; the probe's core total stays at most 2,400 and the core plus mattpocock_skills listing at most 6,500.
-- The skill has at least one member active on the reference probe.
+- The skill has at least one member active on the reference probe; a Domino skill, whose every member gates on domino_project (D63), has every member active on the Domino probe instead, and its pins mark it domino_only.
 - No URL and no upstream name outside ATTRIBUTIONS.md and the license copies; each contributing source's license copy is present and byte-identical.
 - ruff check . and ruff format --check . are clean; no DROPPED_RECOMMENDATIONS token appears in the skill.
 - Kept ids keep their hook links, lint codes and prompt includes; no includes_rules or lint_codes line changes (D16); retired ids owned by the lane are gone and not reused.
