@@ -103,7 +103,7 @@ shipments = shipments.dropna(subset=["destination"]).sort_values("created_at")
 clipped = np.minimum(readings, ceiling)
 ```
 
-### Data Types
+### Dtypes & validation
 
 ```python
 # pandas: declare types where data enters, parse dates with an exact format
@@ -146,6 +146,7 @@ monthly = (
 # polars: a lazy scan, collected once
 monthly = (
     pl.scan_csv(path, schema_overrides=SHIPMENT_SCHEMA)
+    .with_columns(pl.col("created_at").dt.truncate("1mo").alias("month"))
     .filter(pl.col("weight_g") > 0)
     .group_by("month")
     .agg(pl.col("weight_g").sum().alias("total_weight_g"))
@@ -167,8 +168,12 @@ def to_float32(values: npt.ArrayLike) -> npt.NDArray[np.float32]:
 # NumPy: tolerance-aware comparison of float arrays
 np.testing.assert_allclose(result, expected, rtol=1e-6, atol=1e-12)
 
-# pandas and polars: frame comparison that checks dtypes too
-pd.testing.assert_frame_equal(result_frame, expected_frame, check_like=True)
+# pandas: frame comparison that checks the index, dtypes and column order too
+pd.testing.assert_frame_equal(result_frame, expected_frame)
+
+# polars: its testing module is imported on its own; it checks dtypes and order too
+import polars.testing
+
 polars.testing.assert_frame_equal(result_frame, expected_frame)
 ```
 

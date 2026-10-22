@@ -8,7 +8,7 @@ One data operation per row, written as call names only in NumPy, pandas, polars 
 - A rule id is active here when this skill's Rules index lists it; an id the index does not list means the repository lacks that rule's libraries. The index lists ml-serialization-security only when a model library is declared.
 - A dash means the library has no idiom for the operation, or no ml-data rule covers it there.
 - The torch cells matter when torch sits next to NumPy, pandas or polars, for example when a feature frame becomes a tensor.
-- A function with no whole-column form climbs the ml-vectorization ladder in every library: masks and selects, then a lookup table, then a function on one column, never a row loop.
+- A function with no whole-column form climbs the ml-vectorization ladder in every library; the rungs and where to stop are in that rule.
 
 ## Compute over whole columns
 

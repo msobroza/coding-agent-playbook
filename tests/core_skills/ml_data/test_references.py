@@ -20,8 +20,10 @@ from tests.core_skills._references import (
     INTERNAL_GUIDE_MAX_LINES,
     backticked_ids,
     guide_line_count,
+    missing_sibling_guides,
     reference_text,
     references_block,
+    rule_id_like_names,
     skill_md_parts,
     skill_rule_ids,
 )
@@ -56,19 +58,14 @@ ROUTES_TO: Final = (
 )
 #: The mapping's SKILL.md See Also: plain-text skill names (D32).
 SEE_ALSO_SKILLS: Final = ("python-coding", "python-testing")
-#: A token shaped like one of this skill's rule ids, not part of a file name.
-_RULE_ID_LIKE_RE: Final = re.compile(r"(?<![\w.-])ml-[a-z0-9-]*[a-z0-9](?![\w.-])")
-#: Names with that prefix that are no rule of this skill: the skill itself.
+#: The prefix of this skill's rule ids, and the names with it that are no rule: the skill.
+_RULE_ID_PREFIXES: Final = ("ml",)
 _NOT_THIS_SKILLS_RULES: Final = frozenset({"ml-data"})
 
 
 def _rule_id_like_names(text: str) -> set[str]:
-    """The ml-data rule-id-shaped names ``text`` mentions, the skill name left out.
-
-    >>> sorted(_rule_id_like_names("ml-vectorization, ml-data and ml-x.md"))
-    ['ml-vectorization']
-    """
-    return set(_RULE_ID_LIKE_RE.findall(text)) - _NOT_THIS_SKILLS_RULES
+    """The ml-data rule-id-shaped names ``text`` mentions, the skill name left out."""
+    return rule_id_like_names(text, _RULE_ID_PREFIXES, _NOT_THIS_SKILLS_RULES)
 
 
 def test_skill_lists_each_mapped_reference_with_its_gate_in_mapping_order() -> None:
@@ -78,7 +75,14 @@ def test_skill_lists_each_mapped_reference_with_its_gate_in_mapping_order() -> N
 
     assert list(listed) == list(MAPPED_GATES)
     assert listed == MAPPED_GATES
-    assert all(entry["open_when"].strip() for entry in entries)
+
+
+def test_each_listed_reference_says_when_to_open_it() -> None:
+    entries = references_block(SKILL_ROOT)
+
+    blank = [entry["path"] for entry in entries if not entry["open_when"].strip()]
+
+    assert blank == [], f"references with a blank open_when: {blank}"
 
 
 @pytest.mark.parametrize("path", MAPPED_GATES)
@@ -128,28 +132,45 @@ def test_internal_guide_stays_within_the_d49_budget(path: str) -> None:
 
 @pytest.mark.parametrize("path", MAPPED_GATES)
 def test_guide_ends_naming_its_sibling_guide_by_bare_file_name(path: str) -> None:
-    last_line = reference_text(SKILL_ROOT, path).rstrip("\n").rsplit("\n", 1)[-1]
-    siblings = [PurePosixPath(other).name for other in MAPPED_GATES if other != path]
+    missing = missing_sibling_guides(SKILL_ROOT, path, MAPPED_GATES)
 
-    assert all(name in last_line for name in siblings), last_line
-    assert "references/" not in last_line, last_line
+    assert missing == [], f"{path}'s last line lacks or misnames {missing}"
 
 
-def test_hand_written_body_leaves_navigation_to_the_engine() -> None:
-    """D47: no hand-written picking bullets; D32: Quick Reference and plain-text See Also."""
+def _body() -> str:
     _, body = skill_md_parts(SKILL_ROOT)
-    headings = re.findall(r"^## (.+)$", body, re.MULTILINE)
+    return body
+
+
+def test_body_has_only_the_quick_reference_and_see_also_headings() -> None:
+    """D47: no hand-written picking bullets; D32: Quick Reference and See Also."""
+    headings = re.findall(r"^## (.+)$", _body(), re.MULTILINE)
 
     assert headings == ["Quick Reference", "See Also"]
-    assert not any(PurePosixPath(path).name in body for path in MAPPED_GATES)
-    assert not _rule_id_like_names(body), "the Quick Reference names no rule ids"
-    assert "{%" not in body
-    assert "](" not in body
-    see_also = body.partition("## See Also")[2]
+
+
+def test_body_leaves_reference_file_names_to_the_engine() -> None:
+    named = [path for path in MAPPED_GATES if PurePosixPath(path).name in _body()]
+
+    assert named == [], f"SKILL.md body names reference files: {named}"
+
+
+def test_body_names_no_rule_ids() -> None:
+    named = sorted(_rule_id_like_names(_body()))
+
+    assert named == [], f"the Quick Reference names rule ids: {named}"
+
+
+@pytest.mark.parametrize("marker", ["{%", "{{", "]("])
+def test_body_has_no_jinja_and_no_links(marker: str) -> None:
+    assert marker not in _body(), f"SKILL.md body contains {marker!r}"
+
+
+def test_see_also_names_the_mapped_skills_in_order_in_plain_text() -> None:
+    see_also = _body().partition("## See Also")[2]
+
     assert re.findall(r"^- ([a-z-]+):", see_also, re.MULTILINE) == list(SEE_ALSO_SKILLS)
 
 
 def test_body_keeps_the_security_first_reading_instruction() -> None:
-    _, body = skill_md_parts(SKILL_ROOT)
-
-    assert "open the Serialization Security rules first" in body
+    assert "open the Serialization Security rules first" in _body()
