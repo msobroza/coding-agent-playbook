@@ -17,13 +17,8 @@ target, then read the rules in its row.
 | The Domino platform API | None in agent code | The API proxy or python-domino | The proxy or the client library attaches the token itself | domino-api-proxy-auth (domino-jobs) |
 | Local runs outside Domino | A provider key only | A local environment variable | As for an external provider; settings report the run is outside Domino, so no token provider is built and no Authorization header is sent | domino-agent-settings, domino-agent-access-token |
 
-Rules of thumb that follow from the table:
-
-- The agent is never rebuilt to rotate a token; the client attaches a fresh one.
-- No call site reads a credential from the environment itself: settings read it
-  once, and the composition root hands it to the one client or provider that
-  needs it.
-- A failure names the URL or the variable, never the credential.
+Token rotation and refresh are domino-agent-access-token; where each
+credential is read and how it reaches its client is domino-agent-settings.
 
 ## What never carries a credential
 
@@ -35,8 +30,8 @@ Rules of thumb that follow from the table:
 | The agent config file | DominoRun attaches it to the experiment run and the logged model | domino-agent-llm-keys, domino-agent-config-file |
 | The agent card | Served to anyone who can reach the App | a2a-agent-card |
 
-A credential reaches the traced request function only through a closure or an
-injected collaborator, and settings print it masked.
+How a credential stays out of the traced function and out of printed settings
+is domino-agent-redact-traces.
 
 ## Project or user variables
 

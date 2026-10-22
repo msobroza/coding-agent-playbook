@@ -470,7 +470,7 @@ catalog/core/
     │   ├── references/
     │   │   ├── LICENSE.simple-agent-api
     │   │   ├── agent-lifecycle.md
-    │   │   └── credentials-by-call.md
+    │   │   └── auth-by-call.md
     │   └── examples/
     │       ├── simple-agent-api/README.md
     │       ├── simple-agent-api/pyproject.toml

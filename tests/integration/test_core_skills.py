@@ -36,13 +36,16 @@ from coding_agent_playbook.hooks.guardrails_skill import (
 from coding_agent_playbook.skills.document import DESCRIPTION_MAX_CHARS
 from coding_agent_playbook.skills.membership import compose_skills, member_rules_of
 from coding_agent_playbook.skills.naming import agent_skill_issues
+from tests._attributions import load_core_attributions
 from tests._budget_probe import reference_probe_facts, render_core_rule
 from tests._catalog import CORE_ROOT, core_rule_paths, core_rule_skill_ids, core_rules
 from tests._core_skill_layout import (
     NOT_THIRD_PERSON,
     description_problems,
+    internal_reference_problems,
     inventory_problems,
     link_problems,
+    names_rule_id,
     nesting_problems,
     plain_markdown_problems,
 )
@@ -244,7 +247,7 @@ def test_core_skill_md_is_plain_markdown(skill_id: str) -> None:
     body, rule_ids = _authored(skill_id)[1], sorted(core_rules())
     for number, line in enumerate(body.splitlines(), start=1):
         for rule_id in rule_ids:
-            assert not re.search(rf"(?<![\w-]){re.escape(rule_id)}(?![\w-])", line), (
+            assert not names_rule_id(line, rule_id), (
                 f"core skill {skill_id!r}: SKILL.md body line {number} names rule id "
                 f"{rule_id!r}; bodies name topics, the generated index names ids"
             )
@@ -284,6 +287,18 @@ def test_guardrails_skill_md_within_500_lines_with_every_core_hook(tmp_path: Pat
     assert text.count("\n## ") == len(hooks), "one section per core hook with a body"
     lines = text.count("\n")
     assert lines <= 500, f"playbook-guardrails is {lines} lines with every core hook; limit 500"
+
+
+@pytest.mark.parametrize("skill_id", EVERY_CORE_SKILL)
+def test_core_skill_internal_references_are_short_plain_text_guides(skill_id: str) -> None:
+    """D49 over core skills: each engine-written reference is a short decision guide.
+
+    ATTRIBUTIONS lists which references the engine wrote; vendored ones keep
+    their upstream shape.
+    """
+    engine_written = load_core_attributions().engine_written.get(skill_id, ())
+    internal = [path for path in engine_written if path.startswith("references/")]
+    assert internal_reference_problems(SKILLS_ROOT / skill_id, internal) == [], skill_id
 
 
 @pytest.mark.parametrize("skill_id", EVERY_CORE_SKILL)

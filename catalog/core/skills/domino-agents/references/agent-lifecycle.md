@@ -9,7 +9,7 @@ It names rules by id; read the rule before you edit the code it covers.
 | Stage | Runs as | What happens | Rules |
 | --- | --- | --- | --- |
 | Develop | Workspace | Edit the agent, run it locally or as a preview, call the request function by hand; nothing here is a record. | domino-agent-app-factory, domino-agent-settings, domino-agent-config-file |
-| Evaluate | Job | One evaluation script wraps every case in one DominoRun; each case calls the same traced request function the App uses, scored by inline evaluators. | domino-agent-dev-eval-job, domino-agent-evaluators, domino-agent-trace-entrypoint |
+| Evaluate | Job | One evaluation script wraps every case in one DominoRun; each case calls the same traced request function the App uses, scored by inline Domino evaluators. | domino-agent-dev-eval-job, domino-agent-evaluators, domino-agent-trace-entrypoint |
 | Compare | Experiment Manager | Runs of the evaluation Job are compared by their agent config, summary metrics and traces. | domino-agent-config-file, domino-agent-dev-eval-job |
 | Deploy | Deploy Agent | Started from the chosen Job-originated run (or from the Apps view) with the launch script as entrypoint; the agent is hosted as an App with its own dashboard. | domino-agent-app-factory |
 | Serve | App hosting | The App builds the agent once; add_tracing on the one request function records every user request, with no evaluator attached. | domino-agent-app-factory, domino-agent-trace-entrypoint, domino-agent-eval-out-of-band |

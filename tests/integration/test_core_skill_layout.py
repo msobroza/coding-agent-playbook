@@ -20,9 +20,12 @@ from coding_agent_playbook.adapters.opencode import OpenCodeAdapter
 from coding_agent_playbook.adapters.shared_skills import SharedSkillsAdapter
 from tests._catalog import REPO_ROOT
 from tests._core_skill_layout import (
+    INTERNAL_REFERENCE_MAX_LINES,
     every_gate_problems,
+    internal_reference_problems,
     inventory_problems,
     link_problems,
+    names_rule_id,
     nesting_problems,
 )
 
@@ -182,6 +185,44 @@ def test_nesting_check_flags_a_nested_reference_path_not_a_bare_tree(tmp_path: P
     assert nesting_problems(flat) == []
     [problem] = nesting_problems(deep)
     assert "rules/demo-rule.md" in problem and "references/deep/" in problem
+
+
+def test_internal_reference_gate_accepts_a_short_plain_text_guide(tmp_path: Path) -> None:
+    guide = "# Guide\n\nWhich double: demo-rule, in plain text.\n"
+    skill = _scratch_skill(tmp_path, {"references/guide.md": guide})
+    assert internal_reference_problems(skill, ["references/guide.md"]) == []
+
+
+@pytest.mark.parametrize(
+    ("text", "named"),
+    [
+        ("Intro first.\n", "a '# ' title"),
+        ("# Guide\n" + "line\n" * INTERNAL_REFERENCE_MAX_LINES, "lines"),
+        ("# Guide\n\nSee [the rule](../rules/demo-rule.md).\n", "link"),
+        ("# Guide\n\nSee https://example.org for more.\n", "URL"),
+    ],
+)
+def test_internal_reference_gate_names_each_d49_breach(
+    tmp_path: Path, text: str, named: str
+) -> None:
+    """D49: an internal reference is titled, at most 120 lines, with no link and no URL."""
+    skill = _scratch_skill(tmp_path, {"references/guide.md": text})
+    [problem] = internal_reference_problems(skill, ["references/guide.md"])
+    assert problem.startswith("references/guide.md") and named in problem
+
+
+@pytest.mark.parametrize(
+    ("text", "named"),
+    [
+        ("Read demo-rule first.", True),
+        ("(demo-rule)", True),
+        ("Read demo-rule-x first.", False),
+        ("Read x-demo-rule first.", False),
+        ("Read demo_rule first.", False),
+    ],
+)
+def test_names_rule_id_matches_only_the_whole_hyphenated_id(text: str, named: bool) -> None:
+    assert names_rule_id(text, "demo-rule") is named
 
 
 def test_the_engine_test_run_never_collects_example_code() -> None:
