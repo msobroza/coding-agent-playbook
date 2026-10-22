@@ -64,6 +64,9 @@ MOVED_GUIDANCE_OWNERS: Final = (
     ("slots=True", "python-data-shapes"),
     ("monkeypatch.setenv", "pytest-monkeypatch"),
     ("from conftest import", "pytest-conftest"),
+    # The engine's skip/xfail line keeps its characterization sentence through the
+    # C-python-testing-01 split (review of #247).
+    ("quirks included", "pytest"),
 )
 #: A D46(1) owner a content lane has not created yet -> the pin that holds until it
 #: ships, and that lane. The lane that creates the owner deletes its row here

@@ -24,6 +24,7 @@ pytest's `monkeypatch` fixture changes environment variables (`setenv`, `delenv`
 
 ```python
 import os
+from pathlib import Path
 
 
 def test_reads_api_key() -> None:
@@ -43,6 +44,11 @@ def test_export_writes_to_the_export_dir() -> None:
 ## Good Example
 
 ```python
+from pathlib import Path
+
+import pytest
+
+
 def test_reads_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("API_KEY", "test-key")  # undone automatically
 

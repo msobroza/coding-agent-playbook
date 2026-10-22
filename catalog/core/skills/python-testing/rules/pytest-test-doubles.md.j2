@@ -20,7 +20,7 @@ tags: [python, testing, pytest, mocking]
 
 Double only what the code does not own: the network, databases, clocks, randomness, third-party SDKs and the filesystem outside `tmp_path`. When the code's own functions and classes are doubled, the test checks the wiring of the doubles instead of the behavior: it keeps passing after the real logic breaks, and it breaks after a harmless refactor. Never double the unit under test or its own helpers.
 
-The default double is a named fake: a small class named for what it replaces (`FakeInvoiceStore`), with its state in memory, no I/O and realistic data, passed in through the same parameter production uses (`python-dependency-injection`). Assert on what the fake holds after the Act, not on the order of calls.
+The default double is a named fake: a small class named for what it replaces (`FakeInvoiceStore`), with its state in memory, no I/O and realistic data, passed in through the same parameter production uses (the python-coding skill's python-dependency-injection rule). Assert on what the fake holds after the Act, not on the order of calls.
 
 ## Bad Example
 
@@ -72,11 +72,11 @@ def test_issue_invoice_saves_the_gross_total() -> None:
 - How a fake of an owned port behaves (the same errors as the real adapter, failure fakes for error paths) is the python-architecture skill's arch-test-use-cases-with-fakes rule.
 - Many doubles in one test means the unit has too many collaborators. Report that design problem; don't mock harder.
 - Never patch the module under test itself. Prefer fakes (an in-memory store, real files under `tmp_path`) over mocks whenever the boundary has rich behavior.
-- The clock and randomness come in as a clock or a seeded generator (`python-pure-core`). Freeze-time libraries are only for characterizing legacy code that reads the clock directly.
+- The clock and randomness come in as a clock or a seeded generator (the python-coding skill's python-pure-core rule). Freeze-time libraries are only for characterizing legacy code that reads the clock directly.
 - Environment variables, the working directory and module attributes of code that cannot take a parameter yet: `pytest-monkeypatch`.
 - Route dependencies of a FastAPI app are overridden, not patched: the web-application skill's fastapi-dependency-overrides rule.
 - A thin third-party seam the code cannot take as a parameter yet: `pytest-autospec`.
 - Which double fits which dependency, as one decision table: choosing-a-test-double.md.
 {% if has_framework("fastapi") %}
-- Worked example: the hotel example's tests/fakes.py holds named in-memory fakes of the app's own ports, raising the same domain errors as the SQL repositories.
+- Worked example: the web-application skill's examples/fastapi-hotel-api/tests/fakes.py holds named in-memory fakes of the app's own ports, raising the same domain errors as the SQL repositories.
 {% endif %}

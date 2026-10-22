@@ -27,7 +27,7 @@ def test_double() -> None:
 
 
 def test_search_returns_results() -> None:
-    results = search_rooms(city="Lisbon")
+    results = search_rooms(FakeRoomStore(rooms=[]), city="Lisbon")
 
     assert results is not None  # any list passes, even the wrong one
     assert len(results) > 0

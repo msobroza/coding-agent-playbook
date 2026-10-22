@@ -62,6 +62,6 @@ def test_change_email_updates_the_address() -> None:
 ## Notes
 
 - One behavior is not one assert: several asserts examining the result of a single action belong together.
-- Setup repeated across the split tests moves into a fixture (pytest-fixtures), not back into one large test.
+- Setup repeated across the split tests moves into a fixture (`pytest-fixtures`), not back into one large test.
 - End-to-end tests may walk a whole scenario; keep them few and apart from the unit tests.
-- Inputs that exercise the same behavior with different values become one parametrized test (pytest-parametrize).
+- Inputs that exercise the same behavior with different values become one parametrized test (`pytest-parametrize`).

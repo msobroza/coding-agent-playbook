@@ -24,10 +24,10 @@ A unit test is worth keeping when it is Fast, Independent, Repeatable, Self-vali
 Each property has a rule that holds the detail; this one only names them:
 
 - **Fast:** unit tests run in milliseconds, with no network, slow setup or sleeps, so they can run after every change. Doubles for slow boundaries: `pytest-test-doubles`.
-- **Independent:** each test builds what it needs and passes in any order, alone or in parallel. Fresh state per test: pytest-fixtures and pytest-factory-fixtures.
+- **Independent:** each test builds what it needs and passes in any order, alone or in parallel. Fresh state per test: `pytest-fixtures` and `pytest-factory-fixtures`.
 - **Repeatable:** the same result on every machine and every run, with the clock injected, randomness seeded and external services faked: `pytest-deterministic-tests`.
 - **Self-validating:** a test passes or fails on its own assertions, and no person has to read its output: `pytest-assertions`.
-- **Timely:** the test is written with the change, or before it when working test-first, and every bug fix gets a regression test that fails without the fix. Which cases to add: pytest-edge-cases.
+- **Timely:** the test is written with the change, or before it when working test-first, and every bug fix gets a regression test that fails without the fix. Which cases to add: `pytest-edge-cases`.
 
 ## Bad Example
 

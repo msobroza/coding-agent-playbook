@@ -72,7 +72,7 @@ def test_negative_quantity_is_rejected() -> None:
 ## Notes
 
 - The comment markers are optional; blank lines between the three phases are usually enough.
-- A long Arrange phase is a signal to extract a fixture or a factory fixture (pytest-factory-fixtures).
+- A long Arrange phase is a signal to extract a fixture or a factory fixture (`pytest-factory-fixtures`).
 - Several asserts on the result of the same Act are fine; a second Act means a second test (`pytest-one-behavior`).
 - Also known as Given-When-Then.
 - Pin the error message with `match=` (`pytest-assertions`); never catch the error with `try`/`except` and a flag (`pytest-no-test-logic`).

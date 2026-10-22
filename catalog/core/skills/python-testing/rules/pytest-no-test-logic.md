@@ -67,7 +67,7 @@ def test_settings_include_empty_beta_flags() -> None:
 
 ## Notes
 
-- Replace a loop over cases with `@pytest.mark.parametrize` (pytest-parametrize).
+- Replace a loop over cases with `@pytest.mark.parametrize` (`pytest-parametrize`).
 - Work expected values out by hand and write them as literals, with the arithmetic in a comment; never derive them with the production formula.
 - Never compare the result with a reference re-implementation of the same logic in the test: two copies of one algorithm agree on the same bugs.
 - Use `pytest.raises(...)` instead of `try`/`except` and a flag: it already fails when nothing is raised.

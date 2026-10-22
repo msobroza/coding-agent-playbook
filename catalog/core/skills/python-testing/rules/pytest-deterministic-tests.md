@@ -66,8 +66,8 @@ def test_late_checkout_after_noon_costs_half_a_night() -> None:
 
 ## Notes
 
-- Fixed inputs make a failure reproduce identically on every machine. Generated inputs belong to Hypothesis, which seeds, shrinks and replays its failures (pytest-hypothesis-properties); anything else uses an explicitly seeded generator.
+- Fixed inputs make a failure reproduce identically on every machine. Generated inputs belong to Hypothesis, which seeds, shrinks and replays its failures (`pytest-hypothesis-properties`); anything else uses an explicitly seeded generator.
 - What stands in for the clock, the network and other services: `pytest-test-doubles`. Passing the clock in as a parameter is the python-coding skill's python-pure-core rule.
-- Fixture scope decides how widely state is shared: function scope by default (pytest-fixtures).
+- Fixture scope decides how widely state is shared: function scope by default (`pytest-fixtures`).
 - Environment variables, the working directory and module globals are changed through the monkeypatch fixture, which undoes them: `pytest-monkeypatch`.
 - What replaces the clock, generated ids and randomness, in one table: choosing-a-test-double.md.

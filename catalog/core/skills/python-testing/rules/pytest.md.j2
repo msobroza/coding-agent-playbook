@@ -55,29 +55,32 @@ def test_duplicate_email_raises_conflict_error() -> None: ...
 - A useful pattern is `test_<condition>_<expected result>`, such as `test_negative_amount_raises_value_error`. Long names are fine: they are read in failure reports far more often than typed.
 - A behavior that is hard to name usually means the test covers more than one (`pytest-one-behavior`).
 - Write plain functions, not `unittest.TestCase`: it loses `parametrize`, fixture injection and plain `assert`. Don't mix the two styles in a file.
-- Never add `skip` or `xfail` to turn a red suite green. Use `xfail(strict=True, reason=...)` only for a test of the intended behavior whose fix is already agreed, and `skipif` only for environment conditions, always with a `reason`.
+- Never add `skip` or `xfail` to turn a red suite green. Characterization tests assert today's output, quirks included. Use `xfail(strict=True, reason=...)` only for a test of the intended behavior whose fix is already agreed, and `skipif` only for environment conditions, always with a `reason`.
 - The PT lint codes and the pytest-conventions-feedback hook report under this rule; their topics live in split rules: `pytest-parametrize` for PT006, PT007 and loop asserts, `pytest-assertions` for PT011 and PT018. reviewing-tests.md maps every code and finding to its rule.
 
 ### Async tests
 
-{% if has_framework("pytest-asyncio") %}
+{# pytest-asyncio must stay the first branch (D27(4)): the FastAPI+pytest-asyncio probe renders it. #}
+{% set anyio_plugin = has_framework("fastapi") or has_framework("starlette") or has_framework("httpx") %}
+{% set async_mark = "asyncio" if has_framework("pytest-asyncio") else ("anyio" if anyio_plugin else "") %}
+{% if async_mark == "asyncio" %}
 This project has `pytest-asyncio` installed, so mark coroutine tests explicitly; explicit marks keep the boundary between sync and async tests visible in review, unlike `asyncio_mode = "auto"`.
-{% elif has_framework("fastapi") or has_framework("starlette") or has_framework("httpx") %}
+{% elif async_mark == "anyio" %}
 This project installs AnyIO through FastAPI, Starlette or httpx, and AnyIO's pytest plugin registers itself: mark coroutine tests `@pytest.mark.anyio`, with no new dependency, and add one session-scoped `anyio_backend` fixture to the root `conftest.py`.
 {% else %}
 This project has no async test plugin. Propose adding `pytest-asyncio` to the dev dependency group and wait for the user's agreement; until then, drive the coroutine with `asyncio.run(...)` inside a synchronous test.
 {% endif %}
 
 ```python
-{% if has_framework("pytest-asyncio") %}
+{% if async_mark %}
 import pytest
-{% elif has_framework("fastapi") or has_framework("starlette") or has_framework("httpx") %}
-import pytest
+{% if async_mark == "anyio" %}
 
 
 @pytest.fixture(scope="session")
 def anyio_backend() -> str:  # in tests/conftest.py
     return "asyncio"
+{% endif %}
 {% else %}
 import asyncio
 {% endif %}
@@ -91,12 +94,8 @@ class FakeRates:
         return self._nightly_cents
 
 
-{% if has_framework("pytest-asyncio") %}
-@pytest.mark.asyncio
-async def test_quote_charges_every_night() -> None:
-    quote = await quote_stay(FakeRates(nightly_cents=10_000), room_id="r-1", nights=3)
-{% elif has_framework("fastapi") or has_framework("starlette") or has_framework("httpx") %}
-@pytest.mark.anyio
+{% if async_mark %}
+@pytest.mark.{{ async_mark }}
 async def test_quote_charges_every_night() -> None:
     quote = await quote_stay(FakeRates(nightly_cents=10_000), room_id="r-1", nights=3)
 {% else %}
