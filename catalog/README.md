@@ -17,12 +17,17 @@ of the catalog, so never link to it from content.
 catalog/
 ├── README.md                 this guide (ships in the wheel, never synced)
 ├── core/                     the engine layer: always on in every consumer repo
-│   ├── ATTRIBUTIONS.md       credit for ideas distilled from third-party sources
-│   ├── rules/                always/, languages/python/, frameworks/, ml/
+│   ├── ATTRIBUTIONS.md       per-source mapping tables for vendored text, and
+│   │                         credit for distilled ideas
+│   ├── rules/always/         the always rules, loaded in every session
 │   ├── prompts/              one <id>.md or <id>.md.j2 per prompt
 │   ├── hooks/                one <category>/<id>/HOOK.md per lifecycle hook
-│   ├── skills/               one <id>/SKILL.md per core skill; its
-│   │                         references come from the rules that name it
+│   ├── skills/<skill>/
+│   │   ├── SKILL.md          intro, quick reference, playbook: block with sections
+│   │   ├── rules/            one <rule-id>.md or .md.j2 per member rule
+│   │   ├── references/       long-form documents, plus LICENSE.<source> copies
+│   │   ├── scripts/          stdlib-only helpers the rules name
+│   │   └── examples/         runnable example code, where a skill has one
 │   └── eval_samples/         one <sample-id>/ per sample, plus ATTRIBUTIONS.md
 └── plugins/                  bundled plugins: off until a consumer enables one
     └── <name>/
@@ -32,11 +37,16 @@ catalog/
         └── skills/           one <dir>/SKILL.md per skill, plus scripts/, references/
 ```
 
-`core/` ships seven skills, `python-coding`, `python-testing`, `python-tooling`,
-`ml-data`, `web-application`, `domino-apps` and `domino-agents` (the two Domino
-skills are written only in Domino repos). Each one's member rules are rendered
-into its `rules/` directory from the scoped rules that name it. An eighth,
-`playbook-guardrails`, takes no rules: sync appends one section per enabled
+`core/` ships eight base skills. Seven are Python skills that hold member
+rules in their own `rules/` directory: `python-coding`, `python-testing`,
+`python-tooling`, `ml-data`, `web-application`, `design-patterns` and
+`python-architecture`. The eighth, `playbook-guardrails`, takes no rules.
+Five more core skills are gated and join them where the repo calls for
+them: `domino-apps`, `domino-jobs` and `domino-agents` in Domino repos,
+`python-documentation`, and `playbook-creator` in repos with a playbook layer.
+Sync renders each skill's active member rules into its `rules/` directory,
+together with the scoped rules of other layers that name it in `skill:`.
+`playbook-guardrails` builds its body instead: sync appends one section per enabled
 hook's guardrail text to its authored intro, so edit the hook's `HOOK.md` body,
 not the skill, to change a section. Only a skill that declares a
 `playbook:` block takes rules, so the skills of `superpowers` and
@@ -56,16 +66,24 @@ Two rules keep the content self-contained:
   `core/eval_samples/ATTRIBUTIONS.md` and a vendored plugin's upstream text (see
   "Add a bundled plugin"). A markdown link in a rule, prompt, skill or hook
   must resolve to a file inside the same layer (`core/`, or `plugins/<name>/`).
-- **Distilled content never names its source plugin.** When rules, prompts or
-  skills distill ideas from a third-party plugin (the engine's own `core/`, or a
-  distilled bundled plugin), the credit goes in the layer root's
-  `ATTRIBUTIONS.md` and nowhere else. CI scans every other file of `core/` and
-  of every bundled plugin for the names of the sources the scan knows (today,
-  the two sources core distills).
-  Distilling from a new source means adding its name to `_PLUGIN_MARKER_RE` in
-  `tests/integration/test_resources_self_contained.py`. A vendored plugin such
-  as `superpowers` is exempt: it keeps its upstream wording, source name
-  included.
+  Example code in a fenced block under `core/skills/` may use a reserved
+  example host (`example.com`, `*.test`, `localhost`); prose never holds one.
+- **Sources are credited in one place.** Core's Python guidance is vendored:
+  the upstream text of two MIT-licensed sources is copied and adapted (engine
+  frontmatter, one topic per rule, the repository's toolchain, no URLs).
+  `core/ATTRIBUTIONS.md` holds one mapping table per source: each upstream
+  file, the core rules and references it became and what changed, or `DROP`
+  with a reason; files with no upstream text are listed as distilled or
+  engine-written. CI checks that every core file with vendored text is listed,
+  that every listed file exists, and that the pinned upstream commits match. Each
+  skill holding a source's text ships its license notice, byte-identical, as
+  `references/LICENSE.<source>`. Those license copies and `ATTRIBUTIONS.md` are
+  the only core files that may name a source: CI scans every other file of
+  `core/` and of every bundled plugin for the source names it knows. A new
+  source means a new mapping table in `ATTRIBUTIONS.md` and its name in
+  `_PLUGIN_MARKER_RE` in `tests/integration/test_resources_self_contained.py`.
+  A vendored plugin such as `superpowers` is exempt from the name scan: it
+  keeps its upstream wording, source name included.
 
 Rule, prompt and skill sources use `.md` when the body is plain text, and
 `.md.j2` only when the body needs Jinja (detector facts such as
@@ -76,22 +94,25 @@ the consumer's `playbook/`) replaces an artifact with the same `id`.
 
 ## Add a rule
 
-1. Create `core/rules/<group>/<file>.md`, where `<group>` is `always/`,
-   `languages/python/`, `frameworks/` or `ml/`.
-2. Give it frontmatter with `id` (unique across every layer), `name`,
-   `description`, `version` and `scope` (`always` or `scoped`). A scoped rule
-   also names the skill that delivers it in `skill:` (`playbook validate`
-   fails on a scoped rule without one), which an always rule must not carry;
-   the skill must exist after the layer merge, so an overlay or a
-   consumer's `playbook/rules/` may name a core skill. Add `globs` for a scoped
-   rule, `applies_if` to gate it on detector facts, `priority` (lower comes
-   first; the default is 50) and `tags`. SPEC §6.1 has the full schema.
+1. Create a scoped rule as `core/skills/<skill>/rules/<id>.md`, in the skill
+   that owns its topic; its location makes it a member, so it sets no
+   `skill:`. An always rule goes in `core/rules/always/`. A scoped rule
+   anywhere else in core fails `playbook validate`, which names the skill
+   directory to move it to.
+2. Give it the frontmatter keys "Writing a rule" lists (SPEC §6.1 has the full
+   schema). A scoped rule in another layer (an overlay, or a consumer's
+   `playbook/rules/`) names the skill that delivers it in `skill:`
+   (`playbook validate` fails on such a rule without one); the skill must exist
+   after the layer merge, so it may name a core skill.
 3. For a scoped rule, pick the skill by topic: `python-coding` when no library
    is needed (Pydantic validation included), `python-testing` for tests,
    `python-tooling` for one named developer tool, `web-application` for web
    backends, `ml-data` for ML and data libraries, `domino-apps` for Apps
-   served on Domino, `domino-agents` for LLM agent services on Domino,
-   `design-patterns` for the shape of classes and modules inside one module.
+   served on Domino, `domino-jobs` for jobs and launchers on Domino,
+   `domino-agents` for LLM agent services on Domino, `design-patterns` for the
+   shape of classes and modules inside one module, `python-architecture` for
+   relations between modules, `python-documentation` for documentation
+   practice, `playbook-creator` for authoring playbook content.
    When that skill declares `sections:` in its `playbook:` block, name one of
    its section ids in the rule's `section:` (`playbook validate` fails without
    one) and pick a `priority` in that section's impact band (CRITICAL 20-39,
@@ -109,8 +130,85 @@ the consumer's `playbook/`) replaces an artifact with the same `id`.
    `**/test_*.py`, `**/*_test.py`, `**/tests/**/*.py`, `**/conftest.py`,
    `**/fakes.py`. Some core test rules still use `tests/**/*.py`; they move to
    the set as they are revised.
-5. Keep the body to guidance an assistant can act on. A rule cannot include
-   another rule.
+5. Keep the body to guidance an assistant can act on, in the shape "Writing a
+   rule" gives. A rule cannot include another rule.
+
+## Writing a rule
+
+One rule holds one topic. Every core member rule has the same shape, so an
+agent that opens one knows where to look in the next.
+
+Frontmatter: `playbook validate` rejects a key that is not in this list, naming
+the file and the allowed keys.
+
+| Key | Required | What it holds |
+| --- | --- | --- |
+| `id` | yes | The merge key, unique in its layer and equal to the file name without `.md` or `.md.j2`. Keep an existing id when a rule is split (hook links, prompt lists and lint codes keep working); a new id takes its skill's prefix: `python-`, `pytest-`, `ml-`, `design-`, `arch-`, `web-`, `docs-`, `domino-`, `a2a-`, or the tool that owns the topic (`fastapi-`, `pydantic-`, `sqlalchemy-`, `alembic-`, `httpx-`, `ruff-`, `mypy-`). |
+| `name` | yes | A short topic label (`Typing`, `Error handling`); the rendered title. |
+| `description` | yes | The one actionable line the skill's index shows for the rule. |
+| `scope` | yes | `scoped` for a member rule, `always` for one of the always rules. |
+| `version` | no | An integer, 1 by default; raise it when the guidance changes. |
+| `skill` | no | Only for a scoped rule from another layer, naming the skill it joins; a rule inside `skills/<skill>/rules/` never names another skill, and an always rule never carries it. |
+| `section` | for a sectioned skill | One section id from the skill's `playbook.sections`. Its impact sets the `[IMPACT]` tag of the rendered title. |
+| `priority` | no | 0-99, 50 by default; lower sorts first. In a sectioned skill, pick it in the section's impact band: CRITICAL 20-39, HIGH 40-59, MEDIUM 60-79, LOW 80-99, ranked within the section. |
+| `applies_if` | no | A detector-fact predicate that decides whether the rule renders in a repo (`has_framework: ["fastapi"]`, `has_dependency: ["sqlalchemy"]`, `domino_project: true`). |
+| `globs` | no | The files the skill nudge names the skill for; test-related rules use the shared test-file glob set above. |
+| `lint_codes` | no | The ruff codes a lint feedback hook reports for this rule: `{warn: [...], when: [{applies_if, warn}]}`. |
+| `tags` | no | Free-form labels such as `[python, testing]`. |
+
+```yaml
+---
+id: pytest-fixtures
+name: Fixtures
+description: "Share setup through small, explicit fixtures and keep their scope as narrow as the test allows."
+version: 1
+scope: scoped
+globs: ["**/test_*.py", "**/*_test.py", "**/tests/**/*.py", "**/conftest.py", "**/fakes.py"]
+section: fixtures
+priority: 42
+tags: [python, testing]
+---
+```
+
+The body follows the frontmatter, in this order:
+
+```markdown
+# Fixtures
+
+## Description
+
+Why the topic matters and what the rule asks, in a short paragraph.
+
+## Bad Example
+
+A python code block with the code the rule rejects.
+
+## Good Example
+
+The same case written the way the rule asks.
+
+## Notes
+
+- Exceptions, edge cases, the lint codes involved, and the other rules or
+  references to read, by plain id or path.
+```
+
+- **No authored `[IMPACT]`.** Write `# Fixtures`, never `# Fixtures [HIGH]`:
+  the engine renders the tag from the rule's section.
+- **Size:** at most 100 lines and 750 words as rendered, after `ruff format`
+  has laid out the code blocks, on every branch of a template. Longer material
+  is split into several rules or becomes a document under the skill's
+  `references/`.
+- **Gates before templates.** Gate a whole rule with `applies_if`; write a
+  `.md.j2` template only when a detector fact changes part of its text (a
+  `{% if python_at_least("3.11") %}` branch for a newer idiom, a library
+  branch). Example code targets Python 3.10 in the lowest branch.
+- **Code blocks are ruff-formatted.** CI runs `ruff format --check .`, which
+  formats Python code blocks in markdown; every block must parse, and a block
+  of one example stands on its own (no rule depends on another rule's example).
+- **Self-contained.** No URLs in prose and no upstream source or author names:
+  credit goes in `ATTRIBUTIONS.md` only. Name other rules by plain id and
+  references or examples by path, never by a link to another skill.
 
 ## Add a prompt
 
@@ -195,14 +293,20 @@ wiring, not content: their templates stay in the package, under
      capability sentence without "Use when", and declares a `playbook:` block
      with `use_when` (the condition only: the engine writes "Use when
      <use_when>.") and `files` (a file-kind phrase of at most 80 characters with
-     no trailing period, for the "Where guidance lives" map). The engine strips
-     the block, appends a "Covers ..." clause naming the active member rules and
-     a generated `## References` index, and keeps the result within 300
-     characters. The body says what the skill is for and how to pick a
-     reference; it never lists the references, never names a rule id, and holds
-     no Jinja and no markdown links.
+     no trailing period, for the "Where guidance lives" map). A core skill also
+     lists its `sections` (each with `id`, `title`, `impact`, `summary` and
+     `open_when`) and its `references` (path, `open_when`, optional
+     `applies_if`) in that block. The engine strips the block, appends a
+     "Covers ..." clause naming the active sections (or member rules, for a
+     skill without sections), keeps the description within 300 characters, and
+     renders the navigation after the body: "How to use this skill", `## Rules`
+     with one heading per active section, then `## References and examples`.
+     The body is the skill's intro and a short quick reference; it never lists
+     the rules or references, never names a rule id, and holds no Jinja and no
+     markdown links.
 3. Put optional helpers in `scripts/` and optional long-form material in
-   `references/`. Sync copies only `SKILL.md`, `scripts/` and `references/`.
+   `references/`, and runnable example code in `examples/`. Sync copies
+   `SKILL.md`, `scripts/`, `references/` and `examples/`, and renders `rules/`.
    Make scripts executable. Keep Python scripts stdlib-only and valid on
    Python 3.10, because they run in consumer repos; ruff lints them at that
    target. Exit 2 on a usage error:
@@ -231,8 +335,8 @@ wiring, not content: their templates stay in the package, under
    ```
 
 4. Each plugin's gates under `tests/plugins/` pin its skill inventory, and
-   `tests/integration/test_core_skills.py` pins the core one. Update them in
-   the same change.
+   each core skill has its own pins module in `tests/core_skill_pins/`, read by
+   `tests/integration/test_core_skills.py`. Update them in the same change.
 
 The `superpowers` plugin is vendored: its upstream files must stay
 byte-identical, and ruff never touches that directory. Add new skills to a
