@@ -29,12 +29,14 @@ _TOOLING = "python-tooling"
 _TESTING: Final = "python-testing"
 _WEB: Final = "web-application"
 #: python-tooling's ungated member, written in every synthetic repo, and web-application's
-#: members a FastAPI repo without SQLAlchemy gets: the FastAPI pair and the security rules
-#: gated on any web framework (prU C-web-application-01), sorted by file name.
+#: members a FastAPI repo without SQLAlchemy or httpx gets: the members gated on FastAPI
+#: alone (the httpx and SQLAlchemy members need more, D23) and the security rules gated on
+#: any web framework (prU C-web-application-01, -02), sorted by file name.
 _STATIC_CHECKS: Final = ["python-static-checks.md"]
 _FASTAPI_RULES: Final = [
     "fastapi-app-wiring.md",
     "fastapi-error-boundaries.md",
+    "fastapi-no-blocking-calls.md",
     "web-cors-origins.md",
     "web-jwt-validation.md",
     "web-object-authorization.md",
@@ -119,7 +121,8 @@ def test_fastapi_rules_follow_the_fastapi_dependency_in_and_out(
     tmp_path: Path, make_synthetic_repo: Callable[..., Path]
 ) -> None:
     """python-tooling stays for its ungated static-checks member; web-application, whose
-    members all gate on a web framework, comes and goes with ``fastapi``."""
+    members all gate on a web framework, comes and goes with ``fastapi`` (prU L0-15,
+    C-web-application-01, -02)."""
     repo = _synthetic_skill_repo(tmp_path, make_synthetic_repo)
     assert _sync.run(_ns(repo)) == 0
     for root in NATIVE_SKILL_ROOTS:
