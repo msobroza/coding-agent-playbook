@@ -28,6 +28,11 @@ pytestmark = pytest.mark.catalog
 
 DOMINO_SKILLS: Final = sorted(DOMINO_SKILL_IDS)
 _MEMBERS: Final = {pins.skill_id: pins.members for pins in ALL_PINS}
+#: The members the Domino probe activates: it has the reference probe's dependencies,
+#: so a member gated on a dependency it lacks (the A2A rules) stays out.
+_PROBE_MEMBERS: Final = {
+    pins.skill_id: sorted(set(pins.members) - pins.probe_inactive) for pins in ALL_PINS
+}
 
 
 def _emitted_roots(repo: Path, skill_id: str) -> list[str]:
@@ -91,4 +96,4 @@ def test_platforms_domino_writes_the_skill_in_a_marker_free_repo(
 ) -> None:
     assert not (platforms_domino_repo / ".dominoignore").exists()
     assert _emitted_roots(platforms_domino_repo, skill_id) == list(NATIVE_SKILL_ROOTS)
-    assert _emitted_members(platforms_domino_repo, skill_id) == sorted(_MEMBERS[skill_id])
+    assert _emitted_members(platforms_domino_repo, skill_id) == _PROBE_MEMBERS[skill_id]
