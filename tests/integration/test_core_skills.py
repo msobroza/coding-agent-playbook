@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import replace
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Final
 
 import pytest
@@ -115,11 +116,6 @@ def _is_core_member_rule(path: str, subdir: str = "rules") -> bool:
     """Whether repo-relative ``path`` is ``<root>/<core skill>/<subdir>/<file>``."""
     parts = path.split("/")
     return len(parts) >= 3 and parts[-2] == subdir and parts[-3] in WHERE_FROM_PINS
-
-
-def _file_name(path: str) -> str:
-    """The last segment of repo-relative POSIX ``path``."""
-    return path.rpartition("/")[2]
 
 
 def _probe_skill_md(repo: Path, skill_id: str) -> str:
@@ -474,7 +470,9 @@ def test_reference_probe_lockfile_records_member_references_as_rules(
     under_references = [
         e.path for e in lockfile.entries if _is_core_member_rule(e.path, "references")
     ]
-    assert [path for path in under_references if _file_name(path) not in LICENSE_COPY_NAMES] == []
+    assert [
+        path for path in under_references if PurePosixPath(path).name not in LICENSE_COPY_NAMES
+    ] == []
 
 
 def test_reference_probe_writes_no_continue_prompt_for_a_member_skill(

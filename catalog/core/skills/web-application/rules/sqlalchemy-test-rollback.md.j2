@@ -5,7 +5,11 @@ description: "Run persistence and endpoint tests against the production database
 version: 1
 scope: scoped
 globs:
-  - "tests/**/*.py"
+  - "**/test_*.py"
+  - "**/*_test.py"
+  - "**/tests/**/*.py"
+  - "**/conftest.py"
+  - "**/fakes.py"
 applies_if:
   any_framework: ["fastapi", "flask", "django", "starlette"]
   any_dependency: ["sqlalchemy", "alembic"]
@@ -14,6 +18,8 @@ section: testing
 priority: 62
 tags: [python, sqlalchemy, testing]
 ---
+{% set asyncio_plugin = has_framework("pytest-asyncio") %}
+{% set anyio_plugin = has_framework("fastapi") or has_framework("starlette") or has_framework("httpx") %}
 
 # Run database tests in a rolled-back transaction
 
@@ -40,19 +46,26 @@ def schema() -> Iterator[None]:
 ## Good Example
 
 ```python
-# tests/conftest.py: User is the app's ORM model; FIXED_HASH, a precomputed hash string.
+# tests/conftest.py: Base is the app's declarative base and User its ORM model;
+# FIXED_HASH is a precomputed hash of the test password TEST_PASSWORD.
 import os
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator
+from typing import Protocol
 
 import pytest
+{% if asyncio_plugin %}
+import pytest_asyncio
+{% endif %}
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
-MakeUser = Callable[..., Awaitable[User]]
-{% if has_framework("pytest-asyncio") %}
+
+class MakeUser(Protocol):
+    async def __call__(self, *, email: str = ..., password_hash: str = ...) -> User: ...
+{% if asyncio_plugin %}
 
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
-{% elif has_framework("fastapi") or has_framework("starlette") or has_framework("httpx") %}
+{% elif anyio_plugin %}
 
 
 @pytest.fixture(scope="session")
@@ -75,7 +88,7 @@ async def engine() -> AsyncIterator[AsyncEngine]:
     await engine.dispose()
 
 
-{% if has_framework("pytest-asyncio") %}
+{% if asyncio_plugin %}
 @pytest_asyncio.fixture
 {% else %}
 @pytest.fixture
@@ -107,9 +120,9 @@ def make_user(session: AsyncSession) -> MakeUser:
 ## Notes
 
 - Unit tests use fakes; persistence and endpoint tests use the real engine in a rolled-back transaction. This fixture serves the persistence and endpoint tests; the unit-test side is the python-testing skill's pytest-test-doubles rule and the python-architecture skill's arch-test-use-cases-with-fakes rule.
-{% if has_framework("pytest-asyncio") %}
+{% if asyncio_plugin %}
 - The session-scoped engine and the tests must share one event loop: mark database tests `@pytest.mark.asyncio(loop_scope="session")`, the loop scope of the engine fixture.
-{% elif has_framework("fastapi") or has_framework("starlette") or has_framework("httpx") %}
+{% elif anyio_plugin %}
 - The session-scoped `anyio_backend` fixture keeps one event loop for the engine and every test; mark database tests `@pytest.mark.anyio`.
 {% else %}
 - Async fixtures need an async test plugin: propose adding `pytest-asyncio`, only with the team's agreement. The same fixture shape works with a sync `Session` (`engine.connect()`, `conn.begin()`, `Session(bind=conn, join_transaction_mode="create_savepoint")`).

@@ -46,11 +46,12 @@ async def list_invoices(
 ```python
 from typing import Annotated
 
-from fastapi import Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
+from sqlalchemy import select
 
-# Invoice is the ORM model and InvoiceRead its response schema; SessionDep and
-# CurrentUser are the app's Annotated dependency aliases.
+# Invoice is the ORM model and InvoiceRead its response schema; get_current_user is
+# the auth provider, and SessionDep and CurrentUser are the app's Annotated aliases.
 router = APIRouter(prefix="/invoices", dependencies=[Depends(get_current_user)])
 
 

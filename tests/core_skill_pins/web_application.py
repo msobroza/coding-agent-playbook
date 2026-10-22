@@ -4,12 +4,15 @@ from __future__ import annotations
 
 from typing import Final
 
+from tests._catalog import TEST_FILE_GLOBS
 from tests.core_skill_pins import CoreSkillPins, RulePin
 
 #: D23: ``web-*`` rules gate on any web framework.
 _ANY_WEB_FRAMEWORK: Final = {"any_framework": ["fastapi", "flask", "django", "starlette"]}
 #: D46(3): ``fastapi-*`` rules gate on FastAPI only.
 _FASTAPI: Final = {"has_framework": ["fastapi"]}
+#: FastAPI endpoint tests also need pytest.
+_FASTAPI_PYTEST: Final = {"has_framework": ["fastapi", "pytest"]}
 #: The route-module globs the API rules share.
 _ROUTE_GLOBS: Final = (
     "**/routers/**/*.py",
@@ -68,6 +71,7 @@ PINS: Final = CoreSkillPins(
             globs=("**/*.py",),
             priority=41,
             name="FastAPI error boundaries",
+            version=2,  # rewritten from the upstream skeleton (C-web-application-03)
             tags=("python", "fastapi", "errors"),
             section="api-design",
         ),
@@ -92,6 +96,7 @@ PINS: Final = CoreSkillPins(
             globs=(*_ENTRY_GLOBS, "**/settings.py", "**/config.py"),
             priority=44,
             name="FastAPI app wiring",
+            version=2,  # rewritten from the upstream skeleton (C-web-application-03)
             tags=("python", "fastapi"),
             section="app-structure",
         ),
@@ -125,8 +130,8 @@ PINS: Final = CoreSkillPins(
             section="observability",
         ),
         "fastapi-dependency-overrides": RulePin(
-            applies_if={"has_framework": ["fastapi", "pytest"]},
-            globs=("tests/**/*.py",),
+            applies_if=_FASTAPI_PYTEST,
+            globs=TEST_FILE_GLOBS,
             priority=61,
             name="FastAPI dependency overrides in tests",
             tags=("python", "fastapi", "testing"),
@@ -138,7 +143,7 @@ PINS: Final = CoreSkillPins(
                 "any_dependency": ["sqlalchemy", "alembic"],
                 "has_framework": ["pytest"],
             },
-            globs=("tests/**/*.py",),
+            globs=TEST_FILE_GLOBS,
             priority=62,
             name="SQLAlchemy test rollback",
             tags=("python", "sqlalchemy", "testing"),

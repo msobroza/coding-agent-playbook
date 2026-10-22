@@ -19,10 +19,11 @@ import pytest
 
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.config.files import FileSystemStateSource
+from tests.core_skill_pins.web_application import PINS as WEB_PINS
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
     from pathlib import Path
 
 _TOOLING = "python-tooling"
@@ -31,16 +32,21 @@ _WEB: Final = "web-application"
 #: python-tooling's ungated member, written in every synthetic repo, and web-application's
 #: members a FastAPI repo without pytest or SQLAlchemy activates.
 _STATIC_CHECKS: Final = ["python-static-checks.md"]
-_FASTAPI_RULES: Final = [
-    "fastapi-app-wiring.md",
-    "fastapi-dependency-providers.md",
-    "fastapi-error-boundaries.md",
-    "fastapi-request-id-logging.md",
-    "fastapi-thin-routes.md",
-    "web-api-pagination.md",
-    "web-api-schemas.md",
-    "web-http-methods.md",
-]
+#: The gate keys a FastAPI repo without pytest or SQLAlchemy can satisfy.
+_FRAMEWORK_GATE_KEYS: Final = frozenset({"has_framework", "any_framework"})
+
+
+def _needs_only_fastapi(applies_if: Mapping[str, object]) -> bool:
+    """Whether a member gated by ``applies_if`` is active in a FastAPI-only repo."""
+    required = applies_if.get("has_framework", [])
+    return set(applies_if) <= _FRAMEWORK_GATE_KEYS and required in ([], ["fastapi"])
+
+
+_FASTAPI_RULES: Final = sorted(
+    f"{rule_id}.md"
+    for rule_id, pin in WEB_PINS.rules.items()
+    if _needs_only_fastapi(pin.applies_if)
+)
 
 _CONFIG = """\
 schema_version = 1

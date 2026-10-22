@@ -2,7 +2,7 @@
 id: fastapi-app-wiring
 name: FastAPI app wiring
 description: "Build the FastAPI app in a create_app(settings) factory, acquire long-lived resources in its lifespan and release them after yield, and let only the ASGI entrypoint read the environment."
-version: 1
+version: 2
 scope: scoped
 globs:
   - "**/main.py"
@@ -46,7 +46,7 @@ async def startup() -> None:
 ```python
 # app/main.py
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 
 import httpx
 from fastapi import FastAPI
@@ -56,21 +56,23 @@ from app.routers import invoices, users
 from app.settings import Settings
 
 
-def create_app(settings: Settings) -> FastAPI:
-    @asynccontextmanager
-    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    settings: Settings = app.state.settings
+    async with AsyncExitStack() as stack:  # releases in reverse order, even on errors
         engine = create_async_engine(settings.database_url.get_secret_value())
-        try:
-            async with httpx.AsyncClient(
+        stack.push_async_callback(engine.dispose)
+        app.state.payments_client = await stack.enter_async_context(
+            httpx.AsyncClient(
                 base_url=settings.payments_base_url,
-                timeout=httpx.Timeout(settings.payments_timeout_s, connect=3.0),
-            ) as payments_client:
-                app.state.sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
-                app.state.payments_client = payments_client
-                yield
-        finally:
-            await engine.dispose()
+                timeout=httpx.Timeout(settings.payments_timeout_s),
+            )
+        )
+        app.state.sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
+        yield
 
+
+def create_app(settings: Settings) -> FastAPI:
     app = FastAPI(lifespan=lifespan)
     app.state.settings = settings
     app.include_router(users.router)
@@ -100,7 +102,7 @@ app = create_app(Settings())  # a ValidationError lists every missing or invalid
 - Web apps build the DB engine in the app factory or lifespan; scripts and CLIs may still build it at import time.
 - The settings class itself, and the ban on a module-level `settings = Settings()`, are the python-coding skill's pydantic-typed-settings rule. A cached `get_settings()` works with overrides, but its instance can be imported from anywhere; constructing settings once in the entrypoint keeps them injected.
 - Serve a cheap, unauthenticated `/health` liveness route. Deeper checks (database, upstream services) go to a separate readiness route that reports background warm-up without waiting on it.
-- With many resources, `contextlib.AsyncExitStack` keeps the lifespan flat.
+- `contextlib.AsyncExitStack` keeps the lifespan flat however many resources it holds; the lifespan reads the settings `create_app` stored on `app.state`.
 - The lifespan runs once per worker process: with four workers, each process has its own engine and pool.
 - Keep `Base.metadata.create_all` out of startup; the schema is `alembic-migrations`'.
 - Tests build `Settings(...)` with test values and pass it to `create_app`, with no environment patching (see `fastapi-dependency-overrides`).

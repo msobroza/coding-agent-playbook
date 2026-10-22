@@ -45,7 +45,8 @@ def read_room(room_id: int, request: Request) -> RoomRead:
 
 ```python
 # app/deps.py: the one provider module. RoomRepository is a Protocol the use
-# cases consume; SqlRoomRepository and decode_user are the app's own code.
+# cases consume; SqlRoomRepository and decode_user are the app's own code; RoomPage
+# is the page envelope every list endpoint returns (web-api-pagination).
 async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
     async with request.app.state.sessionmaker() as session:
         yield session  # closed when the request ends
@@ -93,9 +94,12 @@ router = APIRouter(prefix="/admin/rooms", dependencies=[Depends(require_admin)])
 
 
 @router.get("")
-async def list_rooms(rooms: RoomsDep, paging: PagingDep) -> list[RoomRead]:
-    found = await rooms.list(limit=paging.limit, after=paging.cursor)
-    return [RoomRead.model_validate(room) for room in found]
+async def list_rooms(rooms: RoomsDep, paging: PagingDep) -> RoomPage:
+    found = await rooms.list(limit=paging.limit, after=paging.cursor)  # rooms + next cursor
+    return RoomPage(
+        items=[RoomRead.model_validate(room) for room in found.rooms],
+        next_cursor=found.next_cursor,
+    )
 ```
 
 ## Notes

@@ -71,23 +71,25 @@ def configure_logging(level: str) -> None:
     logging.basicConfig(level=level, handlers=[handler], force=True)
 
 
+async def request_id_middleware(
+    request: Request, call_next: Callable[[Request], Awaitable[Response]]
+) -> Response:
+    incoming = request.headers.get("X-Request-ID", "")
+    request_id = incoming if REQUEST_ID_PATTERN.fullmatch(incoming) else uuid4().hex
+    token = request_id_var.set(request_id)
+    try:
+        response = await call_next(request)
+    except Exception:
+        logger.exception("unhandled error")  # logged while the ID is still set
+        raise
+    finally:
+        request_id_var.reset(token)
+    response.headers["X-Request-ID"] = request_id
+    return response
+
+
 def add_request_id_middleware(app: FastAPI) -> None:
-    @app.middleware("http")
-    async def request_id_middleware(
-        request: Request, call_next: Callable[[Request], Awaitable[Response]]
-    ) -> Response:
-        incoming = request.headers.get("X-Request-ID", "")
-        request_id = incoming if REQUEST_ID_PATTERN.fullmatch(incoming) else uuid4().hex
-        token = request_id_var.set(request_id)
-        try:
-            response = await call_next(request)
-        except Exception:
-            logger.exception("unhandled error")  # logged while the ID is still set
-            raise
-        finally:
-            request_id_var.reset(token)
-        response.headers["X-Request-ID"] = request_id
-        return response
+    app.middleware("http")(request_id_middleware)  # called by create_app
 
 
 # app/services/invoices.py: one structured call, with IDs instead of personal data

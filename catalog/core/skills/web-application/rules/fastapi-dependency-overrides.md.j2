@@ -5,13 +5,18 @@ description: "Test endpoints on a fresh create_app(test_settings) per test, over
 version: 1
 scope: scoped
 globs:
-  - "tests/**/*.py"
+  - "**/test_*.py"
+  - "**/*_test.py"
+  - "**/tests/**/*.py"
+  - "**/conftest.py"
+  - "**/fakes.py"
 applies_if:
   has_framework: ["fastapi", "pytest"]
 section: testing
 priority: 61
 tags: [python, fastapi, testing]
 ---
+{% set asyncio_plugin = has_framework("pytest-asyncio") %}
 
 # Test endpoints with dependency overrides, not patching
 
@@ -26,6 +31,7 @@ from unittest.mock import AsyncMock, patch
 
 from app.asgi import app  # one global app, built from the real environment
 
+app.dependency_overrides[get_session] = fake_session  # at import: leaks into every test
 client = TestClient(app)  # shared by every test
 
 
@@ -38,10 +44,10 @@ def test_read_invoice() -> None:
 ## Good Example
 
 ```python
-# tests/conftest.py: session, make_user and make_invoice are the rolled-back database
-# fixtures (sqlalchemy-test-rollback); settings is a function-scoped Settings(...) with
-# test values.
-{% if has_framework("pytest-asyncio") %}
+# tests/conftest.py: session and make_user are sqlalchemy-test-rollback's fixtures
+# (make_user stores FIXED_HASH, the hash of TEST_PASSWORD); make_invoice is a factory
+# fixture of the same shape; settings is a function-scoped Settings(...) with test values.
+{% if asyncio_plugin %}
 @pytest_asyncio.fixture
 {% else %}
 @pytest.fixture
@@ -67,7 +73,7 @@ async def client(session: AsyncSession, settings: Settings) -> AsyncIterator[htt
 
 
 # tests/test_invoices.py
-{% if has_framework("pytest-asyncio") %}
+{% if asyncio_plugin %}
 @pytest.mark.asyncio
 {% else %}
 @pytest.mark.anyio
@@ -75,11 +81,11 @@ async def client(session: AsyncSession, settings: Settings) -> AsyncIterator[htt
 async def test_user_cannot_read_another_users_invoice(
     client: httpx.AsyncClient, make_user: MakeUser, make_invoice: MakeInvoice
 ) -> None:
-    await make_user(email="alice@example.com", password="correct horse battery")
+    await make_user(email="alice@example.com")
     bob = await make_user(email="bob@example.com")
     bobs_invoice = await make_invoice(owner=bob)
     login = await client.post(
-        "/auth/token", data={"username": "alice@example.com", "password": "correct horse battery"}
+        "/auth/token", data={"username": "alice@example.com", "password": TEST_PASSWORD}
     )
 
     response = await client.get(
@@ -97,7 +103,7 @@ async def test_user_cannot_read_another_users_invoice(
 - `httpx.ASGITransport` skips the lifespan: override everything the lifespan provides, as above. `TestClient` runs the lifespan as a context manager, but in another thread and event loop, so it cannot share an async database connection with the fixtures. `asgi-lifespan`'s `LifespanManager` runs it in the test's loop: propose it, never add it unasked.
 - Overriding `get_current_user` with a fixed user is fine for tests that are not about auth; keep at least one test per protected router that uses a real token.
 - Fake external HTTP at the transport (`httpx.MockTransport`, or `respx` as a proposal) instead of patching service functions.
-{% if has_framework("pytest-asyncio") %}
+{% if asyncio_plugin %}
 - This project has `pytest-asyncio`: mark async tests `@pytest.mark.asyncio` and decorate async fixtures with `@pytest_asyncio.fixture`; strict mode does not run an async `@pytest.fixture`.
 {% else %}
 - `@pytest.mark.anyio` runs on the AnyIO plugin that ships with FastAPI's AnyIO dependency; async fixtures keep the plain `@pytest.fixture`.
