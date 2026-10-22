@@ -1,0 +1,86 @@
+---
+id: ml-named-aggregation
+name: Named aggregation
+description: "Aggregate groups with built-in reducers into flat, explicitly named result columns; never a per-group Python function for what a reducer computes."
+version: 1
+scope: scoped
+globs:
+  - "**/*.py"
+  - "**/*.ipynb"
+applies_if:
+  any_ml_stack: ["pandas", "polars"]
+section: style
+priority: 61
+tags: [ml, pandas, polars, groupby, style]
+---
+
+# Name every aggregated column where it is computed
+
+## Description
+
+An aggregation that produces nested or generated column names needs flattening, renaming and guessing about order afterwards, and a per-group Python function runs a Python loop over the groups for what a built-in reducer computes in compiled code. Declare each output column's name, its source column and its reducer in one place, so the result is a flat frame with the names the next step reads.{% if has_ml_dep("pandas") %} In pandas that is named aggregation, `agg(new_name=("column", "reducer"))`.{% endif %}{% if has_ml_dep("polars") %} In polars it is one expression per output column, ending in `.alias(...)`.{% endif %}
+
+## Bad Example
+
+```python
+{% if has_ml_dep("pandas") %}
+summary = parcels.groupby("region").agg(
+    {"weight_kg": ["sum", "mean"], "parcel_id": "count"}
+)
+# columns: MultiIndex [("weight_kg", "sum"), ("weight_kg", "mean"), ("parcel_id", "count")]
+summary.columns = ["_".join(column) for column in summary.columns]
+summary = summary.rename(columns={"parcel_id_count": "parcels"}).reset_index()
+
+
+def region_stats(group: pd.DataFrame) -> pd.Series:
+    return pd.Series({"total_kg": group["weight_kg"].sum(), "parcels": len(group)})
+
+
+summary = parcels.groupby("region").apply(region_stats)  # a Python call per group
+{% endif %}
+{% if has_ml_dep("polars") %}
+totals = events.group_by("region").agg(pl.col("weight_kg").sum(), pl.len())
+# renamed after the fact, away from the reducer that made each column
+totals = totals.rename({"weight_kg": "total_kg", "len": "parcels"})
+{% endif %}
+```
+
+## Good Example
+
+```python
+{% if has_ml_dep("pandas") %}
+summary = parcels.groupby("region", as_index=False, observed=True).agg(
+    total_kg=("weight_kg", "sum"),
+    mean_kg=("weight_kg", "mean"),
+    parcels=("parcel_id", "count"),
+    first_scan=("scanned_at", "min"),
+)
+# columns: region, total_kg, mean_kg, parcels, first_scan
+
+# Fallback, only for a reducer with no built-in name: a lambda runs per group
+summary = parcels.groupby("region", as_index=False, observed=True).agg(
+    p95_kg=("weight_kg", lambda weights: weights.quantile(0.95)),
+)
+{% endif %}
+{% if has_ml_dep("polars") %}
+totals = events.group_by("region").agg(
+    pl.col("weight_kg").sum().alias("total_kg"),
+    pl.col("weight_kg").quantile(0.95).alias("p95_kg"),
+    pl.len().alias("parcels"),
+)
+{% endif %}
+```
+
+## Notes
+
+{% if has_ml_dep("pandas") %}
+- pandas: name built-in reducers as strings (`"sum"`, `"mean"`, `"count"`, `"nunique"`, `"min"`, `"max"`, `"first"`); they dispatch to compiled code, while a lambda runs once per group in Python. Never write `groupby(...).apply(<python function>)` for what a reducer already computes.
+- pandas: `as_index=False` keeps the group keys as columns, so no trailing `reset_index()` is needed.
+- pandas: to put a group result back on every row (a group mean next to each value), use `groupby(...).transform("mean")` rather than merging the summary back in.
+- pandas: pass `observed=True` when a group key is categorical, so categories with no rows do not appear as empty groups.
+- pandas: `pd.NamedAgg(column=..., aggfunc=...)` is the explicit form of the tuple. `Series.groupby` has no source column to name, so it takes `agg(total="sum", parcels="count")` instead.
+{% endif %}
+{% if has_ml_dep("polars") %}
+- polars: use built-in expressions (`sum`, `mean`, `n_unique`, `quantile`) inside `agg`, never `map_groups` or `map_elements` for what an expression computes; broadcast a group result back onto every row with `expr.over("region")`.
+{% endif %}
+- Keep the aggregation inside the pipeline that feeds it (ml-method-chaining).

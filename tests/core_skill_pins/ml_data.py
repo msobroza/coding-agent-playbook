@@ -1,21 +1,23 @@
-"""Pins of core skill ``ml-data`` (spec 9.6.2): serialization plus four array and frame rules.
+"""Pins of core skill ``ml-data`` (spec 9.6.2): serialization plus array and frame rules.
 
 Sections and priorities follow mapping-ml-data.md (prU D17, L0-16; the priority
-formula is on :class:`RulePin`). The retired ids ``ml-dtypes-and-typing`` and
-``ml-reproducibility-and-testing`` stay until their content lane retires them,
-filed under their first successor's section and priority (``ml-dtypes-at-load``,
-``ml-seeded-randomness``).
+formula is on :class:`RulePin`). Each member gates on the ml_stack libraries its
+topic exists in; the gates here are the one place those libraries are pinned.
 
 The serialization security, vectorization, indexing & mutation and dtypes &
 validation sections are vendored (C-ml-data-01): their ten rules are pinned at
 the mapping's priorities 20-24 and 40-44, and ``ml-dtypes-and-typing`` is gone.
-``ml-frame-validation`` gates on pandera, which the reference probe lacks.
+``ml-frame-validation`` gates on pandera, which the reference probe lacks. The
+reproducibility, chaining style, typing and testing sections are vendored
+(C-ml-data-02) at priorities 45 and 60-63, and ``ml-reproducibility-and-testing``
+is gone.
 """
 
 from __future__ import annotations
 
 from typing import Final
 
+from tests._catalog import TEST_FILE_GLOBS
 from tests.core_skill_pins import CoreSkillPins, RulePin
 
 _ML_FILES: Final = ("**/*.py", "**/*.ipynb")
@@ -23,6 +25,7 @@ _ML_ARRAY_GATE: Final = {"any_ml_stack": ["numpy", "pandas", "polars"]}
 _ML_NUMPY_GATE: Final = {"any_ml_stack": ["numpy"]}
 _ML_PANDAS_GATE: Final = {"any_ml_stack": ["pandas"]}
 _ML_FRAME_GATE: Final = {"any_ml_stack": ["pandas", "polars"]}
+_ML_TYPING_GATE: Final = {"any_ml_stack": ["numpy", "pandas"]}
 _ML_MODEL_GATE: Final = {
     "any_ml_stack": [
         "torch",
@@ -49,7 +52,11 @@ PINS: Final = CoreSkillPins(
         "ml-frame-validation",
         "ml-numpy-dtypes",
         "ml-categorical-labels",
-        "ml-reproducibility-and-testing",
+        "ml-seeded-randomness",
+        "ml-method-chaining",
+        "ml-named-aggregation",
+        "ml-array-typing",
+        "ml-numeric-assertions",
     ),
     probe_inactive=frozenset({"ml-frame-validation"}),
     section_ids=(
@@ -143,13 +150,45 @@ PINS: Final = CoreSkillPins(
             tags=("ml", "pandas", "polars", "dtypes"),
             section="dtypes",
         ),
-        "ml-reproducibility-and-testing": RulePin(
+        "ml-seeded-randomness": RulePin(
             applies_if=_ML_ARRAY_GATE,
             globs=_ML_FILES,
             priority=45,
-            name="Reproducibility and numeric tests",
-            tags=("ml", "reproducibility", "testing"),
+            name="Seeded randomness",
+            tags=("ml", "numpy", "pandas", "polars", "reproducibility", "random"),
             section="reproducibility",
+        ),
+        "ml-method-chaining": RulePin(
+            applies_if=_ML_FRAME_GATE,
+            globs=_ML_FILES,
+            priority=60,
+            name="Method chaining",
+            tags=("ml", "pandas", "polars", "style"),
+            section="style",
+        ),
+        "ml-named-aggregation": RulePin(
+            applies_if=_ML_FRAME_GATE,
+            globs=_ML_FILES,
+            priority=61,
+            name="Named aggregation",
+            tags=("ml", "pandas", "polars", "groupby", "style"),
+            section="style",
+        ),
+        "ml-array-typing": RulePin(
+            applies_if=_ML_TYPING_GATE,
+            globs=_ML_FILES,
+            priority=62,
+            name="Array and frame typing",
+            tags=("ml", "numpy", "pandas", "typing"),
+            section="typing",
+        ),
+        "ml-numeric-assertions": RulePin(
+            applies_if=_ML_ARRAY_GATE,
+            globs=TEST_FILE_GLOBS,
+            priority=63,
+            name="Numeric assertions",
+            tags=("ml", "testing", "pytest"),
+            section="testing",
         ),
     },
 )

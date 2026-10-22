@@ -58,7 +58,8 @@ ML_ARRAY_RULE_IDS: Final = (
     "ml-check-after-load",
     "ml-data-transforms",
     "ml-dtypes-at-load",
-    "ml-reproducibility-and-testing",
+    "ml-numeric-assertions",
+    "ml-seeded-randomness",
     "ml-vectorization",
 )
 #: Rule id -> text that only the probe's branch of its ``{% if %}`` renders.
@@ -79,9 +80,9 @@ LONG_BRANCH_MARKERS: Final = (
     ("ml-check-after-load", "frame.dtypes"),
     ("ml-check-after-load", "array.shape[1] != dim"),
     ("ml-categorical-labels", "REGION = pd.CategoricalDtype("),
-    ("ml-reproducibility-and-testing", "torch.manual_seed"),
-    ("ml-reproducibility-and-testing", "random_state=int("),
-    ("ml-reproducibility-and-testing", "rng = np.random.default_rng(seed)"),
+    ("ml-seeded-randomness", "torch.manual_seed"),
+    ("ml-seeded-randomness", "random_state=int("),
+    ("ml-seeded-randomness", "rng = np.random.default_rng(seed)"),
     # D27(4): the probe has pytest-asyncio; the AnyIO branches are measured over the matrix.
     ("fastapi-dependency-overrides", "This project has `pytest-asyncio`"),
     ("sqlalchemy-test-rollback", '@pytest_asyncio.fixture(scope="session", loop_scope="session")'),
