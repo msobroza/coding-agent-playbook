@@ -336,7 +336,7 @@ def test_a_new_domino_input_names_the_domino_gated_rule(
 ) -> None:
     """``domino_project`` was baked false; a marker or the committed key turns it on (D63).
 
-    The Domino skills' core rules gate on it too and sort before the repo-local
+    The Domino skills' core rules (Apps, jobs, agents) gate on it too and sort before the repo-local
     one, so the list is untruncated here and both kinds must be named.
     """
     monkeypatch.setattr(resync, "_MAX_NAMED", 1000)
@@ -349,6 +349,7 @@ def test_a_new_domino_input_names_the_domino_gated_rule(
     assert 'rule "domino-runs" (source "<repo-local>")' in item, item
     assert 'rule "domino-app-bind-host-port" (source "coding_agent_playbook")' in item, item
     assert 'rule "domino-agent-access-token" (source "coding_agent_playbook")' in item, item
+    assert 'rule "domino-api-proxy-auth" (source "coding_agent_playbook")' in item, item
     assert " more." not in item, item
 
 

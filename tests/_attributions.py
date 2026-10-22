@@ -223,15 +223,17 @@ class _Parser:
         if self._in_source():
             self.rows[self.section].setdefault(skill, [])
 
-    def _commit(self, sha: str, line: str, lineno: int) -> None:
+    def _require_source_level(self, kind: str, line: str, lineno: int) -> str:
+        """The current source's name; ``kind``'s line must sit under it, before any skill."""
         if not self._in_source() or self.skill is not None:
-            raise ValueError(f"{_where(lineno)}: a Commit line belongs under a source: {line!r}")
-        self.commits[str(self.section)] = sha
+            raise ValueError(f"{_where(lineno)}: a {kind} line belongs under a source: {line!r}")
+        return str(self.section)
+
+    def _commit(self, sha: str, line: str, lineno: int) -> None:
+        self.commits[self._require_source_level("Commit", line, lineno)] = sha
 
     def _distilled_form(self, line: str, lineno: int) -> None:
-        if not self._in_source() or self.skill is not None:
-            raise ValueError(f"{_where(lineno)}: a Form line belongs under a source: {line!r}")
-        self.distilled.add(str(self.section))
+        self.distilled.add(self._require_source_level("Form", line, lineno))
 
     def _row(self, line: str, lineno: int) -> None:
         cells = _row_cells(line)
@@ -342,7 +344,9 @@ def _row_errors(parsed: Attributions) -> list[str]:
 
 
 def _mappings(parsed: Attributions, skill: str, *, distilled: bool = False) -> list[SkillMapping]:
-    """Every vendored (or, with ``distilled``, every distilled) source's sub-section for ``skill``."""
+    """Every vendored source's sub-section for ``skill``, or with ``distilled`` every
+    distilled source's.
+    """
     return [
         source.skills[skill]
         for source in parsed.sources.values()
@@ -466,8 +470,9 @@ def attribution_errors(
 ) -> list[str]:
     """Every D31 violation of ``parsed`` against the core skill tree at ``skills_root``.
 
-    Pins equal D11 (a distilled source, prU D50, carries none); every skill file (license copies aside) is a mapping target,
-    distilled or engine-written, and every listed file exists; a skill listing
+    Pins equal D11 (a distilled source, prU D50, carries none); every skill file
+    (license copies aside) is a mapping target, distilled or engine-written, and
+    every listed file exists; a skill listing
     files exists; no file is both engine-written and vendored, nor both distilled
     and a mapping target (D78(15)); an upstream file appears in at most one row per
     source; every row says what changed or, for DROP, why; a skill holding a

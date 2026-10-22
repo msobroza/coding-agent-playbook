@@ -51,6 +51,7 @@ from tests.core_skill_pins import (
     DOMINO_SKILL_IDS,
     PLAIN_CORE_SKILL_IDS,
     CoreSkillPins,
+    skills_off_on_probe,
 )
 from tests.hook_runtime.handlers.pack_repo import engine_hook, engine_hook_paths
 from tests.hook_samples import resolved_hook
@@ -76,13 +77,10 @@ MEMBERSHIP_FROM_PINS: Final[Mapping[str, str]] = {
 WHERE_FROM_PINS: Final[Mapping[str, str]] = {pins.skill_id: pins.where for pins in ALL_PINS}
 CORE_SKILLS: Final = sorted(PINS_BY_SKILL)
 #: Core skills checked on the reference probe, and on the Domino probe (prU D59, D63).
-REFERENCE_PROBE_SKILLS: Final = sorted(set(PINS_BY_SKILL) - DOMINO_SKILL_IDS)
+REFERENCE_PROBE_SKILLS: Final = sorted(set(PINS_BY_SKILL) - skills_off_on_probe("reference"))
 DOMINO_PROBE_SKILLS: Final = sorted(DOMINO_SKILL_IDS)
-#: Core members whose gate the reference probe fails (spec 9.6.2): a reference-probe
-#: skill's ``probe_inactive`` and every member of a Domino-probe skill.
-PROBE_INACTIVE_MEMBERS: Final = frozenset().union(
-    *(p.probe_inactive if p.probe == "reference" else p.members for p in ALL_PINS)
-)
+#: Core members whose gate the reference probe fails (spec 9.6.2).
+PROBE_INACTIVE_MEMBERS: Final = frozenset().union(*(p.reference_probe_inactive for p in ALL_PINS))
 EVERY_CORE_SKILL: Final = sorted({*CORE_SKILLS, *PLAIN_CORE_SKILL_IDS})
 #: (skill id, rule id) of every rule a pins module pins the frontmatter of.
 PINNED_RULES: Final = sorted((p.skill_id, rule_id) for p in ALL_PINS for rule_id in p.rules)

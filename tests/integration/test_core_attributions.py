@@ -5,8 +5,9 @@ provenance live in one file: one section per source with its D11 pin, and inside
 it one table per core skill mapping each upstream file to the core files it
 became, or to DROP with a reason. A per-skill ``Engine-written files`` list
 covers the files with no upstream text. A distilled source (prU D50) has no
-pin: its rows credit engine-written files by page, or DROP them. The parser is ``tests/_attributions.py``;
-each check here runs once on the shipped file and once on a synthetic tree.
+pin: its rows credit engine-written files by page, or DROP them. The parser is
+``tests/_attributions.py``; each check here runs once on the shipped file and once
+on a synthetic tree.
 """
 
 from __future__ import annotations
@@ -104,6 +105,9 @@ def test_core_attributions_record_the_domino_docs_drops_per_page() -> None:
     rows = source.skills["domino-apps"].rows
     assert "user_guide/71635d" in {row.upstream for row in rows if row.dropped}
     assert "user_guide/cb9195" in {row.upstream for row in rows if not row.dropped}
+    rows = source.skills["domino-jobs"].rows
+    assert "user_guide/ca786d" in {row.upstream for row in rows if row.dropped}
+    assert "user_guide/55fc89" in {row.upstream for row in rows if not row.dropped}
 
 
 def test_core_attributions_list_engine_written_files_per_core_skill() -> None:

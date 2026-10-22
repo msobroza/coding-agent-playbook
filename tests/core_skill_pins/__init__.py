@@ -73,6 +73,11 @@ class CoreSkillPins:
     section_ids: tuple[str, ...] = ()
     probe: ProbeKind = "reference"
 
+    @property
+    def reference_probe_inactive(self) -> frozenset[str]:
+        """The members the reference probe does not activate: all of a Domino skill's."""
+        return self.probe_inactive if self.probe == "reference" else frozenset(self.members)
+
 
 #: Core skills that take no member rules: no ``playbook:`` block, an authored "Use when".
 PLAIN_CORE_SKILL_IDS: Final = frozenset({GUARDRAILS_SKILL_ID})
@@ -95,3 +100,8 @@ def _discover_pins() -> tuple[CoreSkillPins, ...]:
 ALL_PINS: Final = _discover_pins()
 #: The core skills only the Domino probe activates: their pins name ``probe="domino"``.
 DOMINO_SKILL_IDS: Final = frozenset(p.skill_id for p in ALL_PINS if p.probe == "domino")
+
+
+def skills_off_on_probe(probe: ProbeKind) -> frozenset[str]:
+    """The core skills ``probe`` never activates: the Domino ones on the reference probe."""
+    return frozenset() if probe == "domino" else DOMINO_SKILL_IDS
