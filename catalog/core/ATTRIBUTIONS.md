@@ -653,6 +653,17 @@ that comes to hold vendored text moves from here into its source's table.
 - `examples/simple-agent-api/app/asgi.py`
 - `examples/simple-agent-api/evals/trace_store.py`
 - `examples/simple-agent-api/tests/`
+- `references/agent-lifecycle.md`
+- `references/auth-by-call.md`
+
+The two references are engine-written decision guides (D49), not vendored:
+they route a situation to this skill's rules and name the domino-apps and
+domino-jobs rules in plain text, without repeating a rule body.
+`references/agent-lifecycle.md` distills facts from the Domino Data Lab 6.2
+agentic-systems user guide pages, the python-domino agents API guide and the
+environment variable reference (credited by name only, no sentence copied);
+`references/auth-by-call.md` restates facts the secrets rules and the
+domino-apps endpoint and viewer rules already hold.
 
 Upstream files each secrets and service rule draws on (example-agent files by
 path and lines, 6.2 documentation pages by guide and page id):

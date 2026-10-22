@@ -26,7 +26,7 @@ from coding_agent_playbook.validation.link_check import classify_link, extract_m
 from tests._budget_probe import every_gate_facts
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable
 
 #: Whether a file may sit in one side directory.
 type _FileTest = Callable[[Path], bool]
@@ -45,6 +45,8 @@ LICENSE_COPY_NAMES: Final = frozenset(
 NOT_THIRD_PERSON: Final = re.compile(r"(?i)(i|you|we|use)\b")
 #: A URL in a SKILL.md: a scheme or a bare ``www.``.
 URL: Final = re.compile(r"(?i)\b[a-z][a-z0-9+.-]*://|\bwww\.")
+#: D49: the line cap of an internal (engine-written) reference.
+INTERNAL_REFERENCE_MAX_LINES: Final = 120
 #: A path segment after ``references/`` that is itself a directory: real nesting (D78(16)).
 _NESTED_REFERENCE: Final = re.compile(r"references/[^\s/()\[\]`'\"<>]+/")
 _RULE_SUFFIXES: Final = (".md.j2", ".md")
@@ -142,6 +144,44 @@ def nesting_problems(skill_dir: Path) -> list[str]:
                 for match in _NESTED_REFERENCE.findall(line)
             ]
     return problems
+
+
+def internal_reference_problems(skill_dir: Path, paths: Iterable[str]) -> list[str]:
+    """The D49 shape of each internal reference at ``paths`` (skill-relative).
+
+    An internal reference is an engine-written decision guide: it opens with a
+    ``# `` title, holds at most :data:`INTERNAL_REFERENCE_MAX_LINES` lines and
+    names rule ids and files in plain text, so it has no markdown link and no URL.
+    Which references are internal is the caller's input (ATTRIBUTIONS' engine-written
+    list); vendored references keep their upstream shape.
+
+    Example: a guide linking ``../rules/r.md`` ->
+    ``["references/guide.md:3: link '../rules/r.md': name rule ids and files in plain text"]``.
+    """
+    problems: list[str] = []
+    for relative in paths:
+        text = (skill_dir / relative).read_text(encoding="utf-8")
+        if not text.startswith("# "):
+            problems.append(f"{relative}: an internal reference opens with a '# ' title")
+        if (count := len(text.splitlines())) > INTERNAL_REFERENCE_MAX_LINES:
+            problems.append(
+                f"{relative}: {count} lines, over D49's {INTERNAL_REFERENCE_MAX_LINES} lines"
+            )
+        problems += [
+            f"{relative}:{link.line}: link {link.target!r}: name rule ids and files in plain text"
+            for link in extract_markdown_links(text)
+        ]
+        if URL.search(text):
+            problems.append(f"{relative}: holds a URL")
+    return problems
+
+
+def names_rule_id(text: str, rule_id: str) -> bool:
+    """Whether ``text`` names ``rule_id`` as a whole id, not inside a longer hyphenated one.
+
+    Example: ``names_rule_id("see demo-rule-x", "demo-rule")`` -> ``False``.
+    """
+    return re.search(rf"(?<![\w-]){re.escape(rule_id)}(?![\w-])", text) is not None
 
 
 def description_problems(skill_dir: Path) -> list[str]:

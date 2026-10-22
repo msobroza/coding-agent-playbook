@@ -46,6 +46,14 @@ playbook:
       open_when: "Starting an agent service on Domino, or copying one piece end to end: token flow, traced request, evaluation Jobs or their tests."
       applies_if:
         domino_project: true
+    - path: references/agent-lifecycle.md
+      open_when: "Planning where agent code runs (workspace, Job, scheduled Job or deployed agent) or which SDK name a Domino release uses."
+      applies_if:
+        domino_project: true
+    - path: references/auth-by-call.md
+      open_when: "Code calls an LLM provider, a Domino-hosted model, another App or agent, or the Domino API, and the right credential is unclear."
+      applies_if:
+        domino_project: true
 ---
 
 # Domino agents
