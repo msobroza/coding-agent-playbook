@@ -21,6 +21,11 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
 
+#: The probe repo a core skill is checked on: the D5 reference probe, or the D59
+#: Domino probe for the Domino skills the reference probe never activates (prU D63).
+type ProbeKind = Literal["reference", "domino"]
+
+
 @dataclass(frozen=True)
 class RulePin:
     """A member rule's pinned frontmatter (spec 9.4.1 / 9.6.1); the file path is not pinned.
@@ -66,7 +71,7 @@ class CoreSkillPins:
     probe_inactive: frozenset[str]
     rules: Mapping[str, RulePin]
     section_ids: tuple[str, ...] = ()
-    probe: Literal["reference", "domino"] = "reference"
+    probe: ProbeKind = "reference"
 
 
 #: Core skills that take no member rules: no ``playbook:`` block, an authored "Use when".
@@ -88,3 +93,5 @@ def _discover_pins() -> tuple[CoreSkillPins, ...]:
 
 #: Every core skill with member rules, one entry per pins module, sorted by skill id.
 ALL_PINS: Final = _discover_pins()
+#: The core skills only the Domino probe activates: their pins name ``probe="domino"``.
+DOMINO_SKILL_IDS: Final = frozenset(p.skill_id for p in ALL_PINS if p.probe == "domino")

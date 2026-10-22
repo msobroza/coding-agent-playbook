@@ -49,13 +49,14 @@ log = logging.getLogger(__name__)
 EXPECTED_SETTINGS = ("MYAPP_LLM_API_KEY", "MYAPP_DB_URL")
 
 
-def log_startup_identity(environ: Mapping[str, str] = os.environ) -> None:
+def log_startup_identity(environ: Mapping[str, str] | None = None) -> None:
     """One line naming the starter and which expected names are set, never their values."""
-    found = [name for name in EXPECTED_SETTINGS if environ.get(name)]
-    missing = [name for name in EXPECTED_SETTINGS if not environ.get(name)]
+    env = os.environ if environ is None else environ
+    found = [name for name in EXPECTED_SETTINGS if env.get(name)]
+    missing = [name for name in EXPECTED_SETTINGS if not env.get(name)]
     log.info(
         "started by %s; settings found=%s missing=%s",
-        environ.get("DOMINO_STARTING_USERNAME", "unknown"),
+        env.get("DOMINO_STARTING_USERNAME", "unknown"),
         found,
         missing,
     )

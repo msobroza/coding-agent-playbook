@@ -23,7 +23,7 @@ tags: [python, domino, apps, security]
 
 Domino passes the viewer's identity to an App at three levels: a basic header, an enhanced signed token, and an extended token with the viewer's full scope. The basic signal is the `domino-username` header the proxy adds to every request; it holds `Anonymous` when nobody is signed in, and anonymous viewers are possible where an admin allows them. Only frameworks that pass the proxied request headers through see it.
 
-Parse the header in one pure function at the edge, so every view gets a typed viewer or an explicit "nobody", and the parsing is tested without a server.
+Parse the header in one pure function at the edge, so every view gets a typed viewer or an explicit "nobody".
 
 ## Bad Example
 
@@ -56,8 +56,11 @@ def viewer_from_headers(headers: Mapping[str, str]) -> Viewer | None:
     if not username or username == ANONYMOUS:
         return None
     return Viewer(username=username)
+```
 
+Being pure, it is tested without a server, in the App's test file:
 
+```python
 def test_anonymous_is_no_viewer() -> None:
     assert viewer_from_headers({"domino-username": "Anonymous"}) is None
 ```

@@ -46,7 +46,12 @@ from tests._core_skill_layout import (
     nesting_problems,
     plain_markdown_problems,
 )
-from tests.core_skill_pins import ALL_PINS, PLAIN_CORE_SKILL_IDS, CoreSkillPins
+from tests.core_skill_pins import (
+    ALL_PINS,
+    DOMINO_SKILL_IDS,
+    PLAIN_CORE_SKILL_IDS,
+    CoreSkillPins,
+)
 from tests.hook_runtime.handlers.pack_repo import engine_hook, engine_hook_paths
 from tests.hook_samples import resolved_hook
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
@@ -71,8 +76,8 @@ MEMBERSHIP_FROM_PINS: Final[Mapping[str, str]] = {
 WHERE_FROM_PINS: Final[Mapping[str, str]] = {pins.skill_id: pins.where for pins in ALL_PINS}
 CORE_SKILLS: Final = sorted(PINS_BY_SKILL)
 #: Core skills checked on the reference probe, and on the Domino probe (prU D59, D63).
-REFERENCE_PROBE_SKILLS: Final = sorted(p.skill_id for p in ALL_PINS if p.probe == "reference")
-DOMINO_PROBE_SKILLS: Final = sorted(p.skill_id for p in ALL_PINS if p.probe == "domino")
+REFERENCE_PROBE_SKILLS: Final = sorted(set(PINS_BY_SKILL) - DOMINO_SKILL_IDS)
+DOMINO_PROBE_SKILLS: Final = sorted(DOMINO_SKILL_IDS)
 #: Core members whose gate the reference probe fails (spec 9.6.2): a reference-probe
 #: skill's ``probe_inactive`` and every member of a Domino-probe skill.
 PROBE_INACTIVE_MEMBERS: Final = frozenset().union(

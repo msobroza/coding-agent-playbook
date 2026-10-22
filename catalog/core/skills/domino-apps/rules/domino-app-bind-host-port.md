@@ -22,7 +22,7 @@ tags: [python, domino, apps]
 
 Domino's proxy forwards a viewer's requests to one place only: TCP port 8888 on an interface other than loopback. The launch file must start a process listening there; Domino watches that process and keeps the App in its starting state until the port answers. A server that binds `127.0.0.1`, or keeps its framework's default port (Flask 5000, Dash 8050, Streamlit 8501, Shiny 8000), never becomes reachable, and the App stays stuck starting with no error in the code.
 
-Set both values explicitly, in one place, so the launch script and the Python entry point cannot disagree.
+Set both values explicitly on the launch script's server line, and where Python code also starts a server, take them from one constant pair rather than literals scattered across modules.
 
 ## Bad Example
 
@@ -46,7 +46,7 @@ if __name__ == "__main__":
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
-exec python -m myapp.serve
+exec gunicorn --bind 0.0.0.0:8888 "myapp.serve:create_app()"
 ```
 
 ```python
@@ -64,6 +64,7 @@ def create_app() -> Flask:
 
 
 if __name__ == "__main__":
+    # A local check only; the published App runs the gunicorn line above.
     create_app().run(host=HOST, port=PORT)
 ```
 

@@ -47,7 +47,7 @@ import jwt
 USERNAME_CLAIM = "preferred_username"
 
 
-class UnverifiedViewer(Exception):
+class UnverifiedViewerError(Exception):
     """The request carries no token, or one that fails verification."""
 
 
@@ -63,7 +63,9 @@ class ViewerVerifier:
 
     def verify(self, authorization: str | None) -> Viewer:
         if not authorization or not authorization.startswith("Bearer "):
-            raise UnverifiedViewer("no bearer token")
+            raise UnverifiedViewerError(
+                "no viewer token: expected an 'Authorization: Bearer <token>' header"
+            )
         token = authorization.removeprefix("Bearer ")
         try:
             key = self._keys.get_signing_key_from_jwt(token)
@@ -75,11 +77,11 @@ class ViewerVerifier:
                 options={"require": ["exp", "aud", USERNAME_CLAIM]},
             )
         except jwt.PyJWTError as exc:
-            raise UnverifiedViewer(str(exc)) from exc
+            raise UnverifiedViewerError(str(exc)) from exc
         return Viewer(username=str(claims[USERNAME_CLAIM]))
 ```
 
-The key-set URL comes from a prefixed project variable, for example `MYAPP_JWKS_URL` (`domino-env-var-names`, domino-jobs skill); the boundary turns `UnverifiedViewer` into a 401.
+The key-set URL comes from a prefixed project variable, for example `MYAPP_JWKS_URL` (`domino-env-var-names`, domino-jobs skill); the boundary turns `UnverifiedViewerError` into a 401.
 
 ## Notes
 

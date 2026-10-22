@@ -45,7 +45,10 @@ def trace() -> None:
 
 ```python
 import logging
+import re
 from typing import Protocol
+
+_BEARER = re.compile(r"Bearer\s+[A-Za-z0-9._~+/=-]+")
 
 
 class DominoClient(Protocol):
@@ -57,12 +60,13 @@ class DominoClientFactory(Protocol):
 
 
 class RedactAuthorization(logging.Filter):
-    """Masks a bearer token that reaches a log record by accident."""
+    """Masks a bearer token that reaches a log record, in the message or its arguments."""
 
     def filter(self, record: logging.LogRecord) -> bool:
-        if isinstance(record.msg, str) and "Bearer " in record.msg:
-            record.msg = record.msg.split("Bearer ", 1)[0] + "Bearer [redacted]"
-            record.args = ()
+        message = record.getMessage()  # the text after %-formatting with record.args
+        redacted = _BEARER.sub("Bearer [redacted]", message)
+        if redacted != message:
+            record.msg, record.args = redacted, ()
         return True
 
 
@@ -72,7 +76,7 @@ def projects_for_viewer(factory: DominoClientFactory, authorization: str) -> lis
     return client.list_projects()
 ```
 
-The factory is injected from the composition root; the filter is attached once where logging is configured.
+The factory is injected from the composition root; the filter is attached once where logging is configured, and it catches the Bad Example's `dict(request.headers)` argument too. It is a safety net: the fix is never to log headers.
 
 ## Notes
 

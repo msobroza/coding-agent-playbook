@@ -50,7 +50,6 @@ from typing import Protocol
 @dataclass(frozen=True)
 class Viewer:
     username: str
-    token: str
 
 
 class ViewerScopedReader(Protocol):
@@ -73,7 +72,7 @@ def reports_page(reader: ViewerScopedReader, viewer: Viewer) -> list[str]:
     return reader.list_reports(viewer)
 ```
 
-The production adapter implements `ViewerScopedReader` by building a Data API client per request from `viewer.token`; the page depends only on the Protocol.
+The production adapter implements `ViewerScopedReader` with a Data API client built per request from that viewer's token (`domino-app-viewer-token`), so the token never rides on `Viewer`; the page depends only on the Protocol.
 
 ## Notes
 

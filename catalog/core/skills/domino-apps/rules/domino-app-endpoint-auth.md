@@ -44,34 +44,49 @@ def predict(features: list[float]) -> float:
 ## Good Example
 
 ```python
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Literal
+from enum import Enum
 
 import httpx
 
 
+class EndpointMode(Enum):
+    SYNC = "sync"
+    ASYNC = "async"
+
+
 @dataclass(frozen=True)
 class EndpointSettings:
-    url: str  # from MYAPP_MODEL_URL
-    token: str  # from MYAPP_MODEL_TOKEN; never logged
-    mode: Literal["sync", "async"]
+    url: str
+    token: str  # never logged
+    mode: EndpointMode
+
+
+def load_endpoint_settings(environ: Mapping[str, str]) -> EndpointSettings:
+    """Read once at startup, so a missing variable fails there, not in a callback."""
+    return EndpointSettings(
+        url=environ["MYAPP_MODEL_URL"],
+        token=environ["MYAPP_MODEL_TOKEN"],
+        mode=EndpointMode(environ.get("MYAPP_MODEL_MODE", "sync")),
+    )
 
 
 def endpoint_client(settings: EndpointSettings, *, timeout_s: float = 10.0) -> httpx.Client:
     """One client for the App's lifetime, built in the composition root."""
-    if settings.mode == "sync":
+    if settings.mode is EndpointMode.SYNC:
         return httpx.Client(auth=(settings.token, settings.token), timeout=timeout_s)
     headers = {"Authorization": f"Bearer {settings.token}"}
     return httpx.Client(headers=headers, timeout=timeout_s)
 
 
-def predict(client: httpx.Client, url: str, features: list[float]) -> float:
-    response = client.post(url, json={"data": features})
+def predict(client: httpx.Client, settings: EndpointSettings, features: list[float]) -> float:
+    response = client.post(settings.url, json={"data": features})
     response.raise_for_status()
     return float(response.json()["result"])
 ```
 
-Where the repo uses pydantic, the token is a `SecretStr` setting.
+The composition root calls `load_endpoint_settings(os.environ)` once. Where the repo uses pydantic, the token is a `SecretStr` setting.
 
 ## Notes
 

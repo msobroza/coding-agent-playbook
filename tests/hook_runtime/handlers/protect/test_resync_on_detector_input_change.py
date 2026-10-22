@@ -10,7 +10,6 @@ comparison must decide alone whenever the dependency names did not change.
 
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING, Final
 
 import pytest
@@ -329,20 +328,27 @@ def test_requirements_edit_naming_only_known_dependencies_is_silent(
     ids=["domino-marker", "platforms-key"],
 )
 def test_a_new_domino_input_names_the_domino_gated_rule(
-    repo: PackRepo, deps: Callable[..., RuntimeDeps], rel: str, text: str
+    repo: PackRepo,
+    deps: Callable[..., RuntimeDeps],
+    monkeypatch: pytest.MonkeyPatch,
+    rel: str,
+    text: str,
 ) -> None:
     """``domino_project`` was baked false; a marker or the committed key turns it on (D63).
 
-    The Domino skills' core rules gate on it too and may fill the truncated list
-    before the repo-local one, so any Domino-gated rule named proves the gate flipped.
+    The Domino skills' core rules gate on it too and sort before the repo-local
+    one, so the list is untruncated here and both kinds must be named.
     """
+    monkeypatch.setattr(resync, "_MAX_NAMED", 1000)
     repo.write(rel, text)
     tool_input = {"file_path": str(repo.root / rel), "content": text}
 
     report = _post(repo, deps(), "Write", tool_input)
 
     [item] = report.trace.combined.context
-    assert re.search(r'rule "domino-[a-z-]+" \(source "', item), item
+    assert 'rule "domino-runs" (source "<repo-local>")' in item, item
+    assert 'rule "domino-app-bind-host-port" (source "coding_agent_playbook")' in item, item
+    assert " more." not in item, item
 
 
 @pytest.mark.parametrize(
