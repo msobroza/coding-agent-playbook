@@ -1,0 +1,93 @@
+---
+id: arch-composition-root
+name: Composition root
+description: "Choose and build concrete implementations in exactly one composition root per entry point, load settings there once, and hand callees ready-made collaborators."
+version: 1
+scope: scoped
+globs:
+  - "**/main.py"
+  - "**/app.py"
+  - "**/__main__.py"
+  - "**/deps.py"
+  - "**/dependencies.py"
+  - "**/container.py"
+  - "**/bootstrap.py"
+  - "**/wiring.py"
+  - "**/cli.py"
+section: layers
+priority: 21
+tags: [python, architecture, di]
+---
+
+# Wire concrete objects in one composition root per entry point
+
+## Description
+
+The composition root is the single dirty place per entry point: the only code that knows the concrete classes, picks them and connects them. Everything else receives what it needs as parameters. When concrete classes are instantiated across many files, the wiring has no home and every change of vendor or configuration touches business code.
+
+| Entry point | Its composition root |
+| --- | --- |
+| Web app | the app factory and its lifespan for long-lived resources, plus the provider module for per-request sessions and clients (web-application's fastapi-app-wiring and fastapi-dependency-providers rules) |
+| Click or Typer CLI | the root group callback, which builds services once and stores them on the context object |
+| Worker or scheduled job | `main()`, which builds everything and then starts the loop |
+| Library | none of its own: the caller is the root, so the library takes collaborators as parameters |
+
+Web apps build the DB engine in the app factory or lifespan; scripts and CLIs may still build it at import time. Nothing connects, opens a session or calls the network at import time. Build shared pools, sessions and HTTP clients in the root or the app's lifespan and inject them.
+
+## Bad Example
+
+```python
+# Each subcommand builds its own engine and gateway: concrete construction is scattered.
+@cli.command()
+def remind() -> None:
+    engine = create_engine(os.environ["DATABASE_URL"])
+    gateway = HttpSmsGateway(os.environ["SMS_API_BASE"], timeout=5.0)
+    with Session(engine) as session:
+        count = send_overdue_reminders(SqlOverdueLoans(session), gateway.send, utc_now)
+    click.echo(f"{count} reminders sent")
+
+
+@cli.command()
+def close_overdue() -> None:
+    engine = create_engine(os.environ["DATABASE_URL"])  # the same wiring, copied
+    with Session(engine) as session:
+        click.echo(f"{close_loans(session, utc_now().date())} loans closed")
+```
+
+## Good Example
+
+```python
+@dataclass(frozen=True)
+class Services:
+    remind_overdue: Callable[[], int]
+
+
+@click.group()
+@click.pass_context
+def cli(ctx: click.Context) -> None:
+    settings = Settings()  # read once; a missing value stops the CLI here
+    sessions = sessionmaker(create_engine(settings.database_url))
+    gateway = HttpSmsGateway(settings.sms_api_base, timeout=settings.sms_timeout_seconds)
+
+    def remind_overdue() -> int:
+        with sessions() as session:  # one session per run, closed on every path
+            return send_overdue_reminders(SqlOverdueLoans(session), gateway.send, utc_now)
+
+    ctx.obj = Services(remind_overdue=remind_overdue)
+
+
+@cli.command()
+@click.pass_obj
+def remind(services: Services) -> None:
+    click.echo(f"{services.remind_overdue()} reminders sent")
+```
+
+## Notes
+
+- Load the typed settings once in the root and fail at startup when a required value is missing (the python-coding skill's pydantic-typed-settings rule); hand callees the few values they use, not the settings object.
+- Only interface modules import the provider module, for its `Annotated` aliases. Application, domain and infrastructure code never imports the root: reaching into it for a session turns it into a service locator.
+- An existing DI container stays in the composition root; its imports and decorators stay out of business modules.
+- The subcommand constructs nothing. Its test calls `CliRunner().invoke(remind, obj=Services(remind_overdue=lambda: 3))` and checks the output; the use case is tested on its own with fakes.
+{% if has_framework("fastapi") %}
+- Worked example: web-application's hotel example (fastapi-hotel-api), files app/main.py, app/deps.py and app/asgi.py: the FastAPI form of this root, with `create_app(settings)` and its lifespan, the per-request providers, and the one `Settings()` call.
+{% endif %}

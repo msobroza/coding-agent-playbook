@@ -1040,7 +1040,7 @@ one of them in `section:` and takes a priority inside that section's impact band
 (see "Sections and impact bands"). Without `skill:`, `playbook validate` and
 `playbook sync` stop with:
 
-    scope 'scoped' needs a skill: put the file in that skill's rules/ directory (skills/<skill-id>/rules/), or add 'skill: <skill-id>' when the skill comes from another layer; known skills: design-patterns, domino-agents, domino-apps, domino-jobs, ml-data, python-coding, python-testing, python-tooling, web-application
+    scope 'scoped' needs a skill: put the file in that skill's rules/ directory (skills/<skill-id>/rules/), or add 'skill: <skill-id>' when the skill comes from another layer; known skills: design-patterns, domino-agents, domino-apps, domino-jobs, ml-data, python-architecture, python-coding, python-testing, python-tooling, web-application
 
 The list names every skill that can take rules after your layers are merged, so
 a skill of your own joins it. When the rule overrides a rule in core by id, the

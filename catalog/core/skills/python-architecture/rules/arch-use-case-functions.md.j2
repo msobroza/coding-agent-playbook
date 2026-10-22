@@ -1,0 +1,69 @@
+---
+id: arch-use-case-functions
+name: Use case functions
+description: "Put business logic in use-case functions that receive their ports, ids and dates as parameters and return typed records; handlers parse, call one use case and map the result."
+version: 1
+scope: scoped
+globs:
+  - "**/*.py"
+section: boundaries
+priority: 40
+tags: [python, architecture, use-cases]
+---
+
+# Put business logic in use cases that receive their ports
+
+## Description
+
+The application layer holds one function per use case, or a small class when several use cases share collaborators. A use case loads what it needs through ports it receives as parameters, lets the domain decide, persists the outcome and commits, so it owns the transaction boundary. It computes derived values (a booking's price is nights times the room rate), enforces the rules and returns a typed record. It never imports a database module, the web framework or the engine module.
+
+Handlers on the interface side stay thin: accept the input, call exactly one use case, map the result or the domain error to a response or an exit code. When a screen needs the results of two use cases, add a use case that orchestrates them instead of orchestrating in the handler.
+
+## Bad Example
+
+```python
+# worker.py: the queue handler orchestrates and decides
+def handle_booking_requested(message: BookingRequested, session: Session) -> None:
+    room = session.get(RoomRow, message.room_id)
+    nights = (message.check_out - message.check_in).days
+    price_cents = nights * room.nightly_rate_cents  # a business rule in the handler
+    booking_id = uuid.uuid4()  # a hidden id source
+    session.add(BookingRow(id=booking_id, room_id=room.id, price_cents=price_cents))
+    session.add(LedgerRow(booking_id=booking_id, amount_cents=price_cents))
+    session.commit()
+```
+
+## Good Example
+
+```python
+# app/operations/booking.py
+NewId = Callable[[], UUID]
+
+
+def book_room(
+    rooms: RoomRepository, bookings: BookingRepository, request: BookingRequest, new_id: NewId
+) -> Booking:
+    room = rooms.get(request.room_id)  # raises RoomNotFoundError
+    nights = (request.check_out - request.check_in).days
+    price_cents = nights * room.nightly_rate_cents
+    booking = Booking(new_id(), room.room_id, request.check_in, request.check_out, price_cents)
+    bookings.add(booking)
+    return booking
+
+
+# worker.py: parse, call one use case, acknowledge
+def handle_booking_requested(message: BookingRequested, services: Services) -> None:
+    services.book_room(BookingRequest(message.room_id, message.check_in, message.check_out))
+```
+
+## Notes
+
+- Warning signs in a use case: `import fastapi`, `import click`, `HTTPException`, a call to a session factory, reading `os.environ`.
+- Ids, dates and clocks arrive as parameters (`new_id`, `today`), so tests compare literal records; hidden clocks and ids are the python-coding skill's python-pure-core rule.
+- Money is integer cents or `Decimal`, never `float`.
+- The commit belongs to the use case too: when it writes through several repositories, it calls the unit of work's `commit()` once at the end (arch-unit-of-work).
+- The async form awaits the same ports: `room = await rooms.get(request.room_id)`; the rest of the use case is unchanged.
+- FastAPI routes follow the same split in the web-application skill's fastapi-thin-routes rule.
+{% if has_framework("fastapi") %}
+- Worked example: web-application's hotel example (fastapi-hotel-api), file app/operations/booking.py: `book_room` receives its ports, the injected date and the id factory, and returns a typed record.
+{% endif %}
