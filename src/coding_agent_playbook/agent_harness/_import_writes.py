@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.artifacts.frontmatter import format_frontmatter, split_frontmatter
-from coding_agent_playbook.artifacts.member_reference import RULES_DIR
+from coding_agent_playbook.artifacts.member_reference import skill_member_path
 from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from coding_agent_playbook.generated_output.source_files import skill_subtree_files
 
@@ -134,12 +134,11 @@ def write_rule(rule: Rule, into: Path, *, skill_ids: Collection[str] = ()) -> No
     Example: ``write_rule(rule, Path("playbook"))`` -> ``playbook/rules/style.md``.
     """
     suffix = ".md.j2" if rule.is_templated else ".md"
-    filename = f"{rule.frontmatter.id}{suffix}"
     home = rule.home_skill
     if home is not None and home in skill_ids:
-        target = into / "skills" / home / RULES_DIR / filename
+        target = into / skill_member_path(home, rule.frontmatter.id, suffix=suffix)
     else:
-        target = into / "rules" / filename
+        target = into / "rules" / f"{rule.frontmatter.id}{suffix}"
         rule = dataclasses.replace(rule, skill_from_location=False)  # spell the skill out
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(rule.to_markdown(), encoding="utf-8")

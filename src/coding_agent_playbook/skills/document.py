@@ -229,6 +229,26 @@ def emitted_body(skill: Skill) -> str:
     return f"{authored}\n\n{index}" if authored else index
 
 
+def strip_rules_index(body: str) -> str:
+    """``body`` without the trailing ``## Rules`` index :func:`emitted_body` appended.
+
+    The inverse an importer needs when only the emitted ``SKILL.md`` is left (no
+    sidecar keeps the authored body): the index is recognised by its heading and
+    fixed lead line, and everything from it to the end is dropped, so the next
+    sync appends exactly one index again. A body without the index is returned
+    unchanged.
+
+    Example: ``strip_rules_index(emitted_body(skill))`` -> ``skill.body.rstrip() + "\n"``.
+    """
+    marker = f"{_RULES_HEADING}\n\n{_RULES_LEAD}\n"
+    if body.startswith(marker):
+        return ""
+    cut = body.rfind(f"\n\n{marker}")
+    if cut == -1:
+        return body
+    return body[:cut] + "\n"
+
+
 def rules_index(members: Sequence[MemberReference]) -> str:
     """The ``## Rules`` section: one line per member, in the order given.
 

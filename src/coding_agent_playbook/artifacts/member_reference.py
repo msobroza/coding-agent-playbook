@@ -14,6 +14,7 @@ A stdlib-only leaf: ``artifacts.skill`` imports it at run time for
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any, Final
 
 if TYPE_CHECKING:
@@ -25,6 +26,9 @@ if TYPE_CHECKING:
 #: is built from it too, so a rename touches this one line.
 RULES_DIR: Final = "rules"
 
+#: The directory of skills under a playbook layer and under the harness tree alike.
+SKILLS_DIR: Final = "skills"
+
 
 def member_reference_path(rule_id: str) -> str:
     """Where a member rule lives inside its skill directory (E16).
@@ -34,6 +38,31 @@ def member_reference_path(rule_id: str) -> str:
     Example: ``member_reference_path("pytest")`` -> ``"rules/pytest.md"``.
     """
     return f"{RULES_DIR}/{rule_id}.md"
+
+
+def skill_member_path(skill_id: str, rule_id: str, *, suffix: str = ".md") -> str:
+    """A member rule's path relative to the root that holds ``skills/`` (prU D5, D22).
+
+    The one spelling of ``skills/<skill>/rules/<id><suffix>`` that the
+    agent_harness emitter, its manifest and ``import-harness`` share;
+    :func:`skill_member_location` parses it back.
+
+    Example: ``skill_member_path("risk", "limits")`` -> ``"skills/risk/rules/limits.md"``.
+    """
+    return f"{SKILLS_DIR}/{skill_id}/{RULES_DIR}/{rule_id}{suffix}"
+
+
+def skill_member_location(rel_path: str) -> tuple[str, str] | None:
+    """``(skill_id, rule_id)`` of a :func:`skill_member_path` ``.md`` path, else None.
+
+    Example: ``skill_member_location("skills/risk/rules/limits.md")`` -> ``("risk", "limits")``.
+    """
+    parts = PurePosixPath(rel_path).parts
+    if len(parts) != 4 or (parts[0], parts[2]) != (SKILLS_DIR, RULES_DIR):
+        return None
+    if not parts[3].endswith(".md"):
+        return None
+    return parts[1], parts[3].removesuffix(".md")
 
 
 @dataclass(frozen=True)

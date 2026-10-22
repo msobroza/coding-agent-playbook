@@ -21,7 +21,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.agent_harness import emitter, manifest
-from coding_agent_playbook.artifacts.member_reference import member_reference_path
+from coding_agent_playbook.artifacts.member_reference import skill_member_path
 from coding_agent_playbook.generated_output.output_io import write_output_text
 from coding_agent_playbook.rendering.formats import with_sentinel_body
 
@@ -47,29 +47,39 @@ def split_members(
 def member_rule_path(repo_root: Path, rule: Rule) -> Path:
     """``<root>/skills/<skill>/rules/<id>.md`` for a member rule (its ``skill`` is set).
 
+    Raises ``ValueError`` naming the rule when ``skill`` is None: only a member
+    rule (from :func:`split_members`) has a skill directory to go to.
+
     Example: ``member_rule_path(root, typing_rule)`` -> ``root/"skills/python-coding/rules/python-typing.md"``.
     """
-    skill_id = str(rule.frontmatter.skill)
-    return repo_root / "skills" / skill_id / member_reference_path(rule.frontmatter.id)
+    skill_id = rule.frontmatter.skill
+    if skill_id is None:
+        raise ValueError(
+            f"rule {rule.frontmatter.id!r} has no 'skill'; only a member rule "
+            "(skill: <skill-id>) is emitted under skills/<skill>/rules/"
+        )
+    return repo_root / skill_member_path(skill_id, rule.frontmatter.id)
 
 
 def write_rule_file(
     target: Path,
     rule: Rule,
     repo_root: Path,
-    entries: list[manifest.ManifestEntry] | None,
+    entries: list[manifest.ManifestEntry],
+    *,
+    record_manifest: bool = True,
 ) -> Path:
-    """Write ``rule`` at ``target``; append its manifest entry unless ``entries`` is None.
+    """Write ``rule`` at ``target`` and, when ``record_manifest``, append its manifest entry.
 
-    ``None`` is for a hook advisory: presentation only, so a lossless import
-    never turns it into a ``Rule`` (§C.6).
+    A hook advisory passes ``record_manifest=False``: presentation only, so a
+    lossless import never turns it into a ``Rule`` (§C.6).
 
     Example: ``write_rule_file(root / "references" / "x.md", rule, root, entries)``.
     """
     target.parent.mkdir(parents=True, exist_ok=True)
     frontmatter = emitter.frontmatter_block({"description": rule.frontmatter.description})
     write_output_text(target, with_sentinel_body(frontmatter, rule.body))
-    if entries is not None:
+    if record_manifest:
         path = target.relative_to(repo_root).as_posix()
         entries.append(_rule_entry(rule, path, by_location=_placed_by_location(rule, path)))
     return target
@@ -77,9 +87,10 @@ def write_rule_file(
 
 def _placed_by_location(rule: Rule, path: str) -> bool:
     """Whether ``path`` is the rule's home skill's ``rules/`` and the skill came from there."""
-    if not rule.skill_from_location:
+    skill_id = rule.frontmatter.skill
+    if not rule.skill_from_location or skill_id is None:
         return False
-    return path == f"skills/{rule.frontmatter.skill}/{member_reference_path(rule.frontmatter.id)}"
+    return path == skill_member_path(skill_id, rule.frontmatter.id)
 
 
 def _rule_entry(rule: Rule, path: str, *, by_location: bool) -> manifest.ManifestEntry:

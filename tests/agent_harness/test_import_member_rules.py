@@ -18,6 +18,7 @@ from coding_agent_playbook.agent_harness.adapter import AgentHarnessAdapter
 from coding_agent_playbook.agent_harness.importer import import_harness, write_import
 from coding_agent_playbook.catalog.layers import REPO_LOCAL_SOURCE
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
+from coding_agent_playbook.skills.membership import compose_skills
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -61,19 +62,27 @@ def _repo_local(repo: Path) -> tuple[list[Rule], list[Skill]]:
     return rules, skills
 
 
-def _emit_from_sources(tmp_path: Path) -> Path:
-    src = tmp_path / "src"
-    _write_sources(src / "playbook")
-    rules, skills = _repo_local(src)
-    harness = tmp_path / "harness"
-    harness.mkdir()
+def _emit(repo: Path, harness: Path) -> Path:
+    """What a sync of ``repo``'s playbook writes to the harness: skills composed with members."""
+    rules, skills = _repo_local(repo)
+    harness.mkdir(parents=True)
     adapter = AgentHarnessAdapter()
-    for skill in skills:
+    for skill in compose_skills(skills, rules, rules):
         adapter.write_skill(skill, harness)
     for rule in rules:
         adapter.write_rule(rule, harness)
     adapter.finalize(harness)
     return harness
+
+
+def _emit_from_sources(tmp_path: Path) -> Path:
+    src = tmp_path / "src"
+    _write_sources(src / "playbook")
+    return _emit(src, tmp_path / "harness")
+
+
+def _tree(root: Path) -> dict[str, bytes]:
+    return {p.relative_to(root).as_posix(): p.read_bytes() for p in root.rglob("*") if p.is_file()}
 
 
 def test_emitted_tree_puts_both_members_inside_the_skill(tmp_path: Path) -> None:
@@ -94,6 +103,24 @@ def test_lossless_import_writes_byte_identical_rule_sources(tmp_path: Path) -> N
     assert result.warnings == []
     assert (out / _IN_SKILL).read_text(encoding="utf-8") == _IN_SKILL_RULE
     assert (out / _JOINING).read_text(encoding="utf-8") == _JOINING_RULE
+
+
+def test_sync_of_the_imported_playbook_reproduces_the_harness(tmp_path: Path) -> None:
+    """Emit, lossless import, then sync: the same harness bytes, so the same rule sources."""
+    harness = _emit_from_sources(tmp_path)
+    write_import(import_harness(harness), tmp_path / "out" / "playbook")
+
+    again = _emit(tmp_path / "out", tmp_path / "again" / "harness")  # HARNESS.md names the dir
+
+    assert "## Rules" in (harness / "skills" / "risk" / "SKILL.md").read_text(encoding="utf-8")
+    assert _tree(again) == _tree(harness)
+    write_import(import_harness(again), tmp_path / "out2" / "playbook")
+    assert (tmp_path / "out2" / "playbook" / _IN_SKILL).read_text(encoding="utf-8") == (
+        _IN_SKILL_RULE
+    )
+    assert (tmp_path / "out2" / "playbook" / _JOINING).read_text(encoding="utf-8") == (
+        _JOINING_RULE
+    )
 
 
 def test_reimported_rules_load_as_the_originals(tmp_path: Path) -> None:
@@ -145,3 +172,14 @@ def test_best_effort_reads_skill_rules_as_members(tmp_path: Path) -> None:
         "risk-limits.md",
     ]
     assert not any("needs 'skill: <skill-id>'" in w for w in result.warnings)
+
+
+def test_best_effort_import_drops_the_generated_rules_index(tmp_path: Path) -> None:
+    """Regression: the emitted index is not kept as authored text, so a sync cannot repeat it."""
+    harness = _emit_from_sources(tmp_path)
+    shutil.rmtree(harness / ".playbook")
+
+    [skill] = import_harness(harness).skills
+
+    assert "## Rules" not in skill.body
+    assert skill.body == "# Risk\n"

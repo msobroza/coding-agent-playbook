@@ -17,8 +17,11 @@ from coding_agent_playbook.skills.document import (
     compose_description,
     covered_member_count,
     covers_clause,
+    rules_index,
+    strip_rules_index,
     worst_case_description,
 )
+from tests.member_skill_samples import sample_member_reference
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -186,3 +189,10 @@ def test_composing_without_members_is_an_error(
 ) -> None:
     with pytest.raises(ValueError, match=r"at least one member name, got \[\]"):
         compose("X.", [], None)
+
+
+def test_strip_rules_index_removes_the_generated_index_only() -> None:
+    index = rules_index([sample_member_reference("python-typing")])
+    assert strip_rules_index(f"# Python\n\nAuthored.\n\n{index}") == "# Python\n\nAuthored.\n"
+    assert strip_rules_index(index) == ""
+    assert strip_rules_index("# Python\n\n## Rules\n\nMine.\n") == "# Python\n\n## Rules\n\nMine.\n"

@@ -42,12 +42,16 @@ class RuleLoadError(ValueError):
         super().__init__(f"{path}: {problem}")
 
 
+#: A rule's ``scope``: loaded every session, or on demand (a skill's member or a reference).
+RuleScope = Literal["always", "scoped"]
+
+
 @dataclass
 class RuleFrontmatter:
     id: str
     name: str
     description: str
-    scope: Literal["always", "scoped"]
+    scope: RuleScope
     version: int = 1
     globs: list[str] = field(default_factory=list)
     applies_if: dict[str, Any] = field(default_factory=dict)

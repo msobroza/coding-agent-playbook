@@ -37,6 +37,7 @@ from coding_agent_playbook.agent_harness.models import (
     SkillLeaf,
 )
 from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
+from coding_agent_playbook.artifacts.member_reference import RULES_DIR
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -46,7 +47,6 @@ LEAF_DETECTORS_FILENAME = ".leaf-detectors"
 SKILL_FILENAME = "SKILL.md"
 SCRIPTS_DIRNAME = "scripts"
 REFERENCES_DIRNAME = "references"
-RULES_DIRNAME = "rules"
 
 #: Detector leaf type that triggers SKILL.md parsing.
 SKILL_LEAF_TYPE = "skill"
@@ -141,7 +141,7 @@ def _parse_skill_leaf(directory: Path) -> SkillLeaf:
         path=directory,
         scripts=_parse_scripts(directory / SCRIPTS_DIRNAME),
         references=_parse_reference_files(directory / REFERENCES_DIRNAME),
-        rules=_parse_skill_rules(directory / RULES_DIRNAME),
+        rules=_parse_skill_rules(directory / RULES_DIR),
     )
 
 

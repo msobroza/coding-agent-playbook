@@ -171,7 +171,9 @@ class AgentHarnessAdapter(Adapter):
         written.extend(emit_hook_sidecars(self._hooks, repo_root, entries))
 
         always_listed = [*always_rules, *advisories]
-        written.append(self._emit_harness_md(repo_root, always_listed, bool(root_scoped)))
+        written.append(
+            self._emit_harness_md(repo_root, always_listed, has_references=bool(root_scoped))
+        )
 
         if self._skills or self._prompts:
             written.append(self._emit_leaf_detectors(repo_root))
@@ -232,15 +234,17 @@ class AgentHarnessAdapter(Adapter):
     ) -> list[Path]:
         """``rules/<NN>-<id>.md`` per always-rule and hook advisory, then ``RULES.md``.
 
-        Advisories get no manifest entry: presentation only, so a lossless
-        import never turns one into a ``Rule`` (§C.6).
+        Advisories are written with ``record_manifest=False``: presentation only,
+        so a lossless import never turns one into a ``Rule`` (§C.6).
         """
         if not (rules or advisories):
             return []
         written: list[Path] = []
         for rule, record in [*((r, True) for r in rules), *((r, False) for r in advisories)]:
             target = repo_root / "rules" / emitter.always_rule_filename(rule)
-            written.append(write_rule_file(target, rule, repo_root, entries if record else None))
+            written.append(
+                write_rule_file(target, rule, repo_root, entries, record_manifest=record)
+            )
         written.append(self._emit_routing(repo_root, "rules", "Rules to apply every session."))
         return written
 
@@ -270,7 +274,7 @@ class AgentHarnessAdapter(Adapter):
     # --- HARNESS.md --------------------------------------------------------
 
     def _emit_harness_md(
-        self, repo_root: Path, always_rules: list[Rule], has_references: bool
+        self, repo_root: Path, always_rules: list[Rule], *, has_references: bool
     ) -> Path:
         emitted = {
             "skills": bool(self._skills),

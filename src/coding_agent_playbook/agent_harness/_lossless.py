@@ -10,7 +10,6 @@ path (``specs/prH-agent-harness.md`` §C). Split out of :mod:`.importer` by AH-2
 
 from __future__ import annotations
 
-from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.agent_harness._import_writes import (
@@ -19,7 +18,7 @@ from coding_agent_playbook.agent_harness._import_writes import (
 )
 from coding_agent_playbook.agent_harness.hook_sidecars import read_hook_sidecar
 from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
-from coding_agent_playbook.artifacts.member_reference import RULES_DIR
+from coding_agent_playbook.artifacts.member_reference import skill_member_location
 from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill
@@ -124,10 +123,10 @@ def location_skill(rel_path: str, rule_id: str) -> str | None:
 
     Example: ``location_skill("skills/risk/rules/limits.md", "limits")`` -> ``"risk"``.
     """
-    parts = PurePosixPath(rel_path).parts
-    if len(parts) != 4 or (parts[0], parts[2], parts[3]) != ("skills", RULES_DIR, f"{rule_id}.md"):
+    location = skill_member_location(rel_path)
+    if location is None or location[1] != rule_id:
         return None
-    return parts[1]
+    return location[0]
 
 
 def _prompt_from_entry(path: Path, entry: ManifestEntry, source_package: str) -> Prompt:

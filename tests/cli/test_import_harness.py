@@ -312,3 +312,64 @@ def test_best_effort_import_of_an_always_rule_asks_for_no_skill(tmp_path: Path) 
 
     [always] = [w for w in warnings if w.startswith("rule 'python-house-style'")]
     assert "skill" not in always
+
+
+# --- member rules inside their skill (prU D22) -----------------------------------
+
+
+def _emit_in_skill_member_harness(tmp_path: Path) -> Path:
+    """A skill and one member placed by location, with a ``section``: ``skills/<s>/rules/``."""
+    repo = tmp_path / "harness"
+    repo.mkdir()
+    adapter = AgentHarnessAdapter()
+    adapter.write_skill(
+        Skill(
+            frontmatter={"id": "python-coding", "name": "Python", "description": "Python code"},
+            body="# Python\n",
+            scripts_dir=None,
+            references_dir=None,
+            source_package="test",
+        ),
+        repo,
+    )
+    body = "# Typing\n\nUse type hints.\n"
+    frontmatter = RuleFrontmatter(
+        id="python-typing",
+        name="Typing",
+        description="Prefer a concrete type.",
+        scope="scoped",
+        skill="python-coding",
+        section="typing",
+    )
+    rule = Rule(frontmatter, body, body, False, None, "test", "python-coding", True)
+    adapter.write_rule(rule, repo)
+    adapter.finalize(repo)
+    return repo
+
+
+def test_import_puts_an_in_skill_member_back_in_its_skill_rules(tmp_path: Path) -> None:
+    harness = _emit_in_skill_member_harness(tmp_path)
+    assert (harness / "skills" / "python-coding" / "rules" / "python-typing.md").is_file()
+    into = tmp_path / "out"
+
+    assert _import.run(_ns(harness, into)) == 0
+
+    written = (into / "skills" / "python-coding" / "rules" / "python-typing.md").read_text(
+        encoding="utf-8"
+    )
+    assert "section: typing\n" in written
+    assert "skill:" not in written
+    assert not (into / "rules").exists()
+
+
+def test_best_effort_import_puts_an_in_skill_member_back_in_its_skill_rules(
+    tmp_path: Path,
+) -> None:
+    harness = _emit_in_skill_member_harness(tmp_path)
+    shutil.rmtree(harness / ".playbook")
+    into = tmp_path / "out"
+
+    assert _import.run(_ns(harness, into)) == 0
+
+    assert (into / "skills" / "python-coding" / "rules" / "python-typing.md").is_file()
+    assert not (into / "rules").exists()

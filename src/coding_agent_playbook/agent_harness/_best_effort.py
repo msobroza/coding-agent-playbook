@@ -3,8 +3,9 @@
 Kinds are inferred from directory placement (skill leaf -> ``Skill``; ``prompts/*``
 -> ``Prompt``; ``rules/*.md`` -> ``Rule`` scope=always; ``skills/<s>/rules/*.md``
 -> ``Rule`` scope=scoped, a member of ``s`` (prU D22); ``references/*.md`` ->
-``Rule`` scope=scoped, an older tree's layout; raw/non-md -> opaque asset), and every lossy assumption is
-collected as a warning. A ``guardrail-*`` rule file is only a degraded hook
+``Rule`` scope=scoped, an older tree's layout; raw/non-md -> opaque asset), and
+every lossy assumption is collected as a warning. A skill's generated ``## Rules``
+index is dropped from its body: the next sync regenerates it from the members. A ``guardrail-*`` rule file is only a degraded hook
 advisory, so its import as a ``Rule`` is flagged as lossy too. AH-1 (#134) split
 this walk out of :mod:`.importer`; AH-2 (#143) has the importer pass its
 ``ImportResult`` in, so this module no longer imports it back.
@@ -12,15 +13,16 @@ this walk out of :mod:`.importer`; AH-2 (#143) has the importer pass its
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 from coding_agent_playbook.agent_harness._import_writes import read_harness_md, strip_sentinel
 from coding_agent_playbook.agent_harness.models import ContentFile, LeafMarker, RawAsset, SkillLeaf
 from coding_agent_playbook.agent_harness.parser import parse_harness
 from coding_agent_playbook.artifacts.hook_schema import ADVISORY_RULE_PREFIX
 from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
-from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
+from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter, RuleScope
 from coding_agent_playbook.artifacts.skill import Skill
+from coding_agent_playbook.skills.document import strip_rules_index
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -111,7 +113,7 @@ def _best_effort_leaf(leaf: SkillLeaf, top: str, result: ImportResult, source_pa
                 "name": leaf.name or skill_id,
                 "description": leaf.description,
             },
-            body=strip_sentinel(leaf.body),
+            body=strip_rules_index(strip_sentinel(leaf.body)),
             scripts_dir=scripts_dir if scripts_dir.is_dir() else None,
             references_dir=references_dir if references_dir.is_dir() else None,
             source_package=source_package,
@@ -164,7 +166,7 @@ def _best_effort_content(
     if isinstance(item, RawAsset):
         _raw_asset(item, result)
         return
-    scope: Literal["always", "scoped"] = "scoped" if top == "references" else "always"
+    scope: RuleScope = "scoped" if top == "references" else "always"
     rule = _inferred_rule(item, scope, source_package)
     rule_id = rule.frontmatter.id
     if (lossy := guardrail_warning(rule_id)) is not None:
@@ -182,7 +184,7 @@ def _raw_asset(item: RawAsset, result: ImportResult) -> None:
 
 def _inferred_rule(
     item: ContentFile,
-    scope: Literal["always", "scoped"],
+    scope: RuleScope,
     source_package: str,
     *,
     home_skill: str | None = None,
@@ -210,7 +212,7 @@ def _inferred_rule(
     )
 
 
-def _scope_warning(rule_id: str, scope: str, placement: str, *, needs_skill: bool) -> str:
+def _scope_warning(rule_id: str, scope: RuleScope, placement: str, *, needs_skill: bool) -> str:
     """The lossiness warning of a best-effort rule; a scoped one outside a skill needs ``skill:``."""
     skill_hint = "; a scoped rule needs 'skill: <skill-id>' before playbook sync accepts it"
     return (

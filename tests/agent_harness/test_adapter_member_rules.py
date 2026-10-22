@@ -14,6 +14,9 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING
 
+import pytest
+
+from coding_agent_playbook.agent_harness._emit_rules import member_rule_path
 from coding_agent_playbook.agent_harness.adapter import AgentHarnessAdapter
 from coding_agent_playbook.agent_harness.manifest import read_manifest
 from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
@@ -147,3 +150,8 @@ def test_an_unsectioned_rule_entry_has_no_section_key(tmp_path: Path) -> None:
 
     manifest_text = (tmp_path / ".playbook" / "manifest.toml").read_text(encoding="utf-8")
     assert "section" not in manifest_text
+
+
+def test_member_rule_path_names_a_rule_without_skill(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="'python-typing' has no 'skill'"):
+        member_rule_path(tmp_path, _member_rule(skill=None))
