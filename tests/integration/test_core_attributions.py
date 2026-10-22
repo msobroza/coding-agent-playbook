@@ -80,13 +80,17 @@ def test_core_attributions_map_every_core_skill_file() -> None:
 
 
 def test_core_attributions_name_both_pins_and_drop_the_fresh_text_policy() -> None:
-    """ADR 0004 retires 'written fresh' and the prS pin; D11's two commits replace them."""
+    """ADR 0004 retires 'written fresh' and the prS pin; D11's two commits replace them.
+
+    D64 adds the pinned commit of the agent example vendored into domino-agents.
+    """
     text = ATTRIBUTIONS_PATH.read_text(encoding="utf-8")
     assert "written fresh" not in text
     assert "bf64c51" not in text
     assert dict(SOURCE_PINS) == {
         "python-best-practices": "fa0d3f58afb8bf56c028bb559e0e7bc1538e079a",
         "python-clean-architecture": "9d627ca7bedbe0bb9e2fcf3c83d81814a6133dce",
+        "simple-agent-api": "eee728252c42fa660e65c2dccbea6ae4f679c04c",
     }
     commits = {
         name: source.commit

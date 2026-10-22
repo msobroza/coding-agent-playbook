@@ -34,7 +34,9 @@ are decided per file by :func:`policy_for`:
 * ``skills/<skill>/references/LICENSE.python-best-practices`` and
   ``LICENSE.python-clean-architecture`` -> the byte-identical MIT notices (D19)
   name their source, so the marker scan is off there and nowhere else; URLs are
-  still scanned. ``test_core_license_copies.py`` pins their bytes and places;
+  still scanned, except in ``LICENSE.simple-agent-api`` (D64), whose Apache-2.0
+  text cites the license's own address. ``test_core_license_copies.py`` pins
+  their bytes and places;
 * markdown under ``skills/`` -> a reserved example host (D38: ``example.com``,
   ``.org``, ``.net`` and their subdomains, ``*.test``, ``*.example``,
   ``*.invalid``, ``localhost``, the bare host ``test``; any scheme) passes inside
@@ -97,6 +99,9 @@ _VENDORED_PLUGIN_GATES: dict[str, str] = {
 _PRECOMMIT_TEMPLATE_PREFIX = "templates/precommit/"
 
 _EXAMPLES_SUBDIR = "examples"
+#: License copies whose pinned text (D19, D64) cites a URL: the Apache-2.0 notice
+#: of the vendored agent example names the Apache license's address.
+_LICENSE_COPIES_CITING_A_URL = frozenset({"LICENSE.simple-agent-api"})
 
 _EVAL_SAMPLES_SUBDIR = "eval_samples"
 #: Per-sample fixture trees: ``eval_samples/<id>/setup/**`` and ``eval_samples/<id>/solution/**``.
@@ -204,8 +209,9 @@ def _skill_policy(rel: Path) -> ScanPolicy:
     """The checks for a file under ``skills/``: license copies, D38 and D78(13)."""
     parts = rel.parts
     if is_license_copy_path(rel):
-        # D19: the byte-identical MIT notice names its source.
-        return ScanPolicy(urls=True, markers=False)
+        # D19: the byte-identical notice names its source. The Apache-2.0 text also
+        # cites its own license URL; its bytes are pinned, so nothing can slip in.
+        return ScanPolicy(urls=rel.name not in _LICENSE_COPIES_CITING_A_URL, markers=False)
     if rel.name.endswith(MARKDOWN_SUFFIXES):
         return ScanPolicy(urls=True, markers=True, reserved_hosts="in-fences")
     if len(parts) > 3 and parts[2] == _EXAMPLES_SUBDIR and rel.suffix == ".py":
@@ -413,6 +419,7 @@ def test_plugin_scan_exempts_only_each_plugin_root_attributions_from_the_marker_
     [
         ("python-best-practices", ("Ludo Technologies LLC", "MIT License")),
         ("python-clean-architecture", ("MKToronto", "MIT License")),
+        ("simple-agent-api", ("Domino Data Lab", "Apache License 2.0")),
     ],
 )
 def test_core_attributions_credit_each_vendored_source(
@@ -512,6 +519,8 @@ _LICENSE_COPY = ScanPolicy(urls=True, markers=False)
         ("skills/s/scripts/tool.py", ScanPolicy(urls=True, markers=True)),
         ("skills/s/references/LICENSE.python-best-practices", _LICENSE_COPY),
         ("skills/s/references/LICENSE.python-clean-architecture", _LICENSE_COPY),
+        ("skills/s/references/LICENSE.simple-agent-api", ScanPolicy(urls=False, markers=False)),
+        ("skills/s/LICENSE.simple-agent-api", ScanPolicy(urls=True, markers=True)),
         ("skills/s/references/LICENSE.other-source", ScanPolicy(urls=True, markers=True)),
         ("skills/s/LICENSE.python-best-practices", ScanPolicy(urls=True, markers=True)),
         (

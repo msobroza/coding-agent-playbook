@@ -37,6 +37,7 @@ def test_the_license_pins_are_d19s() -> None:
         "python-clean-architecture": (
             "80c4860b8cedcb4efa41ef98e33e3e79a43314442444b3470c3d68cae66025f8"
         ),
+        "simple-agent-api": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
     }
 
 

@@ -33,9 +33,13 @@ type _FileTest = Callable[[Path], bool]
 
 #: The directories a core skill may hold beside its one file, ``SKILL.md``.
 SKILL_DIRS: Final = ("examples", "references", "rules", "scripts")
-#: The byte-identical upstream license copies a core skill's references/ may hold (D19).
+#: The byte-identical upstream license copies a core skill's references/ may hold (D19, D64).
 LICENSE_COPY_NAMES: Final = frozenset(
-    {"LICENSE.python-best-practices", "LICENSE.python-clean-architecture"}
+    {
+        "LICENSE.python-best-practices",
+        "LICENSE.python-clean-architecture",
+        "LICENSE.simple-agent-api",
+    }
 )
 #: A third-person description check (no "I", "you" or "we"), extended with "use" (a "Use when" opener).
 NOT_THIRD_PERSON: Final = re.compile(r"(?i)(i|you|we|use)\b")

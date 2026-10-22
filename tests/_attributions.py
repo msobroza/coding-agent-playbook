@@ -41,22 +41,25 @@ if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping
     from pathlib import Path, PurePath
 
-#: D11: the upstream commit each source is vendored from.
+#: D11: the upstream commit each source is vendored from; D64 adds the agent example's.
 SOURCE_PINS: Final[Mapping[str, str]] = MappingProxyType(
     {
         "python-best-practices": "fa0d3f58afb8bf56c028bb559e0e7bc1538e079a",
         "python-clean-architecture": "9d627ca7bedbe0bb9e2fcf3c83d81814a6133dce",
+        "simple-agent-api": "eee728252c42fa660e65c2dccbea6ae4f679c04c",
     }
 )
-#: D19: the SHA-256 of each source's MIT notice; every copy is byte-identical.
-#: python-best-practices: 1,078 bytes, Ludo Technologies LLC; python-clean-architecture:
-#: 1,066 bytes, MKToronto.
+#: D19: the SHA-256 of each source's license notice; every copy is byte-identical.
+#: python-best-practices: MIT, 1,078 bytes, Ludo Technologies LLC; python-clean-architecture:
+#: MIT, 1,066 bytes, MKToronto; simple-agent-api: Apache-2.0, Domino Data Lab's
+#: simple_agent_api_only example (D64).
 LICENSE_SHA256: Final[Mapping[str, str]] = MappingProxyType(
     {
         "python-best-practices": "5f2aed106f011d7f40db3a248ada7456350188c72a2e3aa8768ef251415fdc5c",
         "python-clean-architecture": (
             "80c4860b8cedcb4efa41ef98e33e3e79a43314442444b3470c3d68cae66025f8"
         ),
+        "simple-agent-api": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
     }
 )
 #: Where a license copy lives, inside a core skill directory.

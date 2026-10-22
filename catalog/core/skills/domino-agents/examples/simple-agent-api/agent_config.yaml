@@ -1,0 +1,28 @@
+# Changed from Domino Data Lab's simple_agent_api_only example (Apache-2.0); see README.md.
+# The agent's non-secret choices. DominoRun attaches this file to the evaluation
+# run and to the logged model, so it holds no key, host or endpoint id: those come
+# from environment variables through app/settings.py. Every key below takes effect.
+version: "1.0.0"
+
+model:
+  # "openai" (OPENAI_API_KEY) or "domino-endpoint" (SIMPLE_AGENT_ENDPOINT_BASE_URL
+  # plus the rotating Domino access token).
+  provider: openai
+  name: gpt-4.1-mini
+  temperature: 0.1
+  max_tokens: 512
+
+agent:
+  retries: 1
+  # Model requests per run; a tool loop stops here.
+  request_limit: 6
+  # Wall-clock deadline of one run, below the App proxy's read timeout.
+  timeout_seconds: 120
+  # Messages of an A2A conversation passed back to the model.
+  max_history: 10
+
+prompts:
+  system: |
+    You answer every question with one short line from a tool, never in your own words.
+    If the question is about a science topic, call science_line; for anything else,
+    call philosophy_line. Reply with the line the tool returned, unchanged.

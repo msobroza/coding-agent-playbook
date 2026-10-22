@@ -41,6 +41,11 @@ playbook:
       impact: MEDIUM
       summary: "Fakes for the model, the token endpoint and the Domino SDK, so the suite runs without Domino or a live LLM."
       open_when: "A test exercises the agent, its routes, the token provider, the tracer or an evaluation Job without Domino or a real model."
+  references:
+    - path: examples/simple-agent-api
+      open_when: "Starting an agent service on Domino, or copying one piece end to end: token flow, traced request, evaluation Jobs or their tests."
+      applies_if:
+        domino_project: true
 ---
 
 # Domino agents
