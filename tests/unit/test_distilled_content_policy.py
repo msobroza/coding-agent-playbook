@@ -1,16 +1,18 @@
-"""The D8 import policy for content core distills (specs/prS-skills-context.md 9.9, 9.15).
+"""The import policy for vendored core content (ADR 0004; specs/prS-skills-context.md 9.9, 9.15).
 
-Core rewrites the python-best-practices collection's ideas in its own words and
-leaves out what D8 drops: the tool and dependency recommendations the engine does
-not adopt, and the upstream conventions an existing core rule overrides. These
-gates keep a dropped recommendation from creeping back into a rule or prompt,
-keep each moved topic in one owner rule, and keep the credit in step with the
-distilled rules. The collection's own names are the marker regex's job
+Core copies the upstream Python guidance and adapts it (ADR 0004, D1), leaving out
+what the import policy drops: the tool and dependency recommendations the engine
+does not adopt, and the upstream conventions an existing core rule overrides.
+These gates keep a dropped recommendation or an insecure setting (D78(4)) from
+creeping back into a rule, reference, SKILL.md or prompt, and keep each moved
+topic in one owner rule. Provenance is ``tests/integration/test_core_attributions.py``'s
+job; the sources' own names are the marker regex's
 (``tests/integration/test_resources_self_contained.py``).
 """
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Final
 
 import pytest
@@ -36,23 +38,16 @@ DROPPED_RECOMMENDATIONS: Final = (
     "| sh",
     "ignore::DeprecationWarning",
 )
-#: The new rules distilled from python-best-practices; later content PRs extend it.
-PBP_DISTILLED_RULES: Final = frozenset(
-    {
-        "python-performance-idioms",
-        "python-async",
-        "python-classes-and-protocols",
-        "pytest-test-doubles",
-        "pytest-fixtures",
-        "python-static-checks",
-        "pytest-configuration",
-        "python-uv-workflow",
-        "pydantic-boundaries",
-        "ml-vectorization",
-        "ml-data-transforms",
-        "ml-dtypes-and-typing",
-        "ml-reproducibility-and-testing",
-    }
+#: Insecure settings no rule, reference or prompt may show, not even in a Bad Example
+#: (D78(4)): Flask's debugger, Streamlit's CORS and XSRF protection switched off, and
+#: its usage telemetry switched on. Case-insensitive; ``=``, ``:`` or a space may
+#: separate the key from its value, so the TOML, CLI and environment forms all match.
+INSECURE_SETTINGS: Final = (
+    re.compile(r"(?i)\bdebug\s*=\s*True\b"),
+    re.compile(r"(?i)\bFLASK_DEBUG\s*=\s*[\"']?1\b"),
+    re.compile(r"(?i)\benableCORS[\"']?\s*[=:\s]\s*[\"']?false\b"),
+    re.compile(r"(?i)\benableXsrfProtection[\"']?\s*[=:\s]\s*[\"']?false\b"),
+    re.compile(r"(?i)\bgatherUsageStats[\"']?\s*[=:\s]\s*[\"']?true\b"),
 )
 #: A topic that changed owner (spec 9.4.7) -> the one core rule whose body holds it.
 MOVED_GUIDANCE_OWNERS: Final = (
@@ -63,19 +58,23 @@ MOVED_GUIDANCE_OWNERS: Final = (
 )
 #: The ``generate-tests`` prompt's line on doubles (spec H18): named fakes come first (D8).
 _GENERATE_TESTS_PROMPT: Final = CORE_ROOT / "prompts" / "generate-tests.md.j2"
-_PBP_SECTION_HEADING: Final = "## Python best-practices guidance"
 
 
-#: Every rule and prompt source in core: the bodies an agent reads as guidance.
-_SCANNED_SOURCES: Final = [path for _, path in core_rule_paths()] + core_markdown_sources("prompts")
+def policy_sources(core_root: Path = CORE_ROOT) -> list[Path]:
+    """Every markdown source an agent reads as guidance, sorted: the always rules, every
+    ``.md``/``.md.j2`` under a core skill (SKILL.md, rules, references, examples) and
+    the prompts. The license copies carry no ``.md`` suffix, so they stay out (D58).
+    """
+    found = {
+        path
+        for kind in ("rules", "skills", "prompts")
+        for path in (core_root / kind).rglob("*")
+        if path.is_file() and path.name.endswith((".md", ".md.j2"))
+    }
+    return sorted(found)
 
 
-def _pbp_attributions_section() -> str:
-    """The python-best-practices entry of core ATTRIBUTIONS.md, up to the next entry."""
-    text = (CORE_ROOT / "ATTRIBUTIONS.md").read_text(encoding="utf-8")
-    _, found, section = text.partition(_PBP_SECTION_HEADING)
-    assert found, f"core ATTRIBUTIONS.md has no {_PBP_SECTION_HEADING!r} entry"
-    return section.split("\n## ", 1)[0]
+_SCANNED_SOURCES: Final = policy_sources()
 
 
 @pytest.mark.parametrize("token", DROPPED_RECOMMENDATIONS)
@@ -88,29 +87,91 @@ def test_core_artifacts_omit_dropped_recommendations(path: Path, token: str) -> 
     assert token not in text, f"{rel}: recommends {token!r}, which the D8 import policy drops"
 
 
-def test_policy_scan_covers_every_core_rule_and_prompt() -> None:
+@pytest.mark.parametrize(
+    "path", _SCANNED_SOURCES, ids=lambda p: p.relative_to(CORE_ROOT).as_posix()
+)
+def test_core_artifacts_show_no_insecure_setting(path: Path) -> None:
+    text = path.read_text(encoding="utf-8")
+    rel = path.relative_to(CORE_ROOT).as_posix()
+    hits = [m.group(0) for pattern in INSECURE_SETTINGS for m in pattern.finditer(text)]
+    assert hits == [], f"{rel}: shows insecure settings {hits} (D78(4))"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "app.run(debug=True)",
+        "app.run(host='0.0.0.0', debug = True)",
+        "export FLASK_DEBUG=1",
+        'FLASK_DEBUG="1"',
+        "enableCORS = false",
+        "streamlit run app.py --server.enableCORS false",
+        "--server.enableXsrfProtection=false",
+        "gatherUsageStats = true",
+        "--browser.gatherUsageStats=true",
+    ],
+)
+def test_insecure_settings_match(text: str) -> None:
+    assert any(pattern.search(text) for pattern in INSECURE_SETTINGS), text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "app.run(debug=False)",
+        "debug=True_value_name",
+        "FLASK_DEBUG=0",
+        "enableCORS = true",
+        "enableXsrfProtection = true",
+        "gatherUsageStats = false",
+    ],
+)
+def test_safe_settings_do_not_match(text: str) -> None:
+    assert not any(pattern.search(text) for pattern in INSECURE_SETTINGS), text
+
+
+def test_policy_scan_covers_every_core_rule_skill_and_prompt() -> None:
     """Guard against a walker that silently scans fewer files than core ships."""
     kinds = {path.relative_to(CORE_ROOT).parts[0] for path in _SCANNED_SOURCES}
     assert kinds == {"rules", "skills", "prompts"}, kinds
-    unscanned = {rule.source_path for rule in core_rules().values()} - set(_SCANNED_SOURCES)
-    assert not unscanned, f"core rules missing from the policy scan: {sorted(map(str, unscanned))}"
+    expected = {path for _, path in core_rule_paths()} | set(core_markdown_sources("prompts"))
+    expected |= set((CORE_ROOT / "skills").glob("*/SKILL.md"))
+    unscanned = expected - set(_SCANNED_SOURCES)
+    assert not unscanned, (
+        f"core sources missing from the policy scan: {sorted(map(str, unscanned))}"
+    )
+    assert {rule.source_path for rule in core_rules().values()} <= set(_SCANNED_SOURCES)
+
+
+def test_policy_scan_reads_references_and_skips_license_copies(tmp_path: Path) -> None:
+    """D58: references are scanned like rules; the byte-identical license copies are not."""
+    for rel in (
+        "rules/always/r.md",
+        "skills/s/SKILL.md",
+        "skills/s/rules/a.md.j2",
+        "skills/s/references/guide.md",
+        "skills/s/references/LICENSE.python-best-practices",
+        "skills/s/scripts/tool.py",
+        "prompts/p.md",
+    ):
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text("x\n", encoding="utf-8")
+
+    scanned = [path.relative_to(tmp_path).as_posix() for path in policy_sources(tmp_path)]
+
+    assert scanned == [
+        "prompts/p.md",
+        "rules/always/r.md",
+        "skills/s/SKILL.md",
+        "skills/s/references/guide.md",
+        "skills/s/rules/a.md.j2",
+    ]
 
 
 def test_core_markdown_sources_refuses_a_kind_core_does_not_ship() -> None:
     """A misspelled kind fails loudly instead of yielding a scan over nothing."""
     with pytest.raises(FileNotFoundError, match="'promts'"):
         core_markdown_sources("promts")
-
-
-@pytest.mark.parametrize("rule_id", sorted(PBP_DISTILLED_RULES))
-def test_core_attributions_name_every_distilled_rule(rule_id: str) -> None:
-    """R5-6: a distilled rule cannot ship without its credit."""
-    assert rule_id in core_rules(), (
-        f"{rule_id!r} is listed as distilled but core ships no such rule"
-    )
-    assert rule_id in _pbp_attributions_section(), (
-        f"core ATTRIBUTIONS.md's python-best-practices entry does not name {rule_id!r}"
-    )
 
 
 @pytest.mark.parametrize(("needle", "owner"), MOVED_GUIDANCE_OWNERS)
