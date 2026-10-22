@@ -70,9 +70,9 @@ The page starts a Domino Job, keeps its id in the browser and polls its status w
 
 ## Notes
 
-- Starting Jobs from code is `domino-launch-jobs-from-code` (domino-jobs skill); the Job runs with the starter's identity unless the viewer's token is used (`domino-app-viewer-token`).
+- Starting Jobs from code is domino-launch-jobs-from-code (domino-jobs skill); the Job runs with the starter's identity unless the viewer's token is used (`domino-app-viewer-token`).
 - A deployment may set other limits, so code reads none of them as constants; keep every request far below them instead.
 - Keep a framework's own upload cap (Streamlit's `server.maxUploadSize`) at or below 25 MiB.
-- Inputs too big for one request go through a Dataset (`domino-datasets-for-large-data`, domino-jobs skill).
+- Inputs too big for one request go through a Dataset (domino-datasets-for-large-data, domino-jobs skill).
 - gunicorn's worker timeout stays below the proxy's (`domino-app-production-server`).
 - A 504 or 413 seen by viewers: see app-troubleshooting.md.

@@ -36,18 +36,22 @@ git status --short
 ## Good Example
 
 ```bash
+git add app.sh myapp/callbacks.py
+git commit -m "Export results to CSV"
+git push origin HEAD
+# Once the change is merged to main:
 git switch main
 git pull --ff-only
 git tag -a app-v1.4.0 -m "App release 1.4.0: export to CSV"
-git push origin main app-v1.4.0
+git push origin app-v1.4.0
 # Publish dialog: revision app-v1.4.0, environment revision as recorded in the README.
 ```
 
-The release is then recorded through the repo's own changelog mechanism (`docs-changelog`, python-documentation skill), and the deployment record names the tag that runs (`domino-app-deployment-record`). Rolling back means republishing the previous tag, which the changelog names.
+The release is then recorded through the repo's own changelog mechanism (docs-changelog, python-documentation skill), and the deployment record names the tag that runs (`domino-app-deployment-record`). Rolling back means republishing the previous tag, which the changelog names.
 
 ## Notes
 
 - In a file-system project, files reach the project only after the workspace saves and stops; stop it before publishing (`domino-app-workspace-preview`).
-- Project types and their limits are `domino-project-types` (domino-jobs skill).
+- Project types and their limits are domino-project-types (domino-jobs skill).
 - When behavior changes without a code change, compare the version snapshot with the deployment record: the environment or hardware tier is the usual cause.
 - A tag is cheap; publish a tag, not a moving branch head, for any App others depend on.

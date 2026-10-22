@@ -18,9 +18,10 @@ The file's shape (ADR 0004)::
 Core paths are relative to the skill directory; one ending in ``/`` covers every
 file under that directory (an example app). A distilled source's rows credit files
 that hold none of its text, so their targets stay engine-written or distilled, and
-one of its pages may feed several skills (one row per skill). :func:`attribution_errors` holds the
-D31 checks; the gates in ``tests/integration/test_core_attributions.py`` and
-``test_core_license_copies.py`` run them on the shipped tree.
+one of its pages may feed several skills (one row per skill). :func:`attribution_errors`
+holds the D31 checks; the gates in ``tests/integration/test_core_attributions.py`` and
+``test_core_license_copies.py`` run them on the shipped tree. The cross-check against
+the mapping specs' ``distill`` actions lives in ``tests/_distill_actions.py``.
 
 Example: ``load_core_attributions().sources["python-best-practices"].commit``
 -> ``"fa0d3f58afb8bf56c028bb559e0e7bc1538e079a"``.
@@ -34,7 +35,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
 
-from tests._catalog import CORE_ROOT, CORE_SKILLS_ROOT, REPO_ROOT
+from tests._catalog import CORE_ROOT, CORE_SKILLS_ROOT
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping
@@ -64,20 +65,14 @@ LICENSE_DIR: Final = "references"
 ENGINE_WRITTEN_HEADING: Final = "Engine-written files"
 #: The core-files cell of a row that maps an upstream file to nothing.
 DROP: Final = "DROP"
-#: The mapping action (D78(15)) of a rule written fresh, with no vendored text.
-DISTILL: Final = "distill"
 
 ATTRIBUTIONS_PATH: Final = CORE_ROOT / "ATTRIBUTIONS.md"
-#: The per-skill mapping specs (``mapping-<skill>.md``) that name each rule's action.
-MAPPING_SPECS_DIR: Final = REPO_ROOT / "specs" / "prU-core-python-skills"
 
 _COMMIT_RE: Final = re.compile(r"^Commit: `([0-9a-f]+)`")
 _DISTILLED_FORM_RE: Final = re.compile(r"^Form: distilled\b")
 _BULLET_RE: Final = re.compile(r"^- `([^`]+)`$")
 _BACKTICKED_RE: Final = re.compile(r"^`([^`]+)`$")
 _TABLE_HEADER: Final = ("Upstream file", "Core files", "Changes")
-#: A mapping spec's rule table: ``| `rules/<file>` | section | priority | action | ...``.
-_SPEC_RULE_ROW_RE: Final = re.compile(r"^\| `(rules/[^`]+)` \|[^|]*\|[^|]*\| (\S+) \|")
 
 
 def license_name(source: str) -> str:
@@ -134,12 +129,16 @@ class SkillMapping:
 
 @dataclass(frozen=True)
 class Source:
-    """One upstream source: its pinned commit and its per-skill mappings."""
+    """One upstream source: its pinned commit and its per-skill mappings.
+
+    ``is_distilled_form`` marks a source restated in the engine's own words
+    (``Form: distilled``, prU D50): it has no pin and its rows hold no upstream text.
+    """
 
     name: str
     commit: str | None
     skills: Mapping[str, SkillMapping]
-    distilled: bool = False
+    is_distilled_form: bool = False
 
 
 @dataclass(frozen=True)
@@ -183,7 +182,7 @@ class _Parser:
     """The parse state: the current section (a source or the engine list) and skill."""
 
     commits: dict[str, str | None] = field(default_factory=dict)
-    distilled: set[str] = field(default_factory=set)
+    distilled_form: set[str] = field(default_factory=set)
     rows: dict[str, dict[str, list[MappingRow]]] = field(default_factory=dict)
     bullets: dict[str, dict[str, list[str]]] = field(default_factory=dict)
     section: str | None = None
@@ -230,7 +229,7 @@ class _Parser:
     def _distilled_form(self, line: str, lineno: int) -> None:
         if not self._in_source() or self.skill is not None:
             raise ValueError(f"{_where(lineno)}: a Form line belongs under a source: {line!r}")
-        self.distilled.add(str(self.section))
+        self.distilled_form.add(str(self.section))
 
     def _row(self, line: str, lineno: int) -> None:
         cells = _row_cells(line)
@@ -257,7 +256,7 @@ class _Parser:
                         for skill, rows in self.rows[name].items()
                     }
                 ),
-                distilled=name in self.distilled,
+                is_distilled_form=name in self.distilled_form,
             )
             for name, commit in self.commits.items()
         }
@@ -313,7 +312,7 @@ def _pin_errors(parsed: Attributions, pins: Mapping[str, str]) -> list[str]:
         f"{name}: no section for this pinned source" for name in pins if name not in parsed.sources
     ]
     for name, source in parsed.sources.items():
-        if source.distilled:
+        if source.is_distilled_form:
             if source.commit is not None:
                 errors.append(f"{name}: a distilled source carries no commit pin")
         elif name not in pins:
@@ -329,10 +328,10 @@ def _row_errors(parsed: Attributions) -> list[str]:
         # A vendored file has one row per source; a distilled page, one per skill it feeds.
         seen: set[tuple[str, str]] = set()
         for skill, mapping in source.skills.items():
-            scope = skill if source.distilled else ""
+            scope = skill if source.is_distilled_form else ""
             for row in mapping.rows:
                 if (scope, row.upstream) in seen:
-                    where = f"{name}/{skill}" if source.distilled else name
+                    where = f"{name}/{skill}" if source.is_distilled_form else name
                     errors.append(f"{where}: `{row.upstream}` appears in more than one row")
                 seen.add((scope, row.upstream))
                 if not row.changes:
@@ -341,32 +340,35 @@ def _row_errors(parsed: Attributions) -> list[str]:
     return errors
 
 
-def _mappings(parsed: Attributions, skill: str, *, distilled: bool = False) -> list[SkillMapping]:
-    """Every vendored (or, with ``distilled``, every distilled) source's sub-section for ``skill``."""
+def _mappings(parsed: Attributions, skill: str, *, is_distilled_form: bool) -> list[SkillMapping]:
+    """The sub-sections for ``skill`` of every source of the given form."""
     return [
         source.skills[skill]
         for source in parsed.sources.values()
-        if skill in source.skills and source.distilled == distilled
+        if skill in source.skills and source.is_distilled_form == is_distilled_form
     ]
 
 
-def _row_targets(parsed: Attributions, skill: str, *, distilled: bool = False) -> set[str]:
-    """Every core path of ``skill`` that a vendored source's row maps upstream text to.
+def vendored_targets(parsed: Attributions, skill: str) -> set[str]:
+    """Every core path of ``skill`` that a vendored source's row maps upstream text to."""
+    mappings = _mappings(parsed, skill, is_distilled_form=False)
+    return {t for m in mappings for row in m.rows for t in row.targets}
 
-    With ``distilled``, the paths a distilled source's rows credit instead: they hold
-    no upstream text.
-    """
-    mappings = _mappings(parsed, skill, distilled=distilled)
+
+def _credited_targets(parsed: Attributions, skill: str) -> set[str]:
+    """Every core path of ``skill`` a distilled-form source's row credits: no upstream text."""
+    mappings = _mappings(parsed, skill, is_distilled_form=True)
     return {t for m in mappings for row in m.rows for t in row.targets}
 
 
 def _skill_coverage_errors(
     parsed: Attributions, skill: str, skill_dir: Path, sources: Iterable[str]
 ) -> list[str]:
-    targets = _row_targets(parsed, skill)
-    distilled = {path for m in _mappings(parsed, skill) for path in m.distilled}
+    targets = vendored_targets(parsed, skill)
+    vendored = _mappings(parsed, skill, is_distilled_form=False)
+    distilled = {path for m in vendored for path in m.distilled}
     engine = set(parsed.engine_written.get(skill, ()))
-    credited = _row_targets(parsed, skill, distilled=True)
+    credited = _credited_targets(parsed, skill)
     listed = targets | distilled | engine | credited
     if not skill_dir.is_dir() and not listed:
         return []  # A lane seeds an empty sub-section before it creates the skill.
@@ -466,8 +468,10 @@ def attribution_errors(
 ) -> list[str]:
     """Every D31 violation of ``parsed`` against the core skill tree at ``skills_root``.
 
-    Pins equal D11 (a distilled source, prU D50, carries none); every skill file (license copies aside) is a mapping target,
-    distilled or engine-written, and every listed file exists; a skill listing
+    Pins equal D11 (a distilled-form source, prU D50, carries none); every skill
+    file (license copies aside) is a mapping target, distilled or engine-written,
+    and every listed file exists; a distilled-form source's row credits only
+    engine-written or distilled files; a skill listing
     files exists; no file is both engine-written and vendored, nor both distilled
     and a mapping target (D78(15)); an upstream file appears in at most one row per
     source; every row says what changed or, for DROP, why; a skill holding a
@@ -480,36 +484,3 @@ def attribution_errors(
         + _coverage_errors(parsed, skills_root, sources)
         + _license_errors(parsed, skills_root, sources)
     )
-
-
-def distill_actions(spec_dir: Path = MAPPING_SPECS_DIR) -> dict[str, frozenset[str]]:
-    """Skill -> the rule files its ``mapping-<skill>.md`` gives the ``distill`` action (D78(15)).
-
-    Example: ``"rules/python-comments-why.md" in distill_actions()["python-coding"]`` -> ``True``.
-    """
-    actions: dict[str, frozenset[str]] = {}
-    for spec in sorted(spec_dir.glob("mapping-*.md")):
-        rows = (_SPEC_RULE_ROW_RE.match(line) for line in spec.read_text("utf-8").splitlines())
-        skill = spec.stem.removeprefix("mapping-")
-        actions[skill] = frozenset(row.group(1) for row in rows if row and row[2] == DISTILL)
-    return actions
-
-
-def distill_action_errors(
-    parsed: Attributions, actions: Mapping[str, Collection[str]]
-) -> list[str]:
-    """Every rule the mapping spec distills that ATTRIBUTIONS.md maps with a change list (D78(15)).
-
-    A distilled rule holds no upstream text, so it is listed as distilled or
-    engine-written, never as a table row's target; a ``.md.j2`` target matches its
-    ``.md`` spec name.
-    """
-    errors = []
-    for skill, paths in sorted(actions.items()):
-        targets = {t.removesuffix(".j2") for t in _row_targets(parsed, skill)}
-        errors += [
-            f"{skill}/{path}: the mapping spec distills it, but a table row maps upstream text to it"
-            for path in sorted(paths)
-            if path in targets
-        ]
-    return errors

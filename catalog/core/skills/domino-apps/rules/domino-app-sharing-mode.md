@@ -50,4 +50,4 @@ Operations that touch sensitive records still check the viewer in code (`domino-
 - When extended identity is on, the README says why the App must act as the viewer (`domino-app-viewer-token`).
 - Anonymous viewers are possible where an admin allows them (`domino-app-viewer-identity`).
 - Keep the project's collaborator list as short as the set of people allowed to change the App.
-- The rest of the README follows `docs-readme-essentials` (python-documentation skill).
+- The rest of the README follows docs-readme-essentials (python-documentation skill).

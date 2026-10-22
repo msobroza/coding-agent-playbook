@@ -70,5 +70,5 @@ The worker count and worker timeout come from environment variables, so a larger
 
 - Workers are separate processes that share no memory; per-viewer state follows `domino-app-replica-state`.
 - Keep gunicorn's worker timeout below the proxy's read timeout (300 s by default), so a stuck worker is restarted before the viewer gets a proxy error (`domino-app-proxy-limits`).
-- gunicorn must be installed in the compute environment: propose adding it, never add it unasked (`domino-pinned-environments`, domino-jobs skill).
+- gunicorn must be installed in the compute environment: propose adding it, never add it unasked (domino-pinned-environments, domino-jobs skill).
 - The launch script itself follows `domino-app-launch-script`; the Dash and Flask wiring is in `domino-app-dash` and `domino-app-flask`.

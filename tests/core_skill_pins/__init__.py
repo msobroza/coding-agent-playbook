@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Final, Literal
 from coding_agent_playbook.hooks.guardrails_skill import GUARDRAILS_SKILL_ID
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterable, Mapping
 
 
 #: The probe repo a core skill is checked on: the D5 reference probe, or the D59
@@ -73,6 +73,11 @@ class CoreSkillPins:
     section_ids: tuple[str, ...] = ()
     probe: ProbeKind = "reference"
 
+    @property
+    def reference_probe_inactive(self) -> frozenset[str]:
+        """The members the reference probe does not activate: all of a Domino skill's."""
+        return self.probe_inactive if self.probe == "reference" else frozenset(self.members)
+
 
 #: Core skills that take no member rules: no ``playbook:`` block, an authored "Use when".
 PLAIN_CORE_SKILL_IDS: Final = frozenset({GUARDRAILS_SKILL_ID})
@@ -95,3 +100,16 @@ def _discover_pins() -> tuple[CoreSkillPins, ...]:
 ALL_PINS: Final = _discover_pins()
 #: The core skills only the Domino probe activates: their pins name ``probe="domino"``.
 DOMINO_SKILL_IDS: Final = frozenset(p.skill_id for p in ALL_PINS if p.probe == "domino")
+
+
+def probe_skill_ids(skill_ids: Iterable[str], probe: ProbeKind) -> frozenset[str]:
+    """The skills of ``skill_ids`` that ``probe`` activates (prU D63).
+
+    The Domino probe is the reference probe plus Domino markers, so it activates
+    every skill; the reference probe activates all but the Domino skills.
+
+    Example: ``probe_skill_ids({"ml-data", "domino-apps"}, "reference")`` ->
+    ``frozenset({"ml-data"})``.
+    """
+    ids = frozenset(skill_ids)
+    return ids if probe == "domino" else ids - DOMINO_SKILL_IDS

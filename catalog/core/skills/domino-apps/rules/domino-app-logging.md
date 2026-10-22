@@ -21,7 +21,7 @@ tags: [python, domino, apps, logging]
 
 An App never syncs a file back to the project, so a log file written under the project directory vanishes with the container at the next stop, restart or scale event. What the App writes to stdout and stderr is kept: it is captured with the execution logs, included in the support bundle and retained indefinitely. When the App runs several replicas, the output of every pod is interleaved into one log, so a line that does not say which pod wrote it cannot be traced.
 
-This rule holds only what differs for Apps; the shared practice (one line per event, no secrets, logs kept forever) is `domino-job-logging` (domino-jobs skill).
+This rule holds only what differs for Apps; the shared practice (one line per event, no secrets, logs kept forever) is domino-job-logging (domino-jobs skill).
 
 ## Bad Example
 

@@ -5,8 +5,9 @@ provenance live in one file: one section per source with its D11 pin, and inside
 it one table per core skill mapping each upstream file to the core files it
 became, or to DROP with a reason. A per-skill ``Engine-written files`` list
 covers the files with no upstream text. A distilled source (prU D50) has no
-pin: its rows credit engine-written files by page, or DROP them. The parser is ``tests/_attributions.py``;
-each check here runs once on the shipped file and once on a synthetic tree.
+pin: its rows credit engine-written files by page, or DROP them. The parser is
+``tests/_attributions.py``; each check here runs once on the shipped file and once
+on a synthetic tree.
 """
 
 from __future__ import annotations
@@ -21,13 +22,12 @@ from tests._attributions import (
     SOURCE_PINS,
     Attributions,
     attribution_errors,
-    distill_action_errors,
-    distill_actions,
     load_core_attributions,
     parse_attributions,
     write_tree,
 )
 from tests._catalog import CORE_SKILLS_ROOT
+from tests._distill_actions import distill_action_errors, distill_actions
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -91,7 +91,7 @@ def test_core_attributions_name_both_pins_and_drop_the_fresh_text_policy() -> No
     commits = {
         name: source.commit
         for name, source in load_core_attributions().sources.items()
-        if not source.distilled
+        if not source.is_distilled_form
     }
     assert commits == dict(SOURCE_PINS)
 
@@ -99,7 +99,7 @@ def test_core_attributions_name_both_pins_and_drop_the_fresh_text_policy() -> No
 def test_core_attributions_record_the_domino_docs_drops_per_page() -> None:
     """prU D50: the distilled Domino documentation has page rows, DROP rows included."""
     source = load_core_attributions().sources["domino-docs"]
-    assert source.distilled
+    assert source.is_distilled_form
     assert source.commit is None
     rows = source.skills["domino-apps"].rows
     assert "user_guide/71635d" in {row.upstream for row in rows if row.dropped}
@@ -369,13 +369,13 @@ def _with_distilled(section: str = _DISTILLED_SECTION) -> str:
 def test_parse_marks_a_distilled_source_without_a_pin() -> None:
     source = _parsed(_with_distilled()).sources["docs-source"]
 
-    assert source.distilled
+    assert source.is_distilled_form
     assert source.commit is None
     assert [(r.upstream, r.targets) for r in source.skills["alpha"].rows] == [
         ("guide/p1", ("SKILL.md",)),
         ("guide/p2", ()),
     ]
-    assert not _parsed().sources["up-source"].distilled
+    assert not _parsed().sources["up-source"].is_distilled_form
 
 
 def test_a_distilled_source_needs_no_pin_and_no_license_copy(tmp_path: Path) -> None:

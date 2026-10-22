@@ -53,6 +53,7 @@ _DOCKER_RULE: Final = (
     "---\nid: docker-hygiene\nname: Docker hygiene\ndescription: Pin base images.\n"
     "scope: always\napplies_if:\n  has_dockerfile: true\n---\nPin base images.\n"
 )
+_NOW_APPLICABLE: Final = "now applicable but not synced yet: "
 _DOMINO_RULE: Final = (
     "---\nid: domino-runs\nname: Domino runs\ndescription: Write run outputs.\n"
     "scope: always\napplies_if:\n  domino_project: true\n---\nWrite run outputs.\n"
@@ -328,27 +329,33 @@ def test_requirements_edit_naming_only_known_dependencies_is_silent(
     ids=["domino-marker", "platforms-key"],
 )
 def test_a_new_domino_input_names_the_domino_gated_rule(
-    repo: PackRepo,
-    deps: Callable[..., RuntimeDeps],
-    monkeypatch: pytest.MonkeyPatch,
-    rel: str,
-    text: str,
+    repo: PackRepo, deps: Callable[..., RuntimeDeps], rel: str, text: str
 ) -> None:
     """``domino_project`` was baked false; a marker or the committed key turns it on (D63).
 
-    The Domino skills' core rules gate on it too and sort before the repo-local
-    one, so the list is untruncated here and both kinds must be named.
+    The Domino skills' core rules gate on it too and come before the repo-local
+    one, which the shipped cap may fold into the " and N more" tail: every named
+    row is Domino-gated, a core one leads, and the repo-local one ends the list.
     """
-    monkeypatch.setattr(resync, "_MAX_NAMED", 1000)
     repo.write(rel, text)
     tool_input = {"file_path": str(repo.root / rel), "content": text}
 
     report = _post(repo, deps(), "Write", tool_input)
 
     [item] = report.trace.combined.context
-    assert 'rule "domino-runs" (source "<repo-local>")' in item, item
-    assert 'rule "domino-app-proxy-limits" (source "coding_agent_playbook")' in item, item
-    assert " more." not in item, item
+    named, hidden = _turned_on(item)
+    assert all(label.startswith('rule "domino-') for label in named), item
+    assert named[0].endswith('(source "coding_agent_playbook")'), item
+    local = 'rule "domino-runs" (source "<repo-local>")'
+    assert hidden > 0 or named[-1] == local, item
+
+
+def _turned_on(context: str) -> tuple[list[str], int]:
+    """The labels the "now applicable" line names, and how many its tail folds away."""
+    line = context.partition(_NOW_APPLICABLE)[2].partition(".\n")[0]
+    shown, _, tail = line.partition(" and ")
+    hidden = int(tail.removesuffix(" more")) if tail else 0
+    return shown.split(", "), hidden
 
 
 @pytest.mark.parametrize(

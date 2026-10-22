@@ -53,8 +53,8 @@ One branch and one environment revision per stage, published side by side; prod 
 
 ## Notes
 
-- Pinning packages inside the environment is `domino-pinned-environments`, and choosing a fixed environment revision instead of the moving latest one is `domino-environment-revisions` (both domino-jobs skill); clone an environment for a change rather than editing it in place.
+- Pinning packages inside the environment is domino-pinned-environments, and choosing a fixed environment revision instead of the moving latest one is domino-environment-revisions (both domino-jobs skill); clone an environment for a change rather than editing it in place.
 - The account that starts and restarts the App belongs in the table, because its user variables and data rights apply (`domino-app-starter-settings`).
 - The sharing mode and identity options get their own README block (`domino-app-sharing-mode`).
-- What else a README needs is `docs-readme-essentials` (python-documentation skill).
+- What else a README needs is docs-readme-essentials (python-documentation skill).
 - When behavior changes without a code change, compare this table with the version snapshot of the last publish.

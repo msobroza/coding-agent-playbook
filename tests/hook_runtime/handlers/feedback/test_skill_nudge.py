@@ -22,6 +22,7 @@ from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME
 from coding_agent_playbook.sync import pipeline as _sync
 from tests._catalog import TEST_FILE_GLOBS
 from tests.cli.hook_repo import CONFIG, GUARD_CONFIG, hook_deps
+from tests.core_skill_pins import DOMINO_SKILL_IDS
 from tests.fakes import FakeGitClient
 from tests.hook_runtime.fakes import FakeRuff, ruff_row
 from tests.hook_runtime.handlers.pack_repo import engine_hook, engine_rules
@@ -63,12 +64,12 @@ def _install_six_skill_pack(pack_repo: PackRepo) -> None:
 
 
 def _reference_probe_rules() -> list[Rule]:
-    """Every core rule but the Domino-gated ones: the reference probe has no Domino marker.
+    """Every core rule outside the Domino skills: the reference probe has no Domino marker.
 
     The Domino skills' members all gate on ``domino_project`` (prU D63), so sync never
     puts them in this repo's table; keeping them would change every line below.
     """
-    return [rule for rule in engine_rules() if "domino_project" not in rule.frontmatter.applies_if]
+    return [rule for rule in engine_rules() if rule.frontmatter.skill not in DOMINO_SKILL_IDS]
 
 
 def _line(skill_id: str) -> str:
