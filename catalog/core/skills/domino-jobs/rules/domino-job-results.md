@@ -74,4 +74,4 @@ The job writes `results/summary.json` on every run under the same name, so two r
 - The docs' example admin settings cap a job comparison at 250 files and about 1 MB of diffs, so keep result files few, small and textual; large debug dumps also slow sync.
 - In Git-based projects results live under the artifacts directory (domino-project-types).
 - A custom email must be listed when `.dominoresults` exists (domino-job-email-report).
-- The where-outputs-go reference in this skill shows which files become results per project type.
+- where-outputs-go.md in this skill shows which files become results per project type.

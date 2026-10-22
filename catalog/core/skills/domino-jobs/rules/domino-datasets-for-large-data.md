@@ -65,4 +65,4 @@ def build_features(ctx: JobContext) -> Path:
 - A dataset is mounted read-write or read-only by the dataset role of the user running the job.
 - In a deployment with several data planes, the mounts a run sees depend on its hardware tier's data plane.
 - Reads whose results must be reproducible use snapshots (`domino-dataset-snapshots`).
-- The where-outputs-go reference in this skill lists the limits next to each location.
+- where-outputs-go.md in this skill lists the limits next to each location.

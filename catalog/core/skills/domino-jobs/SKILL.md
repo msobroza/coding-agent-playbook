@@ -41,6 +41,11 @@ playbook:
       impact: MEDIUM
       summary: "Every reported number traces back to the run, code, data, environment and seed that produced it."
       open_when: "A training or scoring job sets a random seed, logs MLflow params or metrics, or its numbers must be reproduced later."
+  references:
+    - path: references/where-outputs-go.md
+      open_when: "Deciding where a job's file goes, or a job's output is missing, unexpectedly in Results, too slow to sync or overwritten by another run."
+      applies_if:
+        domino_project: true
 ---
 
 # Domino jobs
