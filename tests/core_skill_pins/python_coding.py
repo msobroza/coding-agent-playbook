@@ -21,6 +21,10 @@ pydantic-settings, which the reference probe does not declare.
 
 The classes section is vendored (C-python-coding-05): its seven rules are
 pinned at the mapping's priorities 60-66.
+
+The control flow section is vendored (C-python-coding-06): its five rules are
+pinned at the mapping's priorities 67-71, the two ``match`` rules gated on
+Python 3.10, where the statement starts.
 """
 
 from __future__ import annotations
@@ -83,6 +87,11 @@ PINS: Final = CoreSkillPins(
         "python-enums",
         "python-dataclass-post-init",
         "python-hide-internal-state",
+        "python-match-fallback",
+        "python-function-signatures",
+        "python-match-destructuring",
+        "python-closures-and-partial",
+        "python-decorators",
         "python-idioms",
         "python-performance-idioms",
     ),
@@ -317,6 +326,46 @@ PINS: Final = CoreSkillPins(
             name="Hide internal state",
             tags=("python", "design", "oop"),
             section="classes",
+        ),
+        "python-match-fallback": RulePin(
+            applies_if={"python_version": ">=3.10"},
+            globs=_PY_FILES,
+            priority=67,
+            name="Match fallback",
+            tags=("python", "control-flow"),
+            section="functions",
+        ),
+        "python-function-signatures": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=68,
+            name="Function signatures",
+            tags=("python", "functions", "design"),
+            section="functions",
+        ),
+        "python-match-destructuring": RulePin(
+            applies_if={"python_version": ">=3.10"},
+            globs=_PY_FILES,
+            priority=69,
+            name="Match destructuring",
+            tags=("python", "control-flow"),
+            section="functions",
+        ),
+        "python-closures-and-partial": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=70,
+            name="Closures and partial",
+            tags=("python", "functions"),
+            section="functions",
+        ),
+        "python-decorators": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=71,
+            name="Decorators",
+            tags=("python", "functions", "decorators"),
+            section="functions",
         ),
         "python-performance-idioms": RulePin(
             applies_if={},

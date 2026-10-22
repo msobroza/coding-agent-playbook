@@ -40,6 +40,7 @@ FROZEN_DATACLASSES: Final = "python-frozen-dataclasses"
 IDIOMS: Final = "python-idioms"
 EARLY_RETURN: Final = "python-early-return"
 COMPOSITION: Final = "design-composition-over-inheritance"
+SIGNATURES: Final = "python-function-signatures"
 LEGIBILITY: Final = "code-legibility"
 DOCUMENT_LAYOUT: Final = "document-layout"
 #: The always rules that route to no skill; code-legibility names one per line (D73).
@@ -65,7 +66,8 @@ D17_HOUSE_STYLE_PHRASES: Final = (
 )
 #: Each item that left the house style (spec 6.5.4) -> the one member rule that owns it now.
 #: The two class-design items moved on from python-idioms to python-classes-and-protocols
-#: (spec 9.8) and then to design-composition-over-inheritance (prU D46(1)).
+#: (spec 9.8) and then to design-composition-over-inheritance (prU D46(1)), and the flag
+#: split on to python-function-signatures with the control flow rules (prU C-python-coding-06).
 MOVED_ITEM_OWNERS: Final = (
     ("three or more fields", DATA_SHAPES),
     ("parallel lists", DATA_SHAPES),
@@ -78,7 +80,7 @@ MOVED_ITEM_OWNERS: Final = (
     ("match the file", IDIOMS),
     ("os.path", IDIOMS),
     ("count_lines", IDIOMS),
-    ("split the function", IDIOMS),
+    ("split the function", SIGNATURES),
     ("composition over inheritance", COMPOSITION),
     ("DeclarativeBase", COMPOSITION),
     ("f-strings", IDIOMS),

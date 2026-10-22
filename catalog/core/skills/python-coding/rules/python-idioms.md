@@ -1,7 +1,7 @@
 ---
 id: python-idioms
 name: Idioms
-description: "Keep os.path for legacy str APIs, use f-strings, group imports, split flag-driven functions, and avoid star imports and shadowed builtins."
+description: "Keep os.path for legacy str APIs, use f-strings, group imports, and avoid star imports and shadowed builtins."
 version: 1
 scope: scoped
 globs:
@@ -33,7 +33,6 @@ def count_lines_legacy(path):  # avoid: no type hints, no encoding, no Path, lea
 
 ## Functions
 
-- When a boolean flag selects a different algorithm, split the function in two instead of branching on the flag.
 - Class design (composition, subclassing, protocols) is covered in `python-classes-and-protocols`.
 
 ## Strings
