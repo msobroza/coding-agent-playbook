@@ -82,3 +82,4 @@ class UserService:
 - A collaborator that holds dependencies is a plain class; a dataclass is for records.
 - Splitting a class whose methods cluster around disjoint attributes, step by step, is `design-split-god-class`.
 - Exceptions: a facade or coordinator has low cohesion by design, because its job is to sequence others; keep it thin rather than splitting it. Short scripts and notebooks need no split.
+- Where this rule ends and `design-split-god-class`, python-pure-core and python-function-signatures (python-coding) begin: see rule-neighbors.md.

@@ -83,3 +83,4 @@ class PercentageDiscount:  # named, inspectable configuration
 - How a record is shaped once it exists is python-coding's python-data-shapes; design-start-with-the-data decides that one is missing.
 - A method that never reads `self` (smell id method-could-be-function) becomes a module function; keep it a method only when it overrides a base method, satisfies a Protocol or belongs to the class's concept as a `staticmethod`.
 - Do not convert when the lighter form reads worse: `partial` everywhere can hide intent that a small class with named fields states plainly.
+- Telling this rule apart from `design-dry-yagni-kiss`, `design-pattern-from-smell` and python-coding's python-data-shapes: see rule-neighbors.md.

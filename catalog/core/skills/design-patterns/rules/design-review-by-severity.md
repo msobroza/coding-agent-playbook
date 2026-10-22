@@ -62,3 +62,4 @@ Suggested order: the correctness fix first, then the parameter object that unblo
 - Stay read-only and do not stop to ask: report the findings, and change code only when asked.
 - Run `detect_smells.py` and `lcom4_clusters.py` from this skill's `scripts/` when they are present. They print candidates, not verdicts: open the code at every hit, confirm it, and list dismissed hits under "Considered and kept". Without them, apply the same heuristics by reading.
 - If the code is in good shape, say so plainly; never pad a report with invented findings.
+- The quick-pass checklist, every smell with its owning rule, the ruff code for a smell that keeps recurring, and before/after code for common fixes: see quality-checklist.md, smell-catalog.md, lint-guardrails.md and refactoring-moves.md.
