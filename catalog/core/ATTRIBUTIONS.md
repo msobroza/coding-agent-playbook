@@ -42,6 +42,15 @@ not reproduced, and the facts are restated in the engine's own words. The
 use its facts or why it was dropped; a distilled source has no pin and no
 license copy.
 
+The python-documentation skill (its SKILL.md and every rule under its rules/
+directory, listed under "Engine-written files") distills ideas from two
+matforge articles on documenting scientific Python packages and research
+software, which carry no open license; they are credited by name only and
+not vendored. No sentences or examples from the articles are copied, their
+errors are not repeated, and the ideas are restated in the engine's own
+words. The `matforge` section below records, per article section, the files
+that use its ideas or why it was dropped.
+
 ## python-best-practices
 
 Source: the "python-best-practices" agent skills by Ludo Technologies LLC, tag v0.8.0.
@@ -237,6 +246,40 @@ uses gain its files in their row.
 | `user_guide/ccaee6` | DROP | The Git-based /mnt layout is domino-jobs' shared basics. |
 | `support_kb/docs-lifecycle` | DROP | Docs lifecycle and the client compatibility matrix: provenance facts, not rule text. |
 
+## matforge
+
+Source: the matforge articles "Documentation best practices for scientific Python packages" and "Research software documentation: a practical guide for scientists", cited by article and section.
+Form: distilled (credited by name only, not vendored; no open license).
+
+Each row names the files that restate a section's ideas in the engine's own
+words; those files stay under "Engine-written files".
+
+### python-documentation
+
+| Upstream file | Core files | Changes |
+| --- | --- | --- |
+| `documentation-best-practices-scientific-python-packages#docs-as-code` | `rules/docs-same-change.md`, `rules/docs-document-layout.md` | Ideas restated: docs live beside the code so each version carries matching docs; a behavior change is not done until its docs match. |
+| `documentation-best-practices-scientific-python-packages#review-checklist` | `SKILL.md`, `rules/docs-same-change.md` | Ideas restated: the pre-finish checks (docstrings, examples tested, README for user-facing changes, a changelog entry), recast as the Quick Reference and pointers to this skill's rules. Its 'changelog has an entry' follows the repo's own mechanism (D67). |
+| `documentation-best-practices-scientific-python-packages#examples-and-doctests` | `rules/docs-runnable-examples.md` | Ideas restated: examples teach usage and double as tests, and catch silently wrong numerical results. Not reproduced: the misspelled pytest doctest flag and a sample using undefined names; 'every example doctested' becomes 'run the repo's doctest command where it has one' (D67). |
+| `documentation-best-practices-scientific-python-packages#structure-explanation` | `rules/docs-record-why.md`, `rules/docs-architecture-overview.md` | Idea restated: design reasons and background answer 'why' and live apart from tutorials and reference. The ADR and overview parts are engine-written (D60). |
+| `documentation-best-practices-scientific-python-packages#readme` | `rules/docs-readme-essentials.md` | Ideas restated: a short description, install, a minimal example, a link to the full docs, how to cite, the license; shaped by the short-README model (D55) and the architecture pointer (D60). |
+| `documentation-best-practices-scientific-python-packages#changelog` | `rules/docs-changelog.md` | Ideas restated: the six change groups, Semantic Versioning, entries written for people, breaking changes flagged, issues referenced. 'Never generate from commits' is replaced by the repo's own mechanism (D67); its dated Unreleased section is corrected to an undated one. |
+| `documentation-best-practices-scientific-python-packages#citation` | `rules/docs-citation-file.md` | Ideas restated: a citation file at the root with authors, title, version and identifier, matching the README. Not carried: the archive-service wiring. |
+| `documentation-best-practices-scientific-python-packages#readme-process` | DROP | Writing the README before the code is human process advice. |
+| `documentation-best-practices-scientific-python-packages#readme-badges` | DROP | Badges are decoration and need URLs (D38); docs-readme-essentials keeps existing badges and adds none. |
+| `documentation-best-practices-scientific-python-packages#sphinx-setup` | DROP | The quickstart, theme, hosting service, versioned hosting and math extension are imposed tools or hosting setup (D67, D10); the Sphinx rules follow conf.py as it is. |
+| `documentation-best-practices-scientific-python-packages#docstrings` | DROP | Docstrings belong to python-docstrings in python-coding (D53); the required sections, the style preference and typed fields conflict with following the repo's style and never repeating annotated types (D67). |
+| `documentation-best-practices-scientific-python-packages#ci-sample` | DROP | The sample workflow pins an outdated checkout action, installs with pip (D29) and deploys to a docs host; the docs rules run the repo's own command instead. |
+| `documentation-best-practices-scientific-python-packages#pre-commit-config` | DROP | Its example names a hook repository that could not be confirmed to exist, and the docs linters would be imposed tools (D46(5), D67). |
+| `documentation-best-practices-scientific-python-packages#citation-archive-service` | DROP | Connecting an archive service for identifiers and journal submission is account setup; docs-citation-file never invents an identifier. |
+| `research-software-documentation-practical-guide-scientists#comments` | `rules/docs-record-why.md` | Idea restated: a comment explains the reasoning behind the code, never restates the line; the in-body comment guidance is a pointer to python-comments-why (D78(11)). |
+| `research-software-documentation-practical-guide-scientists#examples` | `rules/docs-runnable-examples.md` | Idea restated: many small executable examples, the long ones under examples/. |
+| `research-software-documentation-practical-guide-scientists#readme-and-quick-start` | `rules/docs-readme-essentials.md` | Idea restated: a quick start gets a user running in minutes (install, minimal example, expected output). |
+| `research-software-documentation-practical-guide-scientists#citation` | `rules/docs-citation-file.md` | Idea restated: the citation file records the license and the repository location. |
+| `research-software-documentation-practical-guide-scientists#doxygen` | DROP | C and C++ documentation tooling is outside Python repos. |
+| `research-software-documentation-practical-guide-scientists#cli-help-text` | DROP | A CLI's help text is a code topic, not documentation practice; recorded as an open issue. |
+| `research-software-documentation-practical-guide-scientists#error-messages` | DROP | 'Say how to fix it' extends python-coding's error rules; recorded as an open issue. |
+
 ## Engine-written files
 
 Files written for the engine with no upstream text, per core skill. A file
@@ -282,6 +325,17 @@ that comes to hold vendored text moves from here into its source's table.
 - `rules/python-small-units.md`
 
 ### python-documentation
+
+- `SKILL.md`
+- `rules/docs-same-change.md`
+- `rules/docs-runnable-examples.md`
+- `rules/docs-record-why.md`
+- `rules/docs-document-layout.md`
+- `rules/docs-architecture-overview.md`
+- `rules/docs-readme-essentials.md`
+- `rules/docs-changelog.md`
+- `rules/docs-contributing-guide.md`
+- `rules/docs-citation-file.md`
 
 ### python-testing
 

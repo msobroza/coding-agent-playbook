@@ -85,6 +85,27 @@ SOURCE_LINES: Final = [
     _line("python-coding"),
     _line("python-tooling"),
 ]
+#: python-documentation's ungated members' globs, first seen in member id order.
+DOCUMENTATION_GLOBS: Final = (
+    "docs/architecture.md",
+    "CHANGELOG*",
+    "CHANGES*",
+    "HISTORY*",
+    "NEWS*",
+    "changelog.d/**",
+    "newsfragments/**",
+    "CONTRIBUTING*",
+    ".github/CONTRIBUTING*",
+    "docs/CONTRIBUTING*",
+    "docs/**",
+    "CONTEXT.md",
+    "CONTEXT-MAP.md",
+    ".scratch/**",
+    "README*",
+    "docs/adr/**",
+    "examples/**",
+    "*.rst",
+)
 #: The config files ``python-static-checks`` matches besides Python files and pyproject.
 STATIC_CHECK_CONFIGS: Final = ("ruff.toml", ".ruff.toml", "mypy.ini", ".mypy.ini")
 
@@ -203,9 +224,18 @@ def test_notebook_edit_names_ml_data(
 def test_file_matching_no_skill_is_silent(
     repo: PackRepo, deps: Callable[..., RuntimeDeps], state: Path
 ) -> None:
-    report = edit(repo, deps(), "README.md", state=state)
+    report = edit(repo, deps(), "assets/logo.svg", state=state)
 
     assert report.trace.combined.decision is Decision.NONE
+
+
+def test_readme_edit_names_python_documentation(
+    repo: PackRepo, deps: Callable[..., RuntimeDeps], state: Path
+) -> None:
+    """prU D53: the README is python-documentation's, not a Python skill's."""
+    report = edit(repo, deps(), "README.md", state=state)
+
+    assert context(report) == [_line("python-documentation")]
 
 
 def test_out_of_repo_path_is_silent(
@@ -334,7 +364,9 @@ def test_sync_derives_the_glob_table_from_the_rendered_member_rules(
     """Only rules that pass ``applies_if`` reach the table: no pytest, no FastAPI, no ML here.
 
     python-tooling still appears, with the globs of its one ungated member,
-    python-static-checks (Python files plus the ruff and mypy config files).
+    python-static-checks (Python files plus the ruff and mypy config files), and
+    python-documentation with its ungated members' globs, in member id order
+    (no CITATION.cff, so docs-citation-file's gate fails).
     """
     (tmp_path / "repo").mkdir()
     repo = make_synthetic_repo(tmp_path / "repo", config_text=CONFIG + "[hooks]\nenabled = true\n")
@@ -348,6 +380,7 @@ def test_sync_derives_the_glob_table_from_the_rendered_member_rules(
     assert config == {
         "skills": [
             {"id": "python-coding", "globs": ["**/*.py"]},
+            {"id": "python-documentation", "globs": list(DOCUMENTATION_GLOBS)},
             {"id": "python-tooling", "globs": static_checks},
         ]
     }

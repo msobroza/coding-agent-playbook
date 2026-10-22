@@ -106,6 +106,18 @@ def test_core_attributions_record_the_domino_docs_drops_per_page() -> None:
     assert "user_guide/cb9195" in {row.upstream for row in rows if not row.dropped}
 
 
+def test_core_attributions_record_the_matforge_sections_and_drops() -> None:
+    """prU D50: the distilled documentation articles credit python-documentation by section."""
+    source = load_core_attributions().sources["matforge"]
+    assert source.distilled
+    assert source.commit is None
+    rows = source.skills["python-documentation"].rows
+    credited = {target for row in rows for target in row.targets}
+    assert "rules/docs-changelog.md" in credited
+    dropped = {row.upstream for row in rows if row.dropped}
+    assert "documentation-best-practices-scientific-python-packages#readme-badges" in dropped
+
+
 def test_core_attributions_list_engine_written_files_per_core_skill() -> None:
     """Every core skill has its own Engine-written list, so lanes never share one."""
     on_disk = {p.name for p in CORE_SKILLS_ROOT.iterdir() if p.is_dir()}
