@@ -97,17 +97,29 @@ def test_core_attributions_name_both_pins_and_drop_the_fresh_text_policy() -> No
     assert commits == dict(SOURCE_PINS)
 
 
-def test_core_attributions_record_the_domino_docs_drops_per_page() -> None:
-    """prU D50: the distilled Domino documentation has page rows, DROP rows included."""
+@pytest.mark.parametrize(
+    ("skill", "dropped", "used"),
+    [
+        ("domino-apps", "user_guide/71635d", "user_guide/cb9195"),
+        ("domino-jobs", "user_guide/66b789", "user_guide/da707d"),
+        ("domino-jobs", "legal/terms", "user_guide/fda6d8"),
+        ("domino-jobs", "user_guide/ca786d", "user_guide/55fc89"),
+    ],
+)
+def test_core_attributions_record_the_domino_docs_drops_per_page(
+    skill: str, dropped: str, used: str
+) -> None:
+    """prU D50: the distilled Domino documentation has page rows, DROP rows included.
+
+    Each row keeps the mapping's page id (its path, never a URL host), so a mapping
+    drop is traceable by id.
+    """
     source = load_core_attributions().sources["domino-docs"]
     assert source.distilled
     assert source.commit is None
-    rows = source.skills["domino-apps"].rows
-    assert "user_guide/71635d" in {row.upstream for row in rows if row.dropped}
-    assert "user_guide/cb9195" in {row.upstream for row in rows if not row.dropped}
-    rows = source.skills["domino-jobs"].rows
-    assert "user_guide/ca786d" in {row.upstream for row in rows if row.dropped}
-    assert "user_guide/55fc89" in {row.upstream for row in rows if not row.dropped}
+    rows = source.skills[skill].rows
+    assert dropped in {row.upstream for row in rows if row.dropped}
+    assert used in {row.upstream for row in rows if not row.dropped}
 
 
 def test_core_attributions_record_the_domino_jobs_pages_and_drops() -> None:
