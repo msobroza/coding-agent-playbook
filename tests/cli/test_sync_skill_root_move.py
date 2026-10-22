@@ -144,8 +144,7 @@ def test_first_sync_after_upgrade_moves_pristine_shared_skills_tree(
 
     assert _sync.execute(repo, git=FakeGitClient()) == 0
 
-    # query-db's SKILL.md + run.py, python-coding's SKILL.md + its 15 rule files + its 2
-    # license copies and python-tooling's SKILL.md + its 1 rule file: 22.
+    # The move removes the whole pristine old tree, so the removed count is every file in it.
     assert re.search(rf", {len(_OLD_TREE_FILES)} removed$", capsys.readouterr().out, re.MULTILINE)
     assert not (repo / _OLD_ROOT).exists()
     moved = repo / _NEW_ROOT / "query-db"

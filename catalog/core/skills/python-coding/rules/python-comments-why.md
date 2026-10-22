@@ -24,7 +24,7 @@ Code already says what it does; a comment earns its place by saying why. Write o
 i += 1
 
 # retry three times
-for attempt in range(5):
+for _ in range(5):
     send(batch)
 
 # loop over the pages
@@ -42,7 +42,7 @@ for page in range(1, total_pages + 1):
     rows.extend(fetch_page(page - 1))
 
 # Five attempts cover the provider's documented 2-second failover window.
-for attempt in range(5):
+for _ in range(5):
     send(batch)
 ```
 

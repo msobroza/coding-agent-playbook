@@ -49,7 +49,7 @@ FeeRule = Callable[[Parcel], Decimal]
 
 
 def weight_fee(parcel: Parcel) -> Decimal:
-    return Decimal("0.80") * parcel.weight_kg
+    return Decimal("0.80") * parcel.weight_grams / 1000  # 0.80 per kg, integer grams
 
 
 def quote(parcel: Parcel, rules: Sequence[FeeRule]) -> Decimal:

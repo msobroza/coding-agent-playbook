@@ -37,14 +37,17 @@ A search for `process`, `Manager` or `handle` returns mostly unrelated code, and
 
 ```python
 # invoices/csv_import.py
-def parse_invoice_csv(rows: list[str]) -> list[InvoiceLine]: ...
+from collections.abc import Iterable
+
+
+def parse_invoice_csv(rows: Iterable[str]) -> list[InvoiceLine]: ...
 
 
 class BookingNightsCounter:
     def count_nights(self, booking: Booking) -> int: ...
 
-    def add_line_item(self, item: LineItem) -> None:
-        self.items.append(item)
+    def add_line_item(self, line_item: LineItem) -> None:
+        self.line_items.append(line_item)
 ```
 
 Each name greps to the few places that define and use it, and each verb matches what the body does.

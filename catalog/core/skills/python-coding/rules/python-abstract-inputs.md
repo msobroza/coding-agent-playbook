@@ -28,7 +28,7 @@ def label_for(code: str, labels: dict[str, str]) -> str:
     return labels.get(code, code)
 
 
-count_active(tuple(rows), set(active_ids))  # callers convert to fit the signature
+count_active(list(rows), set(active_ids))  # callers convert to fit the signature
 ```
 
 ## Good Example

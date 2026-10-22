@@ -107,8 +107,8 @@ def test_resync_moves_pristine_member_copies_to_rules(
     member_names = {path.rsplit("/", 1)[1] for path in members}
     for root in _SKILL_ROOTS:
         references = repo / root / _SKILL / "references"
-        left = sorted(name for name in member_names if (references / name).exists())
-        assert left == [], (root, left)
+        stale_members = sorted(name for name in member_names if (references / name).exists())
+        assert stale_members == [], (root, stale_members)
     assert _sync.execute(repo, check=True, git=FakeGitClient()) == 0
 
 

@@ -55,3 +55,17 @@ def test_python_typing_renders_the_310_forms_without_python_version() -> None:
     body = render_core_rule("python-typing", {})
     assert _SELF_MARKER not in body
     assert 'bound="' in body
+
+
+@pytest.mark.parametrize(
+    ("version", "generics_import"),
+    [
+        ("3.10", "from typing import Generic, TypeVar"),
+        ("3.12", "from collections.abc import Callable, Sequence"),
+    ],
+)
+def test_python_typing_generics_examples_show_their_imports(
+    version: str, generics_import: str
+) -> None:
+    facts: Facts = {"python_version": version}
+    assert generics_import in render_core_rule("python-typing", facts)

@@ -47,6 +47,9 @@ def charge(customer: Customer, amount: Decimal, currency: str, *, capture: bool 
         currency: ISO 4217 code, such as "EUR" or "JPY".
         capture: Capture the funds now; False only authorizes them.
 
+    Returns:
+        The gateway's charge, captured or only authorized as `capture` asked.
+
     Raises:
         PaymentDeclinedError: The gateway rejected the charge.
         PaymentGatewayError: The gateway request failed.
@@ -57,7 +60,11 @@ def charge(customer: Customer, amount: Decimal, currency: str, *, capture: bool 
 
 
 class InvoiceService:
-    """Moves invoices through their lifecycle: issue, pay, void."""
+    """Moves invoices through their lifecycle: issue, pay, void.
+
+    Example:
+        >>> InvoiceService(repository).void(invoice_id)
+    """
 ```
 
 ## Notes

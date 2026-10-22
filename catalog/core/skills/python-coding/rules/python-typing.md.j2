@@ -46,6 +46,9 @@ def find_user(user_id: UserId, *, include_disabled: bool = False) -> User | None
 Write generics in PEP 695 syntax: the type parameters sit on the function, class or `type` alias that uses them, with no `TypeVar` declarations.
 
 ```python
+from collections.abc import Callable, Sequence
+
+
 def first[T](items: Sequence[T]) -> T | None:
     return items[0] if items else None
 
@@ -61,6 +64,9 @@ type Transform[T] = Callable[[T], T]
 Declare each type variable once and reuse it across related signatures.
 
 ```python
+from collections.abc import Sequence
+from typing import Generic, TypeVar
+
 T = TypeVar("T")
 K = TypeVar("K")
 V = TypeVar("V")
@@ -92,6 +98,8 @@ class QueryBuilder:
 A method that returns its own instance returns a type variable bound to the class, so a subclass keeps its type:
 
 ```python
+from typing import TypeVar
+
 TBuilder = TypeVar("TBuilder", bound="QueryBuilder")
 
 
