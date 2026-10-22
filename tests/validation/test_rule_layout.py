@@ -7,7 +7,6 @@ the fix, asserted verbatim.
 
 from __future__ import annotations
 
-import importlib
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -15,8 +14,12 @@ import pytest
 
 from coding_agent_playbook.artifacts.rule import Rule
 from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE
-from coding_agent_playbook.catalog.source import ArtifactSource, FileSystemArtifactSource
+from coding_agent_playbook.catalog.source import ArtifactSource
 from coding_agent_playbook.validation._rule_layout import _layer_root, check_rule_layout
+from tests.validation.layout_samples import engine_resources as _engine_layer
+from tests.validation.layout_samples import layout_errors as _check
+from tests.validation.layout_samples import write_rule as _rule
+from tests.validation.layout_samples import write_skill as _skill
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -26,43 +29,11 @@ if TYPE_CHECKING:
     from coding_agent_playbook.evals.sample import EvalSample
     from coding_agent_playbook.validation.findings import ValidationError
 
-_RULE = "---\nid: {id}\nname: {id}\ndescription: d\nscope: {scope}\n{extra}---\nBody\n"
-_SKILL = "---\nid: {id}\nname: {id}\ndescription: d\n{block}---\nBody\n"
-_BLOCK = "playbook:\n  files: f\n"
-
-
-def _write(path: Path, text: str) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
-    return path
-
-
-def _skill(layer: Path, skill_id: str, *, block: str = _BLOCK) -> Path:
-    skill_dir = layer / "skills" / skill_id
-    _write(skill_dir / "SKILL.md", _SKILL.format(id=skill_id, block=block))
-    return skill_dir
-
-
-def _rule(path: Path, rule_id: str, *, scope: str = "scoped", extra: str = "") -> Path:
-    return _write(path, _RULE.format(id=rule_id, scope=scope, extra=extra))
-
 
 @pytest.fixture
 def engine(make_package: Callable[..., str]) -> str:
     """A throwaway engine package, so the real catalog stays out of these fixtures."""
     return make_package("layout_engine", resources=True)
-
-
-def _engine_layer(engine: str) -> Path:
-    module = importlib.import_module(engine)
-    assert module.__file__ is not None
-    return Path(module.__file__).parent / "resources"
-
-
-def _check(repo: Path, engine: str) -> list[ValidationError]:
-    source = FileSystemArtifactSource(repo_root=repo, engine_package=engine)
-    rules, _ = source.collect_rules()
-    return check_rule_layout(rules, source)
 
 
 def _messages(errors: list[ValidationError]) -> list[tuple[str, str]]:

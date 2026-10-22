@@ -11,15 +11,17 @@ SPEC row follows. Prose-only on the SPEC side: these tests never change engine s
 
 from __future__ import annotations
 
-import importlib
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.catalog.source import FileSystemArtifactSource
-from coding_agent_playbook.validation._rule_layout import check_rule_layout
 from tests.unit.test_docs_lifecycle_hooks_spec import _spec_section
+from tests.validation.layout_samples import (
+    engine_resources,
+    layout_errors,
+    write_rule,
+    write_skill,
+)
 from tests.validation.section_samples import (
     FIXTURES,
     MOCKING,
@@ -31,6 +33,7 @@ from tests.validation.section_samples import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
 
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.artifacts.skill import Skill
@@ -41,11 +44,8 @@ _STALE_PHRASES = (
     "references/python-typing.md",
     "kind bands",
     "40-59 language",
+    "is a reference of",
 )
-
-_RULE = "---\nid: {id}\nname: {id}\ndescription: d\nscope: {scope}\n{extra}---\nBody\n"
-_SKILL = "---\nid: {id}\nname: {id}\ndescription: d\n{block}---\nBody\n"
-_BLOCK = "playbook:\n  files: f\n"
 
 
 def _validate_section() -> str:
@@ -77,6 +77,13 @@ def test_section_12_6_retires_v12_and_quotes_the_rules_heading() -> None:
     assert "'## Rules' heading" in _row("V13")
 
 
+def test_section_12_6_gives_both_ways_to_join_a_skill() -> None:
+    """Membership is by location or by ``skill:`` (D5, ADR 0005), never ``skill:`` alone."""
+    section = _validate_section()
+    assert "A scoped rule that names a skill in `skill:` is a member rule" not in section
+    assert "by its location in that skill's `rules/` or, from another layer, by `skill:`" in section
+
+
 # --- S1-S7 and the D42 warning: the engine's own messages ----------------------------------
 
 
@@ -86,9 +93,32 @@ def _messages(rules: list[Rule], skill: Skill) -> list[str]:
     return [f.message for f in (*findings.errors, *findings.warnings)]
 
 
-_SECTION_CASES = {
-    "S1": lambda: _messages([], make_skill({"sections": [{**MOCKING, "impact": "URGENT"}]})),
-    "S2": lambda: _messages([], make_skill({"sections": [FIXTURES, MOCKING]})),
+def _section_list_messages(sections: object) -> list[str]:
+    """The messages for a skill declaring ``sections`` and no member rule."""
+    return _messages([], make_skill({"sections": sections}))
+
+
+#: One malformed ``sections`` value per S1 message the engine prints (skills/sections.py).
+_MALFORMED_SECTION_LISTS: tuple[object, ...] = (
+    [{**MOCKING, "impact": "URGENT"}],
+    "mocking",
+    ["mocking"],
+    [{**MOCKING, "when": "x"}],
+    [{key: value for key, value in MOCKING.items() if key != "summary"}],
+    [{**MOCKING, "summary": ""}],
+    [{**MOCKING, "summary": "a\nb"}],
+    [{**MOCKING, "id": "Mocking"}],
+    [{**MOCKING, "title": "Mocking, stubbing and faking collaborators"}],
+    [MOCKING, MOCKING],
+)
+
+_SECTION_CASES: dict[str, Callable[[], list[str]]] = {
+    "S1": lambda: [
+        message
+        for sections in _MALFORMED_SECTION_LISTS
+        for message in _section_list_messages(sections)
+    ],
+    "S2": lambda: _section_list_messages([FIXTURES, MOCKING]),
     "S3": lambda: _messages([make_rule(section="mokcing")], make_skill()),
     "S4": lambda: _messages([make_rule(section=None)], make_skill()),
     "S5": lambda: [
@@ -99,6 +129,13 @@ _SECTION_CASES = {
     "S7": lambda: _messages([make_rule(body="# Use fakes [HIGH]\n")], make_skill()),
     "W4": lambda: _messages([make_rule(section=None, package="other")], make_skill()),
 }
+
+
+def test_every_malformed_section_list_yields_its_own_s1_message() -> None:
+    """Guards the S1 case table: each fixture must still hit one distinct engine message."""
+    per_fixture = [_section_list_messages(sections) for sections in _MALFORMED_SECTION_LISTS]
+    assert all(len(messages) == 1 for messages in per_fixture), per_fixture
+    assert len({messages[0] for messages in per_fixture}) == len(per_fixture)
 
 
 @pytest.mark.parametrize("check_id", sorted(_SECTION_CASES))
@@ -113,45 +150,40 @@ def test_section_12_6_row_quotes_the_section_check_message(check_id: str) -> Non
 # --- R1-R6: the rules/ layout messages, paths relative to the repo ------------------------
 
 
-def _write(path: Path, text: str) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
-    return path
+def _in_skill_rule_naming_another_skill(repo: Path) -> None:
+    """R1: a rule in the rules/ of skill 's' declares 'skill: t'."""
+    write_rule(write_skill(repo / "playbook", "s") / "rules" / "r.md", "r", extra="skill: t\n")
 
 
-def _skill(layer: Path, skill_id: str, *, block: str = _BLOCK) -> Path:
-    skill_dir = layer / "skills" / skill_id
-    _write(skill_dir / "SKILL.md", _SKILL.format(id=skill_id, block=block))
-    return skill_dir
+def _in_skill_rule_file_named_otherwise(repo: Path) -> None:
+    """R2: rule 'python-typing' lies in a skill's rules/ as typing.md.j2."""
+    write_rule(write_skill(repo / "playbook", "s") / "rules" / "typing.md.j2", "python-typing")
 
 
-def _rule(path: Path, rule_id: str, *, scope: str = "scoped", extra: str = "") -> None:
-    _write(path, _RULE.format(id=rule_id, scope=scope, extra=extra))
+def _one_rule_id_twice_in_one_layer(repo: Path) -> None:
+    """R3: rule id 'r' is defined by two files of the repo-local layer."""
+    write_rule(repo / "playbook" / "rules" / "r-old.md", "r", extra="skill: s\n")
+    write_rule(write_skill(repo / "playbook", "s") / "rules" / "r.md", "r")
 
 
-def _r1(repo: Path) -> None:
-    _rule(_skill(repo / "playbook", "s") / "rules" / "r.md", "r", extra="skill: t\n")
+def _rules_dirs_of_unusable_skills(repo: Path) -> None:
+    """R4, both messages: a rules/ without SKILL.md, and one in a skill without 'playbook:'."""
+    write_rule(repo / "playbook" / "skills" / "orphan" / "rules" / "r.md", "r")
+    (write_skill(repo / "playbook", "plain", block="") / "rules").mkdir()
 
 
-def _r2(repo: Path) -> None:
-    _rule(_skill(repo / "playbook", "s") / "rules" / "typing.md.j2", "python-typing")
+def _always_rule_in_a_skill_rules_dir(repo: Path) -> None:
+    """R6: always rule 'house' lies in the rules/ of skill 's'."""
+    write_rule(write_skill(repo / "playbook", "s") / "rules" / "house.md", "house", scope="always")
 
 
-def _r3(repo: Path) -> None:
-    _rule(repo / "playbook" / "rules" / "r-old.md", "r", extra="skill: s\n")
-    _rule(_skill(repo / "playbook", "s") / "rules" / "r.md", "r")
-
-
-def _r4(repo: Path) -> None:
-    _rule(repo / "playbook" / "skills" / "orphan" / "rules" / "r.md", "r")
-    (_skill(repo / "playbook", "plain", block="") / "rules").mkdir()
-
-
-def _r6(repo: Path) -> None:
-    _rule(_skill(repo / "playbook", "s") / "rules" / "house.md", "house", scope="always")
-
-
-_LAYOUT_CASES = {"R1": _r1, "R2": _r2, "R3": _r3, "R4": _r4, "R6": _r6}
+_LAYOUT_CASES: dict[str, Callable[[Path], None]] = {
+    "R1": _in_skill_rule_naming_another_skill,
+    "R2": _in_skill_rule_file_named_otherwise,
+    "R3": _one_rule_id_twice_in_one_layer,
+    "R4": _rules_dirs_of_unusable_skills,
+    "R6": _always_rule_in_a_skill_rules_dir,
+}
 
 
 @pytest.fixture
@@ -161,12 +193,11 @@ def engine(make_package: Callable[..., str]) -> str:
 
 
 def _layout_messages(repo: Path, engine: str) -> list[str]:
-    source = FileSystemArtifactSource(repo_root=repo, engine_package=engine)
-    rules, _ = source.collect_rules()
+    """Each layout finding as ``<path>: <message>``, with ``<repo>/`` stripped from both."""
     prefix = f"{repo}/"
     return [
         f"{error.path.removeprefix(prefix)}: {error.message.replace(prefix, '')}"
-        for error in check_rule_layout(rules, source)
+        for error in layout_errors(repo, engine)
     ]
 
 
@@ -184,9 +215,9 @@ def test_section_12_6_row_quotes_the_layout_check_message(
 
 def test_section_12_6_row_quotes_the_r5_move_hint(tmp_path: Path, engine: str) -> None:
     """R5's paths name the engine package, so the row is checked around them."""
-    layer = Path(importlib.import_module(engine).__file__ or "").parent / "resources"
-    _skill(layer, "python-coding")
-    _rule(layer / "rules" / "typing.md.j2", "python-typing", extra="skill: python-coding\n")
+    layer = engine_resources(engine)
+    write_skill(layer, "python-coding")
+    write_rule(layer / "rules" / "typing.md.j2", "python-typing", extra="skill: python-coding\n")
     [message] = _layout_messages(tmp_path, engine)
     row = _row("R5")
     for fragment in (
