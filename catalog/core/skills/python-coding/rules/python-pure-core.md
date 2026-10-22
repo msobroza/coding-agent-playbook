@@ -11,35 +11,71 @@ priority: 49
 tags: [python, design, testability]
 ---
 
-# Pure core, effects at the edges
+# Prefer pure functions without side effects
 
-Logic that depends only on its arguments is tested with plain input-to-output assertions and reused anywhere. Keep domain and calculation code pure, and let a thin outer shell gather inputs, call it, and carry out the effects. Small scripts and notebooks may stay imperative.
+## Description
 
-## Inputs arrive as arguments
+A pure function returns the same output for the same input and has no side effects: it mutates nothing outside itself and does no I/O. Logic that depends only on its arguments is tested with plain input-to-output assertions, reused anywhere, and safe to cache or run in parallel. Keep domain and calculation code pure, and let a thin outer shell gather the inputs, call it, and carry out the effects ("functional core, imperative shell"). Small scripts and notebooks may stay imperative.
 
-- A domain or calculation function never reads the wall clock (`datetime.now()`, `time.time()`), randomness (`random`, `uuid4()`), environment variables or files on its own. Pass the value in, or pass a clock (`now: Callable[[], datetime]`), an id factory or a `random.Random` instance when it needs fresh ones.
-- When one function reads input, computes, and presents the result, split it so the computing step runs without patching anything.
-
-## Effects stay in the shell
-
-- Domain classes contain no `print()`, `input()`, network, file or mail I/O. Return values; the entry point or handler presents or persists them.
-- Render for humans with `__str__`, `__format__` or a separate presenter, not with `show_*()` methods that print.
-- `__init__` does no I/O, printing or registration, and starts no threads or tasks.
-
-## No hidden mutation
-
-- Don't mutate arguments or module-level state, and never share state through a `global` statement. Return a new value (`dataclasses.replace(...)`, a new list).
-- When in-place mutation is the contract, make the name say so (`sort_in_place`, `apply_discount_to`) and return `None`.
-
-## Testing the core
-
-Test pure functions with direct argument-to-return assertions and no mocks. Freeze-time libraries (freezegun, time-machine) are for characterizing legacy code that cannot take a clock yet, not a substitute for passing one in new code.
+## Bad Example
 
 ```python
-def is_expired(token: Token, now: datetime) -> bool:  # good: caller supplies the time
-    return token.expires_at <= now
+total_processed = 0
 
 
-def is_expired_legacy(token: Token) -> bool:  # avoid: testable only by freezing time
-    return token.expires_at <= datetime.now(UTC)
+def process_item(item: Item) -> Result:
+    global total_processed
+    total_processed += 1  # side effect: module state
+    item.status = ItemStatus.PROCESSED  # side effect: mutates its argument
+    log_to_file(item)  # side effect: I/O
+    return calculate_result(item)
+
+
+def weekend_discount(price: Decimal) -> Decimal:
+    if datetime.now().weekday() == 5:  # hidden input: the wall clock
+        return price * Decimal("0.10")
+    return Decimal("0")
 ```
+
+## Good Example
+
+```python
+from dataclasses import dataclass, replace
+from datetime import date
+from decimal import Decimal
+
+
+@dataclass(frozen=True)
+class Item:
+    status: ItemStatus
+    quantity: int
+    unit_price: Decimal
+
+
+def calculate_result(item: Item) -> Result:  # pure: depends only on its argument
+    return Result(value=item.quantity * item.unit_price, category=categorize(item))
+
+
+def weekend_discount(price: Decimal, today: date) -> Decimal:  # the caller supplies the date
+    return price * Decimal("0.10") if today.weekday() == 5 else Decimal("0")
+
+
+def mark_processed(item: Item) -> Item:  # a new value instead of a mutation
+    return replace(item, status=ItemStatus.PROCESSED)
+
+
+def main() -> None:  # the imperative shell reads the clock and does the I/O
+    today = date.today()
+    results = [calculate_result(item) for item in load_items()]
+    discounts = [weekend_discount(result.value, today) for result in results]
+    save_results(results, discounts)
+```
+
+## Notes
+
+- Inputs arrive as arguments: a domain function never reads the wall clock, randomness (`random`, `uuid4()`), environment variables or files on its own. Pass the value in, or pass a clock (`now: Callable[[], datetime]`), an id factory or a `random.Random` instance when it needs fresh ones.
+- When one function reads input, computes, and presents the result, split it so the computing step runs without patching anything; a function with an unavoidable effect takes the collaborator (a repository) as a parameter and calls the pure step first.
+- Domain classes contain no `print()`, `input()`, network, file or mail I/O; render for humans with `__str__`, `__format__` or a presenter, and keep `input()` in the entry point. `__init__` does no I/O, printing or registration, and starts no threads or tasks.
+- Don't mutate arguments or module-level state, and never share state through a `global` statement; return a new value (`dataclasses.replace(...)`, a new list). When in-place mutation is the contract, the name says so (`sort_in_place`, `apply_discount_to`) and it returns `None`.
+- A request-scoped `ContextVar` is an explicit exception to "no module-level state".
+- Test the core with direct argument-to-return assertions and fixed dates, no mocks. Freeze-time libraries are for characterizing legacy code that reads the clock directly (`datetime.now(timezone.utc)`), not a substitute for passing a clock in new code.
