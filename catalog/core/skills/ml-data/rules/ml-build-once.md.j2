@@ -25,13 +25,20 @@ Arrays and frames are fixed-size, contiguous buffers. Appending to one or concat
 ```python
 {% if has_ml_dep("numpy") %}
 import numpy as np
+{% endif %}
+{% if has_ml_dep("pandas") %}
+import pandas as pd
+{% endif %}
+{% if has_ml_dep("polars") %}
+import polars as pl
+{% endif %}
+{% if has_ml_dep("numpy") %}
 
 samples = np.array([])
 for _ in range(n_samples):
     samples = np.append(samples, draw_sample())  # copies everything each pass
 {% endif %}
 {% if has_ml_dep("pandas") %}
-import pandas as pd
 
 results = pd.DataFrame(columns=["parcel_id", "score"])
 for parcel in parcels:
@@ -42,7 +49,6 @@ for parcel in parcels:
     results.loc[len(results)] = [parcel.id, score(parcel)]  # grows by reallocating too
 {% endif %}
 {% if has_ml_dep("polars") %}
-import polars as pl
 
 readings = pl.DataFrame()
 for path in paths:
@@ -55,6 +61,14 @@ for path in paths:
 ```python
 {% if has_ml_dep("numpy") %}
 import numpy as np
+{% endif %}
+{% if has_ml_dep("pandas") %}
+import pandas as pd
+{% endif %}
+{% if has_ml_dep("polars") %}
+import polars as pl
+{% endif %}
+{% if has_ml_dep("numpy") %}
 
 samples = rng.normal(size=n_samples)  # one call, from the injected generator
 
@@ -65,7 +79,6 @@ for index, path in enumerate(paths):
 data = np.concatenate([load_chunk(path) for path in paths])  # unknown size: build once
 {% endif %}
 {% if has_ml_dep("pandas") %}
-import pandas as pd
 
 records = [{"parcel_id": parcel.id, "score": score(parcel)} for parcel in parcels]
 results = pd.DataFrame.from_records(records)
@@ -77,7 +90,6 @@ frames = [
 combined = pd.concat(frames, ignore_index=True)
 {% endif %}
 {% if has_ml_dep("polars") %}
-import polars as pl
 
 frames = [pl.read_csv(path, schema_overrides=READING_SCHEMA) for path in paths]
 readings = pl.concat(frames)

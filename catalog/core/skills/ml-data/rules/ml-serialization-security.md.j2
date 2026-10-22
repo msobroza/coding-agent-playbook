@@ -39,12 +39,12 @@ model = AutoModel.from_pretrained(repo, trust_remote_code=True)
 estimator = joblib.load(path)  # unpickling, the same exposure
 {% endif %}
 {% if has_ml_dep("numpy") %}
-arr = np.load(path)  # object arrays unpickle
+embeddings = np.load(path)  # object arrays unpickle
 {% endif %}
 {% if has_ml_dep("pandas") %}
 frame = pd.read_pickle(path)  # unpickling
 {% endif %}
-config = yaml.load(text, Loader=yaml.Loader)  # can instantiate arbitrary objects
+settings = yaml.load(text, Loader=yaml.Loader)  # can instantiate arbitrary objects
 ```
 
 ## Good Example
@@ -62,7 +62,7 @@ model.load_state_dict(state)
 model = AutoModel.from_pretrained(repo, revision=PINNED_COMMIT_SHA)
 {% endif %}
 {% if has_ml_dep("numpy") %}
-arr = np.load(path, allow_pickle=False)  # fails loudly instead of executing
+embeddings = np.load(path, allow_pickle=False)  # fails loudly instead of executing
 {% endif %}
 {% if has_ml_dep("pandas") %}
 frame = pd.read_parquet(path)

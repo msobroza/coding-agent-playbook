@@ -20,6 +20,7 @@ from tests.core_skill_pins import CoreSkillPins, RulePin
 
 _ML_FILES: Final = ("**/*.py", "**/*.ipynb")
 _ML_ARRAY_GATE: Final = {"any_ml_stack": ["numpy", "pandas", "polars"]}
+_ML_NUMPY_GATE: Final = {"any_ml_stack": ["numpy"]}
 _ML_PANDAS_GATE: Final = {"any_ml_stack": ["pandas"]}
 _ML_FRAME_GATE: Final = {"any_ml_stack": ["pandas", "polars"]}
 _ML_MODEL_GATE: Final = {
@@ -127,7 +128,7 @@ PINS: Final = CoreSkillPins(
             section="dtypes",
         ),
         "ml-numpy-dtypes": RulePin(
-            applies_if={"any_ml_stack": ["numpy"]},
+            applies_if=_ML_NUMPY_GATE,
             globs=_ML_FILES,
             priority=43,
             name="NumPy dtypes",

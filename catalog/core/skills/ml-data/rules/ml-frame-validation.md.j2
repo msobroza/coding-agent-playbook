@@ -19,7 +19,7 @@ tags: [ml, pandas, polars, validation]
 
 ## Description
 
-Tabular data from files, databases and APIs is untrusted in the same way request payloads are. A frame with a renamed column, a negative weight or duplicated keys usually does not crash; it produces plausible-looking wrong results. `pydantic-boundaries` (python-coding) covers scalar records; pandera is the equivalent for frames: declare column names, dtypes, nullability and value constraints once, validate where data enters, and pass typed frames inward.
+Loaded frames are checked once, where they enter (`ml-check-after-load`). Where the repo already uses pandera, that check is a schema. `pydantic-boundaries` (python-coding) covers scalar records; pandera is the equivalent for frames. Declare column names, dtypes, nullability and value constraints (no negative weights, no duplicated keys) once, validate where data enters, and pass typed frames inward.
 
 ## Bad Example
 
@@ -49,6 +49,8 @@ import pandas as pd
 import pandera.pandas as pa
 from pandera.typing import DataFrame, Series
 
+TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%S"
+
 
 class OrderSchema(pa.DataFrameModel):
     order_id: Series[int] = pa.Field(unique=True)
@@ -71,6 +73,8 @@ def load_orders(path: Path) -> DataFrame[OrderSchema]:
 import pandera.polars as pa
 import polars as pl
 from pandera.typing.polars import DataFrame
+
+TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%S"
 
 
 class OrderSchema(pa.DataFrameModel):
@@ -99,7 +103,7 @@ def total_weight_kg(orders: DataFrame[OrderSchema]) -> float:
 
 ## Notes
 
-- Validate once at the boundary (a load, an API response, an upstream pipeline stage), not inside every transformation. `DataFrame[Schema]` hints document which functions expect validated input: the model doubles as the type hint and the runtime validator, so keep no separate `TypedDict` of columns.
+- Validate at the boundary `ml-check-after-load` names, never inside every transformation. `DataFrame[Schema]` hints document which functions expect validated input: the model doubles as the type hint and the runtime validator, so keep no separate `TypedDict` of columns.
 - `strict = True` catches renamed or extra columns.
 - Be careful with coercion: it casts before checking, so a float column holding `1.9` passes an integer field as `1`. Leave it off for numeric columns, where a wrong dtype is a real error, and enable it per field (`pa.Field(coerce=True)`) only for a cast that loses nothing, such as text to a categorical.
 - Validate with `lazy=True` in pipelines, so one `SchemaErrors` report lists every failing column instead of stopping at the first.
@@ -108,4 +112,4 @@ def total_weight_kg(orders: DataFrame[OrderSchema]) -> float:
 {% if has_ml_dep("pandas") and has_ml_dep("polars") %}
 - For polars frames, the same model comes from `pandera.polars`, with plain annotations (`int`, `str`, `pl.Datetime`) and `pandera.typing.polars.DataFrame` hints.
 {% endif %}
-- This rule applies because the repo already depends on pandera. Never add pandera to a repo without it; there, the hand-written check of `ml-check-after-load` does the job.
+- This rule applies because the repo already depends on pandera; a repo without it keeps the hand-written check of `ml-check-after-load`.

@@ -28,6 +28,14 @@ A comprehension over an array is still a Python loop: the comprehension advice o
 {% if has_ml_dep("numpy") %}
 import numpy as np
 import numpy.typing as npt
+{% endif %}
+{% if has_ml_dep("pandas") %}
+import pandas as pd
+{% endif %}
+{% if has_ml_dep("polars") %}
+import polars as pl
+{% endif %}
+{% if has_ml_dep("numpy") %}
 
 
 def normalize(values: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
@@ -40,7 +48,6 @@ def normalize(values: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
 capped = np.array([min(celsius, ceiling) for celsius in readings])
 {% endif %}
 {% if has_ml_dep("pandas") %}
-import pandas as pd
 
 
 def add_handling_tier(parcels: pd.DataFrame) -> pd.DataFrame:
@@ -54,7 +61,6 @@ def add_handling_tier(parcels: pd.DataFrame) -> pd.DataFrame:
 footprint = parcels.apply(lambda row: row["length_cm"] * row["width_cm"], axis=1)
 {% endif %}
 {% if has_ml_dep("polars") %}
-import polars as pl
 
 parcels = parcels.with_columns(
     pl.col("weight_kg")
@@ -67,9 +73,19 @@ parcels = parcels.with_columns(
 ## Good Example
 
 ```python
-{% if has_ml_dep("numpy") %}
+{% if has_ml_dep("numpy") or has_ml_dep("pandas") %}
 import numpy as np
+{% endif %}
+{% if has_ml_dep("numpy") %}
 import numpy.typing as npt
+{% endif %}
+{% if has_ml_dep("pandas") %}
+import pandas as pd
+{% endif %}
+{% if has_ml_dep("polars") %}
+import polars as pl
+{% endif %}
+{% if has_ml_dep("numpy") %}
 
 
 def normalize(values: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
@@ -79,8 +95,6 @@ def normalize(values: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
 capped = np.where(readings > ceiling, ceiling, readings)
 {% endif %}
 {% if has_ml_dep("pandas") %}
-import numpy as np
-import pandas as pd
 
 
 def add_handling_tier(parcels: pd.DataFrame) -> pd.DataFrame:
@@ -96,7 +110,6 @@ parcels = parcels.assign(
 heavy = parcels[(parcels["weight_kg"] >= 30) & (parcels["service"] == "express")]
 {% endif %}
 {% if has_ml_dep("polars") %}
-import polars as pl
 
 weight = pl.col("weight_kg")
 parcels = parcels.with_columns(

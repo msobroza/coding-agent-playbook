@@ -58,6 +58,7 @@ celsius = np.loadtxt(path, delimiter=",", skiprows=1, usecols=(1, 2), dtype=np.f
 TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%S"
 {% endif %}
 {% if has_ml_dep("pandas") %}
+REGION = pd.CategoricalDtype(["north", "south", "east", "west"])
 TRANSACTION_DTYPES = {
     "customer_id": "Int64",  # nullable integer: a gap stays missing, no float cast
     "zip_code": "string",  # keeps leading zeros
@@ -83,10 +84,12 @@ def load_transactions(path: Path) -> pd.DataFrame:
 
 
 {% endif %}
+REGION_LEVELS = pl.Enum(["north", "south", "east", "west"])
 TRANSACTION_SCHEMA = {
     "customer_id": pl.Int64,
     "zip_code": pl.String,
     "amount_cents": pl.Int64,
+    "region": REGION_LEVELS,  # the shared Enum constant
 }
 
 

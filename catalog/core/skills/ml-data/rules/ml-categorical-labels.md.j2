@@ -29,7 +29,7 @@ Define each label's categories once, as one shared dtype constant, and apply tha
 events = pd.read_csv(path)
 # event_type: text, 8 distinct values repeated on every row
 # severity: "low" / "medium" / "high" sorts alphabetically: high, low, medium
-events.sort_values("severity")  # wrong order
+events = events.sort_values("severity")  # wrong order
 
 north["region"] = north["region"].astype("category")  # categories inferred per source
 south["region"] = south["region"].astype("category")
@@ -50,7 +50,7 @@ REGION = pd.CategoricalDtype(["north", "south", "east", "west"])
 
 events = pd.read_csv(path, dtype={"severity": SEVERITY, "region": REGION})
 summary = events.groupby("region", observed=True)["duration_s"].mean()
-events.sort_values("severity")  # low, medium, high
+events = events.sort_values("severity")  # low, medium, high
 serious = events[events["severity"] >= "medium"]  # ordinal comparison works
 
 regions = pd.concat(
@@ -61,7 +61,7 @@ regions = pd.concat(
 SEVERITY_LEVELS = pl.Enum(["low", "medium", "high"])
 
 events = pl.read_csv(path, schema_overrides={"severity": SEVERITY_LEVELS})
-events.sort("severity")  # low, medium, high: the Enum's order
+events = events.sort("severity")  # low, medium, high: the Enum's order
 {% endif %}
 ```
 

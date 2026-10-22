@@ -203,3 +203,44 @@ def test_seed_sequence_children_are_passed_to_default_rng() -> None:
     assert all("np.random.default_rng" in line for line in spawn_lines), (
         f"SeedSequence children are not passed to np.random.default_rng: {spawn_lines}"
     )
+
+
+@pytest.mark.parametrize(
+    ("rule_id", "ml_stack", "constant"),
+    [
+        ("ml-dtypes-at-load", ("pandas",), "REGION"),
+        ("ml-dtypes-at-load", ("polars",), "REGION_LEVELS"),
+        ("ml-dtypes-at-load", ("pandas",), "TIMESTAMP_FORMAT"),
+        ("ml-frame-validation", ("pandas",), "TIMESTAMP_FORMAT"),
+        ("ml-frame-validation", ("polars",), "TIMESTAMP_FORMAT"),
+    ],
+)
+def test_example_constants_are_defined_before_their_first_use(
+    rule_id: str, ml_stack: tuple[str, ...], constant: str
+) -> None:
+    """Review fix: the examples once used REGION and TIMESTAMP_FORMAT that only a sibling defined."""
+    body = render_core_rule(rule_id, _ml_facts(*ml_stack))
+
+    first_use = re.search(rf"\b{constant}\b", body)
+    assert first_use is not None, f"{rule_id} with {list(ml_stack)} renders no {constant}"
+    assert body.find(f"{constant} = ") == first_use.start(), (
+        f"{rule_id} with {list(ml_stack)} uses {constant} before defining it"
+    )
+
+
+def _python_fences(body: str) -> list[str]:
+    """The contents of every ```python fence of a rendered rule body."""
+    return re.findall(r"```python\n(.*?)```", body, flags=re.DOTALL)
+
+
+@pytest.mark.parametrize("rule_id", ["ml-vectorization", "ml-build-once"])
+def test_each_fence_imports_every_module_once_at_its_top(rule_id: str) -> None:
+    """Review fix: per-library branches once repeated ``import numpy as np`` mid-fence."""
+    body = render_core_rule(rule_id, _ml_facts(*_EVERY_BRANCH_LIBRARY))
+
+    for fence in _python_fences(body):
+        lines = fence.splitlines()
+        imports = [index for index, line in enumerate(lines) if line.startswith("import ")]
+        assert imports == list(range(len(imports))), f"{rule_id}: an import below the top:\n{fence}"
+        modules = [lines[index] for index in imports]
+        assert len(modules) == len(set(modules)), f"{rule_id}: a module imported twice: {modules}"
