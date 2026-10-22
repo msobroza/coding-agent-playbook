@@ -59,16 +59,19 @@ On Domino 6.2 a job is a headless run of one script on a hardware tier and a com
 
 ```python
 import os
+from collections.abc import Mapping
 from pathlib import Path
 
 
-def output_root(env: dict[str, str]) -> Path:
+def output_root(env: Mapping[str, str]) -> Path:
     """Where this run's results go: the artifacts directory, else the working directory."""
-    artifacts = env.get("DOMINO_ARTIFACTS_DIR")
-    return Path(artifacts) if artifacts else Path(env["DOMINO_WORKING_DIR"])
+    for name in ("DOMINO_ARTIFACTS_DIR", "DOMINO_WORKING_DIR"):
+        if value := env.get(name):
+            return Path(value)
+    raise RuntimeError("neither DOMINO_ARTIFACTS_DIR nor DOMINO_WORKING_DIR is set")
 
 
-root = output_root(dict(os.environ))
+root = output_root(os.environ)
 ```
 
 ## See Also

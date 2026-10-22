@@ -89,7 +89,7 @@ A fake `JobLauncher` returning "Succeeded" or "Failed" tests both paths without 
 ## Notes
 
 - The 6.2 docs give `job_start_blocking` a `max_poll_time` (default 6000 seconds) but say only of the older `runs_start_blocking` that exceeding it raises, and neither says what a failed job returns, so the deadline and the state check stay explicit in one function.
-- `job_start` takes no environment revision (domino-environment-revisions) and takes the tier by name, so record the tier the run reports.
+- `job_start` takes no environment revision (domino-environment-revisions) and takes the tier by name, so record the tier ID the run reports.
 - Authentication is domino-api-proxy-auth: the proxy inside runs, a service-account token outside.
 - Orchestrators only trigger jobs; the work code stays in the Domino project. Airflow workers install the `dominodatalab[airflow]` extra.
 - The Platform API starts jobs with `POST /api/jobs/v1/jobs` and has no v1 stop endpoint, so stop through `job_stop` and choose `commit_results` deliberately.

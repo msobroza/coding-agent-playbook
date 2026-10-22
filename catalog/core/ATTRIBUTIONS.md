@@ -202,7 +202,7 @@ Distilled (credited by name only, no vendored text):
 
 ## domino-docs
 
-Source: the Domino Data Lab 6.2 user and admin documentation, cited by page id.
+Source: the Domino Data Lab 6.2 user, admin and API documentation, cited by page id.
 Form: distilled (credited by name only, not vendored; no open license).
 
 Each row names the files that restate a page's facts in the engine's own
@@ -243,6 +243,40 @@ uses gain its files in their row.
 | `user_guide/d95a3c` | DROP | Reserved project files are detector markers and domino-jobs results material, not App guidance. |
 | `user_guide/ccaee6` | DROP | The Git-based /mnt layout is domino-jobs' shared basics. |
 | `support_kb/docs-lifecycle` | DROP | Docs lifecycle and the client compatibility matrix: provenance facts, not rule text. |
+
+### domino-jobs
+
+| Upstream file | Core files | Changes |
+| --- | --- | --- |
+| `user_guide/5dce1f` | `SKILL.md`, `rules/domino-job-schedules.md`, `rules/domino-idempotent-jobs.md` | Facts restated: the schedule fields (branch or commit, command, tier, environment revision, datasets), Quartz expressions, Run sequentially and overlapping runs, the notify and endpoint-update actions. D65 Note: the page calls `0 5 * ? * *` daily; the rule states that it fires at minute 5 of every hour. |
+| `user_guide/d2b098` | `rules/domino-job-schedules.md` | Fact restated: copying a project does not copy its schedules. |
+| `user_guide/e4f67f` | `rules/domino-job-schedules.md`, `rules/domino-launch-jobs-from-code.md` | Facts restated: bigger pipelines go to external orchestrators, which only start Domino jobs; Airflow workers install the `dominodatalab[airflow]` extra. |
+| `user_guide/af97b7` | `rules/domino-idempotent-jobs.md` | Facts restated: re-runs with the original or the current code keep the original arguments; jobs started from a commit never pick up new commits. Not used: tagging, renaming and stopping from the Active tab, volume sizes, tier grouping and cluster attachment (UI-only, no effect on job code). |
+| `user_guide/e09156` | `SKILL.md`, `rules/domino-idempotent-jobs.md`, `rules/domino-flow-task-io.md`, `rules/domino-flow-task-purity.md` | Facts restated: inputs as files under /workflow/inputs, every declared output under /workflow/outputs or the task fails, DOMINO_IS_WORKFLOW_JOB, read-only snapshot mounts (one per dataset, never version 0), retries, timeout, cache and cache_version, use_latest=False with IDs. |
+| `user_guide/2629d4` | `rules/domino-idempotent-jobs.md`, `rules/domino-spot-checkpoints.md` | Facts restated: spot reclaims fail and retry jobs; checkpoints under the artifacts directory are mounted at the next start, not after it; rank in file names; retry after 30 minutes, then a non-spot tier. D65 Note: the page names only the Git-based path and AWS spot capacity, so DFS behavior is left to verify. |
+| `api_guide/c5ef26` | `rules/domino-idempotent-jobs.md`, `rules/domino-launch-jobs-from-code.md` | Facts restated: job_start and its defaults, job_start_blocking's max_poll_time, job_status, job_stop(commit_results), job_restart, the 2.0 client floor for 6.2. D65 Note: the undocumented failure behavior of job_start_blocking becomes an explicit state check. Not used: budgets, billing tags, files and blobs, App publishing and dataset upload helpers (not needed by job code). |
+| `api_guide/8c929e` | `rules/domino-launch-jobs-from-code.md` | Facts restated: POST /api/jobs/v1/jobs starts a job and there is no v1 stop endpoint. |
+| `user_guide/866fae` | `rules/domino-launch-jobs-from-code.md` | Fact restated in the orchestrator Note: Kubeflow uses the same client library. Not reproduced: the page's misnamed package. |
+| `user_guide/752b35` | `rules/domino-launch-jobs-from-code.md` | Index of external orchestrators: informs the orchestrator Note only. |
+| `user_guide/9355a5` | `rules/domino-launch-jobs-from-code.md` | Fact restated: `domino run --wait` blocks until the job ends. |
+| `user_guide/e21e55` | `rules/domino-launch-jobs-from-code.md` | Fact restated: CLI versions before 6.2.3 cannot log in. |
+| `user_guide/b4cb04` | `rules/domino-launch-jobs-from-code.md` | Fact restated: the final state names (Succeeded, Failed, Error, Stopped). |
+| `user_guide/78acf5` | `rules/domino-flow-task-io.md`, `rules/domino-flow-task-purity.md` | Facts restated: tasks are Domino jobs on Flyte with typed inputs and outputs; a task reads versioned inputs and writes defined outputs; tasks writing read-write datasets cannot run in Flows; many tiny computations fit poorly. |
+| `user_guide/55fc89` | `rules/domino-flow-task-io.md` | Fact restated: DOMINO_IS_WORKFLOW_JOB arrives as a text flag in the environment. |
+| `user_guide/5b84c5` | `SKILL.md`, `rules/domino-job-results.md`, `rules/domino-job-logging.md`, `rules/domino-job-stats-file.md`, `rules/domino-job-email-report.md` | Facts restated: .dominoresults and .dominoignore syntax, dominostats.json at the root (deleted before each run, keys become dashboard columns), the success email with the stdout tail and up to ten result files, email.html placement, its title as the subject. D65 Note: the tip naming the file `emails.html` is a slip; the rule uses `email.html`. |
+| `user_guide/bfeeae` | `rules/domino-job-results.md` | Facts restated: .dominoignore at the project root applies to CLI and end-of-run sync, the Git directory is always ignored, isolated results branches. |
+| `user_guide/31abd5` | `rules/domino-job-results.md` | Fact restated: results on an isolated branch are fetched with the download-results command. |
+| `user_guide/de4abb` | `rules/domino-job-results.md`, `rules/domino-job-logging.md` | Facts restated: .dominokeep keeps empty directories; results/stdout.txt holds the console tail in DFS projects. |
+| `user_guide/fda6d8` | `rules/domino-job-results.md` | Fact restated: comparisons match files by name, so result names carry no version. |
+| `user_guide/ee0a08` | `rules/domino-job-results.md` | Fact restated: the example admin caps of 250 compared files and about 1 MB of diffs. |
+| `user_guide/e1c37a` | `rules/domino-job-results.md`, `rules/domino-job-logging.md`, `rules/domino-job-stats-file.md` | Facts restated: results are the files a run adds or changes; Setup Output and User Output logs; resource usage kept about 15 days; MLflow recommended for metrics. Not used: dashboard filtering, commenting and archiving (UI workflows). |
+| `user_guide/5b3b05` | `rules/domino-job-results.md` | Fact restated: in Git-based projects the results are the artifacts. |
+| `user_guide/a068c1` | `rules/domino-job-logging.md` | Fact restated: .py files run with python -u, so prints are unbuffered. |
+| `admin_guide/a9e507` | `rules/domino-job-logging.md` | Fact restated: execution logs are kept indefinitely and go into support bundles. |
+| `user_guide/0264e0` | `rules/domino-job-stats-file.md` | Contradiction resolved: the page calls the file `domino.json`; the rule keeps `dominostats.json` and says so. |
+| `user_guide/f4e1e3` | `rules/domino-job-email-report.md` | Fact restated: a Launcher's email.html becomes the body mailed to its notification list. |
+| `user_guide/db2820` | DROP | Long-running job notifications are a per-user UI preference; nothing for code to do. |
+| `report/domino-jobs R6` | DROP | Report candidate 'persist anything needed beyond 15 days': the limit covers resource-usage details only, not logs or metrics, so it shrinks to one Note in domino-job-logging. |
 
 ## Engine-written files
 

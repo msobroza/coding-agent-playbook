@@ -1,8 +1,7 @@
 """Pins of core skill ``domino-jobs`` (prU D4, D50, D63; mapping-domino-jobs.md).
 
-Every member gates on ``domino_project``, so the standard reference probe activates
-none of them (D63): they are all probe-inactive, and the skill is ``domino_only``, so
-the probe gates check it on the Domino probe instead.
+Every member gates on ``domino_project``, so the skill is checked on the Domino
+probe, which activates every member pinned here.
 """
 
 from __future__ import annotations
@@ -12,7 +11,6 @@ from typing import Final
 from tests.core_skill_pins import CoreSkillPins, RulePin
 
 _DOMINO: Final = {"domino_project": True}
-_FLOW_GLOBS: Final = ("**/*.py", "**/flows/**/*.py", "**/workflow*.py")
 _MEMBERS: Final = (
     "domino-job-schedules",
     "domino-idempotent-jobs",
@@ -30,8 +28,8 @@ PINS: Final = CoreSkillPins(
     skill_id="domino-jobs",
     where="Job and Launcher scripts, requirements.txt and Domino dotfiles",
     members=_MEMBERS,
-    probe_inactive=frozenset(_MEMBERS),
-    domino_only=True,
+    probe_inactive=frozenset(),
+    probe="domino",
     section_ids=(
         "project-and-run-environment",
         "entry-points-and-exit-codes",
@@ -76,7 +74,7 @@ PINS: Final = CoreSkillPins(
         ),
         "domino-flow-task-io": RulePin(
             applies_if=_DOMINO,
-            globs=_FLOW_GLOBS,
+            globs=("**/*.py", "**/flows/**/*.py", "**/workflow*.py"),
             priority=48,
             name="Flow task inputs and outputs",
             tags=("python", "domino", "jobs", "flows"),

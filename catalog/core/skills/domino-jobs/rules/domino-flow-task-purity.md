@@ -44,6 +44,9 @@ features = DominoJobTask(
     name="build-features",
     domino_job_config=DominoJobConfig(
         Command="python -m jobs.features",
+        EnvironmentId=FEATURES_ENVIRONMENT_ID,
+        EnvironmentRevisionSpec=FEATURES_ENVIRONMENT_REVISION_ID,
+        HardwareTierId=MEDIUM_TIER_ID,
         DatasetSnapshots=[DatasetSnapshot(Id=SALES_DATASET_ID, Version=12)],
     ),
     inputs={"day": str},
@@ -52,7 +55,7 @@ features = DominoJobTask(
     timeout=timedelta(hours=1),
     cache=True,
     cache_version="2024-06-feature-v3",  # bumped whenever jobs/features.py changes
-    use_latest=False,
+    use_latest=False,  # with the pinned IDs above, never the latest environment or tier
 )
 ```
 

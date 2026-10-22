@@ -35,42 +35,54 @@ A reclaim after six hours loses six hours, and in distributed training the worke
 ## Good Example
 
 ```python
-import os
+from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 
 
-def checkpoint_dir() -> Path:
-    return Path(os.environ["DOMINO_ARTIFACTS_DIR"]) / "checkpoints"
+def checkpoint_dir(env: Mapping[str, str]) -> Path:
+    artifacts = env.get("DOMINO_ARTIFACTS_DIR")
+    if not artifacts:
+        raise RuntimeError("DOMINO_ARTIFACTS_DIR is unset; expected the run's artifacts directory")
+    return Path(artifacts) / "checkpoints"
 
 
-def checkpoint_path(root: Path, step: int, rank: int) -> Path:
-    return root / f"step-{step:09d}-rank-{rank}.ckpt"
+@dataclass(frozen=True)
+class CheckpointStore:
+    """One worker's checkpoints, named step-<step>-rank-<rank>.ckpt under root."""
 
+    root: Path
+    rank: int
 
-def latest_checkpoint(root: Path, rank: int) -> Path | None:
-    found = sorted(root.glob(f"step-*-rank-{rank}.ckpt"))
-    return found[-1] if found else None
+    def path(self, step: int) -> Path:
+        return self.root / f"step-{step:09d}-rank-{self.rank}.ckpt"
 
+    def saved(self) -> list[Path]:
+        """This rank's checkpoints, oldest first: the zero-padded step sorts by name."""
+        return sorted(self.root.glob(f"step-*-rank-{self.rank}.ckpt"))
 
-def save_checkpoint(trainer: Trainer, root: Path, step: int, rank: int, *, keep: int = 3) -> None:
-    target = checkpoint_path(root, step, rank)
-    partial = target.with_suffix(".partial")
-    trainer.save(partial)  # the framework serializes the state
-    partial.replace(target)  # a reader never sees half a checkpoint
-    for old in sorted(root.glob(f"step-*-rank-{rank}.ckpt"))[:-keep]:
-        old.unlink()
+    @staticmethod
+    def step_of(path: Path) -> int:
+        return int(path.name.split("-")[1])
 
+    def save(self, trainer: Trainer, step: int, *, keep: int = 3) -> None:
+        target = self.path(step)
+        partial = target.with_suffix(".partial")
+        trainer.save(partial)  # the framework serializes the state
+        partial.replace(target)  # a reader never sees half a checkpoint
+        for old in self.saved()[:-keep]:
+            old.unlink()
 
-def resume(trainer: Trainer, root: Path, rank: int) -> int:
-    """Restore the newest checkpoint and return the step to continue from."""
-    newest = latest_checkpoint(root, rank)
-    if newest is None:
-        return 0
-    trainer.load(newest)
-    return int(newest.name.split("-")[1]) + 1
+    def resume(self, trainer: Trainer) -> int:
+        """Restore the newest checkpoint and return the step to continue from."""
+        saved = self.saved()
+        if not saved:
+            return 0
+        trainer.load(saved[-1])
+        return self.step_of(saved[-1]) + 1
 ```
 
-The training loop calls `resume` once at startup and `save_checkpoint` from the framework's checkpoint callback every N steps.
+The training loop builds `CheckpointStore(checkpoint_dir(os.environ), rank)`, calls `resume` once at startup and `save` from the framework's checkpoint callback every N steps.
 
 ## Notes
 
