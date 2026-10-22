@@ -201,7 +201,6 @@ PENDING_LEGIBILITY_TARGETS: Final = frozenset(
     {
         "design-dry-yagni-kiss",
         "arch-predictable-project-tree",
-        "pytest-first-properties",
     }
 )
 #: A pointer renders only when ``rule_active`` resolves it, so none dangles (D73).

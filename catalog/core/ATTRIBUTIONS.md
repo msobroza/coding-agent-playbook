@@ -35,6 +35,9 @@ carry the offending value.
 The rationale of python-coding's `rules/python-meaningful-names.md`
 (names that a search finds, the grep test) distills the same article the same
 way.
+python-testing's `rules/pytest-first-properties.md` (Fast, Independent,
+Repeatable, Self-validating and Timely unit tests, run headless by one
+documented command) distills the same article the same way.
 
 python-coding's `rules/python-comments-why.md` distills one idea from the
 matforge article on documentation best practices (comments that give the
@@ -137,12 +140,19 @@ Distilled (credited by name only, no vendored text):
 
 | Upstream file | Core files | Changes |
 | --- | --- | --- |
+| `skills/testing/rules/mock-boundaries.md` | `rules/pytest-test-doubles.md.j2` | Lines 7-49 are the skeleton (Description, the Bad Example doubling the code's own subtotal and tax, the pure-logic Good test, the many-mocks, fakes-over-mocks and never-patch-the-module-under-test notes): engine frontmatter (kept id and gate), now a template whose hotel-example Note renders only with FastAPI (D48); prices become integer cents and the Bad Example patches with `unittest.mock`; the second Good test (`mocker.patch` of an owned repository, 35-43) is replaced by the engine's FakeInvoiceStore named fake; Notes add the D27(3) sentence, plain-text pointers to sqlalchemy-test-rollback, arch-contract-tests-for-fakes, arch-test-use-cases-with-fakes, pytest-monkeypatch, fastapi-dependency-overrides, pytest-autospec and choosing-a-test-double.md. Dropped: `pip install pytest-mock` (46), freezegun (50; freeze-time only for legacy characterization), 'patch where the name is looked up' (moved to pytest-autospec) and the References list (52-54). |
+| `skills/testing/rules/mock-autospec.md` | `rules/pytest-autospec.md.j2` | Lines 7-44 are the skeleton: engine frontmatter; the Description gains the engine scope (named fakes first, autospec only at a thin third-party seam the code cannot take as a parameter yet), 'patch where the name is looked up' and the bare Mock()/MagicMock() ban; the Good Example branches on pytest-mock (D8): the `mocker` branch keeps the upstream example, the stdlib branch uses `unittest.mock.patch(..., autospec=True)` as a context manager plus a `create_autospec` note; the Bad Example patches with `unittest.mock`; module paths made neutral; Notes add the move-to-a-named-fake line and choosing-a-test-double.md. The References list (46-47) is dropped. |
+| `skills/testing/rules/mock-monkeypatch.md` | `rules/pytest-monkeypatch.md` | Lines 7-57 are the skeleton, in the HIGH isolation section (D32): engine frontmatter; the module-level `settings` flag example (26-28, 48-50) becomes a legacy module path constant patched to `tmp_path`, since business code never imports a settings instance; the `setattr` note (54) is rewritten so setattr is the legacy fallback, not a lighter mock, with the engine's 'in new code a needed patch means a missing parameter' and 'read the environment at the edge' lines; the session-scoped MonkeyPatch note kept; choosing-a-test-double.md named. The References list (59-60) is dropped. |
+| `skills/testing/rules/struct-aaa-pattern.md` | `rules/pytest-arrange-act-assert.md` | Lines 7-58 are the skeleton: engine frontmatter; prices typed as integer cents with the arithmetic in a comment; the engine's 'pytest.raises wraps only the Act' example added; relative links to fixture-factory and struct-one-behavior become the plain-text ids pytest-factory-fixtures and pytest-one-behavior. The References list (60-62) is dropped. |
+| `skills/testing/rules/struct-test-naming.md` | `rules/pytest.md.j2` | Lines 7-43 are the skeleton of Description and examples: engine frontmatter (kept id, gate and lint codes); the engine's mirrored layout (one sentence), `-> None`, plain-class grouping, plain functions over unittest.TestCase and the skip/xfail policy join the Description and Notes; the async-tests part becomes a Notes subsection with the three D27(4) branches (D43) and a typed FakeRates example; the split rules the PT codes lead to and async-tests.md and reviewing-tests.md are named. The relative struct-one-behavior link becomes pytest-one-behavior; the References list (45-46) is dropped. |
+| `skills/testing/rules/struct-one-behavior.md` | `rules/pytest-one-behavior.md` | Lines 7-54 are the skeleton: engine frontmatter; the engine's 'one logical assertion' wording joins the Description; Notes point to pytest-fixtures and pytest-parametrize in plain text. Dropped: the pytest-check plugin note (55), a new-dependency recommendation, and the References list (57-58). |
+| `skills/testing/rules/struct-no-logic.md` | `rules/pytest-no-test-logic.md` | Lines 7-58 are the skeleton: engine frontmatter; float rates become integer percentages and cents; the Good Example gains the engine's literal-with-arithmetic-comment form; Notes add 'never compare against a reference re-implementation'; the param-parametrize link becomes the plain-text id pytest-parametrize. The References list (60-61) is dropped. |
+| `skills/web-application/rules/test-dependency-overrides.md` | `rules/pytest.md.j2` | Lines 89 and 115 only: the shape of the `@pytest.mark.anyio` mark in the pytest rule's AnyIO branch (D27(4)); the rest of the file is the web-application skill's. |
+| `skills/web-application/rules/test-db-rollback.md` | `rules/pytest.md.j2` | Lines 47-49 only: the session-scoped `anyio_backend` fixture returning "asyncio" in the root conftest.py, for the pytest rule's AnyIO branch; the rest of the file is the web-application skill's. |
 
 Distilled (credited by name only, no vendored text):
 
-- `rules/pytest-test-doubles.md`
 - `rules/pytest-fixtures.md`
-- `rules/pytest.md.j2`
 
 ### python-tooling
 
@@ -252,10 +262,9 @@ Distilled (credited by name only, no vendored text):
 
 | Upstream file | Core files | Changes |
 | --- | --- | --- |
-
-Distilled (credited by name only, no vendored text):
-
-- `rules/pytest.md.j2`
+| `skills/clean-architecture/references/testing-advanced.md` | `rules/pytest.md.j2`, `rules/pytest-no-test-logic.md`, `rules/pytest-assertions.md`, `rules/pytest-deterministic-tests.md` | pytest: lines 7-34 confirm the mirrored tests tree and descriptive names, restated as one sentence on the src mirror (no routers/operations tree). pytest-no-test-logic: lines 325-337 become the 'never compare against a reference re-implementation' Note, without the float-money Employee example. pytest-assertions: lines 347-364 (a single input that cannot tell `x * 2` from `x + 2`, a second case that can) become the Bad and Good pair; lines 269-272 and 310-323 the meaningful-assertion and don't-test-built-ins Notes. pytest-deterministic-tests: lines 277-278 and 295-308 (no random input, Hypothesis as the controlled exception, a shared instance leaking between tests) become the Description and Notes, with integer cents. Dropped: 'one assert per test' (35), which conflicts with the engine's one logical assertion, and the mutmut commands (366-369), an unadopted tool. |
+| `skills/clean-architecture/references/async-patterns.md` | `rules/pytest.md.j2` | Lines 313-366: the async stub and the marked coroutine test become the pytest rule's async example: a one-method typed FakeRates returning integer cents instead of the dict-row AsyncDataInterfaceStub with KeyError not-found, and a literal expectation (`== 30_000  # 3 x 10_000`), rendered per D27(4) branch. |
+| `skills/clean-architecture/references/testable-api.md` | `rules/pytest.md.j2`, `rules/pytest-assertions.md`, `rules/pytest-deterministic-tests.md` | pytest: lines 407-430 (skip, xfail, skipif meanings) are restated as the engine's skip/xfail policy; the non-strict 'fix in next sprint' xfail and the skip for a pending migration are not carried. pytest-assertions: lines 266-282 become the `pytest.raises(RoomNotFoundError, match=...)` example on a named fake. pytest-deterministic-tests: lines 305-330 (a shared module-level stub leaking state) become the Bad and Good pair with a named fake and typed records instead of DataInterfaceStub dict rows. |
 
 ### python-tooling
 
@@ -545,6 +554,7 @@ Upstream text these rules leave out (DROP, with the reason):
 ### python-testing
 
 - `SKILL.md`
+- `rules/pytest-first-properties.md`
 
 ### python-tooling
 
