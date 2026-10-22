@@ -35,6 +35,9 @@ hash(basket)  # TypeError: unhashable type: 'list'
 ## Good Example
 
 ```python
+from dataclasses import dataclass
+
+
 @dataclass(frozen=True)
 class Basket:
     items: tuple[Item, ...]

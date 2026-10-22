@@ -15,7 +15,7 @@ tags: [python, design, data]
 
 ## Description
 
-`__post_init__` runs right after the generated `__init__`. Use it to check and normalize field values, so an invalid record can never exist, and raise with the offending value. A value that depends on other fields is a `@property` instead of a stored copy that can go stale. Keep `field(init=False)` for a value computed once from the inputs that callers must not pass.
+`__post_init__` runs right after the generated `__init__`. Use it to check and normalize field values, so an invalid record can never exist, and raise with the offending value. Keep `field(init=False)` for a value computed once from the inputs that callers must not pass; a value derived from other fields is a `@property` (`python-data-shapes`).
 
 ## Bad Example
 
@@ -40,7 +40,10 @@ def register(vehicle: Vehicle) -> None:
 ## Good Example
 
 ```python
-@dataclass
+from dataclasses import dataclass, field
+
+
+@dataclass(frozen=True)  # its inputs cannot change, so search_key cannot go stale
 class Vehicle:
     brand: str
     model: str
@@ -48,12 +51,13 @@ class Vehicle:
     search_key: str = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
-        self.brand = self.brand.strip()
-        if not self.brand:
-            raise ValueError(f"brand must not be empty, got {self.brand!r}")
+        brand = self.brand.strip()
+        if not brand:
+            raise ValueError(f"brand must be non-blank text, got {self.brand!r}")
         if self.seats < 1:
             raise ValueError(f"seats must be at least 1, got {self.seats}")
-        self.search_key = f"{self.brand}:{self.model}".casefold()  # computed once
+        object.__setattr__(self, "brand", brand)  # frozen: assign through object
+        object.__setattr__(self, "search_key", f"{brand}:{self.model}".casefold())
 
     @property
     def display_name(self) -> str:  # derived on access, never stale
@@ -68,6 +72,6 @@ Vehicle(brand="Volvo", model="XC40", seats=0)
 
 - Choose the tool by need: `field(default_factory=...)` for an independent default (an empty list); `__post_init__` to validate or normalize fields; a `@property` for a value that depends on other fields; `field(init=False)` set in `__post_init__` only for a value computed once that callers must not pass (a constructor call that passes it raises `TypeError`).
 - Raise a specific exception that names the field and the value received; do not log and continue.
-- A field computed with `init=False` from mutable fields goes stale when they change: freeze the record (`python-frozen-dataclasses`) or use a `@property`.
+- A field computed with `init=False` from mutable fields goes stale when they change: freeze the record, as `Vehicle` does (`python-frozen-dataclasses`), or use a `@property`.
 - Keep `__post_init__` free of I/O, the clock and randomness: a record's construction must stay pure and repeatable.
 - Data from outside the process is validated where it enters (`pydantic-boundaries` where the repo uses Pydantic); `__post_init__` guards the record's own invariants.

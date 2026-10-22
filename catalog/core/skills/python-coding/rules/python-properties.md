@@ -45,7 +45,9 @@ area = circle.get_area()
 
 ```python
 import math
+from collections.abc import Sequence
 from functools import cached_property
+from statistics import fmean
 
 
 class Circle:

@@ -57,14 +57,14 @@ class User:
 
 
 @dataclass
-class Cart:
+class Cart:  # a builder filled in place inside one layer
     # items: list[Item] = []  raises ValueError when the class is defined
     items: list[Item] = field(default_factory=list)  # a fresh list per instance
 
 
-@dataclass
+@dataclass(frozen=True)  # passed between layers, so frozen
 class Order:
-    items: list[Item]
+    items: tuple[Item, ...]
     customer_id: str
     discount: Decimal = Decimal("0")
 

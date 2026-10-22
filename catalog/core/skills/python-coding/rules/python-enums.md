@@ -33,6 +33,7 @@ def play(choice: str) -> Outcome:
 ## Good Example
 
 ```python
+from collections.abc import Sequence
 from enum import Enum
 from typing import Literal
 
@@ -52,7 +53,7 @@ def play(choice: Move) -> Outcome:
         case Move.SCISSORS:
             return beats_paper()
         case _:
-            raise ValueError(f"unhandled move: {choice!r}")
+            raise ValueError(f"expected a Move member, got {choice!r}")
 
 
 play(Move.SCISORS)  # the type checker flags the unknown member

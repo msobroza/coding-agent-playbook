@@ -24,6 +24,7 @@ A `typing.Protocol` gives structural typing: duck typing that the type checker v
 ## Bad Example
 
 ```python
+import json
 from abc import ABC, abstractmethod
 
 
@@ -47,7 +48,9 @@ def save(obj: Serializable) -> None:  # a library class with to_json() is reject
 ## Good Example
 
 ```python
+import json
 from collections.abc import Callable
+from datetime import datetime
 from typing import Protocol, runtime_checkable
 
 
@@ -84,6 +87,10 @@ def release(resource: object) -> None:
 An ABC stays the right tool when it carries shared code and requires overrides:
 
 ```python
+from abc import ABC, abstractmethod
+from collections.abc import Sequence
+
+
 class Exporter(ABC):
     def export(self, rows: Sequence[Row]) -> str:  # shared implementation
         return "\n".join([self._header(), *(self._line(row) for row in rows)])

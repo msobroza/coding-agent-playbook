@@ -35,11 +35,14 @@ if Accessory.NAVIGATION in car.accessories:
 ## Good Example
 
 ```python
+from dataclasses import dataclass, field
+
+
 @dataclass
 class Vehicle:
     plate: str
-    _accessories: set[Accessory] = field(default_factory=set)
-    _internal_id: str = field(default="", repr=False)  # left out of the repr
+    internal_id: str = field(repr=False)  # left out of the repr
+    _accessories: set[Accessory] = field(default_factory=set, init=False)  # not a parameter
 
     def add_accessory(self, accessory: Accessory) -> None:
         self._accessories.add(accessory)
@@ -50,7 +53,7 @@ class Vehicle:
 
 @dataclass
 class VehicleInventory:
-    _vehicles: dict[str, Vehicle] = field(default_factory=dict, repr=False)
+    _vehicles: dict[str, Vehicle] = field(default_factory=dict, init=False, repr=False)
 
     def add(self, vehicle: Vehicle) -> None:
         self._vehicles[vehicle.plate] = vehicle
@@ -64,13 +67,13 @@ class VehicleInventory:
         except KeyError:
             raise VehicleNotFoundError(f"no vehicle with plate {plate!r}") from None
 
-    def available_count(self) -> int:
+    def vehicle_count(self) -> int:
         return len(self._vehicles)
 ```
 
 ## Notes
 
-- Use `field(repr=False)` for internal ids, caches and secrets, so they stay out of logs and error messages.
+- Use `field(repr=False)` for internal ids, caches and secrets, so they stay out of logs and error messages, and `field(init=False)` for underscored storage, so constructing the object never sets it.
 - A plain record exposes plain attributes (`python-data-shapes`, `python-properties`); a class that protects an invariant exposes methods and keeps the data that the invariant covers underscored.
 - When callers need read access to protected state, return a copy or a read-only view (`tuple(self._items)`, a `@property` returning a `frozenset`), never the internal collection itself.
 - Code outside the class never reads or writes an underscored attribute; a test that does is testing the representation instead of the behavior.
