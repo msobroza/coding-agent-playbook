@@ -1,52 +1,204 @@
 # Attributions
 
 This file is the only place in the shipped resources that credits outside
-sources for the engine's own rules and prompts. Artifact bodies carry no
-attribution. Attributions for the `find-injected-vuln-*` eval fixtures live in
-`eval_samples/ATTRIBUTIONS.md`.
+sources for the engine's own rules, references, scripts and prompts. Artifact
+bodies carry no attribution. Attributions for the `find-injected-vuln-*` eval
+fixtures live in `eval_samples/ATTRIBUTIONS.md`.
 
-## Clean-architecture guidance for Python
+Core's Python guidance is vendored from the two MIT-licensed sources below: the
+upstream text is copied and adapted (engine frontmatter, one topic per rule
+file, the repository's own toolchain, no URLs, and every point where an engine
+decision disagrees rewritten to that decision). Each table records, per core
+skill, which core files every upstream file became and what changed, or `DROP`
+with the reason it was left out. A file listed as distilled reuses ideas only,
+with no upstream text, and is credited here by name.
 
-Source: the "python-clean-architecture" Claude Code plugin, version 0.8.1.
+Each core skill that holds a source's text ships that source's license notice,
+byte-identical, as `references/LICENSE.<source>` (for example
+`references/LICENSE.python-best-practices`). The Continue adapter writes no
+skill directories, so its output carries no license copy.
+
+Core paths in the tables are relative to the skill directory
+(`catalog/core/skills/<skill>/`); a path ending in `/` covers every file under
+that directory. Files the engine wrote with no upstream text are listed per
+skill under "Engine-written files" at the end.
+
+## python-best-practices
+
+Source: the "python-best-practices" agent skills by Ludo Technologies LLC, tag v0.8.0.
+Commit: `fa0d3f58afb8bf56c028bb559e0e7bc1538e079a`
+License: MIT License. Copyright (c) 2026 Ludo Technologies LLC.
+
+Its impact ratings inform each rule's section and priority. Ideas from it also
+shaped the python-error-handling, python-typing, python-docstrings,
+python-dependency-injection, python-data-shapes, python-idioms and pytest rules.
+
+### design-patterns
+
+| Upstream file | Core files | Changes |
+| --- | --- | --- |
+
+### ml-data
+
+| Upstream file | Core files | Changes |
+| --- | --- | --- |
+
+Distilled (credited by name only, no vendored text):
+
+- `rules/ml-vectorization.md.j2`
+- `rules/ml-data-transforms.md.j2`
+- `rules/ml-dtypes-and-typing.md.j2`
+- `rules/ml-reproducibility-and-testing.md.j2`
+
+### python-coding
+
+| Upstream file | Core files | Changes |
+| --- | --- | --- |
+
+Distilled (credited by name only, no vendored text):
+
+- `rules/python-performance-idioms.md`
+- `rules/python-async.md`
+- `rules/python-classes-and-protocols.md`
+- `rules/python-error-handling.md`
+- `rules/python-typing.md.j2`
+- `rules/python-docstrings.md`
+- `rules/python-dependency-injection.md`
+- `rules/python-data-shapes.md`
+- `rules/python-idioms.md`
+
+### python-testing
+
+| Upstream file | Core files | Changes |
+| --- | --- | --- |
+
+Distilled (credited by name only, no vendored text):
+
+- `rules/pytest-test-doubles.md`
+- `rules/pytest-fixtures.md`
+- `rules/pytest.md.j2`
+
+### python-tooling
+
+| Upstream file | Core files | Changes |
+| --- | --- | --- |
+
+Distilled (credited by name only, no vendored text):
+
+- `rules/python-static-checks.md`
+- `rules/pytest-configuration.md`
+- `rules/python-uv-workflow.md`
+- `rules/pydantic-boundaries.md`
+
+### web-application
+
+| Upstream file | Core files | Changes |
+| --- | --- | --- |
+
+## python-clean-architecture
+
+Source: the "python-clean-architecture" Claude Code plugin by MKToronto, 16 commits after version 0.8.1.
+Commit: `9d627ca7bedbe0bb9e2fcf3c83d81814a6133dce`
 License: MIT License. Copyright (c) 2025 MKToronto.
 The plugin describes its concepts as inspired by Arjan Codes' courses.
 
-The following artifacts distill ideas from that plugin:
+Ideas from it also shaped the python-house-style always rule and the
+review-architecture, make-testable, characterize, review and refactor prompts.
 
-- Rules: python-dependency-injection, python-pure-core, python-data-shapes,
-  python-idioms, python-classes-and-protocols, python-context-managers,
-  python-retries-and-timeouts, fastapi-app-wiring, fastapi-error-boundaries.
-- Prompts: review-architecture, make-testable, characterize.
-- Additions to existing artifacts: the python-house-style, python-typing,
-  python-error-handling and pytest rules, and the review and refactor prompts.
+### design-patterns
 
-All of this text was written fresh for this engine. No sentences, examples or
-code from the plugin are copied; only the underlying design ideas are reused,
-restated in the engine's own words and adapted to its rule and prompt format.
+| Upstream file | Core files | Changes |
+| --- | --- | --- |
 
-## Python best-practices guidance
+### ml-data
 
-Source: the "python-best-practices" agent skills collection by Ludo
-Technologies LLC (repository ludo-technologies/python-best-practices), commit
-bf64c51d2f4c8255f126c98359bdbcd5e2587b92 of 2026-08-31.
-License: MIT License. Copyright (c) 2026 Ludo Technologies LLC.
+| Upstream file | Core files | Changes |
+| --- | --- | --- |
 
-The following artifacts distill ideas from that collection:
+### python-architecture
 
-- Rules: python-performance-idioms, python-async,
-  python-classes-and-protocols, pytest-test-doubles, pytest-fixtures,
-  python-static-checks, pytest-configuration, python-uv-workflow,
-  pydantic-boundaries, ml-vectorization, ml-data-transforms,
-  ml-dtypes-and-typing, ml-reproducibility-and-testing.
-- Additions to existing artifacts: the python-error-handling, python-typing,
-  python-docstrings, python-dependency-injection, python-data-shapes,
-  python-idioms and pytest rules.
+| Upstream file | Core files | Changes |
+| --- | --- | --- |
 
-The collection's impact ratings informed each rule's priority. Its tool
-recommendations that the engine does not adopt (a code-analysis tool from the
-same publisher, a build backend, and fixed linter, type-checker and coverage
-settings) were left out.
+### python-coding
 
-All of this text was written fresh for this engine. No sentences, examples or
-code from the collection are copied; only the underlying ideas are reused,
-restated in the engine's own words and adapted to its rule format.
+| Upstream file | Core files | Changes |
+| --- | --- | --- |
+
+Distilled (credited by name only, no vendored text):
+
+- `rules/python-dependency-injection.md`
+- `rules/python-pure-core.md`
+- `rules/python-data-shapes.md`
+- `rules/python-idioms.md`
+- `rules/python-classes-and-protocols.md`
+- `rules/python-context-managers.md`
+- `rules/python-retries-and-timeouts.md`
+- `rules/python-typing.md.j2`
+- `rules/python-error-handling.md`
+
+### python-testing
+
+| Upstream file | Core files | Changes |
+| --- | --- | --- |
+
+Distilled (credited by name only, no vendored text):
+
+- `rules/pytest.md.j2`
+
+### python-tooling
+
+| Upstream file | Core files | Changes |
+| --- | --- | --- |
+
+Distilled (credited by name only, no vendored text):
+
+- `rules/fastapi-app-wiring.md`
+- `rules/fastapi-error-boundaries.md`
+
+### web-application
+
+| Upstream file | Core files | Changes |
+| --- | --- | --- |
+
+## Engine-written files
+
+Files written for the engine with no upstream text, per core skill. A file
+that comes to hold vendored text moves from here into its source's table.
+
+### design-patterns
+
+### domino-agents
+
+### domino-apps
+
+### domino-jobs
+
+### ml-data
+
+- `SKILL.md`
+- `rules/ml-serialization-security.md.j2`
+
+### playbook-creator
+
+### playbook-guardrails
+
+- `SKILL.md`
+
+### python-architecture
+
+### python-coding
+
+- `SKILL.md`
+
+### python-documentation
+
+### python-testing
+
+- `SKILL.md`
+
+### python-tooling
+
+- `SKILL.md`
+
+### web-application

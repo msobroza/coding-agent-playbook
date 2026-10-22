@@ -3,7 +3,7 @@
 The engine's artifacts load straight into an agent's context, often in an
 air-gapped deployment, so a rule, prompt or skill must never point outside the
 shipped bundle and must never name the third-party source some of them were
-distilled from. Credit for that source lives only in a layer root's
+vendored or distilled from. Credit for that source lives only in a layer root's
 ``ATTRIBUTIONS.md``: ``catalog/core/ATTRIBUTIONS.md`` for the engine's own
 artifacts and ``catalog/plugins/<name>/ATTRIBUTIONS.md`` for a bundled plugin.
 The PR-L link gate (``validation/link_check.py``) cannot enforce this: it recognizes only
@@ -29,8 +29,17 @@ are decided per file by :func:`policy_for`:
   the wheel and are copied into the agent's scratch repo. No fixture needs a URL
   today; if one ever does, allow only a reserved example host (``example.com``,
   ``*.test``, ``*.invalid``, ``localhost``) for that one path;
-* ``catalog/core/ATTRIBUTIONS.md`` -> URL-free, but it *must* name the plugin, so
-  the marker scan is off;
+* ``catalog/core/ATTRIBUTIONS.md`` -> URL-free, but it *must* name both vendored
+  sources (ADR 0004), so the marker scan is off;
+* ``skills/<skill>/references/LICENSE.python-best-practices`` and
+  ``LICENSE.python-clean-architecture`` -> the byte-identical MIT notices (D19)
+  name their source, so the marker scan is off there and nowhere else; URLs are
+  still scanned. ``test_core_license_copies.py`` pins their bytes and places;
+* markdown under ``skills/`` -> a reserved example host (D38: ``example.com``,
+  ``.org``, ``.net`` and their subdomains, ``*.test``, ``*.example``,
+  ``*.invalid``, ``localhost``, the bare host ``test``; any scheme) passes inside
+  a fenced code block; prose stays URL-free. Python under ``skills/<skill>/examples/``
+  may name a reserved host anywhere (D78(13)); every other host still fails;
 * ``eval_samples/**/ATTRIBUTIONS.md`` outside fixture trees -> markers only: the
   CC BY 4.0 licence requires its licence URI (pinned by
   ``test_crosscommitvuln_fixtures.py``).
@@ -41,12 +50,20 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import pytest
 
+from tests._attributions import (
+    SOURCE_PINS,
+    is_license_copy_path,
+    load_core_attributions,
+    write_tree,
+)
 from tests._catalog import (
     CORE_ROOT,
+    CORE_SKILLS_ROOT,
+    MARKDOWN_SUFFIXES,
     PRECOMMIT_TEMPLATE_DIR,
     REPO_ROOT,
     bundled_plugin_dirs,
@@ -79,8 +96,7 @@ _VENDORED_PLUGIN_GATES: dict[str, str] = {
 #: The engine-owned pre-commit template (engine wiring, not content) ships too.
 _PRECOMMIT_TEMPLATE_PREFIX = "templates/precommit/"
 
-#: The python-best-practices commit core's distilled rules were written from (spec 9.1).
-_PBP_COMMIT = "bf64c51d2f4c8255f126c98359bdbcd5e2587b92"
+_EXAMPLES_SUBDIR = "examples"
 
 _EVAL_SAMPLES_SUBDIR = "eval_samples"
 #: Per-sample fixture trees: ``eval_samples/<id>/setup/**`` and ``eval_samples/<id>/solution/**``.
@@ -109,6 +125,27 @@ _PLUGIN_MARKER_RE = re.compile(
     r"|software[\s_-]*designer[\s_-]*mindset|claude_plugin_root|\.claude/plugins"
     r"|python[\s_-]*best[\s_-]*practices|\bludo[\s_-]*technologies|\bpyscn\b"
 )
+#: A fenced code block's opening or closing line: three or more backticks or tildes.
+_FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
+#: The host of a URL match: after the scheme (and any user info), after ``mailto:``'s
+#: ``@``, after ``git@``, or the bare domain itself.
+_HOST_RE = re.compile(
+    r"(?i)^(?:[a-z][a-z0-9+.-]*://(?:[^/@\s]*@)?|mailto:[^@\s]*@|git@)?([a-z0-9.-]*)"
+)
+#: D38's reserved names: the bare hosts, and the domains whose subdomains also pass.
+_RESERVED_HOSTS = frozenset({"localhost", "test", "example.com", "example.org", "example.net"})
+_RESERVED_SUFFIXES = (
+    ".example.com",
+    ".example.org",
+    ".example.net",
+    ".test",
+    ".example",
+    ".invalid",
+)
+
+#: Where a reserved example host may appear in a file: nowhere, inside fenced code
+#: blocks only (a core skill's markdown), or anywhere (a core example's Python code).
+ReservedHosts = Literal["never", "in-fences", "anywhere"]
 
 
 @dataclass(frozen=True)
@@ -117,6 +154,7 @@ class ScanPolicy:
 
     urls: bool
     markers: bool
+    reserved_hosts: ReservedHosts = "never"
 
 
 @dataclass(frozen=True)
@@ -145,10 +183,10 @@ def policy_for(rel: Path) -> ScanPolicy:
     """Return the checks for ``rel`` (a path relative to ``catalog/core/``).
 
     >>> policy_for(Path("ATTRIBUTIONS.md"))
-    ScanPolicy(urls=True, markers=False)
+    ScanPolicy(urls=True, markers=False, reserved_hosts='never')
     """
     if rel == Path(_ATTRIBUTIONS_NAME):
-        # The one sanctioned home of the credit: it names the plugin by design.
+        # The one sanctioned home of the credit: it names both sources by design.
         return ScanPolicy(urls=True, markers=False)
     if (
         rel.name == _ATTRIBUTIONS_NAME
@@ -157,6 +195,21 @@ def policy_for(rel: Path) -> ScanPolicy:
     ):
         # CC BY 4.0 requires the licence URI next to the derived fixtures.
         return ScanPolicy(urls=False, markers=True)
+    if rel.parts[0] == CORE_SKILLS_ROOT.name:
+        return _skill_policy(rel)
+    return ScanPolicy(urls=True, markers=True)
+
+
+def _skill_policy(rel: Path) -> ScanPolicy:
+    """The checks for a file under ``skills/``: license copies, D38 and D78(13)."""
+    parts = rel.parts
+    if is_license_copy_path(rel):
+        # D19: the byte-identical MIT notice names its source.
+        return ScanPolicy(urls=True, markers=False)
+    if rel.name.endswith(MARKDOWN_SUFFIXES):
+        return ScanPolicy(urls=True, markers=True, reserved_hosts="in-fences")
+    if len(parts) > 3 and parts[2] == _EXAMPLES_SUBDIR and rel.suffix == ".py":
+        return ScanPolicy(urls=True, markers=True, reserved_hosts="anywhere")
     return ScanPolicy(urls=True, markers=True)
 
 
@@ -217,18 +270,58 @@ def scan_targets(
     return [ScanTarget(root / rel, prefix + rel, policy(Path(rel))) for rel in rels]
 
 
+def _is_reserved(url: str) -> bool:
+    """True when ``url``'s host is one of D38's reserved example names.
+
+    >>> _is_reserved("https://api.example.com/v1"), _is_reserved("https://pypi.org/x")
+    (True, False)
+    """
+    match = _HOST_RE.match(url)
+    host = match.group(1).casefold().rstrip(".") if match else ""
+    return host in _RESERVED_HOSTS or host.endswith(_RESERVED_SUFFIXES)
+
+
+def _fenced_lines(lines: list[str]) -> set[int]:
+    """The 1-based numbers of the lines inside fenced code blocks (fence lines excluded)."""
+    fenced: set[int] = set()
+    fence: str | None = None
+    for lineno, line in enumerate(lines, start=1):
+        marker = _FENCE_RE.match(line)
+        if fence is None and marker:
+            fence = marker.group(1)
+        elif fence is not None and marker and marker.group(1).startswith(fence):
+            fence = None
+        elif fence is not None:
+            fenced.add(lineno)
+    return fenced
+
+
 def scan_text(text: str, rel: str, policy: ScanPolicy) -> list[Violation]:
     """Return every URL / plugin-marker hit in ``text`` that ``policy`` forbids.
 
     >>> scan_text("see www.example.org", "r.md", ScanPolicy(urls=True, markers=True))
     [Violation(rel='r.md', line=1, kind='url', text='www.example.org')]
     """
-    checks = [("url", _URL_RE, policy.urls), ("plugin-marker", _PLUGIN_MARKER_RE, policy.markers)]
+    lines = text.splitlines()
+    if policy.reserved_hosts == "in-fences":
+        lenient = _fenced_lines(lines)
+    elif policy.reserved_hosts == "anywhere":
+        lenient = set(range(1, len(lines) + 1))
+    else:
+        lenient = set()
     found: list[Violation] = []
-    for lineno, line in enumerate(text.splitlines(), start=1):
-        for kind, pattern, enabled in checks:
-            if enabled:
-                found += [Violation(rel, lineno, kind, m.group(0)) for m in pattern.finditer(line)]
+    for lineno, line in enumerate(lines, start=1):
+        if policy.urls:
+            found += [
+                Violation(rel, lineno, "url", m.group(0))
+                for m in _URL_RE.finditer(line)
+                if not (lineno in lenient and _is_reserved(m.group(0)))
+            ]
+        if policy.markers:
+            found += [
+                Violation(rel, lineno, "plugin-marker", m.group(0))
+                for m in _PLUGIN_MARKER_RE.finditer(line)
+            ]
     return found
 
 
@@ -315,18 +408,22 @@ def test_plugin_scan_exempts_only_each_plugin_root_attributions_from_the_marker_
     assert f"{_SCANNED_PLUGIN_PREFIX}{_ATTRIBUTIONS_NAME}" in exempt
 
 
-def test_core_attributions_credit_the_distilled_source() -> None:
+@pytest.mark.parametrize(
+    ("source", "credits"),
+    [
+        ("python-best-practices", ("Ludo Technologies LLC", "MIT License")),
+        ("python-clean-architecture", ("MKToronto", "MIT License")),
+    ],
+)
+def test_core_attributions_credit_each_vendored_source(
+    source: str, credits: tuple[str, ...]
+) -> None:
+    """ADR 0004: each source has its own section, with its D11 pin, holder and license."""
+    assert load_core_attributions().sources[source].commit == SOURCE_PINS[source]
     text = (CORE_ROOT / _ATTRIBUTIONS_NAME).read_text(encoding="utf-8")
-    assert "python-clean-architecture" in text
-    assert "MKToronto" in text
-    assert "MIT" in text
-
-
-def test_core_attributions_credit_python_best_practices() -> None:
-    """Core's second distilled source: its name, publisher, pinned commit and license."""
-    text = (CORE_ROOT / _ATTRIBUTIONS_NAME).read_text(encoding="utf-8")
-    for needle in ("python-best-practices", "Ludo Technologies LLC", _PBP_COMMIT, "MIT"):
-        assert needle in text, f"core ATTRIBUTIONS.md must credit {needle!r}"
+    section = text.split(f"\n## {source}\n", 1)[1].split("\n## ", 1)[0]
+    for needle in credits:
+        assert needle in section, f"core ATTRIBUTIONS.md's {source} section must credit {needle!r}"
 
 
 # --------------------------------------------------------------------------- #
@@ -386,10 +483,18 @@ def test_scan_text_passes_clean_text() -> None:
     assert scan_text(clean, "x.md", _BOTH) == []
 
 
+#: A core skill's markdown: reserved example hosts pass inside fenced code blocks (D38).
+_SKILL_MD = ScanPolicy(urls=True, markers=True, reserved_hosts="in-fences")
+#: Example app code under a core skill: reserved hosts pass anywhere in the file (D78(13)).
+_EXAMPLE_PY = ScanPolicy(urls=True, markers=True, reserved_hosts="anywhere")
+#: A byte-identical license copy names its source by design (D19).
+_LICENSE_COPY = ScanPolicy(urls=True, markers=False)
+
+
 @pytest.mark.parametrize(
     ("rel", "expected"),
     [
-        ("skills/python-coding/rules/python-pure-core.md", ScanPolicy(urls=True, markers=True)),
+        ("skills/python-coding/rules/python-pure-core.md", _SKILL_MD),
         ("prompts/characterize.md", ScanPolicy(urls=True, markers=True)),
         ("eval_samples/some-sample/sample.toml", ScanPolicy(urls=True, markers=True)),
         ("eval_samples/some-sample/setup/app/db.py", ScanPolicy(urls=True, markers=True)),
@@ -399,6 +504,22 @@ def test_scan_text_passes_clean_text() -> None:
         ("eval_samples/some-sample/ATTRIBUTIONS.md", ScanPolicy(urls=False, markers=True)),
         ("eval_samples/some-sample/setup/ATTRIBUTIONS.md", ScanPolicy(urls=True, markers=True)),
         ("rules/ATTRIBUTIONS.md", ScanPolicy(urls=True, markers=True)),
+        ("skills/s/SKILL.md", _SKILL_MD),
+        ("skills/s/references/guide.md", _SKILL_MD),
+        ("skills/s/examples/app/README.md", _SKILL_MD),
+        ("skills/s/examples/app/src/app/main.py", _EXAMPLE_PY),
+        ("skills/s/examples/app/pyproject.toml", ScanPolicy(urls=True, markers=True)),
+        ("skills/s/scripts/tool.py", ScanPolicy(urls=True, markers=True)),
+        ("skills/s/references/LICENSE.python-best-practices", _LICENSE_COPY),
+        ("skills/s/references/LICENSE.python-clean-architecture", _LICENSE_COPY),
+        ("skills/s/references/LICENSE.other-source", ScanPolicy(urls=True, markers=True)),
+        ("skills/s/LICENSE.python-best-practices", ScanPolicy(urls=True, markers=True)),
+        (
+            "skills/s/references/x/LICENSE.python-best-practices",
+            ScanPolicy(urls=True, markers=True),
+        ),
+        ("references/LICENSE.python-clean-architecture", ScanPolicy(urls=True, markers=True)),
+        ("prompts/LICENSE.python-best-practices", ScanPolicy(urls=True, markers=True)),
     ],
 )
 def test_policy_for(rel: str, expected: ScanPolicy) -> None:
@@ -455,9 +576,7 @@ def test_scan_targets_on_a_synthetic_tree(tmp_path: Path) -> None:
         "eval_samples/t/solution/negatives/wrong.md": "clean\n",
         "rules/.cache/junk.md": "https://example.org\n",
     }
-    for rel, body in files.items():
-        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
-        (tmp_path / rel).write_text(body, encoding="utf-8")
+    write_tree(tmp_path, files)
 
     violations = [v.render() for t in scan_targets(tmp_path) for v in scan_file(t)]
 
@@ -468,4 +587,95 @@ def test_scan_targets_on_a_synthetic_tree(tmp_path: Path) -> None:
         "eval_samples/t/solution/transcript.md:1: plugin-marker: 'Arjan'",
         "rules/a.md:1: url: 'https://example.org'",
         "skills/s/scripts/run.py:1: plugin-marker: 'mktoronto'",
+    ]
+
+
+_FENCE = "```"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://example.com/v1/items",
+        "http://api.example.org/x",
+        "https://deep.sub.example.net",
+        "http://localhost:8000/health",
+        "postgresql://user:secret@localhost/app",
+        "http://test/items",
+        "https://svc.test/x",
+        "https://shop.example/x",
+        "https://nothing.invalid",
+        "www.example.org/path",
+        "mailto:someone@example.com",
+        "api.example.com/v1",
+    ],
+)
+def test_reserved_hosts_pass_inside_a_fence_of_a_skill_file(url: str) -> None:
+    text = f'Prose.\n{_FENCE}python\nURL = "{url}"\n{_FENCE}\n'
+    assert scan_text(text, "x.md", _SKILL_MD) == []
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://pypi.org/simple",
+        "https://example.com.evil.org/x",
+        "https://notexample.com/x",
+        "http://localhost.evil.net/x",
+        "https://example.co/x",
+        "https://tester/x",
+    ],
+)
+def test_other_hosts_still_fail_inside_a_fence(url: str) -> None:
+    text = f'{_FENCE}python\nURL = "{url}"\n{_FENCE}\n'
+    assert [v.kind for v in scan_text(text, "x.md", _SKILL_MD)] == ["url"]
+
+
+def test_a_reserved_host_in_prose_still_fails() -> None:
+    """D38: prose stays URL-free; only fenced code may name a reserved host."""
+    text = f"See https://example.com/docs.\n{_FENCE}\nok\n{_FENCE}\nThen http://localhost:8000.\n"
+    assert scan_text(text, "x.md", _SKILL_MD) == [
+        Violation("x.md", 1, "url", "https://example.com/docs."),
+        Violation("x.md", 5, "url", "http://localhost:8000."),
+    ]
+
+
+def test_a_tilde_fence_counts_and_an_unclosed_fence_runs_to_the_end() -> None:
+    text = "~~~toml\nurl = 'https://example.com'\n~~~\nprose\n```\nhttp://localhost/x\n"
+    assert scan_text(text, "x.md", _SKILL_MD) == []
+
+
+def test_reserved_hosts_outside_skills_fail_even_in_a_fence() -> None:
+    text = f"{_FENCE}\nhttps://example.com/x\n{_FENCE}\n"
+    assert [v.kind for v in scan_text(text, "x.md", _BOTH)] == ["url"]
+
+
+def test_example_code_may_name_a_reserved_host_anywhere() -> None:
+    text = (
+        'BASE = "http://localhost:8000"\n'
+        'OTHER = "https://api.example.com/v1"\n'
+        'BAD = "https://pypi.org/x"\n'
+    )
+    assert scan_text(text, "main.py", _EXAMPLE_PY) == [
+        Violation("main.py", 3, "url", 'https://pypi.org/x"')
+    ]
+
+
+def test_a_license_copy_passes_the_marker_scan_only_in_a_skill_references_dir(
+    tmp_path: Path,
+) -> None:
+    """D19: the two license names may name their source only at their sanctioned home."""
+    notice = "MIT License\n\nCopyright (c) 2026 Ludo Technologies LLC\n"
+    files = {
+        "skills/s/references/LICENSE.python-best-practices": notice,
+        "skills/s/LICENSE.python-best-practices": notice,
+        "prompts/LICENSE.python-best-practices": notice,
+    }
+    write_tree(tmp_path, files)
+
+    violations = [v.render() for t in scan_targets(tmp_path) for v in scan_file(t)]
+
+    assert violations == [
+        "prompts/LICENSE.python-best-practices:3: plugin-marker: 'Ludo Technologies'",
+        "skills/s/LICENSE.python-best-practices:3: plugin-marker: 'Ludo Technologies'",
     ]
