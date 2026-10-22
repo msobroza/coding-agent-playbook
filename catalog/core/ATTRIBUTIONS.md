@@ -87,7 +87,9 @@ software, which carry no open license; they are credited by name only and
 not vendored. No sentences or examples from the articles are copied, their
 errors are not repeated, and the ideas are restated in the engine's own
 words. The `matforge` section below records, per article section, the files
-that use its ideas or why it was dropped.
+that use its ideas or why it was dropped. The four-kinds model of user
+documentation those articles follow, Diataxis, is credited here by name, with
+no text taken from it.
 
 ## python-best-practices
 
@@ -522,13 +524,14 @@ Source: the matforge articles "Documentation best practices for scientific Pytho
 Form: distilled (credited by name only, not vendored; no open license).
 
 Each row names the files that restate a section's ideas in the engine's own
-words; those files stay under "Engine-written files".
+words; those files stay under "Engine-written files". Sections a later lane
+uses gain its files in their row.
 
 ### python-documentation
 
 | Upstream file | Core files | Changes |
 | --- | --- | --- |
-| `documentation-best-practices-scientific-python-packages#docs-as-code` | `rules/docs-same-change.md`, `rules/docs-document-layout.md` | Ideas restated: docs live beside the code so each version carries matching docs; a behavior change is not done until its docs match. |
+| `documentation-best-practices-scientific-python-packages#docs-as-code` | `rules/docs-same-change.md`, `rules/docs-document-layout.md`, `rules/docs-check-in-ci.md`, `rules/sphinx-docs-build.md`, `rules/mkdocs-docs-build.md` | Ideas restated: docs live beside the code so each version carries matching docs; a behavior change is not done until its docs match. Ideas restated: docs get the quality bar of code, are built and checked on every push, and a broken link is a bug. |
 | `documentation-best-practices-scientific-python-packages#review-checklist` | `SKILL.md`, `rules/docs-same-change.md` | Ideas restated: the pre-finish checks (docstrings, examples tested, README for user-facing changes, a changelog entry), recast as the Quick Reference and pointers to this skill's rules. Its 'changelog has an entry' follows the repo's own mechanism (D67). |
 | `documentation-best-practices-scientific-python-packages#examples-and-doctests` | `rules/docs-runnable-examples.md` | Ideas restated: examples teach usage and double as tests, and catch silently wrong numerical results; 'every example doctested' becomes 'run the repo's doctest command where it has one' (D67). |
 | `documentation-best-practices-scientific-python-packages#examples-and-doctests-errors` | DROP | Article errors not repeated: the misspelled pytest doctest flag and a sample that uses undefined names; docs-runnable-examples states the correct flag and requires self-contained examples. |
@@ -551,6 +554,14 @@ words; those files stay under "Engine-written files".
 | `research-software-documentation-practical-guide-scientists#doxygen` | DROP | C and C++ documentation tooling is outside Python repos. |
 | `research-software-documentation-practical-guide-scientists#cli-help-text` | DROP | A CLI's help text is a code topic, not documentation practice; recorded as an open issue. |
 | `research-software-documentation-practical-guide-scientists#error-messages` | DROP | 'Say how to fix it' extends python-coding's error rules; recorded as an open issue. |
+| `documentation-best-practices-scientific-python-packages#structure-four-types` | `rules/docs-page-kinds.md` | Ideas restated: tutorial, how-to guide, reference and explanation, each kept in its own place. |
+| `research-software-documentation-practical-guide-scientists#structure` | `rules/docs-page-kinds.md` | Ideas restated: do not cram every kind into the README; ask who reads and what they need. |
+| `documentation-best-practices-scientific-python-packages#sphinx-autodoc` | `rules/sphinx-api-reference.md` | Ideas restated: autodoc extracts the API from docstrings, napoleon reads the docstring styles, roles catch renames. |
+| `documentation-best-practices-scientific-python-packages#structure-reference` | `rules/sphinx-api-reference.md` | Idea restated: reference is complete, exact and built from docstrings. |
+| `research-software-documentation-practical-guide-scientists#toolchain` | `rules/mkdocs-api-reference.md` | Context only: MkDocs as the simple Markdown-site option; the plugin specifics are engine-written. |
+| `documentation-best-practices-scientific-python-packages#workflow-ci` | `rules/docs-check-in-ci.md`, `rules/sphinx-docs-build.md`, `rules/mkdocs-docs-build.md` | Ideas restated: build and check the docs in CI and check links; the repo's own command replaces the article's sample. |
+| `engine: docs-practices section 4 (docs-cross-references)` | DROP | Folded into the Notes of sphinx-api-reference and mkdocs-api-reference (roles, intersphinx, autorefs) instead of a separate rule. |
+| `engine: docs-practices section 4 (sphinx-docs-config, mkdocs-docs-config)` | DROP | Their points are split between the two API-reference rules and the two build rules; separate config rules would repeat them. |
 
 ## Engine-written files
 
@@ -761,6 +772,12 @@ Upstream text these rules leave out (DROP, with the reason):
 - `rules/docs-changelog.md`
 - `rules/docs-contributing-guide.md`
 - `rules/docs-citation-file.md`
+- `rules/docs-page-kinds.md`
+- `rules/sphinx-api-reference.md`
+- `rules/mkdocs-api-reference.md`
+- `rules/docs-check-in-ci.md`
+- `rules/sphinx-docs-build.md`
+- `rules/mkdocs-docs-build.md`
 
 ### python-testing
 
