@@ -4,7 +4,8 @@ The validator runs ``harnesses-ref``-equivalent structural checks against a
 harness tree (emitted or foreign):
 
 - **errors** (non-zero exit): ``HARNESS.md`` absent; its ``name``/``description``
-  empty; a detected skill leaf missing ``name``/``description``;
+  empty; a detected skill leaf missing ``name``/``description``; a non-markdown
+  file in a skill leaf's ``rules/`` (prU D22);
 - **warnings** (exit 0 by default, non-zero under ``--strict``): a grouping
   subdir lacks its routing file; a content ``.md`` lacks ``description``.
 
@@ -383,3 +384,42 @@ def test_malformed_harness_md_is_a_validation_error_not_a_usage_error(
         f"ERROR {root}: HARNESS.md requires non-empty 'name' and 'description'\n"
         "validation failed with 1 error(s), 0 warning(s)\n"
     )
+
+
+# --- a skill leaf's rules/ (prU D22) ----------------------------------------
+
+
+def _skill_with_rules(tmp_path: Path, *files: tuple[str, str]) -> Path:
+    """A minimal harness with one ``skills/db/`` leaf whose ``rules/`` holds ``files``."""
+    root = _minimal_harness(tmp_path)
+    (root / ".leaf-detectors").write_text("skill=SKILL.md\n", encoding="utf-8")
+    skills = root / "skills"
+    (skills / "db" / "rules").mkdir(parents=True)
+    (skills / "SKILLS.md").write_text("---\ndescription: skills\n---\nSkills.\n", encoding="utf-8")
+    (skills / "db" / "SKILL.md").write_text(
+        "---\nname: db\ndescription: Database work\n---\nBody.\n", encoding="utf-8"
+    )
+    for name, text in files:
+        (skills / "db" / "rules" / name).write_text(text, encoding="utf-8")
+    return root
+
+
+def test_skill_rules_markdown_validates_clean(tmp_path, capsys):
+    rule = "---\ndescription: Use params\n---\n# SQL\n"
+    root = _skill_with_rules(tmp_path, ("sql.md", rule))
+
+    rc = _validate_harness.run(_ns(root, strict=True))
+
+    assert rc == 0, capsys.readouterr()
+
+
+def test_non_markdown_file_in_skill_rules_is_an_error_naming_it(tmp_path, capsys):
+    root = _skill_with_rules(tmp_path, ("sql.md", "---\ndescription: d\n---\n# SQL\n"))
+    (root / "skills" / "db" / "rules" / "notes.txt").write_text("x\n", encoding="utf-8")
+
+    rc = _validate_harness.run(_ns(root))
+
+    assert rc != 0
+    out = capsys.readouterr().out
+    bad = root / "skills" / "db" / "rules" / "notes.txt"
+    assert f"{bad}: skill rules/ holds a non-markdown file 'notes.txt'" in out

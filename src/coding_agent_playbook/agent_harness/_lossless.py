@@ -10,6 +10,7 @@ path (``specs/prH-agent-harness.md`` §C). Split out of :mod:`.importer` by AH-2
 
 from __future__ import annotations
 
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.agent_harness._import_writes import (
@@ -18,6 +19,7 @@ from coding_agent_playbook.agent_harness._import_writes import (
 )
 from coding_agent_playbook.agent_harness.hook_sidecars import read_hook_sidecar
 from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
+from coding_agent_playbook.artifacts.member_reference import RULES_DIR
 from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill
@@ -87,6 +89,7 @@ def _rule_from_entry(path: Path, entry: ManifestEntry, source_package: str) -> R
     description = _description_from_disk(path)
     body = _body_from_entry(path, entry)
     is_templated = bool(entry.is_templated) if entry.is_templated is not None else False
+    home_skill = location_skill(entry.path, entry.id) if entry.skill is None else None
     return Rule(
         frontmatter=RuleFrontmatter(
             id=entry.id,
@@ -101,14 +104,30 @@ def _rule_from_entry(path: Path, entry: ManifestEntry, source_package: str) -> R
             priority=entry.priority if entry.priority is not None else 50,
             tags=list(entry.tags),
             lint_codes=dict(entry.lint_codes),
-            skill=entry.skill,
+            skill=entry.skill if home_skill is None else home_skill,
+            section=entry.section,
         ),
         body=body,
         template_body=body,
         is_templated=is_templated,
         source_path=path,
         source_package=source_package,
+        # An entry at ``skills/<s>/rules/<id>.md`` without ``skill`` was placed by
+        # location: a member of ``s`` with no authored ``skill:`` line (prU D22).
+        home_skill=home_skill,
+        skill_from_location=home_skill is not None,
     )
+
+
+def location_skill(rel_path: str, rule_id: str) -> str | None:
+    """The skill whose ``rules/`` holds ``rel_path`` (``skills/<s>/rules/<id>.md``), else None.
+
+    Example: ``location_skill("skills/risk/rules/limits.md", "limits")`` -> ``"risk"``.
+    """
+    parts = PurePosixPath(rel_path).parts
+    if len(parts) != 4 or (parts[0], parts[2], parts[3]) != ("skills", RULES_DIR, f"{rule_id}.md"):
+        return None
+    return parts[1]
 
 
 def _prompt_from_entry(path: Path, entry: ManifestEntry, source_package: str) -> Prompt:

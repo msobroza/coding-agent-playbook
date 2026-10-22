@@ -4,7 +4,8 @@
 
 - a ``.harnessleaf`` marker → an opaque :class:`LeafMarker` (never recursed);
 - a typed leaf per the root ``.leaf-detectors`` (``skill`` leaves parse
-  ``SKILL.md`` and capture ``scripts/`` + internal ``references/``);
+  ``SKILL.md`` and capture ``scripts/``, internal ``references/`` and the
+  member rules under ``rules/``, prU D22);
 - otherwise a grouping directory (read its routing file, then recurse).
 
 Routing-file names derive from the **top-level** ancestor segment and propagate
@@ -45,6 +46,7 @@ LEAF_DETECTORS_FILENAME = ".leaf-detectors"
 SKILL_FILENAME = "SKILL.md"
 SCRIPTS_DIRNAME = "scripts"
 REFERENCES_DIRNAME = "references"
+RULES_DIRNAME = "rules"
 
 #: Detector leaf type that triggers SKILL.md parsing.
 SKILL_LEAF_TYPE = "skill"
@@ -130,7 +132,7 @@ def _parse_directory(
 
 
 def _parse_skill_leaf(directory: Path) -> SkillLeaf:
-    """Parse a ``skill`` leaf: ``SKILL.md`` metadata + ``scripts/`` + ``references/``."""
+    """Parse a ``skill`` leaf: ``SKILL.md`` metadata + ``scripts/``, ``references/``, ``rules/``."""
     frontmatter, body = split_frontmatter((directory / SKILL_FILENAME).read_text(encoding="utf-8"))
     return SkillLeaf(
         name=str(frontmatter.get("name", "")),
@@ -139,7 +141,15 @@ def _parse_skill_leaf(directory: Path) -> SkillLeaf:
         path=directory,
         scripts=_parse_scripts(directory / SCRIPTS_DIRNAME),
         references=_parse_reference_files(directory / REFERENCES_DIRNAME),
+        rules=_parse_skill_rules(directory / RULES_DIRNAME),
     )
+
+
+def _parse_skill_rules(rules_dir: Path) -> tuple[ContentFile | RawAsset, ...]:
+    """Every file of a skill's ``rules/``: markdown -> content, anything else -> raw asset."""
+    if not rules_dir.is_dir():
+        return ()
+    return tuple(_parse_content_files(rules_dir, skip=set()))
 
 
 def _parse_scripts(scripts_dir: Path) -> tuple[ScriptFile, ...]:

@@ -1,8 +1,9 @@
 """The best-effort tier of ``playbook import-harness``: a foreign harness, no sidecar.
 
 Kinds are inferred from directory placement (skill leaf -> ``Skill``; ``prompts/*``
--> ``Prompt``; ``rules/*.md`` -> ``Rule`` scope=always; ``references/*.md`` ->
-``Rule`` scope=scoped; raw/non-md -> opaque asset), and every lossy assumption is
+-> ``Prompt``; ``rules/*.md`` -> ``Rule`` scope=always; ``skills/<s>/rules/*.md``
+-> ``Rule`` scope=scoped, a member of ``s`` (prU D22); ``references/*.md`` ->
+``Rule`` scope=scoped, an older tree's layout; raw/non-md -> opaque asset), and every lossy assumption is
 collected as a warning. A ``guardrail-*`` rule file is only a degraded hook
 advisory, so its import as a ``Rule`` is flagged as lossy too. AH-1 (#134) split
 this walk out of :mod:`.importer`; AH-2 (#143) has the importer pass its
@@ -11,10 +12,10 @@ this walk out of :mod:`.importer`; AH-2 (#143) has the importer pass its
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from coding_agent_playbook.agent_harness._import_writes import read_harness_md, strip_sentinel
-from coding_agent_playbook.agent_harness.models import LeafMarker, RawAsset, SkillLeaf
+from coding_agent_playbook.agent_harness.models import ContentFile, LeafMarker, RawAsset, SkillLeaf
 from coding_agent_playbook.agent_harness.parser import parse_harness
 from coding_agent_playbook.artifacts.hook_schema import ADVISORY_RULE_PREFIX
 from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
@@ -25,7 +26,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.agent_harness.importer import ImportResult
-    from coding_agent_playbook.agent_harness.models import ContentFile, HarnessDirectory
+    from coding_agent_playbook.agent_harness.models import HarnessDirectory
 
 _NO_SIDECAR = (
     "no .playbook/manifest.toml sidecar found; reconstructing best-effort. "
@@ -116,6 +117,22 @@ def _best_effort_leaf(leaf: SkillLeaf, top: str, result: ImportResult, source_pa
             source_package=source_package,
         )
     )
+    for item in leaf.rules:
+        _best_effort_member(item, skill_id, result, source_package)
+
+
+def _best_effort_member(
+    item: ContentFile | RawAsset, skill_id: str, result: ImportResult, source_package: str
+) -> None:
+    """A file of ``skills/<skill_id>/rules/``: markdown -> a member ``Rule``, else an asset."""
+    if isinstance(item, RawAsset):
+        _raw_asset(item, result)
+        return
+    rule = _inferred_rule(item, "scoped", source_package, home_skill=skill_id)
+    result.warnings.append(
+        _scope_warning(rule.frontmatter.id, "scoped", f"skills/{skill_id}/rules", needs_skill=False)
+    )
+    result.rules.append(rule)
 
 
 def _best_effort_prompt(leaf: SkillLeaf, result: ImportResult, source_package: str) -> None:
@@ -145,43 +162,61 @@ def _best_effort_content(
 ) -> None:
     """Markdown content -> ``Rule`` (scope from dir placement); raw -> opaque asset."""
     if isinstance(item, RawAsset):
-        result.raw_assets.append(item.path)
-        result.warnings.append(
-            f"raw asset {item.path.name!r}: no canonical home; copied as opaque passthrough"
-        )
+        _raw_asset(item, result)
         return
+    scope: Literal["always", "scoped"] = "scoped" if top == "references" else "always"
+    rule = _inferred_rule(item, scope, source_package)
+    rule_id = rule.frontmatter.id
+    if (lossy := guardrail_warning(rule_id)) is not None:
+        result.warnings.append(lossy)
+    result.warnings.append(_scope_warning(rule_id, scope, top, needs_skill=scope == "scoped"))
+    result.rules.append(rule)
+
+
+def _raw_asset(item: RawAsset, result: ImportResult) -> None:
+    result.raw_assets.append(item.path)
+    result.warnings.append(
+        f"raw asset {item.path.name!r}: no canonical home; copied as opaque passthrough"
+    )
+
+
+def _inferred_rule(
+    item: ContentFile,
+    scope: Literal["always", "scoped"],
+    source_package: str,
+    *,
+    home_skill: str | None = None,
+) -> Rule:
+    """A ``Rule`` from a harness content file; ``home_skill`` makes it a member by location."""
     frontmatter, body = read_harness_md(item.path)
     # The emitter prefixes always-rules with ``<priority>-``; strip a leading
     # ``NN-`` so the canonical id matches what was emitted.
     rule_id = _strip_priority_prefix(item.filename.removesuffix(".md.j2").removesuffix(".md"))
-    scope = "scoped" if top == "references" else "always"
-    if (lossy := guardrail_warning(rule_id)) is not None:
-        result.warnings.append(lossy)
-    result.warnings.append(_scope_warning(rule_id, scope, top))
-    result.rules.append(
-        Rule(
-            frontmatter=RuleFrontmatter(
-                id=rule_id,
-                name=rule_id,
-                description=str(frontmatter.get("description", "")),
-                scope=scope,  # type: ignore[arg-type]
-            ),
-            body=body,
-            template_body=body,
-            is_templated=item.filename.endswith(".md.j2"),
-            source_path=item.path,
-            source_package=source_package,
-        )
+    return Rule(
+        frontmatter=RuleFrontmatter(
+            id=rule_id,
+            name=rule_id,
+            description=str(frontmatter.get("description", "")),
+            scope=scope,
+            skill=home_skill,
+        ),
+        body=body,
+        template_body=body,
+        is_templated=item.filename.endswith(".md.j2"),
+        source_path=item.path,
+        source_package=source_package,
+        home_skill=home_skill,
+        skill_from_location=home_skill is not None,
     )
 
 
-def _scope_warning(rule_id: str, scope: str, top: str) -> str:
-    """The lossiness warning of a best-effort rule; a scoped one also needs a ``skill:``."""
+def _scope_warning(rule_id: str, scope: str, placement: str, *, needs_skill: bool) -> str:
+    """The lossiness warning of a best-effort rule; a scoped one outside a skill needs ``skill:``."""
     skill_hint = "; a scoped rule needs 'skill: <skill-id>' before playbook sync accepts it"
     return (
-        f"rule {rule_id!r}: scope inferred as {scope!r} from {top}/ placement; "
+        f"rule {rule_id!r}: scope inferred as {scope!r} from {placement}/ placement; "
         "globs/applies_if/priority/tags/version not recoverable without sidecar"
-        + (skill_hint if scope == "scoped" else "")
+        + (skill_hint if needs_skill else "")
     )
 
 
