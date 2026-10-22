@@ -59,11 +59,13 @@ facts are distilled (D50): restated in the engine's own words, with no sentence
 or code copied. Domino Data Lab's `simple_agent_api_only` example agent is
 Apache-2.0 licensed (commit `eee728252c42fa660e65c2dccbea6ae4f679c04c`); the
 rules take only ideas from it, with no sentence or code copied, so they hold no
-upstream text. Neither source has a pinned section above, so the rules are
-listed under "Engine-written files", with the upstream files the secrets and
-service rules draw on and the upstream text they leave out; the adapted example
-app, which does hold that repository's code, is credited with its license copy
-and change list when it is vendored.
+upstream text. The rules are therefore listed under "Engine-written files",
+with the upstream files the secrets and service rules draw on and the upstream
+text they leave out. The adapted example app,
+`examples/simple-agent-api/`, does hold that repository's code: the
+`simple-agent-api` section below maps each upstream file to the example files
+it became, with the change list, and the skill ships the Apache-2.0 license
+copy as `references/LICENSE.simple-agent-api`.
 
 The domino-jobs skill (its SKILL.md and every rule under its rules/
 directory, listed under "Engine-written files") distills facts from the
@@ -570,6 +572,35 @@ uses gain its files in their row.
 | `engine: docs-practices section 4 (docs-cross-references)` | DROP | Folded into the Notes of sphinx-api-reference and mkdocs-api-reference (roles, intersphinx, autorefs) instead of a separate rule. |
 | `engine: docs-practices section 4 (sphinx-docs-config, mkdocs-docs-config)` | DROP | Their points are split between the two API-reference rules and the two build rules; separate config rules would repeat them. |
 
+## simple-agent-api
+
+Source: Domino Data Lab's `simple_agent_api_only` example agent ("REST + A2A").
+Commit: `eee728252c42fa660e65c2dccbea6ae4f679c04c`
+License: Apache License 2.0. Copyright Domino Data Lab.
+
+The code is adapted (Apache-2.0 section 4(b)): each adapted file opens with a
+one-line notice that it was changed, and the example's README.md lists the
+changes. Every file not listed in the table below (README.md, pyproject.toml,
+app/settings.py, app/logs.py, app/tracing.py, app/asgi.py, evals/trace_store.py
+and the tests) is engine-written.
+
+### domino-agents
+
+| Upstream file | Core files | Changes |
+| --- | --- | --- |
+| `app.sh` | `examples/simple-agent-api/app.sh` | `set -euo pipefail`; execs one uvicorn worker on `app.asgi:app` at 0.0.0.0:8888 instead of `python chat_app.py --debug`; log level from settings; unbuffered output; no package install. |
+| `ai_system_config.yaml` | `examples/simple-agent-api/agent_config.yaml` | Renamed to the SDK's default config name; only keys the code applies (provider, name, temperature, a realistic max_tokens, retries, request_limit, timeout_seconds, max_history, version, the system prompt naming the renamed tools); the commented provider blocks with an internal host and endpoint id (15-33) and the unused prompts (46-61) are dropped. |
+| `sample_questions.csv` | `examples/simple-agent-api/sample_questions.csv` | Adds an expected_tool label per row; fixes the planet-name typo ("Jupyter") and the split "photo synthesis"; a comment line carries the change notice. |
+| `simplest_agent.py` | `examples/simple-agent-api/app/agent.py`, `examples/simple-agent-api/app/llm.py`, `examples/simple-agent-api/app/domino_token.py` | Rewritten: a build_agent factory with the tools registered inside and drawing from an injected random.Random, invented lines instead of the quote lists naming real people, no prints, no instrument=True; the traced make_ask with a request limit and a deadline; build_model with the model name from the config and the key from settings; the blocking per-request token hook (84-98) replaced by an async cached token provider and an httpx auth flow. |
+| `chat_app.py` | `examples/simple-agent-api/app/main.py`, `examples/simple-agent-api/app/chat.py`, `examples/simple-agent-api/app/a2a.py` | Rewritten: create_app as the composition root with the A2A app built inside it and fasta2a's pydantic-ai bridge instead of `agent.to_a2a()`; the card URL from settings and a placeholder provider organization; CORS from an allow-list without credentials; a thin, stateless, bounded chat route and an error table with fixed 502 and 504 bodies; the static UI routes, /platform-info and the argparse entry point (27-29, 136-177, 180-211) dropped. |
+| `evaluation_library.py` | `examples/simple-agent-api/evals/evaluators.py` | Random scores and the evaluator class replaced by pure, deterministic scorers with shared metric names; the batch and summary helpers (174-305) dropped because DominoRun aggregates. |
+| `dev_eval_simplest_agent.py` | `examples/simple-agent-api/evals/dev_eval.py` | Rewritten as a Job entry point: argparse instead of a module-level row cap, the App's builders, one evaluation run through the tracer seam, a traced case function scored by the shared evaluator, logged and counted failures, exit code 1 on any failed case, no prints. |
+| `prod_eval_simplest_agent.py` | `examples/simple-agent-api/evals/prod_eval.py` | Rewritten: agent id, version and watermark path from settings or flags instead of literals; a fixed aware-UTC window with an overlap; every page followed; scored traces skipped; the request span picked by name instead of spans[0]; no private framework field; an atomic watermark written after success; a corrupt watermark raises naming its path. |
+| `README.md` | DROP | Not reproduced: the playground screenshots, the curl/Python/JavaScript call samples with placeholder hosts and untimed token fetches, and the file table (32-38, 79-137, 274-287), and the third-party registry recipe and orchestrator code (323-353, 399-463, 498-533). The example's own README.md is engine-written; the local access-token endpoint it describes (51-77) is a fact app/domino_token.py implements, mapped under `simplest_agent.py`. |
+| `requirements.txt` | DROP | Dependency names only: the engine-written pyproject.toml declares them with its own bounds, drops requests and moves the Domino SDK to an optional extra. |
+| `static/` | DROP | The browser playground UI and its two screenshots: the example is an API only. |
+| `.gitignore` | DROP | Upstream editor and tool ignores; the engine's root .gitignore covers the example's environment. |
+
 ## Engine-written files
 
 Files written for the engine with no upstream text, per core skill. A file
@@ -614,6 +645,14 @@ that comes to hold vendored text moves from here into its source's table.
 - `rules/a2a-mount-lifespan.md`
 - `rules/domino-agent-fake-domino-tests.md`
 - `rules/domino-agent-fake-llm-tests.md`
+- `examples/simple-agent-api/README.md`
+- `examples/simple-agent-api/pyproject.toml`
+- `examples/simple-agent-api/app/settings.py`
+- `examples/simple-agent-api/app/logs.py`
+- `examples/simple-agent-api/app/tracing.py`
+- `examples/simple-agent-api/app/asgi.py`
+- `examples/simple-agent-api/evals/trace_store.py`
+- `examples/simple-agent-api/tests/`
 
 Upstream files each secrets and service rule draws on (example-agent files by
 path and lines, 6.2 documentation pages by guide and page id):

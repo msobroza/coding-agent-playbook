@@ -10,6 +10,7 @@ directories.
 
 from __future__ import annotations
 
+import re
 import tomllib
 from typing import TYPE_CHECKING, Final
 
@@ -199,6 +200,9 @@ def test_ci_runs_every_core_example_in_its_own_environment() -> None:
     assert 'uv run --directory "$example" pytest' in job
     assert 'uv run --directory "$example" mypy' in job
     assert 'python-version: ["3.10", "3.12"]' in job
+    # D64: uv comes from its own action, pinned to a commit rather than a movable tag.
+    assert re.search(r"uses: astral-sh/setup-uv@[0-9a-f]{40}\b", job)
+    assert "pip install uv" not in job
 
 
 @pytest.mark.parametrize("adapter", [ClaudeCodeAdapter, OpenCodeAdapter, SharedSkillsAdapter])
