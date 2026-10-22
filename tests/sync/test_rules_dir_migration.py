@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.sync import pipeline as _sync
+from tests._catalog import CORE_SKILLS_ROOT
 from tests.fakes import FakeGitClient
 from tests.plugins.superpowers_expectations import consumer_config
 
@@ -102,9 +103,14 @@ def test_resync_moves_pristine_member_copies_to_rules(
     for path in members:
         assert (repo / path).is_file(), path
         assert not (repo / _old_spelling(path)).exists(), path
-    assert not [path for path in rows if "/references/" in path]
+    assert not [path for path, kind in rows.items() if "/references/" in path and kind == "rule"]
+    # No member copy stays in references/: it holds exactly the files the catalog
+    # skill ships there (today its license copies).
+    shipped = sorted(p.name for p in (CORE_SKILLS_ROOT / _SKILL / "references").iterdir())
+    assert shipped, "the catalog skill ships its license copies under references/"
     for root in _SKILL_ROOTS:
-        assert not (repo / root / _SKILL / "references").exists(), root
+        left = sorted(p.name for p in (repo / root / _SKILL / "references").iterdir())
+        assert left == shipped, root
     assert _sync.execute(repo, check=True, git=FakeGitClient()) == 0
 
 

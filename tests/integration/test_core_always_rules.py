@@ -37,6 +37,7 @@ PROJECT_CONTEXT: Final = "project-context"
 DATA_SHAPES: Final = "python-data-shapes"
 IDIOMS: Final = "python-idioms"
 CLASSES: Final = "python-classes-and-protocols"
+EARLY_RETURN: Final = "python-early-return"
 LEGIBILITY: Final = "code-legibility"
 DOCUMENT_LAYOUT: Final = "document-layout"
 #: The always rules that route to no skill; code-legibility names one per line (D73).
@@ -83,7 +84,7 @@ MOVED_ITEM_OWNERS: Final = (
     ("first-party", IDIOMS),
     ("import *", IDIOMS),
     ("shadow builtins", IDIOMS),
-    ("early `return`", IDIOMS),
+    ("early `return`", EARLY_RETURN),
     ("layout axis", LEGIBILITY),
 )
 #: Owned by always bullet 2 and project-context reminder 2, so python-idioms must not restate them.
@@ -198,9 +199,6 @@ LEGIBILITY_POINTERS: Final = (
 #: ships one removes it here; the F-02 final-state check needs this empty.
 PENDING_LEGIBILITY_TARGETS: Final = frozenset(
     {
-        "python-small-units",
-        "python-early-return",
-        "python-error-messages-with-context",
         "python-meaningful-names",
         "design-single-responsibility",
         "design-dry-yagni-kiss",
