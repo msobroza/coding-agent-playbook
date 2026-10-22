@@ -80,7 +80,6 @@ class PercentageDiscount:  # named, inspectable configuration
 
 - Promote only when a need appears: function, then closure, then callable dataclass, then class; `Callable`, then `Protocol`, then `ABC`.
 - Keep a callable dataclass when instances carry different named configuration or state between calls; configuring a generic function with a closure or `functools.partial` is python-coding's python-closures-and-partial.
-- Records with no behavior are typed dataclasses, never plain dicts; how a record is shaped (frozen, slots, derived fields, parallel lists made one list of records) is python-coding's python-data-shapes.
+- How a record is shaped once it exists is python-coding's python-data-shapes; design-start-with-the-data decides that one is missing.
 - A method that never reads `self` (smell id method-could-be-function) becomes a module function; keep it a method only when it overrides a base method, satisfies a Protocol or belongs to the class's concept as a `staticmethod`.
 - Do not convert when the lighter form reads worse: `partial` everywhere can hide intent that a small class with named fields states plainly.
-- Where this rule ends and design-dry-yagni-kiss, design-pattern-from-smell or python-coding's python-data-shapes begins: see rule-neighbors.md.

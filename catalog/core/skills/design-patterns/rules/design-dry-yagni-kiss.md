@@ -22,13 +22,13 @@ Three principles keep a design no bigger than its problem. DRY: each piece of kn
 ```python
 def create_user(email: str) -> User:
     if not email or "@" not in email:
-        raise InvalidEmailError(f"invalid email: {email!r}")
+        raise InvalidEmailError(f"invalid email {email!r}: expected an address containing '@'")
     return User(email=email)
 
 
 def update_email(user: User, email: str) -> None:
     if not email or "@" not in email:  # the same rule, copied
-        raise InvalidEmailError(f"invalid email: {email!r}")
+        raise InvalidEmailError(f"invalid email {email!r}: expected an address containing '@'")
     user.email = email
 
 
@@ -52,7 +52,7 @@ class StringReverser:  # a class around one expression
 ```python
 def validated_email(email: str) -> str:
     if not email or "@" not in email:
-        raise InvalidEmailError(f"invalid email: {email!r}")
+        raise InvalidEmailError(f"invalid email {email!r}: expected an address containing '@'")
     return email
 
 
@@ -78,7 +78,6 @@ reversed_title = title[::-1]
 - DRY is about knowledge, not text: extract when two copies encode the same rule and must change together. Code that only looks alike but changes for different reasons stays separate.
 - Extract a shared abstraction when the third real case arrives, not before; a hasty abstraction with many parameters to cover unrelated callers is worse than the copies.
 - Add no parameters, options or hooks for needs nobody has stated. YAGNI is not a license for sloppy code: invest in clean structure, not in speculative features.
-- If the abstractions, factories and wrappers outnumber the lines doing real work, the design is ahead of its requirements.
 
 | Situation | Principle |
 | --- | --- |

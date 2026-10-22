@@ -56,8 +56,7 @@ def welcome_message(name: str, *, greet: Greet = greeting) -> str:
 
 ## Notes
 
-- Default preferences for every pattern: a `Protocol` before an `ABC`, unless the base must hold shared state or enforce overrides; `functools.partial` and closures to configure a generic function rather than wrapper classes; a role-named `Callable` alias in place of a single-method abstract class.
-- Do not go fully functional: when the orchestration shrinks to nothing and the logic moves into `partial` calls at startup, a small class with named fields states the intent better. Readability decides.
+- Default preferences for every pattern are design-lightest-construct's promotion ladder and its limit (do not convert when the lighter form reads worse); an `ABC` beats a `Protocol` only when the base must hold shared state or enforce overrides.
 - Move from the lightest form to a heavier one only when the lighter form fails; the pattern table in this skill's SKILL.md gives the signal, the lightest form, the heavier form and when to stop, per pattern.
 - Not speculative: a port at an I/O boundary that tests fake, and documented extension points (entry-point groups, plugin base classes).
 - Removing a pattern that no longer earns its keep is as valid a recommendation as adding one.

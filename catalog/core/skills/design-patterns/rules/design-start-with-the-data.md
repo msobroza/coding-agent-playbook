@@ -59,4 +59,4 @@ class Order:
 - Data-shape signals: fields sharing a prefix (smell id prefixed-field-group) become a record; parallel lists indexed together become one list of records; a chain of attribute reads (`order.customer.address.city`) asks for a method on the object in the middle.
 - A function that needs many parameters from one object is far from its data: move it onto the record, or pass the record (design-tell-dont-ask).
 - Raw structures with operations scattered around them (a nested list as a board, a dict as an account) become a domain class that keeps the data and its operations together.
-- Records are typed dataclasses, never dicts. How a record is shaped (frozen, slots, derived values as properties, parallel lists merged) is python-coding's python-data-shapes; this rule decides that a record is missing.
+- This rule decides that a record is missing. Which construct holds it is design-lightest-construct's; how it is shaped (frozen, slots, derived values as properties, parallel lists merged) is python-coding's python-data-shapes.
