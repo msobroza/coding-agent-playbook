@@ -140,7 +140,7 @@ Delivered: OpenCode plugin generation from canonical hook descriptions — liste
               │                              │         │     coding-agent-playbook.md │
               │                              │         │   .claude/commands/*.md      │
               │                              │         │   .claude/skills/*/          │
-              │                              │         │       references/*.md        │
+              │                              │         │       rules/*.md             │
               └──────────────┬───────────────┘         │   .opencode/command/*.md     │
                              │                         │   .opencode/skills/*/        │
                              │                         │   .agents/skills/*/          │
@@ -230,41 +230,12 @@ coding-agent-playbook/
 │   ├── README.md                           # contributor guide: where each kind lives, how to add one
 │   ├── core/                               # the engine layer, always on (Section 6.3.3 for its skills)
 │   │   ├── ATTRIBUTIONS.md
-│   │   ├── rules/                          # the shipped inventory: 4 always rules, 26 scoped
-│   │   │   ├── always/
-│   │   │   │   ├── 00-project-context.md.j2      # uses {{ project_name }} and framework_skill('clarify')
-│   │   │   │   ├── 05-code-legibility.md.j2      # eight principles, each naming its skill -> rule once rule_active() (prU D73)
-│   │   │   │   ├── 10-python-house-style.md      # plain markdown, no vars: seven bullets
-│   │   │   │   └── 15-document-layout.md.j2      # renders {{ layout.* }} (prU D61, D71)
-│   │   │   ├── languages/python/                 # python-coding members in priority order, then two python-tooling members
-│   │   │   │   ├── dependency-injection.md       # 40
-│   │   │   │   ├── pure-core.md                  # 42
-│   │   │   │   ├── data-shapes.md                # 44
-│   │   │   │   ├── typing.md.j2                  # 50, Python >=3.11; branches on python_version
-│   │   │   │   ├── performance-idioms.md         # 51, distilled
-│   │   │   │   ├── async.md                      # 53, distilled; Python >=3.11
-│   │   │   │   ├── classes-and-protocols.md      # 53, distilled
-│   │   │   │   ├── error-handling.md             # 55
-│   │   │   │   ├── context-managers.md           # 56
-│   │   │   │   ├── docstrings.md                 # 56
-│   │   │   │   ├── retries-and-timeouts.md       # 57, when requests, httpx or aiohttp is used
-│   │   │   │   ├── idioms.md                     # 58
-│   │   │   │   ├── static-checks.md              # python-tooling member (21), distilled; ungated
-│   │   │   │   └── uv-workflow.md                # python-tooling member (28), distilled; uv projects only
-│   │   │   ├── frameworks/
-│   │   │   │   ├── fastapi-app-wiring.md         # python-tooling member (60), FastAPI only
-│   │   │   │   ├── fastapi-error-boundaries.md   # python-tooling member (61), FastAPI only
-│   │   │   │   ├── pytest-configuration.md       # python-tooling member (23), distilled; pytest only
-│   │   │   │   ├── pydantic-boundaries.md        # python-tooling member (63), distilled; Pydantic declared
-│   │   │   │   ├── pytest.md.j2                  # python-testing member (60); branches on pytest-asyncio
-│   │   │   │   ├── pytest-test-doubles.md        # python-testing member (61), distilled
-│   │   │   │   └── pytest-fixtures.md            # python-testing member (63), distilled
-│   │   │   └── ml/
-│   │   │       ├── serialization-security.md.j2  # ml-data member (30); branches on the ML stack
-│   │   │       ├── vectorization.md.j2           # ml-data member (71), distilled; these four: NumPy, pandas or polars, a section per library
-│   │   │       ├── data-transforms.md.j2         # ml-data member (71), distilled
-│   │   │       ├── dtypes-and-typing.md.j2       # ml-data member (73), distilled
-│   │   │       └── reproducibility-and-testing.md.j2  # ml-data member (73), distilled
+│   │   ├── rules/                          # always rules only (prU D21); scoped rules live in their skill's rules/
+│   │   │   └── always/
+│   │   │       ├── 00-project-context.md.j2      # uses {{ project_name }} and framework_skill('clarify')
+│   │   │       ├── 05-code-legibility.md.j2      # eight principles, each naming its skill -> rule once rule_active() (prU D73)
+│   │   │       ├── 10-python-house-style.md      # plain markdown, no vars: seven bullets
+│   │   │       └── 15-document-layout.md.j2      # renders {{ layout.* }} (prU D61, D71)
 │   │   ├── prompts/
 │   │   │   ├── refactor.md                     # plain markdown
 │   │   │   ├── generate-tests.md.j2            # branches + includes_rules
@@ -276,7 +247,13 @@ coding-agent-playbook/
 │   │   ├── hooks/                          # canonical <id>/HOOK.md dirs, builtin handlers only (Section 6.6.7)
 │   │   │   ├── protect/  verify/  feedback/
 │   │   │   └── safety/  audit/                 # category folders carry no meaning
-│   │   ├── skills/                         # python-coding/ python-testing/ python-tooling/ ml-data/: SKILL.md only
+│   │   ├── skills/                         # one directory per core skill (Section 6.3); membership by location (prU D5)
+│   │   │   ├── python-coding/
+│   │   │   │   ├── SKILL.md                # intro + Quick Reference; playbook: {use_when, files, sections, references}
+│   │   │   │   ├── rules/                  # member rules, file name = id: python-typing.md.j2, python-error-handling.md, …
+│   │   │   │   └── references/             # free-form documents + the vendored LICENSE.* copies (prU D19)
+│   │   │   ├── python-testing/  python-tooling/  ml-data/  web-application/  …   # same shape; examples/ where one ships (prU D48)
+│   │   │   └── playbook-guardrails/        # SKILL.md only: no rules, filled from the on hooks (Section 6.3.4)
 │   │   └── eval_samples/
 │   │       ├── ATTRIBUTIONS.md
 │   │       ├── generate-tests-happy-path/
@@ -499,12 +476,12 @@ risk-models/                                # the user's project
 │   ├── rules/
 │   │   ├── 00-project-context.md           # AUTOGENERATED
 │   │   ├── 10-python-house-style.md
-│   │   ├── 20-tooling-baseline.md
-│   │   ├── 30-bnp-banking.md               # from overlay
-│   │   ├── 44-python-data-shapes.md        # a python-coding member: Continue still gets one file per rule
-│   │   ├── 50-python-typing.md
-│   │   ├── 60-fastapi.md                   # only because fastapi detected
-│   │   └── 70-pydantic-v2.md
+│   │   ├── 15-document-layout.md
+│   │   ├── 18-bnp-banking.md               # an always rule from the overlay
+│   │   ├── 20-python-static-checks.md      # a python-tooling member (CRITICAL band): Continue still gets one file per rule
+│   │   ├── 43-python-typing.md             # a python-coding member (HIGH band), title tagged [HIGH]
+│   │   ├── 44-fastapi-app-wiring.md        # a web-application member, only because fastapi detected
+│   │   └── 60-python-data-shapes.md        # a python-coding member (MEDIUM band)
 │   └── prompts/
 │       ├── refactor.md
 │       ├── generate-tests.md
@@ -526,9 +503,10 @@ risk-models/                                # the user's project
 │   │   ├── review.md
 │   │   └── explain.md
 │   └── skills/                             # AUTOGENERATED — Claude Code native skills
-│       ├── python-coding/                  # AUTOGENERATED: core skill; references rendered from its member rules
-│       │   ├── SKILL.md                    #   (composed description + generated references index, §6.1.6)
-│       │   └── references/python-typing.md …
+│       ├── python-coding/                  # AUTOGENERATED: core skill; rules/ rendered from its active member rules
+│       │   ├── SKILL.md                    #   (composed description + generated navigation and rules index, §6.1.6)
+│       │   ├── rules/python-typing.md …    #   one file per active member, title tagged [IMPACT]
+│       │   └── references/                 #   byte-copied free-form documents (gated entries left out)
 │       └── query-db/
 │           ├── SKILL.md
 │           └── scripts/run.py
@@ -607,7 +585,7 @@ The `.j2` suffix is the author's explicit signal to readers: *"this file has log
 **Validation.** `playbook validate` checks `.j2` files for Jinja syntax errors and undefined variables. It does not run Jinja against `.md` files — they're treated as static content. This means renaming a file from `.md` to `.md.j2` triggers a stricter check on next validate.
 ### 6.1 Rules
 A canonical rule is a Markdown file (with or without Jinja templating, per Section 6.0) and YAML frontmatter. The frontmatter declares metadata used by the adapters to render harness-specific output; the body is the rule content.
-Where a rule lands depends on its scope. An always rule goes to the always-loaded files: `AGENTS.md`, the Claude Code rules file (§6.1.4) and Continue's rule files. A scoped rule names the skill that owns its topic (`skill:`, §6.1.1) and is written as a reference inside that skill (§6.1.6, §6.3.3); Continue, which reads no skills, still gets it as its own rule file (§6.1.3). For OpenCode, rules are not written to a separate location — OpenCode reads the universal `AGENTS.md` natively for the always rules (walking up the directory tree; see §10.6 for the per-version lookup and the v1-only `CLAUDE.md` fallback) and finds the scoped ones in `.opencode/skills/<skill>/references/`. No dedicated OpenCode rule directory is generated.
+Where a rule lands depends on its scope. An always rule goes to the always-loaded files: `AGENTS.md`, the Claude Code rules file (§6.1.4) and Continue's rule files; the engine's always rules live in `catalog/core/rules/` (four today: project context, code legibility, Python house style and document layout, §10.2.1). A scoped rule is a **member rule** of the one skill that owns its topic and lives inside it (prU D5, `docs/adr/0005-member-rules-live-in-their-skills-rules-directory.md`, which amends ADR 0001): the file sits in the skill's own `rules/` directory, `<layer>/skills/<skill>/rules/<rule-id>.md[.j2]`, and that location sets its membership, so it declares no `skill:`. Only a rule from another layer (an overlay, a bundled plugin or the consumer repo's `playbook/rules/`) that joins a skill it does not ship names it in `skill:` (§6.1.1). In the rendered output a member rule is the same thing: a file of that skill's `rules/` directory (§6.1.6, §6.3.3); Continue, which reads no skills, still gets it as its own rule file (§6.1.3). For OpenCode, rules are not written to a separate location — OpenCode reads the universal `AGENTS.md` natively for the always rules (walking up the directory tree; see §10.6 for the per-version lookup and the v1-only `CLAUDE.md` fallback) and finds the scoped ones in `.opencode/skills/<skill>/rules/`. No dedicated OpenCode rule directory is generated.
 #### 6.1.1 Frontmatter schema
 ```yaml
 id: python-typing                    # required, unique across all overlays
@@ -615,13 +593,14 @@ name: Typing                         # required, human-readable; a scoped rule's
 description: Prefer a concrete type …  # required: Continue's agentic pull-in; a scoped rule's line in its skill's index
 version: 1                           # bump on breaking content change
 scope: scoped                        # one of: always | scoped
-skill: python-coding                 # required when scope=scoped, forbidden when scope=always: the one skill that owns this rule's topic (§6.3.3)
+skill: python-coding                 # only for a rule outside a skill's rules/ (another layer joining a skill): required when scope=scoped, forbidden when scope=always; the one skill that owns this rule's topic (§6.3.3)
+section: types                       # a member of a skill that declares sections: the section it files under (§6.3.3); its impact band bounds priority
 globs:                               # optional, list. When scope=scoped, these gate inclusion in Continue
   - "**/*.py"
 applies_if:                          # optional Python expression evaluated against facts dict
   python_version: ">=3.11"
   has_framework: ["pydantic"]
-priority: 50                         # optional, lower = earlier in lex order; default 50
+priority: 43                         # optional int 0-99, lower = earlier; default 50; inside its section's band (§10.2.1)
 tags: [language, python]             # optional, for filtering
 lint_codes:                          # optional: the ruff codes a rule-linked lint hook reports (v0.20)
   warn: [ANN001, ANN201, UP007]
@@ -629,7 +608,7 @@ lint_codes:                          # optional: the ruff codes a rule-linked li
     - applies_if: {python_version: ">=3.12"}
       warn: [UP040]
 ```
-`skill` must name a skill that exists after the layer merge and declares a `playbook:` block (§6.3.3, §11.2), so an overlay or `playbook/rules/` adds a rule to a core skill just by naming it; Continue ignores the field (§10.2). Because the engine delivers a scoped rule as a reference of that skill, `description` is the rule's line in the skill's references index: write it as one actionable sentence. `name` is the rule's label in the skill's Covers clause, so keep it a short topic label (`Typing`, not `Python typing conventions`).
+Every key must be one of the fields above: an unknown key is a validation error naming the file, and `scope`, `priority` and `section` are shape-checked (§12.6). A rule in a skill's `rules/` directory is a member of that skill by location and sets no `skill:` (naming another skill there is R1, §12.6). A rule outside every skill's `rules/` — in an overlay's or the repository's `<layer>/rules/` — joins a skill through `skill`, which must name a skill that exists after the layer merge and declares a `playbook:` block (§6.3.3, §11.2), so an overlay or `playbook/rules/` adds a rule to a core skill just by naming it; Continue ignores the field (§10.2). A core scoped rule always lives in its skill's `rules/` (R5). `section` names one of the owning skill's declared sections (S3); when the skill declares sections, an in-layer or repository member must set it (S4), its `priority` must lie in that section's impact band (S6, §10.2.1), and its title carries no authored `[IMPACT]` tag (S7): the engine renders it. Because the engine delivers a scoped rule as a file of that skill, `description` is the rule's "Requires" cell in the skill's rules index: write it as one actionable sentence. `name` labels the rule in that index, so keep it a short topic label (`Typing`, not `Python typing conventions`). It is also the rule's label in the Covers clause of a skill without sections; a sectioned skill's Covers clause names its sections instead.
 
 `lint_codes` links the rule's text to the hook that enforces it: a hook whose `linked_rule` names this rule inherits its `applies_if` and `globs`, and the resolved code list (`warn` plus every `when` row whose predicate holds at sync) is merged into the hook's handler `config` (§6.6.7) as `lint_codes = {rule, skill, warn}`, with `skill` the rule's own `skill` (absent when it names none), so lint feedback names where the fix lives: `rule python-error-handling (skill python-coding): …`. There is no `block` key: lint feedback is warn-only. `playbook validate` checks the shape and the predicates, and an empty `lint_codes` is dropped from the markdown round trip, so unlinked rules stay byte-identical.
 #### 6.1.2 Example: `catalog/core/skills/python-coding/rules/python-typing.md.j2`
@@ -640,12 +619,12 @@ name: Typing
 description: Prefer a concrete type or a Protocol to Any, write X | None, and take abstract read-only types as inputs.
 version: 1
 scope: scoped
-skill: python-coding
 globs:
   - "**/*.py"
 applies_if:
   python_version: ">=3.11"
-priority: 50
+section: types
+priority: 43
 tags: [language, python]
 ---
 # Python typing standards
@@ -682,7 +661,26 @@ from typing import Dict, Optional
 def parse_response(payload: Dict) -> Optional["Response"]: ...
 ```
 ```
-#### 6.1.3 Rendered output for Continue: `.continue/rules/50-python-typing.md`
+The file sits in `python-coding`'s `rules/` directory, so it names no `skill:`; its file name is its id (R2, §12.6), it files under the skill's HIGH section `types` and its priority 43 lies in the HIGH band 40-59 (§10.2.1). Its title carries no `[HIGH]`: the engine adds it on render.
+
+A rule from another layer joins the same skill by naming it. A consumer repo's own rule, `playbook/rules/risk-money-types.md`:
+```markdown
+---
+id: risk-money-types
+name: Money types
+description: Type every amount as Decimal or the repo's Money type, never float.
+scope: scoped
+skill: python-coding
+section: types
+priority: 45
+globs:
+  - "src/risk_models/**/*.py"
+---
+# Money types
+- Annotate amounts as `Decimal` (or `Money`), never `float`.
+```
+It renders as `rules/risk-money-types.md` inside every copy of `python-coding`, listed in the `types` section of the skill's index next to the core members. A repository member of a sectioned skill must set `section:` (S4); a rule from an overlay or a bundled layer without one only warns and is listed under an engine-made "Other" section (W4, D42).
+#### 6.1.3 Rendered output for Continue: `.continue/rules/43-python-typing.md`
 ```markdown
 <!-- AUTOGENERATED by coding-agent-playbook — edit in source, run 'playbook sync' -->
 ---
@@ -692,7 +690,7 @@ alwaysApply: false
 globs:
 - '**/*.py'
 ---
-# Python typing standards
+# Python typing standards [HIGH]
 Target Python version: 3.12.
 ## Always
 - All public functions and methods have full type annotations...
@@ -708,56 +706,81 @@ Target Python version: 3.12.
 
 ## Where guidance lives
 
-Detailed conventions live in skills. Before you edit one of these files, load its skill and open the references its index lists.
+Detailed conventions live in skills. Before you edit one of these files, load its skill and open the rules its index lists.
 
-- Model, array and data-frame code: skill `ml-data`
 - Any Python file: skill `python-coding`
 - Test files and conftest.py: skill `python-testing`
-- Tool configuration and framework wiring: skill `python-tooling`
+- Tool configuration and pyproject.toml: skill `python-tooling`
+- Web endpoints, database access and migrations: skill `web-application`
 
-Lint feedback names a rule id; that rule's reference in the skill has the fix.
+Lint feedback names a rule id; that rule's file in the skill's rules/ has the fix.
 
 ---
 ```
-The Claude Code adapter concatenates the rules that name no skill into one rules file, `.claude/rules/coding-agent-playbook.md`, then the generated `## Where guidance lives` section, and leaves `.claude/CLAUDE.md` a rule-free stub (§10.3.1). A member rule (a scoped rule that names a skill in `skill:`, every scoped rule in core among them) is not in this file: it is a reference of that skill (§6.1.6, `docs/adr/0001-scoped-rules-are-delivered-as-skill-references.md`). Each section gets a `## {name}` heading and, for scoped rules, their globs in italics; the italic line is advisory only. The body follows verbatim — its own headings, a leading `# ` title included, are not demoted.
+The Claude Code adapter concatenates the rules that name no skill into one rules file, `.claude/rules/coding-agent-playbook.md`, then the generated `## Where guidance lives` section, and leaves `.claude/CLAUDE.md` a rule-free stub (§10.3.1). A member rule (a scoped rule of a skill, every scoped rule in core among them) is not in this file: it is a file in that skill's `rules/` directory (§6.1.6, `docs/adr/0005-member-rules-live-in-their-skills-rules-directory.md`). Each section gets a `## {name}` heading and, for scoped rules, their globs in italics; the italic line is advisory only. The body follows verbatim — its own headings, a leading `# ` title included, are not demoted.
 #### 6.1.5 Rendered output for AGENTS.md: section
 Same shape as the Claude Code rules file, plus the Guardrails section (§10.4). Identical rule sections and the same `## Where guidance lives` section, byte for byte.
-#### 6.1.6 Rendered output as a skill reference: `.claude/skills/python-coding/references/python-typing.md`
-A member rule is written as `<skill root>/<skill>/references/<rule-id>.md` in every enabled skill root (§6.3.3), the same bytes everywhere: one italic line naming the rule and its globs, a blank line, then the body after Jinja, unchanged. A member without globs gets ``*Rule `<id>`.*``; the globs line is advisory. Reference files carry no sentinel: like copied references, they are owned through the lockfile, as `kind = "rule"` entries (§14.4).
+#### 6.1.6 Rendered output as a skill rule: `.claude/skills/python-coding/rules/python-typing.md`
+A member rule is written as `<skill root>/<skill>/rules/<rule-id>.md` in every enabled skill root (§6.3.3), the same bytes everywhere, mirroring its place in the source: one italic line naming the rule and its globs, a blank line, then the body after Jinja. A member without globs gets ``*Rule `<id>`.*``; the globs line is advisory. When the skill declares sections, the body's first level-one heading outside code fences gains its section's impact tag, `# <Title> [IMPACT]` (prU D32); the source never carries it (S7, §12.6), and nothing else in the body changes. The tag is part of the rendered rule everywhere it is written as a file, so Continue's rule file (§6.1.3) and the `agent_harness` tree get it too, while the `## Reference rules` appendix of a prompt (§6.2.5) and an eval sample's prompt stay untagged (D46.8). Rule files carry no sentinel: like copied references, they are owned through the lockfile, as `kind = "rule"` entries (§14.4).
 ```markdown
 *Rule `python-typing`; applies to `**/*.py`.*
 
-# Python typing conventions
+# Python typing conventions [HIGH]
 [rest of the body, verbatim]
 ```
-The skill's `SKILL.md` carries the composed description and, after the authored body, the generated index, one line per active member in `(priority, id)` order (`python-coding` on a repo where all twelve members apply):
+The skill's `SKILL.md` carries the composed description and, after the authored body, the generated navigation (§6.3.3): a fixed "How to use this skill" paragraph, the `## Rules` index with one `### <Title> [IMPACT]` heading per section that has an active member, its summary, its open-when line and a two-column table of its active rules in `(priority, id)` order, then the `## References and examples` list (`python-coding` on a FastAPI repo with pytest, shortened):
 ```markdown
 ---
 name: python-coding
 id: python-coding
-description: Library-agnostic Python conventions. Covers Dependency injection, Pure
-  core, Data shapes, Typing, Performance idioms, Asyncio, Classes and protocols, Error
-  handling, Context managers, Docstrings, Timeouts and retries, Idioms. Use when writing,
-  changing or reviewing Python code.
+description: Line- and function-level Python conventions. Covers error handling, names,
+  types, docs, effects and resources, asyncio, pydantic validation, classes and data
+  shapes, idioms and performance. Use when writing, changing or reviewing Python code.
 ---
 <!-- AUTOGENERATED by coding-agent-playbook — edit in source, run 'playbook sync' -->
 
 # Python coding
-[the authored body]
+[the authored intro and Quick Reference]
 
-## References
+## How to use this skill
 
-Each reference is one rule. Open only the ones the current task needs.
+The index below lists only the rules that apply to this repository, most important first. Find the sections whose open-when line matches the change, then read those rules in full before editing; usually one to three are enough. Open a reference or example when a rule names it or its open-when line matches the change.
 
-- [python-dependency-injection](references/python-dependency-injection.md) — Dependency injection: Pass I/O collaborators in as parameters; pick concrete implementations in one composition root per entry point.
-- [python-pure-core](references/python-pure-core.md) — Pure core: Keep business logic free of I/O, clocks, randomness and hidden mutation; perform effects in a thin outer shell.
-- [python-data-shapes](references/python-data-shapes.md) — Data shapes: Model records as dataclasses, not string dicts or parallel lists; freeze them with tuple fields; return at most three values; name magic constants.
-- [python-typing](references/python-typing.md) — Typing: Prefer a concrete type or a Protocol to Any, write X | None, and take abstract read-only types as inputs.
-[one line per remaining active member]
+## Rules
+
+Each file under rules/ is one rule. Open only the ones the current task needs.
+
+### Error handling [CRITICAL]
+
+Catch narrowly, never swallow an exception, derive domain errors from one base and translate them once at the boundary.
+
+Open when: Code adds or changes try/except, raise, an exception class, or where a failure becomes an exit code or log line.
+
+| Rule | Requires |
+| --- | --- |
+| [python-error-handling](rules/python-error-handling.md) | Error handling: Catch only what you can handle, never swallow an exception, chain with raise ... from, and translate errors once at the boundary. |
+
+### Names, types, docs [HIGH]
+
+Annotate every signature precisely, name callable and identifier types, accept abstract inputs, and document public names with an intent line and a usage example.
+
+Open when: Naming a module, class, function or variable, writing a signature or annotation, or a public docstring.
+
+| Rule | Requires |
+| --- | --- |
+| [python-typing](rules/python-typing.md) | Typing: Prefer a concrete type or a Protocol to Any, write X \| None, and take abstract read-only types as inputs. |
+| [python-docstrings](rules/python-docstrings.md) | Docstrings: Every public module, class and function gets a docstring: an intent line, then one usage example. |
+
+[one block per remaining section with an active member]
+
+## References and examples
+
+- [references/<file>.md](references/<file>.md) — Open when: <its open_when line>
 ```
+A skill without sections keeps the flat index: `## Rules`, the same lead line, then one line per active member in `(priority, id)` order, ``- [<rule-id>](rules/<rule-id>.md) — <name>: <description>``, then its listed references, if any, and no "How to use" paragraph.
 ### 6.2 Prompts
 A prompt is a named, invokable instruction. In Continue it becomes a slash command; in Claude Code it lives under `.claude/commands/`.
-A prompt declares the rules its task needs in `includes_rules` — important enough to warrant a dedicated subsection (6.2.5). Since v0.21 (D15) that list is the only declaration: a Claude Code or OpenCode command opens with a generated `## Before you start` block naming the skills and references to load, while Continue, the `agent_harness` leaf and the eval runner append the rules' text.
+A prompt declares the rules its task needs in `includes_rules` — important enough to warrant a dedicated subsection (6.2.5). Since v0.21 (D15) that list is the only declaration: a Claude Code or OpenCode command opens with a generated `## Before you start` block naming the skills and rule files to load, while Continue, the `agent_harness` leaf and the eval runner append the rules' text.
 #### 6.2.1 Frontmatter schema
 ```yaml
 id: generate-tests                   # required
@@ -864,8 +887,8 @@ You are writing tests for risk-models, a python-application project.
 
 ## Before you start
 
-1. Load skill `python-coding` and read its reference `references/python-typing.md`.
-2. Load skill `python-testing` and read its reference `references/pytest.md`.
+1. Load skill `python-coding` and read its rule `rules/python-typing.md`.
+2. Load skill `python-testing` and read its rule `rules/pytest.md`.
 3. For each file in scope, also load any other listed skill whose description matches it.
 
 ## Conventions
@@ -873,7 +896,7 @@ You are writing tests for risk-models, a python-application project.
 ```
 The OpenCode command `.opencode/command/generate-tests.md` carries the same block, after its `description:` envelope and the sentinel line.
 #### 6.2.5 Rule inclusion in prompts — full design
-Why this exists. An authoritative slash command like `/generate-tests` must not depend on the agent stumbling onto the right guidance: *"every time this is invoked, the typing rule and the pytest rule are part of the task."* `includes_rules:` is that declaration. Since v0.21 a scoped rule is a reference inside the skill it names (§6.1.6, §6.3.3), and `includes_rules` is how a prompt carries a scoped rule into its own turn: on Claude Code and OpenCode as a pointer to that reference, loaded on demand, and inline for the harnesses without skills (D15, D22).
+Why this exists. An authoritative slash command like `/generate-tests` must not depend on the agent stumbling onto the right guidance: *"every time this is invoked, the typing rule and the pytest rule are part of the task."* `includes_rules:` is that declaration. Since v0.21 a scoped rule is a file in its skill's `rules/` directory (§6.1.6, §6.3.3), and `includes_rules` is how a prompt carries a scoped rule into its own turn: on Claude Code and OpenCode as a pointer to that rule file, loaded on demand, and inline for the harnesses without skills (D15, D22).
 
 **The declaration: `includes_rules:`.** A list of rule ids, in the order the task needs them. It is the only mechanism: the `{{ rule() }}` Jinja helper was removed in v0.21, and a prompt (or rule, or hook body) that calls it fails `playbook validate` with a migration message (§12.6).
 ```yaml
@@ -889,29 +912,29 @@ includes_rules:
 | Claude Code `.claude/commands/<slash>.md` | a `## Before you start` block; no rule body |
 | OpenCode `.opencode/command/<slash>.md` | the same block as Claude Code |
 | Continue `.continue/prompts/<slash>.md` | a `## Reference rules` appendix at the end: one `### <rule name>` section per rule, inline |
-| agent_harness `prompts/<slash>/SKILL.md` | the same appendix (its scoped rules are top-level `references/<id>.md` files, not skill references, §10.7.2) |
+| agent_harness `prompts/<slash>/SKILL.md` | the same `## Reference rules` section (no `## Before you start` block, §10.7.2) |
 | Eval runner (`evals/prompting.py`) | the body plus the same appendix, the text Continue gets (§15.3) |
 | `playbook render <prompt> --format …` | per format, through the unfiltered registry of applicable rules (§12.7) |
 
-**The block.** Inserted before the body's first level-2 heading outside a code fence (without one, after the leading `# ` title, or at the top). One numbered step per owning skill, in the order its first rule appears in `includes_rules`, listing only the references of rules that are active here; then a closing step:
+**The block.** Inserted before the body's first level-2 heading outside a code fence (without one, after the leading `# ` title, or at the top). One numbered step per owning skill, in the order its first rule appears in `includes_rules`, listing only the rule files of rules that are active here; then a closing step:
 ```markdown
 ## Before you start
 
-1. Load skill `python-coding` and read its references `references/python-typing.md`, `references/python-error-handling.md`.
+1. Load skill `python-coding` and read its rules `rules/python-typing.md`, `rules/python-error-handling.md`.
 2. For each file in scope, also load any other listed skill whose description matches it.
 ```
-A prompt whose included rules resolve to no active reference gets no block, so it renders byte-identically to a prompt without `includes_rules`. Always rules get no line: they are already in always-loaded context.
+A prompt whose included rules resolve to no active member rule gets no block, so it renders byte-identically to a prompt without `includes_rules`. Always rules get no line: they are already in always-loaded context.
 
 **The appendix.** `## Reference rules`, then each included rule's text under `### {rule.name}`, each id once, in `includes_rules` order; a plain `.md` prompt gets it as well as a `.md.j2` one, since the adapter writes it, not Jinja.
 
 **Resolution semantics.**
-Rule inclusion happens after overlay resolution. If `python-typing` is overridden by the BNP overlay, the prompt gets the *overridden* version (its text in the appendix, its reference in its owning skill). This is intentional — prompts depend on rule IDs, not on the original engine content. An overlay author who improves a rule automatically improves every prompt that includes it.
+Rule inclusion happens after overlay resolution. If `python-typing` is overridden by the BNP overlay, the prompt gets the *overridden* version (its text in the appendix, its rule file in its owning skill). This is intentional — prompts depend on rule IDs, not on the original engine content. An overlay author who improves a rule automatically improves every prompt that includes it.
 
 **Filtered rules and inactive skills.**
 
 | Situation | Claude Code / OpenCode | Continue / agent_harness / eval runner |
 | --- | --- | --- |
-| an included rule fails its `applies_if` | no reference listed (the registry holds only applicable rules) | rule omitted from the appendix |
+| an included rule fails its `applies_if` | no rule file listed (the registry holds only applicable rules) | rule omitted from the appendix |
 | every member of a skill is filtered out | the skill is not written (§6.3.2), so no step names it | no change |
 | every included rule filtered out | no block at all; the command is the body alone | no appendix |
 | an included rule is `scope: always` | no line: it is already in always-loaded context | inlined |
@@ -926,12 +949,12 @@ Rule inclusion happens after overlay resolution. If `python-typing` is overridde
 A rule cannot itself reference other rules via `includes_rules:`. Only prompts have `includes_rules:`. This keeps the dependency graph one level deep and trivially analyzable. If a rule needs to reference content from another rule, the author should either (a) duplicate the relevant fragment, or (b) refactor both rules to share a common third rule, kept in `rules/shared/`. The validator enforces this.
 **Tooling support.**
 - `playbook check` shows, for each prompt, which rules it includes.
-- `playbook render <prompt-id> --show-rules` prints each included rule with its `applies_if` outcome and its delivery: the owning skill and reference, or `always loaded` (§12.7).
+- `playbook render <prompt-id> --show-rules` prints each included rule with its `applies_if` outcome and its delivery: the owning skill and rule file, or `always loaded` (§12.7).
 - `playbook validate` runs the three checks above.
 **Why not let rules be included by globs too?**
 A natural follow-on idea: a prompt declares `includes_rules_matching: { tags: ["python", "testing"] }` and the engine picks up all matching rules. Rejected for v1 because it makes the rendered prompt non-deterministic from a glance at the source — you need to mentally execute the matcher against the current rule registry. Explicit lists are uglier but trivially readable. Revisit in v2 if the explicit lists become unwieldy.
 ### 6.3 Skills
-Skills follow the **Agent Skills** layout that Claude Code and OpenCode both read natively. Core (`catalog/core/skills/`) ships the skills that own its scoped rules: `python-coding`, `python-testing`, `python-tooling` and `ml-data` (§6.3.3), plus `playbook-guardrails`, which takes no rules and holds the full guardrail text of the on hooks (§6.3.4). The skills of the opt-in bundled plugins (`catalog/plugins/superpowers/` and `catalog/plugins/mattpocock_skills/`, off unless a consumer enables them, Section 11.5) own none. Overlay packages and repo-local `playbook/skills/<id>/` may ship either kind. They are written natively by the `claude_code` (`.claude/skills/`), `opencode` (`.opencode/skills/`) and `shared_skills` (`.agents/skills/`) adapters through one shared `SkillWriter` (§10.8), so every copy is byte-identical; the opt-in `agent_harness` adapter writes them natively in its own tree (`skills/<id>/SKILL.md`, §10.7). Adapters that keep the ABC default `write_skill` (Continue) degrade a skill to a prompt, except a skill with member rules (§6.3.2); the rules-only `agents_md` adapter does not emit skills at all (a skill with member rules adds its line to the Where map, §10.4).
+Skills follow the **Agent Skills** layout that Claude Code and OpenCode both read natively. Core (`catalog/core/skills/`) ships the skills that own its scoped rules, each holding its members in its own `rules/` directory: `python-coding`, `python-testing`, `python-tooling`, `ml-data`, `web-application` and the others `specs/prU-core-python-skills/target-tree.md` lists (§6.3.3), plus `playbook-guardrails`, which takes no rules and holds the full guardrail text of the on hooks (§6.3.4). The skills of the opt-in bundled plugins (`catalog/plugins/superpowers/` and `catalog/plugins/mattpocock_skills/`, off unless a consumer enables them, Section 11.5) own none. Overlay packages and repo-local `playbook/skills/<id>/` may ship either kind. They are written natively by the `claude_code` (`.claude/skills/`), `opencode` (`.opencode/skills/`) and `shared_skills` (`.agents/skills/`) adapters through one shared `SkillWriter` (§10.8), so every copy is byte-identical; the opt-in `agent_harness` adapter writes them natively in its own tree (`skills/<id>/SKILL.md`, §10.7). Adapters that keep the ABC default `write_skill` (Continue) degrade a skill to a prompt, except a skill with member rules (§6.3.2); the rules-only `agents_md` adapter does not emit skills at all (a skill with member rules adds its line to the Where map, §10.4).
 
 **Every canonical skill must declare `id:` in its `SKILL.md` frontmatter.** The `id` — not the source folder name — is the overlay merge key (§11), the output directory name (`<root>/<id>/`) and the emitted `name`. A skill without `id:` falls back to the id `skill`, so several id-less skills collapse into one and all but the last are silently dropped; `playbook validate` reports every id-less (or non-string-id) skill (§12.6).
 
@@ -945,11 +968,16 @@ A skill is a directory:
 ```
 any-folder-name/                     # the output dir comes from `id:`, not this name
 ├── SKILL.md.j2                      # the prompt body, with frontmatter (must declare `id:`)
-├── scripts/                         # optional, bundled scripts the skill can call
-│   └── helper.py
-└── references/                      # optional, additional context
-    └── reference.md
+├── rules/                           # member rules, one <rule-id>.md[.j2] per rule (§6.1, §6.3.3); only in a skill with a `playbook:` block
+│   └── python-typing.md.j2
+├── references/                      # optional free-form documents: no frontmatter gate, no priority
+│   └── reference.md
+├── examples/                        # optional example files or projects (prU D48), listed like references
+│   └── fastapi-hotel-api/
+└── scripts/                         # optional, bundled scripts the skill can call
+    └── helper.py
 ```
+`rules/` and `references/` hold different things (prU D5): a file under `rules/` is a rule, with its own frontmatter, gate, globs, section and priority, rendered per repository; a file under `references/` is a long-form document (a decision guide, a walkthrough, a license copy) that sync copies byte for byte. A rule that grows past the rule size cap (100 rendered lines) is split, or its long part becomes a reference the rule names in plain text.
 #### 6.3.2 Degradation rule
 When the Continue adapter encounters a skill, it:
 1. Renders `SKILL.md.j2` as a prompt with `invokable: true`.
@@ -957,16 +985,19 @@ When the Continue adapter encounters a skill, it:
 3. Inlines a note in the prompt: *"Helper scripts are available at `.coding-agent-playbook/skills/<skill-id>/scripts/`. You can read them if useful."*
 This is graceful — the user loses the auto-discovery of skills but keeps the content and the scripts.
 As implemented, only step 1 happens: `Adapter.write_skill` degrades through `Skill.to_prompt`, so neither `scripts/` nor `references/` reaches Continue, and no note is added (Section 11.5.1).
-A skill with member rules (§6.3.3) is never degraded: its members already reach Continue as their own rule files, and the prompt would index `references/` files Continue never receives. So no `.continue/prompts/<core-skill>.md` is written.
+A skill with member rules (§6.3.3) is never degraded: its members already reach Continue as their own rule files, and the prompt would index `rules/` files Continue never receives. So no `.continue/prompts/<core-skill>.md` is written. In Continue's rule files, a link to a skill's `references/` renders as the plain file name (D46.9).
 #### 6.3.3 Skills with member rules
-A scoped rule names the one skill that owns its topic in `skill:` (§6.1.1); seen from that skill it is a **member rule** (`CONTEXT.md`). Membership is resolved after the layer merge (§11.2), so an overlay or `playbook/rules/` joins a core skill by naming it, and an override of the skill keeps its members.
-- **Which skills take members.** Only a skill that declares the catalog-only `playbook:` block; `playbook validate` rejects a rule naming any other skill (V14, §12.6), such as a bundled plugin skill.
+A scoped rule belongs to the one skill that owns its topic; seen from that skill it is a **member rule** (`CONTEXT.md`). Membership comes from the file's location, `<layer>/skills/<skill>/rules/` (the loader records it as `Rule.home_skill` and fills `skill` from it), or, for a rule from another layer, from `skill:` (§6.1.1). It is resolved after the layer merge (§11.2), so an overlay or `playbook/rules/` joins a core skill by naming it, and an override of the skill keeps its members.
+- **Which skills take members.** Only a skill that declares the catalog-only `playbook:` block; `playbook validate` rejects a rule naming any other skill (V14, §12.6), such as a bundled plugin skill, and a `rules/` directory in a skill without the block (R4).
 - **Presence.** Such a skill is written only when at least one member passes `applies_if` (`skills.membership.compose_skills`); with none, it is absent from every root, and its earlier output is settled by the leftover policy (§4.2 step 9).
-- **References.** Each active member is rendered as `references/<rule-id>.md` (§6.1.6) in every root the `SkillWriter` writes, and the emitted `SKILL.md` gains a generated `## References` index, one line per member in `(priority, id)` order: ``- [<rule-id>](references/<rule-id>.md) — <name>: <description>``.
-- **The `playbook:` block.** `use_when` (the condition only) and `files` (a file-kind phrase of at most 80 characters, no trailing period) are read by the engine and never emitted: the emitted frontmatter keeps `name`, `id`, `description` and any other authored key.
-- **Description.** The emitted description is `<capability sentence> Covers <member names>. Use when <use_when>.`, at most 300 characters by construction: when every name does not fit, the clause names the highest-priority members that do and ends with `and N more` (`skills.document.compose_description`).
+- **The `playbook:` block.** `use_when` (the condition only) and `files` (a file-kind phrase of at most 80 characters, no trailing period) are read by the engine and never emitted, and neither are `sections` and `references`: the emitted frontmatter keeps `name`, `id`, `description` and any other authored key.
+- **Sections (prU D17).** `playbook.sections` is an ordered list, CRITICAL first and LOW last (S2), of mappings with exactly `id` (kebab-case), `title` (at most 40 characters), `impact` (`CRITICAL`, `HIGH`, `MEDIUM` or `LOW`), `summary` and `open_when` (one line each; the open-when line says which change should send the agent to that section). Each member names its section in `section:`, and its priority is its section's impact band plus its rank inside the section (§10.2.1). A member from another overlay or bundled layer without `section:` is listed under an engine-made `### Other` after the declared sections (D42).
+- **References and examples (prU D47, D48).** `playbook.references` lists the skill's free-form files: each entry has a `path` under `references/` or `examples/` (a file or a directory), a one-line `open_when` and an optional `applies_if`. An entry whose gate fails is neither listed nor written (D58): its files stay out of every root. Once a skill declares sections or references, every file under its `references/` and `examples/` (license copies excepted) must be listed (§12.6).
+- **Rules.** Each active member is rendered as `rules/<rule-id>.md` (§6.1.6) in every root the `SkillWriter` writes, with its section's `[IMPACT]` tag on its title. The emitted `SKILL.md` gains the generated navigation after the authored body: for a sectioned skill, the fixed "How to use this skill" paragraph, then `## Rules` grouped by section — ``### <Title> [IMPACT]``, the summary, `Open when: <open_when>` and a `| Rule | Requires |` table whose rows are ``| [<rule-id>](rules/<rule-id>.md) | <name>: <description> |`` — for every section with an active member, in declared order and `(priority, id)` order inside a section (§6.1.6 shows one); for a skill without sections, the flat `## Rules` index, one line ``- [<rule-id>](rules/<rule-id>.md) — <name>: <description>`` per member in `(priority, id)` order. Both end with `## References and examples`, one line per listed entry whose gate passes, ``- [<path>](<path>) — Open when: <open_when>``.
+- **Description.** The emitted description is `<capability sentence> Covers <…>. Use when <use_when>.`, at most 300 characters. A sectioned skill's Covers clause names its active sections (titles lowercased except words such as FastAPI and HTTP, D46.7) and is never truncated: V11 checks the clause naming every declared section fits (`skills.document.compose_sectioned_description`). A skill without sections names its members by `name`; when every name does not fit, the clause names the highest-priority members that do and ends with `and N more` (`skills.document.compose_description`, W3).
 - **Where map.** Each written skill with members and a `files` phrase adds one line, `- <files>: skill `<id>``, to the `## Where guidance lives` section of `AGENTS.md` and the Claude Code rules file (§10.3.1, §10.4).
-- **Authoring.** The capability sentence is third person and has no `Use when`; the body says what the skill is for and how to pick a reference, never lists the references, names no rule id, has no Jinja and no markdown links, and stays well under 500 lines; hand-written files in the skill's own `references/` may sit next to the rendered ones, but none may take a member's file name (V12). Core's four skills are pinned by `tests/integration/test_core_skills.py` (§16.3).
+- **What sync copies.** Into `<root>/<id>/`: the emitted `SKILL.md`; one `rules/<rule-id>.md` per active member (rendered, never copied); and `scripts/`, `references/` and `examples/` byte for byte, minus the paths of a listed entry whose gate fails, bytecode caches, and anything the secret and link filters withhold (§10.8). A skill's source `rules/` directory itself is never copied: what a repository receives is only its active members, rendered.
+- **Authoring.** The capability sentence is third person and has no `Use when`; the body (pbp's intro and adapted Quick Reference for a core skill, D32) says what the skill is for, never lists the rules (the engine generates the index and the navigation), has no Jinja and stays well under 500 lines; it may not have its own `## Rules` heading (V13). Rules of the skill live in its `rules/`, free-form documents in its `references/`. Core's skills are pinned by `tests/integration/test_core_skills.py` (§16.3).
 #### 6.3.4 The guardrails skill
 `catalog/core/skills/playbook-guardrails/SKILL.md` (id `hooks.guardrails_skill.GUARDRAILS_SKILL_ID`) holds the full text of every guardrail a repository enables, the text-form of its on hooks (`CONTEXT.md`: **Guardrail**). It has no member rules and no `playbook:` block, so its authored description carries its own `Use when` clause and is emitted as written; the D13 checks and the listing budget cover it like any core skill (`EXPECTED_PLAIN_CORE_SKILLS` in `tests/integration/test_core_skills.py`). An overlay or repo-local skill with the same id replaces the authored description and intro and still gets the generated sections.
 - **Composition.** After skills are composed, sync takes this skill out of the skills every adapter receives (`split_guardrails_skill`) and appends to its authored body one section per on hook that has an advisory, sorted by hook id: ``## <name> (`<id>`)`` over the hook's advisory text, the rendered body plus its enforcement line (`compose_guardrails_skill`). One file, no references: the agent loads it rarely, and the core pack's sections stay far under 500 lines.
@@ -1221,11 +1252,11 @@ class Skill:
 
 
 # coding_agent_playbook/artifacts/member_reference.py (a stdlib-only leaf skill.py imports)
-def member_reference_path(rule_id: str) -> str: ...  # "references/<rule_id>.md"
+def member_reference_path(rule_id: str) -> str: ...  # "rules/<rule_id>.md"
 
 
 @dataclass(frozen=True)
-class MemberReference:  # one member rule, rendered as its skill's references/<rule_id>.md
+class MemberReference:  # one member rule, rendered as its skill's rules/<rule_id>.md
     rule_id: str
     name: str  # its label in the skill's Covers clause and index
     description: str  # its line in the skill's index
@@ -1754,7 +1785,7 @@ The renderer exposes per-format transforms applied after Jinja substitution:
 | `continue_rule` | Emit the sentinel on line 1, then a new frontmatter: `name`, `description`, `alwaysApply` (`true` for `scope: always`, whose `globs` are dropped; `false` for `scoped`, plus `globs` when non-empty). Canonical-only keys (`id`, `version`, `scope`, `skill`, `priority`, `applies_if`, `tags`) are dropped. Then the body. |
 | `claude_md_section` | Drop frontmatter; emit a `## {name}` heading, then `` *Applies to: `g1`, `g2`* `` (each glob in backticks, comma-separated) when the rule is `scope: scoped` with non-empty `globs` (advisory only — nothing gates on it), then the body verbatim (its own headings are not demoted) and a `---` separator. Emitted into the Claude Code rules file `.claude/rules/coding-agent-playbook.md` (§10.3.1); the name predates the rules' move out of `.claude/CLAUDE.md` and stays, since `--format claude_md_section` is CLI surface. The composite adapters render it only for rules that name no skill (§10.3.1, §10.4); a member rule is a skill reference instead. |
 | `agents_md_section` | Same as `claude_md_section`. |
-| `skill_reference` | A member rule's reference, `<skill root>/<skill>/references/<rule-id>.md` (§6.1.6): one italic line, ``*Rule `<id>`; applies to `g1`, `g2`.*`` (``*Rule `<id>`.*`` without globs; advisory only), a blank line, then the body after Jinja, unchanged. No frontmatter and no sentinel: the file is owned through its `kind = "rule"` lockfile entry (§14.4). Rendered by `skills.document.render_member_reference` when skills are composed, not by `render_for`, so it is no `--format` value of `playbook render`. |
+| `skill_reference` | A member rule's file in its skill, `<skill root>/<skill>/rules/<rule-id>.md` (§6.1.6): one italic line, ``*Rule `<id>`; applies to `g1`, `g2`.*`` (``*Rule `<id>`.*`` without globs; advisory only), a blank line, then the body after Jinja, with its section's `[IMPACT]` tag on the title when the skill declares sections (D32). No frontmatter and no sentinel: the file is owned through its `kind = "rule"` lockfile entry (§14.4). Rendered by `skills.document.render_member_reference` when skills are composed, not by `render_for`, so it is no `--format` value of `playbook render`. |
 | `prompt_continue` | Emit the sentinel on line 1, then a new frontmatter `name`, `description`, `invokable: true`, then the body. When `includes_rules:` is set, append the `## Reference rules` appendix built through `rule_registry`: each included rule once, in order, under `### {rule.name}`; a rule filtered out by `applies_if` is skipped (§6.2.5). |
 | `prompt_claude_command` | Strip frontmatter; prepend a title line if not present. Insert the `## Before you start` block built through `skill_references` before the body's first `##` heading outside a code fence (§6.2.5); no rule text. A prompt with no active skill reference gets no block and renders byte-identically. A read-only prompt (`write_scope: {read_only: true}`, §6.2.1) instead opens with the frontmatter block `---` / `disallowed-tools: Edit Write NotebookEdit` / `---`, so Claude Code removes those tools while the command runs, and carries the sentinel on the first body line (§4.3). Every other prompt renders as before. |
 | `prompt_opencode_command` | Strip canonical frontmatter; emit a new minimal frontmatter with `description:` only (OpenCode's required field), plus `agent: plan` for a read-only prompt (§10.6.1), on line 1, the sentinel as the first body line. Map `input_variables` to `$ARGUMENTS` / `$1` / `$2`, then insert the same `## Before you start` block as `prompt_claude_command` (it holds no placeholder). |
@@ -1952,20 +1983,18 @@ class ContinueAdapter(Adapter):
 **Hooks: none — guardrail text only.** Continue ships no wired hook mechanism: the `cn` CLI's hook code is dormant in every published bundle and the IDE `config.yaml` has no hooks key. The Continue adapter therefore never writes hook configuration under `.continue/`; Continue receives each enabled hook's guardrail text only, as a rule file (`specs/prK-lifecycle-hooks.md` §A.8).
 
 **Rules: one file per rule, scoped ones included.** Continue reads no skills, so the skills-first delivery (§6.3.3) does not apply to it: every rule that passes `applies_if` keeps its own `.continue/rules/<priority>-<id>.md` (§6.1.3), a member rule included, and `continue_rule` drops the `skill` key like every other canonical-only key (§9.7). A skill with member rules is not degraded to a Continue prompt either (§6.3.2): its members already arrive here as rule files, and the prompt would index `references/` files Continue never receives.
-#### 10.2.1 Numbering scheme
-Continue loads rules in lexicographical order, so the file name controls priority. The adapter prefixes filenames with the rule's `priority` (default 50, zero-padded to 2 digits). Authors keep priorities sparse (00, 10, 20, ..., 90) so new rules can slot in without renumbering.
+#### 10.2.1 Numbering scheme and the priority policy
+Continue loads rules in lexicographical order, so the file name controls priority: the adapter prefixes each file name with the rule's `priority` (0-99, default 50, zero-padded to 2 digits; `playbook validate` refuses anything else, §12.6). The same number orders everything else that lists rules: the always-loaded files (§6.1.4), a skill's rules index (§6.3.3) and Continue's directory. One policy sets it (prU D17, which replaces the earlier bands by rule kind):
+
 | Priority | Used for |
 | --- | --- |
-| `00` | Project context (project name, kind, top-level description) |
-| `05` | Code legibility (eight language-neutral principles, prU D73) |
-| `10` | Python house style (the seven always-loaded conventions) |
-| `15` | Document layout (where specs, plans and decision records live, prU D61) |
-| `20` | Tooling baseline (ruff, mypy, pytest, package manager) |
-| `30` | Compliance and security (overlay territory) |
-| `40`-`59` | Language-specific scoped rules (dependency injection, pure core, data shapes, typing, performance idioms, asyncio, classes and protocols, error handling, idioms) |
-| `60` | Framework-specific scoped rules (fastapi, pydantic, sqlalchemy) |
-| `70` | Domain-specific scoped rules |
-| `90` | Per-repo customizations from `playbook/` |
+| `00`-`19` | Always rules: project context `00`, code legibility `05` (prU D73), Python house style `10`, document layout `15` (prU D61) |
+| `20`-`39` | Members of a CRITICAL section |
+| `40`-`59` | Members of a HIGH section |
+| `60`-`79` | Members of a MEDIUM section |
+| `80`-`99` | Members of a LOW section |
+
+Inside a band, a member's number is its rank in its section: the first rule of the section takes the band's first numbers, and authors keep them sparse so a new rule slots in without renumbering. A sectioned skill's members are sorted by `(section order, priority, id)`, and S6 (§12.6) rejects a priority outside the member's section band. A skill without sections (an overlay's or a repository's own skill, or a bundled plugin) keeps the free 0-99 range: its members sort by `(priority, id)` and no band is checked (D46.8). No band binds a rule outside a sectioned skill: an overlay's or a repository's always rules should still take `00`-`19` so they sort before skill members in Continue, and a guardrail's advisory rule file stays at `30` (`30-guardrail-<id>.md`, §6.6.7).
 ### 10.3 Claude Code adapter
 ```python
 class ClaudeCodeAdapter(Adapter):
@@ -2015,7 +2044,7 @@ class ClaudeCodeAdapter(Adapter):
             write_engine_owned(rules_path, repo_root, rules.encode("utf-8")),
         ]
 ```
-Skills are written natively to `.claude/skills/<id>/` (`SKILL.md` + byte-copied `scripts/` and `references/`) by the shared `SkillWriter`, with `name` = id and the sentinel as the first body line (§6.3). Core's skills are among them: a skill with member rules also gets one `references/<rule-id>.md` per active member and the generated index (§6.1.6, §6.3.3). `stale_outputs` (and so `cleanup_stale`) combines two passes: the anchored sentinel scan (`generated_output.sentinel.has_sentinel`) over `.claude/commands/` and the launcher directory `.claude/hooks/playbook/`, and the single-file check of `.claude/CLAUDE.md` and `.claude/rules/coding-agent-playbook.md` (each reported only when it carries the sentinel and was not re-written this sync). It never scans `.claude/rules/`: every other file there is the user's. It never deletes inside `.claude/skills/`: stale skill output is settled by the lockfile leftover policy (§4.2 step 9, §10.8). `.claude/settings.json` is never stale: managed elements are removed inside `finalize`, and the file itself is never deleted. Hooks are §10.3.2.
+Skills are written natively to `.claude/skills/<id>/` (`SKILL.md` + byte-copied `scripts/`, `references/` and `examples/`) by the shared `SkillWriter`, with `name` = id and the sentinel as the first body line (§6.3). Core's skills are among them: a skill with member rules also gets one `rules/<rule-id>.md` per active member and the generated navigation and rules index (§6.1.6, §6.3.3). `stale_outputs` (and so `cleanup_stale`) combines two passes: the anchored sentinel scan (`generated_output.sentinel.has_sentinel`) over `.claude/commands/` and the launcher directory `.claude/hooks/playbook/`, and the single-file check of `.claude/CLAUDE.md` and `.claude/rules/coding-agent-playbook.md` (each reported only when it carries the sentinel and was not re-written this sync). It never scans `.claude/rules/`: every other file there is the user's. It never deletes inside `.claude/skills/`: stale skill output is settled by the lockfile leftover policy (§4.2 step 9, §10.8). `.claude/settings.json` is never stale: managed elements are removed inside `finalize`, and the file itself is never deleted. Hooks are §10.3.2.
 #### 10.3.1 Rule composition: the rules file and the `CLAUDE.md` stub
 `finalize()` writes two files. The always rules, then the generated `## Where guidance lives` section, go to `.claude/rules/coding-agent-playbook.md`:
 ```markdown
@@ -2051,7 +2080,7 @@ Lint feedback names a rule id; that rule's reference in the skill has the fix.
 
 This file is generated by coding-agent-playbook.
 ```
-Each section is a `claude_md_section` rendering (§9.7): the rules, each byte-identical to its `AGENTS.md` section (up to line endings: both Claude Code files are written as LF bytes, while `AGENTS.md` is still written in text mode, so CRLF on Windows), in one list sorted by `(priority, id)`. A member rule (a scoped rule that names a skill in `skill:`) is never a section: the adapter drops it, and the Where section after the list names its skill instead (`skills.document.where_guidance_section`, the one function both composite files call, so the section is byte-identical in `AGENTS.md`). A hook Claude Code cannot run (`adapters.claude_code.hooks.runs_natively` is false: `claude_code` is missing from its `supports`, or none of its events reaches Claude Code) adds no section: with guardrail text, it adds one guardrail line to a `## Guardrails` section after the Where section, `hooks.enforcement.guardrails_section` as in `AGENTS.md` (§10.4), and its full text is in `.claude/skills/playbook-guardrails/` (§6.3.4; D26). With the core hooks every hook runs natively, so the file has no Guardrails section. With session-start-playbook-briefing on, one fixed heartbeat line closes the rules file (§10.3.2). Project name and description reach the file only through rules that render them (e.g. the bundled `00-project-context` rule). Prompts are not listed: they live in `.claude/commands/`. With no rule, no Where line, no guardrail line and no heartbeat line, `finalize()` writes neither file and a stale engine-owned one is removed; a heartbeat line alone still writes both, the rules file then holding only that line. The rules file is one unscoped engine file: it carries no frontmatter, so Claude Code always loads it, and per-rule `paths:` scoping (Claude Code's native path-scoped `.claude/rules/<id>.md`) is still not used: no scoped rule reaches it in full (`playbook validate` requires `skill:` on every authored scoped rule, V1 in §12.6, and a hook's advisory rule becomes a guardrail line), and a member rule is not in this file: it is a reference of the skill it names, under `.claude/skills/<skill>/references/`. The engine owns exactly that one path: `output_locations` declares the file, never the `.claude/rules/` directory, so every other file there is the user's and is never read, rewritten, gitignored or deleted. Because that directory holds the user's files, the rules file is written whole only over nothing or a file carrying the sentinel on line 1, like the launcher (§10.3.2, `generated_output/write_guard.py`): a same-named file of the user's, anything that is not a regular file, a hard link, or a symlink at the path, at `.claude` or at `.claude/rules` is refused, never written through, and a stale-output check never reports a file reached through such a link. With `claude_code` enabled, sync checks the path before any adapter writes, hooks or not: write mode exits 1 with `error: .claude/rules/coding-agent-playbook.md: <reason>` and `error: playbook sync stopped; .claude/rules/coding-agent-playbook.md was not changed.`, and `--check` / `--check-staged` print `Cannot verify .claude/rules/coding-agent-playbook.md: <reason>.` and exit 1. The stub keeps its plain overwrite of whatever regular file is there, but is never written through a link either: a symlink at `.claude/CLAUDE.md` is refused the same way, before any adapter writes, with `error: .claude/CLAUDE.md: it is a symbolic link, and the engine never writes through one` (`--check`: `Cannot verify .claude/CLAUDE.md: …`), and so are a hard link (`it is a hard link shared with another file, …`) and anything that is not a regular file, such as a directory or a FIFO (`it is not a regular file`). Writing the stub in place through the common `.claude/CLAUDE.md -> ../AGENTS.md` link, or through the same file hard-linked (the usual stand-in on Windows, where file symlinks need developer mode), would otherwise turn `AGENTS.md` into the stub for every other tool. (A linked `.claude` is already refused by the rules-file check above.) Both files are `kind = "composite"` lock entries (§14.4) and composite singletons of the hook guard tables, so guard-generated-outputs denies an agent's edit of either with the same reason and the drift scan reports either as an orphan (`specs/prK-hook-pack.md` §E.1).
+Each section is a `claude_md_section` rendering (§9.7): the rules, each byte-identical to its `AGENTS.md` section (up to line endings: both Claude Code files are written as LF bytes, while `AGENTS.md` is still written in text mode, so CRLF on Windows), in one list sorted by `(priority, id)`. A member rule (a scoped rule of one skill, by its location in that skill's `rules/` or by `skill:`) is never a section: the adapter drops it, and the Where section after the list names its skill instead (`skills.document.where_guidance_section`, the one function both composite files call, so the section is byte-identical in `AGENTS.md`). A hook Claude Code cannot run (`adapters.claude_code.hooks.runs_natively` is false: `claude_code` is missing from its `supports`, or none of its events reaches Claude Code) adds no section: with guardrail text, it adds one guardrail line to a `## Guardrails` section after the Where section, `hooks.enforcement.guardrails_section` as in `AGENTS.md` (§10.4), and its full text is in `.claude/skills/playbook-guardrails/` (§6.3.4; D26). With the core hooks every hook runs natively, so the file has no Guardrails section. With session-start-playbook-briefing on, one fixed heartbeat line closes the rules file (§10.3.2). Project name and description reach the file only through rules that render them (e.g. the bundled `00-project-context` rule). Prompts are not listed: they live in `.claude/commands/`. With no rule, no Where line, no guardrail line and no heartbeat line, `finalize()` writes neither file and a stale engine-owned one is removed; a heartbeat line alone still writes both, the rules file then holding only that line. The rules file is one unscoped engine file: it carries no frontmatter, so Claude Code always loads it, and per-rule `paths:` scoping (Claude Code's native path-scoped `.claude/rules/<id>.md`) is still not used: no scoped rule reaches it in full (`playbook validate` requires `skill:` on every authored scoped rule, V1 in §12.6, and a hook's advisory rule becomes a guardrail line), and a member rule is not in this file: it is a rule of its skill, under `.claude/skills/<skill>/rules/`. The engine owns exactly that one path: `output_locations` declares the file, never the `.claude/rules/` directory, so every other file there is the user's and is never read, rewritten, gitignored or deleted. Because that directory holds the user's files, the rules file is written whole only over nothing or a file carrying the sentinel on line 1, like the launcher (§10.3.2, `generated_output/write_guard.py`): a same-named file of the user's, anything that is not a regular file, a hard link, or a symlink at the path, at `.claude` or at `.claude/rules` is refused, never written through, and a stale-output check never reports a file reached through such a link. With `claude_code` enabled, sync checks the path before any adapter writes, hooks or not: write mode exits 1 with `error: .claude/rules/coding-agent-playbook.md: <reason>` and `error: playbook sync stopped; .claude/rules/coding-agent-playbook.md was not changed.`, and `--check` / `--check-staged` print `Cannot verify .claude/rules/coding-agent-playbook.md: <reason>.` and exit 1. The stub keeps its plain overwrite of whatever regular file is there, but is never written through a link either: a symlink at `.claude/CLAUDE.md` is refused the same way, before any adapter writes, with `error: .claude/CLAUDE.md: it is a symbolic link, and the engine never writes through one` (`--check`: `Cannot verify .claude/CLAUDE.md: …`), and so are a hard link (`it is a hard link shared with another file, …`) and anything that is not a regular file, such as a directory or a FIFO (`it is not a regular file`). Writing the stub in place through the common `.claude/CLAUDE.md -> ../AGENTS.md` link, or through the same file hard-linked (the usual stand-in on Windows, where file symlinks need developer mode), would otherwise turn `AGENTS.md` into the stub for every other tool. (A linked `.claude` is already refused by the rules-file check above.) Both files are `kind = "composite"` lock entries (§14.4) and composite singletons of the hook guard tables, so guard-generated-outputs denies an agent's edit of either with the same reason and the drift scan reports either as an orphan (`specs/prK-hook-pack.md` §E.1).
 
 **Why two files.** OpenCode v1 (anomalyco/opencode v1.19.3, `session/instruction.ts:171-218` via `tool/read.ts:300`) attaches the first `AGENTS.md`/`CLAUDE.md` of each directory between a file its read tool opens and the working directory (§10.6), so with the rules in `.claude/CLAUDE.md`, an OpenCode run at or above the repo root added a second full copy of them when its read tool opened a file under `.claude/` (once per uncompacted session, §10.6), and leaked the Claude-only heartbeat line to OpenCode. Neither OpenCode v1 (1.19.3) nor v2 (dev `24c7f7a`) discovers `.claude/rules/` on its own (v1 looks up files named `AGENTS.md`, `CLAUDE.md` or `CONTEXT.md`; v2 only `AGENTS.md`, and its `.claude/` compatibility reads only `skills/`). Only an `opencode.json` `instructions` entry the user adds, such as `.claude/rules/*.md`, would load it, next to `AGENTS.md`. Claude Code loads `.claude/rules/*.md` files without `paths:` frontmatter "at launch with the same priority as `.claude/CLAUDE.md`" (code.claude.com/docs/en/memory). `.claude/CLAUDE.md` must still exist, rule-free: in Claude Code's default `claude-md-or-agents-md` mode (v2.1.277+) a `CLAUDE.md`, `.claude/CLAUDE.md` or `CLAUDE.local.md` in the working directory or above it stops Claude from also reading the root `AGENTS.md` natively, while a `.claude/rules/` file does not count and keeps loading alongside `AGENTS.md`, so without the stub Claude would load the rules twice. The stub names no rules file on purpose: OpenCode v1 still attaches it, and a pointer would invite its model to read the rules again. Live-verified on Claude Code 2.1.292 (2026-10-16, `claude -p` witness tokens): with `AGENTS.md`, a header-only `.claude/CLAUDE.md` and a `.claude/rules/` file, Claude loads only the rules file, both at the repo root and when launched from a subdirectory.
 #### 10.3.2 Hooks: the managed `settings.json` merge, the launcher and the pin (v0.20)
@@ -2089,7 +2118,7 @@ A read-only prompt (`write_scope: {read_only: true}`) renders as a command whose
 - *Concurrent handlers.* Claude Code runs every matching handler in parallel, the user's own included, and the playbook group always sees the original `tool_input`. A user, plugin or skill hook returning `updatedInput` can still change the executed input after the playbook's verdict, a known gap that ordering cannot close.
 - *Incidental reach.* Other harnesses read `.claude/settings.json` too (Cursor, GitHub Copilot CLI, VS Code's opt-in Claude format); the dispatcher goes inert on a payload that is not Claude-shaped. Copilot CLI's `preToolUse` fails closed on errors, so a repo used with Copilot CLI, on Windows above all, must be verified against the real CLI before relying on hooks (OQ-15). Gemini CLI's `gemini hooks migrate --from-claude` copies `timeout` into a milliseconds field: never migrate playbook-managed entries.
 ### 10.4 AGENTS.md adapter
-Always enabled (adapter discovery, `adapters.registry.discover_adapters`, adds `agents_md` to every enabled set). Produces a single `AGENTS.md` at the repo root. Identical in shape to the Claude Code rules file (§10.3.1, title `# AGENTS.md`; rule sections byte-identical) but lives at the root because that's where Codex, Cursor, and Copilot look for it; hooks go to a trailing Guardrails section (below), one line each, instead of being sorted in with the rules. It holds the always rules (a member rule, one that names a skill in `skill:`, is dropped: it is a reference of that skill), then the generated `## Where guidance lives` section, byte-identical to the rules file's, then the Guardrails section. Without member skills the file is byte-identical to the rules-only composition. The map names only skills a sync writes, so it is kept only when some enabled adapter declares a `native_skills_root` (`Adapter.note_native_skill_roots`, §10.1): with `adapters_enabled = []` or only `continue`, `AGENTS.md` has no Where section. With no always rule left after `applies_if` filtering, no Where line and no guardrail line, nothing is written and a stale engine-owned `AGENTS.md` is removed. When member rules are active and no enabled adapter delivers them (`Adapter.delivers_member_rules`, False only here), `playbook sync` prints `warning: no enabled adapter delivers scoped rules (only agents_md is on); skill <id> reaches no assistant: add claude_code, opencode or shared_skills to adapters_enabled` on stderr; nothing is inlined into `AGENTS.md` instead.
+Always enabled (adapter discovery, `adapters.registry.discover_adapters`, adds `agents_md` to every enabled set). Produces a single `AGENTS.md` at the repo root. Identical in shape to the Claude Code rules file (§10.3.1, title `# AGENTS.md`; rule sections byte-identical) but lives at the root because that's where Codex, Cursor, and Copilot look for it; hooks go to a trailing Guardrails section (below), one line each, instead of being sorted in with the rules. It holds the always rules (a member rule, one that belongs to a skill by location or by `skill:`, is dropped: it is in that skill's `rules/`), then the generated `## Where guidance lives` section, byte-identical to the rules file's, then the Guardrails section. Without member skills the file is byte-identical to the rules-only composition. The map names only skills a sync writes, so it is kept only when some enabled adapter declares a `native_skills_root` (`Adapter.note_native_skill_roots`, §10.1): with `adapters_enabled = []` or only `continue`, `AGENTS.md` has no Where section. With no always rule left after `applies_if` filtering, no Where line and no guardrail line, nothing is written and a stale engine-owned `AGENTS.md` is removed. When member rules are active and no enabled adapter delivers them (`Adapter.delivers_member_rules`, False only here), `playbook sync` prints `warning: no enabled adapter delivers scoped rules (only agents_md is on); skill <id> reaches no assistant: add claude_code, opencode or shared_skills to adapters_enabled` on stderr; nothing is inlined into `AGENTS.md` instead.
 ```python
 class AgentsMdAdapter(Adapter):
     name = "agents_md"
@@ -2159,8 +2188,8 @@ You are writing tests for risk-models, a python-application project.
 
 ## Before you start
 
-1. Load skill `python-coding` and read its reference `references/python-typing.md`.
-2. Load skill `python-testing` and read its reference `references/pytest.md`.
+1. Load skill `python-coding` and read its rule `rules/python-typing.md`.
+2. Load skill `python-testing` and read its rule `rules/pytest.md`.
 3. For each file in scope, also load any other listed skill whose description matches it.
 
 ## Conventions
@@ -2216,19 +2245,21 @@ The adapter emits a harness tree under the repo root (`specs/prH-agent-harness.m
 ├── skills/
 │   ├── SKILLS.md               #   routing file (description-only frontmatter)
 │   └── <id>/
-│       ├── SKILL.md            #   name + description + body
+│       ├── SKILL.md            #   name + description + body + the generated rules index (prU D46.7)
+│       ├── rules/              #   <rule-id>.md per active member rule, as in the source (prU D5, D22)
 │       ├── scripts/            #   ← Skill.scripts_dir, byte-copied verbatim (shutil.copy2)
-│       └── references/         #   ← Skill.references_dir, byte-copied verbatim
-│                               #   (both minus bytecode caches, §10.8)
+│       ├── references/         #   ← Skill.references_dir, byte-copied verbatim
+│       └── examples/           #   ← Skill.examples_dir, byte-copied verbatim (prU D48)
+│                               #   (all three minus bytecode caches and gated entries, §10.8)
 ├── prompts/
 │   ├── PROMPTS.md
 │   └── <slash>/SKILL.md        #   skill-shaped leaf; includes_rules as an inline appendix
 ├── rules/
 │   ├── RULES.md
 │   └── <priority:02d>-<id>.md  #   scope=always rules; frontmatter = description only
-├── references/
+├── references/                 #   absent when every scoped rule belongs to an emitted skill
 │   ├── REFERENCES.md
-│   └── <id>.md                 #   scope=scoped rules; frontmatter = description only
+│   └── <id>.md                 #   any other scope=scoped rule; frontmatter = description only
 └── .playbook/                  # round-trip sidecar (dotfile; harness clients skip it)
     ├── manifest.toml           #   full canonical reconstruction payload (§20.10)
     ├── hooks/<id>/             #   hook sidecar: HOOK.md (+ byte-copied scripts/), v0.20
@@ -2237,10 +2268,10 @@ The adapter emits a harness tree under the repo root (`specs/prH-agent-harness.m
 #### 10.7.2 Canonical → harness mapping
 | Canonical type | Harness destination | Native fields on the leaf |
 | --- | --- | --- |
-| `Skill` | `skills/<id>/SKILL.md` (+ `scripts/`, `references/`) | `name`, `description`, body, copied script/reference bytes |
-| `Prompt` | `prompts/<slash>/SKILL.md` (skill-shaped leaf) | `name`, `description`, the titled body, its `includes_rules` as a `## Reference rules` appendix (`render_inline_prompt_markdown`, §9.7) + an input-variables note; no `## Before you start` block, since the tree's scoped rules are top-level `references/<id>.md` files, not skill references |
+| `Skill` | `skills/<id>/SKILL.md` (+ `scripts/`, `references/`, `examples/`) | `name`, `description`, body ending with the generated rules index (§6.3.3), copied script/reference/example bytes |
+| `Prompt` | `prompts/<slash>/SKILL.md` (skill-shaped leaf) | `name`, `description`, the titled body, its `includes_rules` as a `## Reference rules` appendix (`render_inline_prompt_markdown`, §9.7) + an input-variables note; no `## Before you start` block: the leaf carries the included rules' text itself |
 | `Rule` (scope=always) | `rules/<priority:02d>-<id>.md` | `description`, body |
-| `Rule` (scope=scoped) | `references/<id>.md` (one file per scoped rule, member rules included: the harness tree has its own `references/` and composes no skills from rules) | `description`, body; the owning `skill` is recorded in `manifest.toml` (§20.10) |
+| `Rule` (scope=scoped) | `skills/<skill>/rules/<id>.md` for a member of an emitted skill, the same `rules/` directory as the source (prU D22); `references/<id>.md` for any other scoped rule | `description`, body (title tagged `[IMPACT]` in a sectioned skill); the `section` and any non-native field are recorded in `manifest.toml` (§20.10), and `skill` only for a rule outside a skill's `rules/`, since the path names it |
 | `Hook` (v0.20) | `.playbook/hooks/<id>/HOOK.md` (+ `scripts/`), and `rules/30-guardrail-<id>.md` when its body is not blank | none: the harness spec has no lifecycle-event concept, so the sidecar is opaque and the rule file is advisory text (`description` + the `hook_advisory` body) |
 
 `scope=always` rules go to `rules/` and `HARNESS.md` adds an "Always consult these" section instructing the agent to read them every session — keeping the root body small and spec-idiomatic. The harness rule file emits **only** `description`; the rule `name` and every other non-native field round-trip via the sidecar (§20.10).
@@ -2270,7 +2301,7 @@ class SharedSkillsAdapter(Adapter):
 **The `SkillWriter`** (`adapters/skill_dirs/writer.py`) is the single source of truth for a native skill directory; `claude_code` (`.claude/skills`), `opencode` (`.opencode/skills`) and `shared_skills` (`.agents/skills`) each hold one, differing only in the repo-relative root, so a skill is **byte-identical in every root**.
 - **Retired location.** `retired_output_locations = ("shared_skills/",)` (§10.1) keeps the pre-v0.21 root a deletion bound and prune boundary, in write mode and `--check`, until 1.0. The first sync after an upgrade writes `.agents/skills/<id>/`, deletes every `shared_skills/` file the previous lockfile lists whose bytes still match and that git does not track, prunes the emptied tree (`shared_skills/` itself is a real directory as spelled) and swaps `/shared_skills/<id>/` for `/.agents/skills/<id>/` in the managed `.gitignore` block. Edited or tracked files are kept and stay owned (in the lockfile and, under `commit = false`, in the block); under `commit = true` they are listed on stderr (`note: kept output …`). A file no lockfile lists, such as a hand-written `shared_skills/<id>/`, is never touched. The location is not current output, so `guard_config.json`'s `generated` path class lists `.agents/skills/` and never `shared_skills/`. While an enabled adapter is missing (a listed `codex` included, §12.2) every leftover is kept and the cleanup waits.
 - **No loose file in a skill root.** Every path an adapter writes under `.claude/skills/`, `.opencode/skills/` or `.agents/skills/` is `<root>/<id>/<…>`: OpenCode v2 loads any root-level `*.md` in a skill root as a skill, so a loose file there would be a phantom skill. The invariant is structural and pinned by tests, with no runtime guard: `ensure_path_safe_skill_id` accepts one relative segment, the writer refuses a skill directory resolving outside its root and writes only `SKILL.md`, `scripts/**` and `references/**` inside it, and the validate gate refuses ids that break the Agent Skills name rule before any write. `agent_harness`'s `skills/SKILLS.md` is the one engine file directly inside a skills-like directory, and `skills/` is not a harness skill root: do not point `.agents/skills`, `.claude/skills` or `.opencode/skills` at it.
-- **Member references.** For a skill with member rules (§6.3.3) the writer also writes one `references/<rule-id>.md` per `MemberReference`, from its `text` (the `skill_reference` format, §9.7), in the same `<root>/<id>/` and with the same bytes in every root, and the `SKILL.md` it writes carries the composed description and the generated `## References` index (`skills.document.emitted_frontmatter` / `emitted_body`). The `playbook:` block is never emitted. A rendered reference is recorded as `kind = "rule"` with its rule id (§14.4), so ownership and leftovers work exactly as for a copied reference.
+- **Member references.** For a skill with member rules (§6.3.3) the writer also writes one `rules/<rule-id>.md` per `MemberReference` (`member_reference_path`), from its `text` (the `skill_reference` format, §9.7), in the same `<root>/<id>/` and with the same bytes in every root, and the `SKILL.md` it writes carries the composed description and the generated navigation: the `## Rules` index and the `## References and examples` list (`skills.document.emitted_frontmatter` / `emitted_body`). The `playbook:` block is never emitted, and a `references/` or `examples/` path whose `playbook.references` entry fails its `applies_if` is not copied. A rendered rule file is recorded as `kind = "rule"` with its rule id (§14.4), so ownership and leftovers work exactly as for a copied reference.
 - **Write.** `<root>/<id>/SKILL.md` (frontmatter on line 1 with `name` = id, the sentinel HTML comment as the first body line, then the body) plus byte-copies (`shutil.copy2`, copies not symlinks — source symlinks are dereferenced, exec bits preserved) of the canonical `scripts/` and `references/` subtrees. Two kinds of source file are never copied, each named in a stderr warning (and by `playbook validate`): a secret path (§17.3), judged by its name in the skill *and* by where it resolves, so `scripts/notes.txt -> ~/.aws/credentials` is not published under an innocent name; and a file whose real location lies outside the skill's own source directory (a link leaving it). Links that stay inside the skill are copied. The same filter (`generated_output/source_files.py`) applies to the `agent_harness` skill copies. Returns every file written.
 - **Bytecode caches are never copied.** Any path under `scripts/` or `references/` with a `__pycache__` component, and any `*.pyc`/`*.pyo` file, is skipped silently (`generated_output/source_files.py`, the walk the secret/link filter above starts from, shared with the `agent_harness` adapter's `skills/<id>/` copy, so such a file is never written, listed in the lockfile or recorded in `.playbook/manifest.toml`). They are interpreter-tagged by-products: `pip install` byte-compiles the `.py` scripts a bundled plugin ships, and importing a script in-process writes `scripts/__pycache__/`; copying them made the output depend on how and under which Python the engine was installed. A cache an earlier engine synced is settled as a leftover (§4.2 step 9). Nothing else is skipped — a dot-file may be authored content.
 - **Path safety.** Non-path-safe ids (separators, `.`/`..`, NUL, drive/absolute) raise `ValueError` with the offending value; a destination under a symlink leading out of the skill directory is skipped with a stderr warning before anything is created — never written through, never a crash, the user's link left alone, the rest of the skill still written (`link_leaving`; until v0.20 it was a `ValueError` that stopped `playbook sync` with a traceback) — and so is a `<root>/<id>` that is itself a link leading out of the skills root, in every mode. A symlink sitting at a destination file is replaced, never written through. `sync --check` names a link leading out of a skill directory in its `Missing on disk:` hint (§12.3).
@@ -2666,7 +2697,7 @@ Each overlay in `overlays_enabled` that `playbook sync` would refuse (the shared
   On-disk files match the lockfile, but the state is not clean:
   'playbook sync' refuses to run until every overlay in overlays_enabled is usable (see Environment).
 ```
-`playbook check` is a diagnostic: it exits 0 whatever it reports, drift included, as before; `playbook validate` (§12.6) and `playbook sync` are the gates that exit non-zero. A `ConfigError` (§7.1) is the exception — the config cannot be loaded, so `check` (and `check --refresh`, which then writes nothing) exits 2 with `error: …`; §12.5 adds the cases where only `--refresh` refuses.
+**Harness hints (prU D79).** One harness-marker table (`detector/harness_markers.py`), reading repo files only and never `PATH`, drives an advisory Harnesses block: `playbook check` warns when a harness's markers exist but its adapter is off (`opencode.json` or user-written `.opencode/` files, `.continue/`, …), or when a configured adapter shows no use beyond the engine's own generated files (the lockfile tells them apart), each warning naming the config change or `playbook init --adapters ...` that fixes it; interactive `playbook init` pre-selects the detected adapters (§12.1). The hints never fail the command. `playbook check` is a diagnostic: it exits 0 whatever it reports, drift included, as before; `playbook validate` (§12.6) and `playbook sync` are the gates that exit non-zero. A `ConfigError` (§7.1) is the exception — the config cannot be loaded, so `check` (and `check --refresh`, which then writes nothing) exits 2 with `error: …`; §12.5 adds the cases where only `--refresh` refuses.
 **Hooks block (v0.20).** Between `=== Artifacts ===` and `=== Drift ===`, `playbook check` prints the `[hooks]` switch and every hook the sources define, by id. An on hook is labelled per enabled adapter from that adapter's `hook_support` and the hook's events and `supports` — `enforced`, `degraded` (registered there, with a gap: an unreachable or degraded event, or a tool class the harness lacks), `advisory` (text only) or `—` (neither: not registered there and no advisory body) — so advice is never mistaken for enforcement; an off hook gives its reason:
 ```
 === Hooks ===
@@ -2697,7 +2728,10 @@ $ playbook validate
 ✓ All sample `prompt_id` back-references match a prompt's `eval_samples:` list
 ✓ All markdown links self-contained (relative targets resolve; externals allowlisted)
 ✓ All skills are valid Agent Skills (string id declared, id/name matches ^[a-z0-9]+(-[a-z0-9]+)*$, description present)
+✓ Every rule file loads and has a valid scope, priority and section
+✓ Every rule file sits where its layer's rules/ layout puts it (R1–R6)
 ✓ Every scoped rule names a skill that takes member rules (V1–V14)
+✓ Every sectioned skill's sections, members and references are sound (S1–S7, RF1–RF6)
 ✓ All hooks honour the hook trust contract (H1–H21)
 ✗ overlays_enabled: coding_agent_playbook.plugins.superpower: no such bundled plugin (bundled plugins: coding_agent_playbook.plugins.mattpocock_skills, coding_agent_playbook.plugins.superpowers)
 ✗ rules/frameworks/sqlalchemy-v2.md.j2: applies_if references unknown fact 'orm_version'
@@ -2725,7 +2759,7 @@ The overlay rule (v0.17) runs the sync preflight's own check (`validation.prefli
 
 The Agent Skills rule (v0.15) checks every resolved skill: it must declare a string `id` (§6.3), its id — emitted as the `SKILL.md` `name` and the output directory — must match `^[a-z0-9]+(-[a-z0-9]+)*$` and be at most 64 chars, and it must carry a `description` of 1–1024 chars. OpenCode silently drops a skill that breaks either name/description constraint, so authors learn here instead of at runtime. Id-less skills all merge under the fallback id `skill` (all but one silently dropped), so they are checked from the **pre-merge** list and each one is reported. Skills carry no source path, so errors are reported as `skills/<id> (<source package>)`, or — for an id-less skill — by its authored `name` plus, when it has `scripts/`/`references/`, its source directory.
 
-**Member rules and `playbook:` blocks (v0.21).** A scoped rule that names a skill in `skill:` is a member rule of that skill (§6.1.1; design `specs/prS-skills-context.md` §6.6), and a skill takes members only when it declares the catalog-only `playbook:` block. `validation/_skills.py` checks both sides over the merged rule and skill sets, ignoring `applies_if`, so every repo sees the same findings whatever its detector facts. Rule findings name the rule's file; skill findings use the `skills/<id> (<source package>)` label above. Errors stop `playbook sync` before any write; warnings print on stderr. Every scoped rule needs a skill, by location (a file in a layer's `skills/<skill>/rules/` is a member of that skill without `skill:`, and the loader records it as `Rule.home_skill`; prU D5, ADR 0005) or by `skill:` (V1, the message is `SCOPED_RULE_NEEDS_SKILL_MESSAGE`, which MIGRATION.md quotes): an overlay or `playbook/rules/` scoped rule without `skill:` stops `playbook sync` until it names one. The known skills it lists are the merged skills that declare a `playbook:` block, sorted. A hook's guardrail (its text form) names no skill and never reaches these checks, since it is not an authored rule.
+**Member rules and `playbook:` blocks (v0.21).** A scoped rule is a member rule of one skill, by its location in that skill's `rules/` or, from another layer, by `skill:` (§6.1.1; design `specs/prS-skills-context.md` §6.6), and a skill takes members only when it declares the catalog-only `playbook:` block. `validation/_skills.py` checks both sides over the merged rule and skill sets, ignoring `applies_if`, so every repo sees the same findings whatever its detector facts. Rule findings name the rule's file; skill findings use the `skills/<id> (<source package>)` label above. Errors stop `playbook sync` before any write; warnings print on stderr. Every scoped rule needs a skill, by location (a file in a layer's `skills/<skill>/rules/` is a member of that skill without `skill:`, and the loader records it as `Rule.home_skill`; prU D5, ADR 0005) or by `skill:` (V1, the message is `SCOPED_RULE_NEEDS_SKILL_MESSAGE`, which MIGRATION.md quotes): an overlay or `playbook/rules/` scoped rule without `skill:` stops `playbook sync` until it names one. The known skills it lists are the merged skills that declare a `playbook:` block, sorted. A hook's guardrail (its text form) names no skill and never reaches these checks, since it is not an authored rule. V12 (a hand-written reference with a member's file name) was retired by prU D5: members render to `rules/<id>.md`, so a file in the skill's `references/` can no longer collide with one, and V13 now guards the `## Rules` heading the engine appends.
 
 | # | Check | Sample line |
 | --- | --- | --- |
@@ -2734,47 +2768,55 @@ The Agent Skills rule (v0.15) checks every resolved skill: it must declare a str
 | V3 | an always rule sets `skill` | `FAIL rules/x.md: 'skill: python-coding' is not allowed on an always rule (always rules stay in always-loaded context); remove 'skill', or set 'scope: scoped' to deliver the rule through that skill` |
 | V4 | `skill` is not an id string | `FAIL rules/x.md: skill 42 must be a skill id string matching ^[a-z0-9]+(-[a-z0-9]+)*$ (1-64 chars), e.g. 'python-coding'` |
 | V5 | no skill of that id after the merge | `FAIL rules/x.md: skill 'python-codng' does not exist after merging every layer; expected one of: ml-data, python-coding, python-testing, python-tooling (or enable the overlay that ships it)` |
-| V6 | a member rule's id is not a skill-safe file name | `FAIL rules/x.md: rule id 'Py_Typing' cannot be a member of skill 'python-coding': its reference is written as references/<id>.md, so the id must match ^[a-z0-9]+(-[a-z0-9]+)*$ (1-64 chars)` |
+| V6 | a member rule's id is not a skill-safe file name | `FAIL rules/x.md: rule id 'Py_Typing' cannot be a member of skill 'python-coding': its rule file is written as rules/<id>.md, so the id must match ^[a-z0-9]+(-[a-z0-9]+)*$ (1-64 chars)` |
 | V7 | `playbook` is not a mapping | `FAIL skills/x (pkg): 'playbook' must be a mapping with optional keys files, use_when, sections, references, got str 'yes'` |
 | V8 | an unknown key in `playbook` | `FAIL skills/x (pkg): 'playbook' has unknown key 'when'; allowed keys: files, use_when, sections, references` |
 | V9 | `use_when` or `files` is not one non-empty line; `files` is over 80 chars or ends with a period | `FAIL skills/x (pkg): 'playbook.files' is 112 chars; keep it to one line of at most 80 chars without a trailing period (it becomes one line of 'Where guidance lives')` |
 | V10 | `use_when` starts with "Use when" (the engine adds it) | `FAIL skills/x (pkg): 'playbook.use_when' starts with 'Use when'; write only the condition (the engine adds 'Use when'), e.g. 'editing a Python module'` |
 | V11 | the worst-case composed description, the longest member name plus the `and <N-1> more` tail, is over 300 chars; for a skill that declares sections, the description whose Covers clause names every declared section (`... cannot fit 300 chars when the Covers clause names every declared section: '<text>' is 304 chars; shorten 'description' (40 chars), 'playbook.use_when' (60 chars) or the section titles`) | `FAIL skills/python-coding (pkg): the composed description cannot fit 300 chars even when the Covers clause names one member: '<text>' is 312 chars; shorten 'description' (88 chars), 'playbook.use_when' (130 chars) or the longest member name (python-typing: 'Python typing conventions')` |
-| V12 | a hand-written reference has a member's file name | `FAIL skills/python-coding (pkg): references/python-typing.md is hand-written in this skill but is also the rendered reference of member rule 'python-typing'; rename the hand-written file` |
-| V13 | the authored body has a line that is exactly `## References` | `FAIL skills/python-coding (pkg): the body has its own '## References' heading; the engine appends that section for member rules, so rename yours (e.g. '## Further reading')` |
+| V13 | the authored body has a line that is exactly `## Rules` | `FAIL skills/python-coding (pkg): the body has its own '## Rules' heading; the engine appends that section for member rules, so rename yours (e.g. '## Conventions')` |
 | V14 | `skill` names a skill without a `playbook:` block, such as a bundled plugin skill | `FAIL rules/x.md: skill 'brainstorming' (coding_agent_playbook.plugins.superpowers) declares no 'playbook:' block, so it cannot take member rules; name one that does (ml-data, python-coding, python-testing, python-tooling), or add a 'playbook:' block to a skill of your own (an override of a core skill must keep one)` |
 | W1 | a `playbook:` block without members: no rule in its `rules/` directory and none naming it | `warning: skills/x (pkg): declares 'playbook' but has no member rule (none in its rules/ directory, none naming it in 'skill:'); it is never written` |
 | W2 | member rules but no `playbook.files` | `warning: skills/x (pkg): has member rules but no 'playbook.files'; it is left out of the 'Where guidance lives' section` |
 | W3 | the full member list would be truncated (never for a skill that declares sections: its Covers clause names sections and is not truncated) | `warning: skills/python-coding (pkg): the composed description names 6 of 9 member rules within 300 chars ('... and 3 more'); shorten member names or the authored parts to list them all` |
 
-**Skill sections and references (prU D17, D42, D46.8, D47).** A skill's `playbook:` block may declare an ordered `sections:` list (model in `skills/sections.py`: `SkillSection`, `skill_sections`, `section_rank`; `Impact` and `IMPACT_BANDS` in `artifacts/impact.py`, since a `MemberReference` carries its impact) and a `references:` list; `validation/_sections.py` and `validation/_skill_references.py` check both. Priority bands (CRITICAL 20-39, HIGH 40-59, MEDIUM 60-79, LOW 80-99) apply only to skills that declare sections, and a skill without sections (no `sections` key, or `sections: []`) reports nothing new. A declared section without members is no finding. Member checks wait until S1 accepts the list.
+**Skill sections (prU D17, D32, D42, D46.8).** A skill's `playbook:` block may declare an ordered `sections:` list (model in `skills/sections.py`: `SkillSection`, `skill_sections`, `section_rank`; `Impact` and `IMPACT_BANDS` in `artifacts/impact.py`, since a `MemberReference` carries its impact); `validation/_sections.py` checks it and each member's `section:` and priority. Priority bands (§10.2.1: CRITICAL 20-39, HIGH 40-59, MEDIUM 60-79, LOW 80-99) apply only to skills that declare sections, and a skill without sections (no `sections` key, or `sections: []`) reports nothing new. A declared section without members is no finding. Member checks wait until S1 accepts the list, so a broken list reports once. The samples below are a `python-testing` skill of package `pkg` declaring `mocking` (CRITICAL) and `fixtures` (MEDIUM).
 
 | # | Check | Sample line |
 | --- | --- | --- |
-| S1 | `sections` is not a list of mappings with exactly `id` (kebab-case, unique), `title` (one line, at most 40 chars), `impact`, `summary` and `open_when` (one line each) | `FAIL skills/x (pkg): section 'mocking' (entry 1 of 'playbook.sections'): 'impact' 'URGENT' must be one of CRITICAL, HIGH, MEDIUM, LOW` |
-| S2 | sections do not run from CRITICAL to LOW | `FAIL skills/x (pkg): 'playbook.sections' must run from CRITICAL to LOW: section 'mocking' (CRITICAL) comes after 'fixtures' (MEDIUM)` |
+| S1 | `sections` is not a list of mappings with exactly `id` (kebab-case, unique), `title` (one line, at most 40 chars), `impact`, `summary` and `open_when` (one line each) | `FAIL skills/python-testing (pkg): section 'mocking' (entry 1 of 'playbook.sections'): 'impact' 'URGENT' must be one of CRITICAL, HIGH, MEDIUM, LOW`; not a list: `FAIL skills/python-testing (pkg): 'playbook.sections' must be a list of mappings with keys id, title, impact, summary, open_when, got str 'mocking'`; for an entry: `FAIL skills/python-testing (pkg): section entry 1 of 'playbook.sections': must be a mapping with keys id, title, impact, summary, open_when, got str 'mocking'`; an unknown key: `FAIL skills/python-testing (pkg): section 'mocking' (entry 1 of 'playbook.sections'): has unknown key 'when'; allowed keys: id, title, impact, summary, open_when`; a missing key: `FAIL skills/python-testing (pkg): section 'mocking' (entry 1 of 'playbook.sections'): is missing 'summary'`; an empty value: `FAIL skills/python-testing (pkg): section 'mocking' (entry 1 of 'playbook.sections'): 'summary' must be a non-empty string, got str ''`; two lines: `FAIL skills/python-testing (pkg): section 'mocking' (entry 1 of 'playbook.sections'): 'summary' must be one line, got 'a\nb'`; an id not in kebab-case: `FAIL skills/python-testing (pkg): section 'Mocking' (entry 1 of 'playbook.sections'): 'id' 'Mocking' must be kebab-case, e.g. 'error-handling'`; a long title: `FAIL skills/python-testing (pkg): section 'mocking' (entry 1 of 'playbook.sections'): 'title' 'Mocking, stubbing and faking collaborators' is 42 chars; keep it to at most 40`; a duplicate id: `FAIL skills/python-testing (pkg): 'playbook.sections' declares section 'mocking' more than once; ids are unique` |
+| S2 | sections do not run from CRITICAL to LOW | `FAIL skills/python-testing (pkg): 'playbook.sections' must run from CRITICAL to LOW: section 'mocking' (CRITICAL) comes after 'fixtures' (MEDIUM)` |
 | S3 | a member's `section:` is not declared by its skill | `FAIL rules/x.md: section 'mokcing' is not declared by skill 'python-testing'; declared sections: mocking, fixtures` |
 | S4 | a member of a sectioned skill, from the skill's own layer or from the repository (`<repo-local>`, also when it joins by `skill:`), sets no `section:` | `FAIL rules/x.md: skill 'python-testing' declares sections, so its member rule needs 'section:'; declared sections: mocking, fixtures` |
-| S5 | `section:` on an always rule, or on a member of a skill without sections | `FAIL rules/x.md: 'section: mocking' is not allowed: skill 'python-coding' declares no 'playbook.sections'; remove 'section', or declare the section in that skill` |
+| S5 | `section:` on a member of a skill without sections, or on an always rule | `FAIL rules/x.md: 'section: mocking' is not allowed: skill 'python-testing' declares no 'playbook.sections'; remove 'section', or declare the section in that skill`; for an always rule: `FAIL rules/x.md: 'section: mocking' is not allowed on an always rule (sections group a skill's member rules); remove 'section'` |
 | S6 | a member's priority is outside its section's band | `FAIL rules/x.md: priority 45 is outside the band of section 'mocking' (CRITICAL): expected 20-39` |
 | S7 | a member of a sectioned skill has an authored impact tag in its first heading | `FAIL rules/x.md: the first heading '# Use fakes [HIGH]' carries an impact tag; remove '[HIGH]' (the engine renders it from the rule's section)` |
 | W4 | a member from another overlay or bundled layer (not `<repo-local>`) joins a sectioned skill without `section:`; this includes the replaced layer's members when a higher layer replaces a skill and declares sections (D42) | `warning: rules/x.md: joins skill 'python-testing' (pkg) from another layer without 'section:'; it is listed under 'Other', after the declared sections: mocking, fixtures` |
-| R1 | a `references` entry is not a mapping with `path`, a one-line `open_when` and an optional `applies_if`, or its path is not relative under `references/` or `examples/` | `FAIL skills/x (pkg): reference 'docs/guide.md' (entry 1 of 'playbook.references'): 'path' must be a relative path under references/ or examples/, e.g. 'references/guide.md'` |
-| R2 | a listed path does not exist in the skill directory | `FAIL skills/x (pkg): reference 'references/gone.md' (entry 1 of 'playbook.references'): references/gone.md does not exist in the skill directory` |
-| R3 | a skill that declares `sections` or `references` leaves a file under `references/` or `examples/` unlisted (only license files are exempt; a skill that declares neither is not checked yet, F-02 covers the core skills) | `FAIL skills/x (pkg): references/guide.md is not listed in 'playbook.references'; add an entry with its path (or a parent directory) and open_when (license files are exempt)` |
-| R4 | an entry's `applies_if` breaks the rule predicate language, such as a list-typed key given a bare string | `FAIL skills/x (pkg): reference 'references/guide.md' (entry 1 of 'playbook.references'): applies_if: predicate 'any_framework' must be a list of strings; got 'fastapi'` |
+
+**Skill references and examples (prU D47, D48, D58).** `validation/_skill_references.py` checks the `playbook.references` list the engine renders as "References and examples" (§6.3.3). Each entry is a mapping with `path` (relative, under `references/` or `examples/`, a file or a directory such as one example project), a one-line `open_when` and an optional `applies_if` in the rule predicate language. Once a skill declares `sections` or `references`, every file under its `references/` and `examples/` must be covered by an entry (its own path or a parent directory's); license files (`LICENSE*`, `COPYING*`) are exempt (D19). A skill that declares neither is not checked yet (F-02's test covers the core skills). The findings name the skill and, for an entry, its path and position:
+
+| # | Check | Sample line |
+| --- | --- | --- |
+| RF1 | `references` is not a list, or an entry is not a mapping | `FAIL skills/python-testing (pkg): 'playbook.references' must be a list of mappings with keys path, open_when and optional applies_if, got str 'x'`; for an entry: `FAIL skills/python-testing (pkg): reference entry 1 of 'playbook.references': must be a mapping with keys path, open_when and optional applies_if, got str 'x'` |
+| RF2 | an entry has an unknown key, or no `path` | `FAIL skills/python-testing (pkg): reference 'references/guide.md' (entry 1 of 'playbook.references'): has unknown key 'when'; allowed keys: path, open_when, applies_if`; without a path: `FAIL skills/python-testing (pkg): reference entry 1 of 'playbook.references': is missing 'path'` |
+| RF3 | `open_when` is missing or not one line, or `path` is not relative under `references/` or `examples/` | `FAIL skills/python-testing (pkg): reference 'references/guide.md' (entry 1 of 'playbook.references'): 'open_when' must be one line, got 'a\nb'`; for the path: `FAIL skills/python-testing (pkg): reference 'docs/guide.md' (entry 1 of 'playbook.references'): 'path' must be a relative path under references/ or examples/, e.g. 'references/guide.md'` |
+| RF4 | a listed path does not exist in the skill directory | `FAIL skills/python-testing (pkg): reference 'references/gone.md' (entry 1 of 'playbook.references'): references/gone.md does not exist in the skill directory` |
+| RF5 | a file under `references/` or `examples/` is not listed | `FAIL skills/python-testing (pkg): references/guide.md is not listed in 'playbook.references'; add an entry with its path (or a parent directory) and open_when (license files are exempt)` |
+| RF6 | an entry's `applies_if` is not a mapping or breaks the rule predicate language, such as a list-typed key given a bare string | `FAIL skills/python-testing (pkg): reference 'references/guide.md' (entry 1 of 'playbook.references'): applies_if: predicate 'any_framework' must be a list of strings; got 'fastapi'`; not a mapping: `FAIL skills/python-testing (pkg): reference 'references/guide.md' (entry 1 of 'playbook.references'): 'applies_if' must be a mapping of predicate keys, got str 'fastapi'` |
 
 V11 measures with `skills.document.worst_case_description`, the same bound the sync's composition holds: a real composition of `M` active members (`M` at most the merged count `N`) that falls back to one name is never longer than that worst case, so a skill that validates cannot make `playbook sync` raise. The D13 description lint, the 500-line limit and the one-level references check are CI tests over the core skills only, never validate checks, so enabling a bundled plugin whose skills predate them keeps validate passing.
 
-**The rules/ layout (v0.21, prU D21).** `validation/_rule_layout.py` checks every layer's rule files and skill directories before the merge; each finding names the file, the offending value and the fix. Overlay and local-layer `<layer>/rules/` files keep free names. The engine's `catalog/core/rules/` holds only always rules; an engine scoped rule there is R5's, not R2's (prU D36).
+**Rule files: load errors and shape (v0.21, prU D21).** Every rule file of every layer is loaded tolerantly (`ArtifactSource.collect_rules`), so one malformed file is one `FAIL` line naming it, never a traceback, and the other rules are still checked. A file that cannot be loaded at all reports why: `FAIL playbook/rules/x.md: unknown frontmatter key 'impact'; allowed keys: id, name, description, scope, version, globs, applies_if, priority, tags, lint_codes, skill, section` (a typo'd key would otherwise be dropped silently), `missing required frontmatter key 'scope'; allowed keys: …` and `invalid YAML frontmatter: <parser error>` likewise. A loaded rule then has its shape checked (`validation/_frontmatter.py`, `check_rule_shape`), each finding naming the value: `scope: expected 'always' or 'scoped', got 'scopped'`; `priority: expected an int in 0-99, got 120` (a bool is refused too; Continue's `{priority:02d}` file name needs two digits); `section: expected a kebab-case string (e.g. 'error-handling'), got 'Error Handling'`.
+
+**The rules/ layout (v0.21, prU D5, D21, D36).** `validation/_rule_layout.py` checks every layer's rule files and skill directories before the merge; each finding names the file, the offending value and the fix. A rule in `<layer>/skills/<skill>/rules/` is a member of that skill by location; overlay and local-layer `<layer>/rules/` files keep free names and join a skill with `skill:`. The engine's `catalog/core/rules/` holds only always rules; an engine scoped rule there is R5's, not R2's. The samples are a repo whose local layer holds skills `s` and `plain`:
 
 | # | Check | Sample line |
 | --- | --- | --- |
 | R1 | a rule in `skills/x/rules/` declares `skill: y` | `FAIL playbook/skills/s/rules/r.md: declares 'skill: t' but lies in the rules/ directory of skill 's', which sets its membership; remove the 'skill:' line, or move the file to playbook/skills/t/rules/r.md` |
-| R2 | the file name minus `.md`/`.md.j2` is not the id, for a rule in a skill's `rules/` (any layer) or an engine always rule (which may keep a two-digit prefix such as `10-`) | `FAIL playbook/skills/s/rules/typing.md.j2: file name 'typing.md.j2' does not match rule id 'python-typing'; rename the file to python-typing.md.j2` |
+| R2 | the file name minus `.md`/`.md.j2` is not the id, for a rule in a skill's `rules/` (any layer) or an engine always rule (which may keep a two-digit prefix such as `10-`; its message then adds ` (an always rule may keep a two-digit priority prefix, e.g. 10-house.md)`) | `FAIL playbook/skills/s/rules/typing.md.j2: file name 'typing.md.j2' does not match rule id 'python-typing'; rename the file to python-typing.md.j2` |
 | R3 | two files of one layer share an id (the same id in two layers is an override) | `FAIL playbook/rules/r-old.md: rule id 'r' is defined by 2 files in layer <repo-local>: playbook/rules/r-old.md and playbook/skills/s/rules/r.md; the later one silently replaces the earlier, so give one file another id or delete it` |
-| R4 | a skill directory's `rules/` without `SKILL.md`, or in a skill without a `playbook:` block | `FAIL playbook/skills/plain/rules: skill 'plain' has a rules/ directory but its SKILL.md declares no 'playbook:' block, so it cannot take member rules; add a 'playbook:' block (e.g. 'playbook: {files: <which files this skill covers>}') to playbook/skills/plain/SKILL.md, or move the rules out` |
-| R5 | an engine-layer scoped rule outside a skill's `rules/` (that file's only finding; overlay and local layers keep scoped rules in `<layer>/rules/`) | `FAIL catalog/core/rules/languages/typing.md.j2: scoped rule 'python-typing' lies in the engine's rules/ directory catalog/core/rules/languages, which holds only always rules; move it to catalog/core/skills/python-coding/rules/python-typing.md.j2 and remove its 'skill:' line` |
+| R4 | a skill directory's `rules/` without `SKILL.md`, or in a skill without a `playbook:` block | `FAIL playbook/skills/orphan/rules: a rules/ directory in a skill directory without SKILL.md is never loaded; add SKILL.md with an 'id' and a 'playbook:' block, or move its files to playbook/rules/ with 'skill: <skill-id>'`; without the block: `FAIL playbook/skills/plain/rules: skill 'plain' has a rules/ directory but its SKILL.md declares no 'playbook:' block, so it cannot take member rules; add a 'playbook:' block (e.g. 'playbook: {files: <which files this skill covers>}') to playbook/skills/plain/SKILL.md, or move the rules out` |
+| R5 | an engine-layer scoped rule outside a skill's `rules/` (that file's only finding; overlay and local layers keep scoped rules in `<layer>/rules/`) | `FAIL catalog/core/rules/typing.md.j2: scoped rule 'python-typing' lies in the engine's rules/ directory catalog/core/rules, which holds only always rules; move it to catalog/core/skills/python-coding/rules/python-typing.md.j2 and remove its 'skill:' line` (`<skill>` stands in when the file names none) |
 | R6 | an always rule in a skill's `rules/` (reported instead of V3, and as that file's only finding) | `FAIL playbook/skills/s/rules/house.md: always rule 'house' lies in the rules/ directory of skill 's', but always rules are never skill members; move it to playbook/rules/house.md, or set 'scope: scoped' to keep it in the skill` |
 
 **Without a consumer config (v0.20).** An engine or overlay checkout has no `.coding-agent-playbook.toml`, and `playbook validate` no longer fails there: it validates the engine's catalog, the checkout's own `src/*/resources/` (an overlay checkout; a checkout whose `src/<pkg>` is the engine package is never walked twice) and `playbook/`, and first names the consumer-config checks it skips. Installed overlays are not discovered, since overlays resolve by package name from `overlays_enabled` only:
@@ -2828,8 +2870,8 @@ applies_if evaluated: True
 $ playbook render generate-tests --show-rules
 Prompt:    generate-tests
 includes_rules:
-  - python-typing  (playbook_rules_bnp, applies_if=True -> skill python-coding, references/python-typing.md)
-  - pytest  (coding_agent_playbook, applies_if=True -> skill python-testing, references/pytest.md)
+  - python-typing  (playbook_rules_bnp, applies_if=True -> skill python-coding, rules/python-typing.md)
+  - pytest  (coding_agent_playbook, applies_if=True -> skill python-testing, rules/pytest.md)
   - project-context  (coding_agent_playbook, applies_if=True -> always loaded)
   - python-style  (coding_agent_playbook, applies_if=False -> OMITTED)
   - python-typng  (UNKNOWN)
@@ -2838,7 +2880,7 @@ $ playbook render destructive-command-guard
 $ playbook render destructive-command-guard --format hook_claude_settings
 [{"hooks": {"PreToolUse": [...]}}: its Claude Code registrations, from its own frontmatter]
 ```
-`--show-rules` names each included rule's delivery in a Claude Code or OpenCode command (v0.21, D15): its owning skill and reference, `always loaded` for an always rule, `OMITTED` when its `applies_if` is false here, `UNKNOWN` when no rule has the id. Rendering a prompt with `--format prompt_claude_command` or `prompt_opencode_command` shows the `## Before you start` block, and `--format prompt_continue` the `## Reference rules` appendix, both through the registry of the rules that apply here, unfiltered by validate. A prompt whose body still calls the removed `rule()` prints `error: <file>: 'rule' is undefined` and `error: playbook render aborted.` and exits 1, instead of a traceback.
+`--show-rules` names each included rule's delivery in a Claude Code or OpenCode command (v0.21, D15): its owning skill and rule file, `always loaded` for an always rule, `OMITTED` when its `applies_if` is false here, `UNKNOWN` when no rule has the id. Rendering a prompt with `--format prompt_claude_command` or `prompt_opencode_command` shows the `## Before you start` block, and `--format prompt_continue` the `## Reference rules` appendix, both through the registry of the rules that apply here, unfiltered by validate. A prompt whose body still calls the removed `rule()` prints `error: <file>: 'rule' is undefined` and `error: playbook render aborted.` and exits 1, instead of a traceback.
 The `--show-source` sample is stylized: `Template:` prints the template's absolute path, `Overrides:` names the package of each layer whose artifact this one replaces (`coding_agent_playbook` for the engine), and `Adapters:` lists the enabled adapters in sorted order.
 **Hooks (v0.20).** A hook id renders `hook_advisory` by default — the full text Continue and `agent_harness` receive and the `playbook-guardrails` skill holds (`AGENTS.md` gets one line, §10.4) — and `--format hook_claude_settings` shows the hook's Claude Code registrations as `settings.json` JSON, built from its declared frontmatter alone (no `[hooks]` gating, no deadlines from other hooks), for debugging; sync never writes that projection (§9.7). Only these two formats apply to a hook, and rule or prompt formats are refused for it. Ids are looked up across rules, prompts, skills and hooks, which is why validate reports a hook id that equals a rule or prompt id (H20, §12.6). A hook body that calls `rule()` fails naming the file (H19).
 ### 12.8 `playbook eval` (Tier 0 enumeration + the v1.1 `--run` runner)
@@ -2924,14 +2966,14 @@ imported 6 artifact(s) into /repo/playbook (3 rules, 2 prompts, 1 skills, 0 hook
 ```
 Two fidelity tiers, picked automatically (`specs/prH-agent-harness.md` §C):
 - **Lossless** — when a `.playbook/manifest.toml` sidecar is present (a playbook-emitted harness): every artifact is rebuilt from the manifest's full reconstruction payload (full frontmatter incl. rule `name`, the un-rendered source body, `is_templated`, per-script `executable` bit), independent of how the leaf rendered or inlined content. Script exec bits are restored on POSIX, no-op on Windows.
-- **Best-effort** — no sidecar (a foreign harness): kinds are inferred from directory placement (`skills/*` → `Skill`, `prompts/*` → `Prompt`, `rules/*.md` → `Rule` scope=always, `references/*.md` → `Rule` scope=scoped, non-markdown → opaque asset). Non-native fields are defaulted and every lossy assumption is reported as a `warning:` on stderr — the importer never silently guesses.
+- **Best-effort** — no sidecar (a foreign harness): kinds are inferred from directory placement (`skills/*` → `Skill`, `prompts/*` → `Prompt`, `rules/*.md` → `Rule` scope=always, `skills/<s>/rules/*.md` → `Rule` scope=scoped and a member of `s` (prU D22), `references/*.md` → `Rule` scope=scoped (an older tree's layout), non-markdown → opaque asset; a skill's generated rules index is dropped from its body, since the next sync regenerates it). Non-native fields are defaulted and every lossy assumption is reported as a `warning:` on stderr — the importer never silently guesses.
 ```
 $ playbook import-harness ./vendor/foreign-harness --into playbook
 warning: no .playbook/manifest.toml sidecar found; reconstructing best-effort. ...
 warning: rule 'pep8': scope inferred as 'always' from rules/ placement; globs/applies_if/priority/tags/version not recoverable without sidecar
 imported 2 artifact(s) into /repo/playbook (2 rules, 0 prompts, 0 skills, 0 hooks)
 ```
-All reconstructed rules — `scope=always` *and* `scope=scoped` — are written under `<into>/rules/<id>.md` (the only directory `FileSystemArtifactSource.list_rules()` reads); `scope` is preserved in the rule's emitted frontmatter, so a scoped rule stays scoped without needing a separate directory. A lossless import also rebuilds every hook from its manifest entry (kind `"hook"`, v0.20) through `Hook.from_dict`, never from the rendered files, and writes it as `<into>/hooks/<id>/HOOK.md` (`HOOK.md.j2` when templated) with its `scripts/`, exec bits restored; a best-effort import reads a `rules/NN-guardrail-*.md` advisory as a rule and warns that the hook cannot be reconstructed without the sidecar (§10.7.2). The hook sidecar has one module for both directions, `agent_harness.hook_sidecars`: `emit_hook_sidecars` writes it and `read_hook_sidecar` reads an entry back. Exit code is 2 on a usage error (missing/non-directory path, or no `HARNESS.md`), else 0.
+A rule placed by location in the tree (`skills/<s>/rules/<id>.md`) whose skill is imported with it is written back to `<into>/skills/<s>/rules/<id>.md`, without a `skill:` line, where `FileSystemArtifactSource` finds it as a member of `s` (§20.3). Every other reconstructed rule — `scope=always` *and* `scope=scoped` — is written under `<into>/rules/<id>.md` with its `skill:` spelled out; `scope` is preserved in the rule's emitted frontmatter, so a scoped rule stays scoped. A lossless import also rebuilds every hook from its manifest entry (kind `"hook"`, v0.20) through `Hook.from_dict`, never from the rendered files, and writes it as `<into>/hooks/<id>/HOOK.md` (`HOOK.md.j2` when templated) with its `scripts/`, exec bits restored; a best-effort import reads a `rules/NN-guardrail-*.md` advisory as a rule and warns that the hook cannot be reconstructed without the sidecar (§10.7.2). The hook sidecar has one module for both directions, `agent_harness.hook_sidecars`: `emit_hook_sidecars` writes it and `read_hook_sidecar` reads an entry back. Exit code is 2 on a usage error (missing/non-directory path, or no `HARNESS.md`), else 0.
 ### 12.10 `playbook validate-harness`
 Run `harnesses-ref`-equivalent structural checks on an Agent Harness tree (emitted or foreign). This is the lint half of the client-runtime decision (§10.7 / decision #3): the playbook validates harness *structure*, it does not implement a harness client runtime.
 ```
@@ -3012,7 +3054,7 @@ The deterministic stages share a 3 s default budget and feed one combined reason
 
 **`playbook-hook simulate <event>`** runs the exact dispatch pipeline on one payload from stdin and prints what the harness would get. Options: `--harness claude_code|opencode`, `--repo DIR`, `--config PATH` (a `guard_config.json` run without the digest check), `--state DIR` (default: an ephemeral directory, so the real decision log is never touched), `--unattended` (force the ask degradation), `--env NAME=VALUE` (repeatable, to try kill switches), `--async` and `--format text|json`. The JSON is `{exit_code, stdout, stderr, decisions, combined, latency_ms}`, where `exit_code` is the harness-facing code: a `pre_tool_use` deny is 2, though `dispatch` itself exits 10. A completed simulation exits 0 whatever it decided; a usage error exits 2.
 
-**`playbook-hook doctor`** is human-run and read-only (it never syncs). It checks what a harness hides by failing open: the `guard_config.json` digest against its lock entry; the interpreter pin (present, executable, Python ≥ 3.12, isolated under `-I`, importing this engine; an interpreter in a uv or pipx cache is degraded); the state root `<git-dir>/playbook-hooks/` (mode 700, owned by the user); the `machine.json` tool signatures; the trust approvals of external handlers; `PLAYBOOK_HOOK_WRAPPER_PREFIXES` when set (the prefixes it adds, or a warning for an entry it refuses or a value a settings file sets); OpenCode (`opencode --version` ≥ 1.18.29, `OPENCODE_DISABLE_PROJECT_CONFIG`, the shim's lock digest and registrations); and a guard-decision-log summary of the last `--since DAYS` (default 30): per guard, the deny, ask, override and degraded counts. `--repin [PYTHON]` is its one write: it rewrites the interpreter pin (default: the running interpreter) before checking. `--repo DIR` and `--format text|json` as for `simulate`. Exit codes: `0` healthy (warnings included), `1` degraded, `2` broken, and `2` for usage errors. Running the exact registered commands with canary payloads, reporting `disableAllHooks` and the managed-policy kill switches, and warning when `copilot` is on `PATH` are designed (`specs/prK-lifecycle-hooks.md` §D.9) but not implemented yet.
+**`playbook-hook doctor`** is human-run and read-only (it never syncs). It checks what a harness hides by failing open: the `guard_config.json` digest against its lock entry; the interpreter pin (present, executable, Python ≥ 3.12, isolated under `-I`, importing this engine; an interpreter in a uv or pipx cache is degraded); the state root `<git-dir>/playbook-hooks/` (mode 700, owned by the user); the `machine.json` tool signatures; the trust approvals of external handlers; `PLAYBOOK_HOOK_WRAPPER_PREFIXES` when set (the prefixes it adds, or a warning for an entry it refuses or a value a settings file sets); OpenCode (`opencode --version` ≥ 1.18.29, `OPENCODE_DISABLE_PROJECT_CONFIG`, the shim's lock digest and registrations); and a guard-decision-log summary of the last `--since DAYS` (default 30): per guard, the deny, ask, override and degraded counts. `--repin [PYTHON]` is its one write: it rewrites the interpreter pin (default: the running interpreter) before checking. `--repo DIR` and `--format text|json` as for `simulate`. Exit codes: `0` healthy (warnings included), `1` degraded, `2` broken, and `2` for usage errors. Running the exact registered commands with canary payloads, reporting `disableAllHooks` and the managed-policy kill switches, and warning when `copilot` is on `PATH` are designed (`specs/prK-lifecycle-hooks.md` §D.9) but not implemented yet. **Inert calls (prU D79).** A hook call the dispatcher leaves alone — a payload the harness parser classifies as foreign (`foreign_marker:<key>`, `timestamp`, `event_mismatch`, `missing_session_id`, `claude_project_dir_unset`, or OpenCode's equivalents) or an event outside a git repository (`not_a_repo`) — still exits 0 with no output, but leaves one `decision: "ignored"` line with its event, harness and reason, once per session, event and reason (once per UTC day when there is no session id), in the worktree state root or, outside git, the user-level one (`hook_runtime/dispatch/ignored_calls.py`); doctor reports these calls (counts and reasons, most recent first) and flags `claude_project_dir_unset` and `missing_session_id` as a likely misconfigured real session, which would otherwise run with every guard silently off.
 
 **`playbook-hook --version`** prints `playbook-hook <version>`.
 ### 12.14 `playbook gate-scan`
@@ -3302,8 +3344,8 @@ artifact_id = "query-db"
 source = "<repo-local>"
 adapter = "claude_code"
 
-[[entries]]                           # a member rule's reference: its rule's provenance (§6.3.3)
-path = ".claude/skills/python-coding/references/python-typing.md"
+[[entries]]                           # a member rule's file in its skill: its rule's provenance (§6.3.3)
+path = ".claude/skills/python-coding/rules/python-typing.md"
 sha256 = "5d07…"
 bytes = 2641
 kind = "rule"
@@ -3510,7 +3552,7 @@ The `coding_agent_playbook/evals/` package ships `sample.py`, `loader.py`, `vali
 - `test_renderer.py` — render templates with hand-crafted context; assert exact output.
 - `test_overlays.py` — registration, ordering, override resolution.
 - `lockfile/test_model.py` — hash compute, drift detection.
-- `skills/test_membership.py`, `skills/test_document.py` — skill composition (§6.3.3): membership and gating, the composed description and its `and N more` truncation, the references index, the reference text and the Where section. `tests/cli/test_validate_skills.py` pins the V1–V14 and W1–W3 lines of `playbook validate` (§12.6), and `tests/cli/test_sync_skill_references.py` runs a sync end to end.
+- `skills/test_membership.py`, `skills/test_document.py` — skill composition (§6.3.3): membership and gating, the composed description and its `and N more` truncation, the rules index and section navigation, the rule file text and the Where section. `tests/cli/test_validate_skills.py` pins the V1–V14 and W1–W3 lines of `playbook validate` (§12.6), and `tests/cli/test_sync_skill_references.py` runs a sync end to end.
 - The docs-consistency tests (`tests/unit/test_docs_*.py`) read SPEC, README, MIGRATION, `catalog/README.md` and `CONTEXT.md`, never engine behaviour: `test_docs_glossary.py` pins the glossary pointer, every `CONTEXT.md` term, the `skill` field of §6.1 and the core skills of §6.3, and `test_docs_migration_skills.py` the v0.21 MIGRATION section, quoting `SCOPED_RULE_NEEDS_SKILL_MESSAGE` verbatim.
 - `generated_output/test_gitignore.py` — managed-block entries (skill-dir collapse under any root, escaping verified against real git), append/replace/idempotence, CRLF and missing-final-newline preservation, malformed markers, removal.
 - `sync/test_git_client.py` — `SubprocessGitClient` against throwaway repos (guarded on git being on PATH, hermetic git env) plus its silent failure modes; `playbook sync` tests inject `tests/fakes.py::FakeGitClient` instead of patching `subprocess`.
@@ -3699,6 +3741,8 @@ class FileSystemStateSource(StateSource):
     # Implementation = the current config + lockfile logic, just renamed.
 ```
 These are the **only** sources v1 ships. They depend on nothing beyond the existing dependency budget (jinja2, packaging) — both use stdlib `tomllib`, `pathlib`, and `importlib.metadata` only.
+
+**Rule discovery order (prU D5, D21).** `FileSystemArtifactSource.collect_rules` walks the layers in `layer_roots` order (the engine's `catalog/core/`, each enabled bundled plugin and overlay in `overlays_enabled` order, the extra `resources/` roots of a config-less overlay checkout (§12.6), then the repository's `playbook/`), and inside each layer reads `<layer>/rules/**` first, then each skill directory's `<layer>/skills/<dir>/rules/**` (`catalog.skill_rules`), each in sorted path order, `*.md` and `*.md.j2` alike. Only a `<dir>` holding `SKILL.md` (or `SKILL.md.j2`) counts as a skill; a rule found under it gets `Rule.home_skill` = that skill's `id`, which also fills `skill` when the file sets none, so the rest of the engine sees every member through `skill` alone. A `rules/` directory in a directory without `SKILL.md` contributes nothing (R4 reports it, §12.6). Later layers override earlier ones by id, whichever directory either file sits in; two files with one id in one layer are R3. Malformed files are collected as `RuleLoadError`s, one per file, so `playbook validate` reports each one and `list_rules` (what sync reads) raises the first.
 
 **Where the engine's own content comes from (`catalog/roots.py`; v0.19 named it `bundled_content.py`, N3 moved `catalog.py` into the `catalog/` package).** One leaf module, importing nothing from the engine (so `config/model.py` and `config/schema.py` can import it), is the only code that knows where `catalog/` is. Its constants are `ENGINE_PACKAGE = "coding_agent_playbook"`, `PLUGIN_NAMESPACE = "coding_agent_playbook.plugins"`, `DEPRECATED_PACK_NAMESPACE = "coding_agent_playbook.packs"`, `PACKAGED_CATALOG_DIRNAME = "_catalog"` and `CHECKOUT_CATALOG_DIRNAME = "catalog"`, plus `_PACKAGE_DIR`, the package directory, which is read at call time and is the one seam end-to-end tests may monkeypatch. Names follow one rule: a function that returns a directory of the catalog says `catalog` (`catalog_root`, `catalog_layer_root`), and a predicate or listing of what ships says `bundled` (`is_bundled_layer`, `bundled_plugins`), the user-facing term.
 - `catalog_root(package_dir=None)` returns `<package_dir>/_catalog` when `<package_dir>/_catalog/core` is a directory (an installed wheel); otherwise `<package_dir>/../../catalog` when `package_dir.parent.name == "src"` and `<repo>/catalog/core` is a directory (a source checkout); otherwise it raises `CatalogMissingError` naming both paths (§12). Requiring `core/` in the wheel case means a mis-scoped force-include fails loudly instead of loading zero engine artifacts.
@@ -4078,7 +4122,7 @@ AGENTS.md
 │   ├── explain.md
 │   └── pii-scan.md
 └── skills/                         # core skills: scoped rules as references (§6.3.3)
-    ├── python-coding/              # SKILL.md + references/python-typing.md (overlay's text) …
+    ├── python-coding/              # SKILL.md + rules/python-typing.md (overlay's text) …
     ├── python-testing/
     └── python-tooling/             # static checks always; FastAPI wiring because fastapi detected
 .opencode/
@@ -4109,7 +4153,7 @@ User types: "/generate-tests for the score_counterparty endpoint"
   → All three are guaranteed in context, regardless of which files are open
 → Assistant generates tests/api/test_routes.py extension following the mirror layout
 ```
-The `includes_rules:` mechanism is what gives `/generate-tests` its reliability. Even if the user invokes it from a markdown file or an unrelated module, the typing and pytest rules are still in scope because the prompt declared them as dependencies. Without `includes_rules:`, the agent would only see whichever scoped rules happened to match the currently-open file's globs — which on a markdown file would be none of them. In Claude Code and OpenCode the same declaration becomes the command's `## Before you start` block: load `python-coding` and read `references/python-typing.md`, load `python-testing` and read `references/pytest.md` (§6.2.4, §6.2.5), so the rules arrive on demand instead of in the command text.
+The `includes_rules:` mechanism is what gives `/generate-tests` its reliability. Even if the user invokes it from a markdown file or an unrelated module, the typing and pytest rules are still in scope because the prompt declared them as dependencies. Without `includes_rules:`, the agent would only see whichever scoped rules happened to match the currently-open file's globs — which on a markdown file would be none of them. In Claude Code and OpenCode the same declaration becomes the command's `## Before you start` block: load `python-coding` and read `rules/python-typing.md`, load `python-testing` and read `rules/pytest.md` (§6.2.4, §6.2.5), so the rules arrive on demand instead of in the command text.
 ### A.6 Step 5: update
 Two weeks later, the engine releases v0.4.1 with improved test-generation prompt wording.
 ```bash
@@ -4250,6 +4294,7 @@ Skills-first context (design `specs/prS-skills-context.md`; decision record `doc
 - **CI (one-line guardrails)**: `tests/unit/test_types_hook.py` and `test_types_hook_roundtrip.py` pin the `summary` shape errors and the round trip; `tests/unit/test_hook_policy_advisory.py` the summary, its fallback and cut, the line and the sorted section; `test_hook_policy_resolved.py` `guardrail_text`; `tests/hooks/test_hook_summaries.py` that every core hook with a body declares a summary and that `stop-ci-parity-gate`'s names `ruff check .`, `ruff format --check .`, the type checker and the tests; `tests/adapters/test_agents_md.py`, `test_always_only_composites.py` and `test_guardrails_skill_targets.py::test_claude_code_writes_skill_and_line_for_a_hook_it_cannot_run` the two sections; `tests/cli/test_validate_hooks.py` the `FAIL` line; `tests/integration/test_context_budget.py::test_agents_md_within_1500_words` loses its strict xfail (the probe's `AGENTS.md` is about 800 words) and a new test checks one line per advised hook.
 - **`python_design` removed (§5.1, §6.3, §11.5, §11.5.2, §11.5.3, §12.4, §12.6, §16.3, §16.4, §16.7)**: the opt-in `coding_agent_playbook.plugins.python_design` bundled plugin and its tests are deleted, ahead of folding its guidance into core (`specs/prU-core-python-skills.md`, D2); §11.5.2 keeps its number as a tombstone. A config that still lists it is refused by every command as `no such bundled plugin`, and once the consumer removes it the next write-mode sync settles its two skill directories as leftovers. The `(bundled plugins: …)` examples name the two remaining plugins; §11.5's tooling paragraph and its "Scripts in a consumer repo" paragraph (moved from §11.5.2) cite `mattpocock_skills`; the reference probe and the `wheel-smoke` init enable only `superpowers`; ruff no longer excludes `catalog/plugins/python_design/**/*.md`. CI: `tests/plugins/python_design/` is gone, and the generic tests that used the plugin as a sample (`tests/cli/test_sync_skill_root_move.py`, the V14 case of `tests/cli/test_validate_skills.py`, `tests/integration/test_ruff_scope.py`, `tests/integration/test_resources_self_contained.py`) use `superpowers` or `mattpocock_skills` instead.
 - **`--judge-samples` (§12.8, §15.3, §15.3.1, §21; D80)**: the `playbook eval <id> --run` flag formerly spelled `samples` becomes `--judge-samples N` (default 1), the number of times the judge scores each rubric criterion before averaging, not a count of eval samples. The old spelling stays one release as a deprecated alias hidden from `--help`: it still works, prints one stderr line naming `--judge-samples`, and passing both flags exits `2`. The grading context field `EvalContext.samples` and the `samples=` keyword of `HarnessRunner.run_sample` and `evals.run.scoring.score` become `judge_samples`. `tests/cli/test_eval_run.py` pins the flag, the alias line, the both-flags error and the hidden help; the CLI surface golden is re-recorded.
+- **Rules inside skills, sections and the priority policy (§4.1, §5.1, §5.3, §6.1, §6.1.1-§6.1.6, §6.2.4, §6.2.5, §6.3, §6.3.1-§6.3.3, §6.6.2, §9.7, §10.2.1, §10.3, §10.7.1, §10.7.2, §10.8, §12.4, §12.6, §12.7, §12.9, §12.13, §14.4, §16.1, §20.3, Appendix A; prU D5, D17, D21, D22, D32, D42, D47, D79, ADR 0005)**: a scoped rule lives in its skill's `rules/` directory, which sets its membership, in the catalog and in every rendered skill root (`<root>/<skill>/rules/<id>.md`, the agent_harness tree included); `skill:` stays only for a rule from another layer joining a skill. `references/` holds free-form documents and `examples/` example projects, both listed in `playbook.references` with an open-when line. Skills declare ordered sections with an impact; a member names its `section:`, its title is rendered with `[IMPACT]`, and `SKILL.md` gets the generated "How to use this skill" paragraph, the index grouped by section and the references list. §10.2.1 replaces the bands by rule kind with the priority policy: `00`-`19` always rules, CRITICAL `20`-`39`, HIGH `40`-`59`, MEDIUM `60`-`79`, LOW `80`-`99`, ranked inside the section; skills without sections keep 0-99. §12.6 gains the rule load and shape checks, R1-R6 (layout), S1-S7 and W4 (sections) and RF1-RF6 (references, formerly numbered R1-R4) with the engine's sample lines, retires V12 and moves V13 to `## Rules`. §20.3 documents the discovery order; §12.13 and §12.4 the logged inert hook calls and the harness hints (D79). `tests/unit/test_docs_rules_in_skills_spec.py` pins the R and S rows to the engine's own messages and the absence of the old delivery wording from the body.
 ### v0.20 (2026-10-16)
 Assistant lifecycle hooks (PR K). `Hook` joins `Rule`, `Prompt` and `Skill` as the fourth emitted canonical kind, rendered natively for Claude Code and OpenCode and as advisory text everywhere else, with one import-light dispatcher for every harness event. **Opt-in, with no hook output on upgrade:** a repo without `[hooks] enabled = true` gets no settings entries, launcher, shim or advisory text, only one notice line from `playbook sync`; the Claude Code rules file below is the one non-hook layout change. Authoritative design: `specs/prK-lifecycle-hooks.md` and `specs/prK-hook-pack.md`; migration: `MIGRATION.md`.
 - **Layout (on top of v0.19)**: the engine's hooks live in the catalog, `catalog/core/hooks/<category>/<id>/HOOK.md`, found through the `catalog` module like every other engine kind; a bundled plugin may ship `catalog/plugins/<name>/hooks/` and an overlay package `<pkg>/resources/hooks/`. The launcher and OpenCode shim templates are engine wiring and stay in the package, `src/coding_agent_playbook/templates/hook_shims/`, next to `templates/precommit/`. The protected `resource_roots` ids keep their `pkg:<layer>/resources` spelling, and a bundled layer's id resolves to its content directory (`catalog/core/`, `catalog/plugins/<name>/`). In the engine checkout, validate-then-sync-on-canonical-edit and control-plane-guard treat `catalog/core/<kind>/**` and `catalog/plugins/*/<kind>/**` as canonical sources, as they treat an overlay checkout's `src/*/resources/<kind>/**`.
