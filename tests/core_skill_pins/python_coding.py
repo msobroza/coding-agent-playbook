@@ -7,6 +7,9 @@ successors' sections. ``python-performance-idioms`` takes 79, the MEDIUM band's
 one unmapped slot, so it ties with no mapped rule. The classes section's mapped
 rules fill every slot from 60 to 66, so ``python-classes-and-protocols`` keeps
 its successor ``python-protocols``'s 61 and sorts after it by id.
+
+The classes section is vendored (C-python-coding-05): its seven rules are
+pinned at the mapping's priorities 60-66.
 """
 
 from __future__ import annotations
@@ -32,6 +35,12 @@ PINS: Final = CoreSkillPins(
         "pydantic-boundaries",
         "python-data-shapes",
         "python-classes-and-protocols",
+        "python-protocols",
+        "python-properties",
+        "python-frozen-dataclasses",
+        "python-enums",
+        "python-dataclass-post-init",
+        "python-hide-internal-state",
         "python-idioms",
         "python-performance-idioms",
     ),
@@ -48,6 +57,62 @@ PINS: Final = CoreSkillPins(
         "idioms",
     ),
     rules={
+        "python-data-shapes": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=60,
+            name="Data shapes",
+            tags=("python", "design", "data"),
+            section="classes",
+        ),
+        "python-protocols": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=61,
+            name="Protocols",
+            tags=("python", "design", "typing"),
+            section="classes",
+        ),
+        "python-properties": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=62,
+            name="Properties",
+            tags=("python", "design", "oop"),
+            section="classes",
+        ),
+        "python-frozen-dataclasses": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=63,
+            name="Frozen dataclasses",
+            tags=("python", "design", "data"),
+            section="classes",
+        ),
+        "python-enums": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=64,
+            name="Enums for closed sets",
+            tags=("python", "design", "typing"),
+            section="classes",
+        ),
+        "python-dataclass-post-init": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=65,
+            name="Dataclass post-init",
+            tags=("python", "design", "data"),
+            section="classes",
+        ),
+        "python-hide-internal-state": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=66,
+            name="Hide internal state",
+            tags=("python", "design", "oop"),
+            section="classes",
+        ),
         "python-performance-idioms": RulePin(
             applies_if={},
             globs=_PY_FILES,

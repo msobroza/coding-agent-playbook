@@ -38,7 +38,7 @@ License: MIT License. Copyright (c) 2026 Ludo Technologies LLC.
 
 Its impact ratings inform each rule's section and priority. Ideas from it also
 shaped the python-error-handling, python-typing, python-docstrings,
-python-dependency-injection, python-data-shapes, python-idioms and pytest rules.
+python-dependency-injection, python-idioms and pytest rules.
 
 ### design-patterns
 
@@ -61,6 +61,9 @@ Distilled (credited by name only, no vendored text):
 
 | Upstream file | Core files | Changes |
 | --- | --- | --- |
+| `skills/coding-standards/rules/oop-dataclass.md` | `rules/python-data-shapes.md`, `rules/python-frozen-dataclasses.md` | python-data-shapes: lines 8-79 are the skeleton (title, Description, Bad Example of a hand-written `__init__`/`__repr__`/`__eq__`/`__hash__`, Good Example with `default_factory` and slots): engine frontmatter; the Order's stored `_total` becomes a `@property` and its float discount a Decimal; the frozen Point moves to python-frozen-dataclasses; Notes merge the engine's record rules (no string dicts, no parallel lists, at most three tuple values, slots, Final constants vs the settings object) and a TypedDict-at-the-edge line. python-frozen-dataclasses: line 76 (frozen generates `__hash__`) joins its Description. Dropped: the derived `_total` stored in `__post_init__` and the float discount (54-59), because derived values are properties and money is never float (pbp-B#61, pbp-B#56), and 'consider attrs' (80), a new dependency (pbp-B19). |
+| `skills/coding-standards/rules/oop-protocol.md` | `rules/python-protocols.md` | Lines 8-116 are the skeleton: engine frontmatter; the f-string JSON becomes `json.dumps`; the three-method Repository Protocol with `id` parameters becomes a two-method role-named InvoiceSender (repository ports are python-architecture's, pbp-B#60); a Callable alias is added for one behavior; the ABC Exporter shrinks to typed rows instead of `list[dict]`; 'When ABC is the right choice' and the Notes collapse into one ABC-vs-Protocol Note plus the engine's seam-only line. |
+| `skills/coding-standards/rules/oop-property.md` | `rules/python-properties.md` | Lines 8-104 are the skeleton: engine frontmatter; trimmed to the Circle class and one cached_property example returning a typed record instead of `dict[str, float]`; error messages carry the offending value; the User example is dropped to fit; the cached_property note is reworded around the instance `__dict__`; the engine's 'keep properties cheap' and 'never functools.lru_cache on a method' points and a design-lazy-loading pointer are added. |
 
 Distilled (credited by name only, no vendored text):
 
@@ -71,7 +74,6 @@ Distilled (credited by name only, no vendored text):
 - `rules/python-typing.md.j2`
 - `rules/python-docstrings.md`
 - `rules/python-dependency-injection.md`
-- `rules/python-data-shapes.md`
 - `rules/python-idioms.md`
 - `rules/pydantic-boundaries.md`
 
@@ -131,12 +133,19 @@ review-architecture, make-testable, characterize, review and refactor prompts.
 
 | Upstream file | Core files | Changes |
 | --- | --- | --- |
+| `skills/clean-architecture/references/classes-and-dataclasses.md` | `rules/python-data-shapes.md`, `rules/python-frozen-dataclasses.md`, `rules/python-dataclass-post-init.md`, `rules/python-hide-internal-state.md` | python-data-shapes: lines 96-226 (dataclass basics, simple and mutable defaults with the ValueError on a list literal, named default factories) become its Good Example's Cart and Notes, without reserve()'s print. python-frozen-dataclasses: lines 330-395 (when to freeze, the `__post_init__` limitation, default_factory before `object.__setattr__`) become Notes; the generated licence plate becomes a value derived from fields. python-dataclass-post-init: lines 257-329 (`field(init=False)`, validation in `__post_init__`, the default_factory vs `__post_init__` table) are the skeleton; the random plate becomes a search key computed from fields, a derived display name becomes a `@property`, and errors name the offending value. python-hide-internal-state: lines 396-464 (the underscore convention, `repr=False`, expose behavior and hide data) are the skeleton; accessories become a set, and find_by_plate gains a raising get_by_plate per the engine's absence convention. Dropped: the random licence plate as a default_factory (227-256), because randomness inside a record default breaks the pure core (pca-F13). Not vendored: the inspiration line (5). |
+| `skills/clean-architecture/references/data-structures.md` | `rules/python-data-shapes.md`, `rules/python-enums.md` | python-data-shapes: lines 141-205 (tuples for two or three values, upgrading a long tuple to a dataclass) become a Note. python-enums: lines 257-340 (the problem with strings, the Enum solution, when to use, practical patterns) are the skeleton; the match gains a raising `case _`. Not vendored: the inspiration line (5). |
+| `skills/clean-architecture/references/code-quality.md` | `rules/python-data-shapes.md`, `rules/python-enums.md` | python-data-shapes: rule 6 (86-105, parallel data structures -> a record) and rule 11 (135-159, named constants including semantic ones, annotated Final) become Notes. python-enums: rule 1 (7-20, strings for fixed option sets) becomes its Description; its 'integers for money' half stays with the house style. |
+| `skills/clean-architecture/references/code-smells.md` | `rules/python-data-shapes.md`, `rules/python-enums.md` | python-data-shapes: 2.3 and 2.4 (152-198, redundant instance variables -> a property, parallel data structures and the zip detection line) become Notes. python-enums: 1.1 (17-35, type abuse and its detection line) becomes a Note; `class Role(str, Enum)` becomes the version Note. |
+| `skills/clean-architecture/references/refactoring-case-studies.md` | `rules/python-data-shapes.md`, `rules/python-enums.md` | python-data-shapes: move 5 (129-152, magic numbers -> module constants) becomes the constants Note, without its print calls. python-enums: move 6 (153-179, string comparisons with the 'scisssors' typo) becomes the Bad Example. |
+| `skills/clean-architecture/references/types-and-type-hints.md` | `rules/python-protocols.md` | Lines 315-440 and 626-668 (nominal vs structural typing, the Protocol vs ABC table, Protocol as the default) condense into the Description and the ABC-vs-Protocol Note; the dict-based Repository example is not vendored (repository ports are python-architecture's). |
+| `skills/clean-architecture/references/design-principles.md` | `rules/python-protocols.md` | Lines 256-263 (the ABC vs Protocol table) merge with the types-and-type-hints table into one Note. |
+| `commands/make-pythonic.md` | `rules/python-protocols.md`, `rules/python-data-shapes.md`, `rules/python-enums.md` | Line 17 (ABC hierarchy -> Protocol) is applied only within the engine's seam rule (pca-F1b); line 27 (manual `__init__` for data holders -> dataclass) and line 28 (bare string constants -> Enum or StrEnum) become Notes. |
 
 Distilled (credited by name only, no vendored text):
 
 - `rules/python-dependency-injection.md`
 - `rules/python-pure-core.md`
-- `rules/python-data-shapes.md`
 - `rules/python-idioms.md`
 - `rules/python-classes-and-protocols.md`
 - `rules/python-context-managers.md`
