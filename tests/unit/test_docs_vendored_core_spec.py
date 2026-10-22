@@ -15,12 +15,12 @@ import re
 
 import pytest
 
-from tests._budget_probe import LISTING_MAX_CHARS
-from tests.integration.test_context_budget import (
+from tests._budget_probe import (
     CORE_DESCRIPTION_MAX_CHARS,
     CORE_DESCRIPTIONS_MAX_CHARS,
     DOMINO_CORE_DESCRIPTIONS_MAX_CHARS,
     DOMINO_LISTING_MAX_CHARS,
+    LISTING_MAX_CHARS,
 )
 from tests.unit.test_docs_lifecycle_hooks_spec import _spec_section
 
@@ -32,7 +32,9 @@ _OWNED_PARTS = (
     ("### 16.7 Bundled plugin tests", "\n## 17. "),
 )
 #: The wording the fresh-text policy and the old budgets left behind (D-02 acceptance).
-_RETIRED_WORDING = re.compile(r"written fresh|distilled, not vendored|2,000|6,000|four skills")
+_RETIRED_WORDING = re.compile(
+    r"\bwritten fresh\b|\bdistilled, not vendored\b|\b2,000\b|\b6,000\b|\bfour skills\b"
+)
 _LICENSE_COPIES = (
     "references/LICENSE.python-best-practices",
     "references/LICENSE.python-clean-architecture",

@@ -27,7 +27,14 @@ from coding_agent_playbook.rendering.formats import render_for
 from coding_agent_playbook.skills.document import where_entry, where_guidance_section
 from coding_agent_playbook.sync.render import render_artifacts
 from coding_agent_playbook.validation.context import SyncContext
-from tests._budget_probe import LISTING_MAX_CHARS, every_core_where_entry
+from tests._budget_probe import (
+    CORE_DESCRIPTION_MAX_CHARS,
+    CORE_DESCRIPTIONS_MAX_CHARS,
+    DOMINO_CORE_DESCRIPTIONS_MAX_CHARS,
+    DOMINO_LISTING_MAX_CHARS,
+    LISTING_MAX_CHARS,
+    every_core_where_entry,
+)
 from tests._catalog import core_rules, core_skill_ids
 from tests.core_skill_pins import DOMINO_SKILL_IDS, ProbeKind
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
@@ -45,12 +52,6 @@ ALWAYS_HEADINGS: Final = [
     "## Python house style",
 ]
 AGENTS_MD_MAX_WORDS: Final = 1500
-CORE_DESCRIPTION_MAX_CHARS: Final = 300
-#: prU D18 as amended by D54 (2,000 -> 2,400 -> 2,800); the per-skill cap above stays.
-CORE_DESCRIPTIONS_MAX_CHARS: Final = 2800
-#: prU D59: the Domino probe's own caps, the worst case once the Domino skills apply.
-DOMINO_CORE_DESCRIPTIONS_MAX_CHARS: Final = 3400
-DOMINO_LISTING_MAX_CHARS: Final = 7500
 _GUARDRAILS_HEADING: Final = "## Guardrails"
 
 
