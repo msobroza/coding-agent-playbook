@@ -46,6 +46,19 @@ playbook:
       impact: MEDIUM
       summary: "Keep URLs, query parameters and generated docs predictable for clients."
       open_when: "A route's URL path, version prefix, query parameters, tags, summary or documented responses are added or renamed."
+  references:
+    - path: references/add-an-endpoint.md
+      open_when: "Adding an endpoint or a new resource to a FastAPI service, and checking that no layer or test was skipped."
+      applies_if:
+        has_framework: ["fastapi"]
+    - path: references/api-review-checklist.md
+      open_when: "Reviewing a web API change, or checking a service before its first production release."
+      applies_if:
+        any_framework: ["fastapi", "flask", "django", "starlette"]
+    - path: references/request-lifecycle.md
+      open_when: "Unsure which request step owns a change or a failure: startup, provider, route, use case, repository or error table."
+      applies_if:
+        has_framework: ["fastapi"]
 ---
 
 # Web application
