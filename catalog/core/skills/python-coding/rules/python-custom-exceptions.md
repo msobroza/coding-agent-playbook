@@ -59,6 +59,18 @@ def fetch_order(order_id: str) -> Order:
     if not order.visible_to_customer:
         raise OrderAccessDeniedError(order_id)
     return order
+
+
+def show_order(order_id: str) -> int:
+    try:
+        print(render(fetch_order(order_id)))
+    except OrderNotFoundError:  # one failure mode, handled precisely
+        print(f"no order {order_id!r}", file=sys.stderr)
+        return 2
+    except AppError as exc:  # the rest of the family
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    return 0
 ```
 
 ## Notes

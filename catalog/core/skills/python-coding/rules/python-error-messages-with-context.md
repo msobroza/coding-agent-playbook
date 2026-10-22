@@ -38,9 +38,13 @@ def load_retry_count(config: Mapping[str, str]) -> int:
 
 ```python
 def parse_port(raw: str, *, field: str = "port") -> int:
-    port = int(raw)
+    expected = f"{field}: expected an integer from 1 to 65535, got {raw!r}"
+    try:
+        port = int(raw)
+    except ValueError as exc:
+        raise ValueError(expected) from exc
     if not 0 < port < 65536:
-        raise ValueError(f"{field}: expected an integer from 1 to 65535, got {raw!r}")
+        raise ValueError(expected)
     return port
 
 
@@ -48,15 +52,15 @@ def load_retry_count(config: Mapping[str, str]) -> int:
     raw = config["retries"]
     try:
         return int(raw)
-    except ValueError as err:
-        raise ConfigError(f"retries: expected a whole number, got {raw!r}") from err
+    except ValueError as exc:
+        raise ConfigError(f"retries: expected a whole number, got {raw!r}") from exc
 ```
 
 ## Notes
 
 - Format the value with `!r`, so empty strings, stray whitespace, `None` and type differences show: `got ''` and `got '8080 '` read differently from `got 8080`.
 - State the expectation concretely: a range, a format, the allowed choices or the expected type.
-- Keep the cause with `raise ... from err` when you translate an exception: the message adds the context, the chain keeps the original traceback.
+- Keep the cause with `raise ... from exc` when you translate an exception: the message adds the context, the chain keeps the original traceback.
 - For a large value, show a bounded excerpt or its length, never a whole payload.
 - Never put secrets, tokens or personal data in a message; name the field and describe what is wrong with it instead. `python-error-handling` owns what may be logged.
 - A custom exception class also carries the values as attributes, so a handler can read them without parsing the message; `python-custom-exceptions` shows the pattern.

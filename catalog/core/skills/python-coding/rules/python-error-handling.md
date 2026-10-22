@@ -71,7 +71,7 @@ def parse_amount(user_input: str) -> int:
 - If a function cannot recover or add useful context, do not catch the exception. Logging and then `pass` is still swallowing.
 - Logging is not recovery. Log and suppress only at an explicit boundary, such as a task supervisor or a command entry point, where the failure stays observable and becomes a defined non-success outcome (a failed task state, a nonzero exit code); `python-error-boundaries` says where those are.
 - Never suppress cancellation or process-control exceptions: `asyncio.CancelledError`, `KeyboardInterrupt` and `SystemExit` propagate, unless the boundary cleans up and re-raises them.
-- If degraded behavior is intentional, make it observable and document which failures trigger the fallback. The documented absence of an explicitly optional resource is a normal condition, not degraded behavior.
+- Intentional degraded behavior is a fallback, and `python-error-boundaries` says how to document it. The documented absence of an explicitly optional resource is a normal condition, not degraded behavior.
 - When you translate an exception, `raise NewError(...) from exc` keeps the original traceback visible; `from None` deliberately hides it, for an inner exception that is noise the caller cannot act on.
 - `assert` is stripped when Python runs with `-O`. It documents invariants in tests and tight internal loops; it never validates user input and never guards security. Use `if ... raise` for anything that must hold at runtime:
 

@@ -24,10 +24,13 @@ def checkout(order: Order) -> Receipt:
     if order.is_valid:
         if order.items:
             if order.customer.is_active:
-                # main logic buried three levels deep
-                total = sum((item.price for item in order.items), Decimal(0))
-                discount = calculate_discount(order.customer)
-                return Receipt(order_id=order.id, total=total - discount)
+                if order.payment_method is not None:
+                    # main logic buried four levels deep
+                    total = sum((item.price for item in order.items), Decimal(0))
+                    discount = calculate_discount(order.customer)
+                    return Receipt(order_id=order.id, total=total - discount)
+                else:
+                    raise MissingPaymentMethodError(order.id)
             else:
                 raise InactiveCustomerError(order.customer.id)
         else:
@@ -47,6 +50,8 @@ def checkout(order: Order) -> Receipt:
         raise EmptyOrderError(order.id)
     if not order.customer.is_active:
         raise InactiveCustomerError(order.customer.id)
+    if order.payment_method is None:
+        raise MissingPaymentMethodError(order.id)
 
     # the main logic is flat and clear
     total = sum((item.price for item in order.items), Decimal(0))
@@ -63,7 +68,13 @@ def post_fees(fees: Iterable[ShippingFee], ledger: Ledger) -> None:
     for fee in fees:
         if not is_billable(fee):
             continue
-        ledger.post(fee)
+        post_fee(fee, ledger)  # the per-item body, with its own guards
+
+
+def post_fee(fee: ShippingFee, ledger: Ledger) -> None:
+    if fee.account_id is None:
+        raise UnassignedFeeError(fee.id)
+    ledger.post(fee.account_id, fee.cents)
 ```
 
 ## Notes

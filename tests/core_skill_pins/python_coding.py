@@ -8,8 +8,8 @@ one unmapped slot, so it ties with no mapped rule. The classes section's mapped
 rules fill every slot from 60 to 66, so ``python-classes-and-protocols`` keeps
 its successor ``python-protocols``'s 61 and sorts after it by id.
 
-C-python-coding-01 adds the vendored errors and shape rules; ``python-early-return``
-takes the guard-clause guidance (and its pinned phrase) from ``python-idioms``.
+``python-early-return`` owns the guard-clause guidance and its pinned phrase, which
+left ``python-idioms`` so that one rule holds each topic.
 """
 
 from __future__ import annotations

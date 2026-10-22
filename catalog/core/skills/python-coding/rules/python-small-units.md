@@ -42,7 +42,7 @@ def import_orders(path: Path, repository: OrderRepository) -> int:
             # write
             repository.save(Order(id=order_id, quantity=quantity, total=total))
             imported += 1
-            # ... and so on for another 40 lines of logging, retries and reporting
+            # ... and so on: logging, retries and reporting take it to about 60 lines
     return imported
 ```
 
@@ -79,7 +79,7 @@ def order_total(unit_price: Decimal, quantity: int) -> Decimal:
 
 ## Notes
 
-- Split along the steps: each named step does one thing at one level of abstraction, and the top function reads as the list of steps.
+- Split along the steps: each named step does one thing, and the top function reads as the list of steps; `python-early-return` keeps each function at one level of abstraction.
 - The numbers are guides, not limits. A 25-line function that does one thing is fine; a 12-line one that parses, validates and writes is not.
 - Split a file past about 500 lines along its responsibilities; design-single-responsibility (design-patterns skill) says how to find them.
 - The clean-code-metrics-nonregression hook blocks a change that grows a function's complexity; extracting named steps is the usual fix.
