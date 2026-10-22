@@ -50,17 +50,21 @@ async def search_users(q: str, sort: str, session: SessionDep) -> list[UserRead]
 
 ```python
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import Query
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 
 # SessionDep is the per-request AsyncSession alias; User the ORM model; UserRead its schema.
 router = APIRouter(prefix="/users")
 
 UserSort = Literal["email", "created_at"]
-SORT_COLUMNS = {"email": User.email, "created_at": User.created_at}
+SORT_COLUMNS: dict[UserSort, InstrumentedAttribute[Any]] = {
+    "email": User.email,
+    "created_at": User.created_at,
+}  # mypy checks the keys against UserSort
 
 
 @router.get("/search")

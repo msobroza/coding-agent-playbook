@@ -85,7 +85,7 @@ SessionDep = Annotated[AsyncSession, Depends(get_session)]
 async def read_user(user_id: int, session: SessionDep) -> UserRead:
     user = await session.get(User, user_id)
     if user is None:
-        raise NotFoundError("User")
+        raise NotFoundError("User", user_id)
     return UserRead.model_validate(user)
 ```
 

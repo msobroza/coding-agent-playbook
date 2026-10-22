@@ -52,24 +52,26 @@ async def create_report(month: str, user: CurrentUser, session: SessionDep) -> R
 
 ```python
 import asyncio
-from dataclasses import dataclass
 from decimal import Decimal
-from pathlib import Path
 
+import httpx
 from fastapi import Response
+from pydantic import BaseModel
 
-# PaymentsClientDep is the shared httpx.AsyncClient alias; SessionDep, CurrentUser
-# and Invoice are the per-request session, the authenticated user and the ORM model.
+# PaymentsClientDep is the shared httpx.AsyncClient alias, SettingsDep the settings
+# alias; SessionDep, CurrentUser and Invoice are the per-request session, the
+# authenticated user and the ORM model.
 router = APIRouter(prefix="/reports", dependencies=[Depends(get_current_user)])
-ARCHIVE_DIR = Path("/var/reports")
 
 
-@dataclass(frozen=True)
-class FxRates:
+class FxRates(BaseModel):
     base: str
     rates: dict[str, Decimal]
 
 
+# Awaits the shared client, translates httpx.HTTPError and validates the payload
+# with FxRates.model_validate_json, as in httpx-shared-client.
+async def fetch_fx_rates(client: httpx.AsyncClient) -> FxRates: ...
 def render_pdf(invoices: list[Invoice], fx: FxRates) -> bytes: ...  # seconds of CPU
 
 
@@ -78,18 +80,15 @@ async def create_report(
     month: str, user: CurrentUser, session: SessionDep, payments: PaymentsClientDep
 ) -> Response:
     invoices = list(await session.scalars(select(Invoice).where(Invoice.owner_id == user.id)))
-    response = await payments.get("/fx-rates")  # awaited, non-blocking
-    response.raise_for_status()
-    payload = response.json()
-    fx = FxRates(payload["base"], {k: Decimal(v) for k, v in payload["rates"].items()})
+    fx = await fetch_fx_rates(payments)  # awaited, non-blocking
     pdf = await asyncio.to_thread(render_pdf, invoices, fx)  # CPU work off the loop
     return Response(pdf, media_type="application/pdf")
 
 
 # Only blocking calls inside: plain def runs in FastAPI's thread pool
 @router.get("/{report_id}/archive")
-def read_archived_report(report_id: int) -> Response:
-    pdf = (ARCHIVE_DIR / f"{report_id}.pdf").read_bytes()  # blocking I/O is fine here
+def read_archived_report(report_id: int, settings: SettingsDep) -> Response:
+    pdf = (settings.report_archive_dir / f"{report_id}.pdf").read_bytes()  # blocking is fine
     return Response(pdf, media_type="application/pdf")
 ```
 

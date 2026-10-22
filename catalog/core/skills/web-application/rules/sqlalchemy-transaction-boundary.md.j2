@@ -74,7 +74,7 @@ async def add_lines(
     )
     invoice = await session.scalar(stmt)
     if invoice is None:
-        raise NotFoundError("Invoice")
+        raise NotFoundError("Invoice", invoice_id)
     for line in lines:
         add_line(invoice, line)
     await session.commit()  # one commit; an exception before it rolls everything back
