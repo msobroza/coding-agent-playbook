@@ -14,7 +14,7 @@ Rule ids from this skill are given bare; rules of other skills carry their skill
 
 What happens: typed settings are read once; `create_app(settings)` builds the app; the lifespan acquires the engine, the sessionmaker and shared clients before `yield` and releases them after it.
 
-- Rules: python-coding's pydantic-typed-settings, fastapi-app-wiring, sqlalchemy-session-per-request (engine and sessionmaker in the lifespan), httpx-shared-client (one client per upstream), web-cors-origins (middleware from settings).
+- Rules: fastapi-app-wiring, sqlalchemy-session-per-request (engine and sessionmaker in the lifespan), httpx-shared-client (one client per upstream), web-cors-origins (middleware from settings); python-coding's pydantic-typed-settings.
 - Not here: creating tables. The schema comes from reviewed migrations (alembic-migrations).
 - Example: app/settings.py, app/main.py, app/asgi.py.
 
@@ -68,12 +68,11 @@ Unit tests use fakes; persistence and endpoint tests use the real engine in a ro
 
 | Symptom | Step | Rules |
 | --- | --- | --- |
-| A duplicate or a lost race answers 500 | 4, 5 | fastapi-error-boundaries (catch `IntegrityError` at the flush or commit, raise the domain conflict, map it to 409) |
-| `DetachedInstanceError` or expired attributes after commit | 1, 4 | sqlalchemy-session-per-request (`expire_on_commit=False`), sqlalchemy-eager-loading |
-| `PendingRollbackError` on the next statement | 4 | sqlalchemy-transaction-boundary (roll back after a failed flush or commit) |
-| Writes that vanish after a 2xx | 4, 6 | sqlalchemy-transaction-boundary (the use case commits; teardown never does) |
+| A duplicate or a lost race answers 500 | 4, 5 | fastapi-error-boundaries |
+| `DetachedInstanceError` or expired attributes after commit | 1, 4 | sqlalchemy-session-per-request, sqlalchemy-eager-loading |
+| `PendingRollbackError` on the next statement | 4 | sqlalchemy-transaction-boundary |
+| Writes that vanish after a 2xx | 4, 6 | sqlalchemy-transaction-boundary |
 | Requests that stall under load | 3, 1 | fastapi-no-blocking-calls, httpx-shared-client |
-| A test override that has no effect | 7 | fastapi-dependency-overrides (use `app.dependency_overrides` on the app under test, not a module patch) |
+| A test override that has no effect | 7 | fastapi-dependency-overrides |
 | A lazy load raising while the response model is built | 4 | sqlalchemy-eager-loading |
 | A 400 where a 409 or 422 belongs | 5 | fastapi-error-boundaries, web-http-methods |
-| A schema change that works locally but not in production | 1 | alembic-migrations |

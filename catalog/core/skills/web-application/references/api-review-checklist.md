@@ -33,7 +33,7 @@ One line per check for reviewing a web API change, or a whole service before its
 - [ ] JWTs are decoded with a pinned algorithm list and required `exp`, `iat`, `sub`, `iss` and `aud` claims; access tokens are short-lived (`web-jwt-validation`).
 - [ ] Passwords are stored only as Argon2id hashes, hashed off the event loop, and an unknown email answers like a wrong password (`web-password-hashing`).
 - [ ] CORS lists the exact trusted origins from settings, defaults to none, and never combines every origin with credentials (`web-cors-origins`).
-- [ ] Login and reset endpoints are rate-limited where the project has a limiter or a proxy that throttles.
+- [ ] Login and reset endpoints are rate-limited where the project has a limiter or a proxy that throttles (`web-password-hashing`).
 
 ## Before the first production release
 
@@ -43,4 +43,4 @@ One line per check for reviewing a web API change, or a whole service before its
 - [ ] Outbound HTTP goes through one shared client per upstream with timeouts and limits from settings (`httpx-shared-client`).
 - [ ] The schema changes only through reviewed Alembic revisions run once per deploy; the app never calls `create_all` (`alembic-migrations`).
 - [ ] The engine is built once in the lifespan and each request gets its own session that closes on every path (`sqlalchemy-session-per-request`).
-- [ ] Use cases are tested on fakes, and endpoints through the real app and database in a rolled-back transaction.
+- [ ] Use cases are tested on fakes, and endpoints through the real app and database in a rolled-back transaction (`fastapi-dependency-overrides`, `sqlalchemy-test-rollback`).

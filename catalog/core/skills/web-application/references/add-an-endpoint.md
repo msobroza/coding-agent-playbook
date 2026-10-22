@@ -21,7 +21,7 @@ The steps for adding an endpoint, or a whole new resource, to a FastAPI service,
    - every query that loads a record by an id the client sent is scoped to the caller's owner or tenant, and a record the caller may not see answers 404 (`web-object-authorization`).
 6. **Error table.** Give each new failure a domain exception under the project's base error and one row in the app's error mapping (not found 404, conflict 409, invalid 422); no `try`/`except` in the route (`fastapi-error-boundaries`). Declare the non-2xx outcomes in the route's `responses=` and give it a `summary` (`fastapi-openapi-metadata`).
 7. **Wiring.** Call `include_router` for the new router inside `create_app`; the factory only includes routers and builds lifespan resources (`fastapi-app-wiring`).
-8. **Tests.** Unit tests use fakes; persistence and endpoint tests use the real engine in a rolled-back transaction.
+8. **Tests.** Which test covers which layer is section 7 of request-lifecycle.md; for the new resource:
    - Use-case tests run on named in-memory fakes of the ports (`InMemoryRoomRepository`, not a generic dict-backed stub) that raise the same domain errors as the real repositories.
    - Endpoint tests build a fresh `create_app(test_settings)`, override only out-of-process dependencies and the clock, and call the app through `httpx.ASGITransport` (`fastapi-dependency-overrides`), on a session inside an outer transaction rolled back after each test (`sqlalchemy-test-rollback`).
    - Cover the success path, not found, a conflict, invalid input (422) and another caller's record (404).
