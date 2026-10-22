@@ -59,13 +59,18 @@ python-data-shapes, python-idioms and pytest rules.
 
 | Upstream file | Core files | Changes |
 | --- | --- | --- |
+| `skills/data-science/rules/repro-default-rng.md` | `rules/ml-seeded-randomness.md.j2` | Lines 8-66 are the skeleton: engine frontmatter; the description opens with the engine's 'a run nobody can repeat' and adds the seed-as-configuration, record-the-seed and None-in-production points; the global `np.random.seed` Bad and the injected-Generator Good become per-library template lines (NumPy generator for numpy, pandas and scikit-learn; torch, scikit-learn, pandas and polars seeding lines), with a polars-only Bad and Good built on `random.Random(seed)` and no NumPy; arrays are annotated with `npt.NDArray`; the shape-only test (55-58) is replaced by the engine's same-seed repeat test; '(NumPy 1.25+)' (63) dropped; the drawn-entropy record and `SeedSequence(seed).spawn` children passed to `default_rng` added; the design-no-global-singleton cross-reference becomes plain text naming python-no-global-singletons, and test determinism points to pytest-deterministic-tests. |
+| `skills/data-science/rules/style-method-chaining.md` | `rules/ml-method-chaining.md.j2` | Lines 8-54 are the skeleton for the pandas branch: engine frontmatter; the sales example becomes shipment weights (no float money) with dtypes at the read and dates parsed by `pd.to_datetime` with a format instead of `parse_dates`; a polars Bad/Good pair (eager intermediates vs a lazy scan collected once) and the engine's lazy-scan note added; notes kept (lambdas see the intermediate frame, one step per line, named functions via pipe, chain cost worded version-neutrally, no query/eval strings). |
+| `skills/data-science/rules/style-named-aggregation.md` | `rules/ml-named-aggregation.md.j2` | Lines 8-54 are the skeleton for the pandas branch: engine frontmatter; revenue sums become parcel weights and counts (no float money); `observed=True` added to the group-bys and as a note; a polars pair (renaming after the fact vs expressions ending in `.alias`) and the `expr.over` / no `map_groups` note added; notes kept (string reducers, as_index=False, transform, NamedAgg, the Series.groupby form). |
+| `skills/data-science/rules/type-array-annotations.md` | `rules/ml-array-typing.md.j2` | Lines 8-34, 38-52 and 55-67 are the skeleton: engine frontmatter; NumPy and pandas parts become template branches; the pandera `DataFrame[Schema]` hints (35-37, 53-54, 68) leave this rule for ml-frame-validation, and the pandas Good form names its required columns in the docstring and returns `pd.DataFrame`; `load_matrix` takes a `Path`; 'Install pandas-stubs as a dev dependency' (66) becomes 'propose it, never add it unasked'; the doc-type-hints cross-reference becomes plain text naming python-typing. |
+| `skills/data-science/rules/test-numeric-assertions.md` | `rules/ml-numeric-assertions.md.j2` | Lines 8-65 are the skeleton: engine frontmatter; the description opens with the engine's 'a test that compares floats exactly breaks on the next machine'; examples split into NumPy, pandas and polars template lines (`polars.testing` pair added), with the pandas expected frame built inline from a hand-computed case instead of a golden file; the scalar `pytest.approx` test is dropped in favor of a pointer to pytest-assertions; the fixture-factory cross-reference becomes plain text naming pytest-factory-fixtures; globs follow the shared test-file set (D41). |
+| `skills/data-science/rules/vec-no-python-loops.md` | `rules/ml-named-aggregation.md.j2` | Line 78 (group-wise logic uses built-in reducers in transform/agg, never groupby().apply) becomes the 'never groupby().apply for a reducer' note. |
 
 Distilled (credited by name only, no vendored text):
 
 - `rules/ml-vectorization.md.j2`
 - `rules/ml-data-transforms.md.j2`
 - `rules/ml-dtypes-and-typing.md.j2`
-- `rules/ml-reproducibility-and-testing.md.j2`
 
 ### python-coding
 
@@ -135,6 +140,7 @@ review-architecture, make-testable, characterize, review and refactor prompts.
 
 | Upstream file | Core files | Changes |
 | --- | --- | --- |
+| `skills/clean-architecture/references/patterns/pipeline.md` | DROP | Lines 185-222 (pandas `.pipe()`), handed off by design-patterns: ml-method-chaining already covers `pipe` with arguments, and the example mutates its argument and prints from main, contradicting ml-data-transforms; ml-data vendors no text from this source. |
 
 ### python-architecture
 

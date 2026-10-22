@@ -8,7 +8,7 @@ facts (``tests/_budget_probe.py``), and counts after ``ruff format`` has laid ou
 its code blocks. Those facts reach the ``pytest-asyncio`` branch of
 ``pytest``, the torch, NumPy, pandas and scikit-learn sections of
 ``ml-serialization-security``, and the NumPy and pandas sections and the torch and
-scikit-learn seeding lines of the four array and data-frame members (spec 9.15,
+scikit-learn seeding lines of the array and data-frame members (spec 9.15,
 12.3); the sanity test below pins each one. The probe declares no
 ``transformers`` and no ``polars``, pins one Python and one project description,
 so the bound is also applied to every distinct rendering of every scoped rule and
@@ -51,12 +51,12 @@ MATRIX_MEASURED_RULE_IDS: Final = sorted(
         *(rule_id for rule_id, rule in core_rules().items() if rule.is_templated),
     }
 )
-#: The four ml-data members for array and data-frame code (spec 9.6.1), sorted by id;
-#: each renders one section per library (``tests/unit/test_ml_data_rules.py``).
+#: The ml-data members for array and data-frame code (spec 9.6.1) that still render one
+#: ``## <library>`` section per library, sorted by id (``tests/unit/test_ml_data_rules.py``).
+#: The vendored members (prU D7) put their library lines inside one Bad and one Good Example.
 ML_ARRAY_RULE_IDS: Final = (
     "ml-data-transforms",
     "ml-dtypes-and-typing",
-    "ml-reproducibility-and-testing",
     "ml-vectorization",
 )
 #: Rule id -> text that only the probe's branch of its ``{% if %}`` renders.
@@ -67,9 +67,9 @@ LONG_BRANCH_MARKERS: Final = (
     ("ml-serialization-security", "## pandas frames"),
     ("ml-serialization-security", "## scikit-learn estimators"),
     *((rule_id, heading) for rule_id in ML_ARRAY_RULE_IDS for heading in ("## NumPy", "## pandas")),
-    ("ml-reproducibility-and-testing", "torch.manual_seed"),
-    ("ml-reproducibility-and-testing", "random_state=int("),
-    ("ml-reproducibility-and-testing", "rng = np.random.default_rng(seed)"),
+    ("ml-seeded-randomness", "torch.manual_seed"),
+    ("ml-seeded-randomness", "random_state=int("),
+    ("ml-seeded-randomness", "rng = np.random.default_rng(seed)"),
 )
 
 

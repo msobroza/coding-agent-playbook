@@ -1,0 +1,101 @@
+---
+id: ml-numeric-assertions
+name: Numeric assertions
+description: "Compare arrays and frames in tests with the library's tolerance-aware assertions, on small expected data built inline and computed by hand."
+version: 1
+scope: scoped
+globs:
+  - "**/test_*.py"
+  - "**/*_test.py"
+  - "**/tests/**/*.py"
+  - "**/conftest.py"
+  - "**/fakes.py"
+applies_if:
+  any_ml_stack: ["numpy", "pandas", "polars"]
+section: testing
+priority: 63
+tags: [ml, testing, pytest]
+---
+
+# Compare numeric results with tolerance-aware assertions
+
+## Description
+
+A test that compares floats exactly breaks on the next machine or library release. `assert result == expected` on arrays raises `ValueError: The truth value of an array is ambiguous`, and `(result == expected).all()` is both exact (it fails on `0.1 + 0.2`) and uninformative (it prints `False`). The libraries ship assertion helpers that compare with a relative and an absolute tolerance, handle missing values in the same position, check dtypes and labels, and print the first mismatches. Use them in every test that checks arrays or frames.
+
+## Bad Example
+
+```python
+{% if has_ml_dep("numpy") %}
+def test_normalize() -> None:
+    result = normalize(np.array([1.0, 2.0, 3.0]))
+    assert (result == np.array([-1.2247, 0.0, 1.2247])).all()  # exact compare fails
+{% endif %}
+{% if has_ml_dep("pandas") %}
+{% if has_ml_dep("numpy") %}
+
+
+{% endif %}
+def test_summarize() -> None:
+    result = summarize(load_fixture("golden_summary.csv"))
+    assert result.equals(expected)  # True or False only, no diff, exact float compare
+{% endif %}
+{% if has_ml_dep("polars") %}
+{% if has_ml_dep("numpy") or has_ml_dep("pandas") %}
+
+
+{% endif %}
+def test_daily_totals() -> None:
+    assert daily_totals(events).to_dicts() == EXPECTED_ROWS  # exact floats, no diff
+{% endif %}
+```
+
+## Good Example
+
+```python
+{% if has_ml_dep("numpy") %}
+def test_normalize() -> None:
+    result = normalize(np.array([1.0, 2.0, 3.0]))
+    np.testing.assert_allclose(result, [-1.2247, 0.0, 1.2247], rtol=1e-4, atol=1e-12)
+
+
+def test_assign_ids_is_exact() -> None:
+    np.testing.assert_array_equal(assign_ids(3), np.array([0, 1, 2]))  # ints: exact
+{% endif %}
+{% if has_ml_dep("pandas") %}
+{% if has_ml_dep("numpy") %}
+
+
+{% endif %}
+def test_summarize() -> None:
+    readings = pd.DataFrame({"site": ["x", "x", "y"], "celsius": [1.0, 2.0, 4.0]})
+    expected = pd.DataFrame(
+        {"site": ["x", "y"], "mean_celsius": [1.5, 4.0]},  # computed by hand
+    )
+    pd.testing.assert_frame_equal(summarize(readings), expected)
+{% endif %}
+{% if has_ml_dep("polars") %}
+{% if has_ml_dep("numpy") or has_ml_dep("pandas") %}
+
+
+{% endif %}
+def test_daily_totals() -> None:
+    expected = pl.DataFrame({"day": [1, 2], "total_kg": [3.5, 0.0]})
+    polars.testing.assert_frame_equal(daily_totals(events), expected, abs_tol=1e-9)
+{% endif %}
+```
+
+## Notes
+
+- Never compare float arrays with `==`, and never assert `(a == b).all()`: a difference in the last bit fails the test, and the failure shows no values.
+- `pytest.approx` is for scalars and short lists; it does not say which element differed and checks neither dtype nor shape (pytest-assertions in python-testing covers scalar assertions).
+{% if has_ml_dep("numpy") %}
+- `np.testing.assert_allclose(actual, desired, rtol=..., atol=...)`: set `atol` whenever the expected values include zeros, since a relative tolerance alone allows no difference at all at zero. Use `np.testing.assert_array_equal` for integers, booleans and strings; both treat missing values in the same position as equal.
+{% endif %}
+{% if has_ml_dep("pandas") %}
+- pandas: `pd.testing.assert_frame_equal` and `assert_series_equal` check the index, dtypes and column order by default. Loosen `check_dtype`, `check_like` (which ignores column order) or `check_exact` only with a comment saying why.
+{% endif %}
+{% if has_ml_dep("polars") %}
+- polars: `polars.testing.assert_frame_equal` and `assert_series_equal` check dtypes and order by default; loosen a check only with a comment saying why.
+{% endif %}
+- Build expected data inline from small cases computed by hand (three sensors over two days), so a reader can see why each number is right, or with a factory fixture (pytest-factory-fixtures in python-testing). Never load it from golden CSV files: a CSV round trip loses dtypes and index names, and nobody checks a thousand rows by eye.

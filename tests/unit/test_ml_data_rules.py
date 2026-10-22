@@ -1,11 +1,13 @@
-"""The four ml-data members for array and data-frame code (specs/prS-skills-context.md 12).
+"""The ml-data members for array and data-frame code (specs/prS-skills-context.md 12).
 
-They gate on ``any_ml_stack: [numpy, pandas, polars]`` (D9), one gate for the
-three libraries, so each renders one section per library the repo declares: a
-NumPy-only repo gets the NumPy parts and no data-frame guidance (R5-2). torch
-alone activates none of them, so a torch-only repo keeps
-``ml-serialization-security`` as ml-data's only member, and the resync golden
-for adding torch stays byte-identical.
+The distilled members gate on ``any_ml_stack: [numpy, pandas, polars]`` (D9), one
+gate for the three libraries, so each renders one section per library the repo
+declares: a NumPy-only repo gets the NumPy parts and no data-frame guidance
+(R5-2). The vendored members (prU C-ml-data-02) gate on the libraries their
+topic exists in (mapping-ml-data.md) and select each library's lines inside one
+Bad and one Good Example. torch alone activates none of them, so a torch-only
+repo keeps ``ml-serialization-security`` as ml-data's only member, and the
+resync golden for adding torch stays byte-identical.
 """
 
 from __future__ import annotations
@@ -29,8 +31,16 @@ pytestmark = pytest.mark.catalog
 
 #: Every library one of the four rules branches on: their longest rendered form.
 _EVERY_BRANCH_LIBRARY: Final = ("numpy", "pandas", "polars", "scikit-learn", "torch")
-#: The line that says where the run's ``rng`` comes from (ml-reproducibility-and-testing).
+#: The line that says where the run's ``rng`` comes from (ml-seeded-randomness).
 _RNG_DEFINITION: Final = "rng = np.random.default_rng(seed)"
+#: Vendored member -> the ml_stack libraries its gate names (mapping-ml-data.md).
+VENDORED_RULE_GATES: Final = {
+    "ml-seeded-randomness": ("numpy", "pandas", "polars"),
+    "ml-method-chaining": ("pandas", "polars"),
+    "ml-named-aggregation": ("pandas", "polars"),
+    "ml-array-typing": ("numpy", "pandas"),
+    "ml-numeric-assertions": ("numpy", "pandas", "polars"),
+}
 
 
 def _ml_facts(*libraries: str) -> Facts:
@@ -73,6 +83,18 @@ def test_torch_only_repo_keeps_serialization_as_the_only_ml_data_member(tmp_path
     assert members == ["ml-serialization-security"], f"torch alone activates {members}"
 
 
+@pytest.mark.parametrize("rule_id", sorted(VENDORED_RULE_GATES))
+@pytest.mark.parametrize("library", ["numpy", "pandas", "polars", "torch"])
+def test_vendored_member_gates_on_its_libraries(rule_id: str, library: str, tmp_path: Path) -> None:
+    members = _active_ml_data_members(_ml_facts(library), tmp_path)
+
+    active = rule_id in members
+    assert active == (library in VENDORED_RULE_GATES[rule_id]), (
+        f"{rule_id} active={active} with ml_stack [{library}]; its gate names "
+        f"{list(VENDORED_RULE_GATES[rule_id])}"
+    )
+
+
 def _section_rows() -> list[tuple[str, tuple[str, ...], str, str]]:
     """(rule id, ml_stack, text that must render, text that must not) for each library."""
     rows: list[tuple[str, tuple[str, ...], str, str]] = []
@@ -88,16 +110,23 @@ def _section_rows() -> list[tuple[str, tuple[str, ...], str, str]]:
         *rows,
         ("ml-data-transforms", ("pandas",), ".loc", "pl.col"),
         ("ml-data-transforms", ("polars",), "pl.col", ".loc"),
-        # Library-specific seeding lines follow their own library, inside the shared section.
-        (
-            "ml-reproducibility-and-testing",
-            ("numpy", "torch"),
-            "torch.manual_seed",
-            "random_state=",
-        ),
-        ("ml-reproducibility-and-testing", ("numpy", "scikit-learn"), "random_state=", "torch."),
+        # Library-specific seeding lines follow their own library.
+        ("ml-seeded-randomness", ("numpy", "torch"), "torch.manual_seed", "random_state="),
+        ("ml-seeded-randomness", ("numpy", "scikit-learn"), "random_state=", "torch."),
+        ("ml-seeded-randomness", ("pandas",), "frame.sample(", "pl."),
+        ("ml-seeded-randomness", ("numpy",), "SeedSequence", "frame.sample("),
         # polars installs no NumPy, so a polars-only repo gets no NumPy generator.
-        ("ml-reproducibility-and-testing", ("polars",), "seed=sample_seed", "np.random"),
+        ("ml-seeded-randomness", ("polars",), "seed=sample_seed", "np.random"),
+        # The vendored members select each library's lines inside one Bad and one Good Example.
+        ("ml-method-chaining", ("pandas",), ".pipe(", "pl."),
+        ("ml-method-chaining", ("polars",), ".collect()", ".pipe("),
+        ("ml-named-aggregation", ("pandas",), "as_index=False", "pl."),
+        ("ml-named-aggregation", ("polars",), '.alias("total_kg")', "as_index"),
+        ("ml-array-typing", ("numpy",), "npt.NDArray[np.float64]", "pd."),
+        ("ml-array-typing", ("pandas",), "pandas-stubs", "npt."),
+        ("ml-numeric-assertions", ("numpy",), "np.testing.assert_allclose", "pd.testing"),
+        ("ml-numeric-assertions", ("pandas",), "pd.testing.assert_frame_equal", "np.testing"),
+        ("ml-numeric-assertions", ("polars",), "polars.testing.assert_frame_equal", "pd."),
     ]
 
 
@@ -111,7 +140,7 @@ def test_library_sections_follow_the_ml_stack(
     assert absent not in body, f"{rule_id} with {list(ml_stack)} renders {absent!r}"
 
 
-@pytest.mark.parametrize("rule_id", ML_ARRAY_RULE_IDS)
+@pytest.mark.parametrize("rule_id", [*ML_ARRAY_RULE_IDS, *sorted(VENDORED_RULE_GATES)])
 def test_ml_array_rule_fits_one_reference_read_with_every_library(rule_id: str) -> None:
     """The longest form: the probe declares no polars, so its size test misses that section."""
     body = render_core_rule(rule_id, _ml_facts(*_EVERY_BRANCH_LIBRARY))
@@ -131,7 +160,7 @@ def test_ml_array_rule_fits_one_reference_read_with_every_library(rule_id: str) 
 )
 def test_rng_is_defined_before_its_first_use(ml_stack: tuple[str, ...]) -> None:
     """Review fix: the pandas and scikit-learn lines once used ``rng`` that only NumPy defined."""
-    body = render_core_rule("ml-reproducibility-and-testing", _ml_facts(*ml_stack))
+    body = render_core_rule("ml-seeded-randomness", _ml_facts(*ml_stack))
 
     first_use = re.search(r"\brng\b", body)
     assert first_use is not None, f"{list(ml_stack)} renders no `rng` at all"
@@ -143,10 +172,10 @@ def test_rng_is_defined_before_its_first_use(ml_stack: tuple[str, ...]) -> None:
 
 def test_seed_sequence_children_are_passed_to_default_rng() -> None:
     """Review fix: ``SeedSequence.spawn`` returns seeds, not generators, so the line wraps them."""
-    body = render_core_rule("ml-reproducibility-and-testing", _ml_facts("numpy"))
+    body = render_core_rule("ml-seeded-randomness", _ml_facts("numpy"))
 
     spawn_lines = [line for line in body.splitlines() if "SeedSequence(seed).spawn" in line]
-    assert spawn_lines, "the NumPy section no longer names SeedSequence(seed).spawn"
+    assert spawn_lines, "the NumPy lines no longer name SeedSequence(seed).spawn"
     assert all("np.random.default_rng" in line for line in spawn_lines), (
         f"SeedSequence children are not passed to np.random.default_rng: {spawn_lines}"
     )
