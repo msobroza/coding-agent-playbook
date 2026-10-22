@@ -1,8 +1,12 @@
 """Pins of core skill ``python-coding`` (prU L0-15): the moved rules in mapping sections.
 
 ``pydantic-boundaries`` joins from python-tooling (D24). The retired ids
-``python-classes-and-protocols`` and ``python-performance-idioms`` stay until
-their content lane retires them, in their successors' sections.
+``python-classes-and-protocols`` and ``python-performance-idioms`` have no
+mapping row and stay until their content lane retires them, in their
+successors' sections. ``python-performance-idioms`` takes 79, the MEDIUM band's
+one unmapped slot, so it ties with no mapped rule. The classes section's mapped
+rules fill every slot from 60 to 66, so ``python-classes-and-protocols`` keeps
+its successor ``python-protocols``'s 61 and sorts after it by id.
 """
 
 from __future__ import annotations
@@ -32,11 +36,22 @@ PINS: Final = CoreSkillPins(
         "python-performance-idioms",
     ),
     probe_inactive=frozenset(),
+    section_ids=(
+        "errors",
+        "shape",
+        "types",
+        "effects",
+        "async",
+        "pydantic",
+        "classes",
+        "functions",
+        "idioms",
+    ),
     rules={
         "python-performance-idioms": RulePin(
             applies_if={},
             globs=_PY_FILES,
-            priority=74,
+            priority=79,
             name="Performance idioms",
             tags=("python", "performance"),
         ),

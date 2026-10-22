@@ -16,6 +16,13 @@ PINS: Final = CoreSkillPins(
     ),
     # The reference probe has no uv.lock, so the uv gate fails there (spec 9.6.2).
     probe_inactive=frozenset({"python-uv-workflow"}),
+    section_ids=(
+        "linting",
+        "type-checking",
+        "formatting",
+        "test-configuration",
+        "package-management",
+    ),
     rules={
         "python-static-checks": RulePin(
             applies_if={},

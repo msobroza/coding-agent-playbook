@@ -35,7 +35,7 @@ playbook:
 
 # Python tooling
 
-Conventions tied to one named developer tool: the linter, the type checker, the formatter, the test runner's settings and the package manager. Library-agnostic conventions and Pydantic validation stay in the python-coding skill, test code in the python-testing skill, and web framework wiring in the web-application skill; a rule here adds only what its tool changes.
+Conventions tied to one named developer tool: the linter, the type checker, the formatter, the test runner's settings and the package manager. Line- and function-level Python conventions, Pydantic validation included, stay in the python-coding skill, test code in the python-testing skill, and web framework wiring in the web-application skill; a rule here adds only what its tool changes.
 
 ## Picking rules
 

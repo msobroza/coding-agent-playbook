@@ -7,7 +7,7 @@ scope: scoped
 globs:
   - "**/*.py"
 section: idioms
-priority: 74
+priority: 79
 tags: [python, performance]
 ---
 

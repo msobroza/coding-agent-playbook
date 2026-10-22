@@ -14,6 +14,16 @@ PINS: Final = CoreSkillPins(
         "fastapi-app-wiring",
     ),
     probe_inactive=frozenset(),
+    section_ids=(
+        "security",
+        "database",
+        "async-io",
+        "api-design",
+        "app-structure",
+        "observability",
+        "testing",
+        "api-conventions",
+    ),
     rules={
         "fastapi-error-boundaries": RulePin(
             applies_if={"has_framework": ["fastapi"]},
