@@ -4,8 +4,8 @@
 > scoped rules must add `skill: <skill-id>` to each one, or `playbook sync` refuses them. A
 > repo-local rule that joins a core skill also needs `section:` and a priority inside that
 > section's impact band. Run `playbook validate` before upgrading. Member rules are now
-> written to `<skill>/rules/<rule-id>.md`, and four core rule ids are retired; see the
-> v0.21 TL;DR.
+> written to `<skill>/rules/<rule-id>.md`, and four scoped rule ids in core are retired;
+> see the v0.21 TL;DR.
 >
 > **v0.20** (assistant lifecycle hooks, below) asks one thing of every
 > consumer: run `playbook validate` before upgrading, because `playbook sync` now
@@ -666,11 +666,12 @@ ships the skills `python-coding`, `python-testing`, `python-tooling` and
 `ml-data`, plus `playbook-guardrails`, which holds the hooks' guardrail text
 when hooks are on, and new skills built from vendored upstream guidance (see
 "New core skills"). Member rules live in their skill's `rules/` directory, in
-the catalog and in the output (`docs/adr/0005-member-rules-live-in-their-skills-rules-directory.md`),
-and each skill groups them into sections by impact. Each change of the release has a row in the table below, and a
-subsection after it when a row is not enough. The terms always rule, scoped
-rule, member rule, skill and reference mean what `CONTEXT.md` says. The SPEC
-changelog entry is v0.21.
+the catalog and in the output
+(`docs/adr/0005-member-rules-live-in-their-skills-rules-directory.md`), and
+each skill groups them into sections by impact. Each change of the release has
+a row in the table below, and a subsection after it when a row is not enough.
+The terms always rule, scoped rule, member rule, skill and reference mean what
+`CONTEXT.md` says. The SPEC changelog entry is v0.21.
 
 ### TL;DR — who needs to do anything
 
@@ -954,10 +955,10 @@ A member rule, a scoped rule that names a skill in `skill:`, is no longer
 written into `AGENTS.md` or `.claude/rules/coding-agent-playbook.md`
 (`CLAUDE_RULES_PATH`). It reaches Claude Code, OpenCode and Codex as a
 rule file of its skill, `<skills root>/<skill>/rules/<rule-id>.md` (see
-"Member rules move to rules/"), and Continue still gets it as its own rule file. Both files now carry the always
-rules, then one generated `## Where guidance lives` section, byte-identical in
-the two, with one line per written skill that has member rules and a
-`playbook.files` phrase:
+"Member rules move to rules/"), and Continue still gets it as its own rule
+file. Both files now carry the always rules, then one generated
+`## Where guidance lives` section, byte-identical in the two, with one line
+per written skill that has member rules and a `playbook.files` phrase:
 
     - Risk model modules: skill `risk-models`
 
@@ -1036,7 +1037,8 @@ globs: ["src/risk/**/*.py"]
 
 `python-coding` declares sections, so a repo-local rule that joins it also names
 one of them in `section:` and takes a priority inside that section's impact band
-(see "Sections and impact bands"). Without `skill:`, `playbook validate` and `playbook sync` stop with:
+(see "Sections and impact bands"). Without `skill:`, `playbook validate` and
+`playbook sync` stop with:
 
     scope 'scoped' needs a skill: put the file in that skill's rules/ directory (skills/<skill-id>/rules/), or add 'skill: <skill-id>' when the skill comes from another layer; known skills: design-patterns, domino-agents, domino-apps, ml-data, python-coding, python-testing, python-tooling, web-application
 
@@ -1283,9 +1285,11 @@ dropped. There is nothing to do but `playbook sync`; what changes:
   keys, which read runtime and dev dependencies alike (names PEP 503-normalized):
   `has_dependency: [pydantic-settings]` holds when every listed package is
   declared, `any_dependency: [sqlalchemy, alembic]` when at least one is. They
-  are open to overlay and repo-local rules, prompts and hooks too. The detector
-  reads `pyproject.toml` only, so in a repo that declares its dependencies in
-  Poetry tables or `requirements*.txt` these gates stay off.
+  are open to overlay and repo-local rules, prompts and hooks too. They read
+  `[project].dependencies`, the dev groups of `optional-dependencies` and
+  `[dependency-groups]` in `pyproject.toml`, and the names in root
+  `requirements*.txt` files. A package declared only in Poetry tables, a
+  nested requirements file or `setup.py` leaves them off.
 - **Overrides.** An overlay or repo-local rule whose id is one of the new ids
   now replaces the core rule, like any rule with the same id; `playbook check`
   shows which one won. A repo-local override of a kept id such as `pytest` keeps
