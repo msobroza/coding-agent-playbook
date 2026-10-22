@@ -1,7 +1,8 @@
 """Pins of core skill ``design-patterns`` (prU D4, D14): the shape of code inside a module.
 
 C-design-patterns-01 creates the skill with its six sections and the ten rules of
-the responsibilities and abstractions sections; later lanes append theirs.
+the responsibilities and abstractions sections; C-design-patterns-02 adds the seven
+rules of the simplicity and smells sections; later lanes append theirs.
 """
 
 from __future__ import annotations
@@ -26,6 +27,13 @@ PINS: Final = CoreSkillPins(
         "design-composition-over-inheritance",
         "design-liskov-substitution",
         "design-interface-segregation",
+        "design-dry-yagni-kiss",
+        "design-lightest-construct",
+        "design-pattern-from-smell",
+        "design-review-by-severity",
+        "design-start-with-the-data",
+        "design-name-for-intent",
+        "design-complete-construction",
     ),
     probe_inactive=frozenset(),
     section_ids=(
@@ -116,6 +124,62 @@ PINS: Final = CoreSkillPins(
             name="Interface segregation",
             tags=("python", "design", "solid"),
             section="abstractions",
+        ),
+        "design-dry-yagni-kiss": RulePin(
+            applies_if={},
+            globs=_PY,
+            priority=50,
+            name="DRY, YAGNI and KISS",
+            tags=("python", "design", "simplicity"),
+            section="simplicity",
+        ),
+        "design-lightest-construct": RulePin(
+            applies_if={},
+            globs=_PY,
+            priority=51,
+            name="The lightest construct",
+            tags=("python", "design", "simplicity"),
+            section="simplicity",
+        ),
+        "design-pattern-from-smell": RulePin(
+            applies_if={},
+            globs=_PY,
+            priority=52,
+            name="A pattern only for a present smell",
+            tags=("python", "design", "patterns"),
+            section="simplicity",
+        ),
+        "design-review-by-severity": RulePin(
+            applies_if={},
+            globs=_PY,
+            priority=60,
+            name="Design review by severity",
+            tags=("python", "design", "review"),
+            section="smells",
+        ),
+        "design-start-with-the-data": RulePin(
+            applies_if={},
+            globs=_PY,
+            priority=61,
+            name="Start with the data",
+            tags=("python", "design", "data"),
+            section="smells",
+        ),
+        "design-name-for-intent": RulePin(
+            applies_if={},
+            globs=_PY,
+            priority=62,
+            name="Names that match intent",
+            tags=("python", "design", "naming"),
+            section="smells",
+        ),
+        "design-complete-construction": RulePin(
+            applies_if={},
+            globs=_PY,
+            priority=63,
+            name="Complete construction",
+            tags=("python", "design", "construction"),
+            section="smells",
         ),
     },
 )
