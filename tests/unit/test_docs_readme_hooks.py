@@ -12,14 +12,12 @@ that lands undocumented fails here. Prose-only: the tests read markdown and
 parse frontmatter and config snippets; they never run engine behaviour.
 
 Since prU D55 the README is a short user README and its former sections live,
-unchanged, in the ``docs/`` pages of :data:`USER_DOC_PAGES`; the pins read those pages.
+unchanged, in the ``docs/`` pages of ``tests._docs.USER_DOC_PAGES``; the pins read those pages.
 """
 
 from __future__ import annotations
 
-import re
 import tomllib
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -46,50 +44,19 @@ from coding_agent_playbook.metrics_gate.policy import (
     resolve_metric_selection,
 )
 from tests._catalog import CORE_ROOT
+from tests._docs import FENCE, headings, user_docs
 from tests.unit.test_docs_lifecycle_hooks_cli import _metric_names, _precommit_ids
 from tests.unit.test_docs_lifecycle_hooks_spec import _HOOK_INVARIANTS
 
-_ROOT = Path(__file__).resolve().parents[2]
 _HOOKS_ROOT = CORE_ROOT / "hooks"
 _LIFECYCLE = "## Assistant lifecycle hooks"
-_FENCE = re.compile(r"^\s*```(\w*)\s*$")
-_HEADING = re.compile(r"^(#{1,6}) ")
 _PR_TITLE_EXPR = "${{ github.event.pull_request.title }}"
-
-
-#: The pages that hold the README's former sections (prU D55), in reading order.
-USER_DOC_PAGES = (
-    "docs/overview.md",
-    "docs/setup.md",
-    "docs/skills.md",
-    "docs/hooks.md",
-    "docs/checks.md",
-)
-
-
-def _user_docs() -> str:
-    """Every page of :data:`USER_DOC_PAGES`, joined; each page opens with its own ``#`` title."""
-    pages = (_ROOT / page for page in USER_DOC_PAGES)
-    return "\n".join(page.read_text(encoding="utf-8") for page in pages)
-
-
-def _headings(text: str) -> list[tuple[int, int, str]]:
-    """``(offset, level, line)`` of every heading outside fenced code (``# x`` in a block is not one)."""
-    found: list[tuple[int, int, str]] = []
-    fenced, offset = False, 0
-    for line in text.splitlines(keepends=True):
-        if _FENCE.match(line):
-            fenced = not fenced
-        elif not fenced and (match := _HEADING.match(line)):
-            found.append((offset, len(match.group(1)), line.rstrip("\n")))
-        offset += len(line)
-    return found
 
 
 def _section(heading: str) -> str:
     """The user-docs section under the heading line ``heading``, up to the next one of its level or above."""
-    text = _user_docs()
-    heads = _headings(text)
+    text = user_docs()
+    heads = headings(text)
     starts = [(offset, level) for offset, level, line in heads if line == heading]
     assert starts, f"the user docs have no {heading!r} heading"
     start, level = starts[0]
@@ -103,7 +70,7 @@ def _blocks(text: str, language: str) -> list[str]:
     current: list[str] | None = None
     indent = 0
     for line in text.splitlines():
-        match = _FENCE.match(line)
+        match = FENCE.match(line)
         if match and current is None and match.group(1) == language:
             current, indent = [], len(line) - len(line.lstrip())
         elif match and current is not None:
@@ -135,8 +102,8 @@ def _enforced_on(hook: HookFrontmatter) -> str:
     return "; ".join(parts) or "advisory only"
 
 
-def test_readme_separates_precommit_and_lifecycle_hooks() -> None:
-    lines = [line for _, _, line in _headings(_user_docs())]
+def test_user_docs_separate_precommit_and_lifecycle_hooks() -> None:
+    lines = [line for _, _, line in headings(user_docs())]
     assert "### Pre-commit hooks" in lines
     assert _LIFECYCLE in lines
     assert "### Hooks" not in lines
@@ -253,9 +220,9 @@ def _parse_policy(document: dict[str, Any]) -> set[str]:
     return {"hooks", "guardrails", "metrics"} & set(document)
 
 
-def test_readme_policy_snippets_parse_with_the_engine_parsers() -> None:
+def test_user_docs_policy_snippets_parse_with_the_engine_parsers() -> None:
     seen: set[str] = set()
-    for block in _blocks(_user_docs(), "toml"):
+    for block in _blocks(user_docs(), "toml"):
         seen |= _parse_policy(tomllib.loads(block))
     assert seen == {"hooks", "guardrails", "metrics"}
 

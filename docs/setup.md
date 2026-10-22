@@ -85,7 +85,7 @@ change `playbook/` or the config. `AGENTS.md` is always generated regardless of
 which adapters are enabled (as long as at least one always rule, Where line (a skill with member
 rules and a `playbook.files` phrase, while an enabled adapter writes a skills root) or hook advisory applies). A member rule (one in a skill's `rules/`, or a scoped rule that names a skill with `skill:`) is not in it: it
 arrives in that skill's `rules/` directory, and a generated `## Where guidance lives`
-section maps file kinds to those skills (core ships eight Python skills, see "Rules inside skills" in [skills.md](skills.md#rules-inside-skills)).
+section maps file kinds to those skills (the core skills are listed under "Rules inside skills" in [skills.md](skills.md#rules-inside-skills)).
 Claude Code gets the same always-rule sections and the same map in `.claude/rules/coding-agent-playbook.md`,
 which it loads natively; the generated `.claude/CLAUDE.md` is a rule-free stub, so
 OpenCode v1 (which attaches that file when it reads under `.claude/`) never loads

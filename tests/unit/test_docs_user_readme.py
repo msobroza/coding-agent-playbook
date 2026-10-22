@@ -18,11 +18,13 @@ import pytest
 
 from coding_agent_playbook.artifacts.rule import RuleFrontmatter
 from tests._catalog import CATALOG_ROOT, REPO_ROOT
-from tests.unit.test_docs_readme_hooks import USER_DOC_PAGES, _headings, _user_docs
+from tests._docs import USER_DOC_PAGES, headings, user_docs
 
 _README = REPO_ROOT / "README.md"
 #: D55's "about 80 lines", with a little slack for wrapping.
 _README_MAX_LINES = 90
+#: D55's "6-line ASCII overview": the content lines of the README's text block.
+_OVERVIEW_LINES = 6
 #: The only level-2 sections the short README holds (D55), in order.
 _README_SECTIONS = (
     "## What it is",
@@ -90,8 +92,9 @@ def _readme_prose() -> str:
 def _writing_a_rule() -> str:
     """The contributor guide's "Writing a rule" section; its fenced template's ``##`` lines stay in."""
     text = (CATALOG_ROOT / "README.md").read_text(encoding="utf-8")
-    heads = _headings(text)
-    start = next(offset for offset, _, line in heads if line == _WRITING_A_RULE)
+    heads = headings(text)
+    start = next((offset for offset, _, line in heads if line == _WRITING_A_RULE), None)
+    assert start is not None, f"catalog/README.md has no {_WRITING_A_RULE!r} heading"
     end = next((at for at, level, _ in heads if at > start and level <= 2), len(text))
     return text[start:end]
 
@@ -102,19 +105,22 @@ def test_readme_is_short() -> None:
 
 
 def test_readme_holds_only_the_d55_sections() -> None:
-    sections = tuple(line for _, level, line in _headings(_readme()) if level == 2)
+    sections = tuple(line for _, level, line in headings(_readme()) if level == 2)
     assert sections == _README_SECTIONS
 
 
 def test_readme_overview_is_a_six_line_diagram() -> None:
     blocks = re.findall(r"```text\n(.*?)```", _readme(), flags=re.DOTALL)
     assert blocks, "the README overview is a ```text block"
-    assert len(blocks[0].splitlines()) <= 6, blocks[0]
+    lines = blocks[0].splitlines()
+    assert len(lines) == _OVERVIEW_LINES, (
+        f"the overview has {len(lines)} lines (D55: 6):\n{blocks[0]}"
+    )
 
 
 @pytest.mark.parametrize("heading", _FORMER_README_HEADINGS)
 def test_every_former_readme_section_lives_in_docs(heading: str) -> None:
-    lines = [line for _, _, line in _headings(_user_docs())]
+    lines = [line for _, _, line in headings(user_docs())]
     assert lines.count(heading) == 1, f"docs/ must hold {heading!r} exactly once"
 
 
@@ -146,10 +152,9 @@ def test_readme_setup_names(token: str) -> None:
 
 
 def test_readme_states_the_continue_license_gap() -> None:
-    prose = _readme_prose()
-    assert "Continue" in prose and "license" in prose
-    sentence = next(s for s in prose.split(". ") if "Continue" in s and "license" in s)
-    assert "no" in sentence or "without" in sentence, sentence
+    sentences = [s for s in _readme_prose().split(". ") if "Continue" in s and "license" in s]
+    assert sentences, "README.md needs a sentence naming Continue and its license gap (D19)"
+    assert "no license file" in sentences[0], sentences[0]
 
 
 @pytest.mark.parametrize("doc", ["README.md", "catalog/README.md"])
@@ -158,7 +163,7 @@ def test_no_doc_says_four_skills(doc: str) -> None:
 
 
 def test_docs_say_core_rules_live_in_their_skill() -> None:
-    docs = " ".join(_user_docs().split())
+    docs = " ".join(user_docs().split())
     assert "`<skills root>/<skill>/rules/<rule-id>.md`" in docs
     assert "unrelated to Claude Code's `.claude/rules/`" in docs
 
@@ -176,7 +181,7 @@ def test_writing_a_rule_covers_every_frontmatter_key(key: str) -> None:
         "## Good Example",
         "## Notes",
         "[IMPACT]",
-        "100",
+        "100 lines",
         "750 words",
         "CRITICAL 20-39",
         "applies_if",

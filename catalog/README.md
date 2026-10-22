@@ -37,15 +37,16 @@ catalog/
         └── skills/           one <dir>/SKILL.md per skill, plus scripts/, references/
 ```
 
-`core/` ships eight Python skills. Seven hold member rules in their own
-`rules/` directory: `python-coding`, `python-testing`, `python-tooling`,
-`ml-data`, `web-application`, `design-patterns` and `python-architecture`.
-Gated skills join them where the repo calls for them: `domino-apps`,
-`domino-jobs` and `domino-agents` in Domino repos, `python-documentation`, and
-`playbook-creator` in repos with a playbook layer. Sync renders each skill's
-active member rules into its `rules/` directory, together with the scoped
-rules of other layers that name it in `skill:`. The eighth,
-`playbook-guardrails`, takes no rules: sync appends one section per enabled
+`core/` ships eight base skills. Seven are Python skills that hold member
+rules in their own `rules/` directory: `python-coding`, `python-testing`,
+`python-tooling`, `ml-data`, `web-application`, `design-patterns` and
+`python-architecture`. The eighth, `playbook-guardrails`, takes no rules.
+Five more core skills are gated and join them where the repo calls for
+them: `domino-apps`, `domino-jobs` and `domino-agents` in Domino repos,
+`python-documentation`, and `playbook-creator` in repos with a playbook layer.
+Sync renders each skill's active member rules into its `rules/` directory,
+together with the scoped rules of other layers that name it in `skill:`.
+`playbook-guardrails` builds its body instead: sync appends one section per enabled
 hook's guardrail text to its authored intro, so edit the hook's `HOOK.md` body,
 not the skill, to change a section. Only a skill that declares a
 `playbook:` block takes rules, so the skills of `superpowers` and
@@ -95,18 +96,14 @@ the consumer's `playbook/`) replaces an artifact with the same `id`.
 
 1. Create a scoped rule as `core/skills/<skill>/rules/<id>.md`, in the skill
    that owns its topic; its location makes it a member, so it sets no
-   `skill:`. An always rule goes in `core/rules/always/`. A scoped core rule
-   anywhere else fails `playbook validate`, which names the skill directory to
-   move it to.
-2. Give it the frontmatter "Writing a rule" lists: `id` (unique across every
-   layer and equal to the file name), `name`, `description`, `version` and
-   `scope` (`always` or `scoped`). A scoped rule in another layer (an overlay,
-   or a consumer's `playbook/rules/`) names the skill that delivers it in
-   `skill:` (`playbook validate` fails on such a rule without one), which an
-   always rule must not carry; the skill must exist after the layer merge, so
-   it may name a core skill. Add `globs` for a scoped rule, `applies_if` to
-   gate it on detector facts, `priority` and `tags`. SPEC §6.1 has the full
-   schema.
+   `skill:`. An always rule goes in `core/rules/always/`. A scoped rule
+   anywhere else in core fails `playbook validate`, which names the skill
+   directory to move it to.
+2. Give it the frontmatter keys "Writing a rule" lists (SPEC §6.1 has the full
+   schema). A scoped rule in another layer (an overlay, or a consumer's
+   `playbook/rules/`) names the skill that delivers it in `skill:`
+   (`playbook validate` fails on such a rule without one); the skill must exist
+   after the layer merge, so it may name a core skill.
 3. For a scoped rule, pick the skill by topic: `python-coding` when no library
    is needed (Pydantic validation included), `python-testing` for tests,
    `python-tooling` for one named developer tool, `web-application` for web

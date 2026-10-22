@@ -9,10 +9,12 @@ Continue and every `AGENTS.md` reader. A detector keeps only what applies to the
 repo, generated files stay out of git, and nothing reaches the network.
 
 ```text
- sources                 playbook sync                        outputs
- catalog/core/ ─┐        resolve by id (later layer wins)     AGENTS.md, .claude/, .opencode/
- overlays      ─┼──────► keep what applies (detector)  ─────► .agents/skills/<id>/{SKILL.md,rules/}
- playbook/     ─┘        render (sandboxed Jinja)             hooks: one playbook-hook dispatcher
+ sources                  playbook sync                         outputs
+ catalog/core/       ─┐   resolve by id (later layer wins)      AGENTS.md (every AGENTS.md reader)
+ bundled plugins     ─┤   keep what applies (detector)          .claude/, .opencode/
+ overlays            ─┼─► render (sandboxed Jinja)        ────► .agents/skills/<id>/{SKILL.md,rules/}
+ playbook/ (local)   ─┘   write generated files, never commit   .continue/ (when enabled)
+                                                                hooks: one playbook-hook dispatcher
 ```
 
 ## Install
@@ -44,9 +46,9 @@ the frameworks at a repo that keeps its specs or plans elsewhere. A `playbook/`
 directory (`mkdir playbook`) starts a local layer whose rules, prompts and skills
 win over the engine's by id.
 
-Core ships eight Python skills; a core skill's member rules land in its `rules/`
-directory (`.claude/skills/<skill>/rules/`, unrelated to Claude Code's
-`.claude/rules/`). Continue gets each rule as its own file but no license file,
+A core skill's member rules land in its `rules/` directory
+(`.claude/skills/<skill>/rules/`, unrelated to Claude Code's `.claude/rules/`);
+[docs/skills.md](docs/skills.md#rules-inside-skills) lists the core skills. Continue gets each rule as its own file but no license file,
 so the vendored MIT notices reach only the skill roots.
 
 ## Keep it current
@@ -61,9 +63,9 @@ upgrade, read `MIGRATION.md`.
 - **Where a rule goes:** a scoped rule goes in the `rules/` directory of the
   skill that owns its topic (`catalog/core/skills/<skill>/rules/<id>.md`); the
   always rules live in `catalog/core/rules/always/`.
-- **A minimal rule:** frontmatter with `id`, `name`, `description`, `scope`,
-  `section` and `priority`, then Description, Bad Example, Good Example and
-  Notes. `catalog/README.md` ("Writing a rule") has the template.
+- **A minimal rule:** frontmatter, then Description, Bad Example, Good Example
+  and Notes; `catalog/README.md` ("Writing a rule") lists the keys and has the
+  template.
 - **The commands to run:** `ruff check .`, `ruff format --check .`, `mypy` and
   `pytest -q`, inside `uv sync --extra dev`.
 - **PR titles** follow Conventional Commits (`feat(catalog): ...`); commitizen

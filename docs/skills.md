@@ -83,8 +83,10 @@ playbook/skills/<dir>/  ──►  SkillWriter  ──┬──►  .claude/skil
 
 ### Rules inside skills
 
-Core ships eight Python skills: seven that hold member rules, plus
-`playbook-guardrails`. A core member rule lives in its skill's `rules/`
+Core ships eight base skills: the seven Python skills in the table below, which
+hold member rules, plus `playbook-guardrails`, which holds none. The gated
+`domino-*`, `python-documentation` and `playbook-creator` skills join them where
+the repo calls for them. A core member rule lives in its skill's `rules/`
 directory (`catalog/core/skills/<skill>/rules/<rule-id>.md`), and its location
 makes it a member; the two always rules stay in `catalog/core/rules/always/`.
 Each skill groups its rules into sections, from CRITICAL to LOW:

@@ -20,8 +20,9 @@ import re
 import pytest
 
 from tests._catalog import CATALOG_ROOT, REPO_ROOT, TEST_FILE_GLOBS, core_rule_skill_ids
+from tests._docs import USER_DOC_PAGES
 from tests.unit.test_docs_lifecycle_hooks_spec import _spec_section
-from tests.unit.test_docs_readme_hooks import USER_DOC_PAGES, _blocks
+from tests.unit.test_docs_readme_hooks import _blocks
 from tests.unit.test_docs_readme_hooks import _section as _readme_section
 
 _CONTEXT_MD = REPO_ROOT / "CONTEXT.md"
