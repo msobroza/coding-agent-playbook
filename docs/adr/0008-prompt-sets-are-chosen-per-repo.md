@@ -15,3 +15,5 @@ The core prompts list rules (`includes_rules`) but never point the agent to the 
 
 - v2 keeps v1's `includes_rules`, so the opt-in eval comparison can measure the skill guidance alone; when v2 becomes the default after the pilot, v1 can be retired.
 - A prompt names framework skills only through capabilities, so the same v2 text works with mattpocock_skills, superpowers, another framework or none.
+- The core skills to load sit under `## Skills for this task`, not a second `## Before you start`: the Claude Code and OpenCode adapters already insert a block of that name for the included rules.
+- The non-interactive workflows (characterize, make-testable, review-architecture, find-injected-vulnerability) record an assumption instead of stopping to ask, and ask only when the request names nothing they can act on, so an eval run never stalls on a question.
