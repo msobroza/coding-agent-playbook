@@ -4,8 +4,8 @@ Core ships ``python-coding``, ``python-testing``, ``python-tooling``,
 ``ml-data`` and ``web-application``; each is written only while one of its
 member rules passes ``applies_if`` (ADR 0001). ``python-testing``'s members all
 need pytest, so the skill follows the ``pytest`` dependency in and out of the
-repo. ``python-tooling`` has an ungated member (``python-static-checks``), so it
-stays, while ``web-application``'s rules follow ``fastapi``. The "Where guidance lives" map in
+repo. ``python-tooling`` has ungated members (``python-static-checks`` and three
+more), so it stays, while ``web-application``'s rules follow ``fastapi``. The "Where guidance lives" map in
 ``AGENTS.md`` names only skills a sync writes, so it is absent when no enabled
 adapter has a native skill root.
 """
@@ -19,6 +19,7 @@ import pytest
 
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.config.files import FileSystemStateSource
+from tests.core_skill_pins.python_tooling import UNGATED_MEMBERS
 from tests.core_skill_pins.web_application import PINS as WEB_PINS
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
 
@@ -29,9 +30,9 @@ if TYPE_CHECKING:
 _TOOLING = "python-tooling"
 _TESTING: Final = "python-testing"
 _WEB: Final = "web-application"
-#: python-tooling's ungated member, written in every synthetic repo, and web-application's
+#: python-tooling's ungated members, written in every synthetic repo, and web-application's
 #: members a FastAPI repo without pytest or SQLAlchemy activates.
-_STATIC_CHECKS: Final = ["python-static-checks.md"]
+_UNGATED_TOOLING_RULES: Final = [f"{rule_id}.md" for rule_id in UNGATED_MEMBERS]
 #: The gate keys a FastAPI repo without pytest or SQLAlchemy can satisfy.
 _FRAMEWORK_GATE_KEYS: Final = frozenset({"has_framework", "any_framework"})
 
@@ -138,26 +139,26 @@ def test_python_testing_follows_the_pytest_dependency_in_and_out(
 def test_fastapi_rules_follow_the_fastapi_dependency_in_and_out(
     tmp_path: Path, make_synthetic_repo: Callable[..., Path]
 ) -> None:
-    """python-tooling stays for its ungated static-checks member; web-application, whose
-    members all gate on a web framework, comes and goes with ``fastapi`` (prU L0-15,
+    """python-tooling stays for its ungated members; web-application, whose members
+    all gate on a web framework, comes and goes with ``fastapi`` (prU L0-15,
     C-web-application-01, -02)."""
     repo = _synthetic_skill_repo(tmp_path, make_synthetic_repo)
     assert _sync.run(_ns(repo)) == 0
     for root in NATIVE_SKILL_ROOTS:
-        assert _rule_files(repo, root, _TOOLING) == _STATIC_CHECKS, root
+        assert _rule_files(repo, root, _TOOLING) == _UNGATED_TOOLING_RULES, root
         assert not (repo / root / _WEB).exists(), root
 
     _set_dependencies(repo, '["click", "fastapi"]')
     assert _sync.run(_ns(repo)) == 0
     for root in NATIVE_SKILL_ROOTS:
-        assert _rule_files(repo, root, _TOOLING) == _STATIC_CHECKS, root
+        assert _rule_files(repo, root, _TOOLING) == _UNGATED_TOOLING_RULES, root
         assert _rule_files(repo, root, _WEB) == _FASTAPI_RULES, root
     assert "skill `web-application`" in (repo / "AGENTS.md").read_text(encoding="utf-8")
 
     _set_dependencies(repo, '["click"]')
     assert _sync.run(_ns(repo)) == 0
     for root in NATIVE_SKILL_ROOTS:
-        assert _rule_files(repo, root, _TOOLING) == _STATIC_CHECKS, root
+        assert _rule_files(repo, root, _TOOLING) == _UNGATED_TOOLING_RULES, root
         assert not (repo / root / _WEB).exists(), root
     assert _skill_lock_paths(repo, _WEB) == []
     agents_md = (repo / "AGENTS.md").read_text(encoding="utf-8")

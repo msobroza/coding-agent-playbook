@@ -4,8 +4,8 @@
 repo and its authored texts are generic, while the Covers clause follows the gates.
 The skill declares sections (prU D17, L0-15), so the Covers clause names the
 sections whose members are active: the probe has no ``uv.lock``, so its
-description names linting and test configuration; the same probe with a
-``uv.lock`` also names package management. The FastAPI rules moved to
+description names linting, type checking, formatting and test configuration; the
+same probe with a ``uv.lock`` also names package management. The FastAPI rules moved to
 web-application and the Pydantic rule to python-coding (D24). The authored
 body's picker bullets name each member by the display name the index shows.
 """
@@ -19,6 +19,7 @@ import pytest
 
 from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from tests._catalog import CORE_ROOT, core_rules
+from tests.core_skill_pins.python_tooling import PINS
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
 
 if TYPE_CHECKING:
@@ -30,17 +31,15 @@ _SENTENCE: Final = "Conventions for the developer tools the repo already runs."
 _USE_WHEN: Final = (
     "Use when fixing lint or type-check findings, editing tool settings, or changing dependencies."
 )
-#: The probe activates the linting and test-configuration sections, in declared order.
-PROBE_DESCRIPTION: Final = f"{_SENTENCE} Covers linting, test configuration. {_USE_WHEN}"
-#: With a ``uv.lock`` the uv workflow's package-management section joins last.
+_PROBE_SECTIONS: Final = "linting, type checking, formatting, test configuration"
+#: The probe activates every section but package management, in declared order.
+PROBE_DESCRIPTION: Final = f"{_SENTENCE} Covers {_PROBE_SECTIONS}. {_USE_WHEN}"
+#: With a ``uv.lock`` the two uv rules' package-management section joins last.
 UV_PROBE_DESCRIPTION: Final = (
-    f"{_SENTENCE} Covers linting, test configuration, package management. {_USE_WHEN}"
+    f"{_SENTENCE} Covers {_PROBE_SECTIONS}, package management. {_USE_WHEN}"
 )
-_UV_PROBE_RULES: Final = [
-    "pytest-configuration.md",
-    "python-static-checks.md",
-    "python-uv-workflow.md",
-]
+#: With a ``uv.lock`` the probe activates every member.
+_UV_PROBE_RULES: Final = sorted(f"{rule_id}.md" for rule_id in PINS.members)
 
 
 def _tooling_description(repo: Path) -> str:

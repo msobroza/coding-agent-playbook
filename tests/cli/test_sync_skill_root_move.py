@@ -33,6 +33,7 @@ from coding_agent_playbook.generated_output.gitignore import (
 from coding_agent_playbook.sync import pipeline as _sync
 from tests._catalog import core_skill_ids
 from tests.cli.test_sync_skills import _lock_paths, _skill_tree, _write_repo_local_skill
+from tests.core_skill_pins.python_tooling import UNGATED_MEMBERS
 from tests.fakes import FakeGitClient
 from tests.plugins.superpowers_expectations import EXPECTED_SKILL_IDS, PLUGIN_NAME, consumer_config
 
@@ -90,10 +91,12 @@ _SYNTHETIC_PYTHON_CODING_MEMBERS = (
     "python-type-aliases",
     "python-typing",
 )
+#: python-tooling's ungated members, active on the synthetic repo (no pytest, no uv.lock).
+_SYNTHETIC_PYTHON_TOOLING_MEMBERS = UNGATED_MEMBERS
 #: Every file the pre-v0.21 engine left under ``shared_skills/`` for ``_synced_then_rewound``:
 #: query-db's two, the core python-coding skill with one rule file per active member and its
-#: two upstream license copies (D19), and python-tooling with its one ungated member (no
-#: framework, no uv.lock).
+#: two upstream license copies (D19), and python-tooling with its four ungated members (no
+#: framework, no uv.lock) and the same two license copies.
 _OLD_TREE_FILES = frozenset(
     {
         "query-db/SKILL.md",
@@ -103,7 +106,9 @@ _OLD_TREE_FILES = frozenset(
         "python-coding/references/LICENSE.python-best-practices",
         "python-coding/references/LICENSE.python-clean-architecture",
         "python-tooling/SKILL.md",
-        "python-tooling/rules/python-static-checks.md",
+        *(f"python-tooling/rules/{rule_id}.md" for rule_id in _SYNTHETIC_PYTHON_TOOLING_MEMBERS),
+        "python-tooling/references/LICENSE.python-best-practices",
+        "python-tooling/references/LICENSE.python-clean-architecture",
     }
 )
 

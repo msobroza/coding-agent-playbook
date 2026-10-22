@@ -22,6 +22,7 @@ from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME
 from coding_agent_playbook.sync import pipeline as _sync
 from tests._catalog import TEST_FILE_GLOBS
 from tests.cli.hook_repo import CONFIG, GUARD_CONFIG, hook_deps
+from tests.core_skill_pins.python_tooling import UNGATED_GLOBS
 from tests.fakes import FakeGitClient
 from tests.hook_runtime.fakes import FakeRuff, ruff_row
 from tests.hook_runtime.handlers.pack_repo import engine_hook, engine_rules
@@ -87,8 +88,6 @@ SOURCE_LINES: Final = [
     _line("python-coding"),
     _line("python-tooling"),
 ]
-#: The config files ``python-static-checks`` matches besides Python files and pyproject.
-STATIC_CHECK_CONFIGS: Final = ("ruff.toml", ".ruff.toml", "mypy.ini", ".mypy.ini")
 
 
 @pytest.fixture
@@ -336,8 +335,8 @@ def test_sync_derives_the_glob_table_from_the_rendered_member_rules(
 ) -> None:
     """Only rules that pass ``applies_if`` reach the table: no pytest, no FastAPI, no ML here.
 
-    python-tooling still appears, with the globs of its one ungated member,
-    python-static-checks (Python files plus the ruff and mypy config files).
+    python-tooling still appears, with the globs of its ungated members (Python files,
+    stubs and the ruff, mypy, pyright and pre-commit config files).
     """
     (tmp_path / "repo").mkdir()
     repo = make_synthetic_repo(tmp_path / "repo", config_text=CONFIG + "[hooks]\nenabled = true\n")
@@ -347,12 +346,12 @@ def test_sync_derives_the_glob_table_from_the_rendered_member_rules(
     hooks = json.loads((repo / GUARD_CONFIG).read_bytes())["hooks"]
     config = hooks[HOOK_ID]["handlers"]["post_tool_use"]["config"]
     assert rc == 0
-    static_checks = ["**/*.py", "pyproject.toml", *STATIC_CHECK_CONFIGS]
     assert config == {
         "skills": [
             {"id": "design-patterns", "globs": ["**/*.py"]},
             {"id": "python-coding", "globs": ["**/*.py"]},
-            {"id": "python-tooling", "globs": static_checks},
+            # A repo with neither pytest nor uv: python-tooling's ungated members' globs.
+            {"id": "python-tooling", "globs": list(UNGATED_GLOBS)},
         ]
     }
 

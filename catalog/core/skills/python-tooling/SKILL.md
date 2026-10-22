@@ -35,12 +35,43 @@ playbook:
 
 # Python tooling
 
-Conventions tied to one named developer tool: the linter, the type checker, the formatter, the test runner's settings and the package manager. Line- and function-level Python conventions, Pydantic validation included, stay in the python-coding skill, test code in the python-testing skill, and web framework wiring in the web-application skill; a rule here adds only what its tool changes.
+Conventions for the developer tools a Python repo already runs: the linter, the type checker, the formatter, the test runner's settings and, in a uv project, the package manager. The repo's own configuration and CI commands decide which tools run and how strictly; the rules here say how to work inside them.
+
+## Why these tools matter
+
+| Tool | What it catches |
+| --- | --- |
+| ruff | Bugs and style violations, before review; it also formats code and sorts imports |
+| mypy or pyright | Type errors, before the code runs |
+| The test runner | Regressions, so changes can be made with confidence |
+| uv, in a uv project | Drift between the declared dependencies, the lock and the environment |
+
+Running these checks in CI and in pre-commit hooks reduces the review burden and keeps quality consistent.
+
+## Quick reference
+
+The commands as CI runs them; copy the exact arguments from the repo's CI workflow, Makefile or pre-commit config. In a uv project, each runs through `uv run`.
+
+```bash
+ruff check .                     # lint
+ruff check . --fix               # apply the safe fixes
+ruff format --check .            # is everything formatted?
+ruff format <the files you changed>
+mypy                             # type check with the repo's settings
+```
+
+The test suite runs with the command CI uses, with coverage where the repo measures it.
 
 ## Picking rules
 
 The rules index in this file lists only the rules that apply to this repo, grouped by section, most important first, each with the one line it requires. Open every rule whose line matches the change and read it in full before writing code or editing configuration.
 
-- A lint or type-check finding, a suppression comment, or ruff or mypy settings: static checks.
+- A lint finding, a suppression comment, a pre-commit hook or a check that fails only in CI: static checks, linting with ruff.
+- A type error, a stub file or type-checker settings: type checking with mypy.
+- Layout, line wrapping or import order: formatting with ruff.
 - Test-runner settings, markers, warning filters or coverage thresholds: the test runner's configuration.
-- Adding, removing or upgrading a dependency, the lockfile, or running project commands: uv workflow.
+- Adding, removing or upgrading a dependency, the lockfile, or running project commands: uv workflow, declaring dependencies.
+
+## See also
+
+The python-coding skill holds typing, error handling and Pydantic; the python-testing skill holds test code and coverage practice; the web-application skill holds FastAPI wiring and error boundaries.

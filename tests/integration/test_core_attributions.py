@@ -253,7 +253,32 @@ def test_a_mapped_row_without_changes_fails(tmp_path: Path) -> None:
 
 def test_an_upstream_file_mapped_twice_fails(tmp_path: Path) -> None:
     text = _SYNTHETIC.replace("`skills/b.md` | DROP", "`skills/a.md` | DROP")
-    assert _errors(tmp_path, text) == ["up-source: `skills/a.md` appears in more than one row"]
+    # The message names the skill whose table holds the duplicate: the file may feed others.
+    assert _errors(tmp_path, text) == [
+        "up-source/alpha: `skills/a.md` appears in more than one row"
+    ]
+
+
+def test_an_upstream_file_may_feed_two_skills_one_row_each(tmp_path: Path) -> None:
+    """A long upstream reference can feed rules of two skills (prU mapping handovers).
+
+    Each skill's sub-section lists the core files of that skill, so the file gets one
+    row per skill; twice in one skill's table still fails.
+    """
+    beta = "\n### beta\n\n| Upstream file | Core files | Changes |\n| --- | --- | --- |\n"
+    beta += "| `skills/a.md` | `rules/b.md` | Lines 3-4 become a Note. |\n"
+    text = _SYNTHETIC.replace("\n## Engine-written files", beta + "\n## Engine-written files")
+    tree = {
+        **_TREE,
+        "beta/SKILL.md": b"# Beta\n",
+        "beta/rules/b.md": b"# B\n",
+        "beta/references/LICENSE.up-source": _LICENSE,
+    }
+    text = text.replace(
+        "### alpha\n\n- `SKILL.md`", "### alpha\n\n- `SKILL.md`\n\n### beta\n\n- `SKILL.md`"
+    )
+
+    assert _errors(tmp_path, text, tree) == []
 
 
 def test_an_upstream_file_may_feed_several_skills_one_row_each(tmp_path: Path) -> None:
