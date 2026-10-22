@@ -6,15 +6,17 @@ member into a :class:`MemberReference` and attaches them to
 ``Skill.member_references``; the skill writer then writes ``text`` under every
 skill root, so the copies are byte-identical.
 
-A stdlib-only leaf: ``artifacts.skill`` imports it at run time for
-``Skill.from_dict``, so it cannot import ``artifacts.skill`` back
-(specs/prS-skills-context.md section 6.4.1).
+Below ``artifacts.skill``: ``artifacts.skill`` imports it at run time for
+``Skill.from_dict``, so it imports only the stdlib and the ``artifacts.impact``
+leaf, never ``artifacts.skill`` back (specs/prS-skills-context.md section 6.4.1).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
+
+from coding_agent_playbook.artifacts.impact import Impact
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -45,7 +47,7 @@ class MemberReference:
     line, ``globs`` feed the rule file's first line and ``source_package`` its
     lockfile provenance. ``section`` and ``impact`` place the member in its
     skill's sectioned index (prU D17): its section's id and that section's
-    impact (``"CRITICAL"`` to ``"LOW"``); both ``None`` for a member of a skill
+    :class:`Impact`; both ``None`` for a member of a skill
     without sections, or for one listed under the engine's "Other" section (D42).
 
     Example: ``MemberReference("python-typing", ...).filename`` -> ``"python-typing.md"``.
@@ -59,7 +61,7 @@ class MemberReference:
     text: str
     source_package: str
     section: str | None = None
-    impact: str | None = None
+    impact: Impact | None = None
 
     @property
     def filename(self) -> str:
@@ -83,7 +85,7 @@ class MemberReference:
             "text": self.text,
             "source_package": self.source_package,
             "section": self.section,
-            "impact": self.impact,
+            "impact": None if self.impact is None else str(self.impact),
         }
 
     @classmethod
@@ -99,5 +101,10 @@ class MemberReference:
             source_package=data["source_package"],
             # A dict written before sections existed has neither key.
             section=data.get("section"),
-            impact=data.get("impact"),
+            impact=_impact_or_none(data.get("impact")),
         )
+
+
+def _impact_or_none(value: str | None) -> Impact | None:
+    """A serialized impact back as :class:`Impact`; ``None`` stays ``None``."""
+    return None if value is None else Impact(value)

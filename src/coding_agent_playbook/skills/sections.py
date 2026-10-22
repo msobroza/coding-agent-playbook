@@ -19,13 +19,13 @@ import re
 from collections import Counter
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from enum import StrEnum
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.artifacts.impact import Impact
 from coding_agent_playbook.skills.playbook_block import PLAYBOOK_BLOCK_KEY, playbook_block
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Sequence
 
     from coding_agent_playbook.artifacts.skill import Skill
 
@@ -41,37 +41,6 @@ SECTION_KEYS: Final = ("id", "title", "impact", "summary", "open_when")
 SECTION_TITLE_MAX_CHARS: Final = 40
 #: Lowercase words joined by single hyphens, as rule ``section:`` values are.
 _KEBAB_CASE: Final = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
-
-
-class Impact(StrEnum):
-    """A section's impact, declared from most to least important (D17).
-
-    Example: ``Impact("HIGH").band`` -> ``range(40, 60)``.
-    """
-
-    CRITICAL = "CRITICAL"
-    HIGH = "HIGH"
-    MEDIUM = "MEDIUM"
-    LOW = "LOW"
-
-    @property
-    def band(self) -> range:
-        """The priorities a member of a section of this impact may take."""
-        return IMPACT_BANDS[self]
-
-    @property
-    def rank(self) -> int:
-        """0 for CRITICAL up to 3 for LOW: sections are declared in rank order."""
-        return list(Impact).index(self)
-
-
-#: Priority = impact band + rank within the section (D17).
-IMPACT_BANDS: Final[Mapping[Impact, range]] = {
-    Impact.CRITICAL: range(20, 40),
-    Impact.HIGH: range(40, 60),
-    Impact.MEDIUM: range(60, 80),
-    Impact.LOW: range(80, 100),
-}
 
 
 @dataclass(frozen=True)
@@ -109,6 +78,24 @@ def skill_sections(skill: Skill) -> tuple[SkillSection, ...]:
     if not isinstance(value, list) or section_list_problems(value):
         return ()
     return tuple(_section(entry) for entry in value)
+
+
+def section_rank(sections: Sequence[SkillSection]) -> Callable[[str | None], int]:
+    """Where a member's ``section`` id sorts among ``sections``: its declared index.
+
+    ``None`` or an id no entry declares ranks ``len(sections)``: D42's engine-made
+    "Other" section, listed last. The one place that decides what lands in Other.
+
+    Example: ``section_rank(sections)("fixtures")`` -> ``1``;
+    ``section_rank(sections)(None)`` -> ``len(sections)``.
+    """
+    ranks = {section.id: index for index, section in enumerate(sections)}
+    other = len(ranks)
+
+    def rank(section_id: str | None) -> int:
+        return other if section_id is None else ranks.get(section_id, other)
+
+    return rank
 
 
 def section_list_problems(value: object) -> list[str]:

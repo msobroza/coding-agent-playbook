@@ -357,7 +357,9 @@ def test_reference_probe_emits_each_core_skill_within_budget(
     if block.get("sections"):
         # A sectioned skill's Covers clause names its active sections, not its members (D17).
         covers = description.partition(" Covers ")[2].partition(". Use when ")[0]
-        active = {rule.frontmatter.section for rule in members}
+        # Only declared sections are named: a member in D42's Other adds no name.
+        declared = {section["id"] for section in block["sections"]}
+        active = {rule.frontmatter.section for rule in members} & declared
         assert len(covers.split(", ")) == len(active), f"{skill_id} covers {covers!r}"
     else:
         for rule in members:

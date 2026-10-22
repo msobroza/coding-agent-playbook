@@ -17,10 +17,11 @@ from typing import TYPE_CHECKING, Any, ClassVar, Final, Protocol, TypeGuard
 
 from coding_agent_playbook.artifacts.member_reference import MemberReference
 from coding_agent_playbook.artifacts.skill import ListedReference
+from coding_agent_playbook.skills._rules_index import one_line
 from coding_agent_playbook.skills.document import render_member_reference
 from coding_agent_playbook.skills.naming import skill_id_of
 from coding_agent_playbook.skills.playbook_block import PLAYBOOK_BLOCK_KEY, playbook_block
-from coding_agent_playbook.skills.sections import REFERENCES_KEY, skill_sections
+from coding_agent_playbook.skills.sections import REFERENCES_KEY, section_rank, skill_sections
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -155,7 +156,7 @@ def member_reference(rule: Rule, sections: Sequence[SkillSection] = ()) -> Membe
         text=render_member_reference(fm.id, fm.globs, rule.body),
         source_package=rule.source_package,
         section=None if section is None else section.id,
-        impact=None if section is None else str(section.impact),
+        impact=None if section is None else section.impact,
     )
 
 
@@ -194,22 +195,17 @@ def _composed_skill(
     if not is_rule_skill(skill):
         return skill
     sections = skill_sections(skill)
+    rank = section_rank(sections)
     active = _active_members(skill, merged_rules, active_by_id)
     members = sorted(
         (member_reference(rule, sections) for rule in active),
-        key=lambda member: _section_rank(member, sections),
+        key=lambda member: rank(member.section),
     )  # stable: (priority, id) order holds within a section
     return dataclasses.replace(
         skill,
         member_references=tuple(members),
         listed_references=_listed_references(skill, reference_applies),
     )
-
-
-def _section_rank(member: MemberReference, sections: Sequence[SkillSection]) -> int:
-    """The index of ``member``'s section; members in no declared section come last (D42)."""
-    ids = [section.id for section in sections]
-    return ids.index(member.section) if member.section in ids else len(ids)
 
 
 def _listed_references(
@@ -224,7 +220,7 @@ def _listed_references(
     if not isinstance(entries, list):
         return ()
     return tuple(
-        ListedReference(entry["path"], " ".join(entry["open_when"].split()))
+        ListedReference(entry["path"], one_line(entry["open_when"]))
         for entry in entries
         if _is_listable_entry(entry)
         and ("applies_if" not in entry or reference_applies(dict(entry["applies_if"])))

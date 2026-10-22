@@ -13,9 +13,10 @@ import dataclasses
 from pathlib import Path
 from typing import Any
 
+from coding_agent_playbook.artifacts.impact import Impact
 from coding_agent_playbook.artifacts.member_reference import MemberReference
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
-from coding_agent_playbook.artifacts.skill import Skill
+from coding_agent_playbook.artifacts.skill import ListedReference, Skill
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 
 _TYPING_RULE_MD = """\
@@ -119,6 +120,26 @@ def test_member_reference_round_trips_and_names_its_file() -> None:
     member = _member()
     assert member.filename == "python-typing.md"
     assert MemberReference.from_dict(member.to_dict()) == member
+
+
+def test_a_sectioned_member_keeps_its_impact_as_the_enum_through_dict() -> None:
+    member = dataclasses.replace(_member(), section="types", impact=Impact.HIGH)
+    data = member.to_dict()
+
+    assert (data["section"], data["impact"]) == ("types", "HIGH")
+    restored = MemberReference.from_dict(data)
+    assert restored == member
+    assert restored.impact is Impact.HIGH
+
+
+def test_listed_references_round_trip_through_their_own_dict() -> None:
+    ref = ListedReference("references/guide.md", "Choosing a fake.")
+    skill = dataclasses.replace(Skill.from_dict(_skill_dict()), listed_references=(ref,))
+
+    assert ref.to_dict() == {"path": "references/guide.md", "open_when": "Choosing a fake."}
+    assert ListedReference.from_dict(ref.to_dict()) == ref
+    assert Skill.from_dict(skill.to_dict()) == skill
+    assert Skill.from_dict(_skill_dict()).listed_references == ()
 
 
 def test_skill_source_dir_round_trips_and_defaults_to_none() -> None:

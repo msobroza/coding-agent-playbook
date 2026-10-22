@@ -28,6 +28,7 @@ from coding_agent_playbook.skills._rules_index import (
     RULES_HEADING,
     RULES_LEAD,
     active_sections,
+    one_line,
     references_section,
     section_label,
     sectioned_navigation,
@@ -343,7 +344,7 @@ def where_guidance_section(entries: Sequence[WhereEntry]) -> str:
 
 def _index_line(member: MemberReference) -> str:
     link = f"[{member.rule_id}]({member_reference_path(member.rule_id)})"
-    return f"- {link} — {_one_line(member.name)}: {_one_line(member.description)}"
+    return f"- {link} — {one_line(member.name)}: {one_line(member.description)}"
 
 
 def _rule_line(rule_id: str, globs: Sequence[str]) -> str:
@@ -372,7 +373,7 @@ def _joined(description: str, covers: str, use_when: str | None) -> str:
 
 def _sentence(text: str) -> str:
     """``text`` on one line, ending with ``.`` unless it already ends a sentence."""
-    flat = _one_line(text)
+    flat = one_line(text)
     if not flat or flat.endswith(_SENTENCE_ENDINGS):
         return flat
     return f"{flat}."
@@ -380,12 +381,7 @@ def _sentence(text: str) -> str:
 
 def _label(name: str) -> str:
     """A member name as the Covers clause shows it: one line, no trailing ``.``."""
-    return _one_line(name).removesuffix(".")
-
-
-def _one_line(text: str) -> str:
-    """``text`` with every whitespace run, newlines included, collapsed to one space."""
-    return " ".join(text.split())
+    return one_line(name).removesuffix(".")
 
 
 def _catalog_phrase(value: object) -> str | None:

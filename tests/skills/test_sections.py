@@ -6,14 +6,14 @@ from typing import Any
 
 import pytest
 
+from coding_agent_playbook.artifacts.impact import IMPACT_BANDS, Impact
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.skills.sections import (
-    IMPACT_BANDS,
-    Impact,
     SkillSection,
     declared_sections_value,
     one_line_phrase_problem,
     section_list_problems,
+    section_rank,
     skill_sections,
 )
 
@@ -141,3 +141,14 @@ def test_section_list_problems_reports_a_non_list_then_entries_then_duplicates()
 )
 def test_one_line_phrase_problem(value: object, problem: str | None) -> None:
     assert one_line_phrase_problem("open_when", value) == problem
+
+
+def test_section_rank_puts_none_and_undeclared_ids_in_other_last() -> None:
+    sections = [
+        SkillSection("mocking", "Mocking", Impact.CRITICAL, "S.", "O."),
+        SkillSection("fixtures", "Fixtures", Impact.HIGH, "S.", "O."),
+    ]
+    rank = section_rank(sections)
+
+    assert [rank("mocking"), rank("fixtures")] == [0, 1]
+    assert [rank(None), rank("team-extra")] == [2, 2]

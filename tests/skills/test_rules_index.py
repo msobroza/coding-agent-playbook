@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from coding_agent_playbook.artifacts.impact import Impact
 from coding_agent_playbook.artifacts.member_reference import MemberReference
 from coding_agent_playbook.artifacts.skill import ListedReference, Skill
 from coding_agent_playbook.skills.document import emitted_body
@@ -71,7 +72,7 @@ def _member(
         "text\n",
         "pkg",
         section=section,
-        impact=impact,
+        impact=None if impact is None else Impact(impact),
     )
 
 

@@ -206,6 +206,10 @@ def test_composing_without_members_is_an_error(
         ("SQLAlchemy sessions", "SQLAlchemy sessions"),
         ("CQRS and event sourcing", "CQRS and event sourcing"),
         ("Async I/O", "async I/O"),
+        # Per word (D46.7): a later word with no inner capital is lowercased too.
+        ("Pydantic Settings", "pydantic settings"),
+        ("Django ORM views", "django ORM views"),
+        ("Errors from FastAPI", "errors from FastAPI"),
     ],
 )
 def test_covers_clause_lowercases_section_titles_except_words_with_inner_capitals(

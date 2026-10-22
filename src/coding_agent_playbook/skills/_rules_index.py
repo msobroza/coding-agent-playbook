@@ -23,6 +23,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.artifacts.member_reference import RULES_DIR, member_reference_path
+from coding_agent_playbook.skills.sections import section_rank
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -80,12 +81,12 @@ def sectioned_rules_index(
     """
     if not members:
         return ""
-    declared = {section.id for section in sections}
+    rank = section_rank(sections)
     blocks = [
         _section_block(section, [m for m in members if m.section == section.id])
         for section in sections
     ]
-    others = [member for member in members if member.section not in declared]
+    others = [member for member in members if rank(member.section) == len(sections)]
     blocks.append(_other_block(others))
     body = "\n".join(block for block in blocks if block)
     return f"{RULES_HEADING}\n\n{RULES_LEAD}\n\n{body}"
@@ -100,7 +101,7 @@ def references_section(references: Sequence[ListedReference]) -> str:
     if not references:
         return ""
     lines = [
-        f"- [{ref.path}]({ref.path}) — Open when: {_one_line(ref.open_when)}" for ref in references
+        f"- [{ref.path}]({ref.path}) — Open when: {one_line(ref.open_when)}" for ref in references
     ]
     return "\n".join([_REFERENCES_HEADING, "", *lines, ""])
 
@@ -169,9 +170,15 @@ def _table(members: Sequence[MemberReference]) -> list[str]:
 
 def _cell(text: str) -> str:
     """``text`` on one line with its pipes escaped, safe inside a table cell."""
-    return _one_line(text).replace("|", "\\|")
+    return one_line(text).replace("|", "\\|")
 
 
-def _one_line(text: str) -> str:
-    """``text`` with every whitespace run, newlines included, collapsed to one space."""
+def one_line(text: str) -> str:
+    """``text`` with every whitespace run, newlines included, collapsed to one space.
+
+    The one helper every generated skill line uses (``skills.document``, the
+    references listed by ``skills.membership``).
+
+    Example: ``one_line("Open\\n  when")`` -> ``"Open when"``.
+    """
     return " ".join(text.split())

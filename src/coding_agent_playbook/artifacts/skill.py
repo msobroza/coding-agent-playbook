@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 # Imported at run time: Skill.from_dict rebuilds member references from dicts.
 from coding_agent_playbook.artifacts.member_reference import MemberReference
 from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 @dataclass(frozen=True)
@@ -23,6 +26,19 @@ class ListedReference:
 
     path: str
     open_when: str
+
+    def to_dict(self) -> dict[str, str]:
+        """Lossless dict form, the inverse of :meth:`from_dict`.
+
+        Example: ``ListedReference("references/a.md", "X.").to_dict()`` ->
+        ``{"path": "references/a.md", "open_when": "X."}``.
+        """
+        return {"path": self.path, "open_when": self.open_when}
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> ListedReference:
+        """Inverse of :meth:`to_dict`: ``ListedReference.from_dict(r.to_dict()) == r``."""
+        return cls(path=data["path"], open_when=data["open_when"])
 
 
 @dataclass
@@ -86,9 +102,7 @@ class Skill:
             "source_package": self.source_package,
             "member_references": [member.to_dict() for member in self.member_references],
             "source_dir": None if self.source_dir is None else str(self.source_dir),
-            "listed_references": [
-                {"path": ref.path, "open_when": ref.open_when} for ref in self.listed_references
-            ],
+            "listed_references": [ref.to_dict() for ref in self.listed_references],
         }
 
     @classmethod
@@ -107,5 +121,5 @@ class Skill:
             data["source_package"],
             tuple(MemberReference.from_dict(member) for member in members),
             None if source_dir is None else Path(source_dir),
-            tuple(ListedReference(ref["path"], ref["open_when"]) for ref in listed),
+            tuple(ListedReference.from_dict(ref) for ref in listed),
         )
