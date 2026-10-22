@@ -135,22 +135,29 @@ def test_core_ships_exactly_the_d4_skills() -> None:
         assert not odd, f"core skill {skill_id!r} rules/ holds more than rule files: {odd}"
 
 
-def test_core_rules_dir_holds_only_the_always_rules() -> None:
-    """prU L0-07 (D21, D36): scoped core rules live in their skill's rules/."""
-    files = sorted(p.relative_to(CORE_ROOT).as_posix() for p in (CORE_ROOT / "rules").rglob("*"))
-    assert [f for f in files if (CORE_ROOT / f).is_file()] == [
-        "rules/always/00-project-context.md.j2",
-        "rules/always/10-python-house-style.md",
-    ]
+def test_core_rules_dir_holds_only_always_rules() -> None:
+    """prU L0-07 (D21, D36): core-layer scoped rules live in their skill's rules/.
+
+    Read from disk, so adding an always rule to core edits no pin here.
+    """
+    files = [path for path in (CORE_ROOT / "rules").rglob("*") if path.is_file()]
+    assert files
+    for path in files:
+        assert path.relative_to(CORE_ROOT / "rules").parts[0] == "always", path
+        front, _ = split_frontmatter(path.read_text(encoding="utf-8"))
+        assert front["scope"] == "always", path
 
 
-def test_core_in_skill_rules_are_named_by_id_and_declare_no_skill() -> None:
-    """prU L0-07: the directory sets membership; the file stem is the id."""
+def test_core_in_skill_rules_declare_no_skill() -> None:
+    """prU L0-07: the directory sets membership, so a moved rule drops its 'skill:' line.
+
+    R1 allows a line naming the home skill; core keeps none. The file name is
+    R2's, checked on the real catalog by the validate no-finding test.
+    """
     for home, path in core_rule_paths():
         if home is None:
             continue
         front, _ = split_frontmatter(path.read_text(encoding="utf-8"))
-        assert path.name.removesuffix(".j2").removesuffix(".md") == front["id"], path
         assert "skill" not in front, f"{path} declares 'skill: {front['skill']}'"
 
 

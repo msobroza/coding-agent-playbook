@@ -6,6 +6,7 @@ Covers each error class documented in SPEC §12.6 plus the happy path.
 from __future__ import annotations
 
 import argparse
+import shutil
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -13,6 +14,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 import coding_agent_playbook
+from coding_agent_playbook.catalog import roots as catalog_roots
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.validation import context as _validate_context
@@ -571,7 +573,7 @@ def test_config_less_validate_of_the_engine_checkout_has_no_layout_finding(
 ) -> None:
     """prU L0-06, L0-07: the layout checks add no finding to the engine's own catalog.
 
-    Since L0-07 the core scoped rules sit in their skills' ``rules/``, named by
+    Since L0-07 the core-layer scoped rules sit in their skills' ``rules/``, named by
     id, so R2 and R5 cover every engine rule and find nothing.
     """
     ctx = _validate_context.config_less_context(REPO_ROOT)
@@ -579,6 +581,41 @@ def test_config_less_validate_of_the_engine_checkout_has_no_layout_finding(
     assert check_rule_layout(ctx.rule_definitions, ctx.artifact_source) == []
     assert _validate.run(_ns(REPO_ROOT)) == 0
     assert "FAIL" not in capsys.readouterr().out
+
+
+def test_validate_fails_on_a_scoped_rule_added_under_the_engine_rules_dir(
+    tmp_path: Path,
+    make_synthetic_repo: Callable[..., Path],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """prU L0-07 (D36): R5 through ``playbook validate`` on a copy of the real catalog.
+
+    The engine is pointed at the copy (a checkout layout, ``src/<pkg>`` next to
+    ``catalog/``), so the real ``catalog/core/rules/`` stays untouched.
+    """
+    shutil.copytree(REPO_ROOT / "catalog", tmp_path / "engine" / "catalog")
+    monkeypatch.setattr(
+        catalog_roots, "_PACKAGE_DIR", tmp_path / "engine" / "src" / "coding_agent_playbook"
+    )
+    stray = tmp_path / "engine" / "catalog" / "core" / "rules" / "languages" / "stray.md"
+    stray.parent.mkdir(parents=True)
+    stray.write_text(
+        "---\nid: python-stray\nname: Stray\ndescription: d\nscope: scoped\n"
+        "skill: python-coding\n---\nBody\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "consumer").mkdir()
+    repo = make_synthetic_repo(tmp_path / "consumer")
+
+    assert _validate.run(_ns(repo)) == 1
+
+    fails = [line for line in capsys.readouterr().out.splitlines() if line.startswith("FAIL")]
+    assert fails == [
+        f"FAIL {stray}: scoped rule 'python-stray' lies in the engine's rules/ directory "
+        f"{stray.parent}, which holds only always rules; move it to "
+        "catalog/core/skills/python-coding/rules/python-stray.md and remove its 'skill:' line"
+    ]
 
 
 def test_validate_reports_an_in_skill_always_rule_once_with_a_move_hint(

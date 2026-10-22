@@ -1,4 +1,4 @@
-"""prU L0-07: moving the scoped core rules into their skills changes no synced byte.
+"""prU L0-07: moving the core-layer scoped rules into their skills changes no synced byte.
 
 Temporary, until L0-15 gives the moved rules sections and priorities (it then
 deletes this module and its digest list, F-02). The reference probe's synced
@@ -8,7 +8,7 @@ digests committed in ``tests/fixtures/core_move_probe_digests.json``, which
 were taken from the probe synced before the move.
 
 A later ticket that changes this output on purpose (a rendering change, a new
-core rule) updates the digest list: the failure message lists every path whose
+rule in core) updates the digest list: the failure message lists every path whose
 digest differs, with its new digest.
 """
 

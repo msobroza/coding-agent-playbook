@@ -13,12 +13,17 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.catalog.source import FileSystemArtifactSource
+from coding_agent_playbook.artifacts.rule import Rule
+from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE
+from coding_agent_playbook.catalog.source import ArtifactSource, FileSystemArtifactSource
 from coding_agent_playbook.validation._rule_layout import _layer_root, check_rule_layout
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from coding_agent_playbook.artifacts.prompt import Prompt
+    from coding_agent_playbook.artifacts.skill import Skill
+    from coding_agent_playbook.evals.sample import EvalSample
     from coding_agent_playbook.validation.findings import ValidationError
 
 _RULE = "---\nid: {id}\nname: {id}\ndescription: d\nscope: {scope}\n{extra}---\nBody\n"
@@ -285,7 +290,7 @@ def test_r5_an_engine_scoped_rule_outside_a_skill_gets_a_move_hint(
             str(path),
             "scoped rule 'python-typing' lies in the engine's rules/ directory "
             f"{path.parent}, which holds only always rules; move it to "
-            f"{layer / 'skills' / 's' / 'rules' / 'python-typing.md.j2'} and remove its "
+            f"{engine}/resources/skills/s/rules/python-typing.md.j2 and remove its "
             "'skill:' line",
         )
     ]
@@ -294,6 +299,7 @@ def test_r5_an_engine_scoped_rule_outside_a_skill_gets_a_move_hint(
 def test_r5_names_a_placeholder_skill_for_an_engine_scoped_rule_without_one(
     tmp_path: Path, engine: str
 ) -> None:
+    """With no 'skill:' line there is nothing to remove, so the hint asks for none."""
     layer = _engine_layer(engine)
     path = _rule(layer / "rules" / "r.md", "r")
 
@@ -301,10 +307,38 @@ def test_r5_names_a_placeholder_skill_for_an_engine_scoped_rule_without_one(
         str(path),
         (
             f"scoped rule 'r' lies in the engine's rules/ directory {path.parent}, which holds "
-            f"only always rules; move it to {layer / 'skills' / '<skill>' / 'rules' / 'r.md'} "
-            "and remove its 'skill:' line"
+            f"only always rules; move it to {engine}/resources/skills/<skill>/rules/r.md"
         ),
     ) in _messages(_check(tmp_path, engine))
+
+
+class _RulesOnlySource(ArtifactSource):
+    """A non-filesystem source: it has no layers, so R4 and R5 have no directory to read."""
+
+    name = "rules-only"
+
+    def __init__(self, rules: list[Rule]) -> None:
+        self._rules = rules
+
+    def list_rules(self) -> list[Rule]:
+        return self._rules
+
+    def list_prompts(self) -> list[Prompt]:
+        return []
+
+    def list_skills(self) -> list[Skill]:
+        return []
+
+    def list_eval_samples(self) -> list[EvalSample]:
+        return []
+
+
+def test_r5_is_silent_for_a_non_filesystem_source(tmp_path: Path) -> None:
+    """Without layer roots there is no engine rules/ directory to place a rule outside of."""
+    path = _rule(tmp_path / "rules" / "typing.md", "python-typing", extra="skill: s\n")
+    rule = Rule.from_markdown(path, ENGINE_PACKAGE)
+
+    assert check_rule_layout([rule], _RulesOnlySource([rule])) == []
 
 
 def test_the_layer_of_an_in_skill_rule_outside_a_skill_rules_dir_is_an_error() -> None:
