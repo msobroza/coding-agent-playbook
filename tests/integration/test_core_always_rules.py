@@ -206,7 +206,6 @@ LEGIBILITY_POINTERS: Final = (
 PENDING_LEGIBILITY_TARGETS: Final = frozenset(
     {
         "design-dry-yagni-kiss",
-        "arch-predictable-project-tree",
         "pytest-first-properties",
     }
 )

@@ -91,8 +91,11 @@ SOURCE_LINES: Final = [
 ]
 #: The source skill the five-line cap cuts from the first edit of ``src/app.py``.
 CUT_SOURCE_LINE: Final = _line("python-tooling")
-#: python-architecture's member globs in member order: Python files, the composition-root
-#: file names (arch-composition-root), then the domain and application packages.
+#: python-architecture's member globs, first seen in rule-id order: Python files, the
+#: composition-root file names (arch-composition-root), the read-model packages (arch-cqrs),
+#: the event packages (arch-event-sourcing), the generic package names and package inits
+#: (arch-no-junk-drawer-packages), pyproject.toml (arch-predictable-project-tree), then the
+#: domain modules (arch-rich-domain-model).
 ARCHITECTURE_GLOBS: Final = [
     "**/*.py",
     "**/main.py",
@@ -104,13 +107,32 @@ ARCHITECTURE_GLOBS: Final = [
     "**/bootstrap.py",
     "**/wiring.py",
     "**/cli.py",
+    "**/queries/**/*.py",
+    "**/queries.py",
+    "**/read_models/**/*.py",
+    "**/projections/**/*.py",
+    "**/projections.py",
+    "**/services/**/*.py",
+    "**/application/**/*.py",
+    "**/events/**/*.py",
+    "**/events.py",
+    "**/event_store.py",
+    "**/eventstore/**/*.py",
     "**/domain/**/*.py",
+    "**/utils/**/*.py",
+    "**/utils.py",
+    "**/helpers/**/*.py",
+    "**/helpers.py",
+    "**/common/**/*.py",
+    "**/common.py",
+    "**/managers/**/*.py",
+    "**/misc.py",
+    "**/__init__.py",
+    "pyproject.toml",
     "**/models/**/*.py",
     "**/entities/**/*.py",
     "**/domain.py",
     "**/models.py",
-    "**/services/**/*.py",
-    "**/application/**/*.py",
 ]
 
 
