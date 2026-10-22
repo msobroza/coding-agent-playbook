@@ -49,6 +49,9 @@ _SKILL_ROOTS = (".claude/skills", ".opencode/skills", _NEW_ROOT)
 _SYNTHETIC_PYTHON_CODING_MEMBERS = (
     "python-abstract-inputs",
     "python-async",
+    "python-async-fanout",
+    "python-async-generators",
+    "python-async-tasks",
     "python-classes-and-protocols",
     "python-comments-why",
     "python-context-managers",

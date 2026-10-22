@@ -1,0 +1,63 @@
+---
+id: python-async-fanout
+name: Bounded fan-out
+description: "Cap concurrent calls with a semaphore built on the running loop and sized from settings, or with the client's own connection limit."
+version: 1
+scope: scoped
+globs:
+  - "**/*.py"
+section: async
+priority: 57
+tags: [python, async, concurrency]
+---
+
+# Bound the fan-out
+
+## Description
+
+Starting one coroutine per item runs all of them at once. With thousands of items that exhausts connections and file descriptors, or trips the remote service's rate limit, and every request then fails together.
+
+- Cap concurrent calls with an `asyncio.Semaphore` created on the loop that uses it: inside the coroutine that fans out, or in a client built on that loop, never at import time.
+- Size it from the remote service's stated limit, read from the settings object, not a literal default in the function signature; the batch deadline comes from settings the same way.
+- When the HTTP client has its own connection limit, set that instead.
+
+## Bad Example
+
+```python
+async def quote_parcels(carrier: CarrierClient, parcels: Sequence[Parcel]) -> list[Quote]:
+    # 10,000 parcels open 10,000 requests at once
+    return await asyncio.gather(*(carrier.quote(parcel) for parcel in parcels))
+```
+
+## Good Example
+
+```python
+async def quote_parcels(carrier: CarrierClient, parcels: Sequence[Parcel]) -> list[Quote]:
+    slots = asyncio.Semaphore(carrier.max_parallel_requests)  # from settings, on this loop
+    deadline = carrier.batch_timeout_seconds  # from settings too
+
+    async def quote(parcel: Parcel) -> Quote:
+        async with slots:  # released even when the call raises
+            return await carrier.quote(parcel)
+
+{% if python_at_least("3.11") %}
+    async with asyncio.timeout(deadline):
+        async with asyncio.TaskGroup() as group:
+            pending = [group.create_task(quote(parcel)) for parcel in parcels]
+    return [task.result() for task in pending]
+{% else %}
+    quotes = await asyncio.wait_for(
+        asyncio.gather(*(quote(parcel) for parcel in parcels)),
+        timeout=deadline,
+    )
+    return list(quotes)
+{% endif %}
+```
+
+## Notes
+
+- A semaphore created at import time, or shared by two event loops (a second `asyncio.run`, a test loop), can end up bound to the wrong loop and raise `RuntimeError`. Build it where the loop runs, or keep one client per loop.
+- `asyncio.BoundedSemaphore` raises when a slot is released more often than acquired, which catches acquire and release bugs; build it the same way.
+- Prefer the client's own pool limit when there is one: `httpx.AsyncClient(limits=httpx.Limits(max_connections=...))`, `aiohttp.TCPConnector(limit=...)`.
+- For producer-consumer work, or when items arrive over time, start a fixed number of workers that read an `asyncio.Queue` instead of one task per item.
+- Give the whole batch one deadline, as above (`python-async`); each single request keeps its own timeout (`python-retries-and-timeouts`, when the repo uses requests, httpx or aiohttp).
