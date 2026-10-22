@@ -18,7 +18,7 @@ tags: [python, async, concurrency]
 Starting one coroutine per item runs all of them at once. With thousands of items that exhausts connections and file descriptors, or trips the remote service's rate limit, and every request then fails together.
 
 - Cap concurrent calls with an `asyncio.Semaphore` created on the loop that uses it: inside the coroutine that fans out, or in a client built on that loop, never at import time.
-- Size it from the remote service's stated limit, read from the settings object, not a literal default in the function signature.
+- Size it from the remote service's stated limit, read from the settings object, not a literal default in the function signature; the batch deadline comes from settings the same way.
 - When the HTTP client has its own connection limit, set that instead.
 
 ## Bad Example
@@ -34,20 +34,21 @@ async def quote_parcels(carrier: CarrierClient, parcels: Sequence[Parcel]) -> li
 ```python
 async def quote_parcels(carrier: CarrierClient, parcels: Sequence[Parcel]) -> list[Quote]:
     slots = asyncio.Semaphore(carrier.max_parallel_requests)  # from settings, on this loop
+    deadline = carrier.batch_timeout_seconds  # from settings too
 
     async def quote(parcel: Parcel) -> Quote:
         async with slots:  # released even when the call raises
             return await carrier.quote(parcel)
 
 {% if python_at_least("3.11") %}
-    async with asyncio.timeout(QUOTE_BATCH_TIMEOUT_SECONDS):
+    async with asyncio.timeout(deadline):
         async with asyncio.TaskGroup() as group:
             pending = [group.create_task(quote(parcel)) for parcel in parcels]
     return [task.result() for task in pending]
 {% else %}
     quotes = await asyncio.wait_for(
         asyncio.gather(*(quote(parcel) for parcel in parcels)),
-        timeout=QUOTE_BATCH_TIMEOUT_SECONDS,
+        timeout=deadline,
     )
     return list(quotes)
 {% endif %}

@@ -48,7 +48,7 @@ class StayRequest(BaseModel):
     @classmethod
     def accept_legacy_keys(cls, data: object) -> object:
         if isinstance(data, dict) and "arrival" in data:  # older clients send arrival
-            return {("check_in" if key == "arrival" else key): v for key, v in data.items()}
+            return {("check_in" if key == "arrival" else key): value for key, value in data.items()}
         return data
 
     @model_validator(mode="after")

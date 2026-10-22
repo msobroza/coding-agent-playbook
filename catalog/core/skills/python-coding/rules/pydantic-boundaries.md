@@ -42,7 +42,7 @@ def register_signup(payload: dict, users: UserStore) -> UserId:
 class SignupMessage(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    email: EmailStr  # needs the email-validator extra
+    email: EmailStr  # needs the email-validator extra (pydantic-special-types)
     age: int = Field(ge=0, le=150)
     name: str = Field(min_length=1, max_length=100)
 
@@ -56,7 +56,11 @@ def handle_signup(raw: bytes, users: UserStore) -> UserId:  # the queue consumer
     try:
         message = SignupMessage.model_validate_json(raw)
     except ValidationError as exc:
-        raise MalformedMessage(f"signup message: {exc.error_count()} invalid fields") from exc
+        # each failing field and the shape it expected, not just a count
+        problems = "; ".join(
+            f"{'.'.join(map(str, error['loc']))}: {error['msg']}" for error in exc.errors()
+        )
+        raise MalformedMessage(f"signup message: {problems}") from exc
     return users.create(message.email, message.age, message.name)  # typed values inward
 ```
 
@@ -66,6 +70,5 @@ def handle_signup(raw: bytes, users: UserStore) -> UserId:  # the queue consumer
 - Never read a dict field by field (`payload["weight"]`) and build the model afterwards: that skips the coercion and the error report the model exists for. Raw dicts passed between functions and validation written as `if` statements are the two smells this rule removes.
 - Never catch `ValidationError` deep in domain code: by then the data should already be typed, and catching it there hides where the bad input came from. FastAPI translates it for request models; a settings loader lets it stop the program at startup.
 - Keep models thin: a model validates and serializes. It holds no business rules and does no I/O, so no database lookups in validators and no network calls in properties.
-- `EmailStr` needs the `email-validator` package (the `pydantic[email]` extra); propose adding it when the repo lacks it, never add it unasked.
-- Field limits, `Literal` sets and before-validators are `pydantic-field-constraints`; cross-field checks are `pydantic-model-validators`; configuration is `pydantic-typed-settings`.
+- Field limits, `Literal` sets and before-validators are `pydantic-field-constraints`; `EmailStr` and the other validated types, with the extras they need, are `pydantic-special-types`; cross-field checks are `pydantic-model-validators`; configuration is `pydantic-typed-settings`.
 - Separate request and response schemas for an HTTP API are the web-application skill's web-api-schemas rule, and FastAPI wiring is that skill's too.

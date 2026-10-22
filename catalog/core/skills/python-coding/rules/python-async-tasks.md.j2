@@ -20,7 +20,7 @@ tags: [python, async, concurrency]
 {% if python_at_least("3.11") %}
 - Start tasks the current scope waits for inside an `asyncio.TaskGroup`: the block exits only when every task is done, and a failure cancels the others and raises an `ExceptionGroup`.
 {% else %}
-- Keep tasks the current scope waits for in a local list, await them together, and cancel and await the rest in `finally`, so a failure leaves no task running.
+- Keep tasks the current scope waits for in a local task set, await them together, and cancel and await the rest in `finally`, so a failure leaves no task running. Tasks that outlive the call report through the supervisor's done callback below.
 {% endif %}
 - Hand a task that must outlive the call to a supervisor object that the composition root builds and closes (`python-dependency-injection`). It keeps a reference until the task is done, reads the outcome in a done callback and reports a failure there.
 - Never collect tasks in a module-level set: nothing closes it and tests share it.
@@ -69,7 +69,7 @@ async def warm_caches(loaders: Sequence[CacheLoader]) -> None:
             group.create_task(loader.load())
 {% else %}
 async def warm_caches(loaders: Sequence[CacheLoader]) -> None:
-    tasks = [asyncio.create_task(loader.load()) for loader in loaders]
+    tasks: set[asyncio.Task[None]] = {asyncio.create_task(loader.load()) for loader in loaders}
     try:
         await asyncio.gather(*tasks)  # the first failure propagates
     finally:

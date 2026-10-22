@@ -64,9 +64,9 @@ async def export_orders(client: OrdersClient, sink: OrderSink) -> None:
 async def first_overdue(client: OrdersClient) -> Order | None:
     async with aclosing(iter_order_pages(client)) as pages:
         async for page in pages:
-            for order in page.items:
-                if order.is_overdue:
-                    return order  # aclosing closes the generator here
+            overdue = next((order for order in page.items if order.is_overdue), None)
+            if overdue is not None:
+                return overdue  # aclosing closes the generator here
     return None
 ```
 

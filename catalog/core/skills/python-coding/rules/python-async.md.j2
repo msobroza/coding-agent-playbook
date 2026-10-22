@@ -20,7 +20,7 @@ Awaiting independent calls one after another adds up their wait times; started t
 {% if python_at_least("3.11") %}
 - When you need every result, use `asyncio.TaskGroup`: the first failure cancels the remaining tasks and the group raises an `ExceptionGroup`. Handle it with `except*` clauses that name the types you can recover from.
 {% else %}
-- When you need every result, `await asyncio.gather(...)` with the default `return_exceptions=False`: the first exception propagates to the caller. The other awaitables are not cancelled and keep running in the background; when they must stop on the first failure, own them as tasks and cancel them in `finally` (`python-async-tasks`).
+- When you need every result, `await asyncio.gather(...)` with the default `return_exceptions=False`: the first exception propagates to the caller. When the others must stop on the first failure, own them as tasks and cancel them in `finally` (`python-async-tasks`).
 {% endif %}
 - Use `asyncio.gather(..., return_exceptions=True)` only when partial results are useful. Then inspect every result: re-raise an `asyncio.CancelledError` first, because it is a `BaseException` and not an `Exception`, and log each other failure with `exc_info` at the per-item boundary (`python-error-handling`).
 - Await one call after another only when it needs the previous result.
@@ -38,17 +38,21 @@ async def load_dashboard(client: BillingClient, customer_id: str) -> Dashboard:
 
 ```python
 {% if python_at_least("3.11") %}
-async def load_dashboard(client: BillingClient, customer_id: str) -> Dashboard:
-    async with asyncio.timeout(DASHBOARD_TIMEOUT_SECONDS):  # one deadline for the group
+async def load_dashboard(
+    client: BillingClient, customer_id: str, deadline_seconds: float  # from settings
+) -> Dashboard:
+    async with asyncio.timeout(deadline_seconds):  # one deadline for the group
         async with asyncio.TaskGroup() as group:
             invoices = group.create_task(client.invoices(customer_id))
             limit = group.create_task(client.credit_limit(customer_id))
     return Dashboard(invoices=invoices.result(), credit_limit=limit.result())
 {% else %}
-async def load_dashboard(client: BillingClient, customer_id: str) -> Dashboard:
+async def load_dashboard(
+    client: BillingClient, customer_id: str, deadline_seconds: float  # from settings
+) -> Dashboard:
     invoices, limit = await asyncio.wait_for(  # one deadline; it cancels both calls
         asyncio.gather(client.invoices(customer_id), client.credit_limit(customer_id)),
-        timeout=DASHBOARD_TIMEOUT_SECONDS,
+        timeout=deadline_seconds,
     )
     return Dashboard(invoices=invoices, credit_limit=limit)
 {% endif %}
@@ -76,6 +80,7 @@ async def collect_quotes(carriers: Sequence[Carrier], parcel: Parcel) -> list[Qu
 {% else %}
 - Bound the wait of a group with `asyncio.wait_for(<awaitable>, timeout=<setting>)`, as above. Up to 3.10 it raises `asyncio.TimeoutError`, which `except TimeoutError` does not catch, so name `asyncio.TimeoutError`.
 {% endif %}
+- When one awaitable of a plain `asyncio.gather` raises, the others are not cancelled: they keep running in the background and their later failures go unseen.
 - The timeout on each single outbound call belongs to `python-retries-and-timeouts`, when the repo uses requests, httpx or aiohttp.
 - Keep the loop free. Inside `async def`, never call `time.sleep` (await `asyncio.sleep`), a blocking HTTP client or database driver, a blocking file read or a CPU-heavy loop. Move blocking I/O off the loop with `await asyncio.to_thread(...)` and CPU-bound work to a process pool. Blocking calls in web routes are the web-application skill's fastapi-no-blocking-calls rule.
 - Call `asyncio.run(main())` once, at the program's entry point, never from code that already runs on a loop.

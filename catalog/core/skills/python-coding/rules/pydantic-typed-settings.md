@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     signing_key: SecretStr = Field(min_length=32)
     payments_base_url: str
     payments_api_key: SecretStr
-    request_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+    request_timeout_seconds: float = Field(gt=0, le=60)  # tuned per deployment
     allowed_origins: list[str] = Field(default_factory=list)  # JSON in the environment
 
 
