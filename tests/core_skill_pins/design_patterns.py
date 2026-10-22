@@ -1,7 +1,8 @@
 """Pins of core skill ``design-patterns`` (prU D4, D14): the shape of code inside a module.
 
 C-design-patterns-01 creates the skill with its six sections and the ten rules of
-the responsibilities and abstractions sections; later lanes append theirs.
+the responsibilities and abstractions sections; C-design-patterns-03 adds the seven
+rules of the common-patterns section; later lanes append theirs.
 """
 
 from __future__ import annotations
@@ -26,6 +27,13 @@ PINS: Final = CoreSkillPins(
         "design-composition-over-inheritance",
         "design-liskov-substitution",
         "design-interface-segregation",
+        "design-plugin-loading",
+        "design-dispatch-table",
+        "design-strategy",
+        "design-adapter",
+        "design-value-objects",
+        "design-domain-events",
+        "design-lazy-loading",
     ),
     probe_inactive=frozenset(),
     section_ids=(
@@ -116,6 +124,62 @@ PINS: Final = CoreSkillPins(
             name="Interface segregation",
             tags=("python", "design", "solid"),
             section="abstractions",
+        ),
+        "design-plugin-loading": RulePin(
+            applies_if={},
+            globs=_PY,
+            priority=64,
+            name="Plugin loading",
+            tags=("python", "design", "patterns"),
+            section="common-patterns",
+        ),
+        "design-dispatch-table": RulePin(
+            applies_if={},
+            globs=_PY,
+            priority=65,
+            name="Dispatch table",
+            tags=("python", "design", "patterns"),
+            section="common-patterns",
+        ),
+        "design-strategy": RulePin(
+            applies_if={},
+            globs=_PY,
+            priority=66,
+            name="Strategy",
+            tags=("python", "design", "patterns"),
+            section="common-patterns",
+        ),
+        "design-adapter": RulePin(
+            applies_if={},
+            globs=_PY,
+            priority=67,
+            name="Adapter",
+            tags=("python", "design", "patterns"),
+            section="common-patterns",
+        ),
+        "design-value-objects": RulePin(
+            applies_if={},
+            globs=_PY,
+            priority=68,
+            name="Value objects",
+            tags=("python", "design", "patterns"),
+            section="common-patterns",
+        ),
+        "design-domain-events": RulePin(
+            applies_if={},
+            globs=_PY,
+            priority=69,
+            name="Domain events",
+            tags=("python", "design", "patterns"),
+            section="common-patterns",
+        ),
+        "design-lazy-loading": RulePin(
+            applies_if={},
+            globs=_PY,
+            priority=70,
+            name="Lazy loading",
+            tags=("python", "design", "patterns"),
+            section="common-patterns",
         ),
     },
 )
