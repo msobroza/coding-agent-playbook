@@ -17,6 +17,7 @@ from coding_agent_playbook.skills.document import (
     WhereEntry,
     emitted_body,
     emitted_frontmatter,
+    playbook_block,
     render_member_reference,
     rules_index,
     skill_catalog_block,
@@ -157,3 +158,19 @@ def test_skill_catalog_block_reads_absent_or_malformed_keys_as_none(
     frontmatter = {"id": "x"} if playbook is None else {"id": "x", "playbook": playbook}
     block = skill_catalog_block(Skill(frontmatter, "", None, None, "pkg"))
     assert (block.use_when, block.files) == expected
+
+
+@pytest.mark.parametrize(
+    ("playbook", "expected"),
+    [
+        ({"use_when": "x", "sections": []}, {"use_when": "x", "sections": []}),
+        ("yes", {}),
+        (None, {}),
+    ],
+)
+def test_playbook_block_reads_an_absent_or_non_mapping_block_as_empty(
+    playbook: object, expected: dict[str, object]
+) -> None:
+    frontmatter = {"id": "x"} if playbook is None else {"id": "x", "playbook": playbook}
+
+    assert playbook_block(Skill(frontmatter, "", None, None, "pkg")) == expected

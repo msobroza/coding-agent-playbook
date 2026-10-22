@@ -236,7 +236,7 @@ def test_playbook_block_must_be_a_mapping(repo: Path, capsys: pytest.CaptureFixt
     assert rc == 1
     assert fail_lines(out) == [
         f"FAIL skills/python-coding {_REPO_LOCAL}: 'playbook' must be a mapping with optional "
-        "keys files and use_when, got str 'yes'"
+        "keys files, use_when, sections, references, got str 'yes'"
     ]
 
 
@@ -251,7 +251,7 @@ def test_playbook_block_rejects_unknown_keys(
     assert rc == 1
     assert fail_lines(out) == [
         f"FAIL skills/python-coding {_REPO_LOCAL}: 'playbook' has unknown key 'when'; "
-        "allowed keys: files, use_when"
+        "allowed keys: files, use_when, sections, references"
     ]
 
 
@@ -477,4 +477,65 @@ def test_truncated_member_list_warns_with_counts(
         f"warning: skills/{_OWN_SKILL} {_REPO_LOCAL}: the composed description names 3 of 4 "
         "member rules within 300 chars ('... and 1 more'); shorten member names or the "
         "authored parts to list them all"
+    ]
+
+
+_SECTIONED_BLOCK = (
+    _PLAYBOOK_BLOCK
+    + "  sections:\n"
+    + "    - id: models\n      title: Models\n      impact: HIGH\n"
+    + "      summary: Model code.\n      open_when: Editing a model.\n"
+    + "    - id: reports\n      title: Reports\n      impact: LOW\n"
+    + "      summary: Report code.\n      open_when: Editing a report.\n"
+)
+
+
+def test_a_repo_local_rule_joining_a_sectioned_skill_needs_a_section(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    write_skill(repo, _OWN_SKILL, block=_SECTIONED_BLOCK)
+    rule = write_rule(repo, "risk-var", skill=_OWN_SKILL, priority=40)
+
+    rc, out, _ = run_validate(repo, capsys)
+
+    assert rc == 1
+    assert fail_lines(out) == [
+        f"FAIL {rule}: skill {_OWN_SKILL!r} declares sections, so its member rule needs "
+        "'section:'; declared sections: models, reports"
+    ]
+
+
+def test_a_sectioned_skill_with_sound_members_validates(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    write_skill(repo, _OWN_SKILL, block=_SECTIONED_BLOCK)
+    rule = write_rule(repo, "risk-var", skill=_OWN_SKILL, priority=40)
+    rule.write_text(
+        rule.read_text(encoding="utf-8").replace("priority:", "section: models\npriority:"),
+        encoding="utf-8",
+    )
+
+    rc, out, err = run_validate(repo, capsys)
+
+    assert rc == 0, out
+    assert "warning:" not in err
+
+
+@pytest.mark.parametrize("key", ["any_framework", "any_ml_stack", "any_dependency"])
+def test_a_list_predicate_key_given_a_bare_string_fails_naming_the_rule(
+    repo: Path, capsys: pytest.CaptureFixture[str], key: str
+) -> None:
+    rule = write_rule(repo, "python-typing")
+    rule.write_text(
+        rule.read_text(encoding="utf-8").replace(
+            "priority:", f"applies_if:\n  {key}: fastapi\npriority:"
+        ),
+        encoding="utf-8",
+    )
+
+    rc, out, _ = run_validate(repo, capsys)
+
+    assert rc == 1
+    assert fail_lines(out) == [
+        f"FAIL {rule}: applies_if: predicate {key!r} must be a list of strings; got 'fastapi'"
     ]

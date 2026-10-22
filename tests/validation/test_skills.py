@@ -214,3 +214,21 @@ def test_check_skill_membership_leaves_an_in_skill_always_rule_to_r6() -> None:
 
     skills = [_skill("python-coding", block=_BLOCK)]
     assert check_skill_membership([rule], skills, all_rules=[rule]) == []
+
+
+def test_v8_names_sections_and_references_as_allowed_keys() -> None:
+    skill = _skill("python-coding", block={**_BLOCK, "when": "always"})
+
+    findings = check_rule_skills([_rule("python-typing")], [skill])
+
+    assert [error.message for error in findings.errors] == [
+        "'playbook' has unknown key 'when'; allowed keys: files, use_when, sections, references"
+    ]
+
+
+def test_sections_and_references_are_known_playbook_keys() -> None:
+    block = {**_BLOCK, "sections": [], "references": []}
+
+    findings = check_rule_skills([_rule("python-typing")], [_skill("python-coding", block=block)])
+
+    assert findings.errors == []

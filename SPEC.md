@@ -1211,6 +1211,7 @@ class Skill:
     references_dir: Path | None
     source_package: str
     member_references: tuple[MemberReference, ...] = ()  # active member rules, set at sync
+    source_dir: Path | None = None  # its directory, for validate (prU D47)
     ...
 
 
@@ -2725,8 +2726,8 @@ The Agent Skills rule (v0.15) checks every resolved skill: it must declare a str
 | V4 | `skill` is not an id string | `FAIL rules/x.md: skill 42 must be a skill id string matching ^[a-z0-9]+(-[a-z0-9]+)*$ (1-64 chars), e.g. 'python-coding'` |
 | V5 | no skill of that id after the merge | `FAIL rules/x.md: skill 'python-codng' does not exist after merging every layer; expected one of: ml-data, python-coding, python-testing, python-tooling (or enable the overlay that ships it)` |
 | V6 | a member rule's id is not a skill-safe file name | `FAIL rules/x.md: rule id 'Py_Typing' cannot be a member of skill 'python-coding': its reference is written as references/<id>.md, so the id must match ^[a-z0-9]+(-[a-z0-9]+)*$ (1-64 chars)` |
-| V7 | `playbook` is not a mapping | `FAIL skills/x (pkg): 'playbook' must be a mapping with optional keys files and use_when, got str 'yes'` |
-| V8 | an unknown key in `playbook` | `FAIL skills/x (pkg): 'playbook' has unknown key 'when'; allowed keys: files, use_when` |
+| V7 | `playbook` is not a mapping | `FAIL skills/x (pkg): 'playbook' must be a mapping with optional keys files, use_when, sections, references, got str 'yes'` |
+| V8 | an unknown key in `playbook` | `FAIL skills/x (pkg): 'playbook' has unknown key 'when'; allowed keys: files, use_when, sections, references` |
 | V9 | `use_when` or `files` is not one non-empty line; `files` is over 80 chars or ends with a period | `FAIL skills/x (pkg): 'playbook.files' is 112 chars; keep it to one line of at most 80 chars without a trailing period (it becomes one line of 'Where guidance lives')` |
 | V10 | `use_when` starts with "Use when" (the engine adds it) | `FAIL skills/x (pkg): 'playbook.use_when' starts with 'Use when'; write only the condition (the engine adds 'Use when'), e.g. 'editing a Python module'` |
 | V11 | the worst-case composed description, the longest member name plus the `and <N-1> more` tail, is over 300 chars | `FAIL skills/python-coding (pkg): the composed description cannot fit 300 chars even when the Covers clause names one member: '<text>' is 312 chars; shorten 'description' (88 chars), 'playbook.use_when' (130 chars) or the longest member name (python-typing: 'Python typing conventions')` |
@@ -2736,6 +2737,23 @@ The Agent Skills rule (v0.15) checks every resolved skill: it must declare a str
 | W1 | a `playbook:` block without members: no rule in its `rules/` directory and none naming it | `warning: skills/x (pkg): declares 'playbook' but has no member rule (none in its rules/ directory, none naming it in 'skill:'); it is never written` |
 | W2 | member rules but no `playbook.files` | `warning: skills/x (pkg): has member rules but no 'playbook.files'; it is left out of the 'Where guidance lives' section` |
 | W3 | the full member list would be truncated | `warning: skills/python-coding (pkg): the composed description names 6 of 9 member rules within 300 chars ('... and 3 more'); shorten member names or the authored parts to list them all` |
+
+**Skill sections and references (prU D17, D42, D46.8, D47).** A skill's `playbook:` block may declare an ordered `sections:` list (model in `skills/sections.py`: `Impact`, `IMPACT_BANDS`, `SkillSection`, `skill_sections`) and a `references:` list; `validation/_sections.py` and `validation/_skill_references.py` check both. Priority bands (CRITICAL 20-39, HIGH 40-59, MEDIUM 60-79, LOW 80-99) apply only to skills that declare sections, and a skill without sections (no `sections` key, or `sections: []`) reports nothing new. A declared section without members is no finding. Member checks wait until S1 accepts the list.
+
+| # | Check | Sample line |
+| --- | --- | --- |
+| S1 | `sections` is not a list of mappings with exactly `id` (kebab-case, unique), `title` (one line, at most 40 chars), `impact`, `summary` and `open_when` (one line each) | `FAIL skills/x (pkg): section 'mocking' (entry 1 of 'playbook.sections'): 'impact' 'URGENT' must be one of CRITICAL, HIGH, MEDIUM, LOW` |
+| S2 | sections do not run from CRITICAL to LOW | `FAIL skills/x (pkg): 'playbook.sections' must run from CRITICAL to LOW: section 'mocking' (CRITICAL) comes after 'fixtures' (MEDIUM)` |
+| S3 | a member's `section:` is not declared by its skill | `FAIL rules/x.md: section 'mokcing' is not declared by skill 'python-testing'; declared sections: mocking, fixtures` |
+| S4 | a member of a sectioned skill, from the skill's own layer or from the repository (`<repo-local>`, also when it joins by `skill:`), sets no `section:` | `FAIL rules/x.md: skill 'python-testing' declares sections, so its member rule needs 'section:'; declared sections: mocking, fixtures` |
+| S5 | `section:` on an always rule, or on a member of a skill without sections | `FAIL rules/x.md: 'section: mocking' is not allowed: skill 'python-coding' declares no 'playbook.sections'; remove 'section', or declare the section in that skill` |
+| S6 | a member's priority is outside its section's band | `FAIL rules/x.md: priority 45 is outside the band of section 'mocking' (CRITICAL): expected 20-39` |
+| S7 | a member of a sectioned skill has an authored impact tag in its first heading | `FAIL rules/x.md: the first heading '# Use fakes [HIGH]' carries an impact tag; remove '[HIGH]' (the engine renders it from the rule's section)` |
+| W4 | a member from another overlay or bundled layer (not `<repo-local>`) joins a sectioned skill without `section:`; this includes the replaced layer's members when a higher layer replaces a skill and declares sections (D42) | `warning: rules/x.md: joins skill 'python-testing' (pkg) from another layer without 'section:'; it is listed under 'Other', after the declared sections: mocking, fixtures` |
+| R1 | a `references` entry is not a mapping with `path`, a one-line `open_when` and an optional `applies_if`, or its path is not relative under `references/` or `examples/` | `FAIL skills/x (pkg): reference 'docs/guide.md' (entry 1 of 'playbook.references'): 'path' must be a relative path under references/ or examples/, e.g. 'references/guide.md'` |
+| R2 | a listed path does not exist in the skill directory | `FAIL skills/x (pkg): reference 'references/gone.md' (entry 1 of 'playbook.references'): references/gone.md does not exist in the skill directory` |
+| R3 | a skill that declares `sections` or `references` leaves a file under `references/` or `examples/` unlisted (only license files are exempt; a skill that declares neither is not checked yet, F-02 covers the core skills) | `FAIL skills/x (pkg): references/guide.md is not listed in 'playbook.references'; add an entry with its path (or a parent directory) and open_when (license files are exempt)` |
+| R4 | an entry's `applies_if` breaks the rule predicate language, such as a list-typed key given a bare string | `FAIL skills/x (pkg): reference 'references/guide.md' (entry 1 of 'playbook.references'): applies_if: predicate 'any_framework' must be a list of strings; got 'fastapi'` |
 
 V11 measures with `skills.document.worst_case_description`, the same bound the sync's composition holds: a real composition of `M` active members (`M` at most the merged count `N`) that falls back to one name is never longer than that worst case, so a skill that validates cannot make `playbook sync` raise. The D13 description lint, the 500-line limit and the one-level references check are CI tests over the core skills only, never validate checks, so enabling a bundled plugin whose skills predate them keeps validate passing.
 

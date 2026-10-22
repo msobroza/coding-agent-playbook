@@ -45,6 +45,9 @@ Validates:
 - Member rules and ``playbook:`` blocks (prS §6.6 V3-V14, W1-W3,
   ``validation._skills``): a rule's ``skill`` names a merged skill that takes
   members, and that skill's block, description fit and references are sound.
+- Skill sections and references (prU D17, D42, D47, ``validation._sections``):
+  S1-S7 over ``playbook.sections`` and each member's ``section:`` and
+  priority band, and every ``playbook.references`` entry and listed file.
 - Every hook honours the trust contract H1-H21 (specs/prK-lifecycle-hooks.md
   §B.5, ``validation._hooks``): a malformed ``HOOK.md`` is a ``FAIL`` line, not a
   traceback (P8c); degraded cells and clamped timeouts are ``warning:`` lines.
@@ -88,6 +91,7 @@ from coding_agent_playbook.validation._frontmatter import (
 from coding_agent_playbook.validation._hooks import check_hooks
 from coding_agent_playbook.validation._links import check_markdown_links, load_links_config
 from coding_agent_playbook.validation._rule_layout import check_rule_layout
+from coding_agent_playbook.validation._sections import check_skill_sections
 from coding_agent_playbook.validation._skills import (
     check_rule_skills,
     check_skill_membership,
@@ -349,9 +353,17 @@ def collect_validation_findings(
     """
     errors = _artifact_errors(ctx, config_less=config_less)
     skills = check_rule_skills(ctx.rules_resolved, ctx.skills_resolved)
+    sections = check_skill_sections(
+        ctx.rules_resolved,
+        ctx.skills_resolved,
+        check_predicate=lambda predicate: evaluate_predicate(
+            predicate, ctx.facts, repo_root=ctx.repo_root
+        ),
+    )
     hook_errors, hook_warnings = check_hooks(ctx, local_policy_is_error=local_policy_is_error)
     return ValidationFindings(
-        [*errors, *skills.errors, *hook_errors], [*skills.warnings, *hook_warnings]
+        [*errors, *skills.errors, *sections.errors, *hook_errors],
+        [*skills.warnings, *sections.warnings, *hook_warnings],
     )
 
 

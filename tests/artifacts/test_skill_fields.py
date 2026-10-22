@@ -16,6 +16,7 @@ from typing import Any
 from coding_agent_playbook.artifacts.member_reference import MemberReference
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill
+from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 
 _TYPING_RULE_MD = """\
 ---
@@ -118,3 +119,21 @@ def test_member_reference_round_trips_and_names_its_file() -> None:
     member = _member()
     assert member.filename == "python-typing.md"
     assert MemberReference.from_dict(member.to_dict()) == member
+
+
+def test_skill_source_dir_round_trips_and_defaults_to_none() -> None:
+    skill = Skill({"id": "x"}, "", None, None, "pkg", source_dir=Path("catalog/core/skills/x"))
+
+    assert Skill.from_dict(skill.to_dict()) == skill
+    assert Skill.from_dict(_skill_dict()).source_dir is None
+
+
+def test_the_catalog_source_records_each_skills_directory(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "playbook" / "skills" / "risk-models"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("---\nid: risk-models\n---\nBody\n", encoding="utf-8")
+
+    skills = FileSystemArtifactSource(repo_root=tmp_path).list_skills()
+
+    by_id = {skill.frontmatter.get("id"): skill for skill in skills}
+    assert by_id["risk-models"].source_dir == skill_dir

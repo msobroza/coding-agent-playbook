@@ -243,6 +243,7 @@ def _iter_skills(skills_root: Path, source_package: str) -> Iterator[Skill]:
             scripts_dir=scripts_dir if scripts_dir.is_dir() else None,
             references_dir=references_dir if references_dir.is_dir() else None,
             source_package=source_package,
+            source_dir=skill_dir,
         )
 
 

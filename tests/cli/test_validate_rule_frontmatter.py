@@ -119,13 +119,31 @@ def test_validate_reports_a_bad_shape_naming_the_value(
     assert "Traceback" not in err
 
 
-def test_validate_accepts_a_section_and_the_priority_bounds(
+def test_validate_accepts_the_priority_bounds(
     tmp_path: Path, make_synthetic_repo: Callable[..., Path], capsys: pytest.CaptureFixture[str]
 ) -> None:
     repo = make_synthetic_repo(tmp_path)
-    _write_rule(repo, "low", "priority: 0\nsection: error-handling\n")
+    _write_rule(repo, "low", "priority: 0\n")
     _write_rule(repo, "high", "priority: 99\n")
 
     rc, fails, _ = _validate(repo, capsys)
 
     assert (rc, fails) == (0, [])
+
+
+def test_validate_rejects_a_section_on_an_always_rule(
+    tmp_path: Path, make_synthetic_repo: Callable[..., Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A well-formed section id still fails here: sections group member rules (prU S5).
+    repo = make_synthetic_repo(tmp_path)
+    rule = _write_rule(repo, "low", "priority: 0\nsection: error-handling\n")
+
+    rc, fails, _ = _validate(repo, capsys)
+
+    assert (rc, fails) == (
+        1,
+        [
+            f"FAIL {rule}: 'section: error-handling' is not allowed on an always rule "
+            "(sections group a skill's member rules); remove 'section'"
+        ],
+    )
