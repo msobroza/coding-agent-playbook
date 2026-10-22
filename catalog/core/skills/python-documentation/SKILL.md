@@ -1,7 +1,7 @@
 ---
 id: python-documentation
 name: python-documentation
-description: "Documentation practice for Python repos, using the repo's own docs tools."
+description: "Python docs practice with the repo's own docs tools."
 playbook:
   use_when: "changing public behavior or writing a README, changelog, docs page, ADR or why-comment"
   files: "README, changelog, CONTRIBUTING, CITATION.cff and docs/ pages"

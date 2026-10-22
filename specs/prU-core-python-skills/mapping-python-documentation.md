@@ -5,7 +5,7 @@ Generated from the verified mapping data; do not edit by hand. Decisions: [../pr
 Priority = impact band floor (CRITICAL 20, HIGH 40, MEDIUM 60, LOW 80) + the rule's rank among the skill's rules of that impact, in index order (D17).
 
 
-Description (248 characters): Documentation practice for Python repos, using the repo's own docs tools. Covers docs in sync, design records, repository files, user docs, docs build. Use when changing public behavior or writing a README, changelog, docs page, ADR or why-comment.
+Description (227 characters): Python docs practice with the repo's own docs tools. Covers docs in sync, design records, repository files, user docs, docs build. Use when changing public behavior or writing a README, changelog, docs page, ADR or why-comment.
 
 `playbook.files`: README, changelog, CONTRIBUTING, CITATION.cff and docs/ pages
 
