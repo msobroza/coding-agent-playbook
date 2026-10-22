@@ -715,7 +715,7 @@
           "type": null,
           "choices": null,
           "required": false,
-          "help": "opt-in and paid: run the eval tasks of the rule-including prompts on BASE_REF and on HEAD and compare them (needs the agent's credentials)",
+          "help": "opt-in and paid: run the eval samples of the rule-including prompts on BASE_REF and on HEAD and compare them (needs the agent's credentials)",
           "metavar": "BASE_REF"
         },
         {
@@ -739,16 +739,16 @@
         {
           "action": "_StoreAction",
           "option_strings": [
-            "--compare-samples"
+            "--compare-runs"
           ],
-          "dest": "compare_samples",
+          "dest": "compare_runs",
           "nargs": null,
           "const": null,
           "default": 3,
           "type": "int",
           "choices": null,
           "required": false,
-          "help": "--compare: runs per task on each side (default: 3)",
+          "help": "--compare: runs per eval sample on each side (default: 3)",
           "metavar": null
         },
         {

@@ -1,12 +1,12 @@
-"""Compare eval runs of the same tasks on a base and on HEAD (D37, D76; prU F-01).
+"""Compare eval runs of the same eval samples on a base and on HEAD (D37, D76; prU F-01).
 
-The opt-in ``playbook eval --compare`` runs each task several times per side and
-hands the outcomes here. This module is pure: it summarizes each side (passes,
+The opt-in ``playbook eval --compare`` runs each eval sample several times per side
+and hands the outcomes here. This module is pure: it summarizes each side (passes,
 mean score, spread), flags regressions by the default thresholds and renders the
-comparison as a table or JSON. A task *regresses* when its mean score drops by
-more than :data:`MAX_SCORE_DROP`, or when it passes on the base (a majority of
-its base samples pass) and fails a majority of its HEAD samples (2 of 3 by
-default). The comparison is advisory, never a merge gate.
+comparison as a table or JSON. An eval sample *regresses* when its mean score drops
+by more than :data:`MAX_SCORE_DROP`, or when it passes on the base (a majority of
+its base runs pass) and fails a majority of its HEAD runs (2 of 3 by default). The
+comparison is advisory, never a merge gate.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ MAX_SCORE_DROP: Final = 0.05
 _DIGITS: Final = 6
 
 
-#: The prompts whose included rule bodies change (D30): their eval tasks are compared.
+#: The prompts whose included rule bodies change (D30): their eval samples are compared.
 COMPARED_PROMPTS: Final = frozenset(
     {
         "characterize",
@@ -40,8 +40,8 @@ COMPARED_PROMPTS: Final = frozenset(
 )
 
 
-class _Task(Protocol):
-    """What task selection reads from an eval sample (``EvalSample``)."""
+class _EvalSampleIds(Protocol):
+    """What eval sample selection reads from an ``EvalSample``."""
 
     @property
     def id(self) -> str: ...
@@ -50,37 +50,37 @@ class _Task(Protocol):
     def prompt_id(self) -> str: ...
 
 
-def compared_task_ids(tasks: Iterable[_Task]) -> list[str]:
-    """The sorted ids of the tasks graded against one of :data:`COMPARED_PROMPTS`.
+def compared_sample_ids(eval_samples: Iterable[_EvalSampleIds]) -> list[str]:
+    """The sorted ids of the eval samples graded against one of :data:`COMPARED_PROMPTS`.
 
     Example::
 
-        >>> from types import SimpleNamespace as T
-        >>> compared_task_ids([T(id="b", prompt_id="review"), T(id="a", prompt_id="explain")])
+        >>> from types import SimpleNamespace as S
+        >>> compared_sample_ids([S(id="b", prompt_id="review"), S(id="a", prompt_id="explain")])
         ['b']
     """
-    return sorted(task.id for task in tasks if task.prompt_id in COMPARED_PROMPTS)
+    return sorted(s.id for s in eval_samples if s.prompt_id in COMPARED_PROMPTS)
 
 
 @dataclass(frozen=True)
-class SampleOutcome:
-    """One eval run of one task: its verdict and score (``None`` when unscorable).
+class RunOutcome:
+    """One eval run of one eval sample: its verdict and score (``None`` when unscorable).
 
     Example::
 
-        >>> SampleOutcome.from_run(0, '{"passed": true, "aggregate_score": 1.0}')
-        SampleOutcome(passed=True, score=1.0)
+        >>> RunOutcome.from_run(0, '{"passed": true, "aggregate_score": 1.0}')
+        RunOutcome(passed=True, score=1.0)
     """
 
     passed: bool
     score: float | None
 
     @classmethod
-    def from_run(cls, exit_code: int, stdout: str) -> SampleOutcome:
+    def from_run(cls, exit_code: int, stdout: str) -> RunOutcome:
         """Read ``playbook eval <id> --run --format json``'s exit code and output.
 
-        Exit ``2`` (the task could not be scored), or output that is not the JSON
-        report, is a failed sample with no score; the verdict and score otherwise
+        Exit ``2`` (the eval sample could not be scored), or output that is not the
+        JSON report, is a failed run with no score; the verdict and score otherwise
         come from the report's ``passed`` and ``aggregate_score``.
         """
         if exit_code not in (0, 1):
@@ -96,10 +96,10 @@ class SampleOutcome:
 
 @dataclass(frozen=True)
 class SideSummary:
-    """One side's outcomes for one task: passes out of ``count``, mean score and spread.
+    """One side's runs of one eval sample: passes out of ``count``, mean score and spread.
 
     ``mean`` and ``spread`` (population standard deviation) cover the scored
-    samples only; both are ``None`` when no sample could be scored.
+    runs only; both are ``None`` when no run could be scored.
     """
 
     count: int
@@ -108,12 +108,12 @@ class SideSummary:
     spread: float | None
 
     @classmethod
-    def of(cls, outcomes: Sequence[SampleOutcome]) -> SideSummary:
+    def of(cls, outcomes: Sequence[RunOutcome]) -> SideSummary:
         """Summarize ``outcomes``.
 
         Example::
 
-            >>> SideSummary.of([SampleOutcome(True, 0.5), SampleOutcome(False, None)])
+            >>> SideSummary.of([RunOutcome(True, 0.5), RunOutcome(False, None)])
             SideSummary(count=2, passes=1, mean=0.5, spread=0.0)
         """
         scores = [o.score for o in outcomes if o.score is not None]
@@ -125,21 +125,30 @@ class SideSummary:
         return cls(len(outcomes), passes, mean, spread)
 
     @property
-    def passes_overall(self) -> bool:
-        """Whether a majority of the samples passed."""
-        return self.passes * 2 > self.count
+    def failures(self) -> int:
+        """How many runs failed (an unscorable run fails)."""
+        return self.count - self.passes
 
     @property
-    def failures(self) -> int:
-        """How many samples failed (an unscorable sample fails)."""
-        return self.count - self.passes
+    def passes_overall(self) -> bool:
+        """Whether a majority of the runs passed."""
+        return _is_majority(self.passes, self.count)
+
+    @property
+    def fails_overall(self) -> bool:
+        """Whether a majority of the runs failed (2 of 3 by default)."""
+        return _is_majority(self.failures, self.count)
+
+
+def _is_majority(part: int, count: int) -> bool:
+    return part * 2 > count
 
 
 @dataclass(frozen=True)
-class TaskComparison:
-    """One task's base and HEAD summaries and why it regressed (empty when it did not)."""
+class SampleComparison:
+    """One eval sample's base and HEAD summaries and why it regressed (empty when not)."""
 
-    task_id: str
+    sample_id: str
     base: SideSummary
     head: SideSummary
     reasons: tuple[str, ...]
@@ -150,15 +159,39 @@ class TaskComparison:
         return bool(self.reasons)
 
 
-def compare_task(
-    task_id: str, base: Sequence[SampleOutcome], head: Sequence[SampleOutcome]
-) -> TaskComparison:
-    """Compare one task's base and HEAD outcomes by the default thresholds (D37).
+@dataclass(frozen=True)
+class ComparisonSetup:
+    """What both sides shared: their labels, the agent runner and the judge (if any).
+
+    Without a judge the compared score is the deterministic gate score only, so
+    the table and JSON say which score they compare.
 
     Example::
 
-        >>> base = [SampleOutcome(True, 0.9)] * 3
-        >>> compare_task("t", base, [SampleOutcome(True, 0.7)] * 3).reasons
+        >>> ComparisonSetup("main (v1)", "HEAD (v1)", runner="fake").score_name
+        'gate score'
+    """
+
+    base_label: str
+    head_label: str
+    runner: str
+    judge: str | None = None
+
+    @property
+    def score_name(self) -> str:
+        """``judge score`` with a judge, ``gate score`` (deterministic only) without."""
+        return "judge score" if self.judge else "gate score"
+
+
+def compare_sample(
+    sample_id: str, base: Sequence[RunOutcome], head: Sequence[RunOutcome]
+) -> SampleComparison:
+    """Compare one eval sample's base and HEAD outcomes by the default thresholds (D37).
+
+    Example::
+
+        >>> base = [RunOutcome(True, 0.9)] * 3
+        >>> compare_sample("s", base, [RunOutcome(True, 0.7)] * 3).reasons
         ('mean score drops 0.200',)
     """
     base_summary, head_summary = SideSummary.of(base), SideSummary.of(head)
@@ -167,42 +200,50 @@ def compare_task(
         drop = round(base_summary.mean - head_summary.mean, _DIGITS)
         if drop > MAX_SCORE_DROP:
             reasons.append(f"mean score drops {drop:.3f}")
-    if base_summary.passes_overall and head_summary.failures * 2 > head_summary.count:
-        reasons.append(f"fails {head_summary.failures} of {head_summary.count} samples on head")
-    return TaskComparison(task_id, base_summary, head_summary, tuple(reasons))
+    if base_summary.passes_overall and head_summary.fails_overall:
+        reasons.append(f"fails {head_summary.failures} of {head_summary.count} runs on head")
+    return SampleComparison(sample_id, base_summary, head_summary, tuple(reasons))
 
 
-def format_comparison_table(
-    rows: Sequence[TaskComparison], *, base_label: str, head_label: str
-) -> str:
-    """Render ``rows`` as an aligned text table, one line per task, plus a summary line.
+def format_comparison_table(rows: Sequence[SampleComparison], setup: ComparisonSetup) -> str:
+    """Render ``rows`` as an aligned table, one line per eval sample, framed by setup and summary.
 
-    Each side shows ``passes/count pass`` and ``mean ± spread`` of the scores; the
-    last column is ``ok`` or ``REGRESSION: <reasons>``.
+    The first line names the runner and judge both sides ran with; each side then
+    shows ``passes/count pass`` and ``mean ± spread`` of the scores; the last column
+    is ``ok`` or ``REGRESSION: <reasons>``.
 
     Example::
 
-        >>> row = compare_task("t", [SampleOutcome(True, 0.9)], [SampleOutcome(True, 0.9)])
-        >>> format_comparison_table([row], base_label="b", head_label="h").splitlines()[-1]
-        '0 of 1 tasks regressed (advisory, not a merge gate)'
+        >>> row = compare_sample("s", [RunOutcome(True, 0.9)], [RunOutcome(True, 0.9)])
+        >>> format_comparison_table([row], ComparisonSetup("b", "h", "fake")).splitlines()[-1]
+        '0 of 1 eval samples regressed (advisory, not a merge gate)'
     """
-    header: tuple[str, ...] = ("task", f"{base_label} outcome", f"{head_label} outcome")
-    header += (f"{base_label} score", f"{head_label} score", "verdict")
+    score = setup.score_name
+    header: tuple[str, ...] = ("eval sample", f"{setup.base_label} outcome")
+    header += (f"{setup.head_label} outcome", f"{setup.base_label} {score}")
+    header += (f"{setup.head_label} {score}", "verdict")
     table = [header] + [_table_cells(row) for row in rows]
     widths = [max(len(cells[i]) for cells in table) for i in range(len(header) - 1)]
-    lines = [
+    lines = [_setup_line(setup)]
+    lines += [
         "  ".join([*(c.ljust(w) for c, w in zip(cells, widths, strict=False)), cells[-1]])
         for cells in table
     ]
     regressed = sum(1 for row in rows if row.regressed)
-    lines.append(f"{regressed} of {len(rows)} tasks regressed (advisory, not a merge gate)")
+    lines.append(f"{regressed} of {len(rows)} eval samples regressed (advisory, not a merge gate)")
     return "\n".join(lines)
 
 
-def _table_cells(row: TaskComparison) -> tuple[str, ...]:
+def _setup_line(setup: ComparisonSetup) -> str:
+    if setup.judge:
+        return f"runner {setup.runner}, judge {setup.judge}: score = gate and judge rubric"
+    return f"runner {setup.runner}, no judge: score = deterministic gate score only"
+
+
+def _table_cells(row: SampleComparison) -> tuple[str, ...]:
     verdict = "REGRESSION: " + "; ".join(row.reasons) if row.regressed else "ok"
     outcomes = (_outcome_cell(row.base), _outcome_cell(row.head))
-    return (row.task_id, *outcomes, _score_cell(row.base), _score_cell(row.head), verdict)
+    return (row.sample_id, *outcomes, _score_cell(row.base), _score_cell(row.head), verdict)
 
 
 def _outcome_cell(side: SideSummary) -> str:
@@ -216,26 +257,29 @@ def _score_cell(side: SideSummary) -> str:
 
 
 def comparison_to_dict(
-    rows: Sequence[TaskComparison], *, base_label: str, head_label: str
+    rows: Sequence[SampleComparison], setup: ComparisonSetup
 ) -> dict[str, object]:
-    """Stable JSON view of the comparison: both labels, the regression count and each task.
+    """Stable JSON view: both labels, runner, judge, score kind, regressions, each sample.
 
     Example::
 
-        >>> comparison_to_dict([], base_label="b", head_label="h")["regressions"]
+        >>> comparison_to_dict([], ComparisonSetup("b", "h", "fake"))["regressions"]
         0
     """
     return {
-        "base": base_label,
-        "head": head_label,
+        "base": setup.base_label,
+        "head": setup.head_label,
+        "runner": setup.runner,
+        "judge": setup.judge,
+        "score": setup.score_name,
         "regressions": sum(1 for row in rows if row.regressed),
-        "tasks": [_row_to_dict(row) for row in rows],
+        "samples": [_row_to_dict(row) for row in rows],
     }
 
 
-def _row_to_dict(row: TaskComparison) -> dict[str, object]:
+def _row_to_dict(row: SampleComparison) -> dict[str, object]:
     return {
-        "task_id": row.task_id,
+        "sample_id": row.sample_id,
         "base": _side_to_dict(row.base),
         "head": _side_to_dict(row.head),
         "regressed": row.regressed,
