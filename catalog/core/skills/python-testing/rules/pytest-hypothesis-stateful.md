@@ -5,7 +5,11 @@ description: "Test stateful objects with a Hypothesis rule-based state machine t
 version: 1
 scope: scoped
 globs:
-  - "tests/**/*.py"
+  - "**/test_*.py"
+  - "**/*_test.py"
+  - "**/tests/**/*.py"
+  - "**/conftest.py"
+  - "**/fakes.py"
 applies_if:
   has_framework: ["pytest"]
   has_dependency: ["hypothesis"]

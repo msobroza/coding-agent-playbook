@@ -5,7 +5,11 @@ description: "Give parametrized cases with long strings or non-scalar values exp
 version: 1
 scope: scoped
 globs:
-  - "tests/**/*.py"
+  - "**/test_*.py"
+  - "**/*_test.py"
+  - "**/tests/**/*.py"
+  - "**/conftest.py"
+  - "**/fakes.py"
 applies_if:
   has_framework: ["pytest"]
 section: parametrization
@@ -17,39 +21,42 @@ tags: [python, testing, pytest, parametrize]
 
 ## Description
 
-pytest generates parametrize ids from the argument values, which works for short strings but degrades to `payload0`, `payload1` or truncated reprs for mappings, records and long inputs. Give such cases explicit ids with `pytest.param(..., id=...)`, so the failure report and `-k` selection use the scenario's name instead of an opaque index.
+pytest generates parametrize ids from the argument values, which works for short strings but degrades to `event0`, `event1` or truncated reprs for mappings, records and long inputs. Give such cases explicit ids with `pytest.param(..., id=...)`, so the failure report and `-k` selection use the scenario's name instead of an opaque index.
 
 ## Bad Example
 
 ```python
 @pytest.mark.parametrize(
-    "payload",
+    "event",
     [
-        {"type": "invoice.paid", "data": {"amount": 100}},
-        {"type": "invoice.paid", "data": {"amount": 0}},
-        {"type": "invoice.void", "data": {"amount": 100}},
+        WebhookEvent(kind="invoice.paid", invoice_id="inv-1", amount_cents=100),
+        WebhookEvent(kind="invoice.paid", invoice_id="inv-1", amount_cents=0),
+        WebhookEvent(kind="invoice.void", invoice_id="inv-1", amount_cents=100),
     ],
 )
-def test_webhook_handling(payload: Mapping[str, object]) -> None: ...
+def test_webhook_handling(event: WebhookEvent) -> None: ...
 
 
 # Failure report:
-#   FAILED test_webhooks.py::test_webhook_handling[payload1]
-# Which case is payload1? Open the file and count.
+#   FAILED test_webhooks.py::test_webhook_handling[event1]
+# Which case is event1? Open the file and count.
 ```
 
 ## Good Example
 
 ```python
+PAID = WebhookEvent(kind="invoice.paid", invoice_id="inv-1", amount_cents=100)
+
+
 @pytest.mark.parametrize(
-    "payload",
+    "event",
     [
-        pytest.param({"type": "invoice.paid", "data": {"amount": 100}}, id="paid"),
-        pytest.param({"type": "invoice.paid", "data": {"amount": 0}}, id="paid-zero-amount"),
-        pytest.param({"type": "invoice.void", "data": {"amount": 100}}, id="voided"),
+        pytest.param(PAID, id="paid"),
+        pytest.param(replace(PAID, amount_cents=0), id="paid-zero-amount"),
+        pytest.param(replace(PAID, kind="invoice.void"), id="voided"),
     ],
 )
-def test_webhook_handling(payload: Mapping[str, object]) -> None: ...
+def test_webhook_handling(event: WebhookEvent) -> None: ...
 
 
 # Failure report:

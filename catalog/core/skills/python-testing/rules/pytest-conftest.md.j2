@@ -5,8 +5,11 @@ description: "Define each fixture where all its users live, in the test file or 
 version: 1
 scope: scoped
 globs:
-  - "tests/**/*.py"
+  - "**/test_*.py"
+  - "**/*_test.py"
+  - "**/tests/**/*.py"
   - "**/conftest.py"
+  - "**/fakes.py"
 applies_if:
   has_framework: ["pytest"]
 section: fixtures
@@ -46,10 +49,12 @@ from conftest import FakeInvoiceStore
 
 ```
 tests/
+├── __init__.py            # one per test directory, so tests.fakes imports
 ├── conftest.py            # suite-wide only: settings, the database session
 ├── fakes.py               # shared fakes, imported explicitly
 ├── api/
 │   ├── conftest.py        # api-wide: client, auth_headers
+│   ├── test_invoices.py   # imports FakeInvoiceStore from tests.fakes
 │   └── test_webhooks.py   # webhook_payload defined here, its only user
 └── pdf/
     ├── conftest.py        # pdf-wide: sample_pdf_dir
@@ -64,12 +69,18 @@ def client(settings: Settings) -> ApiClient:
 
 
 # tests/api/test_webhooks.py: a single-file fixture stays in the file
+@pytest.fixture
+def webhook_payload() -> WebhookEvent:
+    return WebhookEvent(kind="invoice.paid", invoice_id="inv-1", amount_cents=10_000)
+
+
+# tests/api/test_invoices.py: a shared fake is imported explicitly
 from tests.fakes import FakeInvoiceStore
 
 
 @pytest.fixture
-def webhook_payload() -> WebhookEvent:
-    return WebhookEvent(kind="invoice.paid", invoice_id="inv-1", amount_cents=10_000)
+def invoices() -> FakeInvoiceStore:
+    return FakeInvoiceStore()
 ```
 
 ## Notes

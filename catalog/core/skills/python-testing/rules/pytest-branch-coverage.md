@@ -5,7 +5,11 @@ description: "Read branch coverage to find the paths no test runs, then add case
 version: 1
 scope: scoped
 globs:
-  - "tests/**/*.py"
+  - "**/test_*.py"
+  - "**/*_test.py"
+  - "**/tests/**/*.py"
+  - "**/conftest.py"
+  - "**/fakes.py"
 applies_if:
   has_framework: ["pytest"]
   any_dependency: ["pytest-cov", "coverage"]

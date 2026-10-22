@@ -5,7 +5,11 @@ description: "Collapse tests that differ only in inputs and expected values into
 version: 1
 scope: scoped
 globs:
-  - "tests/**/*.py"
+  - "**/test_*.py"
+  - "**/*_test.py"
+  - "**/tests/**/*.py"
+  - "**/conftest.py"
+  - "**/fakes.py"
 applies_if:
   has_framework: ["pytest"]
 section: parametrization
@@ -57,14 +61,14 @@ def test_slugify(raw: str, expected: str) -> None:
     assert slugify(raw) == expected
 ```
 
-When some cases raise and others return, parametrize the expectation itself and wrap only the Act in it:
+When some cases raise and others return, parametrize the expectation itself and wrap only the Act in it (here `split_bill` raises a `ValueError` naming the bad `people` value):
 
 ```python
 @pytest.mark.parametrize(
     ("divisor", "expectation"),
     [
         (2, contextlib.nullcontext()),
-        (0, pytest.raises(ZeroDivisionError)),
+        (0, pytest.raises(ValueError, match="people=0")),
     ],
 )
 def test_split_bill(divisor: int, expectation: AbstractContextManager[object]) -> None:

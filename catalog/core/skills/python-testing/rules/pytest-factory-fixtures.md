@@ -5,8 +5,11 @@ description: "When tests need variations of one object, return a factory with ke
 version: 1
 scope: scoped
 globs:
-  - "tests/**/*.py"
+  - "**/test_*.py"
+  - "**/*_test.py"
+  - "**/tests/**/*.py"
   - "**/conftest.py"
+  - "**/fakes.py"
 applies_if:
   has_framework: ["pytest"]
 section: fixtures
@@ -48,7 +51,7 @@ def inactive_user() -> User:
 def make_user() -> Callable[..., User]:
     counter = itertools.count()
 
-    def _make(*, name: str | None = None, active: bool = True, role: str = "member") -> User:
+    def _make(*, name: str | None = None, active: bool = True, role: Role = "member") -> User:
         name = name or f"user{next(counter)}"
         return User(name=name, email=f"{name}@example.com", active=active, role=role)
 
@@ -65,15 +68,17 @@ def test_users_have_unique_emails(make_user: Callable[..., User]) -> None:
     assert make_user().email != make_user().email
 ```
 
-When the objects need cleanup, the factory records what it created and removes it after `yield`:
+Here `Role = Literal["member", "admin"]`. When the objects need cleanup, the factory records what it created and removes it after `yield`:
 
 ```python
 @pytest.fixture
 def create_user(db: Database) -> Iterator[Callable[..., User]]:
+    counter = itertools.count()
     created: list[User] = []
 
-    def _create(*, name: str = "alice", email: str = "alice@example.com") -> User:
-        user = User(name=name, email=email)
+    def _create(*, name: str | None = None) -> User:
+        name = name or f"user{next(counter)}"
+        user = User(name=name, email=f"{name}@example.com")
         db.save(user)
         created.append(user)
         return user
@@ -90,4 +95,3 @@ def create_user(db: Database) -> Iterator[Callable[..., User]]:
 - Attributes a test doesn't mention get valid defaults; a test must not depend on them. When it does, it states them.
 - Type the fixture as `Callable[..., User]` (or a `Protocol` with the exact keyword signature when the parameters matter to the type checker); a `yield` factory returns `Iterator[Callable[..., User]]`.
 - A long Arrange step that builds several related objects is a sign a factory is missing.
-- A factory of rows in a real database flushes and never commits, inside the per-test rolled-back session (the web-application skill's sqlalchemy-test-rollback).

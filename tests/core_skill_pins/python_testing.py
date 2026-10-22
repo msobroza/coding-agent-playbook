@@ -2,17 +2,19 @@
 
 Sections and priorities follow mapping-python-testing.md (prU D17, L0-16; the
 priority formula is on :class:`RulePin`). C-python-testing-02 vendored the
-fixtures, parametrization and coverage rules at priorities 48-50 and 60-65.
+fixtures, parametrization and coverage rules at priorities 48-50 and 60-65, on
+the shared test-file glob set (D41); the rules C-python-testing-01 revises still
+use ``tests/**/*.py`` until it moves them.
 """
 
 from __future__ import annotations
 
 from typing import Final
 
+from tests._catalog import TEST_FILE_GLOBS
 from tests.core_skill_pins import CoreSkillPins, RulePin
 
 _TEST_FILES: Final = ("tests/**/*.py", "**/conftest.py")
-_TEST_MODULES: Final = ("tests/**/*.py",)
 _PYTEST_GATE: Final = {"has_framework": ["pytest"]}
 #: D23: the coverage rule renders only where the repo already measures coverage.
 _COVERAGE_GATE: Final = {**_PYTEST_GATE, "any_dependency": ["pytest-cov", "coverage"]}
@@ -22,7 +24,7 @@ _HYPOTHESIS_GATE: Final = {**_PYTEST_GATE, "has_dependency": ["hypothesis"]}
 _FIXTURES_RULES: Final = {
     "pytest-fixtures": RulePin(
         applies_if=_PYTEST_GATE,
-        globs=_TEST_FILES,
+        globs=TEST_FILE_GLOBS,
         priority=48,
         name="pytest fixtures",
         tags=("python", "testing", "pytest", "fixtures"),
@@ -30,7 +32,7 @@ _FIXTURES_RULES: Final = {
     ),
     "pytest-conftest": RulePin(
         applies_if=_PYTEST_GATE,
-        globs=_TEST_FILES,
+        globs=TEST_FILE_GLOBS,
         priority=49,
         name="Fixtures in the nearest conftest.py",
         tags=("python", "testing", "pytest", "fixtures", "conftest"),
@@ -38,7 +40,7 @@ _FIXTURES_RULES: Final = {
     ),
     "pytest-factory-fixtures": RulePin(
         applies_if=_PYTEST_GATE,
-        globs=_TEST_FILES,
+        globs=TEST_FILE_GLOBS,
         priority=50,
         name="Factory fixtures",
         tags=("python", "testing", "pytest", "fixtures", "test-data"),
@@ -49,7 +51,7 @@ _FIXTURES_RULES: Final = {
 _PARAMETRIZATION_RULES: Final = {
     "pytest-parametrize": RulePin(
         applies_if=_PYTEST_GATE,
-        globs=_TEST_MODULES,
+        globs=TEST_FILE_GLOBS,
         priority=60,
         name="Parametrized case tables",
         tags=("python", "testing", "pytest", "parametrize"),
@@ -57,7 +59,7 @@ _PARAMETRIZATION_RULES: Final = {
     ),
     "pytest-parametrize-ids": RulePin(
         applies_if=_PYTEST_GATE,
-        globs=_TEST_MODULES,
+        globs=TEST_FILE_GLOBS,
         priority=61,
         name="Readable parametrize ids",
         tags=("python", "testing", "pytest", "parametrize"),
@@ -68,7 +70,7 @@ _PARAMETRIZATION_RULES: Final = {
 _COVERAGE_RULES: Final = {
     "pytest-edge-cases": RulePin(
         applies_if=_PYTEST_GATE,
-        globs=_TEST_MODULES,
+        globs=TEST_FILE_GLOBS,
         priority=62,
         name="Edge cases",
         tags=("python", "testing", "pytest", "coverage"),
@@ -76,7 +78,7 @@ _COVERAGE_RULES: Final = {
     ),
     "pytest-branch-coverage": RulePin(
         applies_if=_COVERAGE_GATE,
-        globs=_TEST_MODULES,
+        globs=TEST_FILE_GLOBS,
         priority=63,
         name="Branch coverage",
         tags=("python", "testing", "pytest", "coverage"),
@@ -84,7 +86,7 @@ _COVERAGE_RULES: Final = {
     ),
     "pytest-hypothesis-properties": RulePin(
         applies_if=_HYPOTHESIS_GATE,
-        globs=_TEST_MODULES,
+        globs=TEST_FILE_GLOBS,
         priority=64,
         name="Hypothesis properties",
         tags=("python", "testing", "pytest", "hypothesis"),
@@ -92,7 +94,7 @@ _COVERAGE_RULES: Final = {
     ),
     "pytest-hypothesis-stateful": RulePin(
         applies_if=_HYPOTHESIS_GATE,
-        globs=_TEST_MODULES,
+        globs=TEST_FILE_GLOBS,
         priority=65,
         name="Hypothesis stateful tests",
         tags=("python", "testing", "pytest", "hypothesis"),

@@ -5,7 +5,11 @@ description: "Test each operation beyond the happy path: empty and zero inputs, 
 version: 1
 scope: scoped
 globs:
-  - "tests/**/*.py"
+  - "**/test_*.py"
+  - "**/*_test.py"
+  - "**/tests/**/*.py"
+  - "**/conftest.py"
+  - "**/fakes.py"
 applies_if:
   has_framework: ["pytest"]
 section: coverage
@@ -43,34 +47,42 @@ def test_create_booking() -> None:
 ## Good Example
 
 ```python
+@pytest.fixture
+def rooms() -> FakeRoomStore:
+    return FakeRoomStore([Room(room_id="room-1", nightly_rate_cents=10_000)])
+
+
 @pytest.mark.parametrize(
     ("nights", "price_cents"),
     [
         pytest.param(0, 0, id="zero-nights"),
         pytest.param(1, 10_000, id="one-night"),
+        pytest.param(29, 290_000, id="below-the-limit"),
         pytest.param(30, 300_000, id="at-the-limit"),  # MAX_NIGHTS is 30
     ],
 )
-def test_booking_price_at_the_boundaries(nights: int, price_cents: int) -> None:
-    rooms = FakeRoomStore([Room(room_id="room-1", nightly_rate_cents=10_000)])
+def test_booking_price_at_the_boundaries(
+    rooms: FakeRoomStore, nights: int, price_cents: int
+) -> None:
     request = BookingRequest(room_id="room-1", check_in=date(2026, 1, 1), nights=nights)
 
     assert create_booking(request, rooms=rooms).price_cents == price_cents
 
 
-def test_booking_above_the_limit_is_rejected() -> None:
-    rooms = FakeRoomStore([Room(room_id="room-1", nightly_rate_cents=10_000)])
-    request = BookingRequest(room_id="room-1", check_in=date(2026, 1, 1), nights=31)
+@pytest.mark.parametrize(
+    ("room_id", "nights", "error", "message"),
+    [
+        pytest.param("room-1", 31, BookingError, "at most", id="above-the-limit"),
+        pytest.param("no-such-room", 1, RoomNotFoundError, "no-such-room", id="not-found"),
+    ],
+)
+def test_booking_is_rejected(
+    rooms: FakeRoomStore, room_id: str, nights: int, error: type[Exception], message: str
+) -> None:
+    request = BookingRequest(room_id=room_id, check_in=date(2026, 1, 1), nights=nights)
 
-    with pytest.raises(BookingError, match="at most"):
+    with pytest.raises(error, match=message):
         create_booking(request, rooms=rooms)
-
-
-def test_booking_an_unknown_room_raises_not_found() -> None:
-    request = BookingRequest(room_id="no-such-room", check_in=date(2026, 1, 1), nights=1)
-
-    with pytest.raises(RoomNotFoundError, match="no-such-room"):
-        create_booking(request, rooms=FakeRoomStore([]))
 ```
 
 ## Notes
