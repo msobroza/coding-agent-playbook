@@ -4,7 +4,8 @@ Core copies upstream Python guidance and adapts it (D1). The credit and the
 provenance live in one file: one section per source with its D11 pin, and inside
 it one table per core skill mapping each upstream file to the core files it
 became, or to DROP with a reason. A per-skill ``Engine-written files`` list
-covers the files with no upstream text. The parser is ``tests/_attributions.py``;
+covers the files with no upstream text. A distilled source (prU D50) has no
+pin: its rows credit engine-written files by page, or DROP them. The parser is ``tests/_attributions.py``;
 each check here runs once on the shipped file and once on a synthetic tree.
 """
 
@@ -87,8 +88,22 @@ def test_core_attributions_name_both_pins_and_drop_the_fresh_text_policy() -> No
         "python-best-practices": "fa0d3f58afb8bf56c028bb559e0e7bc1538e079a",
         "python-clean-architecture": "9d627ca7bedbe0bb9e2fcf3c83d81814a6133dce",
     }
-    commits = {name: source.commit for name, source in load_core_attributions().sources.items()}
+    commits = {
+        name: source.commit
+        for name, source in load_core_attributions().sources.items()
+        if not source.distilled
+    }
     assert commits == dict(SOURCE_PINS)
+
+
+def test_core_attributions_record_the_domino_docs_drops_per_page() -> None:
+    """prU D50: the distilled Domino documentation has page rows, DROP rows included."""
+    source = load_core_attributions().sources["domino-docs"]
+    assert source.distilled
+    assert source.commit is None
+    rows = source.skills["domino-jobs"].rows
+    assert "user_guide/ca786d" in {row.upstream for row in rows if row.dropped}
+    assert "user_guide/55fc89" in {row.upstream for row in rows if not row.dropped}
 
 
 def test_core_attributions_list_engine_written_files_per_core_skill() -> None:
@@ -155,6 +170,7 @@ def test_parse_rejects_a_malformed_row(line: str, match: str) -> None:
         ("- `SKILL.md`\n", r":1: a listed file outside a skill: '- `SKILL.md`'"),
         ("## Engine-written files\nCommit: `abc`\n", r":2: a Commit line belongs under a source"),
         ("## src\n### s\nCommit: `abc`\n", r":3: a Commit line belongs under a source"),
+        ("## src\n### s\nForm: distilled.\n", r":3: a Form line belongs under a source"),
         ("### s\n", r":1: skill heading 's' before any section"),
     ],
 )
@@ -322,3 +338,78 @@ def test_distill_actions_read_the_action_column(tmp_path: Path) -> None:
         },
     )
     assert distill_actions(tmp_path) == {"alpha": frozenset({"rules/a.md"}), "beta": frozenset()}
+
+
+# --------------------------------------------------------------------------- #
+# A distilled source (prU D50): credited by name, no pin, no license copy.
+# --------------------------------------------------------------------------- #
+
+_DISTILLED_SECTION = textwrap.dedent(
+    """\
+    ## docs-source
+
+    Source: documentation without an open license.
+    Form: distilled (credited by name only, not vendored).
+
+    ### alpha
+
+    | Upstream file | Core files | Changes |
+    | --- | --- | --- |
+    | `guide/p1` | `SKILL.md` | Facts restated in the engine's own words. |
+    | `guide/p2` | DROP | A landing page with nothing actionable. |
+
+    """
+)
+
+
+def _with_distilled(section: str = _DISTILLED_SECTION) -> str:
+    return _SYNTHETIC.replace("## Engine-written files", section + "## Engine-written files")
+
+
+def test_parse_marks_a_distilled_source_without_a_pin() -> None:
+    source = _parsed(_with_distilled()).sources["docs-source"]
+
+    assert source.distilled
+    assert source.commit is None
+    assert [(r.upstream, r.targets) for r in source.skills["alpha"].rows] == [
+        ("guide/p1", ("SKILL.md",)),
+        ("guide/p2", ()),
+    ]
+    assert not _parsed().sources["up-source"].distilled
+
+
+def test_a_distilled_source_needs_no_pin_and_no_license_copy(tmp_path: Path) -> None:
+    """Its rows credit engine-written files: they hold no upstream text (D50)."""
+    assert _errors(tmp_path, _with_distilled()) == []
+
+
+def test_a_distilled_source_with_a_commit_pin_fails(tmp_path: Path) -> None:
+    section = _DISTILLED_SECTION.replace("Form: distilled", f"Commit: `{_PIN}`\nForm: distilled")
+    assert _errors(tmp_path, _with_distilled(section)) == [
+        "docs-source: a distilled source carries no commit pin"
+    ]
+
+
+def test_a_distilled_row_crediting_a_vendored_file_fails(tmp_path: Path) -> None:
+    section = _DISTILLED_SECTION.replace("| `SKILL.md` |", "| `rules/a.md` |")
+    assert _errors(tmp_path, _with_distilled(section)) == [
+        "alpha/rules/a.md: credited to a distilled source but not listed as engine-written"
+        " or distilled"
+    ]
+
+
+def test_a_distilled_page_may_feed_several_skills_but_one_row_each(tmp_path: Path) -> None:
+    beta = "### beta\n\n| Upstream file | Core files | Changes |\n| --- | --- | --- |\n"
+    twice = _DISTILLED_SECTION + beta + "| `guide/p1` | DROP | Not beta material. |\n\n"
+    assert _errors(tmp_path, _with_distilled(twice)) == []
+
+    section = _DISTILLED_SECTION.replace("`guide/p2` | DROP", "`guide/p1` | DROP")
+    assert _errors(tmp_path, _with_distilled(section)) == [
+        "docs-source/alpha: `guide/p1` appears in more than one row"
+    ]
+
+
+def test_a_distilled_source_row_is_not_a_distill_action_conflict() -> None:
+    """Its targets hold no upstream text, so a rule the mapping distills may be one."""
+    section = _DISTILLED_SECTION.replace("| `SKILL.md` |", "| `rules/d.md` |")
+    assert distill_action_errors(_parsed(_with_distilled(section)), {"alpha": {"rules/d.md"}}) == []

@@ -13,12 +13,17 @@ from __future__ import annotations
 import importlib
 import pkgutil
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Final, Literal
 
 from coding_agent_playbook.hooks.guardrails_skill import GUARDRAILS_SKILL_ID
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+
+#: The probe repo a core skill is checked on: the D5 reference probe, or the D59
+#: Domino probe for the Domino skills the reference probe never activates (prU D63).
+type ProbeKind = Literal["reference", "domino"]
 
 
 @dataclass(frozen=True)
@@ -49,7 +54,10 @@ class CoreSkillPins:
     """One core skill's pins: its Where phrase, members and the frontmatter of pinned rules.
 
     ``members`` lists every member rule id in index order (priority, then id);
-    ``probe_inactive`` holds the members the reference probe does not activate;
+    ``probe`` names the probe repo the skill is checked on: ``"reference"`` (the D5
+    reference probe) or ``"domino"`` (the D59 Domino probe, for the Domino skills
+    the reference probe never activates; prU D63); ``probe_inactive`` holds the
+    members that probe does not activate;
     ``section_ids`` lists the declared section ids in the order of the skill's
     mapping (``specs/prU-core-python-skills/mapping-<skill>.md``), ``()`` while
     the skill declares none.
@@ -63,6 +71,7 @@ class CoreSkillPins:
     probe_inactive: frozenset[str]
     rules: Mapping[str, RulePin]
     section_ids: tuple[str, ...] = ()
+    probe: ProbeKind = "reference"
 
 
 #: Core skills that take no member rules: no ``playbook:`` block, an authored "Use when".
@@ -84,3 +93,5 @@ def _discover_pins() -> tuple[CoreSkillPins, ...]:
 
 #: Every core skill with member rules, one entry per pins module, sorted by skill id.
 ALL_PINS: Final = _discover_pins()
+#: The core skills only the Domino probe activates: their pins name ``probe="domino"``.
+DOMINO_SKILL_IDS: Final = frozenset(p.skill_id for p in ALL_PINS if p.probe == "domino")
