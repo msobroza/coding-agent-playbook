@@ -158,6 +158,9 @@ def write_prompt(prompt: Prompt, into: Path) -> None:
 def write_skill(skill: Skill, into: Path) -> None:
     """Write ``<into>/skills/<id>/SKILL.md`` with the full frontmatter, plus its side dirs.
 
+    The side dirs are ``scripts/`` (exec bits restored), ``references/`` and
+    ``examples/`` (prU D48).
+
     Example: ``write_skill(skill, Path("playbook"))`` -> ``playbook/skills/db/SKILL.md``.
     """
     skill_id = str(skill.frontmatter.get("id", "skill"))
@@ -165,10 +168,9 @@ def write_skill(skill: Skill, into: Path) -> None:
     skill_dir.mkdir(parents=True, exist_ok=True)
     text = format_frontmatter(dict(skill.frontmatter), skill.body)
     (skill_dir / "SKILL.md").write_text(text, encoding="utf-8")
-    if skill.scripts_dir is not None and skill.scripts_dir.is_dir():
-        copy_tree(skill.scripts_dir, skill_dir / "scripts", restore_exec=True)
-    if skill.references_dir is not None and skill.references_dir.is_dir():
-        copy_tree(skill.references_dir, skill_dir / "references", restore_exec=False)
+    for name, src in skill.side_dirs():
+        if src is not None and src.is_dir():
+            copy_tree(src, skill_dir / name, restore_exec=name == "scripts")
 
 
 def write_hook(hook: Hook, into: Path) -> Path:

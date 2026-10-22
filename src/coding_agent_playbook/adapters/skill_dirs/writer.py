@@ -62,7 +62,7 @@ from coding_agent_playbook.adapters.skill_dirs.ownership import PriorOutput
 from coding_agent_playbook.artifacts.frontmatter import format_frontmatter
 from coding_agent_playbook.artifacts.member_reference import member_reference_path
 from coding_agent_playbook.generated_output.sentinel import has_sentinel
-from coding_agent_playbook.generated_output.source_files import copyable_skill_files
+from coding_agent_playbook.generated_output.source_files import published_skill_files
 from coding_agent_playbook.generated_output.symlinks import (
     is_dangling_symlink,
     link_leaving,
@@ -362,8 +362,8 @@ def _write_skill_files(
         return []
     skill_md.write_text(skill_md_text, encoding="utf-8")
     written = [skill_md]
-    written.extend(_copy_subtree(skill.scripts_dir, skill_dir / "scripts", skill_dir, prior))
-    written.extend(_copy_subtree(skill.references_dir, skill_dir / "references", skill_dir, prior))
+    for name, _ in skill.side_dirs():
+        written.extend(_copy_subtree(skill, name, skill_dir, prior))
     written.extend(_write_member_references(skill, skill_dir, prior))
     return written
 
@@ -473,25 +473,22 @@ def _remove_existing(dst: Path) -> None:
     dst.unlink(missing_ok=True)
 
 
-def _copy_subtree(
-    src: Path | None, dst_root: Path, skill_dir: Path, prior: PriorOutput
-) -> list[Path]:
-    """Byte-copy every publishable file under ``src`` into ``dst_root`` (``shutil.copy2``).
+def _copy_subtree(skill: Skill, name: str, skill_dir: Path, prior: PriorOutput) -> list[Path]:
+    """Byte-copy every published file of ``skill``'s side dir ``name`` into ``skill_dir/name``.
 
-    Returns the destination files in sorted source order; ``[]`` when ``src``
-    is absent. Source symlinks inside the skill are dereferenced (copies, not
-    symlinks); bytecode caches (``__pycache__/``, ``*.pyc``/``*.pyo``) are
+    ``name`` is ``scripts``, ``references`` or ``examples`` (``shutil.copy2``).
+    Returns the destination files in sorted source order; ``[]`` when the skill
+    has no such dir. Source symlinks inside the skill are dereferenced (copies,
+    not symlinks); bytecode caches (``__pycache__/``, ``*.pyc``/``*.pyo``) are
     skipped, so they never reach a skills root or the lockfile; a secret path or
     a link leaving the skill's source dir is never copied
-    (:func:`~.source_files.copyable_skill_files` warns instead). Each recorded
-    path is the file ``copy2`` actually wrote, never a directory; a destination
-    blocked by user files is skipped (see :func:`_prepare_destination`).
+    (:func:`~.source_files.copyable_skill_files` warns instead), nor is a file a
+    failed ``applies_if`` withholds (prU D48, D58). Each recorded path is the
+    file ``copy2`` actually wrote, never a directory; a destination blocked by
+    user files is skipped (see :func:`_prepare_destination`).
     """
-    if src is None:
-        return []
     written: list[Path] = []
-    for source_file in copyable_skill_files(src, dst_root):
-        dst = dst_root / source_file.relative_to(src)
+    for source_file, dst in published_skill_files(skill, name, skill_dir / name):
         if _prepare_destination(dst, skill_dir, prior):
             written.append(Path(shutil.copy2(source_file, dst)))
     return written

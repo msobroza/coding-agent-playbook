@@ -1,7 +1,7 @@
 """The skill-shaped leaves of the ``agent_harness`` adapter (``specs/prH-agent-harness.md`` §B).
 
 ``skills/<id>/SKILL.md`` (the authored body plus the generated rules index, byte-copied
-``scripts/`` and ``references/``; member rules come from :mod:`._emit_rules`) and
+``scripts/``, ``references/`` and ``examples/``; member rules come from :mod:`._emit_rules`) and
 ``prompts/<slash>/SKILL.md``, each with its manifest entry. AH-2 (#143) moved these
 per-kind emitters out of :class:`~.adapter.AgentHarnessAdapter` to bring it under
 its 400-line budget; they take every input as an argument and hold no state. The
@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 from coding_agent_playbook.agent_harness import emitter, manifest
 from coding_agent_playbook.agent_harness.hook_sidecars import copy_scripts
 from coding_agent_playbook.generated_output.output_io import write_output_bytes, write_output_text
-from coding_agent_playbook.generated_output.source_files import copyable_skill_files
+from coding_agent_playbook.generated_output.source_files import published_skill_files
 from coding_agent_playbook.rendering.formats import with_sentinel_body
 from coding_agent_playbook.skills.document import emitted_body
 
@@ -58,7 +58,9 @@ def _emit_skill_leaf(
     scripts, script_paths = copy_scripts(skill.scripts_dir, skill_dir / "scripts", repo_root)
     path = skill_md.relative_to(repo_root).as_posix()
     entries.append(_skill_entry(skill, path, skill_id, name, scripts))
-    return [skill_md, *script_paths, *_copy_references(skill, skill_dir)]
+    copied = _copy_side_files(skill, skill_dir, "references")
+    copied += _copy_side_files(skill, skill_dir, "examples")
+    return [skill_md, *script_paths, *copied]
 
 
 def _skill_entry(
@@ -82,14 +84,14 @@ def _skill_entry(
     )
 
 
-def _copy_references(skill: Skill, skill_dir: Path) -> list[Path]:
-    """Byte-copy the skill's publishable references, filtered like ``scripts/``."""
-    if skill.references_dir is None:
-        return []
-    dst_root = skill_dir / "references"
+def _copy_side_files(skill: Skill, skill_dir: Path, name: str) -> list[Path]:
+    """Byte-copy the skill's published ``references/`` or ``examples/`` files (prU D48, D58).
+
+    Filtered like ``scripts/``, and a file a failed ``applies_if`` withholds is
+    not written.
+    """
     paths: list[Path] = []
-    for src in copyable_skill_files(skill.references_dir, dst_root):
-        dst = dst_root / src.relative_to(skill.references_dir)
+    for src, dst in published_skill_files(skill, name, skill_dir / name):
         dst.parent.mkdir(parents=True, exist_ok=True)
         write_output_bytes(dst, src.read_bytes())
         paths.append(dst)

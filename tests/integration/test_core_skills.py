@@ -7,7 +7,9 @@ parallel. Core also ships one plain skill, ``playbook-guardrails``, which takes
 no member rules: sync composes it from the on hooks' guardrail text (D6), so it
 has no ``playbook:`` block and its authored description carries its own "Use when".
 The D13 static checks (description shape, 500 lines, references one level deep,
-plain markdown) cover the core skills only: bundled plugin skills are exempt
+plain markdown) and the directory gates of ``tests/_core_skill_layout.py`` (a
+core skill holds rules/, references/, scripts/ and examples/, and its links stay
+inside it; prU L0-13) cover the core skills only: bundled plugin skills are exempt
 (D24) because their vendored or distilled descriptions and bodies fail them as
 written, and rewording vendored text would change upstream wording. The
 skill-listing budget in ``test_context_budget.py`` still counts every plugin.
@@ -34,9 +36,9 @@ from coding_agent_playbook.hooks.guardrails_skill import (
 from coding_agent_playbook.skills.document import DESCRIPTION_MAX_CHARS
 from coding_agent_playbook.skills.membership import compose_skills, member_rules_of
 from coding_agent_playbook.skills.naming import agent_skill_issues
-from coding_agent_playbook.validation.link_check import extract_markdown_links
 from tests._budget_probe import reference_probe_facts, render_core_rule
 from tests._catalog import CORE_ROOT, core_rule_paths, core_rule_skill_ids, core_rules
+from tests._core_skill_layout import inventory_problems, link_problems, nesting_problems
 from tests.core_skill_pins import ALL_PINS, PLAIN_CORE_SKILL_IDS, CoreSkillPins
 from tests.hook_runtime.handlers.pack_repo import engine_hook, engine_hook_paths
 from tests.hook_samples import resolved_hook
@@ -122,17 +124,28 @@ def _continue_guardrail_hook_ids(repo: Path) -> list[str]:
 
 
 def test_core_ships_exactly_the_d4_skills() -> None:
-    """An inventory pin: a later PR adding a hand-written reference or a skill updates it."""
+    """An inventory pin: a later PR adding a skill updates the pins modules."""
     assert sorted(p.name for p in SKILLS_ROOT.iterdir()) == EVERY_CORE_SKILL
-    for skill_id in EVERY_CORE_SKILL:
-        entries = sorted(p.name for p in (SKILLS_ROOT / skill_id).iterdir())
-        assert entries in (["SKILL.md"], ["SKILL.md", "rules"]), (
-            f"core skill {skill_id!r} holds {entries}"
-        )
-        rules_dir = SKILLS_ROOT / skill_id / "rules"
-        files = sorted(rules_dir.iterdir()) if rules_dir.is_dir() else []
-        odd = [p.name for p in files if not p.is_file() or not p.name.endswith((".md", ".md.j2"))]
-        assert not odd, f"core skill {skill_id!r} rules/ holds more than rule files: {odd}"
+
+
+@pytest.mark.parametrize("skill_id", EVERY_CORE_SKILL)
+def test_core_skill_holds_only_rules_references_scripts_and_examples(skill_id: str) -> None:
+    """prU L0-13 (D2, D19, D25, D48): SKILL.md plus rules/, references/, scripts/, examples/.
+
+    rules/ holds only rule files, references/ only .md files and the two license
+    copies, one level deep, and scripts/ only .py files (tests/_core_skill_layout.py).
+    """
+    assert inventory_problems(SKILLS_ROOT / skill_id) == [], skill_id
+
+
+@pytest.mark.parametrize("skill_id", EVERY_CORE_SKILL)
+def test_core_skill_links_stay_inside_the_skill(skill_id: str) -> None:
+    """Every relative link in SKILL.md or a rule resolves inside the same skill dir.
+
+    SKILL.md may link only its own references/<file>.md; a rule may link
+    ../references/<file>.md (prU L0-13). A link into another skill names its path.
+    """
+    assert link_problems(SKILLS_ROOT / skill_id) == [], skill_id
 
 
 def test_core_rules_dir_holds_only_always_rules() -> None:
@@ -216,15 +229,15 @@ def test_core_skill_declares_where_phrase(skill_id: str) -> None:
 
 @pytest.mark.parametrize("skill_id", EVERY_CORE_SKILL)
 def test_core_skill_md_is_plain_markdown(skill_id: str) -> None:
-    """The D13 body hygiene (no Jinja, links, URLs or rule ids), over core skills only.
+    """The D13 body hygiene (no Jinja, URLs or rule ids), over core skills only.
 
     Plugin skills are exempt (D24): they take no member rules, and vendored text
     keeps its upstream wording.
     """
     text = _skill_md_text(skill_id)
     assert "{{" not in text and "{%" not in text, f"core skill {skill_id!r} contains Jinja"
-    links = extract_markdown_links(text)
-    assert links == [], f"core skill {skill_id!r} contains a markdown link: {links}"
+    # Links to its own references/*.md are allowed; test_core_skill_links_stay_inside_the_skill
+    # checks them (prU L0-13).
     assert not _URL.search(text), f"core skill {skill_id!r} contains a URL"
     # The description may say "pytest" (also a rule id); only the body must not name ids.
     body, rule_ids = _authored(skill_id)[1], sorted(core_rules())
@@ -276,20 +289,11 @@ def test_guardrails_skill_md_within_500_lines_with_every_core_hook(tmp_path: Pat
 def test_core_skill_references_are_one_level_deep(skill_id: str) -> None:
     """The D13 one-level reference check, over core skills only.
 
+    No directory under references/, and no SKILL.md, rule or reference text
+    naming one; a drawn skill tree's bare ``references/`` passes (D78(16)).
     Plugin skills are exempt (D24): their references are vendored as written.
     """
-    references = SKILLS_ROOT / skill_id / "references"
-    nested = (
-        sorted(p.name for p in references.iterdir() if p.is_dir()) if references.is_dir() else []
-    )
-    assert nested == [], f"core skill {skill_id!r} nests references: {nested}"
-    handwritten = sorted(references.glob("*.md")) if references.is_dir() else []
-    texts = [p.read_text(encoding="utf-8") for p in handwritten]
-    texts += [rule.body for rule in _members(skill_id)]
-    nesting = [text.split("\n", 1)[0] for text in texts if "references/" in text]
-    assert not nesting, (
-        f"core skill {skill_id!r}: text naming references/ (one level only): {nesting}"
-    )
+    assert nesting_problems(SKILLS_ROOT / skill_id) == [], skill_id
 
 
 @pytest.mark.parametrize("skill_id", EVERY_CORE_SKILL)

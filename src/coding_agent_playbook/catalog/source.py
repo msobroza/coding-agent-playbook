@@ -227,8 +227,8 @@ def _iter_skills(skills_root: Path, source_package: str) -> Iterator[Skill]:
     """Yield one ``Skill`` per subdirectory of ``skills_root`` (SPEC §6.3.1).
 
     Each skill directory must contain ``SKILL.md`` (or ``SKILL.md.j2``).
-    ``scripts/`` and ``references/`` sibling subdirectories are recorded on
-    the Skill if present. A ``rules/`` subdirectory is not: its files are
+    ``scripts/``, ``references/`` and ``examples/`` (prU D48) sibling
+    subdirectories are recorded on the Skill if present. A ``rules/`` subdirectory is not: its files are
     rules, which :meth:`FileSystemArtifactSource.collect_rules` loads as
     members of this skill (prU D5), never byte-copied.
     """
@@ -237,6 +237,7 @@ def _iter_skills(skills_root: Path, source_package: str) -> Iterator[Skill]:
         frontmatter, body = split_frontmatter(text)
         scripts_dir = skill_dir / "scripts"
         references_dir = skill_dir / "references"
+        examples_dir = skill_dir / "examples"
         yield Skill(
             frontmatter=frontmatter,
             body=body,
@@ -244,6 +245,7 @@ def _iter_skills(skills_root: Path, source_package: str) -> Iterator[Skill]:
             references_dir=references_dir if references_dir.is_dir() else None,
             source_package=source_package,
             source_dir=skill_dir,
+            examples_dir=examples_dir if examples_dir.is_dir() else None,
         )
 
 

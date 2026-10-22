@@ -156,8 +156,9 @@ extend-exclude = [
 # eval-sample needle fixtures.
 force-exclude = true
 # Skill scripts run in consumer repos on Python 3.10+, so pyupgrade must not
-# suggest 3.12-only syntax there (PEP 695 aliases/generics).
-per-file-target-version = { "catalog/plugins/*/skills/*/scripts/*.py" = "py310" }
+# suggest 3.12-only syntax there (PEP 695 aliases/generics). Core skills ship
+# scripts and example apps too (prU D2, D48); an example targets 3.10 as well.
+per-file-target-version = { "catalog/plugins/*/skills/*/scripts/*.py" = "py310", "catalog/core/skills/*/scripts/*.py" = "py310", "catalog/core/skills/*/examples/**/*.py" = "py310" }
 
 [tool.ruff.lint]
 select = [

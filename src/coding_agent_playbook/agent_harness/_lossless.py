@@ -181,11 +181,13 @@ def _skill_from_entry(path: Path, entry: ManifestEntry, source_package: str) -> 
     restore_recorded_exec_bits(path, entry)
     scripts_dir = path.parent / "scripts"
     references_dir = path.parent / "references"
+    examples_dir = path.parent / "examples"
     return Skill(
         frontmatter=rebuilt,
         body=body,
         scripts_dir=scripts_dir if scripts_dir.is_dir() else None,
         references_dir=references_dir if references_dir.is_dir() else None,
+        examples_dir=examples_dir if examples_dir.is_dir() else None,
         source_package=source_package,
     )
 

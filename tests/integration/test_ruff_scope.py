@@ -13,6 +13,12 @@ plugin has eval samples yet, so that glob is proved in a scratch project that
 carries the engine's ruff excludes. mypy needs no exclude for either home:
 ``catalog/`` is outside its ``files``.
 
+Core skill scripts and example apps run in consumer repos on Python 3.10+
+(prU D2, D48), so ruff lints them at the ``py310`` per-file target version and
+never suggests a 3.12-only rewrite (UP040/UP046/UP047) there; a scratch project
+carrying the engine's target versions proves it, with an engine module as the
+control.
+
 The config half parses ``pyproject.toml``. The behaviour half drives the real
 ``ruff`` binary with ``--no-cache`` (so no ``.ruff_cache`` is written) and is
 skipped when ruff is not on ``PATH``.
@@ -165,3 +171,58 @@ def test_ruff_still_checks_engine_sources() -> None:
     assert not [path for path in listed if "/eval_samples/" in path and "/setup/" in path]
     assert not [path for path in listed if path.startswith(f"{_VENDORED_PACK_GLOB}/")]
     assert _SPLIT_PACK_SCRIPT in listed
+
+
+#: Core skill scripts and example code run in consumer repos on Python 3.10+ (prU D2, D48).
+_CORE_PY310_GLOBS = (
+    "catalog/core/skills/*/scripts/*.py",
+    "catalog/core/skills/*/examples/**/*.py",
+)
+#: A PEP 613 alias: ruff's UP040 rewrites it to a 3.12-only ``type`` statement.
+_PEP613_ALIAS_SOURCE = "from typing import TypeAlias\n\nNumber: TypeAlias = int\n"
+_SCRATCH_CORE_SCRIPT = "catalog/core/skills/demo/scripts/tool.py"
+_SCRATCH_CORE_EXAMPLE = "catalog/core/skills/demo/examples/app/src/app/main.py"
+_SCRATCH_ENGINE_MODULE = "src/demo/module.py"
+
+
+def test_ruff_config_targets_core_scripts_and_examples_at_py310() -> None:
+    targets = _ruff_table()["per-file-target-version"]
+    for glob in _CORE_PY310_GLOBS:
+        assert targets.get(glob) == "py310", f"{glob} needs the py310 target: {targets}"
+
+
+def _write_target_project(root: Path) -> None:
+    """A project with the engine's target versions and every file at ``_PEP613_ALIAS_SOURCE``."""
+    table = _ruff_table()
+    targets = ", ".join(f'"{glob}" = "{v}"' for glob, v in table["per-file-target-version"].items())
+    (root / "pyproject.toml").write_text(
+        f'[tool.ruff]\ntarget-version = "{table["target-version"]}"\n'
+        f"per-file-target-version = {{ {targets} }}\n"
+        '[tool.ruff.lint]\nselect = ["UP"]\n',
+        encoding="utf-8",
+    )
+    for rel in (_SCRATCH_CORE_SCRIPT, _SCRATCH_CORE_EXAMPLE, _SCRATCH_ENGINE_MODULE):
+        path = root / rel
+        path.parent.mkdir(parents=True)
+        path.write_text(_PEP613_ALIAS_SOURCE, encoding="utf-8")
+
+
+@pytest.mark.parametrize("rel", [_SCRATCH_CORE_SCRIPT, _SCRATCH_CORE_EXAMPLE])
+def test_ruff_suggests_no_312_only_rewrite_in_core_scripts_and_examples(
+    tmp_path: Path, rel: str
+) -> None:
+    _write_target_project(tmp_path)
+    completed = _run_ruff("check", "--output-format", "concise", rel, cwd=tmp_path)
+    assert completed.returncode == 0, completed.stdout
+    for code in ("UP040", "UP046", "UP047"):
+        assert code not in completed.stdout
+
+
+def test_ruff_still_suggests_the_312_rewrite_in_engine_code(tmp_path: Path) -> None:
+    """Control: the scratch alias is one UP040 flags at the engine's own target."""
+    _write_target_project(tmp_path)
+    completed = _run_ruff(
+        "check", "--output-format", "concise", _SCRATCH_ENGINE_MODULE, cwd=tmp_path
+    )
+    assert completed.returncode == 1, completed
+    assert "UP040" in completed.stdout

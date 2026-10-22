@@ -60,7 +60,7 @@ def skill_label(skill: Skill) -> str:
     """
     if has_declared_id(skill):
         return f"skills/{skill_id_of(skill)} ({skill.source_package})"
-    source_dir = skill.scripts_dir or skill.references_dir
+    source_dir = skill.scripts_dir or skill.references_dir or skill.examples_dir
     where = f", at {source_dir.parent}" if source_dir is not None else ""
     name = skill.frontmatter.get("name", "?")
     return f"skills/<no id; name {name!r}{where}> ({skill.source_package})"

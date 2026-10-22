@@ -17,6 +17,11 @@ Python 3.10 to 3.13 crossed with every on/off combination of the libraries its
 template tests and with each project metadata variant it reads. This is the one
 size check over the matrix; ``tests/unit/test_core_rule_template_matrix.py`` checks
 that the matrix reaches every branch.
+
+A second bound renders every rule with :func:`tests._budget_probe.every_gate_facts`
+(every gate the detector can open at once), so the rules the probe never
+activates (SQLAlchemy, uv, pydantic-settings) are measured with all their gates
+on too (prU D20, L0-13).
 """
 
 from __future__ import annotations
@@ -25,7 +30,7 @@ from typing import TYPE_CHECKING, Final
 
 import pytest
 
-from tests._budget_probe import reference_probe_facts, render_core_rule
+from tests._budget_probe import every_gate_facts, reference_probe_facts, render_core_rule
 from tests._catalog import core_rules
 from tests._template_matrix import distinct_renderings, ruff_formatted
 
@@ -111,6 +116,12 @@ def test_the_cap_counts_code_blocks_as_ruff_format_lays_them_out() -> None:
     assert len(body.splitlines()) == 99
     with pytest.raises(AssertionError, match="after ruff format"):
         assert_fits_one_reference_read("probe", body, "a synthetic body")
+
+
+@pytest.mark.parametrize("rule_id", SCOPED_CORE_RULE_IDS)
+def test_core_scoped_rule_fits_one_reference_read_with_every_gate_on(rule_id: str) -> None:
+    body = render_core_rule(rule_id, every_gate_facts())
+    assert_fits_one_reference_read(rule_id, body, "every gate on (every_gate_facts)")
 
 
 @pytest.mark.parametrize(("rule_id", "marker"), LONG_BRANCH_MARKERS)

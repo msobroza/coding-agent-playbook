@@ -106,6 +106,7 @@ def _best_effort_leaf(leaf: SkillLeaf, top: str, result: ImportResult, source_pa
     )
     scripts_dir = leaf.path / "scripts"
     references_dir = leaf.path / "references"
+    examples_dir = leaf.path / "examples"
     result.skills.append(
         Skill(
             frontmatter={
@@ -116,6 +117,7 @@ def _best_effort_leaf(leaf: SkillLeaf, top: str, result: ImportResult, source_pa
             body=strip_rules_index(strip_sentinel(leaf.body)),
             scripts_dir=scripts_dir if scripts_dir.is_dir() else None,
             references_dir=references_dir if references_dir.is_dir() else None,
+            examples_dir=examples_dir if examples_dir.is_dir() else None,
             source_package=source_package,
         )
     )

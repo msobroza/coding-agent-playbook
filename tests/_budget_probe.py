@@ -21,7 +21,12 @@ from typing import TYPE_CHECKING, Final
 
 import coding_agent_playbook
 from coding_agent_playbook.commands import init as _init
-from coding_agent_playbook.detector.facts import detect
+from coding_agent_playbook.detector.facts import (
+    DETECTED_BOOL_FACTS,
+    KNOWN_DEV_TOOLS,
+    KNOWN_FRAMEWORKS,
+    detect,
+)
 from coding_agent_playbook.rendering.session import RenderSession, TemplateContext
 from coding_agent_playbook.skills.document import WhereEntry, skill_catalog_block
 from coding_agent_playbook.skills.naming import skill_id_of
@@ -156,6 +161,41 @@ def reference_probe_facts(repo: Path) -> Facts:
     """
     write_reference_probe(repo)
     return detect(repo)
+
+
+#: The ML libraries :func:`every_gate_facts` declares: each opens its own rule sections.
+_EVERY_GATE_ML_STACK: Final = ("numpy", "pandas", "polars", "torch")
+#: Runtime dependencies rules gate on by name (``has_dependency``), beyond the frameworks.
+_EVERY_GATE_DEPENDENCIES: Final = ("pydantic-settings", "anyio")
+
+
+def every_gate_facts() -> Facts:
+    """Facts that open every gate a core rule can take at once: the worst case for its size.
+
+    Every framework the detector knows (``pytest-asyncio`` among them), NumPy,
+    pandas, polars and torch, ``pydantic-settings`` and ``anyio``, ``uv`` as the
+    package manager, Python 3.13 and every boolean fact true (prU D20, L0-13).
+    The reference probe never activates some rules (SQLAlchemy, uv,
+    pydantic-settings), so the size bound renders each rule with these too.
+    Built directly, not detected, so no repo is written.
+
+    Example: ``render_core_rule("python-uv-workflow", every_gate_facts())``.
+    """
+    frameworks = dict.fromkeys(sorted(KNOWN_FRAMEWORKS), "")
+    ml_stack = dict.fromkeys(_EVERY_GATE_ML_STACK, "")
+    facts: Facts = {
+        "python_version": "3.13",
+        "package_manager": "uv",
+        "project_kind": "python-application",
+        "dependencies": {**frameworks, **ml_stack, **dict.fromkeys(_EVERY_GATE_DEPENDENCIES, "")},
+        "dev_dependencies": dict.fromkeys(sorted(KNOWN_DEV_TOOLS), ""),
+        "frameworks": frameworks,
+        "ml_stack": ml_stack,
+        "dev_tools": set(KNOWN_DEV_TOOLS),
+    }
+    for flag in DETECTED_BOOL_FACTS:
+        facts[flag] = True
+    return facts
 
 
 def render_core_rule(

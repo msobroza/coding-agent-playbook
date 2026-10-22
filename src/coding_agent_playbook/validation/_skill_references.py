@@ -155,7 +155,7 @@ def _skill_dir(skill: Skill) -> Path | None:
     """Where the skill's files live: its source dir, else a side directory's parent."""
     if skill.source_dir is not None:
         return skill.source_dir
-    side_dir = skill.references_dir or skill.scripts_dir
+    side_dir = skill.references_dir or skill.scripts_dir or skill.examples_dir
     return None if side_dir is None else side_dir.parent
 
 
