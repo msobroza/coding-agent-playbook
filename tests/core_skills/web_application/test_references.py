@@ -13,11 +13,13 @@ from typing import Final
 
 import pytest
 
-from tests._attributions import MAPPING_SPECS_DIR
 from tests._catalog import core_skill_root
 from tests.core_skills._references import (
     INTERNAL_GUIDE_MAX_LINES,
+    cross_skill_mentions,
     guide_line_count,
+    known_rule_ids,
+    names_a_rule,
     reference_text,
     references_block,
     skill_rule_ids,
@@ -116,38 +118,6 @@ _NOT_THIS_SKILLS_RULES: Final = frozenset({"web-application", "fastapi-hotel-api
 #: The checklist whose every line names the rule that holds its detail (mapping).
 CHECKLIST: Final = "references/api-review-checklist.md"
 _CHECKLIST_LINE_RE: Final = re.compile(r"^- \[ \] .*$", re.MULTILINE)
-_BACKTICKED_ID_RE: Final = re.compile(r"`([a-z0-9]+(?:-[a-z0-9]+)+)`")
-#: Another skill's rules, named "python-architecture's arch-unit-of-work and ...".
-_CROSS_SKILL_RE: Final = re.compile(
-    r"\b([a-z][a-z0-9-]*)'s ([a-z0-9-]+(?:(?:, | and )[a-z0-9-]+)*)"
-)
-_LIST_SEPARATOR_RE: Final = re.compile(r", | and ")
-#: A mapping spec's rule-table row: ``| `rules/<id>.md[.j2]` | ...``.
-_SPEC_RULE_PATH_RE: Final = re.compile(r"^\| `rules/([a-z0-9-]+)\.md(?:\.j2)?` \|", re.MULTILINE)
-
-
-def _cross_skill_mentions(text: str) -> set[tuple[str, str]]:
-    """``(skill, rule id)`` for each "<skill>'s <id>, <id> and <id>" naming a mapped skill.
-
-    >>> sorted(_cross_skill_mentions("python-architecture's a-b and c-d"))
-    [('python-architecture', 'a-b'), ('python-architecture', 'c-d')]
-    """
-    mentions: set[tuple[str, str]] = set()
-    for match in _CROSS_SKILL_RE.finditer(text):
-        skill, ids = match.groups()
-        if (MAPPING_SPECS_DIR / f"mapping-{skill}.md").is_file():
-            mentions.update((skill, rule_id) for rule_id in _LIST_SEPARATOR_RE.split(ids))
-    return mentions
-
-
-def _known_rule_ids(skill: str) -> set[str]:
-    """The rules ``skill`` ships, or its mapping spec plans while its lane has not landed."""
-    spec = (MAPPING_SPECS_DIR / f"mapping-{skill}.md").read_text(encoding="utf-8")
-    planned = set(_SPEC_RULE_PATH_RE.findall(spec))
-    rules_dir = core_skill_root(skill) / "rules"
-    if not rules_dir.is_dir():
-        return planned
-    return planned | {path.name.split(".")[0] for path in rules_dir.iterdir()}
 
 
 def test_skill_lists_each_mapped_reference_with_its_gate_in_mapping_order() -> None:
@@ -173,7 +143,7 @@ def test_reference_names_every_rule_it_routes_to(path: str) -> None:
 def test_reference_names_only_rule_ids_the_skill_ships(path: str) -> None:
     text = reference_text(SKILL_ROOT, path)
 
-    other_skills = {rule_id for _, rule_id in _cross_skill_mentions(text)}
+    other_skills = {rule_id for _, rule_id in cross_skill_mentions(text)}
     named = set(_RULE_ID_LIKE_RE.findall(text)) - _NOT_THIS_SKILLS_RULES - other_skills
     unknown = sorted(named - skill_rule_ids(SKILL_ROOT))
 
@@ -189,33 +159,28 @@ def test_internal_guide_stays_within_the_d49_budget() -> None:
 @pytest.mark.parametrize("path", sorted(ROUTES_TO))
 def test_reference_names_only_rules_other_skills_ship_or_plan(path: str) -> None:
     """A "<skill>'s <id>" pointer names a rule that skill ships or its mapping plans."""
-    mentions = _cross_skill_mentions(reference_text(SKILL_ROOT, path))
+    mentions = cross_skill_mentions(reference_text(SKILL_ROOT, path))
 
     dangling = sorted(
-        (skill, rule) for skill, rule in mentions if rule not in _known_rule_ids(skill)
+        (skill, rule) for skill, rule in mentions if rule not in known_rule_ids(skill)
     )
 
     assert dangling == [], f"{path} names rules their skills neither ship nor plan: {dangling}"
 
 
 def test_cross_skill_parser_finds_the_lifecycle_pointers() -> None:
-    mentions = _cross_skill_mentions(reference_text(SKILL_ROOT, INTERNAL_GUIDE))
+    mentions = cross_skill_mentions(reference_text(SKILL_ROOT, INTERNAL_GUIDE))
 
     assert ("python-architecture", "sqlalchemy-repositories") in mentions
     assert ("python-architecture", "arch-tests-by-layer") in mentions
     assert ("python-coding", "pydantic-typed-settings") in mentions
 
 
-def _names_a_rule(line: str, rule_ids: set[str]) -> bool:
-    """True when ``line`` names one of ``rule_ids`` in backticks, or another skill's rule."""
-    return bool(set(_BACKTICKED_ID_RE.findall(line)) & rule_ids or _cross_skill_mentions(line))
-
-
 def test_every_checklist_line_names_a_rule() -> None:
     lines = _CHECKLIST_LINE_RE.findall(reference_text(SKILL_ROOT, CHECKLIST))
     rule_ids = skill_rule_ids(SKILL_ROOT)
 
-    bare = [line for line in lines if not _names_a_rule(line, rule_ids)]
+    bare = [line for line in lines if not names_a_rule(line, rule_ids)]
 
     assert lines, f"{CHECKLIST} has no checklist lines"
     assert bare == [], f"{CHECKLIST} lines name no rule: {bare}"

@@ -86,3 +86,4 @@ def compute_discount(customer: Customer, today: date) -> Discount:
 - Every indirection costs the reader a hop: add one only where it cuts a real dependency. Adapter, facade, observer and mediator are indirections.
 - `TransactionStore` illustrates pure fabrication only; repositories and units of work as patterns are the python-architecture skill's.
 - The other GRASP principles live in their own rules: Information Expert in `design-tell-dont-ask`, low coupling in `design-low-coupling`, high cohesion in `design-single-responsibility`, polymorphism in `design-open-closed`, protected variations in `design-dependency-inversion`.
+- All nine GRASP principles and the SOLID map, each with the rules that apply it: see principles-and-grasp.md.

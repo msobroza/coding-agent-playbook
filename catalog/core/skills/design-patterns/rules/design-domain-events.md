@@ -77,3 +77,4 @@ events.subscribe(UserRegistered, send_welcome_email)
 - Register once in the entry point, or make `subscribe` ignore a handler it already has: running setup twice otherwise handles every event twice.
 - Decide the failure policy explicitly: let handler errors propagate, or isolate each handler and log with `logger.exception`; never swallow them silently.
 - Not when there is one side effect with one caller: call it directly. A single reaction the caller passes in is `design-callback`.
+- Observer, mediator and a dispatcher compared, and handler modules wired to a dispatcher: see observer-mediator-pubsub.md.

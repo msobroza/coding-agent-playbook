@@ -81,3 +81,4 @@ order = Order(price_cents=100_00, quantity=2, discount=PercentageDiscount(Decima
 - `functools.partial` blurs the signature: some type checkers see only `partial[int]`, so a mismatch with your alias can slip through, and reprs and tracebacks hide what was bound. Prefer a closure or a callable dataclass where typing matters.
 - Keep the `if` for two fixed branches that will not grow.
 - When each branch only maps a key to a value or a handler named in config, a lookup table is enough: see `design-dispatch-table`. A function that builds and returns a configured strategy is `design-function-builder`.
+- The step-by-step walk from ABC and Protocol strategy classes to callables, closures and partial, with each form's trade-offs: see strategy-progression.md.

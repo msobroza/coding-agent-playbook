@@ -36,6 +36,29 @@ playbook:
       impact: LOW
       summary: "Patterns to reach for only when their signal is present and a lighter form has failed."
       open_when: "Code hard-codes its caller's reaction, copies one algorithm, needs a class per combination, undo, modes, chained steps or many options."
+  references:
+    - path: references/smell-catalog.md
+      open_when: "detect_smells.py reports a smell id, or a finding needs its default severity, how to spot it and its owning rule."
+    - path: references/quality-checklist.md
+      open_when: "Running a quick design pass over a module or diff item by item, rather than a full ranked review."
+    - path: references/principles-and-grasp.md
+      open_when: "A finding must name the principle it breaks, or a design choice is argued in cohesion, coupling, GRASP or SOLID terms."
+    - path: references/refactoring-moves.md
+      open_when: "Planning the code change for a finding and wanting a before/after for a common move, or the order to apply moves safely."
+    - path: references/lint-guardrails.md
+      open_when: "The same smell keeps recurring across a codebase and a ruff code could catch it on every commit."
+    - path: references/strategy-progression.md
+      open_when: "Converting ABC or Protocol strategy classes to functions step by step, or weighing each form's trade-offs."
+    - path: references/abstract-factory-progression.md
+      open_when: "Collapsing factory classes that build matching object families into Protocols, callables or a frozen bundle."
+    - path: references/bridge-progression.md
+      open_when: "Converting an ABC bridge between two class hierarchies to Protocols, functions, bound methods or partial."
+    - path: references/command-progression.md
+      open_when: "Undo needs a stack with redo, a batch needs rollback, or commands must be stored, inspected or replayed."
+    - path: references/observer-mediator-pubsub.md
+      open_when: "Choosing between Observer, Mediator and a pub/sub dispatcher, or wiring handler modules to a dispatcher."
+    - path: references/rule-neighbors.md
+      open_when: "A rule here and one in python-coding or python-architecture seem to cover the same code, or two principle rules look alike."
 ---
 
 # Design patterns
