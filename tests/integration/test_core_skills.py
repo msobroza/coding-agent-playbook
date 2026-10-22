@@ -464,8 +464,13 @@ def test_reference_probe_lockfile_records_member_references_as_rules(
         if rule_id not in PROBE_INACTIVE_MEMBERS
     }
     assert rows == expected
-    # prU D5: no member is written under references/ any more.
-    assert not [e.path for e in lockfile.entries if _is_core_member_rule(e.path, "references")]
+    # prU D5: no member is written under references/ any more; only reference files and
+    # license copies live there.
+    assert not [
+        e.path
+        for e in lockfile.entries
+        if _is_core_member_rule(e.path, "references") and e.kind == "rule"
+    ]
 
 
 def test_reference_probe_writes_no_continue_prompt_for_a_member_skill(

@@ -50,24 +50,32 @@ _SYNTHETIC_PYTHON_CODING_MEMBERS = (
     "python-async",
     "python-classes-and-protocols",
     "python-context-managers",
+    "python-custom-exceptions",
     "python-data-shapes",
     "python-dependency-injection",
     "python-docstrings",
+    "python-early-return",
+    "python-error-boundaries",
     "python-error-handling",
+    "python-error-messages-with-context",
     "python-idioms",
     "python-performance-idioms",
     "python-pure-core",
+    "python-small-units",
     "python-typing",
 )
 #: Every file the pre-v0.21 engine left under ``shared_skills/`` for ``_synced_then_rewound``:
-#: query-db's two, the core python-coding skill with one rule file per active member, and
-#: python-tooling with its one ungated member (no framework, no uv.lock).
+#: query-db's two, the core python-coding skill with one rule file per active member and
+#: its two license copies, and python-tooling with its one ungated member (no framework,
+#: no uv.lock).
 _OLD_TREE_FILES = frozenset(
     {
         "query-db/SKILL.md",
         "query-db/scripts/run.py",
         "python-coding/SKILL.md",
         *(f"python-coding/rules/{rule_id}.md" for rule_id in _SYNTHETIC_PYTHON_CODING_MEMBERS),
+        "python-coding/references/LICENSE.python-best-practices",
+        "python-coding/references/LICENSE.python-clean-architecture",
         "python-tooling/SKILL.md",
         "python-tooling/rules/python-static-checks.md",
     }
@@ -137,8 +145,8 @@ def test_first_sync_after_upgrade_moves_pristine_shared_skills_tree(
 
     assert _sync.execute(repo, git=FakeGitClient()) == 0
 
-    # query-db's SKILL.md + run.py, python-coding's SKILL.md + its 11 rule files and
-    # python-tooling's SKILL.md + its 1 rule file: 16.
+    # query-db's SKILL.md + run.py, python-coding's SKILL.md + its 16 rule files + its
+    # 2 license copies and python-tooling's SKILL.md + its 1 rule file: 23.
     assert re.search(rf", {len(_OLD_TREE_FILES)} removed$", capsys.readouterr().out, re.MULTILINE)
     assert not (repo / _OLD_ROOT).exists()
     moved = repo / _NEW_ROOT / "query-db"

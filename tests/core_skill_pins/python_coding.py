@@ -7,6 +7,9 @@ successors' sections. ``python-performance-idioms`` takes 79, the MEDIUM band's
 one unmapped slot, so it ties with no mapped rule. The classes section's mapped
 rules fill every slot from 60 to 66, so ``python-classes-and-protocols`` keeps
 its successor ``python-protocols``'s 61 and sorts after it by id.
+
+C-python-coding-01 adds the vendored errors and shape rules; ``python-early-return``
+takes the guard-clause guidance (and its pinned phrase) from ``python-idioms``.
 """
 
 from __future__ import annotations
@@ -16,12 +19,28 @@ from typing import Final
 from tests.core_skill_pins import CoreSkillPins, RulePin
 
 _PY_FILES: Final = ("**/*.py",)
+#: The kept id's lint codes (D16): the error-handling-lint-feedback hook reads them.
+_ERROR_HANDLING_LINT_CODES: Final = (
+    "E722",
+    "BLE001",
+    "S110",
+    "S112",
+    "B904",
+    "TRY400",
+    "TRY401",
+    "S101",
+)
 
 PINS: Final = CoreSkillPins(
     skill_id="python-coding",
     where="Any Python file",
     members=(
         "python-error-handling",
+        "python-error-messages-with-context",
+        "python-error-boundaries",
+        "python-custom-exceptions",
+        "python-small-units",
+        "python-early-return",
         "python-typing",
         "python-docstrings",
         "python-dependency-injection",
@@ -48,6 +67,55 @@ PINS: Final = CoreSkillPins(
         "idioms",
     ),
     rules={
+        "python-error-handling": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=20,
+            name="Error handling",
+            tags=("python", "errors"),
+            lint_codes={"warn": list(_ERROR_HANDLING_LINT_CODES)},
+            section="errors",
+        ),
+        "python-error-messages-with-context": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=21,
+            name="Error messages with context",
+            tags=("python", "errors"),
+            section="errors",
+        ),
+        "python-error-boundaries": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=22,
+            name="Error boundaries",
+            tags=("python", "errors"),
+            section="errors",
+        ),
+        "python-custom-exceptions": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=23,
+            name="Custom exceptions",
+            tags=("python", "errors"),
+            section="errors",
+        ),
+        "python-small-units": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=40,
+            name="Small units",
+            tags=("python", "readability"),
+            section="shape",
+        ),
+        "python-early-return": RulePin(
+            applies_if={},
+            globs=_PY_FILES,
+            priority=41,
+            name="Shallow nesting",
+            tags=("python", "readability"),
+            section="shape",
+        ),
         "python-performance-idioms": RulePin(
             applies_if={},
             globs=_PY_FILES,

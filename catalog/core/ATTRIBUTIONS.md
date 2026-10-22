@@ -28,7 +28,9 @@ at the skill rule that holds its detail) distills ideas from Akita, "Clean Code
 para Agentes de IA" (2026-04-20), as reformulated by the engine's owner; it is
 credited by name only. No sentences or examples from the article are copied;
 the ideas are restated in the engine's own words as general clean-code
-principles.
+principles. The same article, credited the same way, gave the rationale of the
+python-coding rules on small units, shallow nesting and error messages that
+carry the offending value.
 
 ## python-best-practices
 
@@ -37,7 +39,7 @@ Commit: `fa0d3f58afb8bf56c028bb559e0e7bc1538e079a`
 License: MIT License. Copyright (c) 2026 Ludo Technologies LLC.
 
 Its impact ratings inform each rule's section and priority. Ideas from it also
-shaped the python-error-handling, python-typing, python-docstrings,
+shaped the python-typing, python-docstrings,
 python-dependency-injection, python-data-shapes, python-idioms and pytest rules.
 
 ### design-patterns
@@ -61,13 +63,14 @@ Distilled (credited by name only, no vendored text):
 
 | Upstream file | Core files | Changes |
 | --- | --- | --- |
+| `skills/coding-standards/rules/error-no-silent-exceptions.md` | `rules/python-error-handling.md`, `rules/python-error-boundaries.md` | Engine frontmatter (kept id, lint codes and hook link); impact tag rendered from the section; References list dropped. Examples read text with `encoding="utf-8"` and `SettingsError` derives from the project base error. Notes absorb the engine's "what to catch", chaining, `assert` and logging points. The fixed "enable BLE001 and check-typed-exception" settings become "the repo's ruff settings decide". The boundary and documented-fallback notes (lines 45, 47) also feed `python-error-boundaries`. |
+| `skills/coding-standards/rules/design-early-return.md` | `rules/python-early-return.md` | Retitled around shallow nesting (about two levels, one level of abstraction per function). The `Result(status=...)` strings become raised domain errors, and money totals use `Decimal`. The engine's named-predicate loop example joins the Good Example. "Order guards by likelihood for minor performance gains" (line 73) and the References list are dropped. |
 
 Distilled (credited by name only, no vendored text):
 
 - `rules/python-performance-idioms.md`
 - `rules/python-async.md`
 - `rules/python-classes-and-protocols.md`
-- `rules/python-error-handling.md`
 - `rules/python-typing.md.j2`
 - `rules/python-docstrings.md`
 - `rules/python-dependency-injection.md`
@@ -131,6 +134,11 @@ review-architecture, make-testable, characterize, review and refactor prompts.
 
 | Upstream file | Core files | Changes |
 | --- | --- | --- |
+| `skills/clean-architecture/references/error-handling.md` | `rules/python-error-handling.md`, `rules/python-error-boundaries.md`, `rules/python-custom-exceptions.md` | Split by topic. Lines 5-44: the custom exceptions inherit the project base error instead of `Exception`, and the unclosed sqlite connection becomes a `with closing(...)` block. Lines 45-92 and 280-324: one `except` clause per failure mode and the "a broad catch hides real bugs" note; "simple subclasses of `Exception`" becomes "subclasses of the project base", and the broad-catch exception follows the engine's surfacing-recovery rule. Lines 104-128, 218-242 and 263-279: fail fast, catch only at entry points, let unknown errors propagate, kept stack-neutral (the FastAPI handler and status mapping belong to the web-application skill). The "acceptable retry decorator catching `Exception`" example (lines 93-103) is dropped. |
+| `skills/clean-architecture/references/code-quality.md` | `rules/python-error-handling.md`, `rules/python-early-return.md` | Rule 12's blanket "never `except Exception`" is relaxed to the engine's surfacing-recovery rule (lines 160-178); rule 4's deep-nesting example becomes guard clauses and a per-item helper (lines 46-71). |
+| `skills/clean-architecture/references/code-smells.md` | `rules/python-early-return.md` | Lines 253-275: only the detection line (more than two levels of nested `if`/`for`/`while`) is kept, as a Note. |
+| `skills/clean-architecture/references/refactoring-case-studies.md` | `rules/python-error-handling.md`, `rules/python-error-boundaries.md`, `rules/python-early-return.md` | Move 8 (lines 210-231): the specific catch now chains with `raise ... from exc`. Move 14 (lines 352-373): "return one type from every path" becomes one Note under the engine's absence convention. Moves 1-2 (lines 15-62): guard clauses with `continue` and a named predicate. |
+| `skills/clean-architecture/references/function-design.md` | `rules/python-error-boundaries.md` | Lines 63-99: "validate at entry points, trust validated values inside" kept; the return conventions are rewritten to the engine's absence convention, and no example uses `float` for a price. |
 
 Distilled (credited by name only, no vendored text):
 
@@ -142,7 +150,6 @@ Distilled (credited by name only, no vendored text):
 - `rules/python-context-managers.md`
 - `rules/python-retries-and-timeouts.md`
 - `rules/python-typing.md.j2`
-- `rules/python-error-handling.md`
 
 ### python-testing
 
@@ -197,6 +204,8 @@ that comes to hold vendored text moves from here into its source's table.
 ### python-coding
 
 - `SKILL.md`
+- `rules/python-error-messages-with-context.md`
+- `rules/python-small-units.md`
 
 ### python-documentation
 

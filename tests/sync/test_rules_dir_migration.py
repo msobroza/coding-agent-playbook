@@ -102,9 +102,11 @@ def test_resync_moves_pristine_member_copies_to_rules(
     for path in members:
         assert (repo / path).is_file(), path
         assert not (repo / _old_spelling(path)).exists(), path
-    assert not [path for path in rows if "/references/" in path]
+    assert not [path for path, kind in rows.items() if "/references/" in path and kind == "rule"]
     for root in _SKILL_ROOTS:
-        assert not (repo / root / _SKILL / "references").exists(), root
+        # Only the skill's own reference files (its license copies) stay in references/.
+        left = sorted(p.name for p in (repo / root / _SKILL / "references").glob("*.md"))
+        assert left == [], (root, left)
     assert _sync.execute(repo, check=True, git=FakeGitClient()) == 0
 
 
