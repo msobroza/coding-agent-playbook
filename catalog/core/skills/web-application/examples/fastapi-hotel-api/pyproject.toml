@@ -1,0 +1,47 @@
+# A virtual project: no [build-system], so uv installs only the dependencies
+# below into the example's own environment and never builds the example itself.
+[project]
+name = "fastapi-hotel-api"
+version = "0.1.0"
+description = "A small hotel-booking service: FastAPI, SQLAlchemy 2 and tests at every layer."
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110",
+    "sqlalchemy[asyncio]>=2.0",
+    "aiosqlite>=0.19",
+    "pydantic-settings>=2.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "httpx>=0.27",
+    "anyio>=4.0",
+    "mypy>=1.10",
+]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+# Namespace packages: app/ and tests/ import from the example root without __init__.py files.
+pythonpath = ["."]
+addopts = ["-ra", "--strict-markers", "--strict-config"]
+xfail_strict = true
+filterwarnings = ["error"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "tests"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+files = ["app", "tests"]
+mypy_path = "."
+explicit_package_bases = true

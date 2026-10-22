@@ -192,11 +192,13 @@ def test_the_engine_test_run_never_collects_example_code() -> None:
 
 
 def test_ci_runs_every_core_example_in_its_own_environment() -> None:
-    """D48: one job finds each examples/<app>/pyproject.toml and runs its tests with uv."""
+    """D48: one job finds each examples/<app>/pyproject.toml; uv runs its tests and mypy on 3.10 and 3.12."""
     workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     job = workflow.partition("\n  core-examples:\n")[2].partition("\n  wheel-smoke:\n")[0]
     assert "'*/examples/*/pyproject.toml'" in job
     assert 'uv run --directory "$example" pytest' in job
+    assert 'uv run --directory "$example" mypy' in job
+    assert 'python-version: ["3.10", "3.12"]' in job
 
 
 @pytest.mark.parametrize("adapter", [ClaudeCodeAdapter, OpenCodeAdapter, SharedSkillsAdapter])
