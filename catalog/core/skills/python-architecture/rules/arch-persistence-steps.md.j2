@@ -1,0 +1,79 @@
+---
+id: arch-persistence-steps
+name: Persistence steps
+description: "Climb the persistence steps (injected session, typed repository, unit of work, read models, event sourcing) one at a time, only when the signal for the next step is in the code."
+version: 1
+scope: scoped
+globs:
+  - "**/db/**/*.py"
+  - "**/db.py"
+  - "**/repositories/**/*.py"
+  - "**/repository.py"
+  - "**/repositories.py"
+  - "**/persistence/**/*.py"
+  - "**/infrastructure/**/*.py"
+  - "**/infra/**/*.py"
+  - "**/adapters/**/*.py"
+  - "**/storage/**/*.py"
+  - "**/services/**/*.py"
+section: persistence
+priority: 45
+tags: [python, architecture, persistence]
+---
+
+# Take persistence only as far as its signals
+
+## Description
+
+Data access can be structured in five steps, each more powerful and more expensive than the one before. Climb one step at a time, and only when the signal for the next step is present in the code or in a stated requirement, never in anticipation.
+
+| Step | Signal | Cost |
+| --- | --- | --- |
+| 1. Injected session, queries in the use case | the default for CRUD | rule tests need a database |
+| 2. Typed repository | rules worth testing without a database, the same query repeated across use cases, ORM objects leaking into domain code | a module per aggregate, query methods that multiply |
+| 3. Unit of work | one use case writes through two or more repositories that must succeed or fail together | another seam to fake; every write goes through it |
+| 4. CQRS read models | list or dashboard views compute derived fields on every request | duplicated data, a projector to keep correct |
+| 5. Event sourcing | history is the product: a mandated audit, "what was true on date X" | a schema you can never drop, snapshots, hard erasure |
+
+Skip a repository when the ORM already gives the abstraction you need and no rule needs testing without a database; a repository also limits callers to the methods it defines, so complex reports may need a query function beside it. Skip a unit of work for single-entity CRUD or one repository per use case.
+
+## Bad Example
+
+```python
+# Three tables of plain CRUD, wrapped in every pattern at once.
+class Repository(Protocol[T]):  # generic: no query is named for its question
+    def get(self, item_id: int) -> T: ...
+    def add(self, item: T) -> None: ...
+
+
+class TagUnitOfWork(Protocol):  # a single repository: nothing to coordinate
+    tags: Repository[Tag]
+
+    def commit(self) -> None: ...
+
+
+class TagListReadModel:  # mirrors the tags table column for column
+    ...
+```
+
+## Good Example
+
+```python
+# Step 1: the use case receives the session and returns typed records.
+def tools_in_category(session: Session, category: Category) -> list[ToolSummary]:
+    stmt = select(ToolRow.tool_id, ToolRow.name).where(ToolRow.category == category)
+    rows = session.execute(stmt.order_by(ToolRow.name))
+    return [ToolSummary(tool_id=row.tool_id, name=row.name) for row in rows]
+```
+
+It selects only the columns it returns, hands back typed records rather than ORM rows, and never creates the engine or the session. For many services this is the whole persistence design.
+
+## Notes
+
+- One step per signal. Stepping back down is a valid finding too: a repository with one implementation and no fake in the tests, or a read model that mirrors its write table, is cost without the benefit.
+- Step 1 injects the concrete `Session` or `AsyncSession`; it is not a port. FastAPI dependency aliases use concrete `AsyncSession` / `httpx.AsyncClient` at the route edge; Protocols are for the app's own ports.
+- Step 2 is arch-repository-port, step 3 arch-unit-of-work, step 4 arch-cqrs and step 5 arch-event-sourcing.
+- Which collaborators get a port at all is arch-ports.
+{% if has_framework("fastapi") %}
+- Worked example: web-application's hotel example (fastapi-hotel-api), file README.md: a service at step 3 (a booking writes through several repositories and commits once), with the README saying why.
+{% endif %}

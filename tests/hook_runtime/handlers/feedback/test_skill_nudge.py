@@ -95,8 +95,11 @@ SOURCE_LINES: Final = [
 ]
 #: The source skill the five-line cap cuts from the first edit of ``src/app.py``.
 CUT_SOURCE_LINE: Final = _line("python-tooling")
-#: python-architecture's member globs in member order: Python files, the composition-root
-#: file names (arch-composition-root), then the domain and application packages.
+#: python-architecture's ungated member globs, first occurrence in rule-file order:
+#: Python files, the composition-root file names (arch-composition-root), the use-case
+#: packages and workers (arch-effects-after-commit), the persistence modules
+#: (arch-persistence-steps, arch-repository-port), the domain packages, the shared
+#: test-file globs (D41) and the unit-of-work modules.
 ARCHITECTURE_GLOBS: Final = [
     "**/*.py",
     "**/main.py",
@@ -108,13 +111,37 @@ ARCHITECTURE_GLOBS: Final = [
     "**/bootstrap.py",
     "**/wiring.py",
     "**/cli.py",
+    "**/services/**/*.py",
+    "**/use_cases/**/*.py",
+    "**/usecases/**/*.py",
+    "**/application/**/*.py",
+    "**/operations/**/*.py",
+    "**/worker.py",
+    "**/workers/**/*.py",
+    "**/outbox.py",
+    "**/db/**/*.py",
+    "**/db.py",
+    "**/repositories/**/*.py",
+    "**/repository.py",
+    "**/repositories.py",
+    "**/persistence/**/*.py",
+    "**/infrastructure/**/*.py",
+    "**/infra/**/*.py",
+    "**/adapters/**/*.py",
+    "**/storage/**/*.py",
+    "**/ports.py",
     "**/domain/**/*.py",
     "**/models/**/*.py",
     "**/entities/**/*.py",
     "**/domain.py",
     "**/models.py",
-    "**/services/**/*.py",
-    "**/application/**/*.py",
+    "**/test_*.py",
+    "**/*_test.py",
+    "**/conftest.py",
+    "**/tests/**/*.py",
+    "**/fakes.py",
+    "**/uow.py",
+    "**/unit_of_work.py",
 ]
 #: python-documentation's ungated members' globs, first seen in member id order.
 DOCUMENTATION_GLOBS: Final = tuple(
@@ -170,15 +197,16 @@ def test_test_file_names_testing_and_coding_once_each(
     source = edit(repo, deps(), APP, state=state)
     again = edit(repo, deps(), TEST_APP, state=state)
 
-    # D41: tests/**/*.py ranks python-testing, ml-data (ml-numeric-assertions) and
-    # web-application first, then the ``**/*.py`` ties in config order; the five-line
-    # cap cuts python-coding and python-tooling, which the next source edit then names.
+    # D41: the test-file globs rank python-testing, ml-data (ml-numeric-assertions),
+    # python-architecture (its layer-test rules) and web-application first, then the
+    # ``**/*.py`` ties in config order; the five-line cap cuts python-coding and
+    # python-tooling, which the next source edit then names.
     assert context(first) == [
         _line("python-testing"),
         _line("ml-data"),
+        _line("python-architecture"),
         _line("web-application"),
         _line("design-patterns"),
-        _line("python-architecture"),
     ]
     assert context(source) == [_line("python-coding"), CUT_SOURCE_LINE]
     assert again.trace.combined.decision is Decision.NONE
