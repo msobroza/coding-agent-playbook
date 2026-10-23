@@ -1,0 +1,86 @@
+---
+id: arch-contract-tests-for-fakes
+name: Contract tests for fakes
+description: "Keep each fake honest with one contract suite parametrized over the fake and the real implementation, the SQL half on the production engine in a rolled-back transaction."
+version: 1
+scope: scoped
+globs:
+  - "**/test_*.py"
+  - "**/*_test.py"
+  - "**/conftest.py"
+  - "**/tests/**/*.py"
+  - "**/fakes.py"
+applies_if:
+  has_framework: ["pytest"]
+section: testing
+priority: 52
+tags: [python, architecture, testing]
+---
+
+# Run one contract suite against the fake and the real adapter
+
+## Description
+
+Use-case tests are only as good as the fakes they run on. A fake that returns `None` where the SQL repository raises, or keeps insertion order where the database sorts by name, lets every use-case test pass while production fails. Run one test suite against both: a fixture parametrized over the fake and the real implementation, and contract cases that state each behavior a use case relies on.
+
+The SQL half runs on the engine production uses (a disposable instance, its URL read inside the session-scoped fixture), each test inside an outer transaction rolled back afterwards. Use an in-memory SQLite engine only when production runs SQLite too.
+
+## Bad Example
+
+```python
+class InMemoryToolRepository:
+    def get(self, tool_id: UUID) -> Tool | None:  # the SQL repository raises ToolNotFoundError
+        return self._tools.get(tool_id)
+
+
+def test_lend_unknown_tool() -> None:  # passes on the fake; production raises instead
+    assert lend_tool(FakeLendingUnitOfWork(), UUID(int=404), MEMBER, TODAY) is None
+```
+
+## Good Example
+
+```python
+@pytest.fixture(scope="session")
+def engine() -> Iterator[Engine]:
+    engine = create_engine(os.environ["TEST_DATABASE_URL"])  # read here, not at import
+    Base.metadata.create_all(engine)
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture(params=["memory", "sql"])
+def tools(request: pytest.FixtureRequest, engine: Engine) -> Iterator[ToolRepository]:
+    if request.param == "memory":
+        yield InMemoryToolRepository()
+        return
+    with engine.connect() as connection:
+        transaction = connection.begin()
+        session = Session(bind=connection, join_transaction_mode="create_savepoint")
+        yield SqlToolRepository(session)
+        session.close()
+        transaction.rollback()  # nothing from this test survives
+
+
+def test_unknown_tool_raises_not_found(tools: ToolRepository) -> None:
+    missing = UUID(int=404)
+    with pytest.raises(ToolNotFoundError) as caught:
+        tools.get(missing)
+    assert caught.value.tool_id == missing
+
+
+def test_added_tool_reads_back_unchanged(tools: ToolRepository) -> None:
+    sander = Tool(UUID(int=1), "orbital sander", Category.POWER, barcode="TL-0042")
+    tools.add(sander)
+    assert tools.get(sander.tool_id) == sander
+```
+
+## Notes
+
+- Give every behavior a use case relies on a contract case: not-found errors, duplicate handling, ordering, and what a query returns for an empty table.
+- When the fake and the real adapter disagree, fix the fake; the real backend is the specification.
+- The same shape fits an HTTP client adapter: one suite over the fake and the real client against a recorded or local server.
+- These are persistence tests in the sense of arch-tests-by-layer; the fakes they protect serve arch-test-use-cases-with-fakes.
+- In web repos the fixture is the web-application skill's sqlalchemy-test-rollback rule, with the async session.
+{% if has_framework("fastapi") %}
+- Worked example: web-application's hotel example (fastapi-hotel-api), file tests/test_repositories.py: one suite parametrized over the fakes and the SQL repositories in a rolled-back transaction.
+{% endif %}

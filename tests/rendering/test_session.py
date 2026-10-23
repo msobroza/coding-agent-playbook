@@ -22,7 +22,7 @@ from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.commands import render as render_command
 from coding_agent_playbook.config.model import Config, ProjectMeta
 from coding_agent_playbook.evals.prompting import render_prompt
-from coding_agent_playbook.evals.task import EvalTask
+from coding_agent_playbook.evals.sample import EvalSample
 from coding_agent_playbook.rendering.jinja import TemplateSecurityError
 from coding_agent_playbook.rendering.session import RenderSession, TemplateContext
 from coding_agent_playbook.sync import pipeline
@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 
 
 def _facts(**values: object) -> Facts:
-    """Facts with keys the detector never sets, as an eval task's mock facts may have."""
+    """Facts with keys the detector never sets, as an eval sample's mock facts may have."""
     return cast("Facts", values)
 
 
@@ -63,15 +63,28 @@ _CONTEXT = TemplateContext(facts={"frameworks": {}}, project_name="demo", engine
 
 
 def test_template_context_precedence() -> None:
-    """facts < project < user_choices < engine_version < overrides (RS-D6)."""
-    every_key = ("kind", "project_name", "project_description", "engine_version", "target")
+    """facts < project < user_choices < engine_version and layout < overrides (RS-D6, D71)."""
+    every_key = (
+        "kind",
+        "project_name",
+        "project_description",
+        "engine_version",
+        "layout",
+        "target",
+    )
     context = TemplateContext(
         facts=_facts(**dict.fromkeys(every_key, "F")),
         project_name="P",
         project_description="P",
         engine_version="E",
-        user_choices={"project_description": "C", "engine_version": "C", "target": "C"},
+        user_choices={
+            "project_description": "C",
+            "engine_version": "C",
+            "layout": "C",
+            "target": "C",
+        },
         overrides={"target": "O"},
+        layout={"specs": "L"},
     )
 
     assert context.as_dict() == {
@@ -79,6 +92,7 @@ def test_template_context_precedence() -> None:
         "project_name": "P",
         "project_description": "C",
         "engine_version": "E",
+        "layout": {"specs": "L"},
         "target": "O",
     }
     overridden = dataclasses.replace(context, overrides={"engine_version": "O"})
@@ -318,16 +332,16 @@ def _via_eval_runner(tmp_path: Path, _: SyntheticRepoFactory, __: CaptureFixture
     layer = tmp_path / "layer"
     (layer / "prompts").mkdir(parents=True)
     (layer / "prompts" / "tidy.md").write_text(_TIDY_MD, encoding="utf-8")
-    task_dir = layer / "eval_tasks" / "tidy-task"
-    _write_layer(task_dir / "setup")
-    task = EvalTask(
-        id="tidy-task",
+    sample_dir = layer / "eval_samples" / "tidy-sample"
+    _write_layer(sample_dir / "setup")
+    sample = EvalSample(
+        id="tidy-sample",
         prompt_id="tidy",
         description="d",
-        source_path=task_dir / "task.toml",
+        source_path=sample_dir / "sample.toml",
         source_package="coding_agent_playbook",
     )
-    return render_prompt(task, strict=True)
+    return render_prompt(sample, strict=True)
 
 
 @pytest.mark.parametrize(

@@ -39,14 +39,14 @@ pytestmark = pytest.mark.catalog
 
 _GIT_TIMEOUT_SECONDS = 30
 #: A bundled plugin needs at least one of these, or it ships nothing.
-_KIND_DIRS = ("rules", "prompts", "skills", "eval_tasks", "hooks")
+_KIND_DIRS = ("rules", "prompts", "skills", "eval_samples", "hooks")
 #: The kinds whose files are synced into consumer repos, where their links must resolve
 #: (a hook's body renders as advisory text, SPEC §6.6.7).
 _SYNCED_KIND_DIRS = ("rules", "prompts", "skills", "hooks")
 #: What the link gate reads (``validation/link_check.py``): rendering drops the ``.j2``.
 _MARKDOWN_SUFFIXES = (".md", ".md.j2")
 _SRC_PACKAGE = REPO_ROOT / "src" / "coding_agent_playbook"
-_CONTENT_FILE_PATTERNS = ("*.md", "*.md.j2", "task.toml", "SKILL.md*")
+_CONTENT_FILE_PATTERNS = ("*.md", "*.md.j2", "sample.toml", "SKILL.md*")
 
 
 # --- tracked files vs .gitignore ----------------------------------------------

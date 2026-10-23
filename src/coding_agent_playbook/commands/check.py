@@ -7,7 +7,8 @@ A diagnostic, so it exits 0 whatever it finds (drift included). An overlay in
 ``overlays_enabled`` that ``playbook sync`` would refuse (``validation.preflight``) is
 flagged under Environment, and the Drift section then never reports a clean state.
 The Hooks block comes from :mod:`._check_hooks` (specs/prK-lifecycle-hooks.md
-§A.8). The Drift lines are ``lockfile.drift.drift_entries``, the definition the
+§A.8); the Harnesses block from :mod:`~coding_agent_playbook.detector.harness_markers`
+(advisory, D79). The Drift lines are ``lockfile.drift.drift_entries``, the definition the
 ``drift`` Stop stage shares (specs/prK-hook-pack.md §E.1), with Claude's strict
 settings parser for the scoped (``json:<pointer>``) entries (§C.2.6).
 """
@@ -23,15 +24,18 @@ from coding_agent_playbook.adapters.claude_code.settings.drift import (
     settings_document,
     stray_launcher_edited,
 )
+from coding_agent_playbook.commands._check_framework import format_framework_lines
 from coding_agent_playbook.commands._check_hooks import format_hooks_section
 from coding_agent_playbook.config.committed import (
     detector_cache_table,
     plan_detector_cache_refresh,
 )
 from coding_agent_playbook.config.files import CONFIG_FILENAME, ConfigFiles
-from coding_agent_playbook.detector.facts import detect
-from coding_agent_playbook.detector.predicate import evaluate_predicate
+from coding_agent_playbook.detector.facts import DETECTED_BOOL_FACTS, detect
+from coding_agent_playbook.detector.harness_markers import adapter_hints
+from coding_agent_playbook.detector.predicate import LIST_PREDICATE_KEYS, evaluate_predicate
 from coding_agent_playbook.lockfile.drift import drift_entries
+from coding_agent_playbook.lockfile.model import generated_paths
 from coding_agent_playbook.validation import preflight as _sync_preflight
 from coding_agent_playbook.validation.context import SyncContext
 
@@ -58,6 +62,7 @@ def _format_env_section(ctx: SyncContext, unusable: Sequence[UnusableOverlay] = 
         f"  Python: {python_version}",
         f"  Package manager: {package_manager}",
         f"  Engine: coding-agent-playbook {_engine_version}",
+        *format_framework_lines(ctx.config.layers_enabled, ctx.skills_resolved),
         f"  Overlays: {overlays}",
         *_format_unusable_overlays(unusable),
     ]
@@ -85,17 +90,10 @@ def _format_detected_section(ctx: SyncContext) -> str:
         "=== Detected ===",
         f"  project_kind: {facts.get('project_kind', '(unknown)')}",
         f"  frameworks: {frameworks_str}",
-        f"  has_notebooks: {facts.get('has_notebooks', False)}",
-        f"  has_dockerfile: {facts.get('has_dockerfile', False)}",
-        f"  has_ci: {facts.get('has_ci', False)}",
+        *(f"  {name}: {facts.get(name, False)}" for name in DETECTED_BOOL_FACTS),
     ]
     return "\n".join(lines)
 
-
-#: List-valued ``applies_if`` keys the skip reason quotes as written.
-_LIST_PREDICATE_KEYS = frozenset(
-    {"has_framework", "any_framework", "has_file", "has_dev_dependency"}
-)
 
 #: Value-carrying ``applies_if`` keys the skip reason quotes verbatim (a string
 #: or a list). Without this, ``package_manager`` fell through to the boolean
@@ -118,12 +116,13 @@ def _format_skip_reason(predicate: dict[str, object], facts: dict[str, object]) 
     that's what the example shows and it's the most actionable for the user.
     """
     for key, value in predicate.items():
-        if key in _LIST_PREDICATE_KEYS:
+        # The list-valued keys (has_framework, any_dependency, ...) are quoted as written.
+        if key in LIST_PREDICATE_KEYS:
             wanted = value if isinstance(value, list) else [value]
             return f"(skipped: applies_if {key}={wanted!r})"
         if key in _VERBATIM_PREDICATE_KEYS:
             return f"(skipped: applies_if {key}={value!r})"
-        # Boolean facts (has_notebooks, has_dockerfile, has_ci, banking_mode).
+        # Boolean facts (detector.facts.DETECTED_BOOL_FACTS, banking_mode).
         actual = facts.get(key, False)
         return f"(skipped: {key}={actual})"
     return "(skipped)"
@@ -186,13 +185,14 @@ def _format_artifacts_section(ctx: SyncContext) -> str:
     return "\n".join(out)
 
 
-def _format_drift_section(ctx: SyncContext, unusable: Sequence[UnusableOverlay] = ()) -> str:
-    """Compare the files on disk with the lockfile.
+def _format_drift_section(
+    ctx: SyncContext, lockfile: Lockfile | None, unusable: Sequence[UnusableOverlay] = ()
+) -> str:
+    """Compare the files on disk with ``lockfile`` (``None`` before the first sync).
 
     With an unusable overlay the state is never reported clean: a matching
     lockfile only says what the last sync wrote, and no sync can run now.
     """
-    lockfile = ctx.state_source.load_lockfile()
     lines = ["=== Drift ==="]
     if lockfile is None:
         lines.append("  No lockfile yet — run 'playbook sync' to create one.")
@@ -205,6 +205,23 @@ def _format_drift_section(ctx: SyncContext, unusable: Sequence[UnusableOverlay] 
     if unusable:
         lines.append(f"  {_SYNC_REFUSES} (see Environment).")
     return "\n".join(lines)
+
+
+def _format_harness_section(ctx: SyncContext, lockfile: Lockfile | None) -> str:
+    """Advisory hints where the enabled adapters and the repo's harness files disagree (D79).
+
+    Each hint names the config change that settles it; none affects the exit code.
+    """
+    hints = adapter_hints(
+        ctx.repo_root,
+        ctx.config.adapters_enabled,
+        generated_paths(lockfile),
+        config_name=CONFIG_FILENAME,
+    )
+    lines = [f"  ! {hint}" for hint in hints] or [
+        "  Enabled adapters match the repo's harness files."
+    ]
+    return "\n".join(["=== Harnesses ===", *lines])
 
 
 def _lockfile_drift(ctx: SyncContext, lockfile: Lockfile) -> list[str]:
@@ -266,7 +283,7 @@ def run(args: argparse.Namespace) -> int:
     """
     repo_root = Path(getattr(args, "repo_root", None) or Path.cwd())
     ctx = SyncContext.from_repo(repo_root)
-    unusable = _sync_preflight.unusable_overlays(ctx.config.overlays_enabled)
+    unusable = _sync_preflight.unusable_overlays(ctx.config.layers_enabled)
     if getattr(args, "refresh", False):
         _refresh(repo_root)
         print(f"Refreshed detector_cache in {CONFIG_FILENAME}.")
@@ -274,7 +291,11 @@ def run(args: argparse.Namespace) -> int:
     print(_format_detected_section(ctx))
     print(_format_artifacts_section(ctx))
     print(format_hooks_section(ctx))
-    print(_format_drift_section(ctx, unusable))
+    # Loaded once for both sections; a corrupt lockfile raises here, as the
+    # diagnostic must surface it (init, which only picks menu defaults, tolerates it).
+    lockfile = ctx.state_source.load_lockfile()
+    print(_format_harness_section(ctx, lockfile))
+    print(_format_drift_section(ctx, lockfile, unusable))
     # A diagnostic: problems are reported above, never through the exit code
     # (drift exits 0 too). `playbook validate` and `playbook sync` are the gates.
     return 0

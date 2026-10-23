@@ -142,7 +142,7 @@ def test_override_hint_is_absent_when_no_overridden_rule_named_a_skill() -> None
 
 
 def test_check_rule_skills_leaves_plain_skills_alone() -> None:
-    plain = _skill("query-db", body="## References\n")
+    plain = _skill("query-db", body="## Rules\n")
 
     findings = check_rule_skills([_rule("db", skill="query-db")], [plain])
 
@@ -205,3 +205,80 @@ def test_check_rule_skills_skips_the_truncation_warning_on_a_malformed_block(
 
     assert len(findings.errors) == 1
     assert findings.warnings == []
+
+
+def test_check_skill_membership_leaves_an_in_skill_always_rule_to_r6() -> None:
+    """V3's 'remove skill' does not apply to a location the author cannot remove (R6 hints)."""
+    rule = _rule("house-style", skill="python-coding", scope="always")
+    rule.home_skill, rule.skill_from_location = "python-coding", True
+
+    skills = [_skill("python-coding", block=_BLOCK)]
+    assert check_skill_membership([rule], skills, all_rules=[rule]) == []
+
+
+def test_v8_names_sections_and_references_as_allowed_keys() -> None:
+    skill = _skill("python-coding", block={**_BLOCK, "when": "always"})
+
+    findings = check_rule_skills([_rule("python-typing")], [skill])
+
+    assert [error.message for error in findings.errors] == [
+        "'playbook' has unknown key 'when'; allowed keys: files, use_when, sections, references"
+    ]
+
+
+def _sections(*titles: str) -> list[dict[str, str]]:
+    return [
+        {"id": f"s{i}", "title": t, "impact": "LOW", "summary": "S.", "open_when": "O."}
+        for i, t in enumerate(titles)
+    ]
+
+
+def test_v11_measures_a_sectioned_description_over_every_declared_section() -> None:
+    """V11 counts every declared section, even one no member uses yet (D17, D18)."""
+    titles = [f"Section title number {index:02d}" for index in range(12)]
+    block = {**_BLOCK, "sections": _sections(*titles)}
+    member = _rule("python-typing")
+    member.frontmatter.section = "s0"
+
+    findings = check_rule_skills([member], [_skill("python-coding", block=block)])
+
+    [error] = findings.errors
+    assert error.message.startswith(
+        "the composed description cannot fit 300 chars when the Covers clause names every "
+        "declared section: 'Conventions. Covers section title number 00, "
+    )
+    assert error.message.endswith(
+        "shorten 'description' (12 chars), 'playbook.use_when' (19 chars) or the section titles"
+    )
+
+
+def test_v11_accepts_a_sectioned_description_that_fits() -> None:
+    block = {**_BLOCK, "sections": _sections("Mocking", "Fixtures")}
+    member = _rule("python-typing")
+    member.frontmatter.section = "s0"
+
+    findings = check_rule_skills([member], [_skill("python-coding", block=block)])
+
+    assert findings.errors == []
+    assert findings.warnings == []
+
+
+def test_w3_is_silent_for_a_sectioned_skill() -> None:
+    """Long member names never truncate a Covers clause that names sections."""
+    members = _long_named_members()
+    for rule in members:
+        rule.frontmatter.section = "s0"
+    block = {**_BLOCK, "sections": _sections("Mocking")}
+
+    findings = check_rule_skills(members, [_skill("python-coding", block=block)])
+
+    assert findings.errors == []
+    assert findings.warnings == []
+
+
+def test_sections_and_references_are_known_playbook_keys() -> None:
+    block = {**_BLOCK, "sections": [], "references": []}
+
+    findings = check_rule_skills([_rule("python-typing")], [_skill("python-coding", block=block)])
+
+    assert findings.errors == []

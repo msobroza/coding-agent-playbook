@@ -1,7 +1,7 @@
-"""The task compiler: parsed ``[gate]``/``[rubric]``/``[verdict]``/``[aggregate]`` -> a per-trial structure.
+"""The sample compiler: parsed ``[gate]``/``[rubric]``/``[verdict]``/``[aggregate]`` -> a per-trial structure.
 
-This module turns the three new task blocks into one
-:class:`CompiledTask`: a :class:`~coding_agent_playbook.grading.rubric.Rubric`
+This module turns the three new sample blocks into one
+:class:`CompiledSample`: a :class:`~coding_agent_playbook.grading.rubric.Rubric`
 carrying the two **named layer checks** (``id="gate"`` / ``id="rubric"``) plus a
 *derived* verdict AST.
 
@@ -26,11 +26,11 @@ verdict). A layer with exactly one handle and no ``expr`` defaults the expr to
 that handle's name (the common single-handle case); a layer with multiple handles
 and no ``expr`` is an error - the author must compose them.
 
-This compiler is what the task pipeline runs:
-:func:`coding_agent_playbook.evals.task.compile_eval_task` calls
-:func:`compile_task` for the validator (trial-compile) and the scoring bridge
+This compiler is what the sample pipeline runs:
+:func:`coding_agent_playbook.evals.sample.compile_eval_sample` calls
+:func:`compile_sample` for the validator (trial-compile) and the scoring bridge
 (:mod:`coding_agent_playbook.evals.run.scoring`), and the runner reads
-:attr:`CompiledTask.trials_needed` + :attr:`CompiledTask.aggregate` to drive the
+:attr:`CompiledSample.trials_needed` + :attr:`CompiledSample.aggregate` to drive the
 multi-trial ``[aggregate]`` layer (the ``over`` selector flows through
 :func:`over_boolean`).
 """
@@ -63,7 +63,7 @@ if TYPE_CHECKING:
 #: The default ``[verdict].trial`` expression: both layers must pass.
 _DEFAULT_VERDICT = "gate and rubric"
 
-#: The two layer ids a compiled task may expose (verdict names are a subset).
+#: The two layer ids a compiled sample may expose (verdict names are a subset).
 _LAYER_IDS = ("gate", "rubric")
 
 #: Tolerance for the weighted-verdict ``weights`` sum check (parity with the
@@ -75,7 +75,7 @@ _WEIGHT_SUM_TOLERANCE = 1e-3
 class VerdictSpec:
     """The compiled ``[verdict]``: a boolean expr OR a weighted composite (C10).
 
-    Mutually exclusive forms (mirrors :class:`~coding_agent_playbook.evals.task.Verdict`):
+    Mutually exclusive forms (mirrors :class:`~coding_agent_playbook.evals.sample.Verdict`):
 
     * ``mode == "boolean"`` — :attr:`ast` is the parsed ``[verdict].trial``
       expression and is folded by :func:`verdict_passed` over the layer
@@ -96,8 +96,8 @@ class VerdictSpec:
 
 
 @dataclass(frozen=True)
-class CompiledTask:
-    """The per-trial evaluation structure for one task (+ the aggregate layer).
+class CompiledSample:
+    """The per-trial evaluation structure for one sample (+ the aggregate layer).
 
     :attr:`per_trial` is the :class:`~coding_agent_playbook.grading.rubric.Rubric`
     carrying the present layer checks (``id="gate"`` and/or ``id="rubric"``, in
@@ -113,10 +113,10 @@ class CompiledTask:
     :attr:`aggregate` is the compiled ``[aggregate]`` layer - one composed
     :class:`~coding_agent_playbook.grading.check.Check` over the
     :class:`~coding_agent_playbook.evals.checks.aggregate.AggregateCheck`
-    handles - or ``None`` when the task authored no ``[aggregate]`` block.
+    handles - or ``None`` when the sample authored no ``[aggregate]`` block.
     :attr:`trials_needed` is the number of runner trials the aggregate layer needs
     (``max`` of every aggregate handle's ``k``), defaulting to **1** with no
-    aggregate so the task runs a single trial. :attr:`aggregate_overs` is the set
+    aggregate so the sample runs a single trial. :attr:`aggregate_overs` is the set
     of ``over`` axes the aggregate handles reduce (empty with no aggregate).
     """
 
@@ -129,7 +129,7 @@ class CompiledTask:
 
     @property
     def short_circuit_safe(self) -> bool:
-        """Whether the cross-layer short-circuit can never change this task's result.
+        """Whether the cross-layer short-circuit can never change this sample's result.
 
         With ``fail_fast`` the per-trial scheduler stops grading costlier layers
         once a cheaper *required* layer failed. That only saves work — rather
@@ -212,7 +212,7 @@ def _compile_layer(
     return AllOf(compiled, id=layer)
 
 
-def compile_task(
+def compile_sample(
     *,
     gate_bind: Mapping[str, Mapping[str, Any]] | None = None,
     gate_expr: str | None = None,
@@ -224,9 +224,9 @@ def compile_task(
     verdict_warn: float | None = None,
     aggregate_bind: Mapping[str, Mapping[str, Any]] | None = None,
     aggregate_expr: str | None = None,
-    name: str = "task",
-) -> CompiledTask:
-    """Compile the parsed task blocks into a :class:`CompiledTask`.
+    name: str = "sample",
+) -> CompiledSample:
+    """Compile the parsed sample blocks into a :class:`CompiledSample`.
 
     Builds the ``gate`` and ``rubric`` layer checks (each :func:`_compile_layer`,
     ``None`` when its block is absent), assembles the present ones - in
@@ -236,7 +236,7 @@ def compile_task(
     ``verdict_weights`` / ``verdict_fail`` / ``verdict_warn`` - mutually
     exclusive). Raises :exc:`ValueError` when **no** layer is present, when the
     boolean ``verdict_trial`` references a layer that is absent (e.g. the default
-    ``"gate and rubric"`` on a gate-only task), or when the weighted
+    ``"gate and rubric"`` on a gate-only sample), or when the weighted
     ``verdict_weights`` keys are not a subset of the present layers / fail to sum
     to ``1.0`` / no ``verdict_fail`` cutoff is provided.
 
@@ -249,9 +249,9 @@ def compile_task(
     :class:`~coding_agent_playbook.evals.checks.aggregate.AggregateCheck`
     handles (via the ``metric``-alone fallback in
     :func:`~coding_agent_playbook.evals.compile._handles._build_one`), and its ``expr``
-    composes them - into :attr:`CompiledTask.aggregate` (``None`` when absent).
-    :attr:`CompiledTask.trials_needed` is the ``max`` ``k`` over those handles,
-    defaulting to **1** with no aggregate so the task runs a single trial.
+    composes them - into :attr:`CompiledSample.aggregate` (``None`` when absent).
+    :attr:`CompiledSample.trials_needed` is the ``max`` ``k`` over those handles,
+    defaulting to **1** with no aggregate so the sample runs a single trial.
     """
     gate_check = _compile_layer(gate_bind, gate_expr, layer="gate")
     rubric_check = _compile_layer(rubric_bind, rubric_expr, layer="rubric")
@@ -263,7 +263,7 @@ def compile_task(
     checks: list[Check] = [check for _, check in layered if check is not None]
     present = frozenset(layer for layer, check in layered if check is not None)
     if not checks:
-        raise ValueError("a task must have at least one of [gate] / [rubric]")
+        raise ValueError("a sample must have at least one of [gate] / [rubric]")
 
     verdict_spec = _compile_verdict(
         verdict_trial=verdict_trial,
@@ -276,7 +276,7 @@ def compile_task(
     aggregate, trials_needed, aggregate_overs = _compile_aggregate(aggregate_bind, aggregate_expr)
 
     per_trial = Rubric(checks, name=name)
-    return CompiledTask(
+    return CompiledSample(
         per_trial=per_trial,
         verdict_spec=verdict_spec,
         layers=present,
@@ -594,7 +594,7 @@ def over_boolean(over: str, report: EvaluationReport, verdict: bool) -> bool | N
     layer's ``CheckResult.passed`` from ``report.checks``, or ``None`` when the
     layer was skipped (neutral — it does not vote). Raises
     :exc:`ValueError` when ``over`` is neither ``"verdict"`` nor a present layer
-    id (an unknown axis, or a layer the task does not have). Used by the
+    id (an unknown axis, or a layer the sample does not have). Used by the
     aggregate ``over`` selector.
     """
     if over == "verdict":
@@ -610,9 +610,9 @@ def over_boolean(over: str, report: EvaluationReport, verdict: bool) -> bool | N
 
 
 __all__ = [
-    "CompiledTask",
+    "CompiledSample",
     "VerdictSpec",
-    "compile_task",
+    "compile_sample",
     "over_boolean",
     "verdict_passed",
     "weighted_verdict",

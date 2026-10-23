@@ -1,0 +1,111 @@
+---
+id: fastapi-dependency-overrides
+name: FastAPI dependency overrides in tests
+description: "Test endpoints on a fresh create_app(test_settings) per test, override only out-of-process dependencies in a fixture, and drive the app with httpx over ASGITransport."
+version: 1
+scope: scoped
+globs:
+  - "**/test_*.py"
+  - "**/*_test.py"
+  - "**/tests/**/*.py"
+  - "**/conftest.py"
+  - "**/fakes.py"
+applies_if:
+  has_framework: ["fastapi", "pytest"]
+section: testing
+priority: 61
+tags: [python, fastapi, testing]
+---
+{% set asyncio_plugin = has_framework("pytest-asyncio") %}
+
+# Test endpoints with dependency overrides, not patching
+
+## Description
+
+Patching module attributes breaks when code moves and often has no effect: `Annotated[User, Depends(get_current_user)]` holds a reference to the original function, so patching `app.security.get_current_user` changes nothing. Build a fresh app per test with `create_app(test_settings)`, override only the dependencies that leave the process (the database session, HTTP clients) through `app.dependency_overrides` inside a fixture, and drive the app with `httpx.AsyncClient` over `ASGITransport`. Keep authentication real by logging in with real credentials. Never assign overrides at import time, where they leak into every other test.
+
+## Bad Example
+
+```python
+from unittest.mock import AsyncMock, patch
+
+from app.asgi import app  # one global app, built from the real environment
+
+app.dependency_overrides[get_session] = fake_session  # at import: leaks into every test
+client = TestClient(app)  # shared by every test
+
+
+def test_read_invoice() -> None:
+    with patch("app.security.get_current_user", AsyncMock(return_value=FAKE_USER)):  # no effect
+        response = client.get("/invoices/1")
+    assert response.status_code == 200  # fails with 401, or passes for the wrong reason
+```
+
+## Good Example
+
+```python
+# tests/conftest.py: session and make_user are sqlalchemy-test-rollback's fixtures
+# (make_user stores FIXED_HASH, the hash of TEST_PASSWORD); make_invoice is a factory
+# fixture of the same shape; settings is a function-scoped Settings(...) with test values.
+{% if asyncio_plugin %}
+@pytest_asyncio.fixture
+{% else %}
+@pytest.fixture
+{% endif %}
+async def client(session: AsyncSession, settings: Settings) -> AsyncIterator[httpx.AsyncClient]:
+    app = create_app(settings)
+
+    async def override_session() -> AsyncIterator[AsyncSession]:
+        yield session  # this test's transaction
+
+    def fake_payments(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"status": "paid"})
+
+    payments = httpx.AsyncClient(
+        base_url="https://payments.test", transport=httpx.MockTransport(fake_payments)
+    )
+    app.dependency_overrides[get_session] = override_session
+    app.dependency_overrides[get_payments_client] = lambda: payments
+    transport = httpx.ASGITransport(app=app)  # skips the lifespan: override what it provides
+    async with payments, httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
+    app.dependency_overrides.clear()
+
+
+# tests/test_invoices.py
+{% if asyncio_plugin %}
+@pytest.mark.asyncio
+{% else %}
+@pytest.mark.anyio
+{% endif %}
+async def test_user_cannot_read_another_users_invoice(
+    client: httpx.AsyncClient, make_user: MakeUser, make_invoice: MakeInvoice
+) -> None:
+    await make_user(email="alice@example.com")
+    bob = await make_user(email="bob@example.com")
+    bobs_invoice = await make_invoice(owner=bob)
+    login = await client.post(
+        "/auth/token", data={"username": "alice@example.com", "password": TEST_PASSWORD}
+    )
+
+    response = await client.get(
+        f"/invoices/{bobs_invoice.id}",
+        headers={"Authorization": f"Bearer {login.json()['access_token']}"},
+    )
+
+    assert response.status_code == 404
+```
+
+## Notes
+
+- Unit tests use fakes; persistence and endpoint tests use the real engine in a rolled-back transaction. The session fixture is `sqlalchemy-test-rollback`'s; which behavior is tested at which layer is the python-architecture skill's arch-tests-by-layer rule.
+- Override the function passed to `Depends()` (`get_session`), not the `Annotated` alias. A fresh `create_app()` per test discards overrides; a shared app still clears them in the fixture teardown, as above.
+- `httpx.ASGITransport` skips the lifespan: override everything the lifespan provides, as above. `TestClient` runs the lifespan as a context manager, but in another thread and event loop, so it cannot share an async database connection with the fixtures. `asgi-lifespan`'s `LifespanManager` runs it in the test's loop: propose it, never add it unasked.
+- Overriding `get_current_user` with a fixed user is fine for tests that are not about auth; keep at least one test per protected router that uses a real token.
+- Fake external HTTP at the transport (`httpx.MockTransport`, or `respx` as a proposal) instead of patching service functions.
+{% if asyncio_plugin %}
+- This project has `pytest-asyncio`: mark async tests `@pytest.mark.asyncio` and decorate async fixtures with `@pytest_asyncio.fixture`; strict mode does not run an async `@pytest.fixture`.
+{% else %}
+- `@pytest.mark.anyio` runs on the AnyIO plugin that ships with FastAPI's AnyIO dependency; async fixtures keep the plain `@pytest.fixture`.
+{% endif %}
+- Worked example: the hotel example's tests/conftest.py and tests/test_api.py.

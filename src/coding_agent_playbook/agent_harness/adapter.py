@@ -8,18 +8,24 @@ in :meth:`finalize`, so ``HARNESS.md`` can index everything that was emitted.
 
 Layout (§B):
 
-- ``skills/<id>/SKILL.md`` (+ ``scripts/`` + ``references/``) and ``skills/SKILLS.md``.
+- ``skills/<id>/SKILL.md`` (+ ``scripts/`` + ``references/`` + ``examples/``) and
+  ``skills/SKILLS.md``; the ``SKILL.md`` body ends with the generated rules index
+  (prU D46.7). When an ``examples/`` is written, ``skills/conftest.py`` keeps a
+  consumer's pytest out of it (prU D48).
+- ``skills/<id>/rules/<rule-id>.md`` for each member rule of an emitted skill
+  (prU D22, D5), written by :mod:`._emit_rules`.
 - ``prompts/<slash>/SKILL.md`` (skill-shaped leaf) and ``prompts/PROMPTS.md``;
   both kinds of leaf are written by :mod:`._emit_skills` (AH-2, #143).
 - ``rules/<priority:02d>-<id>.md`` for ``scope=always`` rules and ``rules/RULES.md``.
-- ``references/<id>.md`` for ``scope=scoped`` rules and ``references/REFERENCES.md``.
+- ``references/<id>.md`` for every other ``scope=scoped`` rule and ``references/REFERENCES.md``;
+  absent when every scoped rule is a member of an emitted skill.
 - ``HARNESS.md`` (root role summary + dir index + "Always consult these" pointer).
 - ``.leaf-detectors`` (``skill=SKILL.md``) when any skill/prompt leaf exists.
 - ``.playbook/manifest.toml`` (round-trip sidecar) + ``.playbook/.harnessleaf``.
 - ``.playbook/hooks/<id>/`` hook sidecars and ``rules/30-guardrail-<id>.md``
   advisories (:mod:`.hook_sidecars`, specs/prK-lifecycle-hooks.md §C.6).
 
-Eval tasks are authoring-only and never dispatched to adapters, so this adapter
+Eval samples are authoring-only and never dispatched to adapters, so this adapter
 never emits an ``evals/`` directory — consistent with the five built-in adapters.
 
 The playbook sentinel is written as the **first body line** of every generated
@@ -38,6 +44,11 @@ from typing import TYPE_CHECKING, ClassVar
 
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.agent_harness import emitter, manifest
+from coding_agent_playbook.agent_harness._emit_rules import (
+    member_rule_path,
+    split_members,
+    write_rule_file,
+)
 from coding_agent_playbook.agent_harness._emit_skills import emit_prompt_leaves, emit_skill_leaves
 from coding_agent_playbook.agent_harness.hook_sidecars import (
     emit_hook_sidecars,
@@ -46,10 +57,8 @@ from coding_agent_playbook.agent_harness.hook_sidecars import (
 )
 from coding_agent_playbook.generated_output.file_identity import FileSet
 from coding_agent_playbook.generated_output.output_io import write_output_text
-from coding_agent_playbook.rendering.formats import (
-    render_inline_prompt_markdown,
-    with_sentinel_body,
-)
+from coding_agent_playbook.rendering.formats import render_inline_prompt_markdown
+from coding_agent_playbook.skills.naming import skill_id_of
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -84,12 +93,11 @@ class AgentHarnessAdapter(Adapter):
 
     The optional ``rule_registry`` is used to inline a prompt's
     ``includes_rules:`` as a ``## Reference rules`` appendix (mirrors
-    :class:`ContinueAdapter`): this tree's scoped rules are top-level
-    ``references/<id>.md`` files, not skill references, so there is no skill to
-    point at (P3-6). When omitted, ``includes_rules:`` is declarative-only.
+    :class:`ContinueAdapter`), so a prompt leaf stands alone (P3-6). When
+    omitted, ``includes_rules:`` is declarative-only.
 
     Uniqueness assumption: leaf paths are keyed on canonical ids/slashes —
-    scoped rules at ``references/<id>.md``, always-rules at
+    scoped rules at ``skills/<skill>/rules/<id>.md`` or ``references/<id>.md``, always-rules at
     ``rules/<priority:02d>-<id>.md``, and prompts at ``prompts/<slash>/`` — so a
     duplicate id/slash within one artifact set is last-write-wins. The canonical
     layer guarantees these are unique, so collisions never reach the adapter.
@@ -154,12 +162,20 @@ class AgentHarnessAdapter(Adapter):
         written.extend(self._emit_skills(repo_root, entries))
         written.extend(self._emit_prompts(repo_root, entries))
         always_rules, scoped_rules = self._partition_rules()
+        members, root_scoped = split_members(scoped_rules, {skill_id_of(s) for s in self._skills})
         advisories = guardrail_rules(self._hooks)
         written.extend(self._emit_always_rules(repo_root, always_rules, entries, advisories))
-        written.extend(self._emit_scoped_rules(repo_root, scoped_rules, entries))
+        written.extend(
+            write_rule_file(member_rule_path(repo_root, rule), rule, repo_root, entries)
+            for rule in members
+        )
+        written.extend(self._emit_scoped_rules(repo_root, root_scoped, entries))
         written.extend(emit_hook_sidecars(self._hooks, repo_root, entries))
 
-        written.append(self._emit_harness_md(repo_root, [*always_rules, *advisories]))
+        always_listed = [*always_rules, *advisories]
+        written.append(
+            self._emit_harness_md(repo_root, always_listed, has_references=bool(root_scoped))
+        )
 
         if self._skills or self._prompts:
             written.append(self._emit_leaf_detectors(repo_root))
@@ -229,7 +245,7 @@ class AgentHarnessAdapter(Adapter):
         for rule, record in [*((r, True) for r in rules), *((r, False) for r in advisories)]:
             target = repo_root / "rules" / emitter.always_rule_filename(rule)
             written.append(
-                self._write_rule_content(target, rule, repo_root, entries, record_manifest=record)
+                write_rule_file(target, rule, repo_root, entries, record_manifest=record)
             )
         written.append(self._emit_routing(repo_root, "rules", "Rules to apply every session."))
         return written
@@ -242,49 +258,11 @@ class AgentHarnessAdapter(Adapter):
         written: list[Path] = []
         for rule in rules:
             target = repo_root / "references" / f"{rule.frontmatter.id}.md"
-            written.append(self._write_rule_content(target, rule, repo_root, entries))
+            written.append(write_rule_file(target, rule, repo_root, entries))
         written.append(
             self._emit_routing(repo_root, "references", "On-demand references and scoped rules.")
         )
         return written
-
-    def _write_rule_content(
-        self,
-        target: Path,
-        rule: Rule,
-        repo_root: Path,
-        entries: list[ManifestEntry],
-        *,
-        record_manifest: bool = True,
-    ) -> Path:
-        target.parent.mkdir(parents=True, exist_ok=True)
-        fm = rule.frontmatter
-        frontmatter = emitter.frontmatter_block({"description": fm.description})
-        write_output_text(target, with_sentinel_body(frontmatter, rule.body))
-        if not record_manifest:
-            return target
-        entries.append(
-            manifest.ManifestEntry(
-                kind="rule",
-                path=self._rel(target, repo_root),
-                id=fm.id,
-                # The harness rule file emits ``description`` only — ``name`` and
-                # the un-rendered source body are the sidecar's responsibility so
-                # the lossless importer recovers them independently of the leaf.
-                name=fm.name,
-                body=rule.template_body,
-                is_templated=rule.is_templated,
-                scope=fm.scope,
-                priority=fm.priority,
-                globs=list(fm.globs),
-                applies_if=dict(fm.applies_if),
-                tags=list(fm.tags),
-                version=fm.version,
-                lint_codes=dict(fm.lint_codes),
-                skill=fm.skill,
-            )
-        )
-        return target
 
     # --- routing files -----------------------------------------------------
 
@@ -297,12 +275,14 @@ class AgentHarnessAdapter(Adapter):
 
     # --- HARNESS.md --------------------------------------------------------
 
-    def _emit_harness_md(self, repo_root: Path, always_rules: list[Rule]) -> Path:
+    def _emit_harness_md(
+        self, repo_root: Path, always_rules: list[Rule], *, has_references: bool
+    ) -> Path:
         emitted = {
             "skills": bool(self._skills),
             "prompts": bool(self._prompts),
             "rules": bool(always_rules),
-            "references": any(r.frontmatter.scope != "always" for r in self._rules),
+            "references": has_references,
         }
         dirs = [d for d in _TOP_LEVEL_DIRS if emitted[d]]
         target = repo_root / "HARNESS.md"
@@ -372,7 +352,3 @@ class AgentHarnessAdapter(Adapter):
                 if not emitter.inside_skill_dir(path, skills_dir)
             )
         return candidates
-
-    @staticmethod
-    def _rel(path: Path, repo_root: Path) -> str:
-        return path.relative_to(repo_root).as_posix()

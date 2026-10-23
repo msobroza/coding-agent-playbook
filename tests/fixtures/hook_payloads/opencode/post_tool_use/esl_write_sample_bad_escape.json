@@ -1,0 +1,20 @@
+{
+  "_fixture": {
+    "harness_version": "1.19.0",
+    "source": "k5-eval-sample-authoring-lint"
+  },
+  "hook_event_name": "PostToolUse",
+  "session_id": "ses_7a1b2c3d4e5f",
+  "cwd": "/playbook-fixture/proj",
+  "tool_use_id": "call_esl_01",
+  "tool_name": "Write",
+  "tool_input": {
+    "filePath": "/playbook-fixture/proj/playbook/eval_samples/demo-sample/sample.toml",
+    "content": "id = \"demo-sample\"\npattern = \"\\s+\"\n",
+    "file_path": "/playbook-fixture/proj/playbook/eval_samples/demo-sample/sample.toml"
+  },
+  "tool_response": {
+    "output": "Wrote file successfully.",
+    "title": "playbook/eval_samples/demo-sample/sample.toml"
+  }
+}

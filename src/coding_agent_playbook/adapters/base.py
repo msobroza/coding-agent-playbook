@@ -52,7 +52,7 @@ class Adapter(ABC):
     retired_output_locations: ClassVar[tuple[str, ...]] = ()
 
     #: Whether this adapter's harness receives scoped rules: through its own rule
-    #: files (continue, agent_harness) or through skill references (claude_code,
+    #: files (continue, agent_harness) or through skill rule files (claude_code,
     #: opencode, shared_skills). Only ``agents_md`` sets False: it carries always
     #: rules only. ``playbook sync`` warns when every enabled adapter sets False
     #: (``skills.membership.undelivered_member_warning``). True by default, because
@@ -112,7 +112,7 @@ class Adapter(ABC):
         A skill with ``member_references`` is never degraded (E4,
         specs/prS-skills-context.md section 6.4.7): its member rules already
         reach this adapter through :meth:`write_rule`, and the prompt would
-        index ``references/`` files this harness never receives. So Continue
+        index ``rules/`` files this harness never receives. So Continue
         writes no prompt for it, and nor does an out-of-tree adapter that keeps
         this default.
 

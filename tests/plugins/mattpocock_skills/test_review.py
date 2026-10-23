@@ -22,6 +22,7 @@ from tests.plugins.mattpocock_skills._expectations import (
     present_skill_ids,
     skill_files,
     split_skill,
+    vendored_text,
 )
 
 if TYPE_CHECKING:
@@ -64,7 +65,7 @@ _MIT_PERMISSION = (
 
 
 def _text(skill_id: str, relative: str = "SKILL.md") -> str:
-    return (SKILLS_ROOT / skill_id / relative).read_text(encoding="utf-8")
+    return vendored_text(skill_id, relative)
 
 
 def _lines(skill_id: str, relative: str = "SKILL.md") -> list[str]:

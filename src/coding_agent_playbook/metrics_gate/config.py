@@ -106,7 +106,7 @@ def parse_metrics_config(data: dict[str, Any]) -> MetricConfig:
         select = ["quality"]         # metric or family names (absent: the default set)
         extend_select = ["file_sloc"]
         ignore = ["lcom4"]
-        exclude = ["**/eval_tasks/*/setup/**"]   # the default; a list replaces it
+        exclude = ["**/eval_samples/*/setup/**"]   # the default; a list replaces it
 
         [metrics.ruff_violations]    # the opt-in ruff_violations metric (prK §F.2.1)
         families = { quality = ["C901", "PLR0915"] }   # replaces the named families only

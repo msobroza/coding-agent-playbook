@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.generated_output.gitignore import (
     BLOCK_END,
@@ -31,10 +32,14 @@ from coding_agent_playbook.generated_output.gitignore import (
     apply_managed_block,
 )
 from coding_agent_playbook.sync import pipeline as _sync
-from tests._catalog import core_skill_ids
-from tests.cli.test_sync_skills import _lock_paths, _skill_tree, _write_repo_local_skill
+from tests._catalog import CORE_SKILLS_ROOT, core_skill_ids
+from tests.cli.skill_sync_kit import lock_entry_paths as _lock_paths
+from tests.cli.test_sync_skills import _skill_tree, _write_repo_local_skill
+from tests.core_skill_pins.playbook_creator import PINS as PLAYBOOK_CREATOR_PINS
+from tests.core_skill_pins.python_documentation import PINS as DOCUMENTATION_PINS
+from tests.core_skill_pins.python_tooling import UNGATED_MEMBERS
 from tests.fakes import FakeGitClient
-from tests.plugins.superpowers_expectations import consumer_config
+from tests.plugins.superpowers_expectations import EXPECTED_SKILL_IDS, PLUGIN_NAME, consumer_config
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -44,34 +49,129 @@ if TYPE_CHECKING:
 _OLD_ROOT = "shared_skills"
 _NEW_ROOT = ".agents/skills"
 _SKILL_ROOTS = (".claude/skills", ".opencode/skills", _NEW_ROOT)
-_PYTHON_DESIGN = "coding_agent_playbook.plugins.python_design"
 #: The python-coding members active on the synthetic repo (requires-python >=3.12, no
 #: dependencies): every member but python-retries-and-timeouts, which needs an HTTP client.
 _SYNTHETIC_PYTHON_CODING_MEMBERS = (
+    "python-abstract-inputs",
     "python-async",
-    "python-classes-and-protocols",
+    "python-async-fanout",
+    "python-async-generators",
+    "python-async-tasks",
+    "python-closures-and-partial",
+    "python-collection-choice",
+    "python-comments-why",
+    "python-comprehensions",
     "python-context-managers",
+    "python-custom-context-managers",
+    "python-custom-exceptions",
     "python-data-shapes",
+    "python-dataclass-post-init",
+    "python-decorators",
     "python-dependency-injection",
     "python-docstrings",
+    "python-early-return",
+    "python-enums",
+    "python-error-boundaries",
     "python-error-handling",
+    "python-error-messages-with-context",
+    "python-frozen-dataclasses",
+    "python-function-signatures",
+    "python-generators",
+    "python-hide-internal-state",
     "python-idioms",
-    "python-performance-idioms",
+    "python-imports",
+    "python-match-destructuring",
+    "python-match-fallback",
+    "python-meaningful-names",
+    "python-no-global-singletons",
+    "python-optional-keys",
+    "python-parameterized-queries",
+    "python-properties",
+    "python-protocols",
     "python-pure-core",
+    "python-small-units",
+    "python-str-join",
+    "python-type-aliases",
     "python-typing",
 )
+#: python-tooling's ungated members, active on the synthetic repo (no pytest, no uv.lock).
+_SYNTHETIC_PYTHON_TOOLING_MEMBERS = UNGATED_MEMBERS
+#: The playbook-creator members active on the synthetic repo: its ``playbook/`` layer turns
+#: ``playbook_layer`` on (prU D70), and it lacks ``catalog/core``, the engine-only gate's file.
+_SYNTHETIC_PLAYBOOK_CREATOR_MEMBERS = tuple(
+    rule_id
+    for rule_id in PLAYBOOK_CREATOR_PINS.members
+    if rule_id not in PLAYBOOK_CREATOR_PINS.probe_inactive
+)
+#: The python-documentation members active on the synthetic repo: the ungated ones (no
+#: CITATION.cff, no docs/conf.py, no mkdocs.yml).
+_SYNTHETIC_DOCUMENTATION_MEMBERS = tuple(
+    rule_id for rule_id, pin in DOCUMENTATION_PINS.rules.items() if not pin.applies_if
+)
+
+
+def _gated_rule(path: Path) -> bool:
+    """Whether ``path`` is a member rule file whose frontmatter declares ``applies_if``."""
+    if path.parent.name != "rules":
+        return False
+    frontmatter, _ = split_frontmatter(path.read_text(encoding="utf-8"))
+    return bool(frontmatter.get("applies_if"))
+
+
+#: The design-patterns and python-architecture files, as sync writes them, without the
+#: gated members (python-architecture's sqlalchemy and pytest ones fail on the synthetic
+#: repo, which has neither framework); a ``.md.j2`` rule lands as ``.md``.
+_SYNTHETIC_UNGATED_SKILL_FILES = tuple(
+    f"{skill_id}/" + path.relative_to(CORE_SKILLS_ROOT / skill_id).as_posix().removesuffix(".j2")
+    for skill_id in ("design-patterns", "python-architecture")
+    for path in (CORE_SKILLS_ROOT / skill_id).rglob("*")
+    if path.is_file() and not _gated_rule(path)
+)
 #: Every file the pre-v0.21 engine left under ``shared_skills/`` for ``_synced_then_rewound``:
-#: query-db's two, the core python-coding skill with one reference per active member, and
-#: python-tooling with its one ungated member (no framework, no uv.lock).
+#: query-db's two, the core python-coding skill with one rule file per active member and its
+#: references (its two upstream license copies, D19, and its guides), python-tooling with its ungated members (no
+#: framework, no uv.lock) with the same two license copies and its ungated check-failures
+#: guide (the uv guide gates on a uv.lock), playbook-creator with its
+#: members the repo's layer turns on, the ungated design-patterns and python-architecture,
+#: and python-documentation with its ungated members and its decision guide.
 _OLD_TREE_FILES = frozenset(
     {
         "query-db/SKILL.md",
         "query-db/scripts/run.py",
         "python-coding/SKILL.md",
-        *(f"python-coding/references/{rule_id}.md" for rule_id in _SYNTHETIC_PYTHON_CODING_MEMBERS),
+        *(f"python-coding/rules/{rule_id}.md" for rule_id in _SYNTHETIC_PYTHON_CODING_MEMBERS),
+        *(
+            f"python-coding/references/{path.name}"
+            for path in (CORE_SKILLS_ROOT / "python-coding" / "references").iterdir()
+        ),
         "python-tooling/SKILL.md",
-        "python-tooling/references/python-static-checks.md",
+        *(f"python-tooling/rules/{rule_id}.md" for rule_id in _SYNTHETIC_PYTHON_TOOLING_MEMBERS),
+        "python-tooling/references/LICENSE.python-best-practices",
+        "python-tooling/references/LICENSE.python-clean-architecture",
+        "python-tooling/references/check-failures.md",
+        "playbook-creator/SKILL.md",
+        *(
+            f"playbook-creator/rules/{rule_id}.md"
+            for rule_id in _SYNTHETIC_PLAYBOOK_CREATOR_MEMBERS
+        ),
+        # playbook-creator's six template guides are ungated.
+        *(
+            f"playbook-creator/references/{path.name}"
+            for path in (CORE_SKILLS_ROOT / "playbook-creator" / "references").iterdir()
+        ),
+        *_SYNTHETIC_UNGATED_SKILL_FILES,
+        "python-documentation/SKILL.md",
+        "python-documentation/references/which-document.md",
+        *(
+            f"python-documentation/rules/{rule_id}.md"
+            for rule_id in _SYNTHETIC_DOCUMENTATION_MEMBERS
+        ),
         "forge/SKILL.md",
+        # python-testing's ungated pytest-first-properties (D72) needs no pytest.
+        "python-testing/SKILL.md",
+        "python-testing/rules/pytest-first-properties.md",
+        "python-testing/references/LICENSE.python-best-practices",
+        "python-testing/references/LICENSE.python-clean-architecture",
     }
 )
 
@@ -139,8 +239,7 @@ def test_first_sync_after_upgrade_moves_pristine_shared_skills_tree(
 
     assert _sync.execute(repo, git=FakeGitClient()) == 0
 
-    # query-db's SKILL.md + run.py, python-coding's SKILL.md + its 11 references,
-    # python-tooling's SKILL.md + its 1 reference and the always-rendered forge skill: 17.
+    # The move removes the whole pristine old tree, so the removed count is every file in it.
     assert re.search(rf", {len(_OLD_TREE_FILES)} removed$", capsys.readouterr().out, re.MULTILINE)
     assert not (repo / _OLD_ROOT).exists()
     moved = repo / _NEW_ROOT / "query-db"
@@ -227,7 +326,7 @@ def test_sync_writes_no_loose_file_at_any_skill_root(
 ) -> None:
     """OpenCode v2 loads any root-level ``*.md`` in a skill root as a skill (section 5.4.5)."""
     adapters = ("claude_code", "opencode", "shared_skills", "continue")
-    config = _config(adapters=adapters, overlays=(_PYTHON_DESIGN,))
+    config = _config(adapters=adapters, overlays=(PLUGIN_NAME,))
     repo = make_synthetic_repo(tmp_path, config_text=config)
     _write_repo_local_skill(repo, "query-db")
 
@@ -236,8 +335,9 @@ def test_sync_writes_no_loose_file_at_any_skill_root(
     for root in _SKILL_ROOTS:
         children = sorted((repo / root).iterdir())
         assert all(child.is_dir() for child in children), root
-        # query-db + the two python_design skills, next to the core skills that apply here.
-        assert len([c for c in children if c.name not in core_skill_ids()]) == 3, root
+        # query-db + the superpowers skills, next to the core skills that apply here.
+        not_core = {c.name for c in children if c.name not in core_skill_ids()}
+        assert not_core == {"query-db", *EXPECTED_SKILL_IDS}, root
     for path in _lock_paths(repo):
         for root in _SKILL_ROOTS:
             below = Path(path).relative_to(root).parts if path.startswith(f"{root}/") else ()

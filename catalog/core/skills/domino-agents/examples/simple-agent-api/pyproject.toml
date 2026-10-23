@@ -1,0 +1,68 @@
+# The example's own project: uv builds a throwaway environment from it (no
+# [build-system], so uv treats it as a virtual project and installs only the
+# dependencies). The engine never imports this code.
+[project]
+name = "simple-agent-api"
+version = "0.1.0"
+description = "An LLM agent API for Domino: a FastAPI App with a chat route, an A2A sub-app and two evaluation Jobs."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    # pydantic-ai 2 moved the A2A bridge into fasta2a; the bridge below needs 1.92 or later.
+    "pydantic-ai-slim[openai]>=1.92,<2",
+    "fasta2a[pydantic-ai]>=0.6.1,<1",
+    "fastapi>=0.115.7",
+    "uvicorn>=0.34.0",
+    "httpx>=0.28.1",
+    "pydantic>=2.12.3",
+    "pydantic-settings>=2.6",
+    "PyYAML>=6.0.2",
+]
+
+[project.optional-dependencies]
+# The Domino Standard Environment provides the agent SDK; install this extra only
+# in a custom Domino image (outside Domino tracing stays off either way). CI never
+# installs it: the SDK adapters run only through fakes there.
+domino = ["dominodatalab[agents]>=2.0"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "anyio>=4.0",
+    "mypy>=1.10",
+    "types-PyYAML",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = ["--strict-markers", "--strict-config"]
+xfail_strict = true
+filterwarnings = ["error"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "SIM", "TCH", "RUF"]
+ignore = ["E501"]
+
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = ["pydantic.BaseModel", "pydantic_settings.BaseSettings"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+explicit_package_bases = true
+files = ["app", "evals", "tests"]
+
+# The agent SDK is an optional extra, and fasta2a ships no type marker.
+[[tool.mypy.overrides]]
+module = ["domino", "domino.*", "fasta2a", "fasta2a.*"]
+ignore_missing_imports = true
+
+# BoundedContextStorage extends fasta2a's in-memory storage, typed as Any above.
+[[tool.mypy.overrides]]
+module = "app.a2a"
+disallow_subclassing_any = false

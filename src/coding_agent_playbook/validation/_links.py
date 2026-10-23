@@ -12,7 +12,8 @@ from __future__ import annotations
 import tomllib
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.catalog.source import FileSystemArtifactSource, _iter_md_files
+from coding_agent_playbook.catalog.skill_rules import iter_md_files
+from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.config.files import CONFIG_FILENAME
 from coding_agent_playbook.config.tables.links import LinksConfig, parse_links_config
 from coding_agent_playbook.validation.findings import ValidationError
@@ -25,7 +26,7 @@ if TYPE_CHECKING:
 
 # Artifact kinds whose markdown bodies (and, for skills, references/) are
 # link-checked; a hook body degrades into advisory text, so it is too (H19,
-# specs/prK-lifecycle-hooks.md §B.5). Eval-task setup/ trees are task *inputs*,
+# specs/prK-lifecycle-hooks.md §B.5). Eval-sample setup/ trees are sample *inputs*,
 # not rendered artifacts, so they stay out of scope (specs/prL-markdown-links.md).
 _LINK_CHECKED_SUBDIRS = ("rules", "prompts", "skills", "hooks")
 
@@ -121,7 +122,7 @@ def check_markdown_links(
         error
         for subdir in _LINK_CHECKED_SUBDIRS
         for _label, root in artifact_source.layer_roots(subdir)
-        for md in _iter_md_files(root)
+        for md in iter_md_files(root)
         for error in _scan_markdown_file(md, root_dir=root.parent, links_config=links_config)
     ]
 
@@ -137,7 +138,7 @@ def _scan_source_bodies(
     bodies = [
         *(
             (str(r.source_path or r.frontmatter.id), r.template_body)
-            for r in artifact_source.list_rules()
+            for r in artifact_source.collect_rules()[0]
         ),
         *(
             (str(p.source_path or p.frontmatter.id), p.template_body)

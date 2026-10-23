@@ -15,11 +15,18 @@ from __future__ import annotations
 import tomllib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.config.model import Config, check_config_file
 from coding_agent_playbook.config.schema import ConfigError
 from coding_agent_playbook.config.tables.hooks import PolicyTables, policy_tables
+
+# The config file names, re-exported: they are defined in the detector layer, below
+# config, because the detector reads the committed file's ``platforms`` key (prU D63).
+from coding_agent_playbook.detector.config_filenames import CONFIG_FILENAME as CONFIG_FILENAME
+from coding_agent_playbook.detector.config_filenames import (
+    CONFIG_LOCAL_FILENAME as CONFIG_LOCAL_FILENAME,
+)
 from coding_agent_playbook.generated_output.atomic_io import atomic_write_bytes
 from coding_agent_playbook.lockfile.model import Lockfile
 from coding_agent_playbook.toml_writer import dump_toml
@@ -27,11 +34,6 @@ from coding_agent_playbook.toml_writer import dump_toml
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
-
-#: The committed consumer config: team policy, read by every command (SPEC §7.1).
-CONFIG_FILENAME: Final = ".coding-agent-playbook.toml"
-#: The gitignored personal overrides, merged on top and never written back (SPEC §7.2).
-CONFIG_LOCAL_FILENAME: Final = ".coding-agent-playbook.local.toml"
 
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:

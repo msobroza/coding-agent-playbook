@@ -16,25 +16,21 @@ engine behaviour.
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING
 
 import pytest
 
-from tests._catalog import CATALOG_ROOT, REPO_ROOT
+from tests._catalog import CATALOG_ROOT, REPO_ROOT, TEST_FILE_GLOBS, core_rule_skill_ids
+from tests._docs import USER_DOC_PAGES
 from tests.unit.test_docs_lifecycle_hooks_spec import _spec_section
-from tests.unit.test_docs_migration_skills import _core_rule_skill_ids
 from tests.unit.test_docs_readme_hooks import _blocks
 from tests.unit.test_docs_readme_hooks import _section as _readme_section
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 _CONTEXT_MD = REPO_ROOT / "CONTEXT.md"
 
 #: The wording the docs used while core shipped no skills (before v0.21).
 _NO_SKILLS_CLAIM = re.compile(r"ships no skills|ships none")
 #: The docs that describe what core ships, by repo-relative path.
-_CORE_DOCS = ("README.md", "catalog/README.md", "SPEC.md")
+_CORE_DOCS = ("README.md", "catalog/README.md", "SPEC.md", *USER_DOC_PAGES)
 
 #: A citation of SPEC section 3: "§3" or "Section 3", but not "§3.1" or "§30".
 _SECTION_3_CITATION = re.compile(r"(?:§|Section )3(?![0-9]|\.[0-9])")
@@ -51,7 +47,7 @@ _GLOSSARY_TERMS = (
     "Hook",
     "Guardrail",
     "Skill nudge",
-    "Eval task",
+    "Eval sample",
     "Always-loaded context",
     "Skill listing",
     "Context budget",
@@ -114,19 +110,27 @@ def test_spec_section_6_3_says_core_ships_skills() -> None:
     assert "#### 6.3.3 Skills with member rules" in section
 
 
-def test_catalog_readme_add_a_rule_documents_skill(tmp_path: Path) -> None:
+def test_catalog_readme_add_a_rule_documents_skill() -> None:
     text = (CATALOG_ROOT / "README.md").read_text(encoding="utf-8")
     add_a_rule = text[text.index("## Add a rule") : text.index("## Add a prompt")]
     assert "`skill:`" in add_a_rule, "catalog/README.md 'Add a rule' must document 'skill:'"
-    missing = [i for i in _core_rule_skill_ids(tmp_path) if f"`{i}`" not in add_a_rule]
+    missing = [i for i in core_rule_skill_ids() if f"`{i}`" not in add_a_rule]
     assert not missing, f"'Add a rule' must name every core skill a rule may name: {missing}"
+
+
+def test_catalog_readme_add_a_rule_lists_the_shared_test_file_globs() -> None:
+    """D41 (specs/prU-core-python-skills.md): one glob set for every test-related rule."""
+    text = (CATALOG_ROOT / "README.md").read_text(encoding="utf-8")
+    add_a_rule = text[text.index("## Add a rule") : text.index("## Add a prompt")]
+    missing = [g for g in TEST_FILE_GLOBS if f"`{g}`" not in add_a_rule]
+    assert not missing, f"'Add a rule' must list the shared test-file globs: {missing}"
 
 
 @pytest.mark.parametrize("doc", _CORE_DOCS)
 def test_no_doc_says_core_ships_no_skills(doc: str) -> None:
     lines = (REPO_ROOT / doc).read_text(encoding="utf-8").splitlines()
     stale = [f"{n}: {line}" for n, line in enumerate(lines, 1) if _NO_SKILLS_CLAIM.search(line)]
-    assert not stale, f"{doc} still says something ships no skills (core ships four): {stale}"
+    assert not stale, f"{doc} still says something ships no skills (core ships eight): {stale}"
 
 
 def test_readme_architecture_names_skill_references() -> None:
@@ -135,3 +139,20 @@ def test_readme_architecture_names_skill_references() -> None:
     diagram = blocks[0]
     for token in ("skills/<id>/", "Where guidance lives"):
         assert token in diagram, f"README architecture block lacks {token!r}"
+
+
+#: A "hook" not preceded by "pre-commit " (CONTEXT.md, Hook: avoid bare "hook" for the git kind)
+#: nor by "` playbook ": an engine hook is named by its backticked id, "`<id>` playbook hook".
+_BARE_HOOK = re.compile(r"(?<!pre-commit )(?<!` playbook )\bhooks?\b", re.IGNORECASE)
+
+
+def test_python_documentation_says_pre_commit_hook_for_the_git_kind() -> None:
+    """Every "hook" in the docs skill is a pre-commit hook or a named playbook hook."""
+    skill_dir = CATALOG_ROOT / "core" / "skills" / "python-documentation"
+    bare = [
+        f"{path.relative_to(skill_dir).as_posix()}:{n}: {line}"
+        for path in sorted(skill_dir.rglob("*.md"))
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if _BARE_HOOK.search(line)
+    ]
+    assert not bare, f"say 'pre-commit hook', never a bare 'hook' (CONTEXT.md): {bare}"

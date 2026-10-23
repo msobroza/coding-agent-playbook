@@ -1,6 +1,6 @@
 """Where the engine's catalog lives (stdlib-only leaf; imports nothing from the engine).
 
-The catalog is the engine's own content: its rules, prompts, eval tasks, hooks
+The catalog is the engine's own content: its rules, prompts, eval samples, hooks
 and bundled plugins, in one root with two homes:
 
 - installed wheel: ``<package>/_catalog`` (hatch force-includes ``catalog/``);
@@ -105,7 +105,7 @@ def bundled_plugins(catalog_dir: Path | None = None) -> list[str]:
     Example::
 
         >>> bundled_plugins()  # doctest: +SKIP
-        ['coding_agent_playbook.plugins.python_design', 'coding_agent_playbook.plugins.superpowers']
+        ['coding_agent_playbook.plugins.mattpocock_skills', 'coding_agent_playbook.plugins.superpowers']
     """
     root = catalog_root() if catalog_dir is None else catalog_dir
     plugins_dir = root / _PLUGINS_DIRNAME

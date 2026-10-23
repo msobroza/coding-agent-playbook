@@ -9,12 +9,13 @@ Code's native layout:
   ``.claude/CLAUDE.md`` stub (SPEC §10.3.1). A generated ``## Where guidance
   lives`` section follows them, byte-identical to the one in ``AGENTS.md``. A
   member rule (one that names a skill in ``skill:``) is not in that file: it is
-  a reference of its skill under ``.claude/skills/<skill>/references/``
-  (ADR 0001, specs/prS-skills-context.md 6.4.6).
+  a rule file of its skill under ``.claude/skills/<skill>/rules/``
+  (ADR 0001, ADR 0005, specs/prS-skills-context.md 6.4.6).
 - Prompts are written immediately to ``.claude/commands/{slash}.md`` as pure
   markdown (no top-level frontmatter — Claude Code commands are plain md).
 - Skills are written natively to ``.claude/skills/{id}/`` (``SKILL.md`` plus
-  byte-copied ``scripts/`` and ``references/``, and the rendered member rules)
+  byte-copied ``scripts/`` and ``references/``, and the rendered member rules
+  under ``rules/``)
   through the shared
   :class:`~coding_agent_playbook.adapters.skill_dirs.writer.SkillWriter`, so the
   output is byte-identical to the ``opencode`` / ``shared_skills`` skill roots.
@@ -143,7 +144,7 @@ class ClaudeCodeAdapter(Adapter):
 
     The optional ``rule_registry`` (the sync's ``RuleRegistryImpl``) is used
     only as a ``SkillReferenceIndex``: :func:`render_for` builds each command's
-    ``## Before you start`` block from it, naming the skill references of the
+    ``## Before you start`` block from it, naming the skill rule files of the
     prompt's ``includes_rules``; a command never carries rule text (D15). When
     callers (or tests) omit it, prompts render with no block —
     ``includes_rules:`` becomes purely declarative.
@@ -297,7 +298,7 @@ class ClaudeCodeAdapter(Adapter):
         Buffers the skill's ``## Where guidance lives`` line for the rules
         file, then delegates to the shared :class:`SkillWriter` (``SKILL.md``
         with ``name`` = id and the sentinel as first body line, plus byte-copied
-        ``scripts/`` and ``references/`` and the member references). This
+        ``scripts/`` and ``references/`` and the member rules under ``rules/``). This
         adapter does NOT degrade to ``Skill.to_prompt`` — siblings without
         native skill support (e.g. Continue) use the ABC default.
 

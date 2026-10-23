@@ -38,8 +38,14 @@ jobs:
       - name: mypy (strict)
         run: mypy
 
+      # pytest-xdist spreads the suite over the runner's cores; pytest-cov
+      # combines the workers' coverage data before fail-under is checked.
+      # worksteal, not the default load: the slow end-to-end sync tests
+      # (tests/cli/test_sync_*, seconds each) cluster at the end of the
+      # collection, and with load one worker ran that whole tail alone while
+      # the others sat idle (92% of the tests in 10 min, the rest in 46 min).
       - name: pytest
-        run: pytest -q
+        run: pytest -q -n auto --dist worksteal
 
       - name: playbook --version smoke test
         run: playbook --version
@@ -92,6 +98,46 @@ jobs:
         env:
           PLAYBOOK_PR_TITLE: ${{ github.event.pull_request.title }}
 
+  # Runs each core skill example's own tests (prU D48): an example under
+  # catalog/core/skills/<skill>/examples/<app>/ is a runnable app with its own
+  # pyproject.toml. uv builds a throwaway .venv inside the example from that
+  # pyproject (its dependencies plus its default dev group), so the engine's
+  # install, pyproject and lock gain nothing, and the `test` job never imports
+  # example code (pytest's testpaths is tests/). UV_PYTHON picks the matrix
+  # Python, which uv downloads when the runner lacks it.
+  core-examples:
+    runs-on: ubuntu-latest
+    # Examples run in consumer repos from Python 3.10 on (prU D40, D48).
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+
+      - name: Test and type-check every core example in its own environment
+        run: |
+          set -euo pipefail
+          mapfile -t examples < <(find catalog/core/skills -mindepth 4 -maxdepth 4 -path '*/examples/*/pyproject.toml' -printf '%h\n' | sort)
+          if [ "${#examples[@]}" -eq 0 ]; then
+            echo "no core skill ships an example yet"
+            exit 0
+          fi
+          for example in "${examples[@]}"; do
+            echo "::group::$example"
+            uv run --directory "$example" pytest
+            uv run --directory "$example" mypy
+            echo "::endgroup::"
+          done
+
   # Builds the wheel the way a release does (the sdist first, then a wheel from
   # it) and proves the installed wheel works outside the checkout. catalog/ ships
   # through a force-include, so a mis-scoped include or a tracked file the sdist
@@ -135,7 +181,7 @@ jobs:
           echo "$RUNNER_TEMP/smoke-venv/bin" >> "$GITHUB_PATH"
           timeout 120 "$RUNNER_TEMP/smoke-venv/bin/playbook" --version </dev/null
 
-      - name: init with both bundled plugins in an empty scratch git repo
+      - name: init with the superpowers bundled plugin in an empty scratch git repo
         run: |
           mkdir "$RUNNER_TEMP/smoke-repo"
           cd "$RUNNER_TEMP/smoke-repo"
@@ -143,21 +189,21 @@ jobs:
           # so outside one sync warns and the no-warning check below would fail.
           git init -q
           timeout 120 playbook init --non-interactive --name smoke --kind python-library \
-            --overlays coding_agent_playbook.plugins.superpowers,coding_agent_playbook.plugins.python_design \
+            --overlays coding_agent_playbook.plugins.superpowers \
             </dev/null 2>&1 | tee "$RUNNER_TEMP/init.log"
           if grep -n '^warning:' "$RUNNER_TEMP/init.log"; then
             echo "init printed a warning line" >&2
             exit 1
           fi
-          for skill in brainstorming python-design-review; do
+          for skill in brainstorming; do
             test -f ".claude/skills/$skill/SKILL.md" || { echo "missing .claude/skills/$skill/SKILL.md" >&2; exit 1; }
           done
 
-      - name: eval --list finds the 23 core eval tasks
+      - name: eval --list finds the 23 core eval samples
         run: |
           cd "$RUNNER_TEMP/smoke-repo"
           timeout 120 playbook eval --list </dev/null | tee "$RUNNER_TEMP/eval-list.log"
-          grep -Fw '23 eval tasks' "$RUNNER_TEMP/eval-list.log"
+          grep -Fw '23 eval samples' "$RUNNER_TEMP/eval-list.log"
 
       # The engine's hooks ship as catalog/core/hooks/ in the wheel's _catalog/:
       # the synced destructive-command-guard must deny rm -rf / (exit code 2).

@@ -462,7 +462,7 @@ def test_eight_line_total_cap_bucket_1_first(
     [
         "README.md",
         ".env.settings.py",
-        "src/coding_agent_playbook/resources/eval_tasks/t1/setup/app.py",
+        "src/coding_agent_playbook/resources/eval_samples/t1/setup/app.py",
     ],
     ids=["markdown", "secret-path", "eval-fixture"],
 )

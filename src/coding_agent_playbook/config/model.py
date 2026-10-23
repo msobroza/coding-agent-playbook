@@ -17,16 +17,23 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from coding_agent_playbook.catalog.prompt_sets import DEFAULT_PROMPT_SET, PromptSet
 from coding_agent_playbook.catalog.roots import canonical_overlay_list
 from coding_agent_playbook.config.entries import (
     copy_toml_value,
     unmanaged_config_entries,
     with_unmanaged_entries,
 )
+from coding_agent_playbook.config.framework import layers_with_framework, layout_aliases
+from coding_agent_playbook.config.layout import LayoutRewriter
 from coding_agent_playbook.config.schema import (
     ConfigError,
     check_config_tables,
     check_enabled_keys,
+    check_framework_key,
+    check_layout_table,
+    check_platforms_key,
+    check_prompts_key,
     required_value,
 )
 
@@ -51,6 +58,10 @@ def check_config_file(data: Mapping[str, object], *, source: str) -> None:
     """
     check_enabled_keys(data, source=source)
     check_config_tables(data, source=source)
+    check_framework_key(data, source=source)
+    check_platforms_key(data, source=source)
+    check_layout_table(data, source=source)
+    check_prompts_key(data, source=source)
     if "output" in data:
         parse_output_config(data["output"], source=source)
 
@@ -103,6 +114,16 @@ class Config:
     engine_version: str
     overlays_enabled: list[str] = field(default_factory=list)
     adapters_enabled: list[str] = field(default_factory=list)
+    # The committed ``framework`` (D57): a bundled short name, an overlay module or
+    # "none". ``None`` = no key in the TOML (no framework), so ``to_dict`` stays sparse.
+    framework: str | None = None
+    # The ``[layout]`` keys the file sets (D71), sparse: a key left out keeps its D60
+    # default (``config.layout.resolve_layout``); empty = no table, none written.
+    layout: dict[str, str] = field(default_factory=dict)
+    # The committed ``prompts`` key (D76) as written, named after the TOML key like
+    # ``framework``. ``None`` = no key, so ``to_dict`` stays sparse. Consumers read
+    # ``prompt_set``, the resolved set (the default when the key is absent).
+    prompts: PromptSet | None = None
     storage: StorageConfig = field(default_factory=StorageConfig)
     detector_cache: dict[str, Any] = field(default_factory=dict)
     user_choices: dict[str, Any] = field(default_factory=dict)
@@ -147,6 +168,49 @@ class Config:
         """
         return self.output.commit if self.output is not None else False
 
+    @property
+    def layers_enabled(self) -> list[str]:
+        """The layer packages a sync walks after the engine: the framework's, then the overlays.
+
+        ``overlays_enabled`` holds the non-framework add-ons; the ``framework``
+        key adds its layer first (``config.framework.layers_with_framework``), once.
+
+        Example::
+
+            >>> Config(1, ProjectMeta("x", "python-library"), "0.1",
+            ...        framework="superpowers").layers_enabled
+            ['coding_agent_playbook.plugins.superpowers']
+        """
+        return layers_with_framework(self.overlays_enabled, self.framework)
+
+    def layout_rewriter(self) -> LayoutRewriter:
+        """The D71 layout adapter for this config: ``[layout]`` plus the framework's aliases.
+
+        Falsy (rewrites nothing) for the default layout when no enabled framework
+        declares ``[layout_aliases]``. ``playbook sync`` applies it to every synced
+        file; ``playbook validate`` reports what it rewrites.
+
+        Example::
+
+            >>> bool(Config(1, ProjectMeta("x", "python-library"), "0.1",
+            ...             layout={"specs": "specs"}).layout_rewriter())
+            True
+        """
+        return LayoutRewriter.for_layout(self.layout, aliases=layout_aliases(self.layers_enabled))
+
+    @property
+    def prompt_set(self) -> PromptSet:
+        """The prompt set a sync renders: the ``prompts`` key, else ``"v1"`` (D76).
+
+        What consumers read; :attr:`prompts` is the raw key, kept for ``to_dict``.
+
+        Example::
+
+            >>> Config(1, ProjectMeta("x", "python-library"), "0.1").prompt_set
+            'v1'
+        """
+        return self.prompts if self.prompts is not None else DEFAULT_PROMPT_SET
+
     @classmethod
     def from_dict(cls, data: dict[str, Any], *, source: str = "config") -> Config:
         """Build a :class:`Config` from decoded TOML, refusing misread shapes.
@@ -176,6 +240,9 @@ class Config:
             engine_version=required_value(data, ("engine", "version"), source=source),
             overlays_enabled=list(data.get("overlays_enabled", [])),
             adapters_enabled=list(data.get("adapters_enabled", [])),
+            framework=data["framework"].strip() if "framework" in data else None,
+            layout=dict(data.get("layout", {})),
+            prompts=data.get("prompts"),
             storage=StorageConfig(
                 artifact_source=storage.get("artifact_source", "filesystem"),
                 state_source=storage.get("state_source", "filesystem"),
@@ -215,6 +282,12 @@ class Config:
             result["overlays_enabled"] = list(self.overlays_enabled)
         if self.adapters_enabled:
             result["adapters_enabled"] = list(self.adapters_enabled)
+        if self.framework is not None:
+            result["framework"] = self.framework
+        if self.layout:
+            result["layout"] = dict(self.layout)
+        if self.prompts is not None:
+            result["prompts"] = self.prompts
         result["storage"] = {
             "artifact_source": self.storage.artifact_source,
             "state_source": self.storage.state_source,

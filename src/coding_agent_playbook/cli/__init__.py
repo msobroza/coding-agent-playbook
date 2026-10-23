@@ -12,6 +12,7 @@ import sys
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
+from coding_agent_playbook.artifacts.rule import RuleLoadError
 from coding_agent_playbook.catalog.roots import CatalogMissingError
 
 # Aliased private so build_parser has one spelling (cli.parser), not a second one here.
@@ -27,8 +28,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Parse ``argv``, run the subcommand, and return its exit code.
 
     A missing config (:class:`FileNotFoundError`), a config the engine would
-    misread (:class:`ConfigError`) and a malformed ``HOOK.md``
-    (:class:`HookSchemaError`, prK §A.5) all print ``error: <message>`` and exit
+    misread (:class:`ConfigError`), a malformed ``HOOK.md``
+    (:class:`HookSchemaError`, prK §A.5) and a malformed rule file
+    (:class:`RuleLoadError`, prU D21) all print ``error: <message>`` and exit
     2. Commands load the config and the artifacts first, so each one stops them
     before they write.
 
@@ -60,6 +62,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         FileNotFoundError,
         ConfigError,
         HookSchemaError,
+        RuleLoadError,
         ExitTwoError,
     ) as exc:
         print(f"error: {exc}", file=sys.stderr)

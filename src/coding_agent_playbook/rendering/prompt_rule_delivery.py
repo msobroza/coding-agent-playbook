@@ -5,7 +5,7 @@ prompt body places rule text itself (D15). It reaches the model two ways:
 
 - :func:`skill_pointer_block` builds the ``## Before you start`` block of a
   Claude Code or OpenCode command: one step per owning skill naming the
-  references to read, so the model loads them on demand.
+  rule files to read, so the model loads them on demand.
   :func:`insert_pointer_block` places it before the body's first ``##`` section.
 - :func:`includes_rules_appendix` builds the ``## Reference rules`` appendix,
   every included rule's text inline, for Continue prompts, the agent_harness
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 class SkillReference:
     """Where an active scoped rule is delivered: its owning skill and its file inside it.
 
-    Example: ``SkillReference("python-coding", "references/python-typing.md")``.
+    Example: ``SkillReference("python-coding", "rules/python-typing.md")``.
     """
 
     skill_id: str
@@ -39,10 +39,10 @@ class SkillReference:
 
 
 class SkillReferenceIndex(Protocol):
-    """Which skill reference holds an included rule; ``RuleRegistryImpl`` implements it."""
+    """Which skill rule file holds an included rule; ``RuleRegistryImpl`` implements it."""
 
     def reference_for(self, rule_id: str) -> SkillReference | None:
-        """The reference of an active scoped rule; ``None`` if unknown, filtered out or always."""
+        """The rule file of an active scoped rule; ``None`` if unknown, filtered out or always."""
         ...
 
 
@@ -58,14 +58,14 @@ def skill_pointer_block(
     """The ``## Before you start`` block of a Claude Code or OpenCode command, or ``""`` (D15).
 
     One numbered step per owning skill, in the order its first rule appears in
-    ``includes_rules``, listing only the references of rules that are active
+    ``includes_rules``, listing only the rule files of rules that are active
     here; then the closing step. ``""`` when no included rule resolves to a
-    reference (or ``references`` is ``None``): the prompt then gets no block.
+    rule file (or ``references`` is ``None``): the prompt then gets no block.
 
     Example::
 
         skill_pointer_block(["python-typing", "pytest"], registry)
-        # "## Before you start\\n\\n1. Load skill `python-coding` and read its reference …"
+        # "## Before you start\\n\\n1. Load skill `python-coding` and read its rule …"
     """
     grouped = references_by_skill(includes_rules, references)
     if not grouped:
@@ -78,10 +78,10 @@ def skill_pointer_block(
 def references_by_skill(
     includes_rules: Sequence[str], references: SkillReferenceIndex | None
 ) -> dict[str, list[str]]:
-    """``{skill id: [reference path, ...]}`` in first-appearance order, each id once.
+    """``{skill id: [rule file path, ...]}`` in first-appearance order, each id once.
 
     Example: ``references_by_skill(["pytest"], registry)`` ->
-    ``{"python-testing": ["references/pytest.md"]}``.
+    ``{"python-testing": ["rules/pytest.md"]}``.
     """
     grouped: dict[str, list[str]] = {}
     if references is None:
@@ -94,12 +94,12 @@ def references_by_skill(
 
 
 def load_step(number: int, skill_id: str, paths: Sequence[str]) -> str:
-    """One numbered load step: the skill, then its reference or references.
+    """One numbered load step: the skill, then its rule file or files (prU D5).
 
-    Example: ``load_step(2, "python-testing", ["references/pytest.md"])`` ->
-    ``"2. Load skill `python-testing` and read its reference `references/pytest.md`."``
+    Example: ``load_step(2, "python-testing", ["rules/pytest.md"])`` ->
+    ``"2. Load skill `python-testing` and read its rule `rules/pytest.md`."``
     """
-    noun = "reference" if len(paths) == 1 else "references"
+    noun = "rule" if len(paths) == 1 else "rules"
     listed = ", ".join(f"`{path}`" for path in paths)
     return f"{number}. Load skill `{skill_id}` and read its {noun} {listed}."
 
@@ -109,7 +109,7 @@ def insert_pointer_block(body: str, block: str) -> str:
 
     Without such a heading the block follows the leading ``# `` title line, or
     opens the body when it has no title. An empty ``block`` returns ``body``
-    unchanged, so prompts without active references render byte-identically.
+    unchanged, so prompts without active member rules render byte-identically.
     Every shipped prompt opens with a title and a role paragraph, so the role
     stays first and the load steps come before the task instructions (P3-2).
 

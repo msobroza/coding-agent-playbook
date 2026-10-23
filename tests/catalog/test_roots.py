@@ -117,11 +117,11 @@ def test_catalog_root_finds_the_checkout_catalog_unpatched() -> None:
 def test_bundled_plugins_lists_identifier_dirs_only(tmp_path: Path) -> None:
     root = _make_tree(
         tmp_path / "catalog",
-        plugins=("superpowers", "python_design", ".hidden", "_private", "__pycache__", "bad-name"),
+        plugins=("superpowers", "demo_plugin", ".hidden", "_private", "__pycache__", "bad-name"),
     )
     (root / "plugins" / "README.md").write_text("stray file\n")
     assert bundled_plugins(root) == [
-        "coding_agent_playbook.plugins.python_design",
+        "coding_agent_playbook.plugins.demo_plugin",
         "coding_agent_playbook.plugins.superpowers",
     ]
 

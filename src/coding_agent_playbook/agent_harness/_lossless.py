@@ -18,9 +18,10 @@ from coding_agent_playbook.agent_harness._import_writes import (
 )
 from coding_agent_playbook.agent_harness.hook_sidecars import read_hook_sidecar
 from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
+from coding_agent_playbook.artifacts.member_reference import skill_member_location
 from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
-from coding_agent_playbook.artifacts.skill import Skill
+from coding_agent_playbook.artifacts.skill import Skill, side_dirs_at
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -51,7 +52,7 @@ def read_lossless(
             result.skills.append(_skill_from_entry(absolute, entry, source_package))
         elif entry.kind == "hook":
             _read_hook(absolute, entry, result, source_package)
-        else:  # eval_task or unknown — no canonical adapter home
+        else:  # eval_sample or unknown — no canonical adapter home
             result.warnings.append(
                 f"manifest entry {rel_path!r} has unsupported kind {entry.kind!r}; skipped"
             )
@@ -87,6 +88,7 @@ def _rule_from_entry(path: Path, entry: ManifestEntry, source_package: str) -> R
     description = _description_from_disk(path)
     body = _body_from_entry(path, entry)
     is_templated = bool(entry.is_templated) if entry.is_templated is not None else False
+    home_skill = location_skill(entry.path, entry.id) if entry.skill is None else None
     return Rule(
         frontmatter=RuleFrontmatter(
             id=entry.id,
@@ -101,14 +103,30 @@ def _rule_from_entry(path: Path, entry: ManifestEntry, source_package: str) -> R
             priority=entry.priority if entry.priority is not None else 50,
             tags=list(entry.tags),
             lint_codes=dict(entry.lint_codes),
-            skill=entry.skill,
+            skill=entry.skill if home_skill is None else home_skill,
+            section=entry.section,
         ),
         body=body,
         template_body=body,
         is_templated=is_templated,
         source_path=path,
         source_package=source_package,
+        # An entry at ``skills/<s>/rules/<id>.md`` without ``skill`` was placed by
+        # location: a member of ``s`` with no authored ``skill:`` line (prU D22).
+        home_skill=home_skill,
+        skill_from_location=home_skill is not None,
     )
+
+
+def location_skill(rel_path: str, rule_id: str) -> str | None:
+    """The skill whose ``rules/`` holds ``rel_path`` (``skills/<s>/rules/<id>.md``), else None.
+
+    Example: ``location_skill("skills/risk/rules/limits.md", "limits")`` -> ``"risk"``.
+    """
+    location = skill_member_location(rel_path)
+    if location is None or location[1] != rule_id:
+        return None
+    return location[0]
 
 
 def _prompt_from_entry(path: Path, entry: ManifestEntry, source_package: str) -> Prompt:
@@ -132,7 +150,7 @@ def _prompt_from_entry(path: Path, entry: ManifestEntry, source_package: str) ->
             applies_if=dict(entry.applies_if),
             input_variables=[dict(v) for v in entry.input_variables],
             includes_rules=list(entry.includes_rules),
-            eval_tasks=list(entry.eval_tasks),
+            eval_samples=list(entry.eval_samples),
             output_contract=list(entry.output_contract),
             write_scope=dict(entry.write_scope),
         ),
@@ -161,14 +179,11 @@ def _skill_from_entry(path: Path, entry: ManifestEntry, source_package: str) -> 
     }
     rebuilt.update(entry.extra_frontmatter)
     restore_recorded_exec_bits(path, entry)
-    scripts_dir = path.parent / "scripts"
-    references_dir = path.parent / "references"
     return Skill(
         frontmatter=rebuilt,
         body=body,
-        scripts_dir=scripts_dir if scripts_dir.is_dir() else None,
-        references_dir=references_dir if references_dir.is_dir() else None,
         source_package=source_package,
+        **side_dirs_at(path.parent),
     )
 
 

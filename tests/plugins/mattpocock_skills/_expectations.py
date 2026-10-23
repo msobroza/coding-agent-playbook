@@ -35,7 +35,9 @@ LICENSE_SHA256: Final = "0e7ac423bf2c6e223b7c5b156f8cf72da49d748e56a1641402c31f2
 #: The only plugin rule (D15, T03).
 RULE_FILE_NAME: Final = "mattpocock-skills-tracker.md"
 #: The plugin root's entries (G2); ``rules/`` arrives with T03.
-ROOT_ENTRIES: Final = frozenset({"LICENSE", "ATTRIBUTIONS.md", "README.md", "skills", "rules"})
+ROOT_ENTRIES: Final = frozenset(
+    {"LICENSE", "ATTRIBUTIONS.md", "README.md", "framework.toml", "skills", "rules"}
+)
 #: The licence files a skill's ``references/`` may hold besides markdown (D4, D6).
 LICENSE_FILE_NAMES: Final = frozenset({"LICENSE", "LICENSE-show-me"})
 SCRIPT_SHEBANG: Final = "#!/usr/bin/env python3"
@@ -252,9 +254,28 @@ def scripts_of(skill_id: str) -> list[Path]:
     return [p for p in skill_files(skill_id) if (SKILLS_ROOT / skill_id / "scripts") in p.parents]
 
 
+#: The engine-owned role tag (prU D77, L0-19): one ``capabilities: [<role>]`` line as
+#: the last frontmatter key of seven skills, listed in ATTRIBUTIONS. The upstream
+#: fidelity pins compare the vendored text without it.
+_CAPABILITIES_LINE_RE: Final = re.compile(r"^capabilities: \[[a-z_, ]+\]\n", re.MULTILINE)
+
+
+def vendored_text(skill_id: str, relative: str = "SKILL.md") -> str:
+    """The shipped text of one skill file, minus the engine's ``capabilities`` tag line.
+
+    Read as bytes, so a newline change still shows. Example::
+
+        vendored_text("tdd").split("\\n")[:5]  # upstream frontmatter plus the id line
+    """
+    text = (SKILLS_ROOT / skill_id / relative).read_bytes().decode("utf-8")
+    if relative != "SKILL.md":
+        return text
+    return _CAPABILITIES_LINE_RE.sub("", text, count=1)
+
+
 def split_skill(skill_id: str) -> tuple[dict[str, object], str]:
-    """The source ``SKILL.md`` of ``skill_id`` as (frontmatter, body)."""
-    return split_frontmatter((SKILLS_ROOT / skill_id / "SKILL.md").read_text(encoding="utf-8"))
+    """The source ``SKILL.md`` of ``skill_id`` as (frontmatter, body), without the role tag."""
+    return split_frontmatter(vendored_text(skill_id))
 
 
 def hit_path(path: Path) -> str:

@@ -16,6 +16,7 @@ from coding_agent_playbook.config.committed import (
     plan_committed_update,
     plan_first_config,
 )
+from coding_agent_playbook.config.framework import NO_FRAMEWORK
 from coding_agent_playbook.config.model import Config, OutputConfig, ProjectMeta, StorageConfig
 from coding_agent_playbook.detector.facts import detect
 
@@ -101,13 +102,18 @@ def _with_hooks_answer(config: Config, answer: bool | None) -> Config:
 
 
 def _fresh_config(answers: Answers, detector_cache: dict[str, object]) -> Config:
-    """The config for a repo with no committed file yet (``[output] commit = false``)."""
+    """The config for a repo with no committed file yet (``[output] commit = false``).
+
+    ``framework`` is always written (``none`` without a choice), so the choice is
+    discoverable in the committed file (D57).
+    """
     return Config(
         schema_version=1,
         project=_project_meta(answers),
         engine_version=_engine_version,
         overlays_enabled=list(answers["overlays"]),
         adapters_enabled=list(answers["adapters"]),
+        framework=answers["framework"] or NO_FRAMEWORK,
         storage=StorageConfig(),
         detector_cache=detector_cache,
         output=OutputConfig(commit=False),
@@ -119,7 +125,8 @@ def _apply_answers(
 ) -> Config:
     """``committed`` updated by a re-run: what each managed field becomes.
 
-    ``[project]`` and ``overlays_enabled`` come from the answers, the adapters are
+    ``[project]`` and ``overlays_enabled`` come from the answers, ``framework``
+    from the answer when there is one (else the committed key, else ``none``), the adapters are
     :func:`~coding_agent_playbook.commands._init_adapters.adapters_union`,
     ``[detector_cache]`` is fresh, ``[output]`` is kept
     (else ``commit = false``); ``[engine]``, ``[storage]`` and the committed
@@ -135,6 +142,7 @@ def _apply_answers(
         project=_project_meta(answers),
         adapters_enabled=adapters_union(committed.adapters_enabled, answers["adapters"]),
         overlays_enabled=list(answers["overlays"]),
+        framework=answers["framework"] or committed.framework or NO_FRAMEWORK,
         detector_cache=detector_cache,
         output=committed.output if committed.output is not None else OutputConfig(commit=False),
     )

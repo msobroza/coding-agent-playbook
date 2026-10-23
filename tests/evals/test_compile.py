@@ -1,6 +1,6 @@
-"""Tests for the task compiler (Track C6).
+"""Tests for the sample compiler (Track C6).
 
-The task compiler turns the parsed ``[gate]``/``[rubric]``/``[verdict]`` blocks
+The sample compiler turns the parsed ``[gate]``/``[rubric]``/``[verdict]`` blocks
 into a per-trial evaluation structure: a
 :class:`~coding_agent_playbook.grading.rubric.Rubric` carrying the two named
 layer checks (``id="gate"`` / ``id="rubric"``) plus a *derived* verdict AST. The
@@ -8,7 +8,7 @@ verdict is computed as a boolean function over the two layers' ``passed`` result
 - gate and rubric each run **once** (as the rubric's two checks); the verdict
 does **not** re-run them, so the judge / test suite is never double-invoked.
 
-These tests drive :func:`compile_task` (layer composition, the single-handle
+These tests drive :func:`compile_sample` (layer composition, the single-handle
 default-expr rule, the at-least-one-layer + verdict-name-subset validation),
 :func:`verdict_passed` (derive the trial verdict over a report), and
 :func:`over_boolean` (the aggregate ``over`` selector), plus an end-to-end run of
@@ -22,9 +22,9 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.evals.compile.compiler import (
-    CompiledTask,
+    CompiledSample,
     VerdictSpec,
-    compile_task,
+    compile_sample,
     over_boolean,
     verdict_passed,
 )
@@ -75,19 +75,19 @@ def _report(*results: CheckResult) -> EvaluationReport:
 
 
 # --------------------------------------------------------------------------- #
-# compile_task: gate + rubric layers, default verdict
+# compile_sample: gate + rubric layers, default verdict
 # --------------------------------------------------------------------------- #
 
 
-def test_compile_task_builds_two_named_layer_checks() -> None:
-    compiled = compile_task(
+def test_compile_sample_builds_two_named_layer_checks() -> None:
+    compiled = compile_sample(
         gate_bind=_GATE_BIND,
         gate_expr="build",
         rubric_bind=_RUBRIC_BIND,
         rubric_expr="quality",
         name="t1",
     )
-    assert isinstance(compiled, CompiledTask)
+    assert isinstance(compiled, CompiledSample)
     assert isinstance(compiled.per_trial, Rubric)
     assert compiled.per_trial.name == "t1"
     ids = [c.id for c in compiled.per_trial.checks]
@@ -95,8 +95,8 @@ def test_compile_task_builds_two_named_layer_checks() -> None:
     assert compiled.layers == frozenset({"gate", "rubric"})
 
 
-def test_compile_task_default_verdict_is_gate_and_rubric() -> None:
-    compiled = compile_task(
+def test_compile_sample_default_verdict_is_gate_and_rubric() -> None:
+    compiled = compile_sample(
         gate_bind=_GATE_BIND,
         gate_expr="build",
         rubric_bind=_RUBRIC_BIND,
@@ -121,12 +121,12 @@ def test_compile_task_default_verdict_is_gate_and_rubric() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# compile_task: weighted-verdict spec (C10)
+# compile_sample: weighted-verdict spec (C10)
 # --------------------------------------------------------------------------- #
 
 
-def test_compile_task_with_weighted_verdict_builds_a_weighted_spec() -> None:
-    compiled = compile_task(
+def test_compile_sample_with_weighted_verdict_builds_a_weighted_spec() -> None:
+    compiled = compile_sample(
         gate_bind=_GATE_BIND,
         gate_expr="build",
         rubric_bind=_RUBRIC_BIND,
@@ -142,8 +142,8 @@ def test_compile_task_with_weighted_verdict_builds_a_weighted_spec() -> None:
     assert compiled.verdict_spec.warn == 0.85
 
 
-def test_compile_task_boolean_verdict_spec_keeps_today_shape() -> None:
-    compiled = compile_task(
+def test_compile_sample_boolean_verdict_spec_keeps_today_shape() -> None:
+    compiled = compile_sample(
         gate_bind=_GATE_BIND,
         gate_expr="build",
         verdict_trial="gate",
@@ -153,9 +153,9 @@ def test_compile_task_boolean_verdict_spec_keeps_today_shape() -> None:
     assert compiled.verdict_spec.fail is None
 
 
-def test_compile_task_rejects_both_trial_and_weights() -> None:
+def test_compile_sample_rejects_both_trial_and_weights() -> None:
     with pytest.raises(ValueError, match="cannot set both"):
-        compile_task(
+        compile_sample(
             gate_bind=_GATE_BIND,
             gate_expr="build",
             rubric_bind=_RUBRIC_BIND,
@@ -166,10 +166,10 @@ def test_compile_task_rejects_both_trial_and_weights() -> None:
         )
 
 
-def test_compile_task_rejects_unknown_layer_in_weights() -> None:
+def test_compile_sample_rejects_unknown_layer_in_weights() -> None:
     """Weighted weights must be a subset of the present layers."""
     with pytest.raises(ValueError, match="unknown layer"):
-        compile_task(
+        compile_sample(
             gate_bind=_GATE_BIND,
             gate_expr="build",
             # No [rubric], yet weights mention it.
@@ -178,9 +178,9 @@ def test_compile_task_rejects_unknown_layer_in_weights() -> None:
         )
 
 
-def test_compile_task_rejects_weights_not_summing_to_one() -> None:
+def test_compile_sample_rejects_weights_not_summing_to_one() -> None:
     with pytest.raises(ValueError, match=r"sum to 1\.0"):
-        compile_task(
+        compile_sample(
             gate_bind=_GATE_BIND,
             gate_expr="build",
             rubric_bind=_RUBRIC_BIND,
@@ -190,9 +190,9 @@ def test_compile_task_rejects_weights_not_summing_to_one() -> None:
         )
 
 
-def test_compile_task_rejects_weighted_without_fail() -> None:
+def test_compile_sample_rejects_weighted_without_fail() -> None:
     with pytest.raises(ValueError, match="requires 'fail'"):
-        compile_task(
+        compile_sample(
             gate_bind=_GATE_BIND,
             gate_expr="build",
             rubric_bind=_RUBRIC_BIND,
@@ -208,7 +208,7 @@ def test_compile_task_rejects_weighted_without_fail() -> None:
 
 def test_single_handle_layer_defaults_to_that_handle() -> None:
     # gate has exactly one handle and no expr => the expr defaults to "build".
-    compiled = compile_task(gate_bind=_GATE_BIND, gate_expr=None, verdict_trial="gate")
+    compiled = compile_sample(gate_bind=_GATE_BIND, gate_expr=None, verdict_trial="gate")
     (gate_check,) = compiled.per_trial.checks
     assert gate_check.id == "gate"
     assert compiled.layers == frozenset({"gate"})
@@ -220,7 +220,7 @@ def test_multi_handle_layer_with_no_expr_raises() -> None:
         "lint": {"check": "file_exists", "path": "y.py"},
     }
     with pytest.raises(ValueError, match="compose"):
-        compile_task(gate_bind=bind, gate_expr=None, verdict_trial="gate")
+        compile_sample(gate_bind=bind, gate_expr=None, verdict_trial="gate")
 
 
 # --------------------------------------------------------------------------- #
@@ -228,22 +228,22 @@ def test_multi_handle_layer_with_no_expr_raises() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_gate_only_task_with_gate_verdict() -> None:
-    compiled = compile_task(gate_bind=_GATE_BIND, gate_expr="build", verdict_trial="gate")
+def test_gate_only_sample_with_gate_verdict() -> None:
+    compiled = compile_sample(gate_bind=_GATE_BIND, gate_expr="build", verdict_trial="gate")
     ids = [c.id for c in compiled.per_trial.checks]
     assert ids == ["gate"]
     assert compiled.layers == frozenset({"gate"})
 
 
-def test_gate_only_task_with_default_verdict_mentioning_rubric_raises() -> None:
+def test_gate_only_sample_with_default_verdict_mentioning_rubric_raises() -> None:
     # default verdict "gate and rubric" mentions "rubric" but there is no [rubric].
     with pytest.raises(ValueError, match="rubric"):
-        compile_task(gate_bind=_GATE_BIND, gate_expr="build")
+        compile_sample(gate_bind=_GATE_BIND, gate_expr="build")
 
 
 def test_no_layer_at_all_raises() -> None:
     with pytest.raises(ValueError, match="at least one"):
-        compile_task()
+        compile_sample()
 
 
 # --------------------------------------------------------------------------- #
@@ -253,7 +253,7 @@ def test_no_layer_at_all_raises() -> None:
 
 def test_verdict_passed_and_is_false_when_rubric_fails() -> None:
     report = _report(_result("gate", passed=True), _result("rubric", passed=False))
-    compiled = compile_task(
+    compiled = compile_sample(
         gate_bind=_GATE_BIND,
         gate_expr="build",
         rubric_bind=_RUBRIC_BIND,
@@ -265,7 +265,7 @@ def test_verdict_passed_and_is_false_when_rubric_fails() -> None:
 
 def test_verdict_passed_or_is_true_when_one_layer_passes() -> None:
     report = _report(_result("gate", passed=True), _result("rubric", passed=False))
-    compiled = compile_task(
+    compiled = compile_sample(
         gate_bind=_GATE_BIND,
         gate_expr="build",
         rubric_bind=_RUBRIC_BIND,
@@ -350,7 +350,7 @@ def _measured_ctx(tmp_path: Path, judge: StubJudge) -> tuple[EvalContext, Measur
 
 def test_compiled_per_trial_evaluates_end_to_end(tmp_path: Path) -> None:
     # file_exists runs over the real tree; the StubJudge scores the rubric high.
-    compiled = compile_task(
+    compiled = compile_sample(
         gate_bind=_GATE_BIND,
         gate_expr="build",
         rubric_bind=_E2E_RUBRIC_BIND,
@@ -368,7 +368,7 @@ def test_compiled_per_trial_evaluates_end_to_end(tmp_path: Path) -> None:
 
 
 def test_compiled_per_trial_verdict_false_when_rubric_fails(tmp_path: Path) -> None:
-    compiled = compile_task(
+    compiled = compile_sample(
         gate_bind=_GATE_BIND,
         gate_expr="build",
         rubric_bind=_E2E_RUBRIC_BIND,

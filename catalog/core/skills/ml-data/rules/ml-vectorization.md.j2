@@ -1,0 +1,137 @@
+---
+id: ml-vectorization
+name: Vectorization
+description: "Write array and data-frame work as whole-array operations, and climb a short ladder before any per-element Python."
+version: 1
+scope: scoped
+globs:
+  - "**/*.py"
+  - "**/*.ipynb"
+applies_if:
+  any_ml_stack: ["numpy", "pandas", "polars"]
+section: vectorization
+priority: 21
+tags: [ml, numpy, pandas, polars, performance]
+---
+
+# Vectorize instead of Python loops
+
+## Description
+
+Array and frame libraries execute operations in compiled code over whole columns. A Python `for` loop over the values, or a function applied row by row, drops back to the interpreter for every element and pays Python's overhead per value. Express computations as whole-array operations: arithmetic, comparisons, boolean masks, two-way and many-way selects, reductions along an axis or a column, and the libraries' own string and date operations.
+
+A comprehension over an array is still a Python loop: the comprehension advice of `python-comprehensions` (python-coding) does not apply here.
+
+## Bad Example
+
+```python
+{% if has_ml_dep("numpy") %}
+import numpy as np
+import numpy.typing as npt
+{% endif %}
+{% if has_ml_dep("pandas") %}
+import pandas as pd
+{% endif %}
+{% if has_ml_dep("polars") %}
+import polars as pl
+{% endif %}
+{% if has_ml_dep("numpy") %}
+
+
+def normalize(values: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+    result = []
+    for value in values:  # one interpreter step per value
+        result.append((value - values.mean()) / values.std())
+    return np.array(result)
+
+
+capped = np.array([min(celsius, ceiling) for celsius in readings])
+{% endif %}
+{% if has_ml_dep("pandas") %}
+
+
+def add_handling_tier(parcels: pd.DataFrame) -> pd.DataFrame:
+    tiers = []
+    for _, row in parcels.iterrows():  # row-wise iteration
+        tiers.append(3 if row["weight_kg"] >= 30 else 2 if row["weight_kg"] >= 5 else 1)
+    return parcels.assign(tier=tiers)
+
+
+# apply with axis=1 is still a Python loop
+footprint = parcels.apply(lambda row: row["length_cm"] * row["width_cm"], axis=1)
+{% endif %}
+{% if has_ml_dep("polars") %}
+
+parcels = parcels.with_columns(
+    pl.col("weight_kg")
+    .map_elements(tier_for_weight, return_dtype=pl.Int64)  # Python once per value
+    .alias("tier")
+)
+{% endif %}
+```
+
+## Good Example
+
+```python
+{% if has_ml_dep("numpy") or has_ml_dep("pandas") %}
+import numpy as np
+{% endif %}
+{% if has_ml_dep("numpy") %}
+import numpy.typing as npt
+{% endif %}
+{% if has_ml_dep("pandas") %}
+import pandas as pd
+{% endif %}
+{% if has_ml_dep("polars") %}
+import polars as pl
+{% endif %}
+{% if has_ml_dep("numpy") %}
+
+
+def normalize(values: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+    return (values - values.mean()) / values.std()
+
+
+capped = np.where(readings > ceiling, ceiling, readings)
+{% endif %}
+{% if has_ml_dep("pandas") %}
+
+
+def add_handling_tier(parcels: pd.DataFrame) -> pd.DataFrame:
+    conditions = [parcels["weight_kg"] >= 30, parcels["weight_kg"] >= 5]
+    return parcels.assign(tier=np.select(conditions, [3, 2], default=1))
+
+
+parcels = parcels.assign(
+    footprint_cm2=parcels["length_cm"] * parcels["width_cm"],
+    email_domain=parcels["email"].str.split("@").str[1],  # accessors, not apply
+    shipped_year=parcels["shipped_at"].dt.year,
+)
+heavy = parcels[(parcels["weight_kg"] >= 30) & (parcels["service"] == "express")]
+{% endif %}
+{% if has_ml_dep("polars") %}
+
+weight = pl.col("weight_kg")
+parcels = parcels.with_columns(
+    pl.when(weight >= 30).then(3).when(weight >= 5).then(2).otherwise(1).alias("tier"),
+    (pl.col("length_cm") * pl.col("width_cm")).alias("footprint_cm2"),
+)
+{% endif %}
+```
+
+## Notes
+
+- When no direct operation exists, climb this ladder and stop at the first rung that does the job: masks and selects composed from existing operations; a lookup table that maps each value through a dict; a Python function applied value by value to one column; a compiled extension, and only after the user agrees to the new dependency.
+- A plain loop is still the tool when each of a few items triggers an effect, such as one log line or one upload per file. It is never the tool for computing a column.
+{% if has_ml_dep("numpy") %}
+- NumPy: operators and ufuncs act on whole arrays, `np.where` picks between two outcomes and `np.select` among several, and a reduction takes `axis=` instead of a loop that accumulates by hand.
+{% endif %}
+{% if has_ml_dep("pandas") %}
+- pandas: the ladder is `Series.where`, `Series.mask` or `np.select`, then `Series.map` with a dict, then `Series.apply` on one column. `DataFrame.apply(..., axis=0)` over columns is fine when the function is itself vectorized; `apply(axis=1)`, `iterrows` and `itertuples` are row loops, kept for side effects on a handful of rows.
+{% endif %}
+{% if has_ml_dep("polars") %}
+- polars: write column logic as expressions (`pl.col`, `pl.when(...).then(...).otherwise(...)`). `map_elements` and `map_rows` call Python once per value or per row; they are loops, kept for side effects on a few rows.
+{% endif %}
+- Group-wise logic uses the library's built-in reducers, never a Python function per group: see `ml-named-aggregation`.
+- Vectorized code also reads better: it states what is computed instead of how to iterate.
+- library-equivalents.md gives the same operation in NumPy, pandas, polars and torch, with the rule that governs it.

@@ -9,12 +9,15 @@ Validates:
   at a time, as hooks do, and treats each ``ValueError`` as an error).
 - Prompts never call ``{{ rule() }}``; every ``includes_rules`` id names a rule
   (``validation.prompts``, specs/prS-skills-context.md §7.5).
+- Each layer's later prompt sets (``prompts/v2/``) are complete twins of its v1
+  prompts, keeping their names, slash commands and ``includes_rules`` (D76).
+  The prompts of the set a sync does not render get the per-prompt checks too.
 - Every prompt ``output_contract`` entry compiles as a Python regex (fail-closed,
   like ``AnswerMatchesCheck``; specs/prK-hook-pack.md §E.2).
 - Rule templates never call ``{{ rule(...) }}`` (rules cannot include rules,
   SPEC invariants).
-- Eval-task back-references resolve both directions, via the canonical
-  :func:`coding_agent_playbook.evals.validator.validate_tasks` helper.
+- Eval-sample back-references resolve both directions, via the canonical
+  :func:`coding_agent_playbook.evals.validator.validate_samples` helper.
 - Each Jinja-templated artifact compiles cleanly.
 - Every markdown link in every artifact is self-contained (PR L): relative
   targets resolve inside the artifact's source layer, external links only
@@ -25,15 +28,26 @@ Validates:
   sync`` refuses to run without (``validation.preflight.unusable_overlays``), so a
   misspelled bundled plugin fails here too instead of validating the engine
   layer alone.
+- The ``framework`` key names a framework, at most one framework is enabled,
+  and its ``framework.toml`` and capability tags are sound (D57, D77;
+  ``validation._framework``).
 - Every skill is a valid Agent Skill (SPEC §6.3): it declares an ``id`` string
   (id-less skills all collapse into one skill named ``skill``), its id — emitted
   as the ``SKILL.md`` ``name`` and the output directory — matches
   ``^[a-z0-9]+(-[a-z0-9]+)*$`` (1-64 chars), and it has a 1-1024 char
   ``description``. OpenCode silently drops a skill that fails these, so authors
   learn here instead.
+- The ``rules/`` layout of every layer (prU D21, R1-R4 and R6,
+  ``validation._rule_layout``): an in-skill rule names no other skill, file
+  names equal ids where the layout fixes them, no id twice in one layer, a
+  skill's ``rules/`` sits in a skill that takes members, and no always rule
+  sits in a skill.
 - Member rules and ``playbook:`` blocks (prS §6.6 V3-V14, W1-W3,
   ``validation._skills``): a rule's ``skill`` names a merged skill that takes
   members, and that skill's block, description fit and references are sound.
+- Skill sections and references (prU D17, D42, D47, ``validation._sections``):
+  S1-S7 over ``playbook.sections`` and each member's ``section:`` and
+  priority band, and every ``playbook.references`` entry and listed file.
 - Every hook honours the trust contract H1-H21 (specs/prK-lifecycle-hooks.md
   §B.5, ``validation._hooks``): a malformed ``HOOK.md`` is a ``FAIL`` line, not a
   traceback (P8c); degraded cells and clamped timeouts are ``warning:`` lines.
@@ -60,21 +74,25 @@ from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.config.tables.links import LinksConfig
 from coding_agent_playbook.detector.predicate import evaluate_predicate
 from coding_agent_playbook.evals.loader import (
-    discover_eval_task_dirs,
-    load_eval_task_from_dir,
+    discover_eval_sample_dirs,
+    load_eval_sample_from_dir,
 )
-from coding_agent_playbook.evals.validator import validate_tasks
+from coding_agent_playbook.evals.validator import validate_samples
 from coding_agent_playbook.generated_output.source_files import refused_skill_files
 from coding_agent_playbook.rendering.jinja import RULE_CALL_RE, jinja_syntax_error
 from coding_agent_playbook.skills.naming import agent_skill_issues, has_declared_id
 from coding_agent_playbook.validation import preflight as _sync_preflight
 from coding_agent_playbook.validation._forge import check_forge_table
+from coding_agent_playbook.validation._framework import check_framework
 from coding_agent_playbook.validation._frontmatter import (
     check_lint_codes,
+    check_rule_shape,
     check_write_scope,
 )
 from coding_agent_playbook.validation._hooks import check_hooks
 from coding_agent_playbook.validation._links import check_markdown_links, load_links_config
+from coding_agent_playbook.validation._rule_layout import check_rule_layout
+from coding_agent_playbook.validation._sections import check_skill_sections
 from coding_agent_playbook.validation._skills import (
     check_rule_skills,
     check_skill_membership,
@@ -85,7 +103,12 @@ from coding_agent_playbook.validation.findings import (
     report_validation_warnings,
     skill_label,
 )
-from coding_agent_playbook.validation.prompts import check_prompt_rule_references
+from coding_agent_playbook.validation.prompts import (
+    check_prompt_rule_calls,
+    check_prompt_rule_references,
+    check_prompt_set_twins,
+    unrendered_prompts,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -95,7 +118,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.detector.facts import Facts
-    from coding_agent_playbook.evals.task import EvalTask
+    from coding_agent_playbook.evals.sample import EvalSample
     from coding_agent_playbook.validation.context import SyncContext
 
 
@@ -109,6 +132,13 @@ def _check_overlays_usable(overlays: Sequence[str]) -> list[ValidationError]:
         ValidationError(path="overlays_enabled", message=str(problem))
         for problem in _sync_preflight.unusable_overlays(overlays)
     ]
+
+
+def _consumer_config_errors(ctx: SyncContext) -> list[ValidationError]:
+    """The checks that need a consumer config: usable overlays, then the framework (D57)."""
+    errors = _check_overlays_usable(ctx.config.overlays_enabled)
+    errors.extend(check_framework(ctx.config, ctx.artifact_source.list_skills()))
+    return errors
 
 
 def _applies_if_errors(
@@ -218,52 +248,52 @@ def _check_jinja_compiles(rules: list[Rule], prompts: list[Prompt]) -> list[Vali
     ]
 
 
-def _load_eval_tasks_for_validation(
+def _load_eval_samples_for_validation(
     ctx: SyncContext,
-) -> tuple[list[EvalTask], list[ValidationError]]:
-    """Walk every eval-task directory and load each ``task.toml`` independently,
-    aggregating per-task loader errors instead of fail-fasting.
+) -> tuple[list[EvalSample], list[ValidationError]]:
+    """Walk every eval-sample directory and load each ``sample.toml`` independently,
+    aggregating per-sample loader errors instead of fail-fasting.
 
-    Mirrors :meth:`FileSystemArtifactSource.list_eval_tasks` but catches the
-    per-task :exc:`FileNotFoundError` / :exc:`ValueError` raised by the loader
+    Mirrors :meth:`FileSystemArtifactSource.list_eval_samples` but catches the
+    per-sample :exc:`FileNotFoundError` / :exc:`ValueError` raised by the loader
     and converts them to :class:`ValidationError` entries. Malformed TOML or
     schema violations don't abort the rest of validation — the caller still
-    runs ``validate_tasks`` against the tasks that did load.
+    runs ``validate_samples`` against the samples that did load.
 
     Non-filesystem :class:`ArtifactSource` implementations have no per-package
-    layout to walk, so we fall back to :meth:`ArtifactSource.list_eval_tasks`
+    layout to walk, so we fall back to :meth:`ArtifactSource.list_eval_samples`
     and accept that those sources cannot surface per-file loader errors here —
     that's their responsibility, not ours.
     """
     artifact_source = ctx.artifact_source
     if not isinstance(artifact_source, FileSystemArtifactSource):
-        return list(artifact_source.list_eval_tasks()), []
+        return list(artifact_source.list_eval_samples()), []
     loaded = [
-        _load_eval_task(task_dir, label)
-        for label, root in artifact_source.layer_roots("eval_tasks")
-        for task_dir in discover_eval_task_dirs(root)
+        _load_eval_sample(sample_dir, label)
+        for label, root in artifact_source.layer_roots("eval_samples")
+        for sample_dir in discover_eval_sample_dirs(root)
     ]
-    tasks = [item for item in loaded if not isinstance(item, ValidationError)]
-    return tasks, [item for item in loaded if isinstance(item, ValidationError)]
+    samples = [item for item in loaded if not isinstance(item, ValidationError)]
+    return samples, [item for item in loaded if isinstance(item, ValidationError)]
 
 
-def _load_eval_task(task_dir: Path, source_package: str) -> EvalTask | ValidationError:
-    """Load one ``task.toml``, or return its loader failure as a finding."""
+def _load_eval_sample(sample_dir: Path, source_package: str) -> EvalSample | ValidationError:
+    """Load one ``sample.toml``, or return its loader failure as a finding."""
     try:
-        return load_eval_task_from_dir(task_dir, source_package=source_package)
+        return load_eval_sample_from_dir(sample_dir, source_package=source_package)
     except (FileNotFoundError, ValueError) as exc:
-        return ValidationError(path=str(task_dir / "task.toml"), message=str(exc))
+        return ValidationError(path=str(sample_dir / "sample.toml"), message=str(exc))
 
 
-def _check_eval_tasks(ctx: SyncContext) -> list[ValidationError]:
-    """Run the canonical eval-task validator (SPEC §15.2 + §6.5.5).
+def _check_eval_samples(ctx: SyncContext) -> list[ValidationError]:
+    """Run the canonical eval-sample validator (SPEC §15.2 + §6.5.5).
 
-    Combines per-task loader failures (malformed TOML / missing required
+    Combines per-sample loader failures (malformed TOML / missing required
     fields) with the cross-reference rules from
-    :func:`coding_agent_playbook.evals.validator.validate_tasks`.
+    :func:`coding_agent_playbook.evals.validator.validate_samples`.
     """
-    tasks, load_errors = _load_eval_tasks_for_validation(ctx)
-    cross_errors = validate_tasks(tasks, ctx.prompts_resolved)
+    samples, load_errors = _load_eval_samples_for_validation(ctx)
+    cross_errors = validate_samples(samples, ctx.prompts_resolved)
     return [
         *load_errors,
         *[ValidationError(path=str(e.path), message=e.message) for e in cross_errors],
@@ -324,9 +354,17 @@ def collect_validation_findings(
     """
     errors = _artifact_errors(ctx, config_less=config_less)
     skills = check_rule_skills(ctx.rules_resolved, ctx.skills_resolved)
+    sections = check_skill_sections(
+        ctx.rules_resolved,
+        ctx.skills_resolved,
+        check_predicate=lambda predicate: evaluate_predicate(
+            predicate, ctx.facts, repo_root=ctx.repo_root
+        ),
+    )
     hook_errors, hook_warnings = check_hooks(ctx, local_policy_is_error=local_policy_is_error)
     return ValidationFindings(
-        [*errors, *skills.errors, *hook_errors], [*skills.warnings, *hook_warnings]
+        [*errors, *skills.errors, *sections.errors, *hook_errors],
+        [*skills.warnings, *sections.warnings, *hook_warnings],
     )
 
 
@@ -361,13 +399,23 @@ def sync_gate_errors(ctx: SyncContext) -> list[ValidationError]:
 
 
 def _artifact_errors(ctx: SyncContext, *, config_less: bool) -> list[ValidationError]:
-    """The rule, prompt, eval-task, link and skill checks (everything but hooks)."""
+    """The rule, prompt, eval-sample, link and skill checks (everything but hooks)."""
     rules, prompts = ctx.rules_resolved, ctx.prompts_resolved
-    errors = [] if config_less else _check_overlays_usable(ctx.config.overlays_enabled)
+    errors = [] if config_less else _consumer_config_errors(ctx)
+    errors.extend(
+        ValidationError(path=str(e.path), message=e.problem) for e in ctx.rule_load_errors
+    )
+    errors.extend(check_rule_shape(rules))
+    errors.extend(check_rule_layout(ctx.rule_definitions, ctx.artifact_source))
     errors.extend(_check_applies_if(rules, prompts, ctx.facts, ctx.repo_root))
     errors.extend(check_prompt_rule_references(prompts, {r.frontmatter.id for r in rules}))
-    errors.extend(_check_output_contracts(prompts))
-    errors.extend(check_write_scope(prompts))
+    errors.extend(check_prompt_set_twins(ctx.artifact_source))
+    # The sets this sync does not render get the same per-prompt checks (D76); a
+    # twin keeps its includes_rules, so the reference check above covers them.
+    unrendered = unrendered_prompts(ctx.artifact_source)
+    errors.extend(check_prompt_rule_calls(unrendered))
+    errors.extend(_check_output_contracts([*prompts, *unrendered]))
+    errors.extend(check_write_scope([*prompts, *unrendered]))
     errors.extend(
         check_lint_codes(
             rules,
@@ -375,8 +423,8 @@ def _artifact_errors(ctx: SyncContext, *, config_less: bool) -> list[ValidationE
         )
     )
     errors.extend(_check_rule_bodies_do_not_include_rules(rules))
-    errors.extend(_check_jinja_compiles(rules, prompts))
-    errors.extend(_check_eval_tasks(ctx))
+    errors.extend(_check_jinja_compiles(rules, [*prompts, *unrendered]))
+    errors.extend(_check_eval_samples(ctx))
     links_config, links_errors = (
         (LinksConfig(), []) if config_less else load_links_config(ctx.repo_root)
     )
@@ -386,8 +434,6 @@ def _artifact_errors(ctx: SyncContext, *, config_less: bool) -> list[ValidationE
         errors.extend(check_forge_table(ctx.repo_root))
     errors.extend(_check_agent_skills(ctx.skills_resolved, ctx.artifact_source.list_skills()))
     errors.extend(
-        check_skill_membership(
-            rules, ctx.skills_resolved, all_rules=ctx.artifact_source.list_rules()
-        )
+        check_skill_membership(rules, ctx.skills_resolved, all_rules=ctx.rule_definitions)
     )
     return errors

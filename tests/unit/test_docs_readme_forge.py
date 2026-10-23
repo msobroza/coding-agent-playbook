@@ -1,8 +1,9 @@
-"""Docs-consistency guard: the README documents ``playbook forge`` (specs/prF-forge-adapter.md §11.2, §13).
+"""Docs-consistency guard: the user docs document ``playbook forge`` (specs/prF-forge-adapter.md §11.2, §13).
 
 The section names every forge operation, its ``[forge]`` snippet parses with
 the parser ``playbook forge`` uses, and the *Running on Domino Data Lab*
-check script is valid bash that never prints a token.
+check script is valid bash that never prints a token. Since prU D55 the README is a
+short user README, so the section lives in the ``docs/`` pages of ``tests._docs.USER_DOC_PAGES``.
 """
 
 from __future__ import annotations
@@ -11,15 +12,14 @@ import re
 import shutil
 import subprocess
 import tomllib
-from pathlib import Path
 from typing import Final
 
 import pytest
 
 from coding_agent_playbook.config.tables.forge import parse_forge_table
 from coding_agent_playbook.forge.operations import OPERATIONS
+from tests._docs import user_docs
 
-_ROOT: Final = Path(__file__).resolve().parents[2]
 _SECTION: Final = "## `playbook forge`"
 _DOMINO: Final = "### Running on Domino Data Lab"
 _FENCE: Final = re.compile(r"^```(\w*)\n(.*?)^```$", re.MULTILINE | re.DOTALL)
@@ -30,12 +30,8 @@ _TOKEN_LEAKS: Final = re.compile(
 )
 
 
-def _readme() -> str:
-    return (_ROOT / "README.md").read_text(encoding="utf-8")
-
-
 def _section(heading: str) -> str:
-    text = _readme()
+    text = user_docs()
     start = text.index(f"\n{heading}\n")
     level = heading.split(" ", 1)[0]
     end = text.find(f"\n{level} ", start + len(heading) + 1)
@@ -106,4 +102,4 @@ def test_the_domino_check_script_never_prints_a_token() -> None:
 
 
 def test_gitlab_duo_is_among_the_agents_md_readers() -> None:
-    assert "GitLab Duo" in _readme()
+    assert "GitLab Duo" in user_docs()

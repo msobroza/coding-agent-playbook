@@ -64,6 +64,26 @@ def sample_member_skill(
     return Skill(frontmatter, body, None, references_dir, "coding_agent_playbook", tuple(members))
 
 
+#: A HIGH section, as a skill's ``playbook.sections`` entry declares it (D17).
+SAMPLE_HIGH_SECTION: dict[str, str] = {
+    "id": "mocking",
+    "title": "Mocking",
+    "impact": "HIGH",
+    "summary": "Fakes at the boundary.",
+    "open_when": "Replacing a collaborator in a test.",
+}
+
+
+def sample_sectioned_skill(skill_id: str = "python-testing", *sections: dict[str, str]) -> Skill:
+    """A skill whose ``playbook:`` block declares ``sections`` (default: the HIGH sample).
+
+    Example: ``section_impacts([sample_sectioned_skill()], rules)`` maps a
+    ``section: mocking`` member of ``python-testing`` to ``Impact.HIGH``.
+    """
+    block = {"use_when": "testing", "sections": list(sections or (SAMPLE_HIGH_SECTION,))}
+    return Skill({"id": skill_id, "playbook": block}, "# Body\n", None, None, "pkg")
+
+
 # --- a synthetic repo's own skill with member rules (tests/conftest.make_synthetic_repo) ---
 
 

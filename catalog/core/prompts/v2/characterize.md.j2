@@ -1,0 +1,76 @@
+---
+id: characterize
+name: Characterize
+description: "Pin what legacy code does today, quirks included, with characterization tests driven through its public entry points, without editing the source."
+slash: characterize
+version: 1
+applies_if:
+  any_framework: ["pytest"]
+input_variables:
+  - name: target
+    description: Module, function or package whose current behavior to pin (e.g. "src/billing/pricing.py" or "src/billing/pricing.py::quote")
+    required: false
+includes_rules:
+  - pytest
+eval_samples:
+  - characterize-legacy-pricing
+---
+
+# Characterize
+
+Untested code cannot be refactored safely until its current behavior is written down. A characterization test records what the code does today, not what it should do, so that any later change to an output, right or wrong, turns the suite red before it reaches users.
+
+## Skills for this task
+
+{% if skill_active('python-testing') %}
+Load this skill and read the rules its index points to before you write the tests:
+
+- `python-testing`: how this repository's tests, fixtures and fakes are written.
+{% else %}
+No core skill of this repository covers this task; follow the conventions the surrounding code already uses.
+{% endif %}
+
+## If something is unclear
+
+This workflow does not stop to ask: when a detail is unclear, choose the reading the code supports best and record it as an assumption in the report. Only when the request names nothing you can act on, ask which target the user means before you start{% if framework_skill('clarify') %} (the `{{ framework_skill('clarify') }}` skill settles it){% endif %}.
+
+## Ground rules
+
+- **Never change the source.** Do not fix a bug, add a seam, or tidy an import, even when it would make testing easier. Create or edit test files only, plus a `conftest.py` beside them when fixtures are shared.
+- **Pin, don't judge.** When an output looks wrong, assert the output you observed. Fixing it is a separate change, and this suite is what will make that change visible.
+- **Public entry points only.** Call what real callers call: public functions, classes, CLI commands, routes. A test of a private helper pins the structure the coming refactor is meant to change.
+- **Non-interactive.** Characterize the target the user named, or the module their request points at. State any assumption in the report instead of stopping to ask.
+
+## Workflow
+
+1. **Map the behavior.** Read the target and its callers. List each public entry point, each branch, each constant an input is compared against, and each side effect: files, network, clock, randomness, environment variables, printing, module-level state.
+2. **Choose inputs.** For each branch take one typical input. For each threshold take the value itself plus the values just below and just above it. Add empty, zero, negative and `None` where the signature allows them, inputs that land on a rounding half, and inputs that raise.
+3. **Observe, then assert.** Run the code on those inputs and copy the actual results into the tests as literals. Do not derive expectations by reading the code: your reading is the very thing the suite has to check. For an error, pin the exception type and a stable part of its message.
+4. **Neutralize side effects at the narrowest seam.** The source cannot change yet, so there is no parameter to inject a fake through. That makes patching the sanctioned exception here, done narrowly. Replace the name the module under test looks up, such as `monkeypatch.setattr(mailer, "SMTP", FakeSmtpClient)`. Redirect files with `tmp_path`, `monkeypatch.chdir` or by patching a module-level path constant. Use `monkeypatch.setenv` for environment variables and the framework's own override hook for web dependencies. Write each fake as a small named class (`FakeSmtpClient`, `FakeClock`) that records its calls, and assert on what it recorded. Never patch library internals or the function under test.
+5. **Label the oddities.** Name a test that pins suspicious behavior `test_<unit>_currently_<behavior>` and add a one-line comment saying the behavior is pinned, not approved. When a fix is already agreed, you may instead assert the intended result under `@pytest.mark.xfail(strict=True, reason="...")`, so the suite fails until the mark is removed with the fix. Never use `skip`.
+6. **Run until green.** Run the new tests with pytest, then run them again. A failing characterization test means the expectation is wrong: correct it from what the code returned, never by touching the source. A result that changes between runs exposes hidden input such as the clock, randomness or ordering; pin that input with a fake or a seed.
+7. **Measure.** If `pytest-cov` is installed, run with `--cov=<target module> --cov-branch` and note the lines and branches still unpinned. Do not add dependencies to get coverage.
+
+Put the tests at the mirrored path: `src/pkg/mod.py` is pinned by `tests/test_mod.py`. If that file already exists, extend it rather than creating a parallel one.
+
+## Check and improve your work
+
+{% if framework_skill('debug') %}
+- When a result changes between runs, find the hidden input with the `{{ framework_skill('debug') }}` skill before you pin it.
+{% endif %}
+{% if framework_skill('verify') %}
+- Before you report, run the suite twice as the `{{ framework_skill('verify') }}` skill asks and quote the result.
+{% endif %}
+{% if skill_active('python-testing') and has_framework('pytest') %}
+- `choosing-a-test-double.md` in the python-testing skill says which narrow seam to patch for each side effect.
+{% endif %}
+- Re-read the tests: every expected value was observed, not derived, and no source file changed.
+
+## Output format
+
+The test files you wrote, then a short report:
+
+1. **Pinned**: each entry point and the branches and boundaries its tests cover.
+2. **Surprising behavior**: one bullet per quirk, giving the input, the observed result, why it looks wrong, and the test that pins it. Write `none found` when there are none.
+3. **Run**: the exact pytest command and its result.
+4. **Coverage**: the line and branch coverage reached on the target, or `not measured` with the reason, plus any branch left unpinned and why.

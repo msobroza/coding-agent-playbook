@@ -19,10 +19,15 @@ from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.catalog.roots import canonical_overlay_list, catalog_root
 from coding_agent_playbook.commands._init_adapters import ADAPTERS_FLAG_HELP
-from coding_agent_playbook.commands._init_answers import collect_answers, console_ask
+from coding_agent_playbook.commands._init_answers import (
+    FRAMEWORK_FLAG_HELP,
+    collect_answers,
+    console_ask,
+)
 from coding_agent_playbook.commands._init_config_plan import plan_config
 from coding_agent_playbook.commands._init_overlays import (
     overlay_lists_to_check,
+    refuse_unusable_framework,
     refuse_unusable_overlays,
     warn_deprecated_flag_overlays,
 )
@@ -52,6 +57,7 @@ def configure(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--kind", help="project kind (required in non-interactive mode)")
     parser.add_argument("--description", default="")
     parser.add_argument("--adapters", help=ADAPTERS_FLAG_HELP)
+    parser.add_argument("--framework", help=FRAMEWORK_FLAG_HELP)
     parser.add_argument("--overlays", help="comma-separated overlay package names")
     parser.add_argument(
         "--no-hooks",
@@ -71,6 +77,7 @@ class InitArgs:
     kind: str | None = None
     description: str = ""
     adapters: str | None = None
+    framework: str | None = None
     overlays: str = ""
     no_hooks: bool = False
 
@@ -90,6 +97,7 @@ class InitArgs:
             kind=getattr(args, "kind", None),
             description=str(getattr(args, "description", "") or ""),
             adapters=getattr(args, "adapters", None),
+            framework=(getattr(args, "framework", None) or "").strip() or None,
             overlays=str(getattr(args, "overlays", "") or ""),
             no_hooks=bool(getattr(args, "no_hooks", False)),
         )
@@ -162,7 +170,8 @@ def run(args: argparse.Namespace, *, ask: Ask = console_ask) -> int:
 
     Exit 2, before writing anything, on a usage error: missing flags, an unusable
     overlay in ``--overlays`` (what the committed file gets) or in the local
-    file's ``overlays_enabled`` (what the final sync uses), or (raised as
+    file's ``overlays_enabled`` (what the final sync uses), a ``--framework``
+    that names no usable framework (D57), or (raised as
     ``ConfigError``) a config file the engine would misread. Both files are read
     and checked here — the local one on its own, the committed one on its own,
     then the config the final sync will load (:func:`plan_config`) — so a broken
@@ -190,7 +199,7 @@ def run(args: argparse.Namespace, *, ask: Ask = console_ask) -> int:
         refuse_unusable_overlays(overlays, origin)
         for overlays, origin in overlay_lists_to_check(answers, local)
     ]
-    if any(refused):
+    if any(refused) or refuse_unusable_framework(answers["framework"]):
         return 2
     warn_deprecated_flag_overlays(deprecated_flags)
     plan = plan_config(files, repo_root, answers)

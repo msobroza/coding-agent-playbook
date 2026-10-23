@@ -1,0 +1,84 @@
+---
+id: arch-repository-port
+name: Repository port
+description: "Separate storing data from using it: one narrow repository Protocol per aggregate, declared beside its use cases, taking and returning typed records and raising the domain not-found error."
+version: 1
+scope: scoped
+globs:
+  - "**/repositories/**/*.py"
+  - "**/repository.py"
+  - "**/repositories.py"
+  - "**/ports.py"
+  - "**/services/**/*.py"
+  - "**/db/**/*.py"
+  - "**/persistence/**/*.py"
+section: persistence
+priority: 46
+tags: [python, architecture, repository]
+---
+
+# Put storage behind a narrow repository port
+
+## Description
+
+When SQL, file I/O or API calls sit inside domain classes, the business code knows the storage, cannot be tested without a database and must be rewritten to change backends. A repository separates how data is stored from how it is used: the use case talks to a collection-like port, and an implementation in infrastructure hides the storage behind it. This is step 2 of arch-persistence-steps: take it when rules are worth testing without a database, the same query repeats across use cases, or ORM objects leak into domain code.
+
+Declare one Protocol per aggregate, beside the use cases that consume it (or in their package's `ports.py`), named after the entity and listing only the methods they call. It takes and returns typed records, never rows or `dict[str, Any]`.
+
+## Bad Example
+
+```python
+@dataclass
+class Post:
+    post_id: str
+    title: str
+
+    @classmethod
+    def get_by_id(cls, post_id: str, db_path: str) -> "Post":  # the record knows SQLite
+        with closing(sqlite3.connect(db_path)) as conn:
+            row = conn.execute("SELECT post_id, title FROM posts WHERE post_id = ?", (post_id,))
+            found = row.fetchone()
+        return Post(post_id=found[0], title=found[1])  # a missing row fails with TypeError
+```
+
+## Good Example
+
+```python
+@dataclass(frozen=True)
+class Post:
+    post_id: str
+    title: str
+
+
+class PostRepository(Protocol):  # app/application/ports.py, beside its use cases
+    def get(self, post_id: str) -> Post: ...
+    def add(self, post: Post) -> None: ...
+
+
+class InMemoryPostRepository:  # tests/fakes.py: same contract, same error
+    def __init__(self) -> None:
+        self._posts: dict[str, Post] = {}
+
+    def get(self, post_id: str) -> Post:
+        try:
+            return self._posts[post_id]
+        except KeyError:
+            raise PostNotFoundError(post_id) from None
+
+    def add(self, post: Post) -> None:
+        self._posts[post.post_id] = post
+```
+
+The SQL implementation satisfies `PostRepository` structurally, raises the same `PostNotFoundError`, and never imports the port.
+
+## Notes
+
+- When a row is missing, raise the domain not-found error carrying the id, in every implementation. Return `T | None` only from queries where absence is a normal answer, and let the name say so (`open_loan_for`).
+- Add and flush, never commit: the use case owns the transaction (arch-unit-of-work when several repositories share it).
+- Name query methods after the question they answer (`due_before(day)`) instead of filtering a full listing in Python. Name parameters `post_id`, not `id`, which shadows the builtin.
+- A generic `Repository[T]` with get, add, update and delete for every entity is not a port: no consumer needs all of it, and its queries cannot be named for their question.
+- An async port declares `async def` methods over the same typed records and domain errors.
+- The SQLAlchemy implementation is sqlalchemy-repositories; the fake and its tests are arch-test-use-cases-with-fakes and arch-contract-tests-for-fakes. A repository implementation is an adapter between the domain and the store (the design-patterns skill's design-adapter rule).
+{% if has_framework("fastapi") %}
+- Worked example: web-application's hotel example (fastapi-hotel-api), files app/operations/ports.py and app/db/repositories.py: one narrow port per aggregate raising domain errors, and its SQL implementation.
+{% endif %}

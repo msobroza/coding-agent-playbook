@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 _RULE = "---\nid: {id}\nname: N\ndescription: d\nscope: always\n---\nBody\n"
 _PROMPT = "---\nid: {id}\nname: N\ndescription: d\nslash: {id}\n---\nBody\n"
 _SKILL = "---\nid: {id}\nname: {id}\ndescription: d\n---\nBody\n"
-_TASK = 'id = "{id}"\nprompt_id = "{prompt}"\ndescription = "d"\n'
+_SAMPLE = 'id = "{id}"\nprompt_id = "{prompt}"\ndescription = "d"\n'
 
 
 def _package_resources(name: str) -> Path:
@@ -39,7 +39,7 @@ def _checkout_root(repo: Path, package: str) -> Path:
         ("rules", "x-rule.md", _RULE.format(id="x-rule")),
         ("prompts", "x-prompt.md", _PROMPT.format(id="x-prompt")),
         ("skills", "x-skill/SKILL.md", _SKILL.format(id="x-skill")),
-        ("eval_tasks", "x-task/task.toml", _TASK.format(id="x-task", prompt="x-prompt")),
+        ("eval_samples", "x-sample/sample.toml", _SAMPLE.format(id="x-sample", prompt="x-prompt")),
     ):
         target = root / kind / name
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -86,7 +86,7 @@ def test_extra_resource_roots_is_a_read_only_tuple(tmp_path: Path) -> None:
     assert FileSystemArtifactSource(repo_root=tmp_path).extra_resource_roots == ()
 
 
-def test_extra_resource_roots_feed_rules_prompts_skills_and_eval_tasks(tmp_path: Path) -> None:
+def test_extra_resource_roots_feed_rules_prompts_skills_and_eval_samples(tmp_path: Path) -> None:
     checkout = _checkout_root(tmp_path, "acme_overlay")
     source = FileSystemArtifactSource(repo_root=tmp_path, extra_resource_roots=[checkout])
 
@@ -96,10 +96,10 @@ def test_extra_resource_roots_feed_rules_prompts_skills_and_eval_tasks(tmp_path:
     rules = [(r.frontmatter.id, r.source_package) for r in source.list_rules()]
     prompts = [(p.frontmatter.id, p.source_package) for p in source.list_prompts()]
     skills = [(str(s.frontmatter.get("id")), s.source_package) for s in source.list_skills()]
-    tasks = [(t.id, t.source_package) for t in source.list_eval_tasks()]
+    samples = [(t.id, t.source_package) for t in source.list_eval_samples()]
     assert from_checkout(rules) == ["x-rule"]
     assert from_checkout(prompts) == ["x-prompt"]
     assert from_checkout(skills) == ["x-skill"]
-    assert from_checkout(tasks) == ["x-task"]
+    assert from_checkout(samples) == ["x-sample"]
     # The engine layer still comes first: the checkout is an extra layer.
     assert rules[0][1] == ENGINE_PACKAGE

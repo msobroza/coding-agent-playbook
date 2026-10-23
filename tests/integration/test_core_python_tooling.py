@@ -2,21 +2,26 @@
 
 ``python-static-checks`` is ungated, so ``python-tooling`` is written in every Python
 repo and its authored texts are generic, while the Covers clause follows the gates.
-The probe has no ``uv.lock``, so its description names five members (223
-characters); the same probe with a ``uv.lock`` also names the uv workflow (236).
-Both texts are the spec's, pinned verbatim. The authored body's picker bullets
-name each member by the display name the index and the Covers clause show.
+The skill declares sections (prU D17, L0-15), so the Covers clause names the
+sections whose members are active: the probe has no ``uv.lock``, so its
+description names linting, type checking, formatting and test configuration; the
+same probe with a ``uv.lock`` also names package management. The FastAPI rules moved to
+web-application and the Pydantic rule to python-coding (D24). The authored body
+has no picker bullets (D47): the generated index routes to rules, and "References
+and examples" lists check-failures.md in every repo and uv-dependency-failures.md
+only in a uv project (C-python-tooling-refs).
 """
 
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING, Final
 
 import pytest
 
 from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
-from tests._catalog import CORE_ROOT, core_rules
+from tests._catalog import CORE_ROOT
+from tests.core_skill_pins.python_tooling import PINS
+from tests.core_skills._references import listed_references, written_references
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
 
 if TYPE_CHECKING:
@@ -24,26 +29,19 @@ if TYPE_CHECKING:
 
 pytestmark = pytest.mark.catalog
 
-_SENTENCE: Final = "Conventions tied to a named tool or framework."
-_USE_WHEN: Final = "Use when editing tool configuration or code wired to a framework."
-#: The spec 11 intro text: the five members the probe activates, in (priority, id) order.
-PROBE_DESCRIPTION: Final = (
-    f"{_SENTENCE} Covers Static checks, pytest configuration, FastAPI app wiring, "
-    f"FastAPI error boundaries, Pydantic boundaries. {_USE_WHEN}"
+_SENTENCE: Final = "Conventions for the developer tools the repo already runs."
+_USE_WHEN: Final = (
+    "Use when fixing lint or type-check findings, editing tool settings, or changing dependencies."
 )
-#: With a ``uv.lock`` the uv workflow (priority 28) joins after pytest configuration (23).
+_PROBE_SECTIONS: Final = "linting, type checking, formatting, test configuration"
+#: The probe activates every section but package management, in declared order.
+PROBE_DESCRIPTION: Final = f"{_SENTENCE} Covers {_PROBE_SECTIONS}. {_USE_WHEN}"
+#: With a ``uv.lock`` the two uv rules' package-management section joins last.
 UV_PROBE_DESCRIPTION: Final = (
-    f"{_SENTENCE} Covers Static checks, pytest configuration, uv workflow, FastAPI app "
-    f"wiring, FastAPI error boundaries, Pydantic boundaries. {_USE_WHEN}"
+    f"{_SENTENCE} Covers {_PROBE_SECTIONS}, package management. {_USE_WHEN}"
 )
-_UV_PROBE_REFERENCES: Final = [
-    "fastapi-app-wiring.md",
-    "fastapi-error-boundaries.md",
-    "pydantic-boundaries.md",
-    "pytest-configuration.md",
-    "python-static-checks.md",
-    "python-uv-workflow.md",
-]
+#: With a ``uv.lock`` the probe activates every member.
+_UV_PROBE_RULES: Final = sorted(f"{rule_id}.md" for rule_id in PINS.members)
 
 
 def _tooling_description(repo: Path) -> str:
@@ -53,7 +51,7 @@ def _tooling_description(repo: Path) -> str:
     return str(frontmatter["description"])
 
 
-def test_reference_probe_python_tooling_names_its_five_active_members(
+def test_reference_probe_python_tooling_names_its_active_sections(
     reference_probe_repo: Path,
 ) -> None:
     assert _tooling_description(reference_probe_repo) == PROBE_DESCRIPTION
@@ -64,33 +62,34 @@ def test_uv_lock_adds_the_uv_workflow_to_python_tooling(uv_reference_probe_repo:
     assert description == UV_PROBE_DESCRIPTION
     assert len(description) <= 300, f"{len(description)} chars; the cap is 300"
     for root in NATIVE_SKILL_ROOTS:
-        references = uv_reference_probe_repo / root / "python-tooling" / "references"
-        assert sorted(p.name for p in references.iterdir()) == _UV_PROBE_REFERENCES, root
+        rules = uv_reference_probe_repo / root / "python-tooling" / "rules"
+        assert sorted(p.name for p in rules.iterdir()) == _UV_PROBE_RULES, root
 
 
-#: Member display name -> the picker label the body uses instead. ``pytest`` is also
-#: a rule id, which a SKILL.md body may not name (spec 6.5.5), so this one label is
-#: a phrase; python-testing drops its ``pytest`` prefixes for the same reason.
-_BODY_LABEL_FOR: Final = {"pytest configuration": "the test runner's configuration"}
+_CHECK_FAILURES: Final = "check-failures.md"
+_UV_FAILURES: Final = "uv-dependency-failures.md"
+_SKILL: Final = "python-tooling"
 
 
-def _picker_labels(body: str) -> list[str]:
-    """The reference labels of ``body``'s picker bullets: the text after each bullet's ": "."""
-    tails = (line.rsplit(": ", 1)[-1].rstrip(".") for line in body.splitlines() if line[:2] == "- ")
-    return [label for tail in tails for label in re.split(r", | and ", tail)]
+def test_reference_probe_ships_only_the_ungated_check_failures_guide(
+    reference_probe_repo: Path,
+) -> None:
+    """Without a ``uv.lock`` the uv guide is neither written nor listed (D29, D58(2))."""
+    for root in NATIVE_SKILL_ROOTS:
+        assert written_references(reference_probe_repo, root, _SKILL) == [_CHECK_FAILURES], root
+    assert listed_references(reference_probe_repo, _SKILL) == [_CHECK_FAILURES]
 
 
-def test_python_tooling_pickers_use_member_display_names() -> None:
-    """Each picker bullet names a member by its index label, and every member is named.
+def test_uv_lock_adds_the_uv_dependency_failures_guide(uv_reference_probe_repo: Path) -> None:
+    for root in NATIVE_SKILL_ROOTS:
+        written = written_references(uv_reference_probe_repo, root, _SKILL)
+        assert written == [_CHECK_FAILURES, _UV_FAILURES], root
+    assert listed_references(uv_reference_probe_repo, _SKILL) == [_CHECK_FAILURES, _UV_FAILURES]
 
-    A descriptive phrase ("the package manager's workflow") leaves the agent to
-    guess which index line it means (review of ticket 21); only a name holding a
-    rule id gets a phrase, from ``_BODY_LABEL_FOR``.
-    """
+
+def test_python_tooling_body_leaves_rule_picking_to_the_generated_index() -> None:
+    """D47: the hand-written picker bullets go; the generated parts route to rules."""
     skill_md = CORE_ROOT / "skills" / "python-tooling" / "SKILL.md"
     _, body = split_frontmatter(skill_md.read_text(encoding="utf-8"))
-    rules = core_rules().values()
-    names = {r.frontmatter.name.lower() for r in rules if r.frontmatter.skill == "python-tooling"}
-    expected = sorted(_BODY_LABEL_FOR.get(name, name) for name in names)
-    labels = [label.lower() for label in _picker_labels(body)]
-    assert sorted(set(labels)) == expected, f"picker labels {labels}; expected {expected}"
+    assert "## Picking rules" not in body
+    assert "rules index" not in body

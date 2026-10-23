@@ -30,7 +30,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.detector.predicate import filter_applies_if
+from coding_agent_playbook.config.framework import enabled_framework
+from coding_agent_playbook.detector.predicate import evaluate_predicate, filter_applies_if
 from coding_agent_playbook.hooks.guardrails_skill import (
     compose_guardrails_skill,
     split_guardrails_skill,
@@ -119,13 +120,26 @@ def render_artifacts(ctx: SyncContext) -> RenderedArtifacts:
         rendered = render_artifacts(SyncContext.from_repo(repo))
     """
     context = TemplateContext.for_config(ctx.config, ctx.facts)
-    session = RenderSession.open(ctx.rules_resolved, context, repo_root=ctx.repo_root)
+    session = RenderSession.open(
+        ctx.rules_resolved,
+        context,
+        repo_root=ctx.repo_root,
+        skills=ctx.skills_resolved,
+        framework=enabled_framework(ctx.config.layers_enabled),
+    )
     prompts = filter_applies_if(ctx.prompts_resolved, ctx.facts, ctx.repo_root)
     rendered_rules = session.render_rules()
     rendered_prompts = [session.render_prompt(prompt) for prompt in prompts]
     session.check_inclusions(rendered_prompts)
     hooks = resolve_sync_hooks(ctx, session.with_hook_body)
-    composed = compose_skills(ctx.skills_resolved, ctx.rules_resolved, rendered_rules)
+    composed = compose_skills(
+        ctx.skills_resolved,
+        ctx.rules_resolved,
+        rendered_rules,
+        reference_applies=lambda predicate: evaluate_predicate(
+            predicate, ctx.facts, repo_root=ctx.repo_root
+        ),
+    )
     skills, authored_guardrails = split_guardrails_skill(composed)
     _check_composed_descriptions(skills)
     _warn_undelivered_members(ctx, skills)

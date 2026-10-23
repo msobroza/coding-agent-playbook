@@ -20,7 +20,11 @@ from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName, Harness
 from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME
 from coding_agent_playbook.sync import pipeline as _sync
+from tests._catalog import TEST_FILE_GLOBS
 from tests.cli.hook_repo import CONFIG, GUARD_CONFIG, hook_deps
+from tests.core_skill_pins import skills_off_probe
+from tests.core_skill_pins.python_documentation import PINS as DOCUMENTATION_PINS
+from tests.core_skill_pins.python_tooling import UNGATED_GLOBS
 from tests.fakes import FakeGitClient
 from tests.hook_runtime.fakes import FakeRuff, ruff_row
 from tests.hook_runtime.handlers.pack_repo import engine_hook, engine_rules
@@ -30,6 +34,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
+    from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
     from tests.hook_payloads import HookPayloadCase
     from tests.hook_runtime.handlers.pack_repo import PackRepo
@@ -42,7 +47,33 @@ HOOK_ID: Final = "skill-nudge"
 LINT_HOOK_ID: Final = "error-handling-lint-feedback"
 APP: Final = "src/app.py"
 TEST_APP: Final = "tests/test_app.py"
+#: Principle skills that match every Python file, as eight core skills would (D41).
+PRINCIPLE_SKILLS: Final = (
+    "python-coding",
+    "design-patterns",
+    "python-architecture",
+    "python-documentation",
+    "ml-data",
+)
 NOTEBOOK: Final = "notebooks/explore.ipynb"
+
+
+def _install_six_skill_pack(pack_repo: PackRepo) -> None:
+    """Five ``**/*.py`` principle skills, then python-testing on the shared test-file set."""
+    principle = [{"id": skill_id, "globs": ["**/*.py"]} for skill_id in PRINCIPLE_SKILLS]
+    testing = {"id": "python-testing", "globs": list(TEST_FILE_GLOBS)}
+    pack_repo.install_pack([HOOK_ID], handler_config={HOOK_ID: {"skills": [*principle, testing]}})
+
+
+def _reference_probe_rules() -> list[Rule]:
+    """Every core rule but the members of the skills the reference probe never emits.
+
+    The Domino skills (prU D63) and ``playbook-creator`` (D70) gate on a marker the
+    reference probe lacks, so sync never puts their members in this repo's table;
+    keeping them would change every line below.
+    """
+    off_probe = skills_off_probe("reference")
+    return [rule for rule in engine_rules() if rule.frontmatter.skill not in off_probe]
 
 
 def _line(skill_id: str) -> str:
@@ -50,16 +81,105 @@ def _line(skill_id: str) -> str:
 
 
 #: Every core skill with members, as in the reference probe (FastAPI + pytest + ML):
-#: ``**/*.py`` reaches ml-data, python-coding and python-tooling; tests reach python-testing.
-SOURCE_LINES: Final = [_line("ml-data"), _line("python-coding"), _line("python-tooling")]
-#: The config files ``python-static-checks`` matches besides Python files and pyproject.
-STATIC_CHECK_CONFIGS: Final = ("ruff.toml", ".ruff.toml", "mypy.ini", ".mypy.ini")
+#: ``**/*.py`` reaches design-patterns, ml-data, python-architecture, python-coding and
+#: python-tooling; tests reach python-testing. On ``src/app.py`` python-architecture
+#: (arch-composition-root) and web-application (fastapi-app-wiring) rank first: ``**/app.py``
+#: is the most specific glob that matched (D41), and the ties keep config order. Five lines
+#: fill the per-hook cap, so python-tooling waits for the next matching edit.
+SOURCE_LINES: Final = [
+    _line("python-architecture"),
+    _line("web-application"),
+    _line("design-patterns"),
+    _line("ml-data"),
+    _line("python-coding"),
+]
+#: The source skill the five-line cap cuts from the first edit of ``src/app.py``.
+CUT_SOURCE_LINE: Final = _line("python-tooling")
+#: python-architecture's ungated member globs, first occurrence in rule-file order:
+#: Python files, the composition-root file names (arch-composition-root), the read-model
+#: packages (arch-cqrs), the use-case packages and workers (arch-effects-after-commit), the
+#: event packages (arch-event-sourcing), the domain packages, the generic package names and
+#: package inits (arch-no-junk-drawer-packages), the persistence modules
+#: (arch-persistence-steps), pyproject.toml (arch-predictable-project-tree), the ports
+#: (arch-repository-port), the domain modules, the shared test-file globs (D41) and the
+#: unit-of-work modules.
+ARCHITECTURE_GLOBS: Final = [
+    "**/*.py",
+    "**/main.py",
+    "**/app.py",
+    "**/__main__.py",
+    "**/deps.py",
+    "**/dependencies.py",
+    "**/container.py",
+    "**/bootstrap.py",
+    "**/wiring.py",
+    "**/cli.py",
+    "**/queries/**/*.py",
+    "**/queries.py",
+    "**/read_models/**/*.py",
+    "**/projections/**/*.py",
+    "**/projections.py",
+    "**/services/**/*.py",
+    "**/application/**/*.py",
+    "**/use_cases/**/*.py",
+    "**/usecases/**/*.py",
+    "**/operations/**/*.py",
+    "**/worker.py",
+    "**/workers/**/*.py",
+    "**/outbox.py",
+    "**/events/**/*.py",
+    "**/events.py",
+    "**/event_store.py",
+    "**/eventstore/**/*.py",
+    "**/domain/**/*.py",
+    "**/utils/**/*.py",
+    "**/utils.py",
+    "**/helpers/**/*.py",
+    "**/helpers.py",
+    "**/common/**/*.py",
+    "**/common.py",
+    "**/managers/**/*.py",
+    "**/misc.py",
+    "**/__init__.py",
+    "**/db/**/*.py",
+    "**/db.py",
+    "**/repositories/**/*.py",
+    "**/repository.py",
+    "**/repositories.py",
+    "**/persistence/**/*.py",
+    "**/infrastructure/**/*.py",
+    "**/infra/**/*.py",
+    "**/adapters/**/*.py",
+    "**/storage/**/*.py",
+    "pyproject.toml",
+    "**/ports.py",
+    "**/models/**/*.py",
+    "**/entities/**/*.py",
+    "**/domain.py",
+    "**/models.py",
+    "**/test_*.py",
+    "**/*_test.py",
+    "**/conftest.py",
+    "**/tests/**/*.py",
+    "**/fakes.py",
+    "**/uow.py",
+    "**/unit_of_work.py",
+]
+#: python-documentation's ungated members' globs, first seen in member id order.
+DOCUMENTATION_GLOBS: Final = tuple(
+    dict.fromkeys(
+        glob
+        for _, pin in sorted(DOCUMENTATION_PINS.rules.items())
+        if not pin.applies_if
+        for glob in pin.globs
+    )
+)
 
 
 @pytest.fixture
 def repo(pack_repo: PackRepo) -> PackRepo:
-    """skill-nudge on, its table derived from every core rule (all four member skills)."""
-    pack_repo.install_pack([HOOK_ID], rules=engine_rules())
+    """skill-nudge on, its table derived from every core rule outside the Domino skills."""
+    pack_repo.install_pack([HOOK_ID], rules=_reference_probe_rules())
     return pack_repo
 
 
@@ -84,9 +204,11 @@ def test_second_edit_in_the_same_session_is_silent(
     edit(repo, deps(), APP, state=state)
 
     second = edit(repo, deps(), APP, state=state)
+    third = edit(repo, deps(), APP, state=state)
     test_file = edit(repo, deps(), TEST_APP, state=state)
 
-    assert second.trace.combined.decision is Decision.NONE
+    assert context(second) == [CUT_SOURCE_LINE]  # the line the cap cut, never lost
+    assert third.trace.combined.decision is Decision.NONE
     assert context(test_file) == [_line("python-testing")]  # spec 8.10 item 6
 
 
@@ -97,9 +219,56 @@ def test_test_file_names_testing_and_coding_once_each(
     source = edit(repo, deps(), APP, state=state)
     again = edit(repo, deps(), TEST_APP, state=state)
 
-    assert context(first) == [*SOURCE_LINES[:2], _line("python-testing"), SOURCE_LINES[2]]
-    assert source.trace.combined.decision is Decision.NONE
+    # D41: the test-file globs rank python-testing, ml-data (ml-numeric-assertions),
+    # python-architecture (its layer-test rules) and web-application first, then the
+    # ``**/*.py`` ties in config order; the five-line cap cuts python-coding and
+    # python-tooling, which the next source edit then names.
+    assert context(first) == [
+        _line("python-testing"),
+        _line("ml-data"),
+        _line("python-architecture"),
+        _line("web-application"),
+        _line("design-patterns"),
+    ]
+    assert context(source) == [_line("python-coding"), CUT_SOURCE_LINE]
     assert again.trace.combined.decision is Decision.NONE
+
+
+@pytest.mark.parametrize(
+    "test_file",
+    ["tests/test_x.py", "tests/helpers.py", "tests/unit/factories.py"],
+    ids=["name-glob", "tests-dir-glob", "nested-tests-dir-glob"],
+)
+def test_test_file_edit_ranks_testing_first_and_keeps_the_five_line_cap(
+    pack_repo: PackRepo, deps: Callable[..., RuntimeDeps], state: Path, test_file: str
+) -> None:
+    """D41: six skills match, the most specific glob ranks first, ties keep config order."""
+    _install_six_skill_pack(pack_repo)
+
+    report = edit(pack_repo, deps(), test_file, state=state)
+
+    assert context(report) == [
+        _line("python-testing"),
+        _line("python-coding"),
+        _line("design-patterns"),
+        _line("python-architecture"),
+        _line("python-documentation"),
+    ]
+
+
+def test_cut_skill_shows_on_the_next_matching_edit(
+    pack_repo: PackRepo, deps: Callable[..., RuntimeDeps], state: Path
+) -> None:
+    """D41 keeps the cap and the rank picks the line it cuts; the cut skill is not lost.
+
+    The cap burns no dedupe key, so the sixth skill reaches the next edit.
+    """
+    _install_six_skill_pack(pack_repo)
+    edit(pack_repo, deps(), "tests/test_x.py", state=state)
+
+    report = edit(pack_repo, deps(), APP, state=state)
+
+    assert context(report) == [_line("ml-data")]
 
 
 def test_new_session_nudges_again(
@@ -132,9 +301,18 @@ def test_notebook_edit_names_ml_data(
 def test_file_matching_no_skill_is_silent(
     repo: PackRepo, deps: Callable[..., RuntimeDeps], state: Path
 ) -> None:
-    report = edit(repo, deps(), "README.md", state=state)
+    report = edit(repo, deps(), "assets/logo.svg", state=state)
 
     assert report.trace.combined.decision is Decision.NONE
+
+
+def test_readme_edit_names_python_documentation(
+    repo: PackRepo, deps: Callable[..., RuntimeDeps], state: Path
+) -> None:
+    """prU D53: the README is python-documentation's, not a Python skill's."""
+    report = edit(repo, deps(), "README.md", state=state)
+
+    assert context(report) == [_line("python-documentation")]
 
 
 def test_out_of_repo_path_is_silent(
@@ -214,7 +392,7 @@ def test_nudge_line_comes_before_lint_feedback(
     head = "def run():\n    return 1\n"
     pack_repo.write("pyproject.toml", '[tool.ruff.lint]\nselect = ["F"]\n')
     pack_repo.write(APP, head + "try:\n    run()\nexcept:\n    raise\n")
-    pack_repo.install_pack([HOOK_ID, LINT_HOOK_ID], rules=engine_rules())
+    pack_repo.install_pack([HOOK_ID, LINT_HOOK_ID], rules=_reference_probe_rules())
     pin_ruff(pack_repo, ruff_program)
     ruff = FakeRuff(diagnostics=[ruff_row("E722", 5, "Do not use bare `except`")])
 
@@ -262,8 +440,11 @@ def test_sync_derives_the_glob_table_from_the_rendered_member_rules(
 ) -> None:
     """Only rules that pass ``applies_if`` reach the table: no pytest, no FastAPI, no ML here.
 
-    python-tooling still appears, with the globs of its one ungated member,
-    python-static-checks (Python files plus the ruff and mypy config files).
+    python-tooling still appears, with the globs of its ungated members (Python files,
+    stubs and the ruff, mypy, pyright and pre-commit config files),
+    python-documentation with its ungated members' globs, in member id order
+    (no CITATION.cff, so docs-citation-file's gate fails), and python-testing
+    with its ungated pytest-first-properties on the shared test-file set.
     """
     (tmp_path / "repo").mkdir()
     repo = make_synthetic_repo(tmp_path / "repo", config_text=CONFIG + "[hooks]\nenabled = true\n")
@@ -273,11 +454,15 @@ def test_sync_derives_the_glob_table_from_the_rendered_member_rules(
     hooks = json.loads((repo / GUARD_CONFIG).read_bytes())["hooks"]
     config = hooks[HOOK_ID]["handlers"]["post_tool_use"]["config"]
     assert rc == 0
-    static_checks = ["**/*.py", "pyproject.toml", *STATIC_CHECK_CONFIGS]
     assert config == {
         "skills": [
+            {"id": "design-patterns", "globs": ["**/*.py"]},
+            {"id": "python-architecture", "globs": ARCHITECTURE_GLOBS},
             {"id": "python-coding", "globs": ["**/*.py"]},
-            {"id": "python-tooling", "globs": static_checks},
+            {"id": "python-documentation", "globs": list(DOCUMENTATION_GLOBS)},
+            {"id": "python-testing", "globs": list(TEST_FILE_GLOBS)},
+            # A repo with neither pytest nor uv: python-tooling's ungated members' globs.
+            {"id": "python-tooling", "globs": list(UNGATED_GLOBS)},
         ]
     }
 

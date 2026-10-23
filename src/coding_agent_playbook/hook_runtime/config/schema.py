@@ -80,7 +80,7 @@ class PolicyKeys:
     """
 
     deny: tuple[str, ...] = ("hooks", "guardrails")
-    ask: tuple[str, ...] = ("adapters_enabled", "detector_cache", "engine.version")
+    ask: tuple[str, ...] = ("framework", "adapters_enabled", "detector_cache", "engine.version")
     ask_removals: tuple[str, ...] = ("overlays_enabled",)
     ask_additions: tuple[str, ...] = ("links.allowed_domains",)
     loosening: tuple[str, ...] = ("metrics",)

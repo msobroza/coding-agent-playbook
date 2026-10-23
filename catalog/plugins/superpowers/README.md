@@ -17,3 +17,7 @@ run `playbook sync`.
 ```toml
 overlays_enabled = ["coding_agent_playbook.plugins.superpowers"]
 ```
+
+The plugin is a spec-driven framework (`framework.toml`), so
+`framework = "superpowers"` (what `playbook init --framework superpowers`
+writes) enables it the same way.

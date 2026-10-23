@@ -42,6 +42,9 @@ dev = [
     "mypy>=1.13.0",
     "pytest>=8.3.0",
     "pytest-cov>=5.0.0",
+    # CI's pytest step (.github/workflows/ci.yml) runs the suite under xdist;
+    # addopts stay serial-friendly, so a local single-file run needs no -n.
+    "pytest-xdist>=3.6",
     "types-pyyaml>=6.0",
     # Pinned like ruff: the contracts in [tool.importlinter] run from pytest
     # (tests/architecture/test_import_contracts.py), so a release that changes a
@@ -99,15 +102,15 @@ llm = "coding_agent_playbook.evals.judge:LLMJudge"
 # grading strategies beyond the built-in threshold/regression/file/judge checks.
 
 [project.entry-points."coding_agent_playbook.rubrics"]
-# Out-of-tree named rubrics; reference from task.toml via [rubric] ref = …. A
+# Out-of-tree named rubrics; reference from sample.toml via [rubric] ref = …. A
 # code-defined Rubric subclass (declaring its CRITERIA) registers here so eval
-# tasks can share one rubric by name. The engine ships none; in-tree
+# samples can share one rubric by name. The engine ships none; in-tree
 # registrations win on a name clash.
 
 [project.entry-points."coding_agent_playbook.gates"]
-# Out-of-tree composed gates; reference from a task's [gate.bind] via ref = …. A
+# Out-of-tree composed gates; reference from a sample's [gate.bind] via ref = …. A
 # code-defined factory returning a composed boolean Check (AllOf/AnyOf/Not over
-# file/threshold/judge checks) registers here so eval tasks can share one gate by
+# file/threshold/judge checks) registers here so eval samples can share one gate by
 # name. The engine ships none; in-tree registrations win on a name clash.
 
 [project.entry-points."coding_agent_playbook.hook_handlers"]
@@ -133,34 +136,32 @@ line-length = 100
 src = ["src", "tests"]
 # A vendored opt-in pack (SPEC §11.5: superpowers) ships upstream text that must
 # stay byte-faithful to its source, so ruff never lints or reformats any of its
-# files. The distilled python_design pack (SPEC §11.5.2) is our own code:
-# its stdlib scripts ARE linted and formatted. Only its markdown is excluded,
-# because newer, unpinned ruff versions also reformat code blocks inside
-# markdown (CI has gone red on that before), and its fenced examples include
-# deliberate "before" code.
-# The vendored mattpocock_skills plugin (specs/prT-mattpocock-skills.md D32) gets
-# the same split: its markdown is upstream text kept near-verbatim, while its two
-# Python script rewrites stay linted and formatted.
-# Eval-task fixtures under setup/ are deliberately unclean needle material (the
+# files.
+# The vendored mattpocock_skills plugin (specs/prT-mattpocock-skills.md D32) is
+# split: its markdown is upstream text kept near-verbatim, and newer, unpinned
+# ruff versions also reformat code blocks inside markdown (CI has gone red on
+# that before), so only its markdown is excluded; its two Python script
+# rewrites are our own code and stay linted and formatted.
+# Eval-sample fixtures under setup/ are deliberately unclean needle material (the
 # find-injected-vuln-* bugs live there), so `ruff check --fix` / `ruff format`
-# must never rewrite them either (specs/prK-lifecycle-hooks.md §P9). Eval tasks
+# must never rewrite them either (specs/prK-lifecycle-hooks.md §P9). Eval samples
 # are per layer, so a bundled plugin's fixtures get the same exclude as core's.
 # mypy needs none: catalog/ is outside its `files`.
 extend-exclude = [
     "catalog/plugins/superpowers",
-    "catalog/plugins/python_design/**/*.md",
     "catalog/plugins/mattpocock_skills/**/*.md",
-    "catalog/core/eval_tasks/*/setup",
-    "catalog/plugins/*/eval_tasks/*/setup",
+    "catalog/core/eval_samples/*/setup",
+    "catalog/plugins/*/eval_samples/*/setup",
 ]
 # Pre-commit and the hook/Stop stages pass file names explicitly, and ruff
 # ignores the excludes above for an explicitly passed path unless force-exclude
 # is on: the hooks would then rewrite the vendored superpowers markdown and the
-# eval-task needle fixtures.
+# eval-sample needle fixtures.
 force-exclude = true
 # Skill scripts run in consumer repos on Python 3.10+, so pyupgrade must not
-# suggest 3.12-only syntax there (PEP 695 aliases/generics).
-per-file-target-version = { "catalog/plugins/*/skills/*/scripts/*.py" = "py310" }
+# suggest 3.12-only syntax there (PEP 695 aliases/generics). Core skills ship
+# scripts and example apps too (prU D2, D48); an example targets 3.10 as well.
+per-file-target-version = { "catalog/plugins/*/skills/*/scripts/*.py" = "py310", "catalog/core/skills/*/scripts/*.py" = "py310", "catalog/core/skills/*/examples/**/*.py" = "py310" }
 
 [tool.ruff.lint]
 select = [
@@ -272,7 +273,7 @@ exhaustive_ignores = [
     "hook_runtime",
 ]
 ignore_imports = [
-    # kept: catalog-layers (the artifact source parses eval tasks) is not scheduled (L12)
+    # kept: catalog-layers (the artifact source parses eval samples) is not scheduled (L12)
     "coding_agent_playbook.catalog.source -> coding_agent_playbook.evals.**",
     # kept: catalog-layers (injecting the hook merger from the callers) is not scheduled
     # (L12): OverlayResolver defaults to the layer merge's merge_hook_layers and
@@ -294,8 +295,10 @@ source_modules = [
     "coding_agent_playbook.artifacts.path_classes",
     "coding_agent_playbook.artifacts.path_globs",
     "coding_agent_playbook.catalog.roots",
+    "coding_agent_playbook.detector.bounded_read",
     "coding_agent_playbook.detector.pep503",
     "coding_agent_playbook.detector.pyproject_deps",
+    "coding_agent_playbook.detector.requirements_files",
     "coding_agent_playbook.forge",
     "coding_agent_playbook.generated_output.atomic_io",
     "coding_agent_playbook.generated_output.sentinel",
@@ -313,18 +316,24 @@ forbidden_modules = [
     "coding_agent_playbook.artifacts.hook_frontmatter",
     "coding_agent_playbook.artifacts.hook_schema",
     "coding_agent_playbook.artifacts.identity",
+    "coding_agent_playbook.artifacts.impact",
     "coding_agent_playbook.artifacts.member_reference",
     "coding_agent_playbook.artifacts.prompt",
     "coding_agent_playbook.artifacts.rule",
     "coding_agent_playbook.artifacts.skill",
     "coding_agent_playbook.catalog._hook_walk",
     "coding_agent_playbook.catalog.layers",
+    "coding_agent_playbook.catalog.prompt_sets",
     "coding_agent_playbook.catalog.resolve",
+    "coding_agent_playbook.catalog.skill_rules",
     "coding_agent_playbook.catalog.source",
     "coding_agent_playbook.cli",
     "coding_agent_playbook.commands",
     "coding_agent_playbook.config",
+    "coding_agent_playbook.detector.config_filenames",
     "coding_agent_playbook.detector.facts",
+    "coding_agent_playbook.detector.harness_markers",
+    "coding_agent_playbook.detector.platform_facts",
     "coding_agent_playbook.detector.predicate",
     "coding_agent_playbook.evals",
     "coding_agent_playbook.exit_two",
@@ -369,18 +378,24 @@ forbidden_modules = [
     "coding_agent_playbook.artifacts.hook_frontmatter",
     "coding_agent_playbook.artifacts.hook_schema",
     "coding_agent_playbook.artifacts.identity",
+    "coding_agent_playbook.artifacts.impact",
     "coding_agent_playbook.artifacts.member_reference",
     "coding_agent_playbook.artifacts.prompt",
     "coding_agent_playbook.artifacts.rule",
     "coding_agent_playbook.artifacts.skill",
     "coding_agent_playbook.catalog._hook_walk",
     "coding_agent_playbook.catalog.layers",
+    "coding_agent_playbook.catalog.prompt_sets",
     "coding_agent_playbook.catalog.resolve",
+    "coding_agent_playbook.catalog.skill_rules",
     "coding_agent_playbook.catalog.source",
     "coding_agent_playbook.cli",
     "coding_agent_playbook.commands",
     "coding_agent_playbook.config",
+    "coding_agent_playbook.detector.config_filenames",
     "coding_agent_playbook.detector.facts",
+    "coding_agent_playbook.detector.harness_markers",
+    "coding_agent_playbook.detector.platform_facts",
     "coding_agent_playbook.detector.predicate",
     "coding_agent_playbook.evals",
     "coding_agent_playbook.exit_two",
@@ -414,9 +429,9 @@ ignore_imports = [
     "coding_agent_playbook.hook_runtime.handlers.verify.coverage_diff_gate -> coding_agent_playbook.grading.**",
     "coding_agent_playbook.hook_runtime.handlers.verify.coverage_diff_gate -> coding_agent_playbook.metrics_gate.**",
     "coding_agent_playbook.hook_runtime.handlers.verify.docstring_nonregression -> coding_agent_playbook.grading.**",
-    "coding_agent_playbook.hook_runtime.handlers.protect.eval_task_authoring_lint -> coding_agent_playbook.evals.**",
-    "coding_agent_playbook.hook_runtime.handlers.protect.eval_task_authoring_lint -> coding_agent_playbook.catalog.source",
-    "coding_agent_playbook.hook_runtime.handlers.protect.eval_task_authoring_lint -> coding_agent_playbook.artifacts.**",
+    "coding_agent_playbook.hook_runtime.handlers.protect.eval_sample_authoring_lint -> coding_agent_playbook.evals.**",
+    "coding_agent_playbook.hook_runtime.handlers.protect.eval_sample_authoring_lint -> coding_agent_playbook.catalog.source",
+    "coding_agent_playbook.hook_runtime.handlers.protect.eval_sample_authoring_lint -> coding_agent_playbook.artifacts.**",
     "coding_agent_playbook.hook_runtime.handlers.verify.clean_code_metrics_nonregression -> coding_agent_playbook.grading.**",
     "coding_agent_playbook.hook_runtime.handlers.verify.clean_code_metrics_nonregression -> coding_agent_playbook.metrics_gate.**",
     # N4: detect() (detector.facts) and evaluate_predicate (detector.predicate) both load on
@@ -446,18 +461,24 @@ forbidden_modules = [
     "coding_agent_playbook.artifacts.hook_frontmatter",
     "coding_agent_playbook.artifacts.hook_schema",
     "coding_agent_playbook.artifacts.identity",
+    "coding_agent_playbook.artifacts.impact",
     "coding_agent_playbook.artifacts.member_reference",
     "coding_agent_playbook.artifacts.prompt",
     "coding_agent_playbook.artifacts.rule",
     "coding_agent_playbook.artifacts.skill",
     "coding_agent_playbook.catalog._hook_walk",
     "coding_agent_playbook.catalog.layers",
+    "coding_agent_playbook.catalog.prompt_sets",
     "coding_agent_playbook.catalog.resolve",
+    "coding_agent_playbook.catalog.skill_rules",
     "coding_agent_playbook.catalog.source",
     "coding_agent_playbook.cli",
     "coding_agent_playbook.commands",
     "coding_agent_playbook.config",
+    "coding_agent_playbook.detector.config_filenames",
     "coding_agent_playbook.detector.facts",
+    "coding_agent_playbook.detector.harness_markers",
+    "coding_agent_playbook.detector.platform_facts",
     "coding_agent_playbook.detector.predicate",
     "coding_agent_playbook.evals",
     "coding_agent_playbook.exit_two",
@@ -481,7 +502,7 @@ forbidden_modules = [
     "yaml",
 ]
 broken_contract_guidance = """
-The grading kernel is shared by eval tasks and the metrics gate, so it imports neither, nor
+The grading kernel is shared by eval samples and the metrics gate, so it imports neither, nor
 the hook runtime: only the stdlib, itself and STDLIB_LEAVES (tests/engine_modules.py).
 """
 
@@ -504,6 +525,7 @@ modules = [
     "coding_agent_playbook.commands.twins.check_deps",
     "coding_agent_playbook.commands.twins.check_notebooks",
     "coding_agent_playbook.commands.twins.ci",
+    "coding_agent_playbook.commands.twins.docs_check",
     "coding_agent_playbook.commands.twins.gate_scan",
     "coding_agent_playbook.commands.twins.scan_secrets",
     "coding_agent_playbook.commands.twins.scan_sinks",

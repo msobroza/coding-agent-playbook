@@ -17,7 +17,7 @@ loads its JSON/TOML/text verdict modules only on their branch, and ``tomllib``
 only for an edit of a ``.toml`` policy file (§D.1's branch-local row). On the
 source-changed branch, ``detector.facts`` and ``detector.predicate`` (and
 ``packaging``) load only after the dependency comparison found a change, and
-``evals.*`` / ``catalog.source`` (yaml) only on an ``eval_tasks/*/task.toml``
+``evals.*`` / ``catalog.source`` (yaml) only on an ``eval_samples/*/sample.toml``
 edit; jinja2 never loads. The session-start briefing and the ``drift`` Stop stage
 read the lockfile with ``tomllib`` through ``lockfile`` (the new §D.1 rows): the briefing on every
 start, the stage only once the ledger shows a write it cares about. The
@@ -361,9 +361,9 @@ def test_tomllib_loads_only_for_a_toml_policy_edit(
 
 # --- K5 step 3: the source-changed branch (§D.1 branch-local rows) --------------------
 
-_TASK_DIR: Final = "playbook/eval_tasks/demo-task"
-_UNBOUND_TASK: Final = """\
-id = "demo-task"
+_SAMPLE_DIR: Final = "playbook/eval_samples/demo-sample"
+_UNBOUND_SAMPLE: Final = """\
+id = "demo-sample"
 prompt_id = "demo"
 description = "Demo."
 
@@ -384,14 +384,14 @@ _DEPS_BASE: Final = '[project]\nname = "demo"\ndependencies = ["fastapi"]\n'
 
 @pytest.fixture
 def source_changed(tmp_path: Path, real_proc: SubprocessProc) -> GuardRepo:
-    """A synced repo with resync-on-detector-input-change and eval-task-authoring-lint on."""
+    """A synced repo with resync-on-detector-input-change and eval-sample-authoring-lint on."""
     repo = GuardRepo.create(tmp_path)
     (repo.root / "src").mkdir()
     (repo.root / "src" / "app.py").write_text("x = 1\n", encoding="utf-8")
     (repo.root / "pyproject.toml").write_text(_DEPS_BASE, encoding="utf-8")
-    task = repo.root / _TASK_DIR
-    task.mkdir(parents=True)
-    (task / "task.toml").write_text(_UNBOUND_TASK, encoding="utf-8")
+    sample = repo.root / _SAMPLE_DIR
+    sample.mkdir(parents=True)
+    (sample / "sample.toml").write_text(_UNBOUND_SAMPLE, encoding="utf-8")
     resync = hook_record(
         "resync-on-detector-input-change",
         events=["post_tool_use"],
@@ -400,12 +400,15 @@ def source_changed(tmp_path: Path, real_proc: SubprocessProc) -> GuardRepo:
         matcher={"post_tool_use": {"tools": ["edit", "write", "shell"]}},
     )
     lint = hook_record(
-        "eval-task-authoring-lint",
+        "eval-sample-authoring-lint",
         events=["post_tool_use"],
         decisions=("context", "none"),
         on_error="open",
         matcher={
-            "post_tool_use": {"tools": ["edit", "write"], "paths": ["**/eval_tasks/*/task.toml"]}
+            "post_tool_use": {
+                "tools": ["edit", "write"],
+                "paths": ["**/eval_samples/*/sample.toml"],
+            }
         },
     )
     torch_rule = {
@@ -471,7 +474,9 @@ def test_detector_loads_only_after_the_dependency_comparison_found_a_change(
             allowed=(
                 "tomllib",
                 "packaging",
+                "coding_agent_playbook.detector.config_filenames",
                 "coding_agent_playbook.detector.facts",
+                "coding_agent_playbook.detector.platform_facts",
                 "coding_agent_playbook.detector.predicate",
             ),
         )
@@ -479,10 +484,10 @@ def test_detector_loads_only_after_the_dependency_comparison_found_a_change(
     )
 
 
-def test_evals_and_yaml_load_only_on_an_eval_task_edit(
+def test_evals_and_yaml_load_only_on_an_eval_sample_edit(
     source_changed: GuardRepo, real_proc: SubprocessProc
 ) -> None:
-    payload = _post_edit(source_changed, f"{_TASK_DIR}/task.toml")
+    payload = _post_edit(source_changed, f"{_SAMPLE_DIR}/sample.toml")
 
     imported = _imports(real_proc, source_changed, EventName.POST_TOOL_USE, payload)
 
@@ -490,7 +495,7 @@ def test_evals_and_yaml_load_only_on_an_eval_task_edit(
     assert "yaml" in imported and "coding_agent_playbook.catalog.source" in imported
     # The compile resolves check/gate/metric entry points (importlib.metadata), never
     # the runner or judge groups; the prompts come from catalog.source (yaml).
-    # evals.validator compiles the task through config and the canonical types:
+    # evals.validator compiles the sample through config and the canonical types:
     # every engine module that branch loads is named, so a new one fails here.
     branch_local = (
         "tomllib",
@@ -503,17 +508,23 @@ def test_evals_and_yaml_load_only_on_an_eval_task_edit(
                 "artifacts.hook",
                 "artifacts.hook_frontmatter",
                 "artifacts.hook_schema",
+                "artifacts.identity",
+                "artifacts.impact",
                 "artifacts.member_reference",
                 "artifacts.prompt",
                 "artifacts.rule",
                 "artifacts.skill",
                 "catalog._hook_walk",
+                "catalog.skill_rules",
                 "catalog.layers",
+                "catalog.prompt_sets",
                 "catalog.source",
                 "config",
                 "evals",
                 "grading",
                 "metrics_gate",
+                "skills",
+                "skills.naming",
                 "toml_writer",
             )
         ),

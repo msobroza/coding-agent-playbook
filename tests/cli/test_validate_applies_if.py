@@ -31,7 +31,7 @@ def _write_rule(repo: Path, rule_id: str, applies_if_yaml: str) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         f"---\nid: {rule_id}\nname: R\ndescription: d\nscope: scoped\n"
-        f"skill: python-coding\napplies_if:\n{applies_if_yaml}---\nBody\n",
+        f"skill: python-coding\nsection: types\napplies_if:\n{applies_if_yaml}---\nBody\n",
         encoding="utf-8",
     )
     return path
@@ -111,3 +111,46 @@ def test_applies_if_errors_reports_one_error_per_bad_key(tmp_path: Path) -> None
         ("r.md", "applies_if: unknown predicate key: 'orm_version'"),
         ("r.md", _PIPENV_MESSAGE),
     ]
+
+
+def test_validate_rejects_any_dependency_given_a_string(
+    tmp_path: Path, make_synthetic_repo: Callable[..., Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = make_synthetic_repo(tmp_path)
+    rule = _write_rule(repo, "dep-string", "  any_dependency: pandera\n")
+
+    rc, fail_lines = _fail_lines(repo, capsys)
+
+    assert rc == 1
+    assert fail_lines == [
+        f"FAIL {rule}: applies_if: predicate 'any_dependency' must be a list of strings; "
+        "got 'pandera'"
+    ]
+
+
+def test_validate_still_rejects_a_misspelled_dependency_key(
+    tmp_path: Path, make_synthetic_repo: Callable[..., Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = make_synthetic_repo(tmp_path)
+    rule = _write_rule(repo, "dep-typo", "  has_dependencies: [pandera]\n")
+
+    rc, fail_lines = _fail_lines(repo, capsys)
+
+    assert rc == 1
+    assert fail_lines == [f"FAIL {rule}: applies_if: unknown predicate key: 'has_dependencies'"]
+
+
+def test_validate_accepts_the_dependency_and_any_file_keys(
+    tmp_path: Path, make_synthetic_repo: Callable[..., Path], capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = make_synthetic_repo(tmp_path)
+    _write_rule(
+        repo,
+        "dep-keys",
+        "  has_dependency: [anyio]\n  any_dependency: [pandera, pyjwt]\n"
+        "  any_file: [mkdocs.yml, docs/conf.py]\n",
+    )
+
+    rc, fail_lines = _fail_lines(repo, capsys)
+
+    assert (rc, fail_lines) == (0, [])

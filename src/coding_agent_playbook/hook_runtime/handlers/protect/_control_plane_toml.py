@@ -5,7 +5,8 @@ before and after the edit:
 
 - ``DENY``: any change under ``[hooks]`` (``[hooks.*]`` included, such as
   ``[hooks.commit_convention] cutover_date``) or ``[guardrails]``;
-- ``ASK``: removals from ``overlays_enabled``, any ``adapters_enabled``,
+- ``ASK``: removals from ``overlays_enabled``, any ``framework`` (it enables a
+  layer, like an ``overlays_enabled`` entry; D57), ``adapters_enabled``,
   ``detector_cache`` or ``[engine] version`` change, additions to
   ``[links] allowed_domains``, and ``[metrics]`` loosening. A ``[metrics]``
   change counts as loosening unless it is provably stricter (``mode =

@@ -12,10 +12,10 @@ every root. Each directory holds ``SKILL.md`` plus byte-copies (copies, not
 symlinks) of the canonical ``scripts/`` and ``references/`` subtrees, minus
 Python bytecode caches (:mod:`coding_agent_playbook.generated_output.source_files`).
 
-A skill with member rules (ADR 0001) also gets one ``references/<rule-id>.md``
+A skill with member rules (ADR 0001, ADR 0005) also gets one ``rules/<rule-id>.md``
 per active member, written from ``MemberReference.text`` after the copies and
 guarded like them; its ``SKILL.md`` carries the composed description and the
-generated ``## References`` index (:mod:`coding_agent_playbook.skills.document`).
+generated ``## Rules`` index (:mod:`coding_agent_playbook.skills.document`).
 The catalog-only ``playbook:`` block is never emitted, so a skill without
 members (a bundled plugin's) is written exactly as authored.
 
@@ -61,8 +61,9 @@ from typing import TYPE_CHECKING
 from coding_agent_playbook.adapters.skill_dirs.ownership import PriorOutput
 from coding_agent_playbook.artifacts.frontmatter import format_frontmatter
 from coding_agent_playbook.artifacts.member_reference import member_reference_path
+from coding_agent_playbook.artifacts.skill import SIDE_DIR_NAMES
 from coding_agent_playbook.generated_output.sentinel import has_sentinel
-from coding_agent_playbook.generated_output.source_files import copyable_skill_files
+from coding_agent_playbook.generated_output.source_files import published_skill_files
 from coding_agent_playbook.generated_output.symlinks import (
     is_dangling_symlink,
     link_leaving,
@@ -75,7 +76,7 @@ from coding_agent_playbook.skills.naming import skill_id_of
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from coding_agent_playbook.artifacts.skill import Skill
+    from coding_agent_playbook.artifacts.skill import SideDirName, Skill
 
 #: The primary file of a native skill directory.
 SKILL_FILENAME = "SKILL.md"
@@ -140,7 +141,7 @@ def render_skill_md(skill: Skill) -> str:
     sentinel HTML comment is the first body line. Frontmatter and body come
     from :mod:`~coding_agent_playbook.skills.document`: the catalog-only
     ``playbook`` block is never emitted, and a skill with member rules gets its
-    composed description and the ``## References`` index. A plain skill (a
+    composed description and the ``## Rules`` index. A plain skill (a
     bundled plugin's) is rendered exactly as authored.
 
     Example: ``render_skill_md(skill).splitlines()[0]`` -> ``"---"``.
@@ -162,7 +163,7 @@ class SkillWriter:
     Example::
 
         writer = SkillWriter(Path(".claude") / "skills")
-        written = writer.write(skill, repo_root)  # SKILL.md + scripts/ + references/
+        written = writer.write(skill, repo_root)  # SKILL.md + scripts/ + references/ + rules/
     """
 
     root: Path
@@ -355,21 +356,21 @@ def _is_same_file(first: Path, second: Path) -> bool:
 def _write_skill_files(
     skill: Skill, skill_md_text: str, skill_dir: Path, prior: PriorOutput
 ) -> list[Path]:
-    """Write ``SKILL.md``, the copied subtrees, then the member references into ``skill_dir``."""
+    """Write ``SKILL.md``, the copied subtrees, then the member rules into ``skill_dir``."""
     skill_dir.mkdir(parents=True, exist_ok=True)
     skill_md = skill_dir / SKILL_FILENAME
     if not _prepare_destination(skill_md, skill_dir, prior):
         return []
     skill_md.write_text(skill_md_text, encoding="utf-8")
     written = [skill_md]
-    written.extend(_copy_subtree(skill.scripts_dir, skill_dir / "scripts", skill_dir, prior))
-    written.extend(_copy_subtree(skill.references_dir, skill_dir / "references", skill_dir, prior))
+    for name in SIDE_DIR_NAMES:
+        written.extend(_copy_subtree(skill, name, skill_dir, prior))
     written.extend(_write_member_references(skill, skill_dir, prior))
     return written
 
 
 def _write_member_references(skill: Skill, skill_dir: Path, prior: PriorOutput) -> list[Path]:
-    """Write ``references/<rule-id>.md`` for every member, as UTF-8 LF bytes.
+    """Write ``rules/<rule-id>.md`` for every member, as UTF-8 LF bytes.
 
     The same ``_prepare_destination`` guard as copied files: inside this
     engine-owned skill dir a regular file at the destination is replaced, as a
@@ -474,24 +475,23 @@ def _remove_existing(dst: Path) -> None:
 
 
 def _copy_subtree(
-    src: Path | None, dst_root: Path, skill_dir: Path, prior: PriorOutput
+    skill: Skill, name: SideDirName, skill_dir: Path, prior: PriorOutput
 ) -> list[Path]:
-    """Byte-copy every publishable file under ``src`` into ``dst_root`` (``shutil.copy2``).
+    """Byte-copy every published file of ``skill``'s side dir ``name`` into ``skill_dir/name``.
 
-    Returns the destination files in sorted source order; ``[]`` when ``src``
-    is absent. Source symlinks inside the skill are dereferenced (copies, not
-    symlinks); bytecode caches (``__pycache__/``, ``*.pyc``/``*.pyo``) are
+    ``name`` is ``scripts``, ``references`` or ``examples`` (``shutil.copy2``).
+    Returns the destination files in sorted source order; ``[]`` when the skill
+    has no such dir. Source symlinks inside the skill are dereferenced (copies,
+    not symlinks); bytecode caches (``__pycache__/``, ``*.pyc``/``*.pyo``) are
     skipped, so they never reach a skills root or the lockfile; a secret path or
     a link leaving the skill's source dir is never copied
-    (:func:`~.source_files.copyable_skill_files` warns instead). Each recorded
-    path is the file ``copy2`` actually wrote, never a directory; a destination
-    blocked by user files is skipped (see :func:`_prepare_destination`).
+    (:func:`~.source_files.copyable_skill_files` warns instead), nor is a file a
+    failed ``applies_if`` withholds (prU D48, D58). Each recorded path is the
+    file ``copy2`` actually wrote, never a directory; a destination blocked by
+    user files is skipped (see :func:`_prepare_destination`).
     """
-    if src is None:
-        return []
     written: list[Path] = []
-    for source_file in copyable_skill_files(src, dst_root):
-        dst = dst_root / source_file.relative_to(src)
+    for source_file, dst in published_skill_files(skill, name, skill_dir / name):
         if _prepare_destination(dst, skill_dir, prior):
             written.append(Path(shutil.copy2(source_file, dst)))
     return written

@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 _STATIC_CHECKS = [
     f"threshold:{metric.name}" for metric in static_metrics() if metric.name not in OPT_IN_METRICS
 ]
-_FIXTURE = "eval_tasks/t1/setup/needle.py"
+_FIXTURE = "eval_samples/t1/setup/needle.py"
 
 
 def _write(path: Path, source: str) -> Path:

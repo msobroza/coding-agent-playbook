@@ -9,7 +9,7 @@ includes_rules:
   - python-error-handling
   - python-dependency-injection
   - python-pure-core
-eval_tasks:
+eval_samples:
   - refactor-extract-helper
   - refactor-rename-for-clarity
 ---

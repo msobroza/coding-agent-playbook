@@ -6,6 +6,7 @@ Covers each error class documented in SPEC §12.6 plus the happy path.
 from __future__ import annotations
 
 import argparse
+import shutil
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -13,11 +14,13 @@ from typing import TYPE_CHECKING
 import pytest
 
 import coding_agent_playbook
+from coding_agent_playbook.catalog import roots as catalog_roots
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.validation import context as _validate_context
+from coding_agent_playbook.validation._rule_layout import check_rule_layout
 from coding_agent_playbook.validation.checks import _check_output_contracts
-from tests._catalog import CORE_ROOT
+from tests._catalog import CORE_ROOT, REPO_ROOT
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -270,13 +273,13 @@ def test_validate_flags_jinja_syntax_error(tmp_path, make_synthetic_repo, capsys
     assert "Jinja syntax error" in out
 
 
-def test_validate_flags_orphan_eval_task(tmp_path, make_synthetic_repo, capsys):
-    """An on-disk task.toml referencing a non-existent prompt."""
+def test_validate_flags_orphan_eval_sample(tmp_path, make_synthetic_repo, capsys):
+    """An on-disk sample.toml referencing a non-existent prompt."""
     repo = make_synthetic_repo(tmp_path)
-    task_dir = repo / "playbook" / "eval_tasks" / "orphan-task"
-    task_dir.mkdir(parents=True, exist_ok=True)
-    (task_dir / "task.toml").write_text(
-        'id = "orphan-task"\n'
+    sample_dir = repo / "playbook" / "eval_samples" / "orphan-sample"
+    sample_dir.mkdir(parents=True, exist_ok=True)
+    (sample_dir / "sample.toml").write_text(
+        'id = "orphan-sample"\n'
         'prompt_id = "deleted-prompt"\n'
         'description = "An orphan that points at a deleted prompt"\n',
         encoding="utf-8",
@@ -338,18 +341,18 @@ def test_shipped_prompt_contracts_compile() -> None:
     )
 
 
-def test_validate_flags_missing_eval_task_for_prompt(tmp_path, make_synthetic_repo, capsys):
-    """A prompt declares eval_tasks: [...] but the task dir doesn't exist."""
+def test_validate_flags_missing_eval_sample_for_prompt(tmp_path, make_synthetic_repo, capsys):
+    """A prompt declares eval_samples: [...] but the sample dir doesn't exist."""
     repo = make_synthetic_repo(tmp_path)
     prompts_dir = repo / "playbook" / "prompts"
     prompts_dir.mkdir(parents=True, exist_ok=True)
-    (prompts_dir / "claims-task.md").write_text(
+    (prompts_dir / "claims-sample.md").write_text(
         "---\n"
-        "id: claims-task\n"
+        "id: claims-sample\n"
         "name: Claims\n"
-        "description: claims a task that does not exist\n"
+        "description: claims a sample that does not exist\n"
         "slash: claims\n"
-        "eval_tasks:\n"
+        "eval_samples:\n"
         "  - foo-bar\n"
         "---\n"
         "body\n",
@@ -454,7 +457,7 @@ def test_validate_warns_about_skill_files_sync_never_copies(
 
 _UNKNOWN_FACT_RULE = (
     "---\nid: bad\nname: Bad\ndescription: bad\nscope: scoped\n"
-    "skill: python-coding\napplies_if:\n  orm_version: '>=2'\n---\nBody\n"
+    "skill: python-coding\nsection: types\napplies_if:\n  orm_version: '>=2'\n---\nBody\n"
 )
 
 
@@ -564,3 +567,80 @@ def test_config_less_context_in_the_engine_checkout_walks_the_engine_once(tmp_pa
     assert ctx.overlay_collisions == []
     assert _validate.run(_ns(tmp_path)) == 0
     assert f"OK {_engine_artifact_count(tmp_path)} artifacts validated" in capsys.readouterr().out
+
+
+def test_config_less_validate_of_the_engine_checkout_has_no_layout_finding(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """prU L0-06, L0-07: the layout checks add no finding to the engine's own catalog.
+
+    Since L0-07 the core-layer scoped rules sit in their skills' ``rules/``, named by
+    id, so R2 and R5 cover every engine rule and find nothing.
+    """
+    ctx = _validate_context.config_less_context(REPO_ROOT)
+
+    assert check_rule_layout(ctx.rule_definitions, ctx.artifact_source) == []
+    assert _validate.run(_ns(REPO_ROOT)) == 0
+    assert "FAIL" not in capsys.readouterr().out
+
+
+def test_validate_fails_on_a_scoped_rule_added_under_the_engine_rules_dir(
+    tmp_path: Path,
+    make_synthetic_repo: Callable[..., Path],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """prU L0-07 (D36): R5 through ``playbook validate`` on a copy of the real catalog.
+
+    The engine is pointed at the copy (a checkout layout, ``src/<pkg>`` next to
+    ``catalog/``), so the real ``catalog/core/rules/`` stays untouched.
+    """
+    shutil.copytree(REPO_ROOT / "catalog", tmp_path / "engine" / "catalog")
+    monkeypatch.setattr(
+        catalog_roots, "_PACKAGE_DIR", tmp_path / "engine" / "src" / "coding_agent_playbook"
+    )
+    stray = tmp_path / "engine" / "catalog" / "core" / "rules" / "languages" / "stray.md"
+    stray.parent.mkdir(parents=True)
+    stray.write_text(
+        "---\nid: python-stray\nname: Stray\ndescription: d\nscope: scoped\n"
+        "skill: python-coding\nsection: types\n---\nBody\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "consumer").mkdir()
+    repo = make_synthetic_repo(tmp_path / "consumer")
+
+    assert _validate.run(_ns(repo)) == 1
+
+    fails = [line for line in capsys.readouterr().out.splitlines() if line.startswith("FAIL")]
+    assert fails == [
+        f"FAIL {stray}: scoped rule 'python-stray' lies in the engine's rules/ directory "
+        f"{stray.parent}, which holds only always rules; move it to "
+        "catalog/core/skills/python-coding/rules/python-stray.md and remove its 'skill:' line"
+    ]
+
+
+def test_validate_reports_an_in_skill_always_rule_once_with_a_move_hint(
+    tmp_path: Path,
+    make_synthetic_repo: Callable[..., Path],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """R6 replaces V3's "remove 'skill'" for an always rule a skill's rules/ holds."""
+    repo = make_synthetic_repo(tmp_path)
+    skill_dir = repo / "playbook" / "skills" / "mine"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nid: mine\ndescription: Mine.\nplaybook:\n  files: Any file\n---\nBody\n",
+        encoding="utf-8",
+    )
+    (skill_dir / "rules").mkdir()
+    (skill_dir / "rules" / "house.md").write_text(
+        "---\nid: house\nname: House\ndescription: d\nscope: always\n---\nBody\n",
+        encoding="utf-8",
+    )
+
+    assert _validate.run(_ns(repo)) == 1
+
+    fails = [line for line in capsys.readouterr().out.splitlines() if line.startswith("FAIL")]
+    assert len(fails) == 1
+    assert "always rule 'house' lies in the rules/ directory of skill 'mine'" in fails[0]
+    assert str(repo / "playbook" / "rules" / "house.md") in fails[0]

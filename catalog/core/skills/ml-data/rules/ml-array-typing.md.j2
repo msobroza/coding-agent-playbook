@@ -1,0 +1,89 @@
+---
+id: ml-array-typing
+name: Array and frame typing
+description: "Annotate arrays with numpy.typing (ArrayLike in, NDArray[dtype] out), state shapes and required columns in docstrings, and return Python scalars from reductions."
+version: 1
+scope: scoped
+globs:
+  - "**/*.py"
+  - "**/*.ipynb"
+applies_if:
+  any_ml_stack: ["numpy", "pandas"]
+section: typing
+priority: 62
+tags: [ml, numpy, pandas, typing]
+---
+
+# Annotate arrays and frames with precise types
+
+## Description
+
+Type hints on every signature are the house style (python-typing in python-coding); for numeric code the useful information is what kind of array or frame a function takes and returns.{% if has_ml_dep("numpy") %} A bare `np.ndarray` says nothing about the element type: use `numpy.typing.NDArray[dtype]` for arrays and `ArrayLike` for inputs the function normalizes with `np.asarray`.{% endif %}{% if has_ml_dep("pandas") %} A bare `pd.DataFrame` says nothing about columns: name the columns a function needs in its docstring, and let pandas-stubs check the pandas calls.{% endif %} Then mypy and readers can see the contract.
+
+## Bad Example
+
+```python
+{% if has_ml_dep("numpy") %}
+def cosine_similarity(a, b):
+    return a @ b / (np.linalg.norm(a) * np.linalg.norm(b))
+
+
+def load_matrix(path) -> np.ndarray:  # dtype? shape?
+    ...
+{% endif %}
+{% if has_ml_dep("pandas") %}
+{% if has_ml_dep("numpy") %}
+
+
+{% endif %}
+def top_routes(routes: pd.DataFrame, n: int):  # which columns must routes have?
+    return routes.nlargest(n, "parcels")
+{% endif %}
+```
+
+## Good Example
+
+```python
+{% if has_ml_dep("numpy") %}
+import numpy.typing as npt
+
+
+def cosine_similarity(a: npt.NDArray[np.float64], b: npt.NDArray[np.float64]) -> float:
+    """Cosine similarity of two 1-D vectors of equal length."""
+    return float(a @ b / (np.linalg.norm(a) * np.linalg.norm(b)))
+
+
+def to_float32(values: npt.ArrayLike) -> npt.NDArray[np.float32]:
+    """Accept anything array-like, return a float32 array."""
+    return np.asarray(values, dtype=np.float32)
+
+
+def load_matrix(path: Path) -> npt.NDArray[np.float32]:
+    """Load an (n_samples, n_features) float32 matrix."""
+    ...
+{% endif %}
+{% if has_ml_dep("pandas") %}
+{% if has_ml_dep("numpy") %}
+
+
+{% endif %}
+def top_routes(routes: pd.DataFrame, n: int) -> pd.DataFrame:
+    """Return the n routes with the most parcels.
+
+    routes needs the columns route_id (string) and parcels (Int64).
+    """
+    return routes.nlargest(n, "parcels")
+{% endif %}
+```
+
+## Notes
+
+{% if has_ml_dep("numpy") %}
+- `npt.NDArray[np.float64]` is `np.ndarray[Any, np.dtype[np.float64]]`: mypy does not check the shape, so state the expected shape in the docstring (`(n_samples, n_features)`).
+- Take `npt.ArrayLike` for parameters and return `npt.NDArray[...]`: liberal in what the function accepts, precise in what it returns.
+- Return a plain `float` or `int` from a scalar reduction (`return float(readings.mean())`): NumPy's stubs infer an array for many reductions and operator chains, so `-> np.float64` fails type checking and leaks NumPy scalars to callers.
+- Use `np.floating[Any]` or `np.integer[Any]` instead of a concrete width only when the function really works for any float or integer dtype.
+{% endif %}
+{% if has_ml_dep("pandas") %}
+- pandas: without pandas-stubs, mypy treats pandas objects as `Any` and checks nothing about them. If the repo lacks the stubs, propose adding them to the dev dependencies; never add them unasked.
+{% endif %}

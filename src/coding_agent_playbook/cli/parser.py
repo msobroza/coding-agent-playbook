@@ -33,6 +33,7 @@ from coding_agent_playbook.commands.twins import check_commit_trailers as check_
 from coding_agent_playbook.commands.twins import check_deps as check_deps_cmd
 from coding_agent_playbook.commands.twins import check_notebooks as check_notebooks_cmd
 from coding_agent_playbook.commands.twins import ci as ci_cmd
+from coding_agent_playbook.commands.twins import docs_check as docs_check_cmd
 from coding_agent_playbook.commands.twins import gate_scan as gate_scan_cmd
 from coding_agent_playbook.commands.twins import scan_secrets as scan_secrets_cmd
 from coding_agent_playbook.commands.twins import scan_sinks as scan_sinks_cmd
@@ -59,6 +60,7 @@ _COMMANDS: Final[tuple[Command, ...]] = (
     scan_secrets_cmd,
     check_commit_trailers_cmd,
     check_deps_cmd,
+    docs_check_cmd,
 )
 
 #: The subcommand names in ``--help`` order; the public surface tests pin them.

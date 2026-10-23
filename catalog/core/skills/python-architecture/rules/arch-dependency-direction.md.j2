@@ -1,0 +1,85 @@
+---
+id: arch-dependency-direction
+name: Dependency direction
+description: "Point imports inward: interface -> application -> domain, with infrastructure implementing ports the application declares and only the composition root wiring concrete classes."
+version: 1
+scope: scoped
+globs:
+  - "**/*.py"
+section: layers
+priority: 20
+tags: [python, architecture, layers]
+---
+
+# Point imports inward, toward the domain
+
+## Description
+
+An application has four layers plus a composition root, and every import points inward. The interface layer (routes, CLI commands, queue consumers) translates a delivery mechanism into calls to use cases. The application layer (use cases) loads data, lets the domain decide, saves and commits. The domain layer holds typed records, value objects, rules and domain errors. The infrastructure layer (ORM tables, repositories, clients for other services) touches the outside world. The composition root picks the concrete classes and connects them.
+
+| Layer | May import |
+| --- | --- |
+| interface | application, domain |
+| application | domain |
+| domain | none of the other layers |
+| infrastructure | domain, and application only for the ports it implements |
+| composition root | every layer |
+
+The application does not depend on the database: it declares the port it needs and receives an implementation as a parameter, and the infrastructure class satisfies that port. With the direction right, business rules run in tests without a database and a vendor swap touches one module.
+
+Review for these imports: a transport module (route, CLI command) importing a persistence module, a use case importing a concrete database class instead of taking a port, infrastructure calling a use case, and concrete objects built anywhere but the composition root.
+
+## Bad Example
+
+```python
+# app/operations/booking.py: a use case that reaches outward
+from fastapi import HTTPException  # the web framework in the application layer
+
+from app.db.engine import SessionLocal  # the module that builds the engine
+from app.db.tables import RoomRow  # an ORM table
+
+
+def book_room(room_id: int, nights: int) -> int:
+    with SessionLocal() as session:  # builds its own session
+        room = session.get(RoomRow, room_id)
+        if room is None:
+            raise HTTPException(status_code=404)  # a status code chosen in business code
+        return nights * room.nightly_rate_cents
+```
+
+## Good Example
+
+```python
+# app/operations/booking.py: the use case declares the port it consumes
+class RoomRepository(Protocol):
+    def get(self, room_id: int) -> Room: ...  # raises RoomNotFoundError
+
+
+def quote_stay(rooms: RoomRepository, room_id: int, nights: int) -> int:
+    return nights * rooms.get(room_id).nightly_rate_cents
+
+
+# app/db/repositories.py: infrastructure satisfies it structurally
+class SqlRoomRepository:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def get(self, room_id: int) -> Room:
+        row = self._session.get(RoomRow, room_id)
+        if row is None:
+            raise RoomNotFoundError(room_id)
+        return row.to_record()
+```
+
+## Notes
+
+- Imports under `if TYPE_CHECKING:` create no runtime edge and are never violations.
+- A single-module tool or a notebook needs no layers; a three-module service can stop at `main.py`, `domain.py` and `db.py`.
+- Warning signs per layer: `select(` or `session.` in a route; `import fastapi`, `HTTPException` or `os.environ` in a use case; a session attribute on an entity; infrastructure importing a use case.
+- Domain errors are translated once per entry point (the python-coding skill's python-error-boundaries rule); whether a collaborator deserves a port at all is arch-ports.
+- The skill's layer_map.py script sorts every module into a layer and reports wrong-way imports and import cycles; every hit is a candidate to confirm by reading the import.
+{% if has_framework("fastapi") %}
+- Worked example: web-application's hotel example (fastapi-hotel-api), files app/operations/ports.py and app/db/repositories.py: the application declares its ports and the SQL repositories satisfy them structurally without importing that module.
+{% endif %}
+- Which layer and package a new piece of code belongs in, and where its test goes: see where-code-goes.md.
+- How to run layer_map.py over a whole service, configure it and read its report: see architecture-review.md.

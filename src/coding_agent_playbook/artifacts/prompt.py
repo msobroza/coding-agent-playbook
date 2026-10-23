@@ -27,7 +27,7 @@ class PromptFrontmatter:
     applies_if: dict[str, Any] = field(default_factory=dict)
     input_variables: list[dict[str, Any]] = field(default_factory=list)
     includes_rules: list[str] = field(default_factory=list)
-    eval_tasks: list[str] = field(default_factory=list)
+    eval_samples: list[str] = field(default_factory=list)
     # Regexes the agent's final message must match while this prompt is active
     # (specs/prK-hook-pack.md §E.2 prompt-output-contract-on-stop); compiled by
     # ``playbook validate``, dropped from markdown when empty.
@@ -52,8 +52,8 @@ class PromptFrontmatter:
             self.input_variables = []
         if self.includes_rules is None:
             self.includes_rules = []
-        if self.eval_tasks is None:
-            self.eval_tasks = []
+        if self.eval_samples is None:
+            self.eval_samples = []
         if self.output_contract is None:
             self.output_contract = []
         if self.write_scope is None:

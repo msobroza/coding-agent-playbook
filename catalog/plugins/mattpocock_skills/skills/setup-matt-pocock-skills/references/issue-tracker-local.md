@@ -1,21 +1,21 @@
 # Issue tracker: Local Markdown
 
-Issues and specs for this repo live as markdown files in `.scratch/`.
+Issues and specs for this repo live as markdown files in `docs/specs/` and `docs/plans/`.
 
 ## Conventions
 
-- One feature per directory: `.scratch/<feature-slug>/`
-- The spec is `.scratch/<feature-slug>/spec.md`
-- Implementation issues are one file per ticket at `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01`, never a single combined tickets file
+- One feature per slug, dated when it is created: `YYYY-MM-DD-<feature-slug>`
+- The spec is `docs/specs/YYYY-MM-DD-<feature-slug>.md`
+- Implementation issues are one file per ticket at `docs/plans/YYYY-MM-DD-<feature-slug>/<NN>-<slug>.md`, numbered from `01`, never a single combined tickets file
 - Every issue file (the spec, each ticket) and every map opens with a `# <title>` heading: its name
 - Triage state is recorded as a `Status:` line near the top of each issue file (see `triage-labels.md` for the role strings)
 - Comments and conversation history append to the bottom of the file under a `## Comments` heading
-- `.scratch/` is untracked working state: never stage it in a commit
+- `.scratch/` holds only throwaway prototypes, never a spec, ticket or map: never stage it in a commit
 - Worktrees do not contain untracked files: when you point a subagent or a worktree at a spec, ticket or map, give its absolute path in the main checkout
 
 ## When a skill says "publish to the issue tracker"
 
-Create a new file under `.scratch/<feature-slug>/` (creating the directory if needed).
+Create the spec at `docs/specs/YYYY-MM-DD-<feature-slug>.md`, or a ticket under `docs/plans/YYYY-MM-DD-<feature-slug>/` (creating the directory if needed).
 
 ## When a skill says "fetch the relevant ticket"
 
@@ -33,9 +33,9 @@ A ticket's blockers go on a `Blocked by:` line near the top (bold, `**Blocked by
 
 Used by `wayfinder`. The **map** is a file with one **child** file per ticket.
 
-- **Map**: `.scratch/<effort>/map.md` (the Notes / Decisions-so-far / Fog body).
-- **Child ticket**: `.scratch/<effort>/issues/NN-<slug>.md`, numbered from `01`, with the question in the body. A `Type:` line records the ticket type (`research`/`prototype`/`grilling`/`task`); a `Status:` line records `claimed`/`resolved`/`out-of-scope`.
+- **Map**: `docs/plans/YYYY-MM-DD-<effort>.md` (the Notes / Decisions-so-far / Fog body).
+- **Child ticket**: `docs/plans/YYYY-MM-DD-<effort>/NN-<slug>.md`, numbered from `01`, with the question in the body. A `Type:` line records the ticket type (`research`/`prototype`/`grilling`/`task`); a `Status:` line records `claimed`/`resolved`/`out-of-scope`.
 - **Blocking**: a `Blocked by: NN, NN` line near the top. A ticket is unblocked when every file it lists is closed (`resolved` or `out-of-scope`).
-- **Frontier**: scan `.scratch/<effort>/issues/` for files that are open, unblocked, and unclaimed; first by number wins.
+- **Frontier**: scan `docs/plans/YYYY-MM-DD-<effort>/` for files that are open, unblocked, and unclaimed; first by number wins.
 - **Claim**: set `Status: claimed` and save before any work.
-- **Resolve**: append the answer under an `## Answer` heading, set `Status: resolved`, then append a context pointer (gist + link) to the map's Decisions-so-far in `map.md`. Only the session driving the map appends to `map.md`; a research subagent writes only its own ticket file.
+- **Resolve**: append the answer under an `## Answer` heading, set `Status: resolved`, then append a context pointer (gist + link) to the map's Decisions-so-far in the map file. Only the session driving the map appends to the map file; a research subagent writes only its own ticket file.

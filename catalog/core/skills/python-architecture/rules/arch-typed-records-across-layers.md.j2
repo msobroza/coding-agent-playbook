@@ -1,0 +1,76 @@
+---
+id: arch-typed-records-across-layers
+name: Typed records across layers
+description: "Pass typed records (frozen dataclasses) between layers, never dict[str, Any] or ORM rows; infrastructure converts rows to records and request schemas stay in the interface."
+version: 1
+scope: scoped
+globs:
+  - "**/*.py"
+section: boundaries
+priority: 41
+tags: [python, architecture, records]
+---
+
+# Pass typed records between layers, never dicts or ORM rows
+
+## Description
+
+Layers below the interface exchange typed records: frozen dataclasses or value objects the domain defines. The goal is that use cases never see ORM objects, cursors or driver types, so the data can come from SQL, a file, another service or a test fake. Plain `dict[str, Any]` reaches that goal at the price of every check the type checker could make: a misspelled key or a renamed column fails at run time, far from its cause. A typed record keeps the decoupling and the checks.
+
+Infrastructure builds records from rows inside the module that owns the table, and turns records back into rows on the way in. Request and response schemas (Pydantic models in a web app) stay in the interface layer, which converts them to and from records at the edge.
+
+## Bad Example
+
+```python
+DataObject = dict[str, Any]
+
+
+class DataInterface(Protocol):
+    def read_by_id(self, id: str) -> DataObject: ...
+    def create(self, data: DataObject) -> DataObject: ...
+
+
+def to_dict(obj: Any) -> DataObject:
+    return {col.name: getattr(obj, col.name) for col in obj.__table__.columns}
+
+
+def quote_stay(rooms: DataInterface, room_id: str, nights: int) -> int:
+    return nights * rooms.read_by_id(room_id)["price"]  # a typo here fails only at run time
+```
+
+## Good Example
+
+```python
+# app/domain/model.py
+@dataclass(frozen=True)
+class Room:
+    room_id: int
+    number: str
+    nightly_rate_cents: int
+
+
+# app/operations/ports.py
+class RoomRepository(Protocol):
+    def get(self, room_id: int) -> Room: ...  # raises RoomNotFoundError
+
+
+# app/db/tables.py: the row converts itself; it never leaves the db package
+class RoomRow(Base):
+    __tablename__ = "rooms"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    number: Mapped[str]
+    nightly_rate_cents: Mapped[int]
+
+    def to_record(self) -> Room:
+        return Room(self.id, self.number, self.nightly_rate_cents)
+```
+
+## Notes
+
+- A generic repository over `dict[str, Any]` trades type checking for one class that serves every table; one narrow port per aggregate returning records keeps both.
+- ORM rows, cursors and driver objects never cross the infrastructure boundary, and neither do driver errors: translate them into domain errors there.
+- The one dict on a partial-update path is the interface's `model_dump(exclude_unset=True)`, unpacked into a typed changes record before the use case is called.
+- Request and response models are the web-application skill's web-api-schemas rule; choosing a record's shape (dataclass, NamedTuple, TypedDict) is the python-coding skill's python-data-shapes rule.
+{% if has_framework("fastapi") %}
+- Worked example: web-application's hotel example (fastapi-hotel-api), files app/domain/model.py and app/db/repositories.py: frozen domain records, and repositories that map rows to them so no ORM row leaves the db package.
+{% endif %}

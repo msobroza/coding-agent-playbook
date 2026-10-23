@@ -2,7 +2,7 @@
 id: project-context
 name: Project context
 description: Project name, kind and description, plus the two working agreements every task needs.
-version: 2
+version: 3
 scope: always
 priority: 0
 tags: [always, context]
@@ -14,5 +14,5 @@ You are working on **{{ project_name }}** (project kind: `{{ project_kind }}`).
 {{ project_description }}
 {% endif %}
 
-- Ask before writing code when the scope or the approach is unclear: a short question costs less than the wrong change.
+- Ask before writing code when the scope or the approach is unclear{% if framework_skill('clarify') %} (use the {{ framework_skill('clarify') }} skill){% endif %}: a short question costs less than the wrong change.
 - Report a problem you find outside the task (a latent bug, dead code, a missing test) instead of fixing it in the same change.

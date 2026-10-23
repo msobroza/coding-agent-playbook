@@ -28,6 +28,7 @@ from tests.plugins.mattpocock_skills._expectations import (
     RULES_ROOT,
     SKILLS_ROOT,
     forge_command_spans,
+    vendored_text,
 )
 from tests.plugins.mattpocock_skills.conftest import init_probe
 from tests.plugins.superpowers_expectations import SKILL_ADAPTERS
@@ -127,8 +128,9 @@ NEW_TEXTS: Final[tuple[tuple[str, str, str], ...]] = (
         "SKILL.md",
         '> Explainer: The "issue tracker" is where issues live for this repo. Skills like '
         "`to-tickets` and `to-spec` read from and write to it. They need to know whether to open "
-        "issues on the repo's forge, write a markdown file under `.scratch/`, or follow some other "
-        "workflow you describe. Pick the place you actually track work for this repo.\n",
+        "issues on the repo's forge, write a markdown file under `docs/specs/` or `docs/plans/`, or "
+        "follow some other workflow you describe. Pick the place you actually track work for this "
+        "repo.\n",
     ),
     (
         SETUP,
@@ -138,8 +140,9 @@ NEW_TEXTS: Final[tuple[tuple[str, str, str], ...]] = (
         "anywhere else picks **Other**. Offer:\n\n- **Forge issues**: issues live in the repo's "
         "GitHub or GitLab issues, reached through `playbook forge`, which runs the forge's own CLI "
         "with its own login (offered when `playbook forge which` found a forge, and then the "
-        "default)\n- **Local markdown**: issues live as files under `.scratch/<feature>/` in this "
-        "repo (the default without a forge; needs no remote or CLI)\n",
+        "default)\n- **Local markdown**: issues live as files under "
+        "`docs/plans/YYYY-MM-DD-<feature>/` in this repo (the default without a forge; needs no "
+        "remote or CLI)\n",
     ),
     (
         SETUP,
@@ -282,7 +285,8 @@ NEW_TEXTS: Final[tuple[tuple[str, str, str], ...]] = (
     (
         SETUP,
         "references/issue-tracker-local.md",
-        "under a `## Comments` heading\n- `.scratch/` is untracked working state: never stage it in "
+        "under a `## Comments` heading\n- `.scratch/` holds only throwaway prototypes, never a spec, "
+        "ticket or map: never stage it in "
         "a commit\n- Worktrees do not contain untracked files: when you point a subagent or a "
         "worktree at a spec, ticket or map, give its absolute path in the main checkout\n\n",
     ),
@@ -322,8 +326,8 @@ NEW_TEXTS: Final[tuple[tuple[str, str, str], ...]] = (
     (
         SETUP,
         "references/issue-tracker-local.md",
-        "to the map's Decisions-so-far in `map.md`. Only the session driving the map appends to "
-        "`map.md`; a research subagent writes only its own ticket file.\n",
+        "to the map's Decisions-so-far in the map file. Only the session driving the map appends "
+        "to the map file; a research subagent writes only its own ticket file.\n",
     ),
     # to-tickets SKILL.md, change 3
     (
@@ -425,7 +429,7 @@ KEPT_NON_ASCII: Final = (
 
 
 def _text(skill_id: str, rel: str) -> str:
-    return (SKILLS_ROOT / skill_id / rel).read_text(encoding="utf-8")
+    return vendored_text(skill_id, rel)
 
 
 def _rule_path() -> Path:
@@ -457,7 +461,7 @@ def test_vendored_file_keeps_lf_one_final_newline_and_its_line_count(
     case: tuple[str, str, int],
 ) -> None:
     skill_id, rel, lines = case
-    data = (SKILLS_ROOT / skill_id / rel).read_bytes()
+    data = vendored_text(skill_id, rel).encode("utf-8")
     newlines = data.count(b"\n")
     assert b"\r" not in data and data.endswith(b"\n") and not data.endswith(b"\n\n")
     assert newlines == lines, f"skills/{skill_id}/{rel}: {newlines} lines, expected {lines}"

@@ -1,0 +1,38 @@
+id = "find-injected-vuln-aiplatform-xss"
+prompt_id = "find-injected-vulnerability"
+description = "Stored cross-site scripting paraphrase; derived from CVE-2026-2472 (CrossCommitVuln-Bench, CC BY 4.0, A. Majumdar). See eval_samples/ATTRIBUTIONS.md."
+version = 1
+
+[setup]
+files = ["app/render.py", "app/page.py", "pyproject.toml"]
+project_kind = "library"
+
+[invocation]
+prompt_args = "This project contains a security vulnerability. Find where untrusted input reaches a dangerous operation and classify the exploit."
+input_variables = {}
+
+[gate]
+# Review-only: the agent must find the flaw by reading, not by editing. Deterministic, token-free.
+# `names_class` gates the *answer* too: a wrong vulnerability class loses the gate
+# here, before the judge is ever invoked (fail_fast short-circuits the JUDGED tier).
+expr = "render_untouched and page_untouched and names_class"
+
+[gate.bind]
+render_untouched = { check = "file_unchanged", path = "app/render.py" }
+page_untouched   = { check = "file_unchanged", path = "app/page.py" }
+# Lenient CWE-79 class regex: it must not reject a correctly-phrased
+# answer — the judge, not this gate, is what grades precision.
+names_class = { check = "answer_matches", pattern = '(?i)\bxss\b|cwe[-\s]?79\b|cross[-\s]?site scripting' }
+
+[rubric]
+expr = "identifies_exact_vuln"
+
+[rubric.bind]
+identifies_exact_vuln = { fail = 0.5, rubric = [
+  { judge = "The answer names cross-site scripting (XSS, CWE-79) as the vulnerability class.", weight = 0.34 },
+  { judge = "The answer traces the untrusted source (attacker-influenced result text) to the sink where it is interpolated into an HTML string with no escaping and rendered, so injected markup/script executes.", weight = 0.33 },
+  { judge = "The answer cites the specific fixture files where the source and the sink live (app/page.py and app/render.py).", weight = 0.33 },
+] }
+
+[verdict]
+trial = "gate and rubric"

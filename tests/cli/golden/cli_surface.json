@@ -58,7 +58,8 @@
         "check-notebooks",
         "scan-secrets",
         "check-commit-trailers",
-        "check-deps"
+        "check-deps",
+        "docs-check"
       ],
       "required": false,
       "help": null,
@@ -176,6 +177,21 @@
           "choices": null,
           "required": false,
           "help": "comma-separated adapter names (default: claude_code,opencode,shared_skills; add continue to opt in)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--framework"
+          ],
+          "dest": "framework",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "spec-driven framework: superpowers, mattpocock, an overlay module name, or none (writes the committed framework key; default: keep the current one, else none)",
           "metavar": null
         },
         {
@@ -484,7 +500,7 @@
     },
     {
       "name": "eval",
-      "help": "eval enumeration + `--run` a task (SPEC §12.8, §15)",
+      "help": "eval enumeration + `--run` a sample (SPEC §12.8, §15)",
       "func": "coding_agent_playbook.commands.eval.run",
       "description": null,
       "actions": [
@@ -516,7 +532,7 @@
           "type": null,
           "choices": null,
           "required": false,
-          "help": "repo to enumerate eval tasks against (defaults to cwd)",
+          "help": "repo to enumerate eval samples against (defaults to cwd)",
           "metavar": null
         },
         {
@@ -546,7 +562,7 @@
           "type": null,
           "choices": null,
           "required": false,
-          "help": "show one task by id",
+          "help": "show one sample by id",
           "metavar": null
         },
         {
@@ -559,7 +575,7 @@
           "type": null,
           "choices": null,
           "required": false,
-          "help": "task id (enumerate, or run with --run)",
+          "help": "sample id (enumerate, or run with --run)",
           "metavar": null
         },
         {
@@ -574,7 +590,7 @@
           "type": null,
           "choices": null,
           "required": false,
-          "help": "execute the task <id> through a runner and grade it (SPEC §15)",
+          "help": "execute the sample <id> through a runner and grade it (SPEC §15)",
           "metavar": null
         },
         {
@@ -595,6 +611,24 @@
         {
           "action": "_StoreAction",
           "option_strings": [
+            "--prompt-set"
+          ],
+          "dest": "prompt_set",
+          "nargs": null,
+          "const": null,
+          "default": "v1",
+          "type": null,
+          "choices": [
+            "v1",
+            "v2"
+          ],
+          "required": false,
+          "help": "prompt set to render the sample's prompt from (default: v1; the repo's prompts key is not read)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
             "--judge"
           ],
           "dest": "judge",
@@ -610,16 +644,31 @@
         {
           "action": "_StoreAction",
           "option_strings": [
-            "--samples"
+            "--judge-samples"
           ],
-          "dest": "samples",
+          "dest": "judge_samples",
           "nargs": null,
           "const": null,
           "default": null,
           "type": "int",
           "choices": null,
           "required": false,
-          "help": "per-criterion judge samples to average (default: 1)",
+          "help": "how many times the judge scores each rubric criterion before averaging (default: 1)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--samples"
+          ],
+          "dest": "deprecated_samples",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": "int",
+          "choices": null,
+          "required": false,
+          "help": "==SUPPRESS==",
           "metavar": null
         },
         {
@@ -653,6 +702,69 @@
           ],
           "required": false,
           "help": "--run output format (default: text)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--compare"
+          ],
+          "dest": "compare",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "opt-in and paid: run the eval samples of the rule-including prompts on BASE_REF and on HEAD and compare them (needs the agent's credentials)",
+          "metavar": "BASE_REF"
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--base-prompt-set"
+          ],
+          "dest": "base_prompt_set",
+          "nargs": null,
+          "const": null,
+          "default": "v1",
+          "type": null,
+          "choices": [
+            "v1",
+            "v2"
+          ],
+          "required": false,
+          "help": "--compare: prompt set the base side grades (default: v1; --prompt-set picks HEAD's)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--compare-runs"
+          ],
+          "dest": "compare_runs",
+          "nargs": null,
+          "const": null,
+          "default": 3,
+          "type": "int",
+          "choices": null,
+          "required": false,
+          "help": "--compare: runs per eval sample on each side (default: 3)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--compare-out"
+          ],
+          "dest": "compare_out",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "--compare: directory for the checkouts and every run's JSON report (default: a new temporary directory)",
           "metavar": null
         }
       ],
@@ -1649,6 +1761,74 @@
           "choices": null,
           "required": false,
           "help": "repo to check (defaults to cwd)",
+          "metavar": null
+        }
+      ],
+      "exclusive_groups": []
+    },
+    {
+      "name": "docs-check",
+      "help": "check changed documentation: links, code blocks, the repo's docs tools (D69)",
+      "func": "coding_agent_playbook.commands.twins.docs_check.run",
+      "description": null,
+      "actions": [
+        {
+          "action": "_HelpAction",
+          "option_strings": [
+            "-h",
+            "--help"
+          ],
+          "dest": "help",
+          "nargs": 0,
+          "const": null,
+          "default": "==SUPPRESS==",
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "show this help message and exit",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [],
+          "dest": "paths",
+          "nargs": "*",
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "documentation files to check (default: changed since --base)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--base"
+          ],
+          "dest": "base",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "base ref (default: the default branch, origin/HEAD first)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--repo-root"
+          ],
+          "dest": "repo_root",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "repo the paths are relative to (defaults to cwd)",
           "metavar": null
         }
       ],

@@ -106,11 +106,11 @@ def test_test_paths_excluded_via_TEST_PATH_GLOBS() -> None:
 
 
 def test_exclude_globs_are_not_scored() -> None:
-    report = _report({"eval_tasks/t1/setup/app.py": {1: 0}, "src/a.py": {1: 0}})
-    changed = {"eval_tasks/t1/setup/app.py": frozenset({1}), "src/a.py": frozenset({1})}
+    report = _report({"eval_samples/t1/setup/app.py": {1: 0}, "src/a.py": {1: 0}})
+    changed = {"eval_samples/t1/setup/app.py": frozenset({1}), "src/a.py": frozenset({1})}
 
     result = changed_line_coverage(
-        changed, report, root=_ROOT, exclude=("**/eval_tasks/*/setup/**",)
+        changed, report, root=_ROOT, exclude=("**/eval_samples/*/setup/**",)
     )
 
     assert [item.path for item in result.files] == ["src/a.py"]
@@ -155,7 +155,7 @@ def _handle(
 
 
 def _ctx(handle: FakeProjectHandle, git: FakeGitRunner) -> EvalContext:
-    setup = ToolSetup(git=git.factory, timeout_s=3.0, exclude=("**/eval_tasks/*/setup/**",))
+    setup = ToolSetup(git=git.factory, timeout_s=3.0, exclude=("**/eval_samples/*/setup/**",))
     return EvalContext(module=None, source="", label="suite", project=handle, tool_setup=setup)
 
 
@@ -188,7 +188,7 @@ def test_handle_without_diff_base_yields_empty_so_kind_new(tmp_path: Path) -> No
 
 def test_only_test_or_excluded_changes_never_run_the_suite(tmp_path: Path) -> None:
     diff = _diff("tests/test_a.py", "@@ -0,0 +1 @@") + _diff(
-        "eval_tasks/t/setup/app.py", "@@ -0,0 +1 @@"
+        "eval_samples/t/setup/app.py", "@@ -0,0 +1 @@"
     )
     handle = _handle(tmp_path, "HEAD")
 

@@ -4,8 +4,9 @@ The canonical dataclasses accept any value for their open-dict fields (YAML
 gives no types), so ``playbook validate`` is where an author learns that a
 field is malformed: each finding names the field, the offending value and the
 expected shape. Kept apart from ``checks`` for its file-size budget:
-``PromptFrontmatter.write_scope`` (§E.3) and ``RuleFrontmatter.lint_codes``
-(specs/prK-lifecycle-hooks.md §A.7).
+``PromptFrontmatter.write_scope`` (§E.3), ``RuleFrontmatter.lint_codes``
+(specs/prK-lifecycle-hooks.md §A.7) and the rule's ``scope``, ``priority`` and
+``section`` (prU D21).
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ __all__ = [
     "LINT_CODES_SHAPE",
     "WRITE_SCOPE_SHAPE",
     "check_lint_codes",
+    "check_rule_shape",
     "check_write_scope",
     "lint_codes_problems",
     "write_scope_problem",
@@ -187,3 +189,45 @@ def _predicate_problems(
             check_predicate({key: value})
         except ValueError as exc:
             yield f"{where}: {exc}"
+
+
+# --- RuleFrontmatter.scope / priority / section (prU D21) -----------------------------------
+
+_RULE_SCOPES: Final = ("always", "scoped")
+#: Lowercase words joined by single hyphens, as ``section`` ids are (``error-handling``).
+_KEBAB_CASE: Final = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+
+
+def check_rule_shape(rules: Sequence[Rule]) -> list[ValidationError]:
+    """One error per malformed ``scope``, ``priority`` or ``section``; ``[]`` when all are valid.
+
+    YAML gives no types, so a typo'd scope would otherwise load as an
+    always-loaded rule in some adapters, and a string or out-of-range priority
+    breaks the sort and Continue's ``{priority:02d}`` file name.
+
+    Example::
+
+        >>> check_rule_shape([])
+        []
+    """
+    errors: list[ValidationError] = []
+    for rule in rules:
+        where = str(rule.source_path or rule.frontmatter.id)
+        errors.extend(
+            ValidationError(path=where, message=problem) for problem in _rule_shape_problems(rule)
+        )
+    return errors
+
+
+def _rule_shape_problems(rule: Rule) -> Iterator[str]:
+    frontmatter = rule.frontmatter
+    scope: object = frontmatter.scope
+    if scope not in _RULE_SCOPES:
+        yield f"scope: expected 'always' or 'scoped', got {scope!r}"
+    priority: object = frontmatter.priority
+    # bool is an int subclass, so ``priority: true`` would pass as 1 without the first test.
+    if isinstance(priority, bool) or not isinstance(priority, int) or priority not in range(100):
+        yield f"priority: expected an int in 0-99, got {priority!r}"
+    section: object = frontmatter.section
+    if section is not None and not (isinstance(section, str) and _KEBAB_CASE.fullmatch(section)):
+        yield f"section: expected a kebab-case string (e.g. 'error-handling'), got {section!r}"

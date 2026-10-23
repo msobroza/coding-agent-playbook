@@ -1,8 +1,9 @@
 """The ``facts`` and ``applicability`` tables of ``guard_config.json`` (specs/prK-hook-pack.md §E.0.5, §E.1).
 
-- ``facts``: the detector's dependency names (runtime and dev groups) and the
-  presence flags (``has_dockerfile``, ``has_ci``, ``has_notebooks``), the
-  subset of ``detect()`` a mid-session edit can change, plus the detected
+- ``facts``: the detector's dependency names (runtime and dev groups) and its
+  boolean facts (``detector.facts.DETECTED_BOOL_FACTS``: the presence flags,
+  ``domino_project``, ``playbook_layer``), the subset of ``detect()`` a
+  mid-session edit can change, plus the detected
   ``package_manager`` (dependency-allowlist-guard, §E.4);
 - ``applicability``: the rows of ``inputs.applicability_rows``, sorted.
 
@@ -13,7 +14,9 @@ resync-on-detector-input-change decides from these, so its cheap path is one
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any
+
+from coding_agent_playbook.detector.facts import DETECTED_BOOL_FACTS
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -21,8 +24,6 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hooks.guard_config.inputs import ApplicabilityRow
 
 __all__ = ["applicability_table", "facts_table"]
-
-_FLAGS: Final = ("has_ci", "has_dockerfile", "has_notebooks")
 
 
 def facts_table(facts: Mapping[str, Any]) -> dict[str, Any]:
@@ -37,7 +38,7 @@ def facts_table(facts: Mapping[str, Any]) -> dict[str, Any]:
         "dependencies": sorted(facts.get("dependencies", {})),
         "dev_dependencies": sorted(facts.get("dev_dependencies", {})),
     }
-    table.update({flag: bool(facts.get(flag, False)) for flag in _FLAGS})
+    table.update({flag: bool(facts.get(flag, False)) for flag in sorted(DETECTED_BOOL_FACTS)})
     manager = facts.get("package_manager")
     if isinstance(manager, str):  # dependency-allowlist-guard's tier (a), §E.4
         table["package_manager"] = manager

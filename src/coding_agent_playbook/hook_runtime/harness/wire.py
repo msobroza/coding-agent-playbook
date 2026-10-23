@@ -85,7 +85,7 @@ class WireOutput:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ForeignPayload:
-    """A payload another harness sent: exit 0 with no output, logged once per session.
+    """A payload another harness sent: exit 0 with no output, one ``ignored`` line per session.
 
     ``marker`` names the heuristic that fired (``event_mismatch``,
     ``missing_session_id``, ``foreign_marker:<key>``, ``timestamp``,

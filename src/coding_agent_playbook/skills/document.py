@@ -2,8 +2,8 @@
 
 A skill with member rules (ADR 0001) is emitted with text the engine generates:
 a composed description (capability sentence, a "Covers ..." clause naming the
-active members, then "Use when ..."), a ``## References`` index appended to the
-authored body, one ``references/<rule-id>.md`` file per member, and the
+active members, then "Use when ..."), a ``## Rules`` index appended to the
+authored body, one ``rules/<rule-id>.md`` file per member (ADR 0005), and the
 ``## Where guidance lives`` section of the always-loaded files. One module
 renders all of it, so the skill roots and the two composite files cannot drift.
 
@@ -11,16 +11,33 @@ The authoring data lives in the skill's catalog-only ``playbook:`` block
 (``use_when``, ``files``), which the emitted frontmatter never carries (E1).
 Members are taken in the order given: ``compose_skills`` sorts them by
 ``(priority, id)``, so the highest-priority members come first everywhere.
+
+A skill that declares ``playbook.sections`` (prU D17) is composed differently:
+its Covers clause names its active sections, never truncated, and its body
+gets the sectioned navigation of ``skills._rules_index``; a sectionless skill
+renders exactly as before.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
-from coding_agent_playbook.artifacts.member_reference import member_reference_path
+from coding_agent_playbook.artifacts.member_reference import RULES_DIR, member_reference_path
+from coding_agent_playbook.skills._rules_index import (
+    HOW_TO_USE_BLOCK,
+    RULES_HEADING,
+    RULES_LEAD,
+    active_sections,
+    one_line,
+    references_section,
+    section_label,
+    sectioned_navigation,
+)
+from coding_agent_playbook.skills.capabilities import CAPABILITIES_KEY
 from coding_agent_playbook.skills.naming import skill_id_of
+from coding_agent_playbook.skills.playbook_block import PLAYBOOK_BLOCK_KEY, playbook_block
+from coding_agent_playbook.skills.sections import skill_sections
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -31,21 +48,18 @@ if TYPE_CHECKING:
 #: The composed description's ceiling (D4), held by construction (D21).
 DESCRIPTION_MAX_CHARS: Final = 300
 
-#: The catalog-only frontmatter key of a skill with member rules; stripped on output (E1).
-PLAYBOOK_BLOCK_KEY: Final = "playbook"
+#: Frontmatter keys only the engine reads, never written to an emitted ``SKILL.md``.
+_ENGINE_OWNED_KEYS: Final = frozenset({PLAYBOOK_BLOCK_KEY, CAPABILITIES_KEY})
 
 _SENTENCE_ENDINGS: Final = (".", "!", "?")
-
-_REFERENCES_HEADING: Final = "## References"
-_REFERENCES_LEAD: Final = "Each reference is one rule. Open only the ones the current task needs."
 
 _WHERE_HEADING: Final = "## Where guidance lives"
 _WHERE_LEAD: Final = (
     "Detailed conventions live in skills. Before you edit one of these files, load its "
-    "skill and open the references its index lists."
+    "skill and open the rules its index lists."
 )
 _WHERE_LINT_LINE: Final = (
-    "Lint feedback names a rule id; that rule's reference in the skill has the fix."
+    f"Lint feedback names a rule id; that rule's file in the skill's {RULES_DIR}/ has the fix."
 )
 #: The separator that ends every section of the composite files (rendering/formats.py rule sections).
 _SECTION_END: Final = "---"
@@ -63,13 +77,18 @@ class DescriptionOverflowError(ValueError):
             print(exc.length, exc.text)
     """
 
-    def __init__(self, text: str) -> None:
+    def __init__(self, text: str, *, sectioned: bool = False) -> None:
         self.text = text
         self.length = len(text)
+        covers, names = (
+            ("with the Covers clause naming its sections", "the section titles")
+            if sectioned
+            else ("even when the Covers clause names one member", "the member names")
+        )
         super().__init__(
             f"the composed description is {self.length} chars, over the "
-            f"{DESCRIPTION_MAX_CHARS}-char limit even when the Covers clause names one "
-            f"member: {text!r}; shorten 'description', 'playbook.use_when' or the member names"
+            f"{DESCRIPTION_MAX_CHARS}-char limit {covers}: "
+            f"{text!r}; shorten 'description', 'playbook.use_when' or {names}"
         )
 
 
@@ -103,9 +122,7 @@ def skill_catalog_block(skill: Skill) -> SkillCatalogBlock:
 
     Example: ``skill_catalog_block(python_coding).files`` -> ``"Any Python file"``.
     """
-    block = skill.frontmatter.get(PLAYBOOK_BLOCK_KEY)
-    if not isinstance(block, Mapping):
-        return SkillCatalogBlock(use_when=None, files=None)
+    block = playbook_block(skill)
     return SkillCatalogBlock(
         use_when=_catalog_phrase(block.get("use_when")),
         files=_catalog_phrase(block.get("files")),
@@ -191,52 +208,123 @@ def worst_case_description(
 
 
 def emitted_frontmatter(skill: Skill) -> dict[str, Any]:
-    """Authored frontmatter minus ``playbook``; ``description`` composed when members exist.
+    """Authored frontmatter minus the engine-owned keys; ``description`` composed when members exist.
 
-    A skill without members keeps every other key and value as authored, so a
-    plugin skill's ``SKILL.md`` stays byte-identical. Always a new mapping.
+    The engine-owned keys are ``playbook`` and a framework skill's
+    ``capabilities`` tags (D77). A skill without members keeps every other key
+    and value as authored. Always a new mapping.
 
-    Example: ``emitted_frontmatter(plugin_skill) == plugin_skill.frontmatter`` -> ``True``.
+    Example: ``"capabilities" in emitted_frontmatter(brainstorming)`` -> ``False``.
     """
-    emitted = {key: value for key, value in skill.frontmatter.items() if key != PLAYBOOK_BLOCK_KEY}
-    if skill.member_references:
-        emitted["description"] = compose_description(
-            str(skill.frontmatter.get("description") or ""),
-            [member.name for member in skill.member_references],
-            skill_catalog_block(skill).use_when,
-        )
+    emitted = {
+        key: value for key, value in skill.frontmatter.items() if key not in _ENGINE_OWNED_KEYS
+    }
+    if not skill.member_references:
+        return emitted
+    description = str(skill.frontmatter.get("description") or "")
+    use_when = skill_catalog_block(skill).use_when
+    sections = skill_sections(skill)
+    if sections:
+        titles = [s.title for s in active_sections(skill.member_references, sections)]
+        emitted["description"] = compose_sectioned_description(description, titles, use_when)
+    else:
+        names = [member.name for member in skill.member_references]
+        emitted["description"] = compose_description(description, names, use_when)
     return emitted
 
 
+def sectioned_description(
+    description: str, section_titles: Sequence[str], use_when: str | None
+) -> str:
+    """A sectioned skill's description: Covers names every title given, never truncated (D17).
+
+    Titles are labelled by D46.7 (``"Test Structure"`` -> ``"test structure"``,
+    ``"FastAPI wiring"`` kept); no titles, no Covers clause. Its length is not
+    checked here: V11 measures it over every declared section, and
+    :func:`compose_sectioned_description` refuses an overflow.
+
+    Example::
+
+        sectioned_description("Test conventions.", ["Mocking", "FastAPI wiring"], "editing tests")
+        # 'Test conventions. Covers mocking, FastAPI wiring. Use when editing tests.'
+    """
+    labels = [section_label(_label(title)) for title in section_titles]
+    covers = f"Covers {', '.join(labels)}." if labels else ""
+    return _joined(description, covers, use_when)
+
+
+def compose_sectioned_description(
+    description: str, section_titles: Sequence[str], use_when: str | None
+) -> str:
+    """:func:`sectioned_description`, or :class:`DescriptionOverflowError` over the limit.
+
+    Example: ``compose_sectioned_description("X.", ["Mocking"], None)`` -> ``"X. Covers mocking."``.
+    """
+    text = sectioned_description(description, section_titles, use_when)
+    if len(text) > DESCRIPTION_MAX_CHARS:
+        raise DescriptionOverflowError(text, sectioned=True)
+    return text
+
+
 def emitted_body(skill: Skill) -> str:
-    """Authored body, plus the ``## References`` index when members exist.
+    """Authored body, plus the generated navigation when members exist.
+
+    A skill that declares sections gets the "How to use this skill" paragraph,
+    the index grouped by section and its listed references (``skills._rules_index``);
+    any other skill the flat ``## Rules`` index, then its listed references if any.
 
     Example: ``emitted_body(python_coding).endswith("Typing: Prefer ...\\n")`` -> ``True``.
     """
     if not skill.member_references:
         return skill.body
+    sections = skill_sections(skill)
+    if sections:
+        generated = sectioned_navigation(skill.member_references, sections, skill.listed_references)
+    else:
+        parts = (rules_index(skill.member_references), references_section(skill.listed_references))
+        generated = "\n".join(part for part in parts if part)
     authored = skill.body.rstrip()
-    index = references_index(skill.member_references)
-    return f"{authored}\n\n{index}" if authored else index
+    return f"{authored}\n\n{generated}" if authored else generated
 
 
-def references_index(members: Sequence[MemberReference]) -> str:
-    """The ``## References`` section: one line per member, in the order given.
+def strip_rules_index(body: str) -> str:
+    """``body`` without the trailing navigation :func:`emitted_body` appended.
 
-    Each line is ``- [<rule-id>](references/<rule-id>.md) — <name>: <description>``:
+    The inverse an importer needs when only the emitted ``SKILL.md`` is left (no
+    sidecar keeps the authored body): the navigation is recognised by its fixed
+    opening, the "How to use this skill" paragraph of a sectioned skill or the
+    ``## Rules`` heading and lead line of a sectionless one, and everything from
+    it to the end is dropped, so the next sync appends it exactly once again. A
+    body without the navigation is returned unchanged.
+
+    Example: ``strip_rules_index(emitted_body(skill))`` -> ``skill.body.rstrip() + "\n"``.
+    """
+    for marker in (HOW_TO_USE_BLOCK, f"{RULES_HEADING}\n\n{RULES_LEAD}\n"):
+        if body.startswith(marker):
+            return ""
+        cut = body.rfind(f"\n\n{marker}")
+        if cut != -1:
+            return body[:cut] + "\n"
+    return body
+
+
+def rules_index(members: Sequence[MemberReference]) -> str:
+    """The flat ``## Rules`` section of a sectionless skill: one line per member, in order.
+
+    Each line is ``- [<rule-id>](rules/<rule-id>.md) — <name>: <description>``:
     the link text is the rule id because lint feedback names rule ids (D16).
     ``""`` without members.
 
-    Example: ``references_index(members).splitlines()[0]`` -> ``"## References"``.
+    Example: ``rules_index(members).splitlines()[0]`` -> ``"## Rules"``.
     """
     if not members:
         return ""
     lines = [_index_line(member) for member in members]
-    return "\n".join([_REFERENCES_HEADING, "", _REFERENCES_LEAD, "", *lines, ""])
+    return "\n".join([RULES_HEADING, "", RULES_LEAD, "", *lines, ""])
 
 
 def render_member_reference(rule_id: str, globs: Sequence[str], body: str) -> str:
-    """The text of ``references/<rule_id>.md``: one italic rule line, a blank line, the body.
+    """The text of ``rules/<rule_id>.md``: one italic rule line, a blank line, the body.
 
     The body is the rule's rendered body unchanged, minus the blank lines that
     separate it from its frontmatter; the file ends with one newline. The globs
@@ -278,7 +366,7 @@ def where_guidance_section(entries: Sequence[WhereEntry]) -> str:
 
 def _index_line(member: MemberReference) -> str:
     link = f"[{member.rule_id}]({member_reference_path(member.rule_id)})"
-    return f"- {link} — {_one_line(member.name)}: {_one_line(member.description)}"
+    return f"- {link} — {one_line(member.name)}: {one_line(member.description)}"
 
 
 def _rule_line(rule_id: str, globs: Sequence[str]) -> str:
@@ -307,7 +395,7 @@ def _joined(description: str, covers: str, use_when: str | None) -> str:
 
 def _sentence(text: str) -> str:
     """``text`` on one line, ending with ``.`` unless it already ends a sentence."""
-    flat = _one_line(text)
+    flat = one_line(text)
     if not flat or flat.endswith(_SENTENCE_ENDINGS):
         return flat
     return f"{flat}."
@@ -315,12 +403,7 @@ def _sentence(text: str) -> str:
 
 def _label(name: str) -> str:
     """A member name as the Covers clause shows it: one line, no trailing ``.``."""
-    return _one_line(name).removesuffix(".")
-
-
-def _one_line(text: str) -> str:
-    """``text`` with every whitespace run, newlines included, collapsed to one space."""
-    return " ".join(text.split())
+    return one_line(name).removesuffix(".")
 
 
 def _catalog_phrase(value: object) -> str | None:

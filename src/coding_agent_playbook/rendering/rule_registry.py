@@ -94,7 +94,7 @@ class RuleRegistryImpl:
         already in always-loaded context).
 
         Example: ``registry.reference_for("pytest")`` ->
-        ``SkillReference("python-testing", "references/pytest.md")``.
+        ``SkillReference("python-testing", "rules/pytest.md")``.
         """
         rule = self._by_id.get(rule_id)
         return None if rule is None else skill_reference_of(rule)
@@ -108,7 +108,7 @@ def skill_reference_of(rule: Rule) -> SkillReference | None:
     :meth:`RuleRegistryImpl.reference_for` and ``playbook render --show-rules`` share.
 
     Example: ``skill_reference_of(pytest_rule)`` ->
-    ``SkillReference("python-testing", "references/pytest.md")``.
+    ``SkillReference("python-testing", "rules/pytest.md")``.
     """
     frontmatter = rule.frontmatter
     if frontmatter.scope != "scoped" or frontmatter.skill is None:

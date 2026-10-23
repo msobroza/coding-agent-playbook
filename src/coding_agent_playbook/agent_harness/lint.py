@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.agent_harness.models import ContentFile, SkillLeaf
+from coding_agent_playbook.agent_harness.models import ContentFile, RawAsset, SkillLeaf
 
 if TYPE_CHECKING:
     from coding_agent_playbook.agent_harness.models import HarnessDirectory, HarnessTree
@@ -43,7 +43,8 @@ class HarnessFindings:
 
 
 def lint_harness(tree: HarnessTree) -> HarnessFindings:
-    """Skill leaves without name or description are errors; missing routing files and
+    """Skill leaves without name or description, or with a non-markdown file in their
+    ``rules/``, are errors; missing routing files and
     undescribed content are warnings; opaque ``.harnessleaf`` directories are never inspected.
 
     Example: ``lint_harness(parse_harness(Path("build/harness"))).errors == ()``.
@@ -68,13 +69,26 @@ def _check_skill_leaves(directory: HarnessDirectory, errors: list[HarnessFinding
 
 
 def _skill_leaf_errors(leaf: SkillLeaf) -> list[HarnessFinding]:
-    """One error per empty ``name`` / ``description`` field, in that order."""
+    """One error per empty ``name`` / ``description`` field, then one per non-markdown rule file.
+
+    A skill's ``rules/`` holds its member rules (prU D22): markdown only.
+    """
     fields = {"name": leaf.name, "description": leaf.description}
-    return [
+    empty = [
         HarnessFinding(str(leaf.path), f"skill leaf has empty {field!r}")
         for field, value in fields.items()
         if not value
     ]
+    not_markdown = [
+        HarnessFinding(
+            str(item.path),
+            f"skill rules/ holds a non-markdown file {item.path.name!r}; "
+            "only .md rule files belong there: move it to the skill's references/",
+        )
+        for item in leaf.rules
+        if isinstance(item, RawAsset)
+    ]
+    return [*empty, *not_markdown]
 
 
 def _check_routing_and_content(directory: HarnessDirectory, warnings: list[HarnessFinding]) -> None:

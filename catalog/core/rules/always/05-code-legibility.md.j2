@@ -1,0 +1,20 @@
+---
+id: code-legibility
+name: Code legibility
+description: Eight language-neutral principles that keep code easy to read and safe to change, each pointing to the skill rule with the detail.
+version: 1
+scope: always
+priority: 5
+tags: [always, style]
+---
+
+Where a line names a skill and rule, that rule holds the detail.
+
+- Keep units small: functions of about 4-20 lines, files under about 500{% if rule_active('python-small-units') %} (`python-coding` -> `python-small-units`){% endif %}.
+- Give each module one reason to change, so a concern is edited in one place{% if rule_active('design-single-responsibility') %} (`design-patterns` -> `design-single-responsibility`){% endif %}.
+- Keep nesting shallow, about two levels: return early, one level of abstraction per function{% if rule_active('python-early-return') %} (`python-coding` -> `python-early-return`){% endif %}.
+- Raise errors that carry the offending value and the expected shape{% if rule_active('python-error-messages-with-context') %} (`python-coding` -> `python-error-messages-with-context`){% endif %}.
+- Use distinctive, searchable names: a search should find mostly that concept{% if rule_active('python-meaningful-names') %} (`python-coding` -> `python-meaningful-names`){% endif %}.
+- Give each piece of logic one home: a change to a duplicate fixes one copy and misses the rest{% if rule_active('design-dry-yagni-kiss') %} (`design-patterns` -> `design-dry-yagni-kiss`){% endif %}.
+- Keep the tree predictable: follow the framework's conventions and the repo's one layout axis (layer-first or feature-first), never both{% if rule_active('arch-predictable-project-tree') %} (`python-architecture` -> `arch-predictable-project-tree`){% endif %}.
+- Write F.I.R.S.T unit tests (fast, independent, repeatable, self-validating, timely), run headless by one documented command{% if rule_active('pytest-first-properties') %} (`python-testing` -> `pytest-first-properties`){% endif %}.

@@ -248,7 +248,7 @@ def test_skill_write_provenance_gives_member_references_their_rules_provenance(
     skill_md, guide, typing_ref = (
         skill_dir / "SKILL.md",
         skill_dir / "references" / "guide.md",
-        skill_dir / "references" / "python-typing.md",
+        skill_dir / "rules" / "python-typing.md",
     )
 
     groups = _skill_write_provenance(
@@ -270,10 +270,11 @@ def test_skill_write_provenance_gives_member_references_their_rules_provenance(
 @pytest.mark.parametrize(
     "rel",
     [
-        "python-coding/scripts/python-typing.md",  # not under references/
-        "python-coding/references/deep/python-typing.md",  # not one level deep
-        "other-skill/references/python-typing.md",  # another skill's directory
-        "python-coding/references/python-idioms.md",  # not a member's name
+        "python-coding/scripts/python-typing.md",  # not under rules/
+        "python-coding/references/python-typing.md",  # a hand-written reference (prU D5)
+        "python-coding/rules/deep/python-typing.md",  # not one level deep
+        "other-skill/rules/python-typing.md",  # another skill's directory
+        "python-coding/rules/python-idioms.md",  # not a member's name
     ],
 )
 def test_skill_write_provenance_keeps_skill_provenance_off_a_members_path(

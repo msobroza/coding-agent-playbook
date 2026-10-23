@@ -25,14 +25,14 @@ from coding_agent_playbook.grading.scope import CostTier, Determinism
 from coding_agent_playbook.grading.types import CheckResult, EvalContext
 
 
-def _ctx(judge: StubJudge | None = None, *, samples: int = 1) -> EvalContext:
+def _ctx(judge: StubJudge | None = None, *, judge_samples: int = 1) -> EvalContext:
     return EvalContext(
         module=None,
         source="",
         label="scheduler",
         judge=judge,
         artifact="ART",
-        samples=samples,
+        judge_samples=judge_samples,
     )
 
 

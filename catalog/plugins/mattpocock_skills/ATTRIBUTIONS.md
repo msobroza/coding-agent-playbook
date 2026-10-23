@@ -81,6 +81,13 @@ change from the upstream text listed in this file.
 - Every other key stays verbatim (`description`, `disable-model-invocation`,
   `argument-hint`, `metadata`), except pr-body's `metadata.credits.url` line,
   which is deleted (see "No external URLs").
+- Seven skills gain one engine-owned line, `capabilities: [<role>]`, as their
+  last frontmatter key: grill-me (`clarify`), grill-with-docs
+  (`clarify_with_docs`), to-spec (`spec`), to-tickets (`plan`), tdd (`tdd`),
+  diagnosing-bugs (`debug`) and two-axis-review (`review`). The engine reads
+  it to map the framework's roles and never writes it to the synced copies.
+  `framework.toml` at the plugin root marks the plugin as a spec-driven
+  framework named `mattpocock`.
 - No skill gets a `playbook:` block, so none is a rule skill, and no file in the
   plugin is a `.j2` template.
 - Descriptions are verbatim except two, each listed in its skill's section:
@@ -270,7 +277,13 @@ These are paths inside the consumer repo, not dependencies:
 
 - `docs/agents/issue-tracker.md`, `docs/agents/triage-labels.md` and
   `docs/agents/domain.md`, written by setup-matt-pocock-skills.
-- `.scratch/<slug>/`: the local tracker's files, untracked working state that is
+- `docs/specs/YYYY-MM-DD-<slug>.md` for the local tracker's specs, and
+  `docs/plans/` for its maps (`docs/plans/YYYY-MM-DD-<slug>.md`) and tickets
+  (`docs/plans/YYYY-MM-DD-<slug>/NN-<slug>.md`): the engine's document layout,
+  which sync rewrites to a repo's own `[layout]` directories. Upstream kept
+  them under `.scratch/<slug>/`; every path edit is listed in its skill's
+  section, tagged (document layout, D60, ADR 0006).
+- `.scratch/`: throwaway prototypes only, untracked working state that is
   never staged in a commit.
 - `GLOSSARY.md` and `GLOSSARY-MAP.md`, or `CONTEXT.md` and `CONTEXT-MAP.md` when
   the repo already has them: every file that names the first pair also names the
@@ -441,6 +454,9 @@ throughout (human-facing, Cross-skill references); only `/clear` and
   kept and always writes the labels file); PHASE-BOUNDARIES L29's illustrative
   "(Claude → Codex)" pair. The allowlist has no entry: no word is in command
   position.
+- `SKILL.md`, the `/implement` router line: "one file per ticket under
+  `.scratch/<feature>/issues/`" became "one file per ticket under
+  `docs/plans/YYYY-MM-DD-<feature>/`" (document layout, D60, ADR 0006).
 - Continue: `.continue/prompts/ask-matt.md` holds only the `SKILL.md` body,
   guard line included, which a user-started prompt satisfies. `references/`
   does not travel, so the `references/PHASE-BOUNDARIES.md` link dangles and
@@ -1321,9 +1337,36 @@ lines):
   `out-of-scope`)" (D16).
 - L30 (v1.3.1): appended "Only the session driving the map appends to
   `map.md`; a research subagent writes only its own ticket file." (D16).
+- Path edits (document layout, D60, ADR 0006): the intro "live as markdown
+  files in `.scratch/`" became "in `docs/specs/` and `docs/plans/`"; "One
+  feature per directory: `.scratch/<feature-slug>/`" became "One feature per
+  slug, dated when it is created: `YYYY-MM-DD-<feature-slug>`"; the spec
+  `.scratch/<feature-slug>/spec.md` became
+  `docs/specs/YYYY-MM-DD-<feature-slug>.md`; the tickets
+  `.scratch/<feature-slug>/issues/<NN>-<slug>.md` became
+  `docs/plans/YYYY-MM-DD-<feature-slug>/<NN>-<slug>.md`; the added
+  `.scratch/` line now reads "holds only throwaway prototypes, never a spec,
+  ticket or map: never stage it in a commit"; the publish section's "Create a
+  new file under `.scratch/<feature-slug>/`" became "Create the spec at
+  `docs/specs/YYYY-MM-DD-<feature-slug>.md`, or a ticket under
+  `docs/plans/YYYY-MM-DD-<feature-slug>/`"; the Wayfinding map
+  `.scratch/<effort>/map.md` became `docs/plans/YYYY-MM-DD-<effort>.md`, its
+  child tickets and frontier `.scratch/<effort>/issues/` became
+  `docs/plans/YYYY-MM-DD-<effort>/`, and "in `map.md`" became "in the map
+  file" (twice).
 - L10's code span `triage-labels.md` is not a link and stays; it names the
   consumer's `docs/agents/triage-labels.md`, which Section B now always writes.
 - The `prototype` ticket type at L26 is not a skill id and stays (D8).
+
+Path edits in `SKILL.md` (document layout, D60, ADR 0006):
+
+- Step 1's "`.scratch/`: a sign that a local-markdown issue tracker
+  convention is already in use" names `docs/specs/` and `docs/plans/`
+  instead.
+- Section A's explainer "write a markdown file under `.scratch/`" became
+  "under `docs/specs/` or `docs/plans/`", and its Local markdown option
+  "files under `.scratch/<feature>/`" became "files under
+  `docs/plans/YYYY-MM-DD-<feature>/`".
 
 Other files:
 
@@ -1360,10 +1403,11 @@ Other files:
 Continue: `.continue/prompts/setup-matt-pocock-skills.md` holds only the body,
 guard line included. `references/` does not travel, so the three seed links
 dangle and the agent writes `docs/agents/*.md` from the prose alone, without the
-seeds' forge operations, close, blocking and Wayfinding operations conventions, the `.scratch/`
-and absolute-path rules, the domain-doc consumer rules and the label table. No
-licence copy travels and `disable-model-invocation` is dropped, but a Continue
-prompt is always started by the user. The always rule still reaches Continue as
+seeds' forge operations, close, blocking and Wayfinding operations conventions,
+the document layout paths, the `.scratch/` and absolute-path rules, the
+domain-doc consumer rules and the label table. No licence copy travels and
+`disable-model-invocation` is dropped, but a Continue prompt is always started
+by the user. The always rule still reaches Continue as
 its own `.continue/rules/` file.
 
 ### tdd
@@ -1618,6 +1662,10 @@ Upstream `skills/engineering/to-tickets/`; synced as
 - `SKILL.md` L60 (v1.3.1): "the tracker `/setup-matt-pocock-skills`
   configured" became "the tracker `setup-matt-pocock-skills` configured": this
   is agent-facing process prose, not a "tell the user to run" line (D17).
+- `SKILL.md` L62 (v1.3.1): the local branch's
+  `.scratch/<feature-slug>/issues/<NN>-<slug>.md` became
+  `docs/plans/YYYY-MM-DD-<feature-slug>/<NN>-<slug>.md`, matching the shipped
+  seed (document layout, D60, ADR 0006).
 - `SKILL.md` L63 (v1.3.1): "(GitHub, Linear, …)" became "(a forge's issues,
   Linear, …)", forge-neutral now that setup ships a Forge issues tracker for
   GitHub and GitLab alike (prF F6, Q57).
@@ -1629,9 +1677,9 @@ Upstream `skills/engineering/to-tickets/`; synced as
   line (D19).
 - Kept verbatim on purpose: L11 "If not, tell the user to run
   `/setup-matt-pocock-skills`." (human-facing, D17); L21 names the glossary
-  abstractly (no D21 edit); L62's local branch already matches the shipped
-  seed; L63's native blocking relationship comes from the Blocking section
-  setup records (D13, D14); L65's "blockers are all done" reads as closed under the seed;
+  abstractly (no D21 edit); L63's native blocking relationship comes from the
+  Blocking section setup records (D13, D14); L65's "blockers are all done" reads
+  as closed under the seed;
   L71's `# <NN>: <Ticket title>` already is the title heading and L77's
   `**Status:** ready-for-agent` is the bold line the seed's close section
   rewrites in place (D16); L105's "a prototype" is a common noun (D8); L17's
@@ -1674,6 +1722,9 @@ Vendored with listed changes, model-invoked.
   D18.6). The other sub-agent sentences (L23, L32, L60, L63, L66, L72) stay
   verbatim; step 2 is not changed.
 - `SKILL.md` L29 (v1.3.1): the "GitLab `!67`" example stays verbatim (D18.7).
+- `SKILL.md` L33 (v1.3.1): "A spec file under `docs/`, `specs/`, or
+  `.scratch/`" became "A spec file under `docs/specs/`, `docs/`, or
+  `specs/`" (document layout, D60, ADR 0006).
 - `SKILL.md` L13 (v1.3.1): "tell the user to run `/setup-matt-pocock-skills`"
   keeps the slash (D17); the plugin always rule makes "The issue tracker should
   have been provided to you" true.
@@ -1753,7 +1804,8 @@ so nothing moves and no link is rewritten.
   is appended; charting still hand-resolves nothing (L116) (D17, D18.4).
 - `SKILL.md` L120 (v1.3.1): "a map (URL or number)" becomes "a map (URL,
   number, or path)": on the local markdown tracker, the default and only one
-  shipped, a map is the file `.scratch/<effort>/map.md` (D13, D14).
+  shipped, a map is the file `docs/plans/YYYY-MM-DD-<effort>.md` (D13, D14;
+  the document layout, D60, ADR 0006).
 - `SKILL.md` L124 (v1.3.1): "call the Skill tool for whichever skills the
   `## Notes` block names. If in doubt, call the Skill tool twice, for
   "grilling" and "domain-modeling"." becomes "load each skill the `## Notes`

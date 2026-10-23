@@ -75,7 +75,7 @@ def _prompt_entry() -> ManifestEntry:
         slash="refactor",
         input_variables=[{"name": "target", "required": True}],
         includes_rules=["python-house-style"],
-        eval_tasks=["refactor-001"],
+        eval_samples=["refactor-001"],
         applies_if={},
         version=3,
     )
@@ -98,7 +98,7 @@ def _skill_entry() -> ManifestEntry:
 
 def _eval_entry() -> ManifestEntry:
     return ManifestEntry(
-        kind="eval_task",
+        kind="eval_sample",
         path="evals/refactor-001.toml",
         id="refactor-001",
     )
@@ -235,7 +235,7 @@ def test_roundtrip_skill_with_scripts(tmp_path: Path) -> None:
     assert entry.scripts[1].executable is False
 
 
-def test_roundtrip_eval_task(tmp_path: Path) -> None:
+def test_roundtrip_eval_sample(tmp_path: Path) -> None:
     write_manifest(tmp_path, [_eval_entry()])
     manifest = read_manifest(tmp_path)
     assert manifest is not None
@@ -423,7 +423,7 @@ _GOLDEN_MANIFEST = (
     "version = 3\n"
     'input_variables = [{ name = "target", required = true }]\n'
     'includes_rules = ["python-house-style"]\n'
-    'eval_tasks = ["refactor-001"]\n'
+    'eval_samples = ["refactor-001"]\n'
     "applies_if = {}\n"
     "\n"
     "[[artifact]]\n"
@@ -443,7 +443,7 @@ _GOLDEN_MANIFEST = (
     "executable = false\n"
     "\n"
     "[[artifact]]\n"
-    'kind = "eval_task"\n'
+    'kind = "eval_sample"\n'
     'path = "evals/refactor-001.toml"\n'
     'id = "refactor-001"\n'
 )
@@ -475,7 +475,7 @@ def test_manifest_bytes_are_unchanged_by_the_shared_toml_primitives(tmp_path: Pa
             slash="refactor",
             input_variables=[{"name": "target", "required": True}],
             includes_rules=["python-house-style"],
-            eval_tasks=["refactor-001"],
+            eval_samples=["refactor-001"],
             applies_if={},
             version=3,
         ),
@@ -491,7 +491,7 @@ def test_manifest_bytes_are_unchanged_by_the_shared_toml_primitives(tmp_path: Pa
                 ScriptEntry(path="skills/query-database/scripts/_db.py", executable=False),
             ],
         ),
-        ManifestEntry(kind="eval_task", path="evals/refactor-001.toml", id="refactor-001"),
+        ManifestEntry(kind="eval_sample", path="evals/refactor-001.toml", id="refactor-001"),
     ]
     written = write_manifest(tmp_path, entries)
     assert written.read_text(encoding="utf-8") == _GOLDEN_MANIFEST

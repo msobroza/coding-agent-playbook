@@ -140,7 +140,11 @@ def _opt_out(repo: Path, *, adapters: tuple[str, ...] = SKILL_ADAPTERS) -> None:
 
 
 def _source_body(skill_id: str) -> str:
-    """The vendored ``SKILL.md`` body (frontmatter stripped) of a pack skill."""
+    """The vendored ``SKILL.md`` body (frontmatter stripped) of a pack skill, as synced.
+
+    The plugin's text already names the default document layout and declares no
+    ``[layout_aliases]`` (D61), so a repo with no ``[layout]`` gets it byte for byte.
+    """
     return split_frontmatter((SKILLS_ROOT / skill_id / "SKILL.md").read_text(encoding="utf-8"))[1]
 
 
@@ -155,10 +159,12 @@ def test_sync_writes_skill_md_faithfully(synced_pack_repo: Path, skill_id: str) 
     source_fm, source_body = split_frontmatter(source.read_text(encoding="utf-8"))
     # The SkillWriter puts ``name`` (= id) first and keeps every other key.
     assert text.startswith(f"---\nname: {skill_id}\n")
-    assert written_fm == source_fm
+    # The engine-owned capabilities tag (D77) is the one key sync never writes.
+    assert written_fm == {k: v for k, v in source_fm.items() if k != "capabilities"}
     assert written_fm["id"] == skill_id
     # Exactly the sentinel line is added; the vendored body after it is
-    # untouched, since the port's whole point is upstream fidelity.
+    # untouched: the source already names the document layout's spec and plan
+    # paths (D61), so a repo with the default layout gets it byte for byte.
     assert written_body.startswith(_SENTINEL_BODY_PREFIX)
     assert written_body.removeprefix(_SENTINEL_BODY_PREFIX) == source_body
 

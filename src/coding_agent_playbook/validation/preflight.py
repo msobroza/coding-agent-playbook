@@ -16,6 +16,9 @@ kept and stays ignored (see ``sync._leftovers``), so nothing is lost or publishe
 
 :func:`unusable_overlays` is the one overlay check every command shares:
 ``sync`` refuses, ``validate`` fails, ``check`` flags, ``init --overlays`` refuses.
+:func:`framework_conflict` is the at-most-one-framework rule (D57), which
+``validate`` (and so the sync gate) enforces; :func:`framework_choice_problems`
+is the usable-framework rule ``init --framework`` and ``validate`` share.
 """
 
 from __future__ import annotations
@@ -37,6 +40,11 @@ from coding_agent_playbook.catalog.roots import (
 
 # Re-exported: the preflight's callers and tests list the bundled plugins from here.
 from coding_agent_playbook.catalog.roots import bundled_plugins as bundled_plugins
+from coding_agent_playbook.config.framework import (
+    FRAMEWORK_FILENAME,
+    framework_layers,
+    framework_package,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
@@ -105,6 +113,55 @@ def unusable_overlays(overlays: Sequence[str]) -> list[UnusableOverlay]:
         if reason is not None:
             found.append(UnusableOverlay(name, reason + _plugin_hint(name)))
     return found
+
+
+def framework_conflict(layers: Sequence[str]) -> str | None:
+    """Why ``layers`` (the enabled layer packages) enable more than one framework, else ``None``.
+
+    A framework is a layer shipping ``framework.toml`` (D57); two of them would
+    sync overlapping skills and two role maps, so validate (and with it the
+    sync gate) refuses the pair, naming both.
+
+    Example::
+
+        >>> framework_conflict(["coding_agent_playbook.plugins.superpowers"]) is None
+        True
+    """
+    frameworks = framework_layers(layers)
+    if len(frameworks) < 2:
+        return None
+    return (
+        f"{len(frameworks)} frameworks are enabled together: {', '.join(frameworks)}; "
+        "enable one with the framework key and remove the others from overlays_enabled"
+    )
+
+
+def framework_choice_problems(choice: str | None) -> list[str]:
+    """Why ``choice`` (a ``framework`` value) names no usable framework; ``[]`` when it does.
+
+    The one usability rule ``init --framework`` refuses and ``validate`` fails
+    on (D57): the layer ``choice`` resolves to must pass :func:`unusable_overlays`
+    and ship ``framework.toml``. ``None`` (no choice) and ``none`` pass.
+
+    Example::
+
+        >>> framework_choice_problems("superpowers")
+        []
+        >>> framework_choice_problems("coding_agent_playbook")  # doctest: +ELLIPSIS
+        ['coding_agent_playbook ships no framework.toml, so it is not a framework; ...']
+    """
+    package = None if choice is None else framework_package(choice)
+    if package is None:
+        return []
+    unusable = unusable_overlays([package])
+    if unusable:
+        return [str(problem) for problem in unusable]
+    if framework_layers([package]):
+        return []
+    return [
+        f"{package} ships no {FRAMEWORK_FILENAME}, so it is not a framework; "
+        "list an add-on in overlays_enabled instead"
+    ]
 
 
 def missing_adapters(enabled: Iterable[str], discovered: Iterable[str]) -> list[str]:

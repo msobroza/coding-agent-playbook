@@ -53,6 +53,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
     from coding_agent_playbook.lockfile.model import ProvenanceKind
     from coding_agent_playbook.sync._hook_outputs import SyncHooks
+    from coding_agent_playbook.sync._layout_outputs import FileRewrite
 
 #: 2 = provenance on every entry (specs/prK-lifecycle-hooks.md §P P4, §B.6).
 LOCKFILE_SCHEMA = 2
@@ -101,6 +102,8 @@ class ProvenanceRecorder:
     written: list[Path] = field(default_factory=list)
     provenance: dict[Path, Provenance] = field(default_factory=dict)
     managed: list[LockEntry] = field(default_factory=list)
+    # What the layout adapter rewrote in ``written`` (D71), for validate's report.
+    layout_rewrites: list[FileRewrite] = field(default_factory=list)
 
     def record(self, paths: Iterable[Path], provenance: Provenance) -> None:
         """Append ``paths`` and tag each (resolved) path with ``provenance``."""
@@ -244,15 +247,15 @@ def _skill_write_provenance(
 ) -> list[tuple[list[Path], Provenance]]:
     """Split ``write_skill``'s paths: member references carry their rule's provenance (E9).
 
-    ``<skill-id>/references/<rule-id>.md`` for a rule in ``skill.member_references``
+    ``<skill-id>/rules/<rule-id>.md`` for a rule in ``skill.member_references``
     is recorded as ``kind = "rule"`` with that rule's id and source package, so
     guard-generated-outputs tells an editor to override the rule, the file's
     real source (specs/prS-skills-context.md section 6.4.11); every other path
-    keeps the skill's provenance. Validation keeps a hand-written reference from
-    taking a member's name. Example::
+    keeps the skill's provenance. A hand-written ``references/`` file never shares
+    a member's path, which lies under ``rules/`` (prU D5). Example::
 
         groups = _skill_write_provenance(written, python_coding, "claude_code")
-        # [([.../SKILL.md], skill provenance), ([.../references/python-typing.md], rule ...)]
+        # [([.../SKILL.md], skill provenance), ([.../rules/python-typing.md], rule ...)]
     """
     skill_paths: list[Path] = []
     member_groups: list[tuple[list[Path], Provenance]] = []

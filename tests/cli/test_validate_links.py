@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.artifacts.skill import Skill
-    from coding_agent_playbook.evals.task import EvalTask
+    from coding_agent_playbook.evals.sample import EvalSample
     from coding_agent_playbook.validation.findings import ValidationError
 
 pytestmark = pytest.mark.catalog
@@ -163,7 +163,7 @@ class _InMemorySource(ArtifactSource):
     def list_skills(self) -> list[Skill]:
         return []
 
-    def list_eval_tasks(self) -> list[EvalTask]:
+    def list_eval_samples(self) -> list[EvalSample]:
         return []
 
 
@@ -234,7 +234,7 @@ def _plugins_with_link_checked_markdown() -> set[str]:
     Read from the checkout, not from the code under test, so a plugin the gate
     fails to walk shows up as missing. Example::
 
-        _plugins_with_link_checked_markdown()  # {'python_design', 'superpowers'}
+        _plugins_with_link_checked_markdown()  # {'mattpocock_skills', 'superpowers'}
     """
     kind_dirs = [
         (plugin_dir.name, plugin_dir / kind)

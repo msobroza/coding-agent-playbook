@@ -1,0 +1,74 @@
+---
+id: arch-ports
+name: Ports at real seams
+description: "Add a port only at a real seam (a remote system, a fake for rule tests, two implementations); declare it beside its consumer, name it for the role and keep it as narrow as its use."
+version: 1
+scope: scoped
+globs:
+  - "**/*.py"
+section: boundaries
+priority: 42
+tags: [python, architecture, ports]
+---
+
+# Add ports only at real seams, owned by their consumer
+
+## Description
+
+A port is an abstraction a use case declares for a collaborator at a layer boundary. Injection (passing the collaborator in) is almost always worth it for anything that does I/O; inversion (typing it as a port the consumer owns) is worth it only at a seam. That distinction is the design-patterns skill's design-dependency-inversion rule; this rule decides which collaborators get a port.
+
+| Situation | Inject |
+| --- | --- |
+| CRUD over a few tables, no rules beyond validation | the ORM session, with queries in the use case |
+| Business rules you want to test without a database | a narrow repository Protocol declared beside its consumer |
+| A remote system: payments, mail, SMS, object storage, a vendor SDK | a Protocol or `Callable` alias, implemented by an adapter in infrastructure |
+| A single behavior: send a message, read the clock, make an id | a role-named `Callable` alias |
+| Two or more real implementations chosen by configuration | a Protocol |
+| An in-process helper with no I/O | the concrete function or class, imported directly |
+| A working ABC that shares code or is a documented extension point | keep the ABC |
+| A reporting or analytics query | a query function that takes the session |
+
+The port belongs to the consumer, not the implementor. Declare it in the consuming module or its package's `ports.py`, name it after the role (`OverdueLoans`, `SendSms`), and list only the methods that consumer calls. Implementations satisfy it structurally and never import it.
+
+## Bad Example
+
+```python
+class LoanRepositoryBase(ABC):  # one implementation, no fake: indirection without payoff
+    @abstractmethod
+    def due_before(self, day: date) -> list[OverdueLoan]: ...
+
+
+class FormatsReminder(Protocol):  # a port for a pure in-process helper
+    def __call__(self, loan: OverdueLoan) -> str: ...
+```
+
+## Good Example
+
+```python
+# app/application/reminders.py: the consumer declares what it needs
+SendSms = Callable[[str, str], None]  # (phone number, message)
+Clock = Callable[[], datetime]
+
+
+class OverdueLoans(Protocol):
+    def due_before(self, day: date) -> list[OverdueLoan]: ...
+
+
+def send_overdue_reminders(loans: OverdueLoans, send_sms: SendSms, clock: Clock) -> int:
+    overdue = loans.due_before(clock().date())
+    for loan in overdue:
+        send_sms(loan.member_phone, reminder_text(loan))  # a plain in-process helper
+    return len(overdue)
+```
+
+## Notes
+
+- Production passes a SQL-backed `OverdueLoans`, the SMS gateway's bound `send` method and `lambda: datetime.now(timezone.utc)`; a test passes a list-backed fake, a recording function and a fixed time.
+- A remote system's adapter lives in infrastructure (the design-patterns skill's design-adapter rule) and keeps vendor types, timeouts and retries out of business code.
+- `@runtime_checkable` checks only that method names exist, not their signatures: do not dispatch on it.
+- A Protocol with one implementation and no fake in the tests is speculative: use the concrete type until a second implementation or a test needs the seam.
+- FastAPI dependency aliases use concrete `AsyncSession` / `httpx.AsyncClient` at the route edge; Protocols are for the app's own ports.
+- How to write the alias or Protocol is the python-coding skill's python-protocols rule; passing it in is its python-dependency-injection rule.
+{% if has_framework("fastapi") %}
+- Worked example: web-application's hotel example (fastapi-hotel-api), file app/operations/ports.py: ports only for the repositories and the unit of work, declared beside the use cases; the clock and ids stay plain providers.
+{% endif %}

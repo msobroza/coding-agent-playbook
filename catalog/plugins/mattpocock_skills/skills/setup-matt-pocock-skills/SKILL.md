@@ -28,7 +28,7 @@ Look at the current repo to understand its starting state. Read whatever exists;
 - `GLOSSARY.md` (or `CONTEXT.md` if the repo already has one) and `GLOSSARY-MAP.md` (or `CONTEXT-MAP.md` if the repo already has one) at the repo root
 - `docs/adr/` and any `src/*/docs/adr/` directories
 - `docs/agents/`: does this skill's prior output already exist?
-- `.scratch/`: a sign that a local-markdown issue tracker convention is already in use
+- `docs/specs/` and `docs/plans/`: a sign that a local-markdown issue tracker convention is already in use
 - Monorepo signals: a `pnpm-workspace.yaml`, a `workspaces` field in `package.json`, or a populated `packages/*` with its own `src/`. These are present only in a genuinely large multi-package repo; their absence means single-context, which is almost every repo.
 
 ### 2. Present findings and ask
@@ -39,12 +39,12 @@ Lead each section with the recommended answer so the user can accept it in a wor
 
 **Section A: Issue tracker.**
 
-> Explainer: The "issue tracker" is where issues live for this repo. Skills like `to-tickets` and `to-spec` read from and write to it. They need to know whether to open issues on the repo's forge, write a markdown file under `.scratch/`, or follow some other workflow you describe. Pick the place you actually track work for this repo.
+> Explainer: The "issue tracker" is where issues live for this repo. Skills like `to-tickets` and `to-spec` read from and write to it. They need to know whether to open issues on the repo's forge, write a markdown file under `docs/specs/` or `docs/plans/`, or follow some other workflow you describe. Pick the place you actually track work for this repo.
 
 Default posture: when `playbook forge which` found a forge, preselect **Forge issues**, so the user confirms it once; otherwise propose local markdown. A user who tracks work anywhere else picks **Other**. Offer:
 
 - **Forge issues**: issues live in the repo's GitHub or GitLab issues, reached through `playbook forge`, which runs the forge's own CLI with its own login (offered when `playbook forge which` found a forge, and then the default)
-- **Local markdown**: issues live as files under `.scratch/<feature>/` in this repo (the default without a forge; needs no remote or CLI)
+- **Local markdown**: issues live as files under `docs/plans/YYYY-MM-DD-<feature>/` in this repo (the default without a forge; needs no remote or CLI)
 - **Other** (Jira, Linear, etc.): ask the user to describe the workflow for each section of [issue-tracker-local.md](./references/issue-tracker-local.md) after its Conventions: publish, fetch, close, blocking (default: a plain `Blocked by:` line near the top of each ticket) and the Wayfinding operations; the skill will record each answer under that section's heading
 
 Record the choice in `docs/agents/issue-tracker.md`. The Forge issues seed carries a "PRs as a request surface" flag, defaulted **off**. Leave it off and don't raise it: a user who wants external PRs in the triage queue can flip the flag in the file later.

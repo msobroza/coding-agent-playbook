@@ -8,7 +8,7 @@ budget.
 
 The walk uses ``os.walk`` rather than ``Path.rglob``: it never follows a
 directory symlink on any supported Python (``rglob``'s behaviour changed in
-3.13), and it prunes dot-directories (the ``_iter_md_files`` hygiene rule)
+3.13), and it prunes dot-directories (the ``catalog.skill_rules.iter_md_files`` hygiene rule)
 before descending into them.
 """
 

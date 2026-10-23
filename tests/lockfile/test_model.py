@@ -24,6 +24,7 @@ from coding_agent_playbook.lockfile.model import (
     LockfileFormatError,
     Provenance,
     compute_hash,
+    generated_paths,
 )
 
 if TYPE_CHECKING:
@@ -433,3 +434,19 @@ def test_drift_entries_shared_file_that_is_not_a_regular_file_is_one_unreadable_
     assert [item.line() for item in items] == [
         "unreadable: .claude/settings.json (not a regular file)"
     ]
+
+
+def test_recorded_paths_lists_each_path_once_scoped_entries_included() -> None:
+    whole = LockEntry(path="AGENTS.md", sha256="0" * 64, bytes=1)
+    scoped = [
+        LockEntry(path=".claude/settings.json", sha256="1" * 64, bytes=1, scope=f"json:/{i}")
+        for i in range(2)
+    ]
+    lock = Lockfile(schema_version=2, engine_version="0", rendered_at="", entries=[whole, *scoped])
+
+    assert lock.recorded_paths() == frozenset({"AGENTS.md", ".claude/settings.json"})
+    assert generated_paths(lock) == lock.recorded_paths()
+
+
+def test_generated_paths_is_empty_before_the_first_sync() -> None:
+    assert generated_paths(None) == frozenset()

@@ -15,11 +15,14 @@ it through ``rendering.session``, and ``playbook validate``'s parse-only check i
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from jinja2 import FileSystemLoader, StrictUndefined, TemplateSyntaxError
 from jinja2.exceptions import SecurityError
 from jinja2.sandbox import SandboxedEnvironment
+from packaging.version import InvalidVersion, Version
+
+from coding_agent_playbook.detector.predicate import evaluate_predicate
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -28,6 +31,8 @@ if TYPE_CHECKING:
     # Annotations only: every runtime construction is a ``SandboxedEnvironment``
     # (tests/rendering/test_no_unsandboxed_jinja.py allows no other jinja2 import).
     from jinja2 import Environment
+
+    from coding_agent_playbook.detector.facts import Facts
 
 # A ``{{ rule("id") }}`` call in a template; group 1 is the rule id.
 # Whitespace- and trim-marker-tolerant (``{{rule("x")}}``, ``{{- rule('x') -}}``).
@@ -49,6 +54,11 @@ def build_environment(template_search_paths: Sequence[Path]) -> Environment:
     Rules, prompts and hook bodies all render in this one shape. There is no
     ``rule()`` helper (D15): a template calling it raises ``UndefinedError``,
     and prompts declare their rules in ``includes_rules`` instead.
+    ``framework_skill(role)`` returns the enabled framework's skill for a D74
+    role (``""`` without one), ``skill_active(name)`` whether that skill
+    renders in this repo and ``rule_active(rule_id)`` whether that rule does
+    (kept by ``applies_if``, and its skill active); all three read what
+    ``RenderSession.open`` stashes.
 
     Example::
 
@@ -81,7 +91,64 @@ def build_environment(template_search_paths: Sequence[Path]) -> Environment:
         return name in ml_stack
 
     env.globals["has_ml_dep"] = _has_ml_dep
+
+    # D23/D40: both go through the applies_if seam, so a template branch and a
+    # gate never disagree, and neither fails when its fact is undefined.
+    def _has_dependency(name: str) -> bool:
+        if not isinstance(name, str):
+            raise ValueError(f"has_dependency expects a dependency name string; got {name!r}")
+        return evaluate_predicate({"has_dependency": [name]}, cast("Facts", _facts()))
+
+    env.globals["has_dependency"] = _has_dependency
+
+    def _python_at_least(minimum: str) -> bool:
+        _require_version(minimum)
+        facts = _facts()
+        try:
+            return evaluate_predicate({"python_version": f">={minimum}"}, cast("Facts", facts))
+        except ValueError as exc:  # a malformed fact, e.g. in an eval sample's mock facts
+            raise ValueError(
+                f"python_at_least({minimum!r}): fact python_version must be a version "
+                f"like '3.11'; got {facts.get('python_version')!r}"
+            ) from exc
+
+    env.globals["python_at_least"] = _python_at_least
+
+    # D74: the session stashes the enabled framework's role map and the ids of the
+    # skills that render under ``_framework_roles`` / ``_active_skills``.
+    def _framework_skill(role: str) -> str:
+        roles = env.globals.get("_framework_roles", {})
+        return str(roles.get(role, "")) if isinstance(roles, dict) else ""
+
+    def _skill_active(name: str) -> bool:
+        active = env.globals.get("_active_skills", frozenset())
+        return isinstance(active, frozenset) and name in active
+
+    # prU D73: an always rule names a ``skill -> rule`` pointer only when it resolves.
+    def _rule_active(rule_id: str) -> bool:
+        active = env.globals.get("_active_rules", frozenset())
+        return isinstance(active, frozenset) and rule_id in active
+
+    env.globals["framework_skill"] = _framework_skill
+    env.globals["skill_active"] = _skill_active
+    env.globals["rule_active"] = _rule_active
     return env
+
+
+def _require_version(minimum: object) -> None:
+    """Raise unless ``minimum`` is a version string ``python_at_least`` can compare against.
+
+    Without it a malformed argument surfaces as the predicate's specifier error,
+    which names neither the helper nor the expected shape.
+
+    >>> _require_version("3.x")
+    Traceback (most recent call last):
+    ValueError: python_at_least expects a version like '3.11'; got '3.x'
+    """
+    try:
+        Version(cast("str", minimum))
+    except (InvalidVersion, TypeError) as exc:
+        raise ValueError(f"python_at_least expects a version like '3.11'; got {minimum!r}") from exc
 
 
 def render_artifact_body(

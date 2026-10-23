@@ -57,7 +57,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.hook import Hook
     from coding_agent_playbook.artifacts.hook_schema import HookSchemaError
     from coding_agent_playbook.artifacts.prompt import Prompt
-    from coding_agent_playbook.artifacts.rule import Rule
+    from coding_agent_playbook.artifacts.rule import Rule, RuleLoadError
     from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.catalog.resolve import Collision
     from coding_agent_playbook.catalog.source import ArtifactSource
@@ -155,7 +155,7 @@ def config_less_context(repo_root: Path) -> SyncContext:
         extra_resource_roots=checkout_resource_roots(repo_root, engine_package=ENGINE_PACKAGE),
     )
     return SyncContext.from_config(
-        repo_root, _config_less_config(repo_root), artifact_source=source, tolerate_hook_errors=True
+        repo_root, _config_less_config(repo_root), artifact_source=source, tolerate_load_errors=True
     )
 
 
@@ -203,8 +203,11 @@ class SyncContext:
     ``rules_resolved``, ``prompts_resolved``, ``skills_resolved`` and
     ``hooks_resolved`` are post-overlay-merge but pre-applies_if-filter —
     filtering is the command's responsibility (sync filters; render does not).
-    ``hook_load_errors`` holds the malformed hooks that ``tolerate_hook_errors``
-    set aside; ``hook_violations`` the refused layer overrides (prK §A.5, §A.6).
+    ``rule_definitions`` is every layer's well-formed rule, pre-merge (read it,
+    never ``artifact_source.list_rules()``, which raises on a malformed file).
+    ``hook_load_errors`` and ``rule_load_errors`` hold the malformed hooks and
+    rule files that ``tolerate_load_errors`` set aside (prU D21);
+    ``hook_violations`` the refused layer overrides (prK §A.5, §A.6).
     ``policy_tables`` holds the committed ``[hooks]`` / ``[guardrails]`` tables,
     raw so validate can report a malformed one (H21); read hooks policy there,
     never from ``config.extra_tables``, which merges ``.local.toml`` in (§B.1).
@@ -223,6 +226,8 @@ class SyncContext:
     hooks_resolved: list[Hook] = field(default_factory=list)
     hook_definitions: dict[str, tuple[Hook, ...]] = field(default_factory=dict)
     hook_load_errors: list[HookSchemaError] = field(default_factory=list)
+    rule_definitions: list[Rule] = field(default_factory=list)
+    rule_load_errors: list[RuleLoadError] = field(default_factory=list)
     hook_violations: list[HookViolation] = field(default_factory=list)
     policy_tables: PolicyTables = field(default_factory=PolicyTables)
 
@@ -232,7 +237,7 @@ class SyncContext:
         repo_root: Path,
         *,
         rule_registry: RuleRegistry | None = None,
-        tolerate_hook_errors: bool = False,
+        tolerate_load_errors: bool = False,
         warn_deprecated: bool = True,
     ) -> SyncContext:
         """Discovery: load config → detect facts → instantiate sources → resolve overlays.
@@ -243,10 +248,11 @@ class SyncContext:
         without a registry, then re-build the adapters via
         :func:`discover_adapters` after the registry exists.
 
-        A malformed hook raises ``HookSchemaError`` (sync, check, render and
-        eval fail loudly); ``tolerate_hook_errors=True`` records each one on
-        ``hook_load_errors`` instead, so ``playbook validate`` can report them
-        all (prK §P P8c).
+        A malformed hook raises ``HookSchemaError`` and a malformed rule file
+        ``RuleLoadError`` (sync, check, render and eval fail loudly);
+        ``tolerate_load_errors=True`` records each one on ``hook_load_errors`` /
+        ``rule_load_errors`` instead, so ``playbook validate`` can report them
+        all (prK §P P8c, prU D21).
 
         Prints one ``warning:`` line per deprecated ``coding_agent_playbook.packs.*``
         overlay name, before anything else runs (:func:`_warn_deprecated_overlays`).
@@ -262,7 +268,7 @@ class SyncContext:
             repo_root,
             config,
             rule_registry=rule_registry,
-            tolerate_hook_errors=tolerate_hook_errors,
+            tolerate_load_errors=tolerate_load_errors,
             policy_tables=state_source.load_policy_tables(),
         )
 
@@ -274,14 +280,14 @@ class SyncContext:
         *,
         artifact_source: ArtifactSource | None = None,
         rule_registry: RuleRegistry | None = None,
-        tolerate_hook_errors: bool = False,
+        tolerate_load_errors: bool = False,
         policy_tables: PolicyTables | None = None,
     ) -> SyncContext:
         """:meth:`from_repo` minus the config load: detect → walk → resolve overlays.
 
         Config-less ``playbook validate`` passes a stand-in ``config`` and an
         ``artifact_source`` with extra checkout layers (prK §P P8); by default
-        the source walks the engine, ``config.overlays_enabled`` and
+        the source walks the engine, ``config.layers_enabled`` (the framework, then the overlays) and
         ``<repo>/playbook/``. Without ``policy_tables`` there is no ``[hooks]``
         table, so hooks are off.
 
@@ -294,7 +300,8 @@ class SyncContext:
         if artifact_source is None:
             artifact_source = FileSystemArtifactSource(
                 repo_root=repo_root,
-                overlay_packages=list(config.overlays_enabled),
+                overlay_packages=config.layers_enabled,
+                prompt_set=config.prompt_set,
             )
         # FileSystemArtifactSource walks the engine and bundled-plugin artifacts
         # in the catalog (``catalog/core/``, ``catalog/plugins/<name>/``)
@@ -303,7 +310,11 @@ class SyncContext:
         # those in a single ``list_*`` call — sufficient for PR 10. PRs 13+
         # may split per-layer if we need fine-grained source provenance.
         resolver = OverlayResolver(hook_schemas=RegistryCatalog())  # handlers' CONFIG_SCHEMA
-        all_rules = artifact_source.list_rules()
+        all_rules, rule_load_errors = (
+            artifact_source.collect_rules()
+            if tolerate_load_errors
+            else (artifact_source.list_rules(), [])
+        )
         all_prompts = artifact_source.list_prompts()
         all_skills = artifact_source.list_skills()
         # TODO(PR-13): the OverlayResolver supports per-layer wiring
@@ -319,7 +330,7 @@ class SyncContext:
         prompts_resolved = resolver.resolve_prompts(all_prompts, [], [])
         skills_resolved = resolver.resolve_skills(all_skills, [], [])
         hooks_resolved, hook_load_errors = _resolve_hooks(
-            artifact_source, resolver, tolerate=tolerate_hook_errors
+            artifact_source, resolver, tolerate=tolerate_load_errors
         )
 
         adapters = discover_adapters(config, rule_registry=rule_registry)
@@ -338,6 +349,8 @@ class SyncContext:
             hooks_resolved=hooks_resolved,
             hook_definitions=resolver.hook_definitions,
             hook_load_errors=hook_load_errors,
+            rule_definitions=all_rules,
+            rule_load_errors=rule_load_errors,
             hook_violations=resolver.hook_violations,
             policy_tables=PolicyTables() if policy_tables is None else policy_tables,
         )

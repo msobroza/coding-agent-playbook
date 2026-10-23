@@ -109,7 +109,8 @@ def test_scans_cover_the_whole_plugin() -> None:
     scanned = {path.relative_to(PLUGIN_ROOT).as_posix() for path in pack_files()}
     # The plugin-root files ship in the wheel but are never synced; scanning them
     # keeps the README's enable instructions URL- and namespace-free too.
-    assert {rel for rel in scanned if "/" not in rel} == {"LICENSE", "ATTRIBUTIONS.md", "README.md"}
+    root_files = {"LICENSE", "ATTRIBUTIONS.md", "README.md", "framework.toml"}
+    assert {rel for rel in scanned if "/" not in rel} == root_files
     assert set(resource_files()) <= set(pack_files())
 
 

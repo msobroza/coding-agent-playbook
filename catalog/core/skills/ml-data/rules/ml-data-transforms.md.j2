@@ -1,0 +1,115 @@
+---
+id: ml-data-transforms
+name: Data transforms
+description: "Treat the arrays and frames a function receives as values: return new ones instead of writing into arguments, and rebind the name instead of using inplace=True."
+version: 1
+scope: scoped
+globs:
+  - "**/*.py"
+  - "**/*.ipynb"
+applies_if:
+  any_ml_stack: ["numpy", "pandas", "polars"]
+section: mutation
+priority: 23
+tags: [ml, pandas, polars, numpy]
+---
+
+# Treat arrays and frames as values
+
+## Description
+
+A transform that edits the array or frame it was handed changes data its caller still holds, and the bug surfaces far from the edit, often only on the second run of a notebook cell. Treat inputs as values: a function takes an array or a frame and returns a new one, never writes into its argument, and the caller rebinds the name (`readings = drop_faulty_sensors(readings)`). Changing an object the function created itself is fine; the rule protects what the caller can see. Default to the forms that return a result, and keep each step small and named for what it does to the data (`convert_to_eur`, `drop_cancelled`), so a pipeline reads as a list of decisions.
+
+## Bad Example
+
+```python
+{% if has_ml_dep("numpy") %}
+def cap_readings(readings: npt.NDArray[np.float64], ceiling: float) -> None:
+    readings[readings > ceiling] = ceiling  # writes into the caller's array
+
+
+first_hour = readings[:60]
+first_hour -= baseline  # a slice is a view: this edits `readings` too
+{% endif %}
+{% if has_ml_dep("pandas") %}
+{% if has_ml_dep("numpy") %}
+
+
+{% endif %}
+def clean(users: pd.DataFrame) -> None:
+    users.dropna(subset=["email"], inplace=True)
+    users.rename(columns={"e-mail": "email"}, inplace=True)
+    users.sort_values("created_at", inplace=True)
+    users.reset_index(drop=True, inplace=True)
+
+
+clean(users)  # the caller cannot tell `users` was modified
+# shape-changing methods return None with inplace=True: `users` is now None
+users = users.dropna(inplace=True)
+{% endif %}
+{% if has_ml_dep("polars") %}
+{% if has_ml_dep("numpy") or has_ml_dep("pandas") %}
+
+
+{% endif %}
+def add_tier(parcels: pl.DataFrame) -> None:
+    parcels.insert_column(0, tier_series(parcels))  # edits the caller's frame
+{% endif %}
+```
+
+## Good Example
+
+```python
+{% if has_ml_dep("numpy") %}
+def cap_readings(
+    readings: npt.NDArray[np.float64], ceiling: float
+) -> npt.NDArray[np.float64]:
+    # np.minimum allocates the result; the input is left as it was
+    return np.minimum(readings, ceiling)
+
+
+first_hour = readings[:60] - baseline  # a new array
+{% endif %}
+{% if has_ml_dep("pandas") %}
+{% if has_ml_dep("numpy") %}
+
+
+{% endif %}
+def clean(users: pd.DataFrame) -> pd.DataFrame:
+    return (
+        users.dropna(subset=["email"])
+        .rename(columns={"e-mail": "email"})
+        .sort_values("created_at")
+        .reset_index(drop=True)
+        .fillna({"plan": "free"})
+    )
+
+
+users = clean(users)
+{% endif %}
+{% if has_ml_dep("polars") %}
+{% if has_ml_dep("numpy") or has_ml_dep("pandas") %}
+
+
+{% endif %}
+def add_tier(parcels: pl.DataFrame) -> pl.DataFrame:
+    return parcels.with_columns(tier_expression().alias("tier"))
+{% endif %}
+```
+
+## Notes
+
+- Rebinding the same name (`frame = frame.dropna()`) is fine and idiomatic: the point is that the operation is visible in the data flow.
+- Argument mutation in general belongs to `python-pure-core` (python-coding); this rule covers arrays and frames.
+{% if has_ml_dep("numpy") %}
+- NumPy: basic slicing (`batch[:, :3]`, `readings[10:]`) returns a view that shares memory with the original; copy before writing (`.copy()`) or compute a new array. An assignment through a boolean or integer index (`readings[mask] = 0`) writes into the array being indexed, so do it only on an array the function created, and pass `out=` only an array the function allocated itself.
+{% endif %}
+{% if has_ml_dep("pandas") %}
+- pandas: `inplace=True` rarely saves memory. Shape-changing methods (`dropna`, `sort_values`, `rename`, `reset_index`, `drop`) cannot modify the buffer in place: they build a new frame and return `None`. Value-changing methods (`fillna`, `replace`, `clip`, `where`, `mask`) may update the buffer under copy-on-write, but the keyword still breaks method chaining and hides that the caller's data changed. Under copy-on-write a returned frame shares memory with its input until one of them is written to, so there is no copy to save.
+- pandas: the one exception is a measured memory fix, a value-changing method on a frame that fills most of memory, kept at top level (never inside a helper that received the frame) with a comment that says why.
+- pandas: the returning form composes with `pipe`, `assign` and boolean indexing (`ml-method-chaining`); write values through one indexer (`ml-loc-assignment`).
+{% endif %}
+{% if has_ml_dep("polars") %}
+- polars: frame methods return a new frame, so rebind the name after each step. Keep the few that work in place (`insert_column`, `extend`) for frames the function created.
+{% endif %}
+- review-signals.md maps the warning, lint code or construct a review finds in array and frame code to the rule that fixes it.

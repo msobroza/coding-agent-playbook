@@ -1,0 +1,99 @@
+---
+id: ml-method-chaining
+name: Method chaining
+description: "Write a frame transformation as one parenthesized chain, one step per line, with named frame-to-frame functions joined by pipe instead of reassigned intermediates."
+version: 1
+scope: scoped
+globs:
+  - "**/*.py"
+  - "**/*.ipynb"
+applies_if:
+  any_ml_stack: ["pandas", "polars"]
+section: style
+priority: 60
+tags: [ml, pandas, polars, style]
+---
+
+# Express frame transformations as method chains
+
+## Description
+
+A sequence of column assignments and filters on a reassigned frame interleaves reads and writes, forces the reader to track which columns exist at each line, and invites reuse of a half-transformed frame. A chain makes the transformation one expression: inputs at the top, output at the bottom, every step visible.{% if has_ml_dep("pandas") %} In pandas, chain `assign`, `.loc[lambda ...]`, `rename` and `pipe`, which inserts your own functions without breaking the chain.{% endif %}{% if has_ml_dep("polars") %} In polars, chain expressions inside `filter`, `with_columns`, `select` and `group_by`, starting lazily and collecting once.{% endif %}
+
+## Bad Example
+
+```python
+{% if has_ml_dep("pandas") %}
+shipments = pd.read_csv(path, dtype=SHIPMENT_DTYPES)
+shipments["shipped_at"] = pd.to_datetime(
+    shipments["shipped_at"], format=TIMESTAMP_FORMAT
+)
+shipments = shipments[shipments["status"] == "delivered"]
+shipments["month"] = shipments["shipped_at"].dt.to_period("M")
+monthly = shipments.groupby("month")["weight_kg"].sum()
+monthly = monthly.reset_index()
+monthly.columns = ["month", "total_weight_kg"]
+monthly = monthly.sort_values("total_weight_kg", ascending=False)
+{% endif %}
+{% if has_ml_dep("polars") %}
+# eager: every step runs on its own, and each name holds a half-built frame
+events = pl.read_csv(path, schema_overrides=SHIPMENT_SCHEMA)
+delivered = events.filter(pl.col("status") == "delivered")
+dated = delivered.with_columns(pl.col("shipped_at").str.to_datetime(TIMESTAMP_FORMAT))
+by_month = dated.with_columns(pl.col("shipped_at").dt.truncate("1mo").alias("month"))
+totals = by_month.group_by("month").agg(
+    pl.col("weight_kg").sum().alias("total_weight_kg")
+)
+{% endif %}
+```
+
+## Good Example
+
+```python
+{% if has_ml_dep("pandas") %}
+def add_month(shipments: pd.DataFrame) -> pd.DataFrame:
+    return shipments.assign(
+        shipped_at=lambda frame: pd.to_datetime(
+            frame["shipped_at"], format=TIMESTAMP_FORMAT
+        ),
+        month=lambda frame: frame["shipped_at"].dt.to_period("M"),
+    )
+
+
+monthly = (
+    pd.read_csv(path, dtype=SHIPMENT_DTYPES)
+    .pipe(add_month)
+    .loc[lambda frame: frame["status"] == "delivered"]
+    .pipe(drop_carriers, excluded=TEST_CARRIERS)
+    .groupby("month", as_index=False)
+    .agg(total_weight_kg=("weight_kg", "sum"))
+    .sort_values("total_weight_kg", ascending=False)
+)
+{% endif %}
+{% if has_ml_dep("polars") %}
+totals = (
+    pl.scan_csv(path, schema_overrides=SHIPMENT_SCHEMA)
+    .filter(pl.col("status") == "delivered")
+    .with_columns(pl.col("shipped_at").str.to_datetime(TIMESTAMP_FORMAT))
+    .with_columns(pl.col("shipped_at").dt.truncate("1mo").alias("month"))
+    .group_by("month")
+    .agg(pl.col("weight_kg").sum().alias("total_weight_kg"))
+    .sort("total_weight_kg", descending=True)
+    .collect()  # once, at the end
+)
+{% endif %}
+```
+
+## Notes
+
+- Wrap the chain in parentheses and put one step per line; this is the layout `ruff format` keeps.
+- Break a chain that outgrows a screen into named functions that take a frame and return one, joined by `pipe`, rather than into intermediate variables. Each function is then easy to unit test, and its name says what the step does to the data.
+{% if has_ml_dep("pandas") %}
+- pandas: use `lambda frame: ...` inside `assign` and `.loc` when a step depends on a column created earlier in the same chain; the lambda receives the intermediate frame. `assign` evaluates its keywords in order, so a later one sees an earlier one.
+- pandas: prefer `.loc[lambda ...]` over `query` and `eval` strings, so column references stay Python code that linters and type checkers can see.
+- pandas: chains are not free, since each step returns a new object (copied lazily under copy-on-write). For a hot loop over small frames a direct operation can be right; measure before deviating.
+{% endif %}
+{% if has_ml_dep("polars") %}
+- polars: start a large pipeline lazily (`pl.scan_csv`, `pl.scan_parquet` or `.lazy()`), chain the steps, and call `.collect()` once at the end, so the query planner sees the whole pipeline before it reads any data. Build columns with expressions, never with `map_elements`.
+{% endif %}
+- Parse dates with an exact format where the data is read (ml-dtypes-at-load), and name aggregated columns where they are computed (ml-named-aggregation).

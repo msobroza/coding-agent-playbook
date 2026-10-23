@@ -1,0 +1,143 @@
+---
+id: ml-seeded-randomness
+name: Seeded randomness
+description: "Build one random source from the run's seed at the entry point, pass it down as a parameter, seed every library from that seed, and record it."
+version: 1
+scope: scoped
+globs:
+  - "**/*.py"
+  - "**/*.ipynb"
+applies_if:
+  any_ml_stack: ["numpy", "pandas", "polars"]
+section: reproducibility
+priority: 45
+tags: [ml, numpy, pandas, polars, reproducibility, random]
+---
+{# polars installs no NumPy: only the libraries whose lines use the NumPy generator get it. #}
+{% set numpy_generator = has_ml_dep("numpy") or has_ml_dep("pandas") or has_ml_dep("scikit-learn") %}
+
+# Use one seeded random source per run
+
+## Description
+
+A run nobody can repeat cannot be debugged or trusted. {% if numpy_generator %}`np.random.seed()` and the module-level functions (`np.random.rand`, `np.random.choice`, ...) share one hidden global state, and so do `random.seed()` and the `random` module's functions.{% else %}`random.seed()` and the `random` module's functions share one hidden global state.{% endif %} Any library, test or helper that touches it changes the sequence every caller sees, so results depend on call order and stop being reproducible the moment code is refactored or parallelized.
+
+- The seed is configuration: the entry point reads it, builds the run's one random source from it, and records it with the results (in the run's metadata or its first log line).
+- Every function that draws numbers, shuffles, samples or splits receives that source as a parameter, never as hidden global state.
+- Production passes `None`, so each run draws fresh entropy, unless a run has to be replayed.
+
+## Bad Example
+
+```python
+{% if numpy_generator %}
+np.random.seed(42)  # global, affects every module in the process
+
+
+def make_split(n_rows: int) -> npt.NDArray[np.int64]:
+    return np.random.permutation(n_rows)
+
+
+def add_noise(features: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+    return features + np.random.normal(scale=0.1, size=features.shape)
+
+
+# Order-dependent: swapping these two lines changes both results
+train_idx = make_split(1000)
+noisy = add_noise(features)
+{% else %}
+random.seed(42)  # global, shared with every module that imports random
+{% endif %}
+{% if has_ml_dep("pandas") %}
+holdout = frame.sample(n=100)  # a different, unrecorded holdout on every run
+{% endif %}
+{% if has_ml_dep("polars") %}
+audit_rows = events.sample(n=100)  # unseeded: other rows on every run
+{% endif %}
+```
+
+## Good Example
+
+```python
+def run_experiment(seed: int | None) -> ExperimentResult:
+{% if numpy_generator %}
+    rng = np.random.default_rng(seed)
+    logger.info(
+        "run seed", extra={"seed": seed, "entropy": rng.bit_generator.seed_seq.entropy}
+    )
+{% if has_ml_dep("pandas") %}
+    split_rng, noise_rng, sample_rng = rng.spawn(3)  # one stream per stage
+{% else %}
+    split_rng, noise_rng = rng.spawn(2)  # one stream per stage
+{% endif %}
+    train_idx = make_split(1000, split_rng)
+    noisy = add_noise(features, noise_rng)
+{% else %}
+    source = random.Random(seed)  # one instance, passed down; never random.seed
+    logger.info("run seed", extra={"seed": seed})
+{% endif %}
+{% if has_ml_dep("pandas") %}
+    holdout = frame.sample(n=100, random_state=sample_rng)  # pandas takes the Generator
+{% endif %}
+{% if has_ml_dep("polars") %}
+    audit_rows = pick_audit_rows(events, sample_seed={% if numpy_generator %}int(rng.integers(2**32)){% else %}source.getrandbits(32){% endif %})
+{% endif %}
+{% if has_ml_dep("scikit-learn") %}
+    model = RandomForestClassifier(random_state=int(rng.integers(2**32)))
+{% endif %}
+{% if has_ml_dep("torch") %}
+    torch_seed = {% if numpy_generator %}int(rng.integers(2**32)){% else %}source.getrandbits(32){% endif %}
+
+    torch.manual_seed(torch_seed)  # once, at the entry point
+    loader = DataLoader(
+        dataset, shuffle=True, generator=torch.Generator().manual_seed(torch_seed)
+    )
+{% endif %}
+    ...
+{% if numpy_generator %}
+
+
+def make_split(n_rows: int, rng: np.random.Generator) -> npt.NDArray[np.int64]:
+    return rng.permutation(n_rows)
+
+
+def add_noise(
+    features: npt.NDArray[np.float64], rng: np.random.Generator
+) -> npt.NDArray[np.float64]:
+    return features + rng.normal(scale=0.1, size=features.shape)
+
+
+def test_add_noise_repeats_for_the_same_seed() -> None:
+    features = np.zeros((3, 4))
+    first = add_noise(features, np.random.default_rng(7))
+    again = add_noise(features, np.random.default_rng(7))
+    np.testing.assert_array_equal(first, again)
+{% endif %}
+{% if has_ml_dep("polars") %}
+
+
+def pick_audit_rows(events: pl.DataFrame, *, sample_seed: int) -> pl.DataFrame:
+    return events.sample(n=100, seed=sample_seed)
+{% endif %}
+```
+
+## Notes
+
+{% if numpy_generator %}
+- `Generator` methods (`rng.integers`, `rng.random`, `rng.choice`, `rng.normal`) replace the legacy `np.random.*` functions one to one; note `integers` instead of `randint`.
+- Give each worker or pipeline stage its own child: `rng.spawn(n_workers)`, or the child seeds of `np.random.SeedSequence(seed).spawn(n_workers)`, each passed to `np.random.default_rng`. Never hand every worker the same seed.
+- With a `None` seed, record the entropy the generator drew (`rng.bit_generator.seed_seq.entropy`, as above), so the run can still be replayed.
+{% endif %}
+- Other libraries keep their own random state, which one library's seed does not cover: seed each one explicitly from the run's seed. The standard library's `random` gets its own `random.Random(seed)` instance, passed down like any other dependency.
+{% if has_ml_dep("torch") %}
+- torch: seed its global state once, at the entry point as above, and give each data loader its own `torch.Generator`, seeded from the run's seed.
+{% endif %}
+{% if has_ml_dep("scikit-learn") %}
+- scikit-learn: every estimator, splitter and search gets a `random_state` drawn from the run's NumPy generator, as above; its `random_state` takes no `Generator`, and it is never left unset.
+{% endif %}
+{% if has_ml_dep("pandas") %}
+- pandas: `sample` and its siblings accept the `Generator` itself as `random_state`.
+{% endif %}
+{% if has_ml_dep("polars") %}
+- polars: `sample` and `shuffle` take an integer `seed=`; derive it from the run's seed, never leave it unset.
+{% endif %}
+- A global random state is one more global singleton; python-no-global-singletons (python-coding) covers the general case, and pytest-deterministic-tests (python-testing) covers test determinism beyond random draws.

@@ -4,10 +4,11 @@ One test per row of specs/prS-skills-context.md section 6.6, each asserting the
 exact ``FAIL`` (stdout) or ``warning:`` (stderr) line. V1 and V2 are the
 contract step: a scoped rule without ``skill:`` fails, and an override of a
 rule in core that named one is told which. The fixtures are repo-local: ``playbook/skills/<id>/SKILL.md`` and
-``playbook/rules/<id>.md`` in a synthetic consumer repo. Core ships four skills
-that take members, so they are the known skills every message lists, and a
-repo-local ``python-coding`` overrides the core one and keeps its core members:
-the tests that count members use their own skill, ``risk-models``.
+``playbook/rules/<id>.md`` in a synthetic consumer repo. Core's skills that take
+members, plus the fixture's repo-local ``house-python``, are the known skills
+every message lists. ``house-python`` is no core skill: core's python-coding
+declares sections (prU L0-15), so an override of it would have to declare them
+too; the tests that count members use their own skill, ``risk-models``.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ import pytest
 
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.commands import validate as _validate
+from tests._catalog import core_rule_skill_ids
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -29,16 +31,18 @@ if TYPE_CHECKING:
 _PLAYBOOK_BLOCK = "playbook:\n  use_when: editing Python code\n  files: Any Python file\n"
 _PATTERN = "^[a-z0-9]+(-[a-z0-9]+)*$ (1-64 chars)"
 _REPO_LOCAL = "(<repo-local>)"
-_PYTHON_DESIGN = "coding_agent_playbook.plugins.python_design"
-#: The skills that take members in every synthetic repo: core's four.
-_KNOWN_SKILLS = "ml-data, python-coding, python-testing, python-tooling"
+_SUPERPOWERS = "coding_agent_playbook.plugins.superpowers"
+#: The fixture's repo-local skill that takes members; no core skill has this id.
+_FIXTURE_SKILL = "house-python"
+#: The skills that take members in a repo with the fixture's skill, as V1 and V5 list them.
+_KNOWN_SKILLS = ", ".join(sorted([*core_rule_skill_ids(), _FIXTURE_SKILL]))
 #: A repo-local skill no core rule names, for the tests that count members.
 _OWN_SKILL = "risk-models"
 
-_CONFIG_WITH_PYTHON_DESIGN = f"""\
+_CONFIG_WITH_SUPERPOWERS = f"""\
 schema_version = 1
 adapters_enabled = ["claude_code"]
-overlays_enabled = ["{_PYTHON_DESIGN}"]
+overlays_enabled = ["{_SUPERPOWERS}"]
 
 [project]
 name = "synthetic"
@@ -69,18 +73,20 @@ def write_rule(
     repo: Path,
     rule_id: str,
     *,
-    skill: str | None = "python-coding",
+    skill: str | None = _FIXTURE_SKILL,
     scope: str = "scoped",
     name: str | None = None,
     priority: int = 50,
+    section: str | None = None,
 ) -> Path:
     """Write ``playbook/rules/<rule_id>.md``; ``skill`` is raw YAML (``None`` leaves it out)."""
     target = repo / "playbook" / "rules" / f"{rule_id}.md"
     target.parent.mkdir(parents=True, exist_ok=True)
     skill_line = "" if skill is None else f"skill: {skill}\n"
+    section_line = "" if section is None else f"section: {section}\n"
     target.write_text(
         f"---\nid: {rule_id}\nname: {name or rule_id!r}\ndescription: One line.\n"
-        f"scope: {scope}\n{skill_line}priority: {priority}\n---\nBody\n",
+        f"scope: {scope}\n{skill_line}{section_line}priority: {priority}\n---\nBody\n",
         encoding="utf-8",
     )
     return target
@@ -100,9 +106,10 @@ def fail_lines(out: str) -> list[str]:
 
 @pytest.fixture
 def repo(tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory) -> Path:
-    """A synthetic repo with one valid skill that takes members: ``python-coding``."""
+    """A synthetic repo with one valid skill that takes members: ``house-python``, with one."""
     built = make_synthetic_repo(tmp_path)
-    write_skill(built, "python-coding")
+    write_skill(built, _FIXTURE_SKILL)
+    write_rule(built, "house-naming", name="House naming")
     return built
 
 
@@ -120,9 +127,12 @@ def test_rule_joining_a_repo_local_skill_validates(
 def test_repo_local_rule_may_join_a_core_skill(
     tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """D2: naming the core ``python-coding`` is enough; membership is resolved after the merge."""
+    """D2: naming the core ``python-coding`` is enough; membership is resolved after the merge.
+
+    Core's python-coding declares sections, so the repo's own member names one (S4).
+    """
     repo = make_synthetic_repo(tmp_path)
-    write_rule(repo, "risk-naming", name="Risk naming")
+    write_rule(repo, "risk-naming", skill="python-coding", name="Risk naming", section="types")
 
     rc, out, err = run_validate(repo, capsys)
     assert rc == 0, out
@@ -130,10 +140,11 @@ def test_repo_local_rule_may_join_a_core_skill(
 
     assert _sync.run(argparse.Namespace(repo_root=str(repo), check=False)) == 0
     skill_dir = repo / ".claude" / "skills" / "python-coding"
-    assert (skill_dir / "references" / "risk-naming.md").is_file()
+    assert (skill_dir / "rules" / "risk-naming.md").is_file()
     skill_md = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
-    assert "- [risk-naming](references/risk-naming.md) — Risk naming: One line." in skill_md
-    assert "Risk naming" in skill_md.partition("\n---\n")[0], "the Covers clause names it"
+    assert "| [risk-naming](rules/risk-naming.md) | Risk naming: One line. |" in skill_md
+    frontmatter = " ".join(skill_md.partition("\n---\n")[0].split())
+    assert "names, types, docs" in frontmatter, "the Covers clause names its section"
 
 
 def test_scoped_rule_without_skill_fails_naming_known_skills(
@@ -145,8 +156,9 @@ def test_scoped_rule_without_skill_fails_naming_known_skills(
 
     assert rc == 1
     assert fail_lines(out) == [
-        f"FAIL {rule}: scope 'scoped' needs 'skill: <skill-id>' naming the skill whose "
-        f"references deliver this rule; known skills: {_KNOWN_SKILLS}"
+        f"FAIL {rule}: scope 'scoped' needs a skill: put the file in that skill's rules/ "
+        "directory (skills/<skill-id>/rules/), or add 'skill: <skill-id>' when the skill "
+        f"comes from another layer; known skills: {_KNOWN_SKILLS}"
     ]
 
 
@@ -160,8 +172,9 @@ def test_scoped_override_without_skill_suggests_the_overridden_rules_skill(
 
     assert rc == 1
     assert fail_lines(out) == [
-        f"FAIL {rule}: scope 'scoped' needs 'skill: <skill-id>' naming the skill whose "
-        f"references deliver this rule; known skills: {_KNOWN_SKILLS}; the rule it overrides "
+        f"FAIL {rule}: scope 'scoped' needs a skill: put the file in that skill's rules/ "
+        "directory (skills/<skill-id>/rules/), or add 'skill: <skill-id>' when the skill "
+        f"comes from another layer; known skills: {_KNOWN_SKILLS}; the rule it overrides "
         "(coding_agent_playbook) names 'python-coding'"
     ]
 
@@ -173,7 +186,7 @@ def test_always_rule_with_skill_fails(repo: Path, capsys: pytest.CaptureFixture[
 
     assert rc == 1
     assert fail_lines(out) == [
-        f"FAIL {rule}: 'skill: python-coding' is not allowed on an always rule (always rules "
+        f"FAIL {rule}: 'skill: house-python' is not allowed on an always rule (always rules "
         "stay in always-loaded context); remove 'skill', or set 'scope: scoped' to deliver "
         "the rule through that skill"
     ]
@@ -219,36 +232,36 @@ def test_member_rule_id_must_be_a_skill_safe_name(
 
     assert rc == 1
     assert fail_lines(out) == [
-        f"FAIL {rule}: rule id 'Py_Typing' cannot be a member of skill 'python-coding': its "
-        f"reference is written as references/<id>.md, so the id must match {_PATTERN}"
+        f"FAIL {rule}: rule id 'Py_Typing' cannot be a member of skill 'house-python': its "
+        f"rule file is written as rules/<id>.md, so the id must match {_PATTERN}"
     ]
 
 
 def test_playbook_block_must_be_a_mapping(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    write_skill(repo, "python-coding", block="playbook: 'yes'\n")
+    write_skill(repo, "house-python", block="playbook: 'yes'\n")
     write_rule(repo, "python-typing")
 
     rc, out, _ = run_validate(repo, capsys)
 
     assert rc == 1
     assert fail_lines(out) == [
-        f"FAIL skills/python-coding {_REPO_LOCAL}: 'playbook' must be a mapping with optional "
-        "keys files and use_when, got str 'yes'"
+        f"FAIL skills/house-python {_REPO_LOCAL}: 'playbook' must be a mapping with optional "
+        "keys files, use_when, sections, references, got str 'yes'"
     ]
 
 
 def test_playbook_block_rejects_unknown_keys(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    write_skill(repo, "python-coding", block=_PLAYBOOK_BLOCK + "  when: always\n")
+    write_skill(repo, "house-python", block=_PLAYBOOK_BLOCK + "  when: always\n")
     write_rule(repo, "python-typing")
 
     rc, out, _ = run_validate(repo, capsys)
 
     assert rc == 1
     assert fail_lines(out) == [
-        f"FAIL skills/python-coding {_REPO_LOCAL}: 'playbook' has unknown key 'when'; "
-        "allowed keys: files, use_when"
+        f"FAIL skills/house-python {_REPO_LOCAL}: 'playbook' has unknown key 'when'; "
+        "allowed keys: files, use_when, sections, references"
     ]
 
 
@@ -273,26 +286,26 @@ def test_playbook_files_must_be_one_short_line(
     repo: Path, capsys: pytest.CaptureFixture[str], files_yaml: str, problem: str
 ) -> None:
     block = f"playbook:\n  use_when: editing Python code\n  files: {files_yaml}\n"
-    write_skill(repo, "python-coding", block=block)
+    write_skill(repo, "house-python", block=block)
     write_rule(repo, "python-typing")
 
     rc, out, _ = run_validate(repo, capsys)
 
     assert rc == 1
     assert fail_lines(out) == [
-        f"FAIL skills/python-coding {_REPO_LOCAL}: 'playbook.files' {problem}; {_FILES_SHAPE}"
+        f"FAIL skills/house-python {_REPO_LOCAL}: 'playbook.files' {problem}; {_FILES_SHAPE}"
     ]
 
 
 def test_playbook_use_when_must_be_one_line(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    write_skill(repo, "python-coding", block="playbook:\n  use_when: 7\n  files: Any Python file\n")
+    write_skill(repo, "house-python", block="playbook:\n  use_when: 7\n  files: Any Python file\n")
     write_rule(repo, "python-typing")
 
     rc, out, _ = run_validate(repo, capsys)
 
     assert rc == 1
     assert fail_lines(out) == [
-        f"FAIL skills/python-coding {_REPO_LOCAL}: 'playbook.use_when' is int 7; keep it to one "
+        f"FAIL skills/house-python {_REPO_LOCAL}: 'playbook.use_when' is int 7; keep it to one "
         "non-empty line (the engine writes it as 'Use when <use_when>.' in the composed "
         "description)"
     ]
@@ -300,14 +313,14 @@ def test_playbook_use_when_must_be_one_line(repo: Path, capsys: pytest.CaptureFi
 
 def test_use_when_must_not_repeat_use_when(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
     block = "playbook:\n  use_when: Use when editing Python code\n  files: Any Python file\n"
-    write_skill(repo, "python-coding", block=block)
+    write_skill(repo, "house-python", block=block)
     write_rule(repo, "python-typing")
 
     rc, out, _ = run_validate(repo, capsys)
 
     assert rc == 1
     assert fail_lines(out) == [
-        f"FAIL skills/python-coding {_REPO_LOCAL}: 'playbook.use_when' starts with 'Use when'; "
+        f"FAIL skills/house-python {_REPO_LOCAL}: 'playbook.use_when' starts with 'Use when'; "
         "write only the condition (the engine adds 'Use when'), e.g. 'editing a Python module'"
     ]
 
@@ -349,43 +362,52 @@ def test_description_that_cannot_fit_one_member_name_fails_with_length_and_text(
     ]
 
 
-def test_handwritten_reference_colliding_with_a_member_fails(
+def test_handwritten_reference_named_like_a_member_is_allowed(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    references = repo / "playbook" / "skills" / "python-coding" / "references"
+    """V12 is retired (prU D5): members render to rules/, so references/ cannot collide."""
+    references = repo / "playbook" / "skills" / "house-python" / "references"
     references.mkdir()
     (references / "python-typing.md").write_text("# Notes\n", encoding="utf-8")
     write_rule(repo, "python-typing")
 
     rc, out, _ = run_validate(repo, capsys)
 
-    assert rc == 1
-    assert fail_lines(out) == [
-        f"FAIL skills/python-coding {_REPO_LOCAL}: references/python-typing.md is hand-written "
-        "in this skill but is also the rendered reference of member rule 'python-typing'; "
-        "rename the hand-written file"
-    ]
+    assert rc == 0, out
+    assert fail_lines(out) == []
 
 
-def test_authored_references_heading_fails(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    write_skill(repo, "python-coding", body="# Python coding\n\n## References\n\n- notes\n")
+def test_authored_rules_heading_fails(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    write_skill(repo, "house-python", body="# Python coding\n\n## Rules\n\n- notes\n")
     write_rule(repo, "python-typing")
 
     rc, out, _ = run_validate(repo, capsys)
 
     assert rc == 1
     assert fail_lines(out) == [
-        f"FAIL skills/python-coding {_REPO_LOCAL}: the body has its own '## References' "
+        f"FAIL skills/house-python {_REPO_LOCAL}: the body has its own '## Rules' "
         "heading; the engine appends that section for member rules, so rename yours "
-        "(e.g. '## Further reading')"
+        "(e.g. '## Conventions')"
     ]
 
 
-def test_references_heading_in_a_plain_skill_is_allowed(
+def test_rules_heading_in_a_plain_skill_is_allowed(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """V13 guards only a skill that takes members: nothing is appended to a plain one."""
-    write_skill(repo, "query-db", block="", body="# Query\n\n## References\n")
+    write_skill(repo, "query-db", block="", body="# Query\n\n## Rules\n")
+
+    rc, out, _ = run_validate(repo, capsys)
+
+    assert rc == 0, out
+
+
+def test_references_heading_in_a_member_skill_is_allowed(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """prU D5: the engine appends '## Rules', so an authored '## References' is free."""
+    write_skill(repo, "house-python", body="# Python coding\n\n## References\n\n- notes\n")
+    write_rule(repo, "python-typing")
 
     rc, out, _ = run_validate(repo, capsys)
 
@@ -403,12 +425,12 @@ def _v14_line(rule: Path, skill_id: str, source: str) -> str:
 def test_rule_naming_a_skill_without_a_playbook_block_fails(
     tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """V14 over a python_design skill (D3: a bundled plugin skill owns no members) and
+    """V14 over a superpowers skill (D3: a bundled plugin skill owns no members) and
     over a repo-local plain skill."""
-    built = make_synthetic_repo(tmp_path, config_text=_CONFIG_WITH_PYTHON_DESIGN)
-    write_skill(built, "python-coding")
+    built = make_synthetic_repo(tmp_path, config_text=_CONFIG_WITH_SUPERPOWERS)
+    write_skill(built, "house-python")
     write_skill(built, "query-db", block="")
-    plugin_rule = write_rule(built, "layering", skill="python-architecture")
+    plugin_rule = write_rule(built, "tdd-cycle", skill="test-driven-development")
     local_rule = write_rule(built, "db-queries", skill="query-db")
 
     rc, out, _ = run_validate(built, capsys)
@@ -416,34 +438,34 @@ def test_rule_naming_a_skill_without_a_playbook_block_fails(
     assert rc == 1
     assert fail_lines(out) == [
         _v14_line(local_rule, "query-db", "<repo-local>"),
-        _v14_line(plugin_rule, "python-architecture", _PYTHON_DESIGN),
+        _v14_line(plugin_rule, "test-driven-development", _SUPERPOWERS),
     ]
 
 
 def test_playbook_block_without_members_warns(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """The fixture's python-coding keeps core's members; a skill of its own has none."""
+    """The fixture's house-python has a member; a skill of its own has none."""
     write_skill(repo, _OWN_SKILL)
 
     rc, out, err = run_validate(repo, capsys)
 
     assert rc == 0, out
     assert err.splitlines() == [
-        f"warning: skills/{_OWN_SKILL} {_REPO_LOCAL}: declares 'playbook' but no rule names "
-        "it in 'skill:'; it is never written"
+        f"warning: skills/{_OWN_SKILL} {_REPO_LOCAL}: declares 'playbook' but has no member "
+        "rule (none in its rules/ directory, none naming it in 'skill:'); it is never written"
     ]
 
 
 def test_member_skill_without_files_warns(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    write_skill(repo, "python-coding", block="playbook:\n  use_when: editing Python code\n")
+    write_skill(repo, "house-python", block="playbook:\n  use_when: editing Python code\n")
     write_rule(repo, "python-typing")
 
     rc, out, err = run_validate(repo, capsys)
 
     assert rc == 0, out
     assert err.splitlines() == [
-        f"warning: skills/python-coding {_REPO_LOCAL}: has member rules but no "
+        f"warning: skills/house-python {_REPO_LOCAL}: has member rules but no "
         "'playbook.files'; it is left out of the 'Where guidance lives' section"
     ]
 
@@ -465,4 +487,65 @@ def test_truncated_member_list_warns_with_counts(
         f"warning: skills/{_OWN_SKILL} {_REPO_LOCAL}: the composed description names 3 of 4 "
         "member rules within 300 chars ('... and 1 more'); shorten member names or the "
         "authored parts to list them all"
+    ]
+
+
+_SECTIONED_BLOCK = (
+    _PLAYBOOK_BLOCK
+    + "  sections:\n"
+    + "    - id: models\n      title: Models\n      impact: HIGH\n"
+    + "      summary: Model code.\n      open_when: Editing a model.\n"
+    + "    - id: reports\n      title: Reports\n      impact: LOW\n"
+    + "      summary: Report code.\n      open_when: Editing a report.\n"
+)
+
+
+def test_a_repo_local_rule_joining_a_sectioned_skill_needs_a_section(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    write_skill(repo, _OWN_SKILL, block=_SECTIONED_BLOCK)
+    rule = write_rule(repo, "risk-var", skill=_OWN_SKILL, priority=40)
+
+    rc, out, _ = run_validate(repo, capsys)
+
+    assert rc == 1
+    assert fail_lines(out) == [
+        f"FAIL {rule}: skill {_OWN_SKILL!r} declares sections, so its member rule needs "
+        "'section:'; declared sections: models, reports"
+    ]
+
+
+def test_a_sectioned_skill_with_sound_members_validates(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    write_skill(repo, _OWN_SKILL, block=_SECTIONED_BLOCK)
+    rule = write_rule(repo, "risk-var", skill=_OWN_SKILL, priority=40)
+    rule.write_text(
+        rule.read_text(encoding="utf-8").replace("priority:", "section: models\npriority:"),
+        encoding="utf-8",
+    )
+
+    rc, out, err = run_validate(repo, capsys)
+
+    assert rc == 0, out
+    assert "warning:" not in err
+
+
+@pytest.mark.parametrize("key", ["any_framework", "any_ml_stack", "any_dependency"])
+def test_a_list_predicate_key_given_a_bare_string_fails_naming_the_rule(
+    repo: Path, capsys: pytest.CaptureFixture[str], key: str
+) -> None:
+    rule = write_rule(repo, "python-typing")
+    rule.write_text(
+        rule.read_text(encoding="utf-8").replace(
+            "priority:", f"applies_if:\n  {key}: fastapi\npriority:"
+        ),
+        encoding="utf-8",
+    )
+
+    rc, out, _ = run_validate(repo, capsys)
+
+    assert rc == 1
+    assert fail_lines(out) == [
+        f"FAIL {rule}: applies_if: predicate {key!r} must be a list of strings; got 'fastapi'"
     ]

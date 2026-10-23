@@ -15,7 +15,11 @@ import difflib
 from typing import TYPE_CHECKING, Any, TypeGuard
 
 from coding_agent_playbook import toml_writer as _toml
+from coding_agent_playbook.catalog.prompt_sets import DEFAULT_PROMPT_SET, PROMPT_SETS, is_prompt_set
 from coding_agent_playbook.catalog.roots import canonical_overlay_name
+from coding_agent_playbook.config.framework import BUNDLED_FRAMEWORK_NAMES
+from coding_agent_playbook.config.layout import layout_table_problems
+from coding_agent_playbook.detector.platform_facts import KNOWN_PLATFORMS, PLATFORMS_KEY
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
@@ -297,3 +301,173 @@ def required_value(data: Mapping[str, Any], path: tuple[str, ...], *, source: st
             )
         value = value[key]
     return value
+
+
+_FRAMEWORK_KEY = "framework"
+
+#: Spellings of ``framework`` refused wherever they hold a value but are not read:
+#: TOML nests a key written after a ``[table]`` header (init writes
+#: ``[detector_cache.frameworks]`` last), and ``Config`` reads only the top-level
+#: ``framework``, so a switch appended at the end of the file did nothing (D57).
+_FRAMEWORK_SPELLINGS = (_FRAMEWORK_KEY, "frameworks")
+
+
+def check_framework_key(data: Mapping[str, object], *, source: str) -> None:
+    """Refuse a ``framework`` that is not a non-empty name, or that is not read (D57).
+
+    The value is a bundled framework's short name (``superpowers``,
+    ``mattpocock``), an overlay module name, or ``none``; which layer it names is
+    resolved later (``config.framework``), so a misspelt name is reported by the
+    overlay preflight, not here. Like the enabled lists (:func:`check_enabled_keys`),
+    a ``framework`` (or ``frameworks``) value inside a table, and a top-level
+    ``frameworks``, are refused with the line to write instead; a table is never
+    refused, so ``[detector_cache.frameworks]`` still loads.
+
+    Example::
+
+        >>> check_framework_key({"framework": 1}, source="c.toml")  # doctest: +ELLIPSIS
+        Traceback (most recent call last):
+        ...
+        coding_agent_playbook.config.schema.ConfigError: c.toml: framework must be ...
+    """
+    problems = [
+        problem
+        for path, table in _iter_tables(data)
+        for key, value in table.items()
+        if (problem := _framework_key_problem(path, key, value)) is not None
+    ]
+    if problems:
+        raise ConfigError("\n".join(f"{source}: {problem}" for problem in problems))
+
+
+def _framework_key_problem(path: _TablePath, key: str, value: object) -> str | None:
+    """Why ``key`` (in the table at ``path``) is a misread ``framework``, else ``None``."""
+    if key not in _FRAMEWORK_SPELLINGS or isinstance(value, dict):
+        return None
+    if not path and key == _FRAMEWORK_KEY:
+        return None if _is_name(value) else _framework_value_problem(value)
+    notes = [_NESTED_NOTE] if path else []
+    if key != _FRAMEWORK_KEY:
+        notes.append(f"did you mean {_FRAMEWORK_KEY}?")
+    shown = _toml.format_scalar(value) if _is_name(value) else '"<framework name>"'
+    return (
+        f"{_describe_key(path, key, value)} is not read (found {value!r}) "
+        f"({'; '.join(notes)}); use the top-level key instead, {_PLACEMENT}: "
+        f"{_FRAMEWORK_KEY} = {shown}"
+    )
+
+
+def _framework_value_problem(value: object) -> str:
+    """The message for a top-level ``framework`` that is not a non-empty name."""
+    bundled = ", ".join(f'"{name}"' for name in BUNDLED_FRAMEWORK_NAMES)
+    return (
+        f"framework must be a framework name such as {bundled}, "
+        f'an overlay module name or "none", got {value!r}'
+    )
+
+
+def check_platforms_key(data: Mapping[str, object], *, source: str) -> None:
+    """Refuse a ``platforms`` key the detector would ignore (prU D63).
+
+    Only a top-level list of :data:`KNOWN_PLATFORMS` names is read
+    (``detector.platform_facts.committed_platforms``); ``platforms = ["domino"]``
+    turns the Domino skills on in a repo with no Domino marker yet. A string, an
+    unknown name, or a ``platforms`` value nested in a table (written after a
+    ``[table]`` header) is refused with the line to write instead.
+
+    Example::
+
+        >>> check_platforms_key({"platforms": "domino"}, source="c.toml")  # doctest: +ELLIPSIS
+        Traceback (most recent call last):
+        ...
+        coding_agent_playbook.config.schema.ConfigError: c.toml: platforms must be a list ...
+    """
+    problems = [
+        problem
+        for path, table in _iter_tables(data)
+        if PLATFORMS_KEY in table
+        and (problem := _platforms_problem(path, table[PLATFORMS_KEY])) is not None
+    ]
+    if problems:
+        raise ConfigError("\n".join(f"{source}: {problem}" for problem in problems))
+
+
+def check_layout_table(data: Mapping[str, object], *, source: str) -> None:
+    """Refuse a ``[layout]`` the layout adapter cannot use, naming ``source`` and each key (D71).
+
+    An unknown key, an absolute path, a ``..`` segment or a trailing ``/`` would make
+    ``playbook sync`` rewrite paths to somewhere outside the repo or to nothing, so
+    the config does not load (``config.layout.layout_table_problems`` says why).
+
+    Example::
+
+        >>> check_layout_table({"layout": {"specs": "/s"}}, source="c.toml")  # doctest: +ELLIPSIS
+        Traceback (most recent call last):
+        ...
+        coding_agent_playbook.config.schema.ConfigError: c.toml: [layout] specs must be a relative ...
+    """
+    problems = layout_table_problems(data)
+    if problems:
+        raise ConfigError("\n".join(f"{source}: {problem}" for problem in problems))
+
+
+def _platforms_problem(path: _TablePath, value: object) -> str | None:
+    """Why ``platforms`` (in the table at ``path``) is not read as written, else ``None``."""
+    # A nested table of that name is someone else's (``[detector_cache.platforms]``);
+    # a top-level ``[platforms]`` table is refused below, since the detector ignores it.
+    if path and isinstance(value, dict):
+        return None
+    if path:
+        return (
+            f"{_describe_key(path, PLATFORMS_KEY, value)} is not read (found {value!r}) "
+            f"({_NESTED_NOTE}); use the top-level key instead, {_PLACEMENT}: "
+            f"{PLATFORMS_KEY} = {_platforms_value(value)}"
+        )
+    if not _is_str_list(value):
+        return (
+            f"{PLATFORMS_KEY} must be a list of platform names, got {value!r}; "
+            f"write {PLATFORMS_KEY} = {_platforms_value(value)}"
+        )
+    unknown = sorted(set(value) - KNOWN_PLATFORMS)
+    if unknown:
+        return (
+            f"{PLATFORMS_KEY} names unknown platform(s) {unknown}; "
+            f"known platforms: {sorted(KNOWN_PLATFORMS)}"
+        )
+    return None
+
+
+def _platforms_value(value: object) -> str:
+    """The list to show in ``platforms = …``: ``value`` when usable (a lone string listed), else an example."""
+    names = [value] if isinstance(value, str) else value
+    return _toml.format_scalar(names) if _is_str_list(names) else '["domino"]'
+
+
+_PROMPTS_KEY = "prompts"
+
+
+def check_prompts_key(data: Mapping[str, object], *, source: str) -> None:
+    """Refuse a top-level ``prompts`` that names no prompt set (D76).
+
+    The value is one of :data:`~coding_agent_playbook.catalog.prompt_sets.PROMPT_SETS`
+    (``"v1"``, the default, or ``"v2"``), compared exactly.
+
+    Example::
+
+        >>> check_prompts_key({"prompts": "v3"}, source="c.toml")  # doctest: +ELLIPSIS
+        Traceback (most recent call last):
+        ...
+        coding_agent_playbook.config.schema.ConfigError: c.toml: prompts must be ...
+    """
+    if _PROMPTS_KEY not in data or is_prompt_set(data[_PROMPTS_KEY]):
+        return
+    sets = " or ".join(f'"{name}"' for name in PROMPT_SETS)
+    raise ConfigError(
+        f"{source}: prompts must be the prompt set {sets} "
+        f"(default {DEFAULT_PROMPT_SET!r}), got {data[_PROMPTS_KEY]!r}"
+    )
+
+
+def _is_name(value: object) -> TypeGuard[str]:
+    """True for a non-blank string."""
+    return isinstance(value, str) and bool(value.strip())

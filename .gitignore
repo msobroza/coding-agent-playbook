@@ -232,3 +232,7 @@ __marimo__/
 /opencode.json
 /.continue/
 /shared_skills/
+
+# Core skill examples (prU D48): CI builds a throwaway env inside each example.
+catalog/core/skills/*/examples/*/.venv/
+catalog/core/skills/*/examples/*/uv.lock

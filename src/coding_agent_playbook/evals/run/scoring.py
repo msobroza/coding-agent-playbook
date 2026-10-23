@@ -1,11 +1,11 @@
-"""Scoring bridge — grade an agent's output through the compiled task.
+"""Scoring bridge — grade an agent's output through the compiled sample.
 
 :func:`score` turns a materialized :class:`~coding_agent_playbook.evals.run.harness_runner.Baseline`
 and the captured :class:`~coding_agent_playbook.evals.run.harness_runner.Candidate` into one
 :class:`~coding_agent_playbook.grading.types.EvaluationReport`. It sources the
-checks from the task compiler (:mod:`coding_agent_playbook.evals.compile.compiler`):
-the task's ``[gate]``/``[rubric]`` blocks compile (via
-:func:`~coding_agent_playbook.evals.task.compile_eval_task`) into one per-trial
+checks from the sample compiler (:mod:`coding_agent_playbook.evals.compile.compiler`):
+the sample's ``[gate]``/``[rubric]`` blocks compile (via
+:func:`~coding_agent_playbook.evals.sample.compile_eval_sample`) into one per-trial
 :class:`~coding_agent_playbook.grading.rubric.Rubric` carrying the two named
 layer checks (``id="gate"`` / ``id="rubric"``), and a single
 :meth:`Rubric.evaluate` folds them into the report. The per-trial **verdict** is
@@ -65,7 +65,7 @@ from coding_agent_playbook.grading.types import EvalContext, EvaluationReport, M
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evals.run.harness_runner import Baseline, Candidate
-    from coding_agent_playbook.evals.task import EvalTask
+    from coding_agent_playbook.evals.sample import EvalSample
     from coding_agent_playbook.grading.metric import Metric
     from coding_agent_playbook.grading.rubric import Rubric
     from coding_agent_playbook.grading.types import JudgeLike, Measurement
@@ -76,19 +76,19 @@ _RUBRIC_LABEL = "rubric"
 
 
 def score(
-    task: EvalTask,
+    sample: EvalSample,
     baseline: Baseline,
     candidate: Candidate,
     *,
     judge: JudgeLike | None = None,
-    samples: int = 1,
+    judge_samples: int = 1,
     fail_fast: bool = False,
 ) -> EvaluationReport:
-    """Grade ``candidate`` for ``task`` into one report + derive the trial verdict.
+    """Grade ``candidate`` for ``sample`` into one report + derive the trial verdict.
 
-    Compiles the task's ``[gate]``/``[rubric]`` blocks into one per-trial
+    Compiles the sample's ``[gate]``/``[rubric]`` blocks into one per-trial
     :class:`~coding_agent_playbook.grading.rubric.Rubric`
-    (:func:`~coding_agent_playbook.evals.task.compile_eval_task`), pre-computes the
+    (:func:`~coding_agent_playbook.evals.sample.compile_eval_sample`), pre-computes the
     metrics that rubric's checks reference over the candidate (and, for
     regression/execution, the pristine ``setup/`` baseline snapshot), runs
     :meth:`Rubric.evaluate`, then derives the per-trial verdict from the gate/rubric
@@ -104,14 +104,14 @@ def score(
     ``True`` a lost deterministic gate skips the remaining costlier tiers, so a
     failing ``[gate]`` check spares the LLM judge. The runner passes ``True`` by
     default (cost-saving); ``--full-scoring`` flips it off. It is ignored for a
-    task whose verdict or aggregate the short-circuit could change (an ``or``
+    sample whose verdict or aggregate the short-circuit could change (an ``or``
     verdict, a weighted verdict, an aggregate over a skippable layer — see
-    :attr:`~coding_agent_playbook.evals.compile.compiler.CompiledTask.short_circuit_safe`).
+    :attr:`~coding_agent_playbook.evals.compile.compiler.CompiledSample.short_circuit_safe`).
     """
     from coding_agent_playbook.evals.compile.compiler import verdict_passed, weighted_verdict
-    from coding_agent_playbook.evals.task import compile_eval_task
+    from coding_agent_playbook.evals.sample import compile_eval_sample
 
-    compiled = compile_eval_task(task)
+    compiled = compile_eval_sample(sample)
     rubric = compiled.per_trial
     fail_fast = fail_fast and compiled.short_circuit_safe
 
@@ -130,7 +130,7 @@ def score(
             tree=candidate.tree,
             baseline_tree=baseline.setup_snapshot,
             artifact=_graded_artifact(candidate),
-            samples=samples,
+            judge_samples=judge_samples,
             judge=judge,
             candidate_measurements=measured.candidate,
             baseline_measurements=measured.baseline,
@@ -161,18 +161,18 @@ def score(
 def _graded_artifact(candidate: Candidate) -> str:
     """The text the artifact-side checks grade: the diff, else the transcript.
 
-    An **edit** task is graded on what the agent *did*, so its captured ``git
+    An **edit** sample is graded on what the agent *did*, so its captured ``git
     diff`` is the artifact — unchanged, and the only case that existed before.
 
-    A **review** task is graded on what the agent *said*. Such a task forbids
+    A **review** sample is graded on what the agent *said*. Such a sample forbids
     edits (its ``[gate]`` is ``file_unchanged``), so a well-behaved agent leaves
     ``diff`` empty and its whole contribution lives in the transcript. Handing the
-    judge that empty diff scored every review task against nothing at all, so an
+    judge that empty diff scored every review sample against nothing at all, so an
     empty diff falls back to the transcript. The shipped ``security-review-*`` and
-    ``find-injected-vuln-*`` fixtures are all review tasks.
+    ``find-injected-vuln-*`` fixtures are all review samples.
 
-    The discriminator is the diff rather than anything declared on the task: a
-    task does not announce which kind it is, and an edit task whose agent did
+    The discriminator is the diff rather than anything declared on the sample: a
+    sample does not announce which kind it is, and an edit sample whose agent did
     nothing has no diff to grade either — its transcript is then strictly more
     informative than the empty string it would otherwise be graded on.
     """

@@ -1,0 +1,82 @@
+---
+id: pytest-test-doubles
+name: pytest test doubles
+description: "Double only what the code does not own, never the unit under test or its helpers: a named fake passed in through the production parameter by default, asserting on the state it holds afterwards."
+version: 1
+scope: scoped
+globs:
+  - "tests/**/*.py"
+  - "**/conftest.py"
+applies_if:
+  has_framework: ["pytest"]
+section: mocking
+priority: 20
+tags: [python, testing, pytest, mocking]
+---
+
+# Mock external boundaries, not internal logic
+
+## Description
+
+Double only what the code does not own: the network, databases, clocks, randomness, third-party SDKs and the filesystem outside `tmp_path`. When the code's own functions and classes are doubled, the test checks the wiring of the doubles instead of the behavior: it keeps passing after the real logic breaks, and it breaks after a harmless refactor. Never double the unit under test or its own helpers.
+
+The default double is a named fake: a small class named for what it replaces (`FakeInvoiceStore`), with its state in memory, no I/O and realistic data, passed in through the same parameter production uses (the python-coding skill's python-dependency-injection rule). Assert on what the fake holds after the Act, not on the order of calls.
+
+## Bad Example
+
+```python
+from unittest.mock import patch
+
+
+def test_order_total() -> None:
+    # Doubles the code's own logic: the real calculation never runs.
+    with (
+        patch("shop.orders.calculate_subtotal", return_value=10_000),
+        patch("shop.orders.calculate_tax", return_value=1_000),
+    ):
+        order = Order(lines=[Line(price_cents=5_000, quantity=2)])
+
+        # Only proves that total = subtotal + tax is wired up.
+        assert order.total_cents() == 11_000
+```
+
+## Good Example
+
+```python
+def test_order_total_adds_ten_percent_tax() -> None:
+    # Pure logic of the code itself: no double at all.
+    order = Order(lines=[Line(price_cents=5_000, quantity=2)])
+
+    assert order.total_cents() == 11_000  # 10_000 + 10% tax
+
+
+class FakeInvoiceStore:
+    def __init__(self) -> None:
+        self.saved: dict[str, Invoice] = {}
+
+    def save(self, invoice: Invoice) -> None:
+        self.saved[invoice.number] = invoice
+
+
+def test_issue_invoice_saves_the_gross_total() -> None:
+    store = FakeInvoiceStore()
+
+    issue_invoice(store, number="INV-7", net_cents=1000)
+
+    assert store.saved["INV-7"].total_cents == 1200  # 1000 + 20% VAT
+```
+
+## Notes
+
+- Unit tests use fakes; persistence and endpoint tests use the real engine in a rolled-back transaction. In web apps the second half is the web-application skill's sqlalchemy-test-rollback rule; elsewhere a fake of a persistence port is kept honest by the python-architecture skill's arch-contract-tests-for-fakes rule.
+- How a fake of an owned port behaves (the same errors as the real adapter, failure fakes for error paths) is the python-architecture skill's arch-test-use-cases-with-fakes rule.
+- Many doubles in one test means the unit has too many collaborators. Report that design problem; don't mock harder.
+- Never patch the module under test itself. Prefer fakes (an in-memory store, real files under `tmp_path`) over mocks whenever the boundary has rich behavior.
+- The clock and randomness come in as a clock or a seeded generator (the python-coding skill's python-pure-core rule). Freeze-time libraries are only for characterizing legacy code that reads the clock directly.
+- Environment variables, the working directory and module attributes of code that cannot take a parameter yet: `pytest-monkeypatch`.
+- Route dependencies of a FastAPI app are overridden, not patched: the web-application skill's fastapi-dependency-overrides rule.
+- A thin third-party seam the code cannot take as a parameter yet: `pytest-autospec`.
+- Which double fits which dependency, as one decision table: choosing-a-test-double.md.
+{% if has_framework("fastapi") %}
+- Worked example: the web-application skill's examples/fastapi-hotel-api/tests/fakes.py holds named in-memory fakes of the app's own ports, raising the same domain errors as the SQL repositories.
+{% endif %}

@@ -23,7 +23,7 @@ from coding_agent_playbook.artifacts.rule import Rule
 from coding_agent_playbook.detector.predicate import evaluate_predicate
 from coding_agent_playbook.hooks.resolution.lint_codes import resolve_lint_codes
 from coding_agent_playbook.validation._frontmatter import lint_codes_problems
-from tests._catalog import CORE_ROOT
+from tests._catalog import core_rules
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -34,7 +34,6 @@ if TYPE_CHECKING:
 
 pytestmark = pytest.mark.catalog
 
-ENGINE_RULES: Final = CORE_ROOT / "rules"
 SIDECAR: Final = ".playbook/manifest.toml"
 #: §E.3's codes per linked rule, verbatim.
 SPEC_CODES: Final[Mapping[str, dict[str, Any]]] = {
@@ -52,9 +51,8 @@ SPEC_CODES: Final[Mapping[str, dict[str, Any]]] = {
 
 
 def _engine_rules() -> dict[str, Rule]:
-    paths = sorted(p for p in ENGINE_RULES.rglob("*") if p.name.endswith((".md", ".md.j2")))
-    rules = (Rule.from_markdown(path, "coding_agent_playbook") for path in paths)
-    return {rule.frontmatter.id: rule for rule in rules}
+    """Every core rule by id, wherever it lives (``rules/`` or a skill's ``rules/``)."""
+    return core_rules()
 
 
 def _evaluate(predicate: dict[str, Any], facts: Mapping[str, Any]) -> bool:
@@ -98,7 +96,8 @@ def test_python_docstrings_round_trips_lint_codes(tmp_path: Path) -> None:
     copy_path = tmp_path / "docstrings.md"
     copy_path.write_text(rule.to_markdown(), encoding="utf-8")
 
-    again = Rule.from_markdown(copy_path, "coding_agent_playbook")
+    # The rule's skill comes from its directory (prU L0-07), which to_markdown never writes.
+    again = Rule.from_markdown(copy_path, "coding_agent_playbook", home_skill=rule.home_skill)
 
     assert again.frontmatter == rule.frontmatter
     assert again.frontmatter.lint_codes == SPEC_CODES["python-docstrings"]

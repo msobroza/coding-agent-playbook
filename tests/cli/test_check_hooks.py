@@ -74,8 +74,9 @@ _ENGINE_PACK = (
     "dependency-allowlist-guard",
     "destructive-command-guard",
     "docstring-nonregression",
+    "document-layout-guard",
     "error-handling-lint-feedback",
-    "eval-task-authoring-lint",
+    "eval-sample-authoring-lint",
     "exfil-channel-guard",
     "gate-weakening-guard",
     "git-commit-push-policy-guard",
@@ -138,7 +139,7 @@ def test_hooks_block_labels_per_adapter(
 
     assert lines == [
         "  [hooks]: on",
-        "  Hooks (30 on / 45 total):",
+        "  Hooks (31 on / 46 total):",
         # The engine pack (Track K5): OpenCode has no notebook tool, so guard-generated-outputs
         # and skill-nudge are degraded there; control-plane-guard matches no notebook edit.
         # OpenCode's Stop is evidence-only (§C.3.6), so every Stop-stage hook is degraded there
@@ -162,10 +163,13 @@ def test_hooks_block_labels_per_adapter(
         # K10: a Stop stage plus its post-edit bucket; OpenCode's Stop is evidence-only.
         "    [✓] docstring-nonregression (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: degraded)",
+        # prU L0-22: specs and plans go to the document layout, on both harnesses.
+        "    [✓] document-layout-guard (agents_md: advisory, claude_code: enforced, "
+        "continue: advisory, opencode: enforced)",
         # K7: a rule-linked lint hook has no body (its rule carries the practice).
         "    [✓] error-handling-lint-feedback (agents_md: —, claude_code: enforced, "
         "continue: —, opencode: enforced)",
-        "    [✓] eval-task-authoring-lint (agents_md: advisory, claude_code: enforced, "
+        "    [✓] eval-sample-authoring-lint (agents_md: advisory, claude_code: enforced, "
         "continue: advisory, opencode: enforced)",
         # K8: its remote snapshot rides OpenCode's experimental session_start: degraded there.
         "    [✓] exfil-channel-guard (agents_md: advisory, claude_code: enforced, "
@@ -247,10 +251,10 @@ def test_hooks_block_when_the_table_is_absent(
 
     assert lines == [
         "  [hooks]: off — no [hooks] table (add [hooks] enabled = true or re-run 'playbook init')",
-        "  Hooks (0 on / 43 total):",
-        *_off(_ENGINE_PACK[:17]),
+        "  Hooks (0 on / 44 total):",
+        *_off(_ENGINE_PACK[:18]),
         "    [✗] guard-x (skipped: hooks are off)",
-        *_off(_ENGINE_PACK[17:]),
+        *_off(_ENGINE_PACK[18:]),
     ]
 
 
@@ -267,7 +271,7 @@ def test_hooks_block_when_hooks_are_switched_off_or_unreadable(
 
     assert off_lines == [
         "  [hooks]: off — [hooks] enabled is not true",
-        "  Hooks (0 on / 42 total):",
+        "  Hooks (0 on / 43 total):",
         *_off(_ENGINE_PACK),
     ]
     assert bad_lines[-1] == "  [hooks] cannot be read; run 'playbook validate'."

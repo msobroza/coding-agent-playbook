@@ -161,7 +161,7 @@ def test_rule_registry_falls_back_to_stored_facts_when_caller_passes_empty_conte
 
 
 def _member_rule(rule_id: str, skill: str) -> Rule:
-    """A scoped rule owned by ``skill``: a member rule, delivered as one of its references."""
+    """A scoped rule owned by ``skill``: a member rule, delivered as one of its ``rules/`` files."""
     rule = _make_rule(rule_id, "engine")
     scoped = dataclasses.replace(rule.frontmatter, scope="scoped", skill=skill)
     return dataclasses.replace(rule, frontmatter=scoped)
@@ -182,9 +182,7 @@ def test_reference_for_names_the_skill_and_reference_of_an_active_scoped_rule() 
         [_member_rule("pytest", "python-testing")], {}, build_environment([])
     )
 
-    assert registry.reference_for("pytest") == SkillReference(
-        "python-testing", "references/pytest.md"
-    )
+    assert registry.reference_for("pytest") == SkillReference("python-testing", "rules/pytest.md")
 
 
 def test_reference_for_is_none_for_unknown_filtered_and_always_rules() -> None:

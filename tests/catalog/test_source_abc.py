@@ -27,7 +27,7 @@ class _DummyArtifactSource(ArtifactSource):
     def list_skills(self):
         return []
 
-    def list_eval_tasks(self):
+    def list_eval_samples(self):
         return []
 
 
@@ -58,7 +58,7 @@ def test_collect_hooks_default_wraps_list_hooks():
 
 
 def test_collect_hooks_default_records_a_raised_hook_schema_error():
-    """``tolerate_hook_errors`` (prK §P P8c) must not crash on a third-party
+    """``tolerate_load_errors`` (prK §P P8c) must not crash on a third-party
     source whose ``list_hooks`` fails loudly; its error is recorded instead."""
     error = HookSchemaError("remote:guard-x", "timeout", "2s", "a number of seconds")
 
@@ -67,6 +67,11 @@ def test_collect_hooks_default_records_a_raised_hook_schema_error():
             raise error
 
     assert _FailingSource().collect_hooks() == ([], [error])
+
+
+def test_prompt_set_layers_default_is_empty():
+    """``prompt_set_layers`` is concrete (D76): a source without prompt sets has no twins."""
+    assert _DummyArtifactSource().prompt_set_layers() == []
 
 
 def test_engine_package_of_reads_a_filesystem_source_and_assumes_the_engine_otherwise(

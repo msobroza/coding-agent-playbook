@@ -1,0 +1,81 @@
+---
+id: arch-test-use-cases-with-fakes
+name: Use-case tests with fakes
+description: "Test use cases by passing typed in-memory fakes of their ports, a fixed clock and an id factory, and assert on literal records and domain errors; no database, no mocking library."
+version: 1
+scope: scoped
+globs:
+  - "**/test_*.py"
+  - "**/*_test.py"
+  - "**/conftest.py"
+  - "**/tests/**/*.py"
+  - "**/fakes.py"
+section: testing
+priority: 51
+tags: [python, architecture, testing]
+---
+
+# Test use cases on fakes of their ports
+
+## Description
+
+A use case that receives its ports as parameters can be tested by calling it with fakes: in production the composition root passes the SQL repository, in a test the same parameter gets an in-memory one. No database, no mocking library, no shared state between tests. The tests run fast, are deterministic, and check what the use case does (the booking price is nights times the room rate) rather than which queries it sends.
+
+A fake behaves like the real implementation: the same return types, the same domain errors (a missing id raises the domain not-found error, never `KeyError`), and the same ordering guarantees callers rely on. Name fakes for what they are (`InMemoryRoomRepository`, `RecordingSms`, `FakeHotelUnitOfWork`). Inject time and ids too, so every expected value is a literal.
+
+## Bad Example
+
+```python
+class DataInterfaceStub:
+    def __init__(self) -> None:
+        self.data: dict[str, dict[str, Any]] = {}  # untyped rows, unlike the real store
+
+    def read_by_id(self, id: str) -> dict[str, Any]:
+        return self.data[id]  # KeyError where the real repository raises a domain error
+
+
+def test_create_booking() -> None:
+    rooms = DataInterfaceStub()
+    rooms.data["room-1"] = {"id": "room-1", "price": 100}
+    booking = create_booking(BookingCreate(room_id="room-1", nights=3), rooms)
+    assert booking.id is not None  # proves nothing about the id or the price
+```
+
+## Good Example
+
+```python
+def test_booking_price_is_nights_times_room_rate() -> None:
+    rooms = InMemoryRoomRepository([Room(room_id=1, number="101", rate_cents=10_000)])
+    bookings = InMemoryBookingRepository()
+    stay = Stay(check_in=date(2026, 1, 1), check_out=date(2026, 1, 4))
+
+    booking = book_room(rooms, bookings, room_id=1, stay=stay, new_id=sequential_ids())
+
+    expected = Booking(booking_id=UUID(int=1), room_id=1, stay=stay, price_cents=30_000)
+    assert booking == expected
+    assert bookings.all() == [expected]
+
+
+def test_booking_an_unknown_room_raises_not_found() -> None:
+    with pytest.raises(RoomNotFoundError):
+        book_room(
+            InMemoryRoomRepository([]),
+            InMemoryBookingRepository(),
+            room_id=404,
+            stay=Stay(check_in=date(2026, 1, 1), check_out=date(2026, 1, 2)),
+            new_id=sequential_ids(),
+        )
+```
+
+`sequential_ids()` returns `lambda: UUID(int=next(counter))` over `itertools.count(1)`; a fixed clock is `lambda: moment`. Production passes `uuid4` and `lambda: datetime.now(timezone.utc)`.
+
+## Notes
+
+- These are the unit tests: unit tests use fakes, while persistence and endpoint tests run on the real engine (arch-tests-by-layer). arch-contract-tests-for-fakes keeps each fake honest against the real implementation.
+- A recording fake (`sent: list[tuple[str, str]]`) turns "was it called with" into an ordinary assertion on data.
+- To drive an error path, subclass the fake and override the one method that should fail, raising the same specific error the real adapter raises.
+- A fake of an async port defines `async def` methods with the same contract: typed records and the domain not-found error.
+- Where shared fakes live (an importable `tests/fakes.py`) is the python-testing skill's pytest-conftest rule; what may be doubled at all (`unittest.mock` only for third-party objects) is its pytest-test-doubles rule.
+{% if has_framework("fastapi") %}
+- Worked example: web-application's hotel example (fastapi-hotel-api), files tests/fakes.py and tests/test_operations.py: in-memory fakes that raise the SQL repositories' errors, and use-case tests with fixed dates and ids.
+{% endif %}

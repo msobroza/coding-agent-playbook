@@ -2,7 +2,7 @@
 
 A *gate* is a named, composed boolean :class:`~coding_agent_playbook.grading.check.Check`
 (typically built from the boolean composers ``AllOf``/``AnyOf``/``Not``) that an
-out-of-tree package ships and a task references by name. The registry is a verbatim
+out-of-tree package ships and a sample references by name. The registry is a verbatim
 mirror of the rubric registry: :func:`register_gate` is a decorator factory keyed on
 an explicit name, in-tree registrations win over an entry-point plugin of the same
 name, and the engine ships **no** builtin gates (this group is purely the extension

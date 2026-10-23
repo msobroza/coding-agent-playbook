@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import argparse
 import shutil
-import subprocess
 from typing import TYPE_CHECKING
 
 import pytest
@@ -20,6 +19,7 @@ from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.generated_output.gitignore import BLOCK_END, BLOCK_START
 from coding_agent_playbook.sync import pipeline as _sync
+from tests.cli.git_run import run_git
 from tests.conftest import _DEFAULT_CONFIG
 from tests.fakes import FakeGitClient
 
@@ -46,7 +46,7 @@ def repo(tmp_path: Path, make_synthetic_repo: Callable[..., Path]) -> Path:
         tmp_path,
         rules=[("style-guide", "Use spaces.\n")],
         # Not an engine prompt id: overriding one (``refactor``) without its
-        # eval_tasks fails validate, so sync would refuse to write (prK §P P8).
+        # eval_samples fails validate, so sync would refuse to write (prK §P P8).
         prompts=[("tidy-up", {"slash": "tidy-up", "body": "Tidy up.\n"})],
     )
     _add_skill(built)
@@ -313,25 +313,18 @@ def test_run_check_staged_outside_a_repo_exits_zero(repo: Path) -> None:
 needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="git not on PATH")
 
 
-def _git(repo: Path, *args: str) -> str:
-    proc = subprocess.run(
-        ["git", *args], cwd=repo, check=True, capture_output=True, text=True, timeout=10
-    )
-    return proc.stdout
-
-
 @needs_git
 @pytest.mark.usefixtures("hermetic_git_env")
 def test_e2e_generated_output_is_ignored_and_guarded(repo: Path) -> None:
-    _git(repo, "init", "-q")
+    run_git(repo, "init", "-q")
     assert _sync.execute(repo) == 0
-    _git(repo, "add", "-A")
-    staged = _git(repo, "diff", "--cached", "--name-only").split()
+    run_git(repo, "add", "-A")
+    staged = run_git(repo, "diff", "--cached", "--name-only").split()
     assert ".gitignore" in staged
     assert "AGENTS.md" not in staged
     assert not any(path.startswith(".claude/") for path in staged)
     assert _sync.execute(repo, check_staged=True) == 0
-    _git(repo, "add", "-f", "AGENTS.md")
+    run_git(repo, "add", "-f", "AGENTS.md")
     assert _sync.execute(repo, check_staged=True) == 1
 
 
@@ -342,14 +335,14 @@ def test_e2e_warns_when_legacy_output_is_still_tracked(
 ) -> None:
     monkeypatch.chdir(repo)
     _set_commit_true(repo)
-    _git(repo, "init", "-q")
+    run_git(repo, "init", "-q")
     assert _sync.execute(repo) == 0
-    _git(repo, "add", "-A")
-    _git(repo, "commit", "-q", "--no-verify", "-m", "legacy: output committed")
+    run_git(repo, "add", "-A")
+    run_git(repo, "commit", "-q", "--no-verify", "-m", "legacy: output committed")
     (repo / ".coding-agent-playbook.toml").write_text(_DEFAULT_CONFIG)
     capsys.readouterr()
     assert _sync.execute(repo) == 0
     err = capsys.readouterr().err
     assert "  AGENTS.md\n" in err
     assert "git rm -r --cached --" in err
-    assert "AGENTS.md" in _git(repo, "ls-files")  # warning only: git state untouched
+    assert "AGENTS.md" in run_git(repo, "ls-files")  # warning only: git state untouched

@@ -18,9 +18,14 @@ from coding_agent_playbook.commands._init_adapters import (
     DEFAULT_ADAPTERS,
     adapters_from_flag,
 )
+from coding_agent_playbook.config.files import FileSystemStateSource
+from coding_agent_playbook.config.framework import BUNDLED_FRAMEWORK_NAMES
+from coding_agent_playbook.detector.harness_markers import detected_adapters
+from coding_agent_playbook.lockfile.model import generated_paths
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
 
     from coding_agent_playbook.commands.init import InitArgs
 
@@ -39,6 +44,8 @@ class Answers(TypedDict):
     kind: str
     description: str
     adapters: list[str]
+    # ``framework`` (D57); None = no explicit choice: keep the committed one, else "none".
+    framework: str | None
     overlays: list[str]
     # ``[hooks] enabled``; None = no explicit choice (non-interactive without
     # --no-hooks): keep a value the config already has, else enable.
@@ -54,6 +61,18 @@ _VALID_KINDS = (
 )
 
 _HOOKS_QUESTION = "Enable assistant lifecycle hooks?"
+
+#: The ``--framework`` help and the interactive question list the bundled frameworks'
+#: short names (``config.framework.BUNDLED_FRAMEWORK_NAMES``).
+_BUNDLED_FRAMEWORKS = ", ".join(BUNDLED_FRAMEWORK_NAMES)
+FRAMEWORK_FLAG_HELP = (
+    f"spec-driven framework: {_BUNDLED_FRAMEWORKS}, an overlay module name, or none "
+    "(writes the committed framework key; default: keep the current one, else none)"
+)
+_FRAMEWORK_QUESTION = (
+    f"Spec-driven framework ({_BUNDLED_FRAMEWORKS}, an overlay module or none; "
+    "blank keeps the current one, else none)"
+)
 _YES = frozenset({"y", "yes"})
 _NO = frozenset({"n", "no"})
 
@@ -163,9 +182,31 @@ def _answers_from_flags(args: InitArgs) -> Answers:
         kind=kind,
         description=args.description,
         adapters=adapters_from_flag(args.adapters),
+        framework=args.framework,
         overlays=[o.strip() for o in args.overlays.split(",") if o.strip()],
         hooks=_hooks_answer(args, None),
     )
+
+
+def _preselected_adapters(repo_root: Path) -> list[str]:
+    """The menu's defaults: the adapters whose harness files the repo holds (D79).
+
+    Without any, :data:`DEFAULT_ADAPTERS`. Engine output named in the lockfile
+    is not a harness file; an unreadable lockfile just means none is excluded,
+    since ``playbook sync`` reports it later anyway.
+
+    Example::
+
+        >>> _preselected_adapters(Path("fresh-repo"))  # doctest: +SKIP
+        ['claude_code', 'opencode', 'shared_skills']
+    """
+    try:
+        lockfile = FileSystemStateSource(repo_root=repo_root).load_lockfile()
+    except (OSError, ValueError):  # TOMLDecodeError and LockfileFormatError are ValueErrors
+        lockfile = None
+    generated = generated_paths(lockfile)
+    detected = [a for a in detected_adapters(repo_root, generated) if a in ADAPTER_CHOICES]
+    return detected or list(DEFAULT_ADAPTERS)
 
 
 def _answers_from_questions(args: InitArgs, ask: Ask) -> Answers:
@@ -179,14 +220,16 @@ def _answers_from_questions(args: InitArgs, ask: Ask) -> Answers:
         print(f"  valid kinds: {', '.join(_VALID_KINDS)}")
         kind = _prompt("Project kind", default="python-application", ask=ask)
     adapters = _prompt_multi_select(
-        ADAPTERS_QUESTION, list(ADAPTER_CHOICES), list(DEFAULT_ADAPTERS), ask=ask
+        ADAPTERS_QUESTION, list(ADAPTER_CHOICES), _preselected_adapters(args.repo_root), ask=ask
     )
+    framework = _prompt(_FRAMEWORK_QUESTION, ask=ask) or None
     overlays = _prompt_multi_select("Enable overlay packages?", [], [], ask=ask)
     return Answers(
         name=name,
         kind=kind,
         description=description,
         adapters=adapters,
+        framework=framework,
         overlays=overlays,
         hooks=_hooks_answer(args, ask),
     )

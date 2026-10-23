@@ -1,13 +1,13 @@
 """The handle builder: a ``[<layer>.bind]`` table -> ``name -> Check``.
 
-The task config declares its named *handles* in a ``[gate.bind]`` /
+The sample config declares its named *handles* in a ``[gate.bind]`` /
 ``[rubric.bind]`` / ``[aggregate.bind]`` table - one entry per handle, the value a
 *binding* that the :func:`~coding_agent_playbook.evals.compile._expr.compile_expr`
 interpreter later references by name. This module is the **Factory** that turns
 each binding into a concrete
 :class:`~coding_agent_playbook.grading.check.Check`, and (because the
 boolean-group bindings recurse) a **Composite** builder over the
-:mod:`coding_agent_playbook.grading.compose` tree. The task compiler
+:mod:`coding_agent_playbook.grading.compose` tree. The sample compiler
 (:mod:`coding_agent_playbook.evals.compile.compiler`) calls it once per present layer.
 
 A binding (and any nested child) carries exactly one of six mutually exclusive
@@ -41,7 +41,7 @@ Acyclic by construction: this module imports the grading kernel (the check
 registry, ``compose``, ``Rubric``, ``ThresholdCheck``), the gate and rubric
 registries beside it and the eval-only check families - never the reverse. Importing
 the families here fires their ``@register_check`` decorators, so ``get_check`` sees
-them before its first lookup. It is wired into the task pipeline by
+them before its first lookup. It is wired into the sample pipeline by
 :mod:`coding_agent_playbook.evals.compile.compiler`, which builds each layer's handle map
 from this factory before compiling its ``expr``.
 """
@@ -74,7 +74,7 @@ _EVAL_CHECK_FAMILIES = (aggregate, answer, files)
 _SHAPE_KEYS = ("all_of", "any_of", "not", "rubric", "check", "ref")
 
 #: Tolerance for the rubric-group weight-sum check (parity with the
-#: ``[rubric].weights`` sum rule in :mod:`coding_agent_playbook.evals.task`).
+#: ``[rubric].weights`` sum rule in :mod:`coding_agent_playbook.evals.sample`).
 _WEIGHT_SUM_TOLERANCE = 1e-3
 
 #: The per-criterion ``JudgeCheck`` floor when a rubric group omits ``threshold``.

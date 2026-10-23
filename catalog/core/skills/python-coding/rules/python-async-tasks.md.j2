@@ -1,0 +1,88 @@
+---
+id: python-async-tasks
+name: Background tasks
+description: "Never discard the result of create_task: give every task an owner that keeps it alive, reports its failure and cancels it at shutdown."
+version: 1
+scope: scoped
+globs:
+  - "**/*.py"
+section: async
+priority: 56
+tags: [python, async, concurrency]
+---
+
+# Give every task an owner
+
+## Description
+
+`asyncio.create_task(...)` returns the only strong reference to the task: the event loop keeps a weak one. A task whose result is thrown away can be garbage collected before it finishes, and its exception never reaches your code; at best a "Task exception was never retrieved" message appears when the task is finalized, which is easy to miss.
+
+{% if python_at_least("3.11") %}
+- Start tasks the current scope waits for inside an `asyncio.TaskGroup`: the block exits only when every task is done, and a failure cancels the others and raises an `ExceptionGroup`.
+{% else %}
+- Keep tasks the current scope waits for in a local task set, await them together, and cancel and await the rest in `finally`, so a failure leaves no task running. Tasks that outlive the call report through the supervisor's done callback below.
+{% endif %}
+- Hand a task that must outlive the call to a supervisor object that the composition root builds and closes (`python-dependency-injection`). It keeps a reference until the task is done, reads the outcome in a done callback and reports a failure there.
+- Never collect tasks in a module-level set: nothing closes it and tests share it.
+
+## Bad Example
+
+```python
+async def place_order(order: Order, store: OrderStore, mailer: Mailer) -> None:
+    await store.save(order)
+    asyncio.create_task(mailer.send_confirmation(order))  # may vanish; its error is never seen
+```
+
+## Good Example
+
+```python
+class BackgroundJobs:
+    def __init__(self, log: logging.Logger) -> None:
+        self._log = log
+        self._running: set[asyncio.Task[None]] = set()
+
+    def start(self, job: Coroutine[Any, Any, None]) -> None:
+        task = asyncio.create_task(job)
+        self._running.add(task)
+        task.add_done_callback(self._settle)
+
+    def _settle(self, task: asyncio.Task[None]) -> None:
+        self._running.discard(task)
+        if not task.cancelled() and (error := task.exception()) is not None:
+            self._log.error("background job failed", exc_info=error)
+
+    async def aclose(self) -> None:  # the composition root calls it at shutdown
+        for task in self._running:
+            task.cancel()
+        await asyncio.gather(*self._running, return_exceptions=True)
+
+
+async def place_order(order: Order, store: OrderStore, jobs: BackgroundJobs, mailer: Mailer) -> None:
+    await store.save(order)
+    jobs.start(mailer.send_confirmation(order))
+
+
+{% if python_at_least("3.11") %}
+async def warm_caches(loaders: Sequence[CacheLoader]) -> None:
+    async with asyncio.TaskGroup() as group:  # the scope owns and awaits every task
+        for loader in loaders:
+            group.create_task(loader.load())
+{% else %}
+async def warm_caches(loaders: Sequence[CacheLoader]) -> None:
+    tasks: set[asyncio.Task[None]] = {asyncio.create_task(loader.load()) for loader in loaders}
+    try:
+        await asyncio.gather(*tasks)  # the first failure propagates
+    finally:
+        for task in tasks:
+            task.cancel()  # a no-op for finished tasks; stops the rest after a failure
+        await asyncio.gather(*tasks, return_exceptions=True)
+{% endif %}
+```
+
+## Notes
+
+- The done callback is the supervisor's boundary: it is the one place that reads a background failure, so report it there with the traceback instead of dropping the result.
+- Await a task directly (`result = await task`) when the caller needs its result; then its failure propagates to the caller.
+- A long-running task must stay cancellable: inside it, let `asyncio.CancelledError` propagate and release resources in `finally` (`python-async`).
+- In development, run with `PYTHONASYNCIODEBUG=1` (or `python -X dev`): asyncio's debug mode reports coroutines that were never awaited and slow callbacks.
+- Annotate the reference holder as `set[asyncio.Task[None]]`, the mutable builtin; the abstract `collections.abc.Set` has no `add` or `discard`.

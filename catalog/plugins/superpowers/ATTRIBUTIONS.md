@@ -31,7 +31,8 @@ URL removals listed below) and is not authored by Jesse Vincent.
 
 The port keeps the upstream wording. The only edits are the ones needed to make
 the pack self-contained inside the coding-agent-playbook engine (no upstream
-plugin, marketplace, repository, or network access is needed at run time):
+plugin, marketplace, repository, or network access is needed at run time),
+and the spec and plan paths that follow the engine's document layout:
 
 - **Restructure.** The engine's skill sync copies only `SKILL.md`, `scripts/`
   and `references/` from each skill directory, so every other supporting file at
@@ -52,6 +53,36 @@ plugin, marketplace, repository, or network access is needed at run time):
   first frontmatter key of every `SKILL.md`. `name` is unchanged, and so is
   every `description` except diagnosing-superpowers', which no longer names the
   upstream maintainers as the bug report's recipient (see Dropped below).
+  Six skills gain one engine-owned line, `capabilities: [<role>]`, as their
+  last frontmatter key: brainstorming (`clarify`), writing-plans (`plan`),
+  test-driven-development (`tdd`), systematic-debugging (`debug`),
+  requesting-code-review (`review`) and verification-before-completion
+  (`verify`). The engine reads it to map the framework's roles and never writes
+  it to the synced copies.
+- **Framework metadata added.** `framework.toml` at the pack root is new: it
+  marks the pack as a spec-driven framework named `superpowers`. It declares
+  no `[layout_aliases]`: the skills' own text names the document layout's
+  default paths (next item).
+- **Document layout paths.** The plugin writes specs and plans in the engine's
+  shared document layout (`docs/specs/`, `docs/plans/`) instead of upstream's
+  `docs/superpowers/specs/` and `docs/superpowers/plans/`, so `playbook sync`
+  can move them to a repo's configured `[layout]`. Only the path strings
+  changed; the surrounding wording is upstream's:
+  - brainstorming `SKILL.md`, "Where it goes":
+    `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md` became
+    `docs/specs/YYYY-MM-DD-<topic>-design.md`.
+  - writing-plans `SKILL.md`, "Save plans to":
+    `docs/superpowers/plans/YYYY-MM-DD-<feature-name>.md` became
+    `docs/plans/YYYY-MM-DD-<feature-name>.md`.
+  - writing-plans `SKILL.md`, both "Plan complete and saved to" lines:
+    `docs/superpowers/plans/<filename>.md` became `docs/plans/<filename>.md`.
+  - requesting-code-review `SKILL.md`, the example's `PLAN_OR_REQUIREMENTS`
+    line: `docs/superpowers/plans/deployment-plan.md` became
+    `docs/plans/deployment-plan.md`.
+  - executing-plans `SKILL.md` and subagent-driven-development `SKILL.md`, the
+    example workflow's "Read plan" and "Resolve workspace" lines:
+    `docs/superpowers/plans/feature-plan.md` became
+    `docs/plans/feature-plan.md`.
 - **Cross-skill references.** Namespaced `superpowers:<skill>` references were
   rewritten to the plain skill name (`<skill>`); all referenced skills ship in
   this pack.

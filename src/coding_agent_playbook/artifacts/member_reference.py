@@ -1,4 +1,4 @@
-"""A member rule as its skill delivers it: one ``references/<rule-id>.md`` file.
+"""A member rule as its skill delivers it: one ``rules/<rule-id>.md`` file.
 
 A scoped rule that names a skill in ``skill:`` is a member rule of that skill
 (ADR 0001). At sync, ``skills.membership.compose_skills`` renders each active
@@ -6,21 +6,30 @@ member into a :class:`MemberReference` and attaches them to
 ``Skill.member_references``; the skill writer then writes ``text`` under every
 skill root, so the copies are byte-identical.
 
-A stdlib-only leaf: ``artifacts.skill`` imports it at run time for
-``Skill.from_dict``, so it cannot import ``artifacts.skill`` back
-(specs/prS-skills-context.md section 6.4.1).
+Below ``artifacts.skill``: ``artifacts.skill`` imports it at run time for
+``Skill.from_dict``, so it imports only the stdlib and the ``artifacts.impact``
+leaf, never ``artifacts.skill`` back (specs/prS-skills-context.md section 6.4.1).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from pathlib import PurePosixPath
+from typing import TYPE_CHECKING, Any, Final
+
+from coding_agent_playbook.artifacts.impact import Impact
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-#: The directory inside a skill that holds its references (Agent Skills layout).
-_REFERENCES_DIR = "references"
+#: The directory inside a skill that holds its member rules, as in the source
+#: (prU D5, ADR 0005); ``references/`` stays free for hand-written documents.
+#: Generated wording that names the directory (skills.document, validation V6)
+#: is built from it too, so a rename touches this one line.
+RULES_DIR: Final = "rules"
+
+#: The directory of skills under a playbook layer and under the harness tree alike.
+SKILLS_DIR: Final = "skills"
 
 
 def member_reference_path(rule_id: str) -> str:
@@ -28,19 +37,47 @@ def member_reference_path(rule_id: str) -> str:
 
     The one spelling the writer, the lockfile split and prompt pointer lines share.
 
-    Example: ``member_reference_path("pytest")`` -> ``"references/pytest.md"``.
+    Example: ``member_reference_path("pytest")`` -> ``"rules/pytest.md"``.
     """
-    return f"{_REFERENCES_DIR}/{rule_id}.md"
+    return f"{RULES_DIR}/{rule_id}.md"
+
+
+def skill_member_path(skill_id: str, rule_id: str, *, suffix: str = ".md") -> str:
+    """A member rule's path relative to the root that holds ``skills/`` (prU D5, D22).
+
+    The one spelling of ``skills/<skill>/rules/<id><suffix>`` that the
+    agent_harness emitter, its manifest and ``import-harness`` share;
+    :func:`skill_member_location` parses it back.
+
+    Example: ``skill_member_path("risk", "limits")`` -> ``"skills/risk/rules/limits.md"``.
+    """
+    return f"{SKILLS_DIR}/{skill_id}/{RULES_DIR}/{rule_id}{suffix}"
+
+
+def skill_member_location(rel_path: str) -> tuple[str, str] | None:
+    """``(skill_id, rule_id)`` of a :func:`skill_member_path` ``.md`` path, else None.
+
+    Example: ``skill_member_location("skills/risk/rules/limits.md")`` -> ``("risk", "limits")``.
+    """
+    parts = PurePosixPath(rel_path).parts
+    if len(parts) != 4 or (parts[0], parts[2]) != (SKILLS_DIR, RULES_DIR):
+        return None
+    if not parts[3].endswith(".md"):
+        return None
+    return parts[1], parts[3].removesuffix(".md")
 
 
 @dataclass(frozen=True)
 class MemberReference:
-    """One active member rule of a skill, rendered as ``references/<rule_id>.md``.
+    """One active member rule of a skill, rendered as ``rules/<rule_id>.md``.
 
     ``text`` is the whole file, identical in every skill root. ``name`` labels the
     member in its skill's Covers clause and index, ``description`` is its index
-    line, ``globs`` feed the reference's first line and ``source_package`` its
-    lockfile provenance.
+    line, ``globs`` feed the rule file's first line and ``source_package`` its
+    lockfile provenance. ``section`` and ``impact`` place the member in its
+    skill's sectioned index (prU D17): its section's id and that section's
+    :class:`Impact`; both ``None`` for a member of a skill
+    without sections, or for one listed under the engine's "Other" section (D42).
 
     Example: ``MemberReference("python-typing", ...).filename`` -> ``"python-typing.md"``.
     """
@@ -52,10 +89,12 @@ class MemberReference:
     globs: tuple[str, ...]
     text: str
     source_package: str
+    section: str | None = None
+    impact: Impact | None = None
 
     @property
     def filename(self) -> str:
-        """The file name under ``references/``: ``<rule_id>.md``.
+        """The file name under ``rules/``: ``<rule_id>.md``.
 
         Example: ``member.filename`` -> ``"pytest.md"`` for rule ``pytest``.
         """
@@ -74,6 +113,8 @@ class MemberReference:
             "globs": list(self.globs),
             "text": self.text,
             "source_package": self.source_package,
+            "section": self.section,
+            "impact": None if self.impact is None else str(self.impact),
         }
 
     @classmethod
@@ -87,4 +128,12 @@ class MemberReference:
             globs=tuple(data["globs"]),
             text=data["text"],
             source_package=data["source_package"],
+            # A dict written before sections existed has neither key.
+            section=data.get("section"),
+            impact=_impact_or_none(data.get("impact")),
         )
+
+
+def _impact_or_none(value: str | None) -> Impact | None:
+    """A serialized impact back as :class:`Impact`; ``None`` stays ``None``."""
+    return None if value is None else Impact(value)

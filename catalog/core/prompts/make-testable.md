@@ -11,7 +11,7 @@ input_variables:
 includes_rules:
   - python-dependency-injection
   - python-pure-core
-eval_tasks:
+eval_samples:
   - make-testable-inject-clock
 ---
 

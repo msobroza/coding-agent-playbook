@@ -43,7 +43,7 @@ def pytest_sessionstart(session: pytest.Session) -> None:
     Git exports absolute ``GIT_DIR``/``GIT_INDEX_FILE`` to hooks in a linked
     worktree, and pre-commit passes them on to the ``catalog-checks`` hook. Any
     test running real git without ``hermetic_git_env`` (``materialize`` in the
-    shipped-task tests) would then commit onto the developer's branch and
+    shipped-sample tests) would then commit onto the developer's branch and
     overwrite their index. Runs before collection, so collection-time git is
     covered too.
     """
@@ -227,7 +227,7 @@ def make_synthetic_repo():
             # repo is the path to the consumer-repo root.
 
     Prefer artifact ids the engine does not ship: a repo-local ``refactor``
-    prompt overrides the engine's without its ``eval_tasks``, which fails
+    prompt overrides the engine's without its ``eval_samples``, which fails
     ``playbook validate`` and so makes ``playbook sync`` refuse to write.
     """
 

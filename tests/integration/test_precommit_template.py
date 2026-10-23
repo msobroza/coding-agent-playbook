@@ -16,6 +16,7 @@ import pytest
 import yaml
 
 from coding_agent_playbook.catalog.source import _resource_subdir
+from coding_agent_playbook.commands.twins.docs_check import DOCS_FILES_PATTERN
 from coding_agent_playbook.precommit import (
     PrecommitTemplateMissingError,
     precommit_template_dir,
@@ -201,3 +202,16 @@ def test_default_install_hook_types_includes_commit_msg(
     assert {"coding-agent-playbook-commit-msg", "coding-agent-playbook-commit-trailers"} <= set(
         hooks
     )
+
+
+@pytest.mark.parametrize("output_commit", [False, True])
+def test_starter_runs_docs_check_on_staged_documentation(output_commit: bool) -> None:
+    """D69: the air-gapped twin of ``playbook-docs``, filtered to documentation paths."""
+    hooks = _hooks(yaml.safe_load(render_fresh_pre_commit(output_commit=output_commit)))
+    docs = hooks["coding-agent-playbook-docs"]
+    assert docs["entry"] == "playbook docs-check"
+    assert docs["language"] == "system"
+    assert docs["files"] == DOCS_FILES_PATTERN
+    assert docs["require_serial"] is True
+    assert docs["stages"] == ["pre-commit"]
+    assert docs.get("always_run") in (None, False)

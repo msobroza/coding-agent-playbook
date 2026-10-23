@@ -9,10 +9,12 @@ description that cannot fit 300 characters raises before any adapter runs.
 
 from __future__ import annotations
 
+import argparse
 from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.commands import render as render_command
 from coding_agent_playbook.skills.document import DescriptionOverflowError
 from coding_agent_playbook.sync.render import (
     SkillDescriptionOverflowError,
@@ -168,6 +170,54 @@ def test_render_artifacts_leaves_a_long_description_without_members_as_authored(
     assert skill.frontmatter["description"] == _OVERFLOWING_DESCRIPTION * 2
 
 
+_SECTIONED_SKILL = """\
+---
+id: risk-models
+name: risk-models
+description: Conventions for the risk models.
+playbook:
+  use_when: changing a risk model
+  files: Risk model modules
+  sections:
+    - id: naming
+      title: Naming
+      impact: HIGH
+      summary: Name models after what they price.
+      open_when: A model class or module is added or renamed.
+  references:
+    - path: references/glossary.md
+      open_when: Naming a new model.
+    - path: references/click-cli.md
+      open_when: Adding a command.
+      applies_if:
+        has_framework: [click]
+---
+# Risk models
+"""
+
+
+def test_render_artifacts_lists_only_the_references_whose_applies_if_passes(
+    tmp_path: Path, make_synthetic_repo: Callable[..., Path]
+) -> None:
+    """D47, D58: a reference gated on an absent framework is not listed (click is absent)."""
+    repo = make_synthetic_repo(tmp_path, config_text=_CONFIG.format(adapters='["claude_code"]'))
+    skill_dir = write_repo_member_skill(repo)
+    (skill_dir / "SKILL.md").write_text(_SECTIONED_SKILL, encoding="utf-8")
+    rule = write_repo_member_rule(repo, "risk-naming", priority=40)
+    rule.write_text(
+        rule.read_text(encoding="utf-8").replace("priority: 40", "priority: 40\nsection: naming"),
+        encoding="utf-8",
+    )
+
+    skills = render_artifacts(SyncContext.from_repo(repo)).skills
+
+    [skill] = [s for s in skills if s.frontmatter.get("id") == "risk-models"]
+    assert [ref.path for ref in skill.listed_references] == ["references/glossary.md"]
+    assert [(m.rule_id, m.section, m.impact) for m in skill.member_references] == [
+        ("risk-naming", "naming", "HIGH")
+    ]
+
+
 def test_report_description_overflow_prints_the_skill_and_the_outcome(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -179,3 +229,62 @@ def test_report_description_overflow_prints_the_skill_and_the_outcome(
     first, second = capsys.readouterr().err.splitlines()
     assert first == f"error: skills/x (pkg): {overflow}"
     assert second == "error: playbook sync aborted."
+
+
+def _sectioned_repo(tmp_path: Path, make_synthetic_repo: Callable[..., Path]) -> Path:
+    """:func:`_repo` with ``risk-naming`` filed under a HIGH section of ``risk-models``."""
+    repo = _repo(tmp_path, make_synthetic_repo)
+    skill_md = repo / "playbook" / "skills" / "risk-models" / "SKILL.md"
+    skill_md.write_text(
+        skill_md.read_text(encoding="utf-8").replace(
+            "  files: Risk model modules\n",
+            "  files: Risk model modules\n"
+            "  sections:\n"
+            "    - id: naming\n"
+            "      title: Naming\n"
+            "      impact: HIGH\n"
+            "      summary: Names that say what a model does.\n"
+            "      open_when: Naming a risk model.\n",
+        ),
+        encoding="utf-8",
+    )
+    rule = repo / "playbook" / "rules" / "risk-naming.md.j2"
+    rule.write_text(
+        rule.read_text(encoding="utf-8").replace(
+            "priority: 60\n", "priority: 45\nsection: naming\n"
+        ),
+        encoding="utf-8",
+    )
+    return repo
+
+
+def test_a_sectioned_member_renders_its_sections_impact_in_its_title(
+    tmp_path: Path, make_synthetic_repo: Callable[..., Path]
+) -> None:
+    """D32: the skill reference and the rule every adapter writes both read '# <title> [HIGH]'."""
+    repo = _sectioned_repo(tmp_path, make_synthetic_repo)
+
+    rendered = render_artifacts(SyncContext.from_repo(repo))
+
+    [rule_out] = [r for r in rendered.rules if r.frontmatter.id == "risk-naming"]
+    assert rule_out.body.startswith("# risk-naming [HIGH]\n")
+    [skill] = [s for s in rendered.skills if s.frontmatter.get("id") == "risk-models"]
+    [member] = skill.member_references
+    assert "# risk-naming [HIGH]\n" in member.text
+    source = repo / "playbook" / "rules" / "risk-naming.md.j2"
+    assert "[HIGH]" not in source.read_text(encoding="utf-8")
+
+
+def test_playbook_render_shows_the_impact_tag_of_a_member_rule(
+    tmp_path: Path,
+    make_synthetic_repo: Callable[..., Path],
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """``playbook render <rule-id>`` prints the title as sync writes it (D32)."""
+    repo = _sectioned_repo(tmp_path, make_synthetic_repo)
+    args = argparse.Namespace(
+        repo_root=str(repo), id="risk-naming", format=None, show_source=False, show_rules=False
+    )
+
+    assert render_command.run(args) == 0
+    assert "\n# risk-naming [HIGH]\n" in capsys.readouterr().out

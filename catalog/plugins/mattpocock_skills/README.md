@@ -17,6 +17,10 @@ first `[table]` header, then run `playbook sync`:
 overlays_enabled = ["coding_agent_playbook.plugins.mattpocock_skills"]
 ```
 
+The plugin is a spec-driven framework (`framework.toml`), so
+`framework = "mattpocock"` (what `playbook init --framework mattpocock`
+writes) enables it the same way.
+
 Then, once per repo:
 
 - Run `/setup-matt-pocock-skills`. It writes `docs/agents/issue-tracker.md`,
@@ -26,9 +30,9 @@ Then, once per repo:
   forge only through `playbook forge`; otherwise local markdown. The plugin
   always rule (`mattpocock-skills-tracker`) points the agent at these files and
   asks it to tell you to run setup when a skill needs one that is missing.
-- Add `.scratch/` to the repo's `.gitignore`. The local issue tracker keeps its
-  maps and tickets in `.scratch/<slug>/`: untracked working state that is never
-  staged or committed.
+- Add `.scratch/` to the repo's `.gitignore`: it holds only throwaway
+  prototypes, untracked and never staged or committed. The local issue tracker
+  keeps its specs in `docs/specs/` and its maps and tickets in `docs/plans/`.
 
 ## User-invoked skills
 

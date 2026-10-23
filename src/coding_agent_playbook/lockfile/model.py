@@ -48,6 +48,7 @@ __all__ = [
     "Provenance",
     "ProvenanceKind",
     "compute_hash",
+    "generated_paths",
     "merge_provenance",
 ]
 
@@ -299,8 +300,33 @@ class Lockfile:
             "entries": [entry.to_dict() for entry in self.entries],
         }
 
+    def recorded_paths(self) -> frozenset[str]:
+        """Every repo-relative path an entry records, scoped entries included.
+
+        Example::
+
+            Lockfile(1, "0", "", [LockEntry("AGENTS.md", "0" * 64, 1)]).recorded_paths()
+            # frozenset({'AGENTS.md'})
+        """
+        return frozenset(entry.path for entry in self.entries)
+
     def find(self, repo_relative_path: str) -> LockEntry | None:
         for entry in self.entries:
             if entry.path == repo_relative_path:
                 return entry
         return None
+
+
+def generated_paths(lockfile: Lockfile | None) -> frozenset[str]:
+    """The paths the engine wrote, per ``lockfile``; empty before the first sync.
+
+    The one home for "which repo files are engine output" (D79): ``playbook
+    check`` and interactive ``playbook init`` both exclude these from the
+    harness markers. Scoped entries count, since the engine may have created
+    that shared file; the unused-adapter hint says such files were skipped.
+
+    Example::
+
+        generated_paths(None)  # frozenset()
+    """
+    return lockfile.recorded_paths() if lockfile is not None else frozenset()

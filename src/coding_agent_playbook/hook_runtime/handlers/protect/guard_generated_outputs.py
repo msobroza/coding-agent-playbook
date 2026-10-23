@@ -75,7 +75,7 @@ def guard_generated_outputs(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerR
 
         >>> guard_generated_outputs(edit_of_agents_md, ctx).reason.splitlines()[-1]
         ... # doctest: +SKIP
-        'It is generated from rules; edit playbook/rules/<id> (ids: playbook check), then ...'
+        'It is generated from rules; edit playbook/rules/<id> or playbook/skills/<skill>/...'
     """
     if ctx.hatches.allow_generated_edit or ev.tool is None or ev.repo is None:
         return None
@@ -154,7 +154,11 @@ def _generated(path: str) -> str:
 
 
 def _composite_fix() -> str:
-    return f"It is generated from rules; edit playbook/rules/<id> (ids: playbook check), {_TAIL}"
+    # A member rule may live in its skill's rules/ directory (prU D5).
+    return (
+        "It is generated from rules; edit playbook/rules/<id> or "
+        f"playbook/skills/<skill>/rules/<id> (ids: playbook check), {_TAIL}"
+    )
 
 
 def _generic_fix() -> str:

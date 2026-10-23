@@ -16,10 +16,15 @@ from typing import TYPE_CHECKING, Literal
 
 import coding_agent_playbook as _engine
 from coding_agent_playbook.artifacts.identity import template_source
+from coding_agent_playbook.config.layout import resolve_layout
 from coding_agent_playbook.detector.predicate import filter_applies_if
+from coding_agent_playbook.rendering.impact_tag import with_impact_tag
 from coding_agent_playbook.rendering.jinja import build_environment, render_sandboxed
 from coding_agent_playbook.rendering.prompt_rule_delivery import includes_rules_appendix
 from coding_agent_playbook.rendering.rule_registry import RuleRegistryImpl
+from coding_agent_playbook.skills.capabilities import framework_role_map
+from coding_agent_playbook.skills.membership import active_skill_ids
+from coding_agent_playbook.skills.sections import section_impacts
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -28,8 +33,10 @@ if TYPE_CHECKING:
     from jinja2 import Environment
 
     from coding_agent_playbook.artifacts.hook import Hook
+    from coding_agent_playbook.artifacts.impact import Impact
     from coding_agent_playbook.artifacts.prompt import Prompt
     from coding_agent_playbook.artifacts.rule import Rule
+    from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.config.model import Config
     from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
@@ -53,6 +60,8 @@ class TemplateContext:
     engine_version: str
     user_choices: Mapping[str, object] = field(default_factory=dict)
     overrides: Mapping[str, object] = field(default_factory=dict)
+    # The resolved document layout (D71): every key, its configured path or D60 default.
+    layout: Mapping[str, str] = field(default_factory=lambda: resolve_layout({}))
 
     @classmethod
     def for_config(cls, config: Config, facts: Facts) -> TemplateContext:
@@ -68,10 +77,13 @@ class TemplateContext:
             # importlib.metadata lookup (the root package resolves it lazily).
             engine_version=config.engine_version or _engine.__version__,
             user_choices=config.user_choices,
+            layout=resolve_layout(config.layout),
         )
 
     def as_dict(self) -> dict[str, object]:
-        """facts, then project, then user_choices, then engine_version, then overrides (later wins).
+        """facts, then project, then user_choices, then engine_version and layout, then overrides.
+
+        Later wins, so a fact or a user choice cannot shadow ``layout`` (D71).
 
         Example: ``TemplateContext(facts={}, project_name="demo", engine_version="1").as_dict()``.
         """
@@ -81,6 +93,7 @@ class TemplateContext:
             "project_description": self.project_description,
             **self.user_choices,
             "engine_version": self.engine_version,
+            "layout": dict(self.layout),
             **self.overrides,
         }
 
@@ -96,9 +109,16 @@ class RenderSession:
         rules = session.render_rules()
     """
 
-    def __init__(self, rules: list[Rule], context: TemplateContext, env: Environment) -> None:
+    def __init__(
+        self,
+        rules: list[Rule],
+        context: TemplateContext,
+        env: Environment,
+        impacts: Mapping[str, Impact],
+    ) -> None:
         """Hold what :meth:`open` built; call :meth:`open` instead."""
         self._rules = rules
+        self._impacts = dict(impacts)
         self._context = context.as_dict()
         self._env = env
         # RS-D8: an included rule renders with the facts only, never the full context.
@@ -112,12 +132,23 @@ class RenderSession:
         *,
         repo_root: Path,
         on_malformed_predicate: MalformedPredicate = "raise",
+        skills: Sequence[Skill] = (),
+        framework: str | None = None,
     ) -> RenderSession:
         """Filter ``rules`` by ``applies_if`` once; build the environment and the registry from them.
 
         ``repo_root`` anchors ``has_file``. A predicate ``playbook validate`` would
         reject raises ``ValueError``, unless ``on_malformed_predicate="omit"``:
         ``playbook render`` runs no validate gate, so it drops that rule instead.
+        ``skills`` (the merged skills) and ``framework`` (the enabled framework's
+        layer) feed ``framework_skill(role)``, ``skill_active(name)`` (D74) and
+        ``rule_active(rule_id)`` (prU D73); without them every role is ``""`` and
+        no skill, nor any rule a skill owns, is active, which is what
+        eval-sample prompts see (``evals.prompting._sample_session``).
+        ``skills`` also map each member rule to its section's impact, once per
+        pass (``skills.sections.section_impacts``): :meth:`render_rule` tags that
+        rule's title with ``[IMPACT]`` (D32), while the registry, so every
+        ``Reference rules`` appendix, stays untagged (D46(8)).
 
         Example: ``RenderSession.open([], context, repo_root=repo).render_rule(rule)``.
         """
@@ -125,7 +156,11 @@ class RenderSession:
         env = build_environment([])
         # SPEC §9.4: has_framework and has_ml_dep read the facts from the globals.
         env.globals["_facts"] = dict(context.facts)
-        return cls(kept, context, env)
+        env.globals["_framework_roles"] = framework_role_map(skills, framework)
+        active_skills = active_skill_ids(skills, rules, kept)
+        env.globals["_active_skills"] = active_skills
+        env.globals["_active_rules"] = _reachable_rule_ids(kept, active_skills)
+        return cls(kept, context, env, section_impacts(skills, rules))
 
     @property
     def registry(self) -> RuleRegistryImpl:
@@ -145,12 +180,18 @@ class RenderSession:
     def render_rule(self, rule: Rule) -> Rule:
         """``rule`` rendered whatever its ``applies_if`` (``playbook render <rule-id>``).
 
+        After Jinja, a rule in the session's ``impacts`` gets its section's
+        ``[IMPACT]`` on its title (D32).
+
         Example: ``session.render_rule(rule).body`` -> ``"Project demo ..."``.
         """
-        if not rule.is_templated:
-            return rule
-        body = self._render(rule.template_body, self._context, template_source(rule))
-        return dataclasses.replace(rule, body=body)
+        body = rule.body
+        if rule.is_templated:
+            body = self._render(rule.template_body, self._context, template_source(rule))
+        impact = self._impacts.get(rule.frontmatter.id)
+        if impact is not None:
+            body = with_impact_tag(body, impact)
+        return rule if body == rule.body else dataclasses.replace(rule, body=body)
 
     def render_prompt(self, prompt: Prompt) -> Prompt:
         """The body rendered with ``input_variables`` names masked, for an adapter's format.
@@ -224,6 +265,18 @@ def _applicable(
         return filter_applies_if(list(rules), facts, repo_root)
     # One rule at a time, so a malformed predicate drops its own rule only.
     return [rule for rule in rules if _passes_unless_malformed(rule, facts, repo_root)]
+
+
+def _reachable_rule_ids(kept: Sequence[Rule], active_skills: frozenset[str]) -> frozenset[str]:
+    """Ids ``rule_active`` reports: a kept rule with no skill, or whose skill renders (prU D73).
+
+    A pointer to a rule whose skill is dropped would send the reader nowhere.
+    """
+    return frozenset(
+        rule.frontmatter.id
+        for rule in kept
+        if rule.frontmatter.skill is None or rule.frontmatter.skill in active_skills
+    )
 
 
 def _passes_unless_malformed(rule: Rule, facts: Facts, repo_root: Path) -> bool:

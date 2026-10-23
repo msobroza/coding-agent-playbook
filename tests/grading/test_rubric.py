@@ -63,7 +63,7 @@ class _Cov(Metric):
         return []
 
 
-def _ctx(judge: StubJudge | None = None, *, samples: int = 1) -> EvalContext:
+def _ctx(judge: StubJudge | None = None, *, judge_samples: int = 1) -> EvalContext:
     """A grading ctx that names both metrics as measured, so the Rubric never skips their checks.
 
     These tests exercise the *aggregation* logic, not availability (covered in
@@ -75,7 +75,7 @@ def _ctx(judge: StubJudge | None = None, *, samples: int = 1) -> EvalContext:
         label="rubric",
         judge=judge,
         artifact="ART",
-        samples=samples,
+        judge_samples=judge_samples,
         measured_metrics=frozenset({"cyclomatic_complexity", "coverage"}),
     )
 

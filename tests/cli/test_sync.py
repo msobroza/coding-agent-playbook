@@ -47,7 +47,7 @@ def test_sync_writes_continue_rules_and_agents_md(tmp_path, make_synthetic_repo)
         tmp_path,
         rules=[("style-guide", "Use spaces, not tabs.\n")],
         # Not an engine prompt id: overriding one (``refactor``) without its
-        # eval_tasks fails validate, so sync would refuse to write (prK §P P8).
+        # eval_samples fails validate, so sync would refuse to write (prK §P P8).
         prompts=[("tidy-up", {"slash": "tidy-up", "body": "Tidy up the code.\n"})],
     )
     rc = sync_cmd.run(_ns(repo))
@@ -495,7 +495,7 @@ def _write_member_rule(repo: Path, rule_id: str, body: str, *, applies_if: str =
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
         f"---\nid: {rule_id}\nname: {rule_id.title()}\ndescription: A house rule.\n"
-        f"scope: scoped\nskill: python-coding\nglobs:\n  - '**/*.py'\n{applies_if}"
+        f"scope: scoped\nskill: python-coding\nsection: types\nglobs:\n  - '**/*.py'\n{applies_if}"
         f"priority: 50\n---\n{body}",
         encoding="utf-8",
     )
@@ -520,7 +520,7 @@ def test_sync_points_claude_and_opencode_commands_at_skills(tmp_path, make_synth
     files = _generated_prompt_files(repo, "plain")
     block = (
         "## Before you start\n\n"
-        "1. Load skill `python-coding` and read its reference `references/house-rule.md`.\n"
+        "1. Load skill `python-coding` and read its rule `rules/house-rule.md`.\n"
         f"2. {_CLOSING_STEP}\n\n## Steps\n"
     )
     for harness in ("claude_code", "opencode"):
@@ -531,7 +531,7 @@ def test_sync_points_claude_and_opencode_commands_at_skills(tmp_path, make_synth
         content = files[harness].read_text(encoding="utf-8")
         assert content.count("HOUSE RULE BODY") == 1, harness
         assert "## Before you start" not in content, harness
-    reference = repo / ".claude" / "skills" / "python-coding" / "references" / "house-rule.md"
+    reference = repo / ".claude" / "skills" / "python-coding" / "rules" / "house-rule.md"
     assert "HOUSE RULE BODY" in reference.read_text(encoding="utf-8")
 
 
@@ -581,7 +581,7 @@ def test_sync_omits_the_pointer_line_of_a_filtered_rule(tmp_path, make_synthetic
     assert sync_cmd.run(_ns(repo)) == 0
 
     command = _generated_prompt_files(repo, "plain")["claude_code"].read_text(encoding="utf-8")
-    assert "read its reference `references/house-rule.md`." in command
+    assert "read its rule `rules/house-rule.md`." in command
     assert "gated-rule" not in command
 
 
@@ -628,7 +628,7 @@ def test_sync_migrates_legacy_opencode_commands_to_frontmatter_first(tmp_path, m
     """Commands written with the sentinel on line 1 (older engines) are rewritten
     in place with the envelope first, and a stale legacy command is still cleaned.
 
-    A new prompt id: overriding the engine's ``refactor`` without its ``eval_tasks``
+    A new prompt id: overriding the engine's ``refactor`` without its ``eval_samples``
     fails the validate gate ``playbook sync`` runs first (prK §P P8b)."""
     repo = make_synthetic_repo(
         tmp_path, prompts=[("tidy-up", {"slash": "tidy-up", "body": "Tidy the code.\n"})]

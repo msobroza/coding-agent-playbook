@@ -11,16 +11,20 @@ Absorbs AH-1's ``_import_files.py`` and the write half of ``_import_hooks.py`` (
 
 from __future__ import annotations
 
+import dataclasses
 import os
 import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.artifacts.frontmatter import format_frontmatter, split_frontmatter
+from coding_agent_playbook.artifacts.member_reference import skill_member_path
 from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from coding_agent_playbook.generated_output.source_files import skill_subtree_files
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
+
     from coding_agent_playbook.agent_harness.manifest import ManifestEntry
     from coding_agent_playbook.artifacts.hook import Hook
     from coding_agent_playbook.artifacts.prompt import Prompt
@@ -117,18 +121,25 @@ def copy_tree(src: Path, dst: Path, *, restore_exec: bool) -> None:
             restore_exec_bit(out)
 
 
-def write_rule(rule: Rule, into: Path) -> None:
-    """Write ``rule`` as ``<into>/rules/<id>.md`` (``.md.j2`` when templated).
+def write_rule(rule: Rule, into: Path, *, skill_ids: Collection[str] = ()) -> None:
+    """Write ``rule`` where the catalog loader reads it back (``.md.j2`` when templated).
 
-    Every rule, always or scoped, goes under ``rules/``: it is the only directory
-    ``FileSystemArtifactSource.list_rules`` reads, so a scoped rule written to
-    ``references/`` would be dropped by the next sync. ``scope`` stays in the
-    frontmatter that ``to_markdown`` emits.
+    A rule placed by location (``home_skill`` set) whose skill is in
+    ``skill_ids``, the skills imported with it from the same harness, goes to
+    ``<into>/skills/<skill>/rules/<id>.md`` without a ``skill:`` line (prU D22,
+    D5). Every other rule, always or scoped, goes to ``<into>/rules/<id>.md``,
+    keeping its ``skill:``: a scoped rule written to ``references/`` would be
+    dropped by the next sync.
 
     Example: ``write_rule(rule, Path("playbook"))`` -> ``playbook/rules/style.md``.
     """
     suffix = ".md.j2" if rule.is_templated else ".md"
-    target = into / "rules" / f"{rule.frontmatter.id}{suffix}"
+    home = rule.home_skill
+    if home is not None and home in skill_ids:
+        target = into / skill_member_path(home, rule.frontmatter.id, suffix=suffix)
+    else:
+        target = into / "rules" / f"{rule.frontmatter.id}{suffix}"
+        rule = dataclasses.replace(rule, skill_from_location=False)  # spell the skill out
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(rule.to_markdown(), encoding="utf-8")
 
@@ -147,6 +158,9 @@ def write_prompt(prompt: Prompt, into: Path) -> None:
 def write_skill(skill: Skill, into: Path) -> None:
     """Write ``<into>/skills/<id>/SKILL.md`` with the full frontmatter, plus its side dirs.
 
+    The side dirs are ``scripts/`` (exec bits restored), ``references/`` and
+    ``examples/`` (prU D48).
+
     Example: ``write_skill(skill, Path("playbook"))`` -> ``playbook/skills/db/SKILL.md``.
     """
     skill_id = str(skill.frontmatter.get("id", "skill"))
@@ -154,10 +168,9 @@ def write_skill(skill: Skill, into: Path) -> None:
     skill_dir.mkdir(parents=True, exist_ok=True)
     text = format_frontmatter(dict(skill.frontmatter), skill.body)
     (skill_dir / "SKILL.md").write_text(text, encoding="utf-8")
-    if skill.scripts_dir is not None and skill.scripts_dir.is_dir():
-        copy_tree(skill.scripts_dir, skill_dir / "scripts", restore_exec=True)
-    if skill.references_dir is not None and skill.references_dir.is_dir():
-        copy_tree(skill.references_dir, skill_dir / "references", restore_exec=False)
+    for name, src in skill.side_dirs():
+        if src is not None and src.is_dir():
+            copy_tree(src, skill_dir / name, restore_exec=name == "scripts")
 
 
 def write_hook(hook: Hook, into: Path) -> Path:

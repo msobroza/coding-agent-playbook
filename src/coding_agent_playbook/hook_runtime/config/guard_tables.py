@@ -219,7 +219,7 @@ class GuardTables(Mapping[str, Any]):
     def eval_fixture_globs(self, default: Sequence[str]) -> tuple[str, ...]:
         """``eval.fixture_globs`` when a list of str (an empty one included), else ``default``.
 
-        Example: ``cfg.tables.eval_fixture_globs(FIXTURE_GLOBS) == ("**/eval_tasks/*/setup/**",)``.
+        Example: ``cfg.tables.eval_fixture_globs(FIXTURE_GLOBS) == ("**/eval_samples/*/setup/**",)``.
         """
         globs = self._table(EVAL).get("fixture_globs")
         if isinstance(globs, list) and all(isinstance(glob, str) for glob in globs):

@@ -38,7 +38,7 @@ MANIFEST_FILENAME = "manifest.toml"
 #: Current manifest schema version.
 SCHEMA_VERSION = 1
 
-ArtifactKind = Literal["rule", "prompt", "skill", "eval_task", "hook"]
+ArtifactKind = Literal["rule", "prompt", "skill", "eval_sample", "hook"]
 
 
 @dataclass
@@ -86,12 +86,17 @@ class ManifestEntry:
     # Rule-only, emitted only when non-empty so existing sidecars stay byte-identical.
     lint_codes: dict[str, Any] = field(default_factory=dict)
     # Rule-only: the skill a scoped rule names (ADR 0001); emitted only when set.
+    # A rule placed by location (``skills/<skill>/rules/<id>.md``) records none:
+    # the path names its skill, as the source file's directory does (prU D22).
     skill: str | None = None
+    # Rule-only: the section of its skill's index the rule files under (prU D17);
+    # emitted only when set.
+    section: str | None = None
     # Prompt-only.
     slash: str | None = None
     input_variables: list[dict[str, Any]] = field(default_factory=list)
     includes_rules: list[str] = field(default_factory=list)
-    eval_tasks: list[str] = field(default_factory=list)
+    eval_samples: list[str] = field(default_factory=list)
     # Emitted only when non-empty, so manifests of contract-free prompts stay byte-identical.
     output_contract: list[str] = field(default_factory=list)
     # Prompt-only, emitted only when non-empty so existing sidecars stay byte-identical.
@@ -135,10 +140,10 @@ _KIND_FIELDS: dict[str, tuple[str, ...]] = {
         "version",
         "input_variables",
         "includes_rules",
-        "eval_tasks",
+        "eval_samples",
     ),
     "skill": ("name", "body"),
-    "eval_task": (),
+    "eval_sample": (),
     "hook": ("name", "body", "is_templated"),
 }
 
@@ -156,6 +161,8 @@ def _entry_to_table(entry: ManifestEntry) -> dict[str, Any]:
         table["lint_codes"] = entry.lint_codes
     if entry.kind == "rule" and entry.skill is not None:
         table["skill"] = entry.skill
+    if entry.kind == "rule" and entry.section is not None:
+        table["section"] = entry.section
     if entry.kind == "prompt" and entry.write_scope:
         # Optional fields (specs/prK-lifecycle-hooks.md §A.7) are emitted only
         # when set: listing them in _KIND_FIELDS would add an empty inline table
@@ -189,10 +196,11 @@ def _entry_from_table(table: dict[str, Any]) -> ManifestEntry:
         version=table.get("version"),
         lint_codes=dict(table.get("lint_codes", {})),
         skill=table.get("skill"),
+        section=table.get("section"),
         slash=table.get("slash"),
         input_variables=list(table.get("input_variables", [])),
         includes_rules=list(table.get("includes_rules", [])),
-        eval_tasks=list(table.get("eval_tasks", [])),
+        eval_samples=list(table.get("eval_samples", [])),
         output_contract=list(table.get("output_contract", [])),
         write_scope=dict(table.get("write_scope", {})),
         extra_frontmatter=dict(table.get("extra_frontmatter", {})),

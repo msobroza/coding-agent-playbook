@@ -265,8 +265,20 @@ def test_section_6_6_7_lists_every_tool_class() -> None:
 
 
 def test_section_6_4_documents_has_dev_dependency() -> None:
-    predicate = _spec_section("### 6.4 The `applies_if` predicate", "### 6.5 Eval tasks")
+    predicate = _spec_section("### 6.4 The `applies_if` predicate", "### 6.5 Eval samples")
     assert "has_dev_dependency" in predicate
+
+
+@pytest.mark.parametrize("key", ["has_dependency", "any_dependency", "any_file"])
+def test_section_6_4_documents_the_dependency_and_any_file_keys(key: str) -> None:
+    predicate = _spec_section("### 6.4 The `applies_if` predicate", "### 6.5 Eval samples")
+    assert f"  {key}: [" in predicate, f"SPEC §6.4's operator list lacks {key}"
+
+
+@pytest.mark.parametrize("helper", ["has_dependency(name)", "python_at_least(version)"])
+def test_section_9_4_documents_the_dependency_and_version_helpers(helper: str) -> None:
+    context = _spec_section("### 9.4 Rendering context", "### 9.5 The removed `rule()` helper")
+    assert f"`{helper}`" in context
 
 
 @pytest.mark.parametrize("name", _field_names(HooksConfig))

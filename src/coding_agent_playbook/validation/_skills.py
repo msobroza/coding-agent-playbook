@@ -1,25 +1,35 @@
 """``playbook validate`` over member rules and ``playbook:`` blocks (prS §6.4.12, §6.6).
 
-A scoped rule that names a skill in ``skill:`` is a member rule of that skill
-(ADR 0001); the engine writes it as one of the skill's references. Two checks
-guard that composition before ``playbook sync`` writes anything:
+A scoped rule is a member rule of one skill (ADR 0001, ADR 0005): of the skill
+whose ``skills/<skill>/rules/`` directory holds it, or, for a rule from another
+layer, of the skill it names in ``skill:``. The loader fills ``skill`` from the
+location (``Rule.home_skill``), so every check below reads ``skill`` alone. The
+engine writes a member as one of the skill's rule files. Two checks guard that
+composition before ``playbook sync`` writes anything:
 
-- :func:`check_skill_membership`, per rule: ``skill`` is required on a scoped
+- :func:`check_skill_membership`, per rule: a skill is required on a scoped
   rule (V1, with V2's hint when the rule overrides one that named a skill) and
-  forbidden on an always rule (V3), must be a skill id string (V4) naming a
+  forbidden on an always rule (V3; R6 in ``validation._rule_layout`` covers an
+  always rule inside a skill's ``rules/``), must be a skill id string (V4) naming a
   skill that exists after the layer merge (V5) and declares a ``playbook:``
   block (V14, E6); a member rule's own id must be a skill-safe file name (V6,
   E14).
 - :func:`check_rule_skills`, per skill with a ``playbook:`` block: the block's
   shape (V7-V10, E15), the worst-case composed description within 300 chars
-  (V11, E7), no hand-written reference named like a member (V12), no authored
-  ``## References`` heading (V13); warnings for a block without members (W1),
-  members without ``files`` (W2) and a truncated Covers clause (W3).
+  (V11, E7), no authored ``## Rules`` heading (V13; V12 was retired by prU D5:
+  members render to ``rules/``, so a hand-written ``references/`` file cannot
+  collide with one); warnings for a block without members, in its ``rules/``
+  directory or naming it (W1),
+  members without ``files`` (W2) and a truncated Covers clause (W3, sectionless
+  skills only).
 
 Every check runs over the merged sets and ignores ``applies_if``, so overlay
 authors and consumers see the same findings whatever the detector facts.
 V11 measures with ``skills.document.worst_case_description``, the bound sync's
 ``compose_description`` holds, so a skill that validates cannot make sync raise.
+A skill that declares sections names sections in its Covers clause, never
+truncated (prU D17): V11 measures ``sectioned_description`` over every declared
+section, the longest text sync's ``compose_sectioned_description`` can emit.
 
 The user-facing text is documented, not only coded: SPEC §12.6 lists every check
 with a sample line, and MIGRATION.md quotes V1 (:data:`SCOPED_RULE_NEEDS_SKILL_MESSAGE`,
@@ -37,9 +47,9 @@ from typing import TYPE_CHECKING, Final, TypeGuard
 from coding_agent_playbook.artifacts.member_reference import member_reference_path
 from coding_agent_playbook.skills.document import (
     DESCRIPTION_MAX_CHARS,
-    PLAYBOOK_BLOCK_KEY,
     covered_member_count,
     covers_clause,
+    sectioned_description,
     skill_catalog_block,
     worst_case_description,
 )
@@ -49,6 +59,8 @@ from coding_agent_playbook.skills.naming import (
     AGENT_SKILL_NAME_PATTERN,
     skill_id_of,
 )
+from coding_agent_playbook.skills.playbook_block import PLAYBOOK_BLOCK_KEY
+from coding_agent_playbook.skills.sections import skill_sections
 from coding_agent_playbook.validation.findings import (
     ValidationError,
     ValidationFindings,
@@ -62,7 +74,10 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.skill import Skill
 
 _NAME_SHAPE: Final = f"{AGENT_SKILL_NAME_PATTERN.pattern} (1-{AGENT_SKILL_NAME_MAX_CHARS} chars)"
-_BLOCK_KEYS: Final = ("files", "use_when")
+#: The phrase keys V9 checks; ``sections`` and ``references`` are lists that
+#: ``validation._sections`` and ``validation._skill_references`` check (prU D17, D47).
+_PHRASE_KEYS: Final = ("files", "use_when")
+_BLOCK_KEYS: Final = (*_PHRASE_KEYS, "sections", "references")
 #: ``playbook.files`` becomes one line of ``## Where guidance lives`` (prS §6.4.2).
 _FILES_MAX_CHARS: Final = 80
 _PHRASE_SHAPES: Final = {
@@ -77,12 +92,13 @@ _PHRASE_SHAPES: Final = {
 }
 # E15: the engine adds the prefix, so an authored one would read "Use when Use when".
 _USE_WHEN_PREFIX: Final = re.compile(r"use when\b", re.IGNORECASE)
-_REFERENCES_HEADING: Final = "## References"
+_RULES_HEADING: Final = "## Rules"
 #: V1's message; MIGRATION.md quotes it with ``{known}`` filled for core, and a docs
 #: test imports it so the quote cannot drift (prS §6.4.12).
 SCOPED_RULE_NEEDS_SKILL_MESSAGE: Final = (
-    "scope 'scoped' needs 'skill: <skill-id>' naming the skill whose references deliver "
-    "this rule; known skills: {known}"
+    "scope 'scoped' needs a skill: put the file in that skill's rules/ directory "
+    "(skills/<skill-id>/rules/), or add 'skill: <skill-id>' when the skill comes from "
+    "another layer; known skills: {known}"
 )
 
 
@@ -93,13 +109,14 @@ def check_skill_membership(
 
     ``resolved_rules`` and ``skills`` are the merged sets (``ctx.rules_resolved``,
     ``ctx.skills_resolved``); ``all_rules`` is every layer's definition
-    (``ctx.artifact_source.list_rules()``), read only for V2's hint. An always
+    (``ctx.rule_definitions``, loaded tolerantly so validate never raises on a
+    malformed rule file), read only for V2's hint. An always
     rule without ``skill`` passes here.
 
     Example::
 
         errors = check_skill_membership(
-            ctx.rules_resolved, ctx.skills_resolved, all_rules=ctx.artifact_source.list_rules()
+            ctx.rules_resolved, ctx.skills_resolved, all_rules=ctx.rule_definitions
         )
     """
     skills_by_id = {skill_id_of(skill): skill for skill in skills}
@@ -179,6 +196,8 @@ def _overridden_skill_hint(rule: Rule, all_rules: Sequence[Rule]) -> str:
 def _membership_problems(rule: Rule, skills_by_id: Mapping[str, Skill]) -> list[str]:
     """V3, then V4, then V6 and V5/V14 for one rule that sets ``skill``."""
     value: object = rule.frontmatter.skill
+    if rule.frontmatter.scope == "always" and rule.home_skill is not None:
+        return []  # R6 (validation._rule_layout) gives the move hint for its location
     if rule.frontmatter.scope == "always":
         return [
             f"'skill: {value}' is not allowed on an always rule (always rules stay in "
@@ -195,10 +214,11 @@ def _membership_problems(rule: Rule, skills_by_id: Mapping[str, Skill]) -> list[
 
 
 def _unsafe_id_problem(rule: Rule, skill_id: str) -> str:
-    """V6: the member's id becomes ``references/<id>.md`` in every skill root."""
+    """V6: the member's id becomes ``rules/<id>.md`` in every skill root."""
     return (
         f"rule id {rule.frontmatter.id!r} cannot be a member of skill {skill_id!r}: its "
-        f"reference is written as references/<id>.md, so the id must match {_NAME_SHAPE}"
+        f"rule file is written as {member_reference_path('<id>')}, so the id must match "
+        f"{_NAME_SHAPE}"
     )
 
 
@@ -227,15 +247,14 @@ def _known_rule_skills(skills_by_id: Mapping[str, Skill]) -> str:
 
 
 def _rule_skill_errors(skill: Skill, members: Sequence[Rule]) -> list[str]:
-    """V7-V10 on the block, V11 when the block is sound, then V12 and V13."""
+    """V7-V10 on the block, V11 when the block is sound, then V13."""
     errors = _block_problems(skill.frontmatter[PLAYBOOK_BLOCK_KEY])
     if not errors and members:
         errors.extend(_overflow_problems(skill, members))
-    errors.extend(_collision_problems(skill, members))
-    if any(line.strip() == _REFERENCES_HEADING for line in skill.body.splitlines()):
+    if any(line.strip() == _RULES_HEADING for line in skill.body.splitlines()):
         errors.append(
-            f"the body has its own {_REFERENCES_HEADING!r} heading; the engine appends that "
-            "section for member rules, so rename yours (e.g. '## Further reading')"
+            f"the body has its own {_RULES_HEADING!r} heading; the engine appends that "
+            "section for member rules, so rename yours (e.g. '## Conventions')"
         )
     return errors
 
@@ -245,14 +264,14 @@ def _block_problems(block: object) -> list[str]:
     if not isinstance(block, Mapping):
         return [
             f"'{PLAYBOOK_BLOCK_KEY}' must be a mapping with optional keys "
-            f"{' and '.join(_BLOCK_KEYS)}, got {type(block).__name__} {block!r}"
+            f"{', '.join(_BLOCK_KEYS)}, got {type(block).__name__} {block!r}"
         ]
     unknown = sorted(str(key) for key in block if key not in _BLOCK_KEYS)
     problems = [
         f"'{PLAYBOOK_BLOCK_KEY}' has unknown key {key!r}; allowed keys: {', '.join(_BLOCK_KEYS)}"
         for key in unknown
     ]
-    for key in _BLOCK_KEYS:
+    for key in _PHRASE_KEYS:
         problem = _phrase_problem(key, block.get(key))
         if problem is not None:
             problems.append(f"'{PLAYBOOK_BLOCK_KEY}.{key}' {problem}; {_PHRASE_SHAPES[key]}")
@@ -288,8 +307,15 @@ def _use_when_prefix_problem(value: object) -> list[str]:
 
 
 def _overflow_problems(skill: Skill, members: Sequence[Rule]) -> list[str]:
-    """V11: even a one-name Covers clause with its ``and N-1 more`` tail is over the limit."""
+    """V11: even a one-name Covers clause with its ``and N-1 more`` tail is over the limit.
+
+    A skill that declares sections never truncates: its Covers clause names
+    sections, so V11 measures it naming every declared section (prU D17).
+    """
     parts = _ComposedParts.of(skill, members)
+    sections = skill_sections(skill)
+    if sections:
+        return _sectioned_overflow_problems(parts, [section.title for section in sections])
     worst = parts.worst_case()
     if len(worst) <= DESCRIPTION_MAX_CHARS:
         return []
@@ -297,6 +323,18 @@ def _overflow_problems(skill: Skill, members: Sequence[Rule]) -> list[str]:
         f"the composed description cannot fit {DESCRIPTION_MAX_CHARS} chars even when the "
         f"Covers clause names one member: '{worst}' is {len(worst)} chars; shorten "
         f"{_shorten_hint(parts, _longest_member(members))}"
+    ]
+
+
+def _sectioned_overflow_problems(parts: _ComposedParts, titles: Sequence[str]) -> list[str]:
+    """V11 for a sectioned skill: the description naming every declared section fits."""
+    text = sectioned_description(parts.description, titles, parts.use_when)
+    if len(text) <= DESCRIPTION_MAX_CHARS:
+        return []
+    return [
+        f"the composed description cannot fit {DESCRIPTION_MAX_CHARS} chars when the Covers "
+        f"clause names every declared section: '{text}' is {len(text)} chars; shorten "
+        f"{', '.join(_authored_hints(parts))} or the section titles"
     ]
 
 
@@ -331,31 +369,24 @@ def _longest_member(members: Sequence[Rule]) -> Rule:
 
 def _shorten_hint(parts: _ComposedParts, longest: Rule) -> str:
     """``'description' (N chars), 'playbook.use_when' (M chars) or the longest member name (…)``."""
+    fm = longest.frontmatter
+    return f"{', '.join(_authored_hints(parts))} or the longest member name ({fm.id}: '{fm.name}')"
+
+
+def _authored_hints(parts: _ComposedParts) -> list[str]:
+    """``'description' (N chars)`` and, when set, ``'playbook.use_when' (M chars)``."""
     hints = [f"'description' ({len(parts.description.strip())} chars)"]
     if parts.use_when is not None:
         hints.append(f"'{PLAYBOOK_BLOCK_KEY}.use_when' ({len(parts.use_when)} chars)")
-    fm = longest.frontmatter
-    return f"{', '.join(hints)} or the longest member name ({fm.id}: '{fm.name}')"
-
-
-def _collision_problems(skill: Skill, members: Sequence[Rule]) -> list[str]:
-    """V12: a hand-written ``references/<member-id>.md`` would be overwritten by the member."""
-    if skill.references_dir is None:
-        return []
-    return [
-        f"{member_reference_path(rule.frontmatter.id)} is hand-written in this skill but is "
-        f"also the rendered reference of member rule {rule.frontmatter.id!r}; rename the "
-        "hand-written file"
-        for rule in members
-        if (skill.references_dir.parent / member_reference_path(rule.frontmatter.id)).exists()
-    ]
+    return hints
 
 
 def _rule_skill_warnings(skill: Skill, members: Sequence[Rule]) -> list[str]:
     """W1 without members; otherwise W2 (no ``files``) and W3 (truncated Covers clause)."""
     if not members:
         return [
-            f"declares '{PLAYBOOK_BLOCK_KEY}' but no rule names it in 'skill:'; it is never written"
+            f"declares '{PLAYBOOK_BLOCK_KEY}' but has no member rule (none in its rules/ "
+            "directory, none naming it in 'skill:'); it is never written"
         ]
     block = skill.frontmatter[PLAYBOOK_BLOCK_KEY]
     warnings = []
@@ -371,7 +402,13 @@ def _rule_skill_warnings(skill: Skill, members: Sequence[Rule]) -> list[str]:
 
 
 def _truncation_warning(skill: Skill, members: Sequence[Rule]) -> list[str]:
-    """W3 (D21): the full member list does not fit; silent when V11 already fails."""
+    """W3 (D21): the full member list does not fit; silent when V11 already fails.
+
+    Silent too for a skill that declares sections: its Covers clause names
+    sections and never truncates (prU D17).
+    """
+    if skill_sections(skill):
+        return []
     parts = _ComposedParts.of(skill, members)
     if len(parts.worst_case()) > DESCRIPTION_MAX_CHARS:
         return []

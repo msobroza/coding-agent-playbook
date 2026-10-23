@@ -12,6 +12,8 @@ from importlib import metadata
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
+import pytest
+
 from coding_agent_playbook.adapters.agents_md import AgentsMdAdapter
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
@@ -19,12 +21,17 @@ from coding_agent_playbook.adapters.continue_ import ContinueAdapter
 from coding_agent_playbook.adapters.opencode import OpenCodeAdapter
 from coding_agent_playbook.adapters.shared_skills import SharedSkillsAdapter
 from coding_agent_playbook.agent_harness.adapter import AgentHarnessAdapter
-from coding_agent_playbook.artifacts.member_reference import member_reference_path
+from coding_agent_playbook.artifacts.member_reference import (
+    member_reference_path,
+    skill_member_location,
+    skill_member_path,
+)
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.rendering.session import RenderSession, TemplateContext
 from coding_agent_playbook.skills.membership import (
     MemberRuleDeliverer,
+    active_skill_ids,
     compose_skills,
     is_rule_skill,
     is_skill_member,
@@ -97,9 +104,29 @@ def test_is_skill_member_only_for_rules_naming_a_skill() -> None:
     assert is_skill_member(_rule("legacy", skill=None)) is False
 
 
-def test_member_reference_path_is_references_slash_id_md() -> None:
-    assert member_reference_path("pytest") == "references/pytest.md"
-    assert member_reference_path("python-typing") == "references/python-typing.md"
+def test_member_reference_path_is_rules_slash_id_md() -> None:
+    assert member_reference_path("pytest") == "rules/pytest.md"
+    assert member_reference_path("python-typing") == "rules/python-typing.md"
+
+
+def test_skill_member_path_round_trips_through_its_location() -> None:
+    path = skill_member_path("risk", "limits")
+    assert path == "skills/risk/rules/limits.md"
+    assert skill_member_path("risk", "limits", suffix=".md.j2") == "skills/risk/rules/limits.md.j2"
+    assert skill_member_location(path) == ("risk", "limits")
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "rules/limits.md",
+        "references/limits.md",
+        "skills/risk/references/x.md",
+        "skills/r/rules/x.py",
+    ],
+)
+def test_skill_member_location_is_none_outside_a_skill_rules_dir(path: str) -> None:
+    assert skill_member_location(path) is None
 
 
 def test_compose_skills_passes_plain_skill_through_unchanged() -> None:
@@ -115,6 +142,28 @@ def test_compose_skills_drops_skill_whose_members_are_all_inactive() -> None:
     merged = [_rule("python-typing"), _rule("pytest", skill="python-testing")]
     active = [merged[1]]  # python-typing failed its applies_if
     assert compose_skills([coding, plain], merged, active) == [plain]
+
+
+def test_active_skill_ids_are_the_ids_compose_skills_keeps() -> None:
+    """One keep/drop rule for sync and ``skill_active`` (D74; L0-19 review)."""
+    skills = [
+        _skill("python-coding"),
+        _skill("python-testing"),
+        _skill("brainstorming", playbook=False),
+    ]
+    merged = [_rule("python-typing"), _rule("pytest", skill="python-testing")]
+    active = [merged[1]]
+
+    composed = {skill.frontmatter["id"] for skill in compose_skills(skills, merged, active)}
+
+    assert (
+        active_skill_ids(skills, merged, active)
+        == composed
+        == {
+            "python-testing",
+            "brainstorming",
+        }
+    )
 
 
 def test_compose_skills_drops_declared_skill_without_any_member() -> None:
@@ -247,3 +296,23 @@ def test_in_tree_deliverers_cover_every_registered_adapter() -> None:
     entry_points = metadata.entry_points(group="coding_agent_playbook.adapters")
     registered = {ep.load() for ep in entry_points if ep.value.startswith("coding_agent_playbook.")}
     assert set(_IN_TREE_DELIVERERS) == registered
+
+
+def test_membership_by_location_equals_membership_by_skill_key(tmp_path: Path) -> None:
+    """A rule in ``skills/s/rules/`` joins ``s`` exactly as one naming ``skill: s`` (prU D5)."""
+    text = "---\nid: {id}\nname: {id}\ndescription: d\nscope: scoped\n{skill}---\nBody\n"
+    in_skill = tmp_path / "skills" / "python-coding" / "rules" / "located.md"
+    keyed = tmp_path / "rules" / "keyed.md"
+    for path, rule_id, skill in (
+        (in_skill, "located", ""),
+        (keyed, "keyed", "skill: python-coding\n"),
+    ):
+        path.parent.mkdir(parents=True)
+        path.write_text(text.format(id=rule_id, skill=skill), encoding="utf-8")
+    located = Rule.from_markdown(in_skill, "<repo-local>", home_skill="python-coding")
+    by_key = Rule.from_markdown(keyed, "<repo-local>")
+
+    assert is_skill_member(located) is is_skill_member(by_key) is True
+    assert member_rules_of("python-coding", [located, by_key]) == [by_key, located]
+    [composed] = compose_skills([_skill("python-coding")], [located, by_key], [located, by_key])
+    assert [ref.rule_id for ref in composed.member_references] == ["keyed", "located"]

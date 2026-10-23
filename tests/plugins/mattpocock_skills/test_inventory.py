@@ -32,7 +32,14 @@ if TYPE_CHECKING:
 
 pytestmark = pytest.mark.catalog
 
-_ROOT_ENTRIES: Final = ["ATTRIBUTIONS.md", "LICENSE", "README.md", "rules", "skills"]
+_ROOT_ENTRIES: Final = [
+    "ATTRIBUTIONS.md",
+    "LICENSE",
+    "README.md",
+    "framework.toml",
+    "rules",
+    "skills",
+]
 _SCRIPTS: Final = [
     "diagnosing-bugs/scripts/hitl_loop_template.py",
     "wizard/scripts/wizard_template.py",

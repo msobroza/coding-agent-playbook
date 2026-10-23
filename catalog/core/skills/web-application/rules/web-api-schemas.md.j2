@@ -1,0 +1,109 @@
+---
+id: web-api-schemas
+name: Web API schemas
+description: "Separate request and response models from ORM models: Create and Update models forbid unknown keys, a Read model lists exactly what clients may see."
+version: 1
+scope: scoped
+globs:
+  - "**/schemas.py"
+  - "**/schemas/**/*.py"
+  - "**/routers/**/*.py"
+  - "**/routes/**/*.py"
+  - "**/api/**/*.py"
+  - "**/endpoints/**/*.py"
+  - "**/views.py"
+  - "**/views/**/*.py"
+applies_if:
+  any_framework: ["fastapi", "flask", "django", "starlette"]
+section: api-design
+priority: 40
+tags: [python, web, api, pydantic]
+---
+
+# Separate request and response models from ORM models
+
+## Description
+
+One model for input, output and storage couples the API to the tables. Returning an ORM object, or a schema that mirrors it, leaks fields such as `password_hash` or `is_admin`; accepting the same schema as input lets clients set fields they must never control (mass assignment: `{"is_admin": true}`). Define Pydantic models per direction: `XCreate` and `XUpdate` hold only client-writable fields and forbid unknown keys, and `XRead` lists exactly what clients may see.
+
+## Bad Example
+
+```python
+router = APIRouter(prefix="/users")
+
+
+class UserSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int | None = None
+    email: str
+    password_hash: str | None = None
+    is_admin: bool = False
+
+
+@router.post("")
+async def create_user(body: UserSchema, session: SessionDep) -> UserSchema:
+    user = User(**body.model_dump())  # the client can send is_admin=true
+    session.add(user)
+    await session.commit()
+    return UserSchema.model_validate(user)  # the response includes password_hash
+```
+
+## Good Example
+
+```python
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, SecretStr
+
+# SessionDep and CurrentUser are the app's Annotated dependency aliases;
+# register_user is the service that hashes the password and never sets is_admin.
+router = APIRouter(prefix="/users")
+
+
+class UserCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")  # unknown keys such as is_admin -> 422
+
+    email: EmailStr
+    password: SecretStr = Field(min_length=12, max_length=128)
+
+
+class UserUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: str | None = Field(default=None, max_length=100)
+
+
+class UserRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    email: EmailStr
+    display_name: str | None
+
+
+@router.post("", status_code=status.HTTP_201_CREATED)
+async def create_user(body: UserCreate, session: SessionDep) -> UserRead:
+    user = await register_user(session, body)
+    return UserRead.model_validate(user)
+
+
+@router.patch("/me")
+async def update_me(body: UserUpdate, user: CurrentUser, session: SessionDep) -> UserRead:
+    for field, value in body.model_dump(exclude_unset=True).items():
+        setattr(user, field, value)  # only the fields the client actually sent
+    await session.commit()
+    return UserRead.model_validate(user)
+```
+
+## Notes
+
+- Pydantic ignores unknown keys by default, which already drops `is_admin`; `extra="forbid"` turns it into a 422, so client typos and probing are visible. FastAPI answers 422 for an invalid body on its own.
+- Use `model_dump(exclude_unset=True)` in PATCH handlers, never `exclude_none=True`: it separates "not sent" from "sent as null".
+- Name models by purpose (`UserCreate`, `UserUpdate`, `UserRead`) and add a separate Read model per audience, such as `UserAdminRead`, instead of hiding fields conditionally. Secrets stay out of every Read model; never strip them from a shared model with a serializer (serializers are the python-coding skill's pydantic-serializers rule).
+- Fields that need a workflow, such as an email change that must be re-verified, get their own endpoint instead of a field in `UserUpdate`.
+- `SecretStr` keeps passwords out of `repr`, logs and tracebacks. `EmailStr` needs the `email-validator` extra: propose adding it, or use a constrained `str` (the python-coding skill's pydantic-special-types rule).
+- Validators check input invariants only; business rules stay in the service (the python-coding skill's pydantic-model-validators rule). General Pydantic validation is the python-coding skill's; this rule is the web-specific split.
+- SQLModel table classes are storage, not request or response schemas: keep separate Create, Read and Update models beside them.
+- Other stacks keep the same split: a write serializer and a read serializer per resource.
+{% if has_framework("fastapi") %}
+- Worked example: web-application's hotel example (fastapi-hotel-api), file app/routers/schemas.py, holds Create, Read and Update models per resource, with the PATCH body applied through `model_dump(exclude_unset=True)`.
+{% endif %}

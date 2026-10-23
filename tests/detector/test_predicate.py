@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.detector.facts import Facts, detect
-from coding_agent_playbook.detector.predicate import evaluate_predicate, filter_applies_if
+from coding_agent_playbook.detector.predicate import (
+    LIST_PREDICATE_KEYS,
+    PREDICATE_KEYS,
+    evaluate_predicate,
+    filter_applies_if,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -153,6 +158,98 @@ def test_has_dev_dependency_reads_the_detected_pyproject(tmp_path: Path) -> None
         encoding="utf-8",
     )
     assert evaluate_predicate({"has_dev_dependency": ["pytest-cov"]}, detect(tmp_path)) is True
+
+
+# --- has_dependency / any_dependency (D23): runtime OR dev, PEP 503-normalized ---
+
+_RUNTIME_PANDERA: Facts = {"dependencies": {"pandera": ">=0.20"}}
+_DEV_PANDERA: Facts = {"dev_dependencies": {"pandera": ">=0.20"}}
+_SPLIT_DEPS: Facts = {
+    "dependencies": {"pydantic-settings": ">=2", "anyio": ">=4"},
+    "dev_dependencies": {"pytest": ">=8"},
+}
+
+
+@pytest.mark.parametrize("key", ["has_dependency", "any_dependency"])
+@pytest.mark.parametrize("facts", [_RUNTIME_PANDERA, _DEV_PANDERA], ids=["runtime", "dev"])
+def test_dependency_predicates_read_runtime_and_dev_dependencies(key: str, facts: Facts) -> None:
+    assert evaluate_predicate({key: ["pandera"]}, facts) is True
+
+
+@pytest.mark.parametrize("key", ["has_dependency", "any_dependency"])
+def test_dependency_predicates_are_false_without_dependency_facts(key: str) -> None:
+    assert evaluate_predicate({key: ["pandera"]}, {}) is False
+
+
+@pytest.mark.parametrize("key", ["has_dependency", "any_dependency"])
+def test_dependency_predicates_compare_pep_503_names(key: str) -> None:
+    assert evaluate_predicate({key: ["Pydantic_Settings"]}, _SPLIT_DEPS) is True
+
+
+@pytest.mark.parametrize(
+    ("wanted", "expected"),
+    [
+        (["pydantic-settings", "pytest"], True),  # one runtime, one dev: both declared
+        (["pydantic-settings", "pandera"], False),
+        (["pandera"], False),
+    ],
+)
+def test_has_dependency_requires_every_name(wanted: list[str], expected: bool) -> None:
+    assert evaluate_predicate({"has_dependency": wanted}, _SPLIT_DEPS) is expected
+
+
+@pytest.mark.parametrize(
+    ("wanted", "expected"),
+    [
+        (["pandera", "anyio"], True),
+        (["pandera", "pyjwt"], False),
+        ([], False),
+    ],
+)
+def test_any_dependency_requires_one_name(wanted: list[str], expected: bool) -> None:
+    assert evaluate_predicate({"any_dependency": wanted}, _SPLIT_DEPS) is expected
+
+
+@pytest.mark.parametrize("key", ["has_dependency", "any_dependency"])
+def test_dependency_predicates_require_a_list_of_strings(key: str) -> None:
+    with pytest.raises(ValueError, match=f"'{key}' must be a list of strings; got 'pandera'"):
+        evaluate_predicate({key: "pandera"}, _RUNTIME_PANDERA)
+
+
+def test_any_dependency_reads_the_detected_pyproject(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\ndependencies = ["Pandera>=0.20"]\n', encoding="utf-8"
+    )
+    assert evaluate_predicate({"any_dependency": ["pandera"]}, detect(tmp_path)) is True
+
+
+def test_any_dependency_is_false_in_an_empty_repo(tmp_path: Path) -> None:
+    """Acceptance: ``any_dependency: [pandera]`` fails on the facts ``detect`` emits for no files."""
+    assert evaluate_predicate({"any_dependency": ["pandera"]}, detect(tmp_path)) is False
+
+
+# --- any_file (D78(10)): at least one listed path exists ---
+
+
+def test_any_file_true_when_one_listed_path_exists(tmp_path: Path) -> None:
+    (tmp_path / "mkdocs.yml").write_text("site_name: x\n")
+    predicate = {"any_file": ["docs/conf.py", "mkdocs.yml"]}
+    assert evaluate_predicate(predicate, {}, repo_root=tmp_path) is True
+
+
+def test_any_file_false_when_no_listed_path_exists(tmp_path: Path) -> None:
+    predicate = {"any_file": ["docs/conf.py", "mkdocs.yml"]}
+    assert evaluate_predicate(predicate, {}, repo_root=tmp_path) is False
+
+
+def test_any_file_requires_a_list_of_strings(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="'any_file' must be a list of strings"):
+        evaluate_predicate({"any_file": "mkdocs.yml"}, {}, repo_root=tmp_path)
+
+
+def test_any_file_without_repo_root_raises() -> None:
+    with pytest.raises(ValueError, match="'any_file' requires repo_root"):
+        evaluate_predicate({"any_file": ["mkdocs.yml"]}, {})
 
 
 def test_evaluate_predicate_ml_stack_requires_list() -> None:
@@ -302,3 +399,60 @@ def test_filter_applies_if_keeps_empty_and_true_predicates_in_order(tmp_path: Pa
 def test_filter_applies_if_raises_on_an_unknown_predicate_key(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="unknown predicate key: 'has_dokerfile'"):
         filter_applies_if([_rule("typo", {"has_dokerfile": True})], {}, tmp_path)
+
+
+def _is_accepted(key: str, tmp_path: Path) -> bool:
+    """Whether ``evaluate_predicate`` dispatches ``key`` (any outcome but 'unknown predicate key')."""
+    for value in (5, True):  # bool facts dispatch only on a bool value
+        try:
+            evaluate_predicate({key: value}, {}, repo_root=tmp_path)
+        except ValueError as exc:
+            if "unknown predicate key" not in str(exc):
+                return True
+        else:
+            return True
+    return False
+
+
+def test_every_predicate_key_is_accepted_by_evaluate_predicate(tmp_path: Path) -> None:
+    assert all(_is_accepted(key, tmp_path) for key in PREDICATE_KEYS)
+    assert not _is_accepted("has_dokerfile", tmp_path)
+
+
+def _rejects_as_non_list(key: str, tmp_path: Path) -> bool:
+    """Whether ``key`` with a non-list value fails the list-of-strings check."""
+    try:
+        evaluate_predicate({key: 5}, {}, repo_root=tmp_path)
+    except ValueError as exc:
+        return "must be a list of strings" in str(exc)
+    return False
+
+
+def test_list_predicate_keys_are_exactly_the_keys_that_take_a_list(tmp_path: Path) -> None:
+    """One home for the list-valued keys: ``playbook check`` imports this set."""
+    takes_a_list = {key for key in PREDICATE_KEYS if _rejects_as_non_list(key, tmp_path)}
+    assert takes_a_list == LIST_PREDICATE_KEYS
+
+
+def test_has_dev_dependency_normalizes_the_fact_keys_too() -> None:
+    """Hand-written facts (an eval sample's) match like detected ones: both sides are PEP 503."""
+    facts: Facts = {"dev_dependencies": {"Pytest_Cov": ">=5"}}
+    assert evaluate_predicate({"has_dev_dependency": ["pytest-cov"]}, facts)
+
+
+@pytest.mark.parametrize(
+    ("key", "field"),
+    [
+        ("has_framework", "frameworks"),
+        ("has_ml_stack", "ml_stack"),
+        ("any_ml_stack", "ml_stack"),
+        ("has_dev_dependency", "dev_dependencies"),
+        ("has_dependency", "dependencies"),
+        ("any_dependency", "dev_dependencies"),
+    ],
+)
+def test_names_predicates_reject_a_mis_shaped_fact(key: str, field: str) -> None:
+    """A non-mapping fact raises naming the field: ``"a" in "abc"`` must not match as a substring."""
+    facts = cast("Facts", {field: "abc"})
+    with pytest.raises(ValueError, match=f"fact {field!r} must be a mapping"):
+        evaluate_predicate({key: ["a"]}, facts)
