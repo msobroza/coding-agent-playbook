@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.generated_output.gitignore import (
     BLOCK_END,
@@ -107,14 +108,24 @@ _SYNTHETIC_PLAYBOOK_CREATOR_MEMBERS = tuple(
 _SYNTHETIC_DOCUMENTATION_MEMBERS = tuple(
     rule_id for rule_id, pin in DOCUMENTATION_PINS.rules.items() if not pin.applies_if
 )
-#: The ungated core skills' files, as sync writes them: every member of design-patterns and
-#: python-architecture is ungated, so the synthetic repo gets each whole skill directory
-#: (a ``.md.j2`` rule as ``.md``).
+
+
+def _gated_rule(path: Path) -> bool:
+    """Whether ``path`` is a member rule file whose frontmatter declares ``applies_if``."""
+    if path.parent.name != "rules":
+        return False
+    frontmatter, _ = split_frontmatter(path.read_text(encoding="utf-8"))
+    return bool(frontmatter.get("applies_if"))
+
+
+#: The design-patterns and python-architecture files, as sync writes them, without the
+#: gated members (python-architecture's sqlalchemy and pytest ones fail on the synthetic
+#: repo, which has neither framework); a ``.md.j2`` rule lands as ``.md``.
 _SYNTHETIC_UNGATED_SKILL_FILES = tuple(
     f"{skill_id}/" + path.relative_to(CORE_SKILLS_ROOT / skill_id).as_posix().removesuffix(".j2")
     for skill_id in ("design-patterns", "python-architecture")
     for path in (CORE_SKILLS_ROOT / skill_id).rglob("*")
-    if path.is_file()
+    if path.is_file() and not _gated_rule(path)
 )
 #: Every file the pre-v0.21 engine left under ``shared_skills/`` for ``_synced_then_rewound``:
 #: query-db's two, the core python-coding skill with one rule file per active member and its
