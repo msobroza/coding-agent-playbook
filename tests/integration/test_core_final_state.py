@@ -14,23 +14,30 @@ Each lane pins its own skill; these checks span them all, on the shipped tree:
 - every upstream file at the two D11 pins has an ``ATTRIBUTIONS.md`` row, and every
   row names an upstream file that exists there (the paths-only inventories under
   ``tests/fixtures/upstream_inventory/`` were listed once from the pinned clones);
-- the reference probe's "Where guidance lives" map has a line for each of the eight
-  skills it activates (D4) and fits, with the always rules, in 800 words, and its
-  ``AGENTS.md`` in 1,500 (D35).
+  a second row for one file in one skill's sub-table already fails
+  ``tests/_attributions.attribution_errors`` (D31 keeps one sub-table per skill, so
+  a file feeding several skills has one row in each);
+- the reference probe's "Where guidance lives" map is the one sync renders, with a
+  line for each of the eight skills it activates (D4). Its 800-word cap with the
+  always rules and the 1,500-word ``AGENTS.md`` cap (D35) live in
+  ``tests/integration/test_context_budget.py``, on the same probe.
 """
 
 from __future__ import annotations
 
 import fnmatch
-import re
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Final
 
 import pytest
 
 from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
+from coding_agent_playbook.skills.document import where_entry, where_guidance_section
+from coding_agent_playbook.sync.render import render_artifacts
+from coding_agent_playbook.validation.context import SyncContext
 from tests._attributions import load_core_attributions
 from tests._catalog import CORE_ROOT, CORE_SKILLS_ROOT, REPO_ROOT, RETIRED_RULE_IDS, core_rules
+from tests._core_skill_layout import LICENSE_COPY_NAMES
 from tests.core_skill_pins import ALL_PINS
 
 if TYPE_CHECKING:
@@ -46,16 +53,9 @@ UPSTREAM_INVENTORIES: Final[Mapping[str, Path]] = {
     "python-best-practices": INVENTORY_DIR / "pbp-fa0d3f58.txt",
     "python-clean-architecture": INVENTORY_DIR / "pca-9d627ca.txt",
 }
-#: The lines of the reference probe's map (D4, D35): every core skill with a ``playbook:``
-#: block but the Domino skills (D63) and playbook-creator (D70), which it never activates.
-REFERENCE_WHERE_LINES: Final = 8
-ALWAYS_RULES_MAX_WORDS: Final = 800
-AGENTS_MD_MAX_WORDS: Final = 1500
 _LISTED_DIRS: Final = ("references", "examples")
 #: Tool caches a local test run may leave inside an example app; never shipped.
 _CACHE_DIRS: Final = frozenset({"__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"})
-_WHERE_HEADING: Final = "## Where guidance lives"
-_WHERE_LINE: Final = re.compile(r"^- .+: skill `([a-z0-9-]+)`$")
 
 
 def _playbook_block(skill_dir: Path) -> dict[str, object]:
@@ -72,6 +72,10 @@ def _core_skill_dirs() -> list[Path]:
 def _declared_section_ids(skill_dir: Path) -> list[str]:
     sections = _playbook_block(skill_dir).get("sections") or []
     assert isinstance(sections, list), f"{skill_dir.name}: sections is {sections!r}"
+    for section in sections:
+        assert isinstance(section, dict) and "id" in section, (
+            f"{skill_dir.name}: section {section!r} is not a mapping with an id"
+        )
     return [str(section["id"]) for section in sections]
 
 
@@ -83,12 +87,16 @@ def _listable_files(skill_dir: Path) -> list[PurePosixPath]:
             relative = PurePosixPath(path.relative_to(skill_dir).as_posix())
             if path.is_file() and not _CACHE_DIRS.intersection(relative.parts):
                 files.append(relative)
-    return sorted(f for f in files if not f.name.upper().startswith(("LICENSE", "COPYING")))
+    return sorted(f for f in files if f.name not in LICENSE_COPY_NAMES)
 
 
 def _listed_reference_paths(skill_dir: Path) -> list[PurePosixPath]:
     entries = _playbook_block(skill_dir).get("references") or []
     assert isinstance(entries, list), f"{skill_dir.name}: references is {entries!r}"
+    for entry in entries:
+        assert isinstance(entry, dict) and "path" in entry, (
+            f"{skill_dir.name}: reference {entry!r} is not a mapping with a path"
+        )
     return [PurePosixPath(str(entry["path"])) for entry in entries]
 
 
@@ -177,33 +185,13 @@ def test_row_covers_a_file_a_directory_or_a_glob() -> None:
     assert not _row_covers("skills/a/rules/*.md", "skills/a/README.md")
 
 
-def _words(text: str) -> int:
-    return len(text.split())
-
-
-def _where_skill_ids(agents_md: str) -> list[str]:
-    """The skill id of each line of ``agents_md``'s "Where guidance lives" map, in order."""
-    section = agents_md.partition(f"{_WHERE_HEADING}\n")[2].partition("\n---\n")[0]
-    return [m.group(1) for line in section.splitlines() if (m := _WHERE_LINE.match(line))]
-
-
 def test_reference_probe_where_map_lists_the_eight_reference_skills(
     reference_probe_repo: Path,
 ) -> None:
-    skill_ids = _where_skill_ids((reference_probe_repo / "AGENTS.md").read_text(encoding="utf-8"))
+    """The map in ``AGENTS.md`` is the engine's, with one line per skill the probe activates."""
+    rendered = render_artifacts(SyncContext.from_repo(reference_probe_repo))
+    entries = [entry for skill in rendered.skills if (entry := where_entry(skill)) is not None]
+    agents_md = (reference_probe_repo / "AGENTS.md").read_text(encoding="utf-8")
+    assert where_guidance_section(entries) in agents_md, "AGENTS.md lacks the rendered map"
     on_reference = sorted(pins.skill_id for pins in ALL_PINS if pins.probe == "reference")
-    assert len(skill_ids) == REFERENCE_WHERE_LINES, skill_ids
-    assert skill_ids == on_reference
-
-
-def test_reference_probe_always_context_and_agents_md_fit_their_caps(
-    reference_probe_repo: Path,
-) -> None:
-    """The always-loaded rules file (always rules, map, heartbeat) and the whole AGENTS.md."""
-    text = (reference_probe_repo / "AGENTS.md").read_text(encoding="utf-8")
-    assert _words(text) <= AGENTS_MD_MAX_WORDS, f"AGENTS.md is {_words(text)} words"
-    before_guardrails = text.partition("\n## Guardrails")[0]
-    always_words = _words(before_guardrails[before_guardrails.index("\n## ") :])
-    assert always_words <= ALWAYS_RULES_MAX_WORDS, (
-        f"always rules plus the Where map are {always_words} words; D35 keeps 800"
-    )
+    assert sorted(entry.skill_id for entry in entries) == on_reference
