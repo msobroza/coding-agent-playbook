@@ -60,9 +60,12 @@ def test_cross_skill_mentions_ignores_a_name_with_no_mapping() -> None:
     assert mentions == set()
 
 
-def test_known_rule_ids_of_a_skill_not_yet_landed_are_its_planned_rules() -> None:
+def test_known_rule_ids_of_a_skill_not_yet_landed_are_its_planned_rules(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Every planned skill has landed, so a skill root without rules/ stands in for one.
     skill = "python-documentation"
-    assert not (core_skill_root(skill) / "rules").is_dir(), f"{skill} has landed; pick another"
+    monkeypatch.setattr("tests.core_skills._references.core_skill_root", lambda _skill: tmp_path)
 
     known = known_rule_ids(skill)
 
