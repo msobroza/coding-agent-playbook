@@ -154,6 +154,11 @@ _OLD_TREE_FILES = frozenset(
             f"playbook-creator/rules/{rule_id}.md"
             for rule_id in _SYNTHETIC_PLAYBOOK_CREATOR_MEMBERS
         ),
+        # playbook-creator's six template guides are ungated.
+        *(
+            f"playbook-creator/references/{path.name}"
+            for path in (CORE_SKILLS_ROOT / "playbook-creator" / "references").iterdir()
+        ),
         *_SYNTHETIC_UNGATED_SKILL_FILES,
         "python-documentation/SKILL.md",
         "python-documentation/references/which-document.md",
