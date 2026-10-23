@@ -18,6 +18,7 @@ import pytest
 from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.generated_output.source_files import (
     is_bytecode_cache,
+    is_cache_path,
     published_skill_files,
     skill_subtree_files,
 )
@@ -45,6 +46,29 @@ def test_is_bytecode_cache_flags_caches(relative: str) -> None:
 def test_is_bytecode_cache_keeps_everything_else(relative: str) -> None:
     # Conservative rule: only bytecode caches are skipped, never dot-files.
     assert not is_bytecode_cache(PurePath(relative))
+
+
+@pytest.mark.parametrize(
+    "relative",
+    [
+        "app/.ruff_cache/.gitignore",  # ruff's, planted by `ruff check .` (PR #266 CI)
+        ".ruff_cache/0.17.0/17953856704063259531",
+        "app/.pytest_cache/v/cache/nodeids",
+        ".mypy_cache/3.12/app.data.json",
+        ".hypothesis/examples/ab/cd",
+        "app/.venv/pyvenv.cfg",
+        "__pycache__/run.cpython-312.pyc",
+    ],
+)
+def test_is_cache_path_flags_tool_caches_and_bytecode(relative: str) -> None:
+    assert is_cache_path(PurePath(relative))
+
+
+@pytest.mark.parametrize(
+    "relative", ["app/main.py", ".gitignore", ".env.example", "ruff_cache.md", "venv-notes.md"]
+)
+def test_is_cache_path_keeps_authored_files(relative: str) -> None:
+    assert not is_cache_path(PurePath(relative))
 
 
 def test_skill_subtree_files_skips_caches_and_returns_sorted_files(tmp_path: Path) -> None:

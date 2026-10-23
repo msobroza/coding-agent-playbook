@@ -16,6 +16,14 @@ script in-process writes ``scripts/__pycache__/``. Copying them made the synced 
 (and its lockfile entries) depend on how, and under which Python, the engine was
 installed, so files were added and removed from one sync to the next.
 
+**Nor are tool caches and virtual environments** (``TOOL_CACHE_DIR_NAMES``): a
+``.ruff_cache/``, ``.mypy_cache/``, ``.pytest_cache/``, ``.hypothesis/`` or ``.venv/``
+directory anywhere in a subtree. An example that ships its own ``pyproject.toml``
+gets one as soon as a tool runs over the checkout (the engine's CI runs ``ruff
+check .`` before pytest, which planted ``examples/fastapi-hotel-api/.ruff_cache/``
+and its ``.gitignore``), so copying them made the output depend on what ran in the
+engine's checkout before the sync (PR #266 CI).
+
 Nothing else is skipped silently: a dot-file or any other file under ``scripts/``
 or ``references/`` may be authored content, and the engine cannot tell otherwise.
 
@@ -56,6 +64,11 @@ SKIPPED_DIR_NAMES: frozenset[str] = frozenset({"__pycache__"})
 #: File suffixes a sync never copies (compiled and optimized bytecode).
 SKIPPED_SUFFIXES: frozenset[str] = frozenset({".pyc", ".pyo"})
 
+#: Tool caches and virtual environments a tool run leaves in a skill subtree: never copied.
+TOOL_CACHE_DIR_NAMES: frozenset[str] = frozenset(
+    {".hypothesis", ".mypy_cache", ".pytest_cache", ".ruff_cache", ".venv"}
+)
+
 
 def is_bytecode_cache(relative: PurePath) -> bool:
     """Return whether ``relative`` (a path inside a skill subtree) is a bytecode cache.
@@ -71,6 +84,19 @@ def is_bytecode_cache(relative: PurePath) -> bool:
     return relative.suffix in SKIPPED_SUFFIXES
 
 
+def is_cache_path(relative: PurePath) -> bool:
+    """Return whether ``relative`` (inside a skill subtree) is a cache a sync never copies.
+
+    A bytecode cache (:func:`is_bytecode_cache`) or anything under a tool cache or
+    virtual environment directory (``TOOL_CACHE_DIR_NAMES``), judged relative to the
+    subtree like :func:`is_bytecode_cache`.
+
+    Example: ``is_cache_path(PurePath("app/.ruff_cache/.gitignore"))`` -> ``True``;
+    ``is_cache_path(PurePath(".env.example"))`` -> ``False``.
+    """
+    return is_bytecode_cache(relative) or bool(TOOL_CACHE_DIR_NAMES.intersection(relative.parts))
+
+
 def skill_subtree_files(src: Path) -> list[Path]:
     """Return the files under ``src`` that a sync copies, sorted; caches excluded.
 
@@ -83,7 +109,7 @@ def skill_subtree_files(src: Path) -> list[Path]:
     return sorted(
         path
         for path in src.rglob("*")
-        if path.is_file() and not is_bytecode_cache(path.relative_to(src))
+        if path.is_file() and not is_cache_path(path.relative_to(src))
     )
 
 
