@@ -149,6 +149,11 @@ _OLD_TREE_FILES = frozenset(
             f"python-documentation/rules/{rule_id}.md"
             for rule_id in _SYNTHETIC_DOCUMENTATION_MEMBERS
         ),
+        # python-testing's ungated pytest-first-properties (D72) needs no pytest.
+        "python-testing/SKILL.md",
+        "python-testing/rules/pytest-first-properties.md",
+        "python-testing/references/LICENSE.python-best-practices",
+        "python-testing/references/LICENSE.python-clean-architecture",
     }
 )
 
