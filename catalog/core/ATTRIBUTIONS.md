@@ -785,6 +785,12 @@ routes where a job's file goes, per project type, to the rule that explains
 it, naming rule ids in plain text without repeating a rule body. The
 `domino-docs` rows above name the pages whose facts it restates.
 
+### forge
+
+The forge skill restates the operations of `playbook forge`; it holds no upstream text.
+
+- `SKILL.md`
+
 ### ml-data
 
 `references/library-equivalents.md` and `references/review-signals.md` are internal decision guides (D49), not vendored.
