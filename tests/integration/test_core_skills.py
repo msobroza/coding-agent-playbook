@@ -48,6 +48,7 @@ from tests._core_skill_layout import (
     names_rule_id,
     nesting_problems,
     plain_markdown_problems,
+    prose_lines,
 )
 from tests.core_skill_pins import (
     ALL_PINS,
@@ -249,9 +250,10 @@ def test_core_skill_md_is_plain_markdown(skill_id: str) -> None:
     # Links to its own references/*.md are allowed; test_core_skill_links_stay_inside_the_skill
     # checks them (prU L0-13).
     assert plain_markdown_problems(SKILLS_ROOT / skill_id) == [], skill_id
-    # The description may say "pytest" (also a rule id); only the body must not name ids.
+    # The description may say "pytest" (also a rule id); only the body's prose must not
+    # name ids. Code examples are exempt: `@pytest.fixture` there is the Python module.
     body, rule_ids = _authored(skill_id)[1], sorted(core_rules())
-    for number, line in enumerate(body.splitlines(), start=1):
+    for number, line in prose_lines(body):
         for rule_id in rule_ids:
             assert not names_rule_id(line, rule_id), (
                 f"core skill {skill_id!r}: SKILL.md body line {number} names rule id "

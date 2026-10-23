@@ -26,7 +26,7 @@ from coding_agent_playbook.validation.link_check import classify_link, extract_m
 from tests._budget_probe import every_gate_facts
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Callable, Iterable, Iterator
 
 #: Whether a file may sit in one side directory.
 type _FileTest = Callable[[Path], bool]
@@ -45,6 +45,8 @@ LICENSE_COPY_NAMES: Final = frozenset(
 NOT_THIRD_PERSON: Final = re.compile(r"(?i)(i|you|we|use)\b")
 #: A URL in a SKILL.md: a scheme or a bare ``www.``.
 URL: Final = re.compile(r"(?i)\b[a-z][a-z0-9+.-]*://|\bwww\.")
+#: A line opening or closing a fenced code block: its backtick or tilde run.
+_FENCE: Final = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 #: D49: the line cap of an internal (engine-written) reference.
 INTERNAL_REFERENCE_MAX_LINES: Final = 120
 #: A path segment after ``references/`` that is itself a directory: real nesting (D78(16)).
@@ -182,6 +184,24 @@ def names_rule_id(text: str, rule_id: str) -> bool:
     Example: ``names_rule_id("see demo-rule-x", "demo-rule")`` -> ``False``.
     """
     return re.search(rf"(?<![\w-]){re.escape(rule_id)}(?![\w-])", text) is not None
+
+
+def prose_lines(body: str) -> Iterator[tuple[int, str]]:
+    """``(line number, line)`` for each line of ``body`` outside fenced code blocks.
+
+    The rule-id check reads prose only: a code example's ``@pytest.fixture`` is a
+    Python module, not a pointer to the ``pytest`` rule (C-python-testing-refs).
+
+    Example: ``list(prose_lines("a\\n```\\nb\\n```\\nc"))`` -> ``[(1, "a"), (5, "c")]``.
+    """
+    fence = ""
+    for number, line in enumerate(body.splitlines(), start=1):
+        opener = _FENCE.match(line)
+        if opener and (not fence or opener.group(1).startswith(fence)):
+            fence = "" if fence else opener.group(1)
+            continue
+        if not fence:
+            yield number, line
 
 
 def description_problems(skill_dir: Path) -> list[str]:

@@ -28,6 +28,7 @@ from tests._core_skill_layout import (
     link_problems,
     names_rule_id,
     nesting_problems,
+    prose_lines,
 )
 
 if TYPE_CHECKING:
@@ -224,6 +225,14 @@ def test_internal_reference_gate_names_each_d49_breach(
 )
 def test_names_rule_id_matches_only_the_whole_hyphenated_id(text: str, named: bool) -> None:
     assert names_rule_id(text, "demo-rule") is named
+
+
+def test_prose_lines_skip_fenced_code_and_keep_line_numbers() -> None:
+    body = "Intro demo-rule.\n\n```python\n@pytest.fixture\n```\n\n~~~\ncode\n~~~\nOutro.\n"
+
+    lines = list(prose_lines(body))
+
+    assert lines == [(1, "Intro demo-rule."), (2, ""), (6, ""), (10, "Outro.")]
 
 
 def test_the_engine_test_run_never_collects_example_code() -> None:

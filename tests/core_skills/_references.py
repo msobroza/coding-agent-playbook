@@ -41,7 +41,8 @@ class ReferenceEntry(TypedDict):
 
     path: str
     open_when: str
-    applies_if: NotRequired[dict[str, list[str]]]
+    #: A gate as YAML gives it: a list (``has_framework``), a str or a bool value.
+    applies_if: NotRequired[dict[str, object]]
 
 
 def skill_md_parts(skill_root: Path) -> tuple[dict[str, Any], str]:
