@@ -54,7 +54,7 @@ References:
 
 `SKILL.md`: quick reference from pbp skills/testing/SKILL.md lines 11-13 (intro, without the publisher-voice sentence), pbp skills/testing/SKILL.md lines 53-114 (Quick Reference: structure, fixtures, parametrize, mocking patterns), pbp skills/testing/rules/_sections.md lines 3-45 (section summaries for mocking, test structure, fixtures, parametrization), catalog/core/skills/python-testing/SKILL.md lines 10-12 (keep: production code changed alongside a test follows the python-coding skill); see also python-coding, python-tooling, python-architecture, web-application, ml-data. D32 + D47: SKILL.md = adapted pbp intro + Quick Reference; the engine then generates 'How to use this skill', 'Rules' (one heading per active section with its open_when line and a two-column table) and 'References and examples' (the three internal guides, each with its open_when). The hand-written body carries no 'Picking references' bullets (today's block is deleted). Adapt the quick reference to engine decisions: the mocking pattern shows a named fake first and autospec only as the thin-seam fallback (pbp-B#23; no `mocker` as the default), the factory uses keyword-only params (pbp-B#21), every signature typed. The body names no rule id (test_core_skills.py:372-391) and See Also lists plain-text skill names: python-tooling (pytest configuration, coverage threshold), python-coding (production code under test), python-architecture (testing across layer seams, fakes of ports), web-application (dependency overrides, DB rollback), ml-data (numeric and frame assertions). pbp's `paths:` frontmatter key and 'Designed for AI agents and LLMs' are dropped.
 
-Dropped upstream text (23):
+Dropped upstream text (26):
 
 | Source | Lines | Reason |
 | --- | --- | --- |
@@ -66,7 +66,10 @@ Dropped upstream text (23):
 | pbp:`skills/testing/rules/fixture-scope.md` | 38-55, 62 | db_engine/db_session example replaced by the engine's read-only session fixture (the rolled-back DB fixture is web-application's / python-architecture's); pytest-randomly is a banned dropped recommendation. |
 | pbp:`skills/testing/rules/fixture-factory.md` | 66 | factory_boy: dropped new-dependency recommendation (banned token). |
 | pbp:`skills/testing/rules/struct-one-behavior.md` | 55 | pytest-check: dropped new-dependency recommendation (banned token). |
-| pbp:`skills/testing/SKILL.md` | 4-8, 13 (publisher sentence), 116-118 | Harness-specific `paths:` key, publisher-voice boilerplate, and the cross-skill See Also link (becomes plain-text skill names, D32). |
+| pbp:`skills/testing/SKILL.md` | 1-9 | Harness-specific frontmatter with its `paths:` key; the engine composes SKILL.md frontmatter and uses globs. |
+| pbp:`skills/testing/SKILL.md` | 13 | The publisher-voice sentence of the intro. |
+| pbp:`skills/testing/SKILL.md` | 15-51 | The upstream section tables, replaced by the generated section index (D17, D32). |
+| pbp:`skills/testing/SKILL.md` | 116-118 | The cross-skill See Also link to the tooling page (becomes plain-text skill names, D32); test configuration is the python-tooling skill's. |
 | pca:`skills/clean-architecture/references/testing-advanced.md` | 1-5 | Intro pointing to another pca file; cross-file links do not survive the split. |
 | pca:`skills/clean-architecture/references/testing-advanced.md` | 35 | 'One assert per test' conflicts with the engine's one logical assertion (pca-F row 20). |
 | pca:`skills/clean-architecture/references/testing-advanced.md` | 37-47 | Generic pytest CLI table (-v, -s are personal preferences); the flags the rules need already live in them (-k/--collect-only in pytest-parametrize-ids, --fixtures in pytest-conftest, --setup-show in pytest-fixtures, --lf in python-tooling's pytest-configuration). |

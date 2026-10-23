@@ -45,8 +45,11 @@ LICENSE_COPY_NAMES: Final = frozenset(
 NOT_THIRD_PERSON: Final = re.compile(r"(?i)(i|you|we|use)\b")
 #: A URL in a SKILL.md: a scheme or a bare ``www.``.
 URL: Final = re.compile(r"(?i)\b[a-z][a-z0-9+.-]*://|\bwww\.")
-#: A line opening or closing a fenced code block: its backtick or tilde run.
+#: A line opening a fenced code block: its backtick or tilde run, then an info string.
 _FENCE: Final = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+#: A line that may close a fenced code block: the run alone (CommonMark allows no info
+#: string on a closer, so "```python" inside a ``` block is code, not its end).
+_FENCE_CLOSER: Final = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*$")
 #: D49: the line cap of an internal (engine-written) reference.
 INTERNAL_REFERENCE_MAX_LINES: Final = 120
 #: A path segment after ``references/`` that is itself a directory: real nesting (D78(16)).
@@ -196,12 +199,15 @@ def prose_lines(body: str) -> Iterator[tuple[int, str]]:
     """
     fence = ""
     for number, line in enumerate(body.splitlines(), start=1):
-        opener = _FENCE.match(line)
-        if opener and (not fence or opener.group(1).startswith(fence)):
-            fence = "" if fence else opener.group(1)
-            continue
         if not fence:
-            yield number, line
+            opener = _FENCE.match(line)
+            fence = opener.group(1) if opener else ""
+            if not opener:
+                yield number, line
+            continue
+        closer = _FENCE_CLOSER.match(line)
+        if closer and closer.group(1).startswith(fence):
+            fence = ""
 
 
 def description_problems(skill_dir: Path) -> list[str]:

@@ -29,7 +29,7 @@ from tests.core_skills._references import (
     reference_text,
     references_block,
     skill_md_parts,
-    skill_rule_ids,
+    unknown_rule_ids,
 )
 
 pytestmark = pytest.mark.catalog
@@ -138,19 +138,15 @@ _RULE_ID_LOOKALIKES: Final = frozenset(
     }
 )
 
+#: The pytest rule's six ruff PT warn codes plus the feedback hook's three findings. The
+#: count keeps the routing test from passing vacuously when ``lint_codes`` stops parsing;
+#: change it together with the rule's ``lint_codes.warn`` list.
+_REPORTED_UNDER_PYTEST_COUNT: Final = 9
+
 
 def _guide(path: str) -> str:
     """The text of one of the skill's guides: ``_guide(REVIEWING)``."""
     return reference_text(SKILL_ROOT, path)
-
-
-def _rule_id_like_names(text: str) -> set[str]:
-    """The names in ``text`` shaped like this skill's rule ids, lookalikes left out.
-
-    >>> sorted(_rule_id_like_names("the pytest rule, pytest-asyncio and pytest-fixtures."))
-    ['pytest', 'pytest-fixtures']
-    """
-    return set(_RULE_ID_LIKE_RE.findall(text)) - _RULE_ID_LOOKALIKES
 
 
 def test_skill_lists_each_mapped_reference_gated_on_pytest_in_mapping_order() -> None:
@@ -164,9 +160,13 @@ def test_skill_lists_each_mapped_reference_gated_on_pytest_in_mapping_order() ->
 
 
 def test_rule_id_pattern_skips_plugins_hook_findings_and_module_names() -> None:
-    text = "pytest_asyncio.fixture, pytest-loop-assert (pytest-parametrize); pytest-mock."
+    text = (
+        "pytest_asyncio.fixture, pytest-loop-assert (pytest-parametrize, pytest-nope); pytest-mock."
+    )
 
-    assert _rule_id_like_names(text) == {"pytest-parametrize"}
+    unknown = unknown_rule_ids(text, _RULE_ID_LIKE_RE, _RULE_ID_LOOKALIKES, SKILL_ROOT)
+
+    assert unknown == ["pytest-nope"]
 
 
 @pytest.mark.parametrize("path", list(ROUTES_TO))
@@ -182,8 +182,7 @@ def test_reference_names_every_rule_it_routes_to(path: str) -> None:
 def test_reference_names_only_rule_ids_the_skill_ships(path: str) -> None:
     text = _guide(path)
 
-    other_skills = {rule_id for _, rule_id in cross_skill_mentions(text)}
-    unknown = sorted(_rule_id_like_names(text) - other_skills - skill_rule_ids(SKILL_ROOT))
+    unknown = unknown_rule_ids(text, _RULE_ID_LIKE_RE, _RULE_ID_LOOKALIKES, SKILL_ROOT)
 
     assert unknown == [], f"{path} names rule ids python-testing does not ship: {unknown}"
 
@@ -230,7 +229,7 @@ def test_review_guide_routes_every_code_and_finding_reported_under_the_pytest_ru
 
     unrouted = [name for name in reported if not names_rule_id(text, name)]
 
-    assert len(reported) == 9, reported
+    assert len(reported) == _REPORTED_UNDER_PYTEST_COUNT, reported
     assert unrouted == [], f"{REVIEWING} does not route {unrouted}"
 
 

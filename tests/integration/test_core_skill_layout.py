@@ -235,6 +235,15 @@ def test_prose_lines_skip_fenced_code_and_keep_line_numbers() -> None:
     assert lines == [(1, "Intro demo-rule."), (2, ""), (6, ""), (10, "Outro.")]
 
 
+def test_prose_lines_close_a_fence_only_on_a_bare_fence_run() -> None:
+    """CommonMark: a closing fence has no info string, so ```python inside ``` is code."""
+    body = "```\n```python\nnested-rule\n```\nAfter.\n"
+
+    lines = list(prose_lines(body))
+
+    assert lines == [(5, "After.")]
+
+
 def test_the_engine_test_run_never_collects_example_code() -> None:
     """D48: examples run in their own CI job; the engine's pytest reads only tests/."""
     with (REPO_ROOT / "pyproject.toml").open("rb") as handle:

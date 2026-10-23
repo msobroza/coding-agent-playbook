@@ -22,7 +22,7 @@ from tests.core_skills._references import (
     known_rule_ids,
     reference_text,
     references_block,
-    skill_rule_ids,
+    unknown_rule_ids,
 )
 
 pytestmark = pytest.mark.catalog
@@ -102,9 +102,7 @@ def test_reference_names_every_rule_it_routes_to(path: str) -> None:
 def test_reference_names_only_rule_ids_the_skill_ships(path: str) -> None:
     text = _reference_text(path)
 
-    other_skills = {rule_id for _, rule_id in cross_skill_mentions(text)}
-    named = set(_RULE_ID_LIKE_RE.findall(text)) - _RULE_ID_LOOKALIKES - other_skills
-    unknown = sorted(named - skill_rule_ids(SKILL_ROOT))
+    unknown = unknown_rule_ids(text, _RULE_ID_LIKE_RE, _RULE_ID_LOOKALIKES, SKILL_ROOT)
 
     assert unknown == [], f"{path} names rule ids python-tooling does not ship: {unknown}"
 
