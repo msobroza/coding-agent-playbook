@@ -143,7 +143,7 @@ PATH_EDITS: Final[tuple[tuple[str, str, str, _Edits], ...]] = (
     (
         "mattpocock_skills",
         "ask-matt/SKILL.md",
-        "7e59df484a2d4f67be83eb996f3aa87d333107f5c8ab664e9a3dfeece3fc42ce",
+        "e9839ae533fd0faabf8e43243c33e01a194d2407db2e3459eaead317962181ea",
         (
             (
                 "one file per ticket under `.scratch/<feature>/issues/`",
@@ -154,15 +154,15 @@ PATH_EDITS: Final[tuple[tuple[str, str, str, _Edits], ...]] = (
     (
         "mattpocock_skills",
         "setup-matt-pocock-skills/SKILL.md",
-        "bd24426a13744d7d6995156efe834c1fd9afb2a2d5d5eec2694afd3edf54be21",
+        "47d43febf16708678c1c0f0988345be9c2226a22e0d805f1205674a472e82cae",
         (
             (
                 "- `.scratch/`: a sign that",
                 "- `docs/specs/` and `docs/plans/`: a sign that",
             ),
             (
-                "write a markdown file under `.scratch/` or follow",
-                "write a markdown file under `docs/specs/` or `docs/plans/` or follow",
+                "write a markdown file under `.scratch/`, or follow",
+                "write a markdown file under `docs/specs/` or `docs/plans/`, or follow",
             ),
             (
                 "issues live as files under `.scratch/<feature>/` in this repo",
@@ -179,7 +179,7 @@ PATH_EDITS: Final[tuple[tuple[str, str, str, _Edits], ...]] = (
     (
         "mattpocock_skills",
         "to-tickets/SKILL.md",
-        "adf2116e7575cd583bc48cfe87a40dbd52f55be45ef4c57be20736a7999cce1f",
+        "004866018e47557a7b43ec4f8041c1e2e99e674d472982ca4c60fb42dda6c4a8",
         (
             (
                 "under `.scratch/<feature-slug>/issues/<NN>-<slug>.md`",
