@@ -118,6 +118,10 @@ Round 14 (after the eval sample rename):
 
 - **D80 The judge's sample count is `--judge-samples`.** After D68, `playbook eval <id> --run --samples N` reads as a number of eval samples, though it is how many times the judge scores each rubric criterion before averaging. The flag becomes `--judge-samples N` (default 1), and the grading context field `samples` becomes `judge_samples`. `--samples` stays for one release as a deprecated alias hidden from `--help`: it still works, prints one line on stderr naming `--judge-samples`, and passing both flags is a usage error (exit 2). The MIGRATION v0.21 entry replaces its "keeps its name" sentence. Ticket L0-27, wave 1.
 
+Round 15 (after main's forge merge, owner's decision of 2026-10-23):
+
+- **D81 The Domino listing cap applies to every listing that holds a Domino skill.** With every member active, core plus mattpocock_skills lists 7,332 characters: core's 3,552 (forge's 252 included) plus the plugin's 3,780; it was already 7,080 before forge because the Domino skills count. The per-plugin listing check (`tests/plugins/mattpocock_skills/test_budget.py`, `listing_cap`) therefore applies D59's 7,500 whenever a Domino skill is in the listing and D54's 7,000 otherwise, instead of trimming descriptions. The owner chose to keep it.
+
 ### Follow-ups after this effort
 
 - D45's list (pytest splits, arch-composition-root in review-architecture, PT lint codes, D9's prompt merges).
