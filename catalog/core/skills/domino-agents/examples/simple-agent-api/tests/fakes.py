@@ -49,9 +49,10 @@ SCIENCE_WORDS = ("planet", "star", "atom", "density", "mass", "photosynthesis", 
 
 
 def make_settings(config_path: Path = SHIPPED_CONFIG, **overrides: Any) -> AgentSettings:
-    """Settings built in code: no .env file, outside Domino, a placeholder provider key.
+    """Settings built in code: outside Domino, with a placeholder provider key.
 
-    conftest unsets every variable the settings read, so only these values count.
+    AgentSettings reads no .env file (its model_config sets no env_file), and conftest
+    unsets every variable the settings read, so only these values count.
     ``Any``: the overrides go straight to the settings model, which validates them.
     """
     values: dict[str, Any] = {
@@ -63,7 +64,7 @@ def make_settings(config_path: Path = SHIPPED_CONFIG, **overrides: Any) -> Agent
         "cors_origins": [],
         **overrides,
     }
-    return AgentSettings(_env_file=None, **values)
+    return AgentSettings(**values)
 
 
 def latest_prompt(messages: list[ModelMessage]) -> str:
