@@ -3,7 +3,9 @@
 ``ShimRepo`` is a tmp worktree holding the shim at its committed path, a
 ``package.json`` declaring ESM (node 18 reads a bare ``.js`` as CommonJS) and
 a per-worktree pin naming a fake ``sh`` dispatcher. The fake is the only
-process boundary: it records each call's argv and stdin under ``calls/<n>/``
+process boundary: it records each call's argv and stdin under ``calls/<n>/``,
+then marks the record complete with ``calls/<n>/done`` (a fired, not awaited,
+dispatch may still be writing it when the shim returns)
 and replays the canned stdout and exit code in ``responses/<event>.{out,code}``,
 or ``exec``s ``sleep`` for ``responses/<event>.sleep`` seconds so the shim's
 kill reaches it. ``tests/fixtures/opencode/shim_driver.mjs`` calls the server
@@ -51,6 +53,7 @@ mkdir -p "$d/calls/$n"
 echo $$ > "$d/calls/$n/pid"
 printf '%s\\n' "$@" > "$d/calls/$n/argv"
 cat > "$d/calls/$n/stdin"
+: > "$d/calls/$n/done"
 r="$d/responses/$5"
 if [ -f "$r.sleep" ]; then exec sleep "$(cat "$r.sleep")"; fi
 if [ -f "$r.out" ]; then cat "$r.out"; fi
@@ -151,9 +154,15 @@ class ShimRepo:
         return ShimRun(body["results"], body["errors"], self.calls())
 
     def calls(self) -> list[DispatchCall]:
-        """Every recorded dispatch, oldest first."""
-        dirs = sorted((self.fake / "calls").iterdir(), key=lambda path: int(path.name))
-        return [_call(directory) for directory in dirs]
+        """Every completely recorded dispatch, oldest first.
+
+        A record without its ``done`` marker is still being written by an async
+        (fired, not awaited) dispatch; reading it raced on CI (PR #266), so it is
+        left out until complete (``tests/adapters/test_opencode_shim_node.py``
+        polls for it).
+        """
+        dirs = [path for path in (self.fake / "calls").iterdir() if (path / "done").exists()]
+        return [_call(directory) for directory in sorted(dirs, key=lambda path: int(path.name))]
 
 
 def _call(directory: Path) -> DispatchCall:

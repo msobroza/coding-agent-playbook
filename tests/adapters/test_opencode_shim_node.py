@@ -403,19 +403,18 @@ def test_v2_setup_stub_is_inert(shim: ShimRepo) -> None:
 # --- OQ-19: the fire-and-forget async audit dispatch -------------------------------------
 
 
-def _await_calls(shim: ShimRepo, count: int, wait_s: float = 5.0) -> list[DispatchCall]:
-    """The recorded dispatches once ``count`` exist with their stdin (a fired child is async)."""
+def _await_calls(shim: ShimRepo, count: int, wait_s: float = 10.0) -> list[DispatchCall]:
+    """The complete dispatch records once ``count`` exist (a fired child records async).
+
+    Polls ``shim.calls()``, which lists a record only once the fake marked it done,
+    so a record is never read half-written; bounded by ``wait_s``.
+    """
     deadline = time.monotonic() + wait_s
-    while time.monotonic() < deadline:
-        if sum(_recorded(d) for d in (shim.fake / "calls").iterdir()) >= count:
-            return shim.calls()
+    calls = shim.calls()
+    while len(calls) < count and time.monotonic() < deadline:
         time.sleep(0.05)
-    return shim.calls()
-
-
-def _recorded(call_dir: Path) -> bool:
-    stdin = call_dir / "stdin"
-    return (call_dir / "argv").exists() and stdin.exists() and stdin.stat().st_size > 0
+        calls = shim.calls()
+    return calls
 
 
 def test_async_audit_dispatch_fires_without_awaiting(tmp_path: Path) -> None:
@@ -445,3 +444,20 @@ def test_async_audit_dispatch_fires_without_awaiting(tmp_path: Path) -> None:
     ]
     assert call.payload["tool_name"] == "Read"
     assert call.payload["tool_input"] == {"filePath": "a.md", "file_path": "a.md"}
+
+
+def test_a_half_written_dispatch_record_is_listed_only_once_complete(tmp_path: Path) -> None:
+    """Regression (PR #266 CI): an async dispatch still writing its record when the
+    shim returned made ``ShimRepo.calls`` read a missing ``argv``."""
+    shim = ShimRepo.create(tmp_path, {"session_start": {"timeout_ms": 5000}})
+    record = shim.fake / "calls" / "0"
+    record.mkdir()
+    (record / "pid").write_text("1\n", encoding="utf-8")  # the fake is past mkdir, not argv
+
+    assert shim.calls() == []
+
+    (record / "argv").write_text("\n".join([*RUNTIME_ARGV, "post_tool_use"]), encoding="utf-8")
+    (record / "stdin").write_bytes(b"{}")
+    (record / "done").touch()
+    (call,) = shim.calls()
+    assert (call.event, call.payload, call.pid) == ("post_tool_use", {}, 1)
