@@ -41,7 +41,7 @@ class ReferenceEntry(TypedDict):
 
     path: str
     open_when: str
-    applies_if: NotRequired[dict[str, list[str]]]
+    applies_if: NotRequired[dict[str, str | list[str]]]
 
 
 def skill_md_parts(skill_root: Path) -> tuple[dict[str, Any], str]:
