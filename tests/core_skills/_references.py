@@ -39,6 +39,8 @@ _CROSS_SKILL_RE: Final = re.compile(
 _LIST_SEPARATOR_RE: Final = re.compile(r", | and ")
 #: A backticked rule-id-shaped token: ``design-strategy`` in backticks.
 _BACKTICKED_ID_RE: Final = re.compile(r"`([a-z0-9]+(?:-[a-z0-9]+)+)`")
+#: An emitted SKILL.md's "References and examples" link: ``[references/x.md]``.
+_LISTED_REFERENCE_RE: Final = re.compile(r"\[references/([a-z0-9-]+\.md)\]")
 #: A mapping spec's rule-table row: ``| `rules/<id>.md[.j2]` | ...``.
 _SPEC_RULE_PATH_RE: Final = re.compile(r"^\| `rules/([a-z0-9-]+)\.md(?:\.j2)?` \|", re.MULTILINE)
 
@@ -48,7 +50,8 @@ class ReferenceEntry(TypedDict):
 
     path: str
     open_when: str
-    applies_if: NotRequired[dict[str, str | list[str]]]
+    #: A gate as YAML gives it: a list (``has_framework``), a str or a bool value.
+    applies_if: NotRequired[dict[str, list[str] | str | bool]]
 
 
 def skill_md_parts(skill_root: Path) -> tuple[dict[str, Any], str]:
@@ -173,3 +176,42 @@ def missing_sibling_guides(skill_root: Path, path: str, guides: Collection[str])
     if "references/" in last_line:
         missing.append("references/")
     return missing
+
+
+def unknown_rule_ids(
+    text: str, rule_id_like: re.Pattern[str], lookalikes: frozenset[str], skill_root: Path
+) -> list[str]:
+    """The tokens of ``text`` shaped like the skill's rule ids that name no rule it ships.
+
+    ``rule_id_like`` matches the skill's id shapes; ``lookalikes`` are such tokens that
+    are no rule (plugins, skill names). Another skill's rules, named "<skill>'s <id>",
+    are checked apart, so they are left out too.
+
+    >>> from tests._catalog import core_skill_root
+    >>> root = core_skill_root("python-coding")
+    >>> pattern = re.compile(r"\\bpython-[a-z-]+")
+    >>> unknown_rule_ids("python-async and python-nope", pattern, frozenset(), root)
+    ['python-nope']
+    """
+    other_skills = {rule_id for _, rule_id in cross_skill_mentions(text)}
+    named = set(rule_id_like.findall(text)) - lookalikes - other_skills
+    return sorted(named - skill_rule_ids(skill_root))
+
+
+def written_references(repo: Path, root: str, skill: str) -> list[str]:
+    """The reference guide names ``repo``'s emitted ``skill`` holds under the skill root ``root``.
+
+    Example: ``written_references(repo, ".claude/skills", "python-testing")``.
+    """
+    references = repo / root / skill / "references"
+    return sorted(p.name for p in references.iterdir() if p.suffix == ".md")
+
+
+def listed_references(repo: Path, skill: str) -> list[str]:
+    """The reference file names ``repo``'s emitted ``skill`` lists under "References and examples".
+
+    Example: ``listed_references(repo, "python-tooling")`` -> ``["check-failures.md"]``.
+    """
+    skill_md = repo / ".claude" / "skills" / skill / "SKILL.md"
+    listing = skill_md.read_text(encoding="utf-8").partition("## References and examples")[2]
+    return _LISTED_REFERENCE_RE.findall(listing)

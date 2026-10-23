@@ -195,6 +195,11 @@ Distilled (credited by name only, no vendored text):
 | `skills/testing/rules/param-parametrize.md` | `rules/pytest-parametrize.md` | Lines 7-51 are the skeleton: engine frontmatter; title without the impact tag; the engine's raises/nullcontext example added with the Act alone inside `with expectation:`; Notes add the PT006/PT007 shapes, the fixture-`params=` pointer to pytest-fixtures and the struct-one-behavior link as the plain-text id pytest-one-behavior. The References list (52-54) is dropped. |
 | `skills/testing/rules/param-ids.md` | `rules/pytest-parametrize-ids.md` | Lines 7-53 are the skeleton: engine frontmatter; title without the impact tag; the bare `dict` parameter typed as `Mapping[str, object]`; Notes add the engine's `pytest.param(value, expected, id=...)` form and prefer it over a long `ids=` list. The References list (54-55) is dropped. |
 | `skills/tooling/rules/test-pytest.md` | `rules/pytest-factory-fixtures.md`, `rules/pytest-branch-coverage.md` | Lines 59-75 (handed over by python-tooling): the yield-and-clean-up factory becomes pytest-factory-fixtures' second Good Example, typed `Iterator[Callable[..., User]]` with keyword-only parameters and defaults instead of an untyped positional factory. Lines 144-145: `branch = true` and not chasing 100% become pytest-branch-coverage Notes. Lines 37-58, 76-107 and 141-143 (yield fixtures, the scope table, parametrize with ids, conftest discovery) are covered by the fixture and parametrize rules and not vendored again: their `Generator[...]` fixture, positional factory and `== x * y` expectation contradict engine rules. The configuration, commands and coverage-settings blocks stay with python-tooling. |
+| `skills/testing/SKILL.md` | `SKILL.md` | Lines 11-13: the intro, without the publisher-voice sentence (13), joined with the engine's scope line and its sentence that production code changed alongside a test follows the python-coding skill. Lines 53-114 are the Quick Reference, adapted to the engine: the factory fixture takes keyword-only parameters (pbp-B#21); the mocking block leads with a named `FakeMailer` passed through the production parameter and asserted on its state, keeps the autospec patch only as the fallback for a third-party seam the code cannot take as a parameter yet, as a stdlib `patch(...)` context manager instead of `mocker` (pbp-B#23), and gives the monkeypatch test its Arrange, Act and Assert. See Also becomes plain-text skill names. DROP: the frontmatter and `paths:` (1-9), because the engine writes its own frontmatter and uses globs; the upstream section tables (15-51), replaced by the generated section index (D17, D32); and the See Also link to the tooling page (116-118), because test configuration is the python-tooling skill's. |
+| `skills/testing/rules/_sections.md` | `SKILL.md` | Lines 3-45: the section titles, impacts and summaries inform the mocking, test structure, fixtures and parametrization sections of the skill's frontmatter, which the engine adds test isolation and coverage to; the per-section rule lists are not carried, because the generated index lists the rules. |
+| `skills/testing/README.md` | DROP | D32: upstream README.md files are dropped. |
+| `skills/testing/metadata.json` | DROP | D32: metadata.json is dropped; sections live in SKILL.md (D17). |
+| `skills/testing/rules/_template.md` | DROP | D32: the rule template becomes the "Writing a rule" section of catalog/README.md, not a skill file. |
 
 ### python-tooling
 
@@ -881,7 +886,11 @@ The forge skill restates the operations of `playbook forge`; it holds no upstrea
 
 ### python-testing
 
-- `SKILL.md`
+`references/choosing-a-test-double.md`, `references/async-tests.md` and `references/reviewing-tests.md` are internal decision guides (D49), not vendored.
+
+- `references/async-tests.md`
+- `references/choosing-a-test-double.md`
+- `references/reviewing-tests.md`
 - `rules/pytest-first-properties.md`
 
 ### python-tooling

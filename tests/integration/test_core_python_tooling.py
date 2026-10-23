@@ -14,7 +14,6 @@ only in a uv project (C-python-tooling-refs).
 
 from __future__ import annotations
 
-import re
 from typing import TYPE_CHECKING, Final
 
 import pytest
@@ -22,6 +21,7 @@ import pytest
 from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from tests._catalog import CORE_ROOT
 from tests.core_skill_pins.python_tooling import PINS
+from tests.core_skills._references import listed_references, written_references
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
 
 if TYPE_CHECKING:
@@ -68,19 +68,7 @@ def test_uv_lock_adds_the_uv_workflow_to_python_tooling(uv_reference_probe_repo:
 
 _CHECK_FAILURES: Final = "check-failures.md"
 _UV_FAILURES: Final = "uv-dependency-failures.md"
-
-
-def _written_references(repo: Path, root: str) -> list[str]:
-    """The reference file names ``repo``'s python-tooling skill holds under ``root``."""
-    references = repo / root / "python-tooling" / "references"
-    return sorted(p.name for p in references.iterdir() if p.suffix == ".md")
-
-
-def _listed_references(repo: Path) -> list[str]:
-    """The reference file names the emitted SKILL.md lists under "References and examples"."""
-    skill_md = repo / ".claude" / "skills" / "python-tooling" / "SKILL.md"
-    listing = skill_md.read_text(encoding="utf-8").partition("## References and examples")[2]
-    return re.findall(r"\[references/([a-z0-9-]+\.md)\]", listing)
+_SKILL: Final = "python-tooling"
 
 
 def test_reference_probe_ships_only_the_ungated_check_failures_guide(
@@ -88,15 +76,15 @@ def test_reference_probe_ships_only_the_ungated_check_failures_guide(
 ) -> None:
     """Without a ``uv.lock`` the uv guide is neither written nor listed (D29, D58(2))."""
     for root in NATIVE_SKILL_ROOTS:
-        assert _written_references(reference_probe_repo, root) == [_CHECK_FAILURES], root
-    assert _listed_references(reference_probe_repo) == [_CHECK_FAILURES]
+        assert written_references(reference_probe_repo, root, _SKILL) == [_CHECK_FAILURES], root
+    assert listed_references(reference_probe_repo, _SKILL) == [_CHECK_FAILURES]
 
 
 def test_uv_lock_adds_the_uv_dependency_failures_guide(uv_reference_probe_repo: Path) -> None:
     for root in NATIVE_SKILL_ROOTS:
-        written = _written_references(uv_reference_probe_repo, root)
+        written = written_references(uv_reference_probe_repo, root, _SKILL)
         assert written == [_CHECK_FAILURES, _UV_FAILURES], root
-    assert _listed_references(uv_reference_probe_repo) == [_CHECK_FAILURES, _UV_FAILURES]
+    assert listed_references(uv_reference_probe_repo, _SKILL) == [_CHECK_FAILURES, _UV_FAILURES]
 
 
 def test_python_tooling_body_leaves_rule_picking_to_the_generated_index() -> None:

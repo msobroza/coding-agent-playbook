@@ -36,8 +36,115 @@ playbook:
       impact: MEDIUM
       summary: "Find the inputs and paths the suite still misses: edge-case checklists, branch coverage and property-based tests."
       open_when: "Deciding which cases to add: boundary and error inputs, a coverage report's misses, a regression test, or Hypothesis."
+  references:
+    - path: references/choosing-a-test-double.md
+      open_when: "Before picking what replaces a dependency in a test: fake, stub, autospec, monkeypatch, override or a real database."
+      applies_if:
+        has_framework: ["pytest"]
+    - path: references/async-tests.md
+      open_when: "Adding the first async test or async fixture, or choosing between pytest-asyncio, anyio's marker and asyncio.run."
+      applies_if:
+        has_framework: ["pytest"]
+    - path: references/reviewing-tests.md
+      open_when: "Reviewing a test diff, or a ruff PT code or pytest-conventions-feedback finding that links to the pytest rule."
+      applies_if:
+        has_framework: ["pytest"]
 ---
 
 # Python testing
 
-Conventions for this repo's tests: layout, naming, parametrized cases, test doubles, fixtures, test data and isolation. Production code changed alongside a test still follows the python-coding skill.
+Test-writing practices for readable, maintainable and trustworthy tests in this repo: layout, naming, parametrized cases, test doubles, fixtures, test data and isolation. Production code changed alongside a test still follows the python-coding skill.
+
+## Quick Reference
+
+### Structure
+
+```python
+def test_expired_token_is_rejected() -> None:
+    # Arrange
+    token = make_token(expires_at=YESTERDAY)
+
+    # Act
+    result = validate(token)
+
+    # Assert
+    assert result.valid is False
+```
+
+### Fixtures
+
+```python
+@pytest.fixture  # function scope by default: a fresh value per test
+def user() -> User:
+    return User(name="alice", email="alice@example.com")
+
+
+@pytest.fixture  # a factory when tests need variations of one object
+def make_user() -> Callable[..., User]:
+    def _make(*, name: str = "alice", active: bool = True) -> User:
+        return User(name=name, email=f"{name}@example.com", active=active)
+
+    return _make
+```
+
+### Parametrize
+
+```python
+@pytest.mark.parametrize(
+    ("email", "valid"),
+    [
+        pytest.param("a@example.com", True, id="simple-address"),
+        pytest.param("a@sub.example.com", True, id="subdomain"),
+        pytest.param("no-at-sign", False, id="missing-at"),
+        pytest.param("", False, id="empty-string"),
+    ],
+)
+def test_email_validation(email: str, valid: bool) -> None:
+    assert is_valid_email(email) is valid
+```
+
+### Mocking
+
+```python
+# A named fake passed through the production parameter; assert on what it holds.
+class FakeMailer:
+    def __init__(self) -> None:
+        self.sent: list[Email] = []
+
+    def send(self, email: Email) -> None:
+        self.sent.append(email)
+
+
+def test_signup_sends_a_welcome_email() -> None:
+    mailer = FakeMailer()
+
+    signup(email="alice@example.com", mailer=mailer)
+
+    assert mailer.sent == [Email(to="alice@example.com", template="welcome")]
+
+
+# Fallback for a third-party seam the code cannot take as a parameter yet:
+# patch the name where the code looks it up, with autospec.
+def test_signup_reports_to_the_analytics_sdk() -> None:
+    with patch("app.signup.analytics.track", autospec=True) as track:
+        signup(email="alice@example.com", mailer=FakeMailer())
+
+    track.assert_called_once_with("signup", plan="free")
+
+
+# The monkeypatch fixture for environment variables; it undoes the change.
+def test_reads_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("API_KEY", "test-key")
+
+    config = load_config()
+
+    assert config.api_key == "test-key"
+```
+
+## See Also
+
+- python-tooling: the test runner's configuration, markers and the coverage threshold.
+- python-coding: the production code under test.
+- python-architecture: testing across layer seams and fakes of owned ports.
+- web-application: dependency overrides and database tests in a rolled-back transaction.
+- ml-data: numeric, array and frame assertions.
