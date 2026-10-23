@@ -1,9 +1,11 @@
-"""Skill-listing budget: core plus EACH bundled plugin within 7,000 characters (prU D18, D54).
+"""Skill-listing budget: core plus EACH bundled plugin within the listing cap (prU D18, D54, D59).
 
 specs/prT-mattpocock-skills.md section 7.5: prS D5 as amended by D31. The test
 measures what the engine itself would list, per layer, with the engine's own
 functions (E13): core's rule skills (shipped by ticket 10, #72) are counted at the
 longest description sync composes for them, every plugin skill at its authored one.
+With every member active the Domino skills are counted too, so the cap is D59's
+Domino one (7,500); without them it is D54's 7,000.
 """
 
 from __future__ import annotations
@@ -19,10 +21,11 @@ from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.skills.document import emitted_frontmatter
 from coding_agent_playbook.skills.membership import compose_skills
 from coding_agent_playbook.skills.naming import skill_id_of
-from tests._budget_probe import LISTING_MAX_CHARS
+from tests._budget_probe import DOMINO_LISTING_MAX_CHARS, LISTING_MAX_CHARS
 from tests.plugins.mattpocock_skills._expectations import PLUGIN_NAME, present_skill_ids
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from pathlib import Path
 
     from coding_agent_playbook.artifacts.rule import Rule
@@ -55,12 +58,23 @@ def listing_chars(plugin: str, repo_root: Path) -> dict[str, int]:
     return {skill_id_of(s): len(str(emitted_frontmatter(s)["description"])) for s in composed}
 
 
+def listing_cap(skill_ids: Iterable[str]) -> int:
+    """D59's Domino cap once a Domino skill is listed, else D54's: ``listing_cap(["forge"])`` -> 7000."""
+    domino = any(skill_id.startswith("domino-") for skill_id in skill_ids)
+    return DOMINO_LISTING_MAX_CHARS if domino else LISTING_MAX_CHARS
+
+
 @pytest.mark.parametrize("plugin", bundled_plugins())
-def test_core_plus_each_bundled_plugin_listing_within_7000_chars_d18(
+def test_core_plus_each_bundled_plugin_listing_within_the_listing_cap_d18(
     plugin: str, tmp_path: Path
 ) -> None:
     chars = listing_chars(plugin, tmp_path)
-    assert sum(chars.values()) <= LISTING_MAX_CHARS, sorted(chars.items(), key=lambda kv: -kv[1])
+    assert sum(chars.values()) <= listing_cap(chars), sorted(chars.items(), key=lambda kv: -kv[1])
+
+
+def test_listing_cap_is_the_domino_one_only_with_a_domino_skill() -> None:
+    assert listing_cap(["forge", "python-coding"]) == LISTING_MAX_CHARS
+    assert listing_cap(["forge", "domino-jobs"]) == DOMINO_LISTING_MAX_CHARS
 
 
 def test_budget_counts_every_present_plugin_skill(tmp_path: Path) -> None:
