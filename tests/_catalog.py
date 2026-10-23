@@ -10,6 +10,8 @@ their roots from here, so a change to the catalog layout edits this one module.
 
 from __future__ import annotations
 
+import copy
+import functools
 import tempfile
 from importlib import resources
 from pathlib import Path
@@ -184,8 +186,19 @@ def core_rules() -> dict[str, Rule]:
     ``rules/`` gets that skill as ``home_skill``, which fills ``skill`` when the
     file leaves it out, as the loader does.
 
+    Parsed once per test session and deep-copied per call: one parse of the ~290
+    rules takes about 2 s, and render helpers call this once per rendered rule,
+    which made the core-rule suites quadratic (the full CI test job took over two
+    hours). The copy keeps a test that mutates a rule from leaking into others.
+
     Example: ``core_rules()["python-typing"].frontmatter.skill`` -> ``"python-coding"``.
     """
+    return copy.deepcopy(_parsed_core_rules())
+
+
+@functools.cache
+def _parsed_core_rules() -> dict[str, Rule]:
+    """Every core rule parsed from the checkout, once; callers get copies via :func:`core_rules`."""
     rules = (
         Rule.from_markdown(path, ENGINE_PACKAGE, home_skill=home)
         for home, path in core_rule_paths()
