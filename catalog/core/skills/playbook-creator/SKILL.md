@@ -41,6 +41,19 @@ playbook:
       impact: MEDIUM
       summary: "Plugins are pure content, overlays are importable packages, and third-party text keeps its license and change list."
       open_when: "Creating a bundled plugin or an overlay package, marking a framework, or bringing in third-party text or ideas."
+  references:
+    - path: references/rule-template.md
+      open_when: "Starting a new rule file: an in-skill member rule, a rule joining another layer's skill, or an always rule."
+    - path: references/skill-template.md
+      open_when: "Starting a new skill directory, or adding sections, a guide, a script or an example to an existing skill."
+    - path: references/hook-template.md
+      open_when: "Starting a new HOOK.md with a builtin or an external handler, or wiring a hook's guard twin into pre-commit."
+    - path: references/prompt-template.md
+      open_when: "Starting a new slash-command prompt with includes_rules, a write scope or an output contract."
+    - path: references/eval-sample-template.md
+      open_when: "Starting a new eval sample: its task file, setup/, solution/ and negatives for an edit or a review-only prompt."
+    - path: references/plugin-template.md
+      open_when: "Starting a bundled plugin or an overlay package, or writing its README, ATTRIBUTIONS or framework file."
 ---
 
 # Playbook creator

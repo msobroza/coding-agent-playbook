@@ -84,7 +84,8 @@ The playbook-creator skill is engine-written throughout: it restates the
 engine's own documentation and code (where each kind of artifact lives, how
 layers merge, and how rules, skills, hooks, prompts, eval samples, plugins and
 overlays are written and validated) and holds no upstream text, so every file
-of it is listed under "Engine-written files".
+of it, the six templates under references/ (D49, D70) included, is listed
+under "Engine-written files".
 
 The python-documentation skill (its SKILL.md and every rule under its rules/
 directory, listed under "Engine-written files", beside its engine-written
@@ -796,6 +797,12 @@ it, naming rule ids in plain text without repeating a rule body. The
 ### playbook-creator
 
 - `SKILL.md`
+- `references/eval-sample-template.md`
+- `references/hook-template.md`
+- `references/plugin-template.md`
+- `references/prompt-template.md`
+- `references/rule-template.md`
+- `references/skill-template.md`
 - `rules/playbook-ask-for-missing-inputs.md.j2`
 - `rules/playbook-layer-placement.md`
 - `rules/playbook-override-by-id.md`

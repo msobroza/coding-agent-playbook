@@ -87,11 +87,13 @@ def rule_source(skill_root: Path, rule_id: str) -> str:
 def last_notes_bullets(skill_root: Path, rule_id: str, count: int) -> list[str]:
     """The last ``count`` top-level ``- `` bullets of a rule's Notes section, in order.
 
-    D47 ends a rule's Notes with one see line per reference the rule points to.
+    D47 ends a rule's Notes with one see line per reference the rule points to. A
+    rule body that shows a skeleton has an earlier ``## Notes`` inside a code block,
+    so the last match is the rule's own section.
     """
-    match = NOTES_RE.search(rule_source(skill_root, rule_id))
-    assert match, f"{rule_id} has no Notes section"
-    bullets = [line for line in match.group(1).splitlines() if line.startswith("- ")]
+    sections: list[str] = NOTES_RE.findall(rule_source(skill_root, rule_id))
+    assert sections, f"{rule_id} has no Notes section"
+    bullets = [line for line in sections[-1].splitlines() if line.startswith("- ")]
     assert len(bullets) >= count, f"{rule_id}: {len(bullets)} Notes bullets, expected {count}+"
     return bullets[-count:]
 
@@ -147,7 +149,7 @@ def rule_id_like_names(
 ) -> set[str]:
     """The names ``text`` mentions shaped like a rule id with one of ``prefixes``.
 
-    A token inside a file name or a longer hyphenated word is no mention, and the
+    A token inside a file name, a path or a longer hyphenated word is no mention, and the
     ``excluded`` names (a skill's own name, an engine command) are left out:
 
     >>> sorted(rule_id_like_names("which-document.md, docs-changelog; docs-check", ["docs"],
@@ -155,7 +157,7 @@ def rule_id_like_names(
     ['docs-changelog']
     """
     alternatives = "|".join(re.escape(prefix) for prefix in prefixes)
-    pattern = rf"(?<![\w.-])(?:{alternatives})-[a-z0-9-]*[a-z0-9](?![\w.-])"
+    pattern = rf"(?<![\w./-])(?:{alternatives})-[a-z0-9-]*[a-z0-9](?![\w./-])"
     return set(re.findall(pattern, text)) - set(excluded)
 
 
