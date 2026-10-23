@@ -67,3 +67,4 @@ from app.domain.loans import Loan, overdue_fee
 - Function-local imports are fine when they keep an optional or heavy dependency lazy; they still count for the layer rules, but not for import-time cycles.
 - The skill's layer_map.py script reports only cycles of imports that run at import time, so a cycle hidden by a function-local import has to be found by reading the code.
 - How to write and order imports is the python-coding skill's python-imports rule.
+- How to read the script's cycle output and confirm each cycle in the code: see architecture-review.md.

@@ -27,6 +27,11 @@ if TYPE_CHECKING:
 
 #: D49: an engine-written decision guide is at most 120 lines.
 INTERNAL_GUIDE_MAX_LINES: Final = 120
+#: The content-ticket template: a reference over 100 lines opens with a table of contents.
+TOC_THRESHOLD_LINES: Final = 100
+TOC_HEADING: Final = "## Contents"
+#: A rule's ``## Notes`` section, up to the next ``## `` heading or the end of the file.
+NOTES_RE: Final = re.compile(r"^## Notes\n(.*?)(?=^## |\Z)", re.MULTILINE | re.DOTALL)
 #: Another skill's rules, named "python-architecture's arch-unit-of-work and ...".
 _CROSS_SKILL_RE: Final = re.compile(
     r"\b([a-z][a-z0-9-]*)'s `?([a-z0-9-]+`?(?:(?:, | and )`?[a-z0-9-]+`?)*)"
@@ -70,6 +75,30 @@ def reference_text(skill_root: Path, path: str) -> str:
 def skill_rule_ids(skill_root: Path) -> set[str]:
     """Every rule id of the skill: the rule file names without their suffixes."""
     return {path.name.split(".")[0] for path in (skill_root / "rules").iterdir()}
+
+
+def rule_source(skill_root: Path, rule_id: str) -> str:
+    """The source text of one of the skill's rules, ``rules/<id>.md`` or ``rules/<id>.md.j2``."""
+    paths = sorted((skill_root / "rules").glob(f"{rule_id}.md*"))
+    assert len(paths) == 1, f"{rule_id}: expected one rules/{rule_id}.md[.j2], found {paths}"
+    return paths[0].read_text(encoding="utf-8")
+
+
+def last_notes_bullets(skill_root: Path, rule_id: str, count: int) -> list[str]:
+    """The last ``count`` top-level ``- `` bullets of a rule's Notes section, in order.
+
+    D47 ends a rule's Notes with one see line per reference the rule points to.
+    """
+    match = NOTES_RE.search(rule_source(skill_root, rule_id))
+    assert match, f"{rule_id} has no Notes section"
+    bullets = [line for line in match.group(1).splitlines() if line.startswith("- ")]
+    assert len(bullets) >= count, f"{rule_id}: {len(bullets)} Notes bullets, expected {count}+"
+    return bullets[-count:]
+
+
+def opens_with_table_of_contents(text: str) -> bool:
+    """True when the first ``## `` section of ``text`` is ``TOC_HEADING``."""
+    return text.find(TOC_HEADING) == text.find("\n## ") + 1
 
 
 def guide_line_count(skill_root: Path, path: str) -> int:
