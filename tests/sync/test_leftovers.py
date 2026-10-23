@@ -54,13 +54,21 @@ def test_find_orphans_skips_state_user_and_outside_paths(
     outside.write_text("x")
     entries = [
         _entry(tmp_path, ".gitignore", b"g"),
-        _entry(tmp_path, "sub/.gitignore", b"g"),
         _entry(tmp_path, ".coding-agent-playbook.toml", b"c"),
         _entry(tmp_path, ".coding-agent-playbook.lock", b"l"),
         LockEntry(path=str(outside), sha256=compute_hash(b"x"), bytes=1),
         LockEntry(path="../escape.md", sha256="", bytes=0),
     ]
     assert find_orphans(_lock(*entries), [], tmp_path) == []
+
+
+def test_only_the_repo_root_state_files_are_exempt_by_name(tmp_path: Path) -> None:
+    """A lockfile-owned ``.gitignore`` below the root is an orphan like any file (PR
+    #266 CI); outside every declared location it is still never deleted."""
+    nested = [_entry(tmp_path, "sub/.gitignore", b"g"), _entry(tmp_path, "a/.gitignore", b"g")]
+    assert find_orphans(_lock(*nested), [], tmp_path) == nested
+    assert delete_orphans(nested, tmp_path, _locations(tmp_path)) == []
+    assert (tmp_path / "sub" / ".gitignore").is_file()
 
 
 def test_find_orphans_never_lists_a_scoped_entry(tmp_path: Path) -> None:
@@ -277,6 +285,15 @@ def test_delete_orphans_never_touches_outside_or_state_paths(tmp_path: Path) -> 
     entries = [_entry(tmp_path, ".gitignore", b"x\n"), LockEntry("../x.md", "", 0)]
     assert delete_orphans(entries, tmp_path, _locations(tmp_path, "./", "")) == []
     assert (tmp_path / ".gitignore").is_file()
+
+
+def test_a_nested_gitignore_the_lockfile_owns_is_deleted_and_pruned(tmp_path: Path) -> None:
+    """Regression (PR #266 CI): only the repo-root ``.gitignore`` is a user file; one
+    a skill example ships is engine output, and keeping it kept the skill dir."""
+    nested = _entry(tmp_path, ".claude/skills/s/examples/app/.gitignore", b"*\n")
+    deleted = delete_orphans([nested], tmp_path, _locations(tmp_path))
+    assert deleted == [tmp_path / nested.path]
+    assert not (tmp_path / ".claude" / "skills" / "s").exists()
 
 
 def test_delete_orphans_skips_entries_outside_declared_locations(tmp_path: Path) -> None:
