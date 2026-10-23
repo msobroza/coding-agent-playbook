@@ -1,10 +1,8 @@
 """Pins of core skill ``python-coding`` (prU L0-15): the moved rules in mapping sections.
 
 ``pydantic-boundaries`` joins from python-tooling (D24). The retired id
-``python-classes-and-protocols`` has no mapping row and stays until its content
-lane retires it, in its successors' section. The classes section's mapped
-rules fill every slot from 60 to 66, so ``python-classes-and-protocols`` keeps
-its successor ``python-protocols``'s 61 and sorts after it by id.
+``python-classes-and-protocols`` is gone (F-02), split into ``python-protocols``,
+``python-properties`` and the design-patterns rules that MIGRATION.md names.
 
 The effects section is vendored (C-python-coding-03): its seven rules are
 pinned at the mapping's priorities 48-54.
@@ -84,7 +82,6 @@ PINS: Final = CoreSkillPins(
         "pydantic-special-types",
         "pydantic-typed-settings",
         "python-data-shapes",
-        "python-classes-and-protocols",
         "python-protocols",
         "python-properties",
         "python-frozen-dataclasses",
@@ -463,14 +460,6 @@ PINS: Final = CoreSkillPins(
             name="Async generators",
             tags=("python", "async", "streaming"),
             section="async",
-        ),
-        "python-classes-and-protocols": RulePin(
-            applies_if={},
-            globs=_PY_FILES,
-            priority=61,
-            name="Classes and protocols",
-            tags=("python", "design", "oop"),
-            section="classes",
         ),
         "pydantic-boundaries": RulePin(
             applies_if={"has_framework": ["pydantic"]},

@@ -56,7 +56,6 @@ _SYNTHETIC_PYTHON_CODING_MEMBERS = (
     "python-async-fanout",
     "python-async-generators",
     "python-async-tasks",
-    "python-classes-and-protocols",
     "python-closures-and-partial",
     "python-collection-choice",
     "python-comments-why",
