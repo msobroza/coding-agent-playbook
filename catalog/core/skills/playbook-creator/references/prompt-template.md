@@ -52,7 +52,7 @@ The Output format asks for the exact line the output contract matches. Never pas
 ## What the engine adds per harness
 
 - Claude Code and OpenCode: a "Before you start" block naming each skill and rule file to load.
-- Continue, agent_harness and the eval runner: the included rules' text in a "Reference rules" appendix.
+- Continue, agent_harness and the eval runner: the included rules' text in a closing `## Reference rules` section.
 - An included rule whose gate fails in the repo drops silently.
 
 ## Output-contract patterns

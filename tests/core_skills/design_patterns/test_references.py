@@ -22,6 +22,7 @@ from tests.core_skills._references import (
     cross_skill_mentions,
     guide_line_count,
     known_rule_ids,
+    last_notes_bullet,
     names_a_rule,
     reference_text,
     references_block,
@@ -158,25 +159,10 @@ _NOT_A_RULE: Final = frozenset({"design-patterns"})
 _BARE_REFERENCE_RE: Final = re.compile(r"\b([a-z0-9]+(?:-[a-z0-9]+)*\.md)\b")
 #: D47's see line: the last Notes bullet ends ": see <reference>.md".
 _SEE_LINE_RE: Final = re.compile(r": see [a-z0-9-]+\.md")
-_NOTES_RE: Final = re.compile(r"^## Notes\n(.*?)(?=^## |\Z)", re.MULTILINE | re.DOTALL)
 _HEADING_RE: Final = re.compile(r"^### ([a-z0-9-]+)$", re.MULTILINE)
 _NUMBERED_ITEM_RE: Final = re.compile(r"^\d+\. .*$", re.MULTILINE)
 #: The smell-id cell of a lint-guardrails row: ``| `E722` | bare except | `bare-except` | ...``.
 _LINT_SMELL_CELL_RE: Final = re.compile(r"^\| `[^|]+` \| [^|]+ \| ([^|]+) \|", re.MULTILINE)
-
-
-def _rule_text(rule_id: str) -> str:
-    """The source text of one of the skill's rules (``.md``; none is a template)."""
-    return (SKILL_ROOT / "rules" / f"{rule_id}.md").read_text(encoding="utf-8")
-
-
-def _last_notes_bullet(rule_id: str) -> str:
-    """The last ``- `` bullet of a rule's Notes section."""
-    match = _NOTES_RE.search(_rule_text(rule_id))
-    assert match, f"{rule_id} has no Notes section"
-    bullets = [line for line in match.group(1).splitlines() if line.startswith("- ")]
-    assert bullets, f"{rule_id} has no Notes bullet"
-    return bullets[-1]
 
 
 def _smell_sections() -> dict[str, str]:
@@ -250,7 +236,7 @@ def test_long_reference_opens_with_a_table_of_contents(path: str) -> None:
 
 @pytest.mark.parametrize("rule_id", list(SEE_LINES))
 def test_rule_notes_end_with_their_see_line(rule_id: str) -> None:
-    last = _last_notes_bullet(rule_id)
+    last = last_notes_bullet(SKILL_ROOT, rule_id)
 
     missing = [name for name in SEE_LINES[rule_id] if name not in last]
 

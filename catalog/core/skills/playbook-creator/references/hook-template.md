@@ -63,15 +63,15 @@ allow_code_from = ["<repo-local>"]  # or the overlay's package name
 
 | Event | Decisions allowed | `on_error` allowed | Matcher fields | Timeout cap |
 | --- | --- | --- | --- | --- |
-| `session_start` | `context`, `none` | `open` | `sources` | 600 |
+| `session_start` | `context`, `none` | `open` | `sources` | 15 |
 | `user_prompt_submit` | `deny`, `context`, `none` | `deny`, `open` | none | 30 |
 | `pre_tool_use` | `deny`, `ask`, `context`, `none` | `ask`, `deny`, `open` | `command`, `paths`, `tool_names`, `tools` | 30 |
 | `post_tool_use` | `context`, `none` | `open` | `command`, `paths`, `tool_names`, `tools` | 30 |
 | `post_tool_use_failure` | `context`, `none` | `open` | `command`, `paths`, `tool_names`, `tools` | 30 |
-| `stop` | `deny`, `context`, `none` | `open` | none | 600 |
-| `subagent_stop` | `deny`, `context`, `none` | `open` | `agent_types` | 600 |
-| `pre_compact` | `none` | `open` | `triggers` | 600 |
-| `session_end` | `none` | `open` | none | 600 |
+| `stop` | `deny`, `context`, `none` | `open` | none | 595 |
+| `subagent_stop` | `deny`, `context`, `none` | `open` | `agent_types` | 595 |
+| `pre_compact` | `none` | `open` | `triggers` | 30 |
+| `session_end` | `none` | `open` | none | 8 |
 
 ## Matcher vocabulary
 
@@ -98,21 +98,22 @@ A hook that blocks something reproducible gets a twin running the same judge: a 
       name: <what it checks>
       entry: python tools/<check>.py
       language: system
-      files: ^src/
 ```
 
 ## Overriding a hook
 
 - An overlay hook with an existing id may only add: events, tool classes, stricter config (`playbook-override-by-id`).
-- A `playbook/` hook may replace a hook that is not mandatory.
-- `[hooks] disable = ["<hook-id>"]` switches a hook off with no file.
+- A `playbook/` hook may replace a hook that is not mandatory; `[hooks] disable = ["<hook-id>"]` switches a hook off with no file.
 
 ## Checklist
 
-- The id matches the directory, is unique, and equals no rule or prompt id.
-- Required keys are present; there is exactly one of `handler` or `handlers`.
-- Every decision is valid for a declared event, and `allow` never appears.
-- The timeout respects the cap; `on_error` is valid for each event, and `deny` only on an overlay hook.
-- Every adapter in `supports` reaches at least one declared event.
-- An external script sits in the hook's `scripts/`, and its source is in `allow_code_from`.
-- `applies_if` uses known facts; `linked_rule` names an existing rule; the summary is one line, and the body tells the agent what to do.
+- H1-H2: `HOOK.md` parses, with schema keys only and every required key. The id matches `^[a-z0-9][a-z0-9-]{0,62}$`, equals its directory and is unique in the layer; a directory holds `HOOK.md` or `HOOK.md.j2`, never both, and no hook directory nests in another.
+- H3-H4: `events` is non-empty, unique and canonical. Each `matcher` key is a declared event and uses only that event's fields from the event table; regexes compile, and globs are relative, without `..`.
+- H5: every decision is valid for a declared event, and `allow` never appears.
+- H6-H8: exactly one of `handler` or `handlers`, whose keys equal `events`. A builtin is registered and its `config` validates. An external `command` is `python`, `bash`, `sh` or `node`, never a shell string; its script is a regular file in the hook's `scripts/`; `args` carry no URL. No `type`, `url`, `headers`, `async`, `updated_input`, `prompt` or `model` key.
+- H9-H10: `0 < timeout <= 600`, and the timeout stays within the smallest cap of its events in the event table: above 30 on a tool or prompt event is an error, above any other cap a warning and a clamp. `on_error` is valid for each event, and `deny` only on an overlay hook.
+- H11: every adapter in `supports` reaches at least one declared event.
+- H12-H13: `tier` is `default`, `opt-in` or `overlay`, and `overlay` only on an engine hook or an overlay's override of one; `mandatory: true` only on an overlay hook with `enabled: true`. An engine hook is builtin-only and ships no `scripts/`.
+- H14-H16: an override only adds; nothing overrides or disables a `mandatory` hook; an external handler's source is in `allow_code_from`.
+- H17-H20: `applies_if` uses known facts; `linked_rule` names an existing rule; a `HOOK.md.j2` body compiles and includes no rule; the id equals no rule or prompt id. The summary is one line of 1-120 characters, and the body tells the agent what to do.
+- H21: `[hooks]` and `[guardrails]` parse; `enable` and `disable` name existing hooks and never the same one; `allow_code_from` names enabled overlays or `<repo-local>`.

@@ -26,8 +26,10 @@ scope: scoped                 # lowercase
 section: <section-id>         # declared in the skill's playbook: block
 priority: <band floor + rank> # inside the section's band (table below)
 globs: ["src/**/*.py"]       # the skill nudge and Continue's attachment, never a gate
-applies_if:                   # optional; ANDed keys on detector facts, tags optional too
+applies_if:                   # optional; ANDed keys on detector facts (table below)
   any_dependency: [<name>]
+tags: [<tag>]                 # optional, for filtering only
+# lint_codes: {warn: [<CODE>]} # optional; core adds none until the pilot ends
 ---
 
 # <Imperative title, no impact tag>
@@ -64,6 +66,7 @@ priority: <n>         # inside that section's band
 id: <prefix>-<topic>
 name: <Topic label>
 description: "<One sentence.>"
+version: 1
 scope: always
 priority: <n>
 ---
@@ -79,9 +82,6 @@ Name the file `<id>.md.j2` only when a fact changes part of the text (`playbook-
 Use `typing.Self` as the return type of a fluent method.
 {% else %}
 Bind a `TypeVar` to the class and return it.
-{% endif %}
-{% if has_framework("fastapi") %}
-In a route, take the value through a dependency.
 {% endif %}
 ```
 

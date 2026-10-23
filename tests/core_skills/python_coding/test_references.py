@@ -20,6 +20,7 @@ from tests.core_skills._references import (
     guide_line_count,
     reference_text,
     references_block,
+    rule_id_like_names,
     skill_md_parts,
     skill_rule_ids,
 )
@@ -95,22 +96,13 @@ SEE_ALSO_SKILLS: Final = (
     "web-application",
     "ml-data",
 )
-#: A token shaped like one of this skill's rule ids (their prefixes), not part of a
-#: file name such as ``python-version-idioms.md``.
-_RULE_ID_LIKE_RE: Final = re.compile(r"(?<![\w.-])(?:python|pydantic)-[a-z0-9-]*[a-z0-9](?![\w.-])")
-#: Names with those prefixes that are no rule of this skill: skill names.
-_NOT_THIS_SKILLS_RULES: Final = frozenset(
-    {"python-coding", "python-architecture", "python-testing", "python-tooling"}
-)
+#: The prefixes of this skill's rule ids.
+RULE_ID_PREFIXES: Final = ("python", "pydantic")
 
 
 def _rule_id_like_names(text: str) -> set[str]:
-    """The rule-id-shaped names ``text`` mentions, skill names left out.
-
-    >>> sorted(_rule_id_like_names("python-version-idioms.md, python-async; python-coding"))
-    ['python-async']
-    """
-    return set(_RULE_ID_LIKE_RE.findall(text)) - _NOT_THIS_SKILLS_RULES
+    """The rule-id-shaped names ``text`` mentions, file and skill names left out."""
+    return rule_id_like_names(text, RULE_ID_PREFIXES)
 
 
 def test_skill_lists_each_mapped_reference_ungated_in_mapping_order() -> None:

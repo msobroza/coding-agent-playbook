@@ -78,7 +78,8 @@ The playbook-creator skill is engine-written throughout: it restates the
 engine's own documentation and code (where each kind of artifact lives, how
 layers merge, and how rules, skills, hooks, prompts, eval samples, plugins and
 overlays are written and validated) and holds no upstream text, so every file
-of it is listed under "Engine-written files".
+of it, the six templates under references/ (D49, D70) included, is listed
+under "Engine-written files".
 
 The python-documentation skill (its SKILL.md and every rule under its rules/
 directory, listed under "Engine-written files") distills ideas from two
@@ -715,8 +716,6 @@ Upstream text these rules leave out (DROP, with the reason):
 - `rules/ml-serialization-security.md.j2`
 
 ### playbook-creator
-
-`references/rule-template.md`, `references/skill-template.md`, `references/hook-template.md`, `references/prompt-template.md`, `references/eval-sample-template.md` and `references/plugin-template.md` are engine-written templates (D49, D70), not vendored.
 
 - `SKILL.md`
 - `references/eval-sample-template.md`

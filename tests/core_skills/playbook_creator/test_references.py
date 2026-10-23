@@ -14,13 +14,18 @@ from typing import Final
 
 import pytest
 
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName
+from coding_agent_playbook.hook_runtime.dispatch.policy import ENGINE_DEADLINE_CAP_MS
+from coding_agent_playbook.hooks.contract.contract import FAST_EVENT_TIMEOUT_S, FAST_EVENTS
 from coding_agent_playbook.rendering.jinja import RULE_CALL_RE
 from tests._catalog import core_skill_root
 from tests.core_skills._references import (
     INTERNAL_GUIDE_MAX_LINES,
     guide_line_count,
+    last_notes_bullet,
     reference_text,
     references_block,
+    rule_id_like_names,
     skill_md_parts,
     skill_rule_ids,
 )
@@ -102,25 +107,31 @@ SEE_LINES: Final = {
     "playbook-rule-templates": ("rule-template.md",),
     "playbook-rule-body": ("rule-template.md",),
 }
-#: A token shaped like one of this skill's rule ids, not part of a file name.
-_RULE_ID_LIKE_RE: Final = re.compile(r"(?<![\w./-])playbook-[a-z0-9-]*[a-z0-9](?![\w./-])")
-#: Names with that prefix that are no rule of this skill: skill names.
-_NOT_THIS_SKILLS_RULES: Final = frozenset({"playbook-creator", "playbook-guardrails"})
+#: The prefix every rule id of this skill carries.
+RULE_ID_PREFIXES: Final = ("playbook",)
+HOOK_TEMPLATE: Final = "references/hook-template.md"
+RULE_TEMPLATE: Final = "references/rule-template.md"
+#: A row of the hook template's event table: ``| `stop` | ... | 595 |``.
+_EVENT_ROW_RE: Final = re.compile(r"^\| `([a-z_]+)` \|.*\| (\d+) \|$", re.MULTILINE)
+#: A checklist bullet's contract label: ``- H3-H4: ...`` or ``- H5: ...``.
+_CHECK_LABEL_RE: Final = re.compile(r"^- H(\d+)(?:-H(\d+))?:", re.MULTILINE)
+#: SPEC.md's hook contract runs from H1 to H21.
+_HOOK_CHECKS: Final = range(1, 22)
+#: A fenced block of a template: its text, which may hold ``## `` lines of its own.
+_FENCE_RE: Final = re.compile(r"^```\w*\n(.*?)^```$", re.MULTILINE | re.DOTALL)
 
 
-def _rule_id_like_names(text: str) -> set[str]:
-    """The rule-id-shaped names ``text`` mentions, skill names left out.
-
-    >>> sorted(_rule_id_like_names("rule-template.md, `playbook-rule-ids`; playbook-creator"))
-    ['playbook-rule-ids']
-    """
-    return set(_RULE_ID_LIKE_RE.findall(text)) - _NOT_THIS_SKILLS_RULES
+def _section(text: str, heading: str) -> str:
+    """The text under ``## <heading>``, up to the next ``## `` heading."""
+    start = text.index(f"## {heading}\n")
+    end = text.find("\n## ", start + 1)
+    return text[start : end if end != -1 else len(text)]
 
 
-def _last_note(rule_id: str) -> str:
-    """The last line of the rule's source file: the end of its Notes."""
-    path = next((SKILL_ROOT / "rules").glob(f"{rule_id}.md*"))
-    return path.read_text(encoding="utf-8").rstrip("\n").rsplit("\n", 1)[-1]
+def _expected_cap_s(event: str) -> int:
+    """The engine's deadline cap of ``event`` in seconds, held to the fast-event bound."""
+    cap = ENGINE_DEADLINE_CAP_MS[EventName(event)] // 1000
+    return min(cap, FAST_EVENT_TIMEOUT_S) if event in FAST_EVENTS else cap
 
 
 def test_skill_lists_each_mapped_reference_ungated_in_mapping_order() -> None:
@@ -140,7 +151,7 @@ def test_hand_written_body_leaves_navigation_to_the_engine() -> None:
 
 @pytest.mark.parametrize("path", MAPPED_REFERENCES)
 def test_template_names_every_rule_it_routes_to(path: str) -> None:
-    named = _rule_id_like_names(reference_text(SKILL_ROOT, path))
+    named = rule_id_like_names(reference_text(SKILL_ROOT, path), RULE_ID_PREFIXES)
 
     missing = [rule_id for rule_id in ROUTES_TO[path] if rule_id not in named]
 
@@ -149,7 +160,7 @@ def test_template_names_every_rule_it_routes_to(path: str) -> None:
 
 @pytest.mark.parametrize("path", MAPPED_REFERENCES)
 def test_template_names_only_rule_ids_the_skill_ships(path: str) -> None:
-    named = _rule_id_like_names(reference_text(SKILL_ROOT, path))
+    named = rule_id_like_names(reference_text(SKILL_ROOT, path), RULE_ID_PREFIXES)
 
     unknown = sorted(named - skill_rule_ids(SKILL_ROOT))
 
@@ -172,8 +183,67 @@ def test_template_never_writes_the_rule_inclusion_call(path: str) -> None:
 def test_rule_notes_end_with_its_template_see_line(
     rule_id: str, templates: tuple[str, ...]
 ) -> None:
-    last = _last_note(rule_id)
+    last = last_notes_bullet(SKILL_ROOT, rule_id)
 
     assert last.startswith("- "), last
     assert all(name in last for name in templates), last
     assert "references/" not in last, last
+
+
+def test_hook_template_event_caps_are_the_engine_deadline_caps() -> None:
+    """A timeout within the table's cap passes validate with no clamp warning."""
+    rows = dict(
+        _EVENT_ROW_RE.findall(_section(reference_text(SKILL_ROOT, HOOK_TEMPLATE), "Event table"))
+    )
+
+    caps = {event: int(cap) for event, cap in rows.items()}
+
+    assert caps == {event.value: _expected_cap_s(event.value) for event in EventName}
+
+
+def test_hook_template_checklist_covers_every_hook_contract_check() -> None:
+    checklist = _section(reference_text(SKILL_ROOT, HOOK_TEMPLATE), "Checklist")
+
+    covered = [
+        check
+        for first, last in _CHECK_LABEL_RE.findall(checklist)
+        for check in range(int(first), int(last or first) + 1)
+    ]
+
+    assert covered == list(_HOOK_CHECKS)
+
+
+@pytest.mark.parametrize(
+    ("heading", "keys"),
+    [
+        (
+            "Member rule inside a skill",
+            (
+                "id",
+                "name",
+                "description",
+                "version",
+                "scope",
+                "section",
+                "priority",
+                "globs",
+                "applies_if",
+                "tags",
+                "# lint_codes",
+            ),
+        ),
+        ("Always rule", ("id", "name", "description", "version", "scope", "priority")),
+    ],
+)
+def test_rule_template_skeleton_writes_every_mapped_key(
+    heading: str, keys: tuple[str, ...]
+) -> None:
+    text = reference_text(SKILL_ROOT, RULE_TEMPLATE)
+    fence = _FENCE_RE.search(text, text.index(f"## {heading}\n"))
+    assert fence, f"no skeleton under {heading!r}"
+    block = fence.group(1)
+    frontmatter = block.split("---\n")[1]
+
+    written = [line.split(":", 1)[0] for line in frontmatter.splitlines() if ":" in line]
+
+    assert [key for key in keys if key not in written] == []

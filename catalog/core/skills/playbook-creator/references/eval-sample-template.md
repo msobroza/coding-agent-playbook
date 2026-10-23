@@ -1,6 +1,6 @@
 # Eval sample template
 
-A sample tests the prompt, not the model: write three per prompt, a happy path, an edge case and a regression. Copy the skeleton, replace the placeholders and run `playbook validate`. Fields: `playbook-eval-samples`; the prompt side: `playbook-prompt-frontmatter`.
+An eval sample tests the prompt, not the model: write three per prompt, a happy path, an edge case and a regression. Copy the skeleton, replace the placeholders and run `playbook validate`. Fields: `playbook-eval-samples`; the prompt side: `playbook-prompt-frontmatter`.
 
 ## Contents
 
