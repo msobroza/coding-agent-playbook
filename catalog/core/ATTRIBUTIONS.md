@@ -171,10 +171,15 @@ shaped the python-typing, python-docstrings and pytest rules.
 | `skills/coding-standards/rules/perf-str-join.md` | `rules/python-str-join.md` | Lines 8-46 are the skeleton: engine frontmatter; the O(n^2) headline becomes a plain explanation; the engine's f-string line joins the Notes, and build_csv_line becomes format_tags so the example does not hand-roll CSV, which needs the csv module's quoting. Dropped: the speed figure (line 4) and the pathlib note (line 47), because the house style owns paths. |
 | `skills/coding-standards/SKILL.md` | `SKILL.md` | Lines 11-13: the intro, rewritten for this skill's scope without the publisher-voice sentence (13) and joined with the engine's house-style sentence. Lines 85-149 and 162-209 are the Quick Reference, adapted to the engine: the error example derives its domain error from the project base error and names the offending path with repr; the performance block leads with measure-first, uses `.get` only for an optional key beside an indexed required key and a frozenset built once; the async block puts TaskGroup under one `asyncio.timeout` first (Python 3.11 and later) and gather under `wait_for` for 3.10, opens the client in `async with` with a timeout from settings, and sizes the semaphore from settings; the dependency-injection and early-return snippets use typed collaborators and raise domain errors instead of returning an empty result; the docstring carries its usage example and a keyword-only flag; `EmailStr` notes its extra; the dataclass is frozen with `Decimal` money; the Protocol is role-named with no `id` parameter. See Also becomes plain-text skill names. DROP: the frontmatter and `paths:` (1-9), because the engine writes its own frontmatter and uses globs; the category tables (14-84), replaced by the generated section index (D17, D32); the composition-root, open/closed and interface-segregation snippets (150-161), owned by python-architecture and design-patterns; and the See Also link to the tooling page and its linter (211-213), because tooling is the python-tooling skill's (D10). |
 | `skills/coding-standards/rules/_sections.md` | `SKILL.md` | Lines 1-83: the category wording informs the section summaries in the skill's frontmatter, regrouped into the engine's nine sections and impacts (performance becomes MEDIUM idioms and performance, measured first); the per-category rule lists are not carried, because the generated index lists the rules. |
-
-Distilled (credited by name only, no vendored text):
-
-- `rules/python-classes-and-protocols.md`
+| `skills/coding-standards/README.md` | DROP | D32: upstream README.md files are dropped. |
+| `skills/coding-standards/metadata.json` | DROP | D32: metadata.json is dropped; sections come from SKILL.md (D17). |
+| `skills/coding-standards/rules/_template.md` | DROP | D32: the rule template becomes the 'Writing a rule' section of catalog/README.md, not python-coding content. |
+| `LICENSE` | `references/LICENSE.python-best-practices` | Copied byte-identical (D19); every core skill that holds this source's text ships the same copy. |
+| `README.md` | DROP | D32: the repository README (installation and the skill list) is not vendored; core's own documentation describes its skills. |
+| `CODE_OF_CONDUCT.md` | DROP | Repository governance, not guidance. |
+| `CONTRIBUTING.md` | DROP | Repository governance (how to propose upstream rules), not guidance. |
+| `SECURITY.md` | DROP | Repository governance (how to report a vulnerability upstream), not guidance. |
+| `.gitignore` | DROP | Repository tooling, not guidance. |
 
 ### python-testing
 
@@ -247,6 +252,10 @@ Distilled (credited by name only, no vendored text):
 | `skills/web-application/rules/obs-request-id-logging.md` | `rules/fastapi-request-id-logging.md` | Engine frontmatter; the service example trimmed to one structured log call; the middleware logs unhandled errors itself; a Note adds the D27(5) sentence and limits who sets the context variable; logging libraries and tracing become proposals, never added unasked. |
 | `skills/web-application/rules/test-db-rollback.md` | `rules/sqlalchemy-test-rollback.md.j2`, `examples/fastapi-hotel-api/tests/conftest.py` | Engine frontmatter; the event-loop setup and decorators branch on the repo's async test plugin (D27(4)); the test database URL read inside the fixture; one keyword-only factory with a precomputed hash; the in-memory SQLite stand-in rebuilt per test added as a counter-example; the D27(3) sentence added; testcontainers as a proposal; the example pointer renders only under FastAPI. Lines 34-67 also give the example's conftest.py its fixture shapes: a session-scoped engine reading HOTEL_TEST_DATABASE_URL inside the fixture (else a SQLite file URL built with `URL.create`, plus the driver-level BEGIN hooks SAVEPOINTs need under aiosqlite), the outer-transaction session with `join_transaction_mode="create_savepoint"`, and keyword-only factories that flush without committing; AnyIO's session-scoped `anyio_backend` instead of an async test plugin (D27(4)). |
 | `skills/web-application/rules/test-dependency-overrides.md` | `rules/fastapi-dependency-overrides.md.j2`, `examples/fastapi-hotel-api/tests/conftest.py` | Engine frontmatter; the async markers and fixture decorators branch on the repo's async test plugin (D27(4)); the settings fixture compressed into a comment; the Bad example keeps the no-effect patch and adds a global app, an import-time override and a global client; the login uses the password whose hash sqlalchemy-test-rollback's factory stores; overrides cleared in the fixture teardown (engine text); the D27(3) sentence added; asgi-lifespan and respx as proposals. Lines 36-77 also give the example's `client` fixture: a fresh `create_app(settings)` with a placeholder database URL, only `get_session` and `today_utc` overridden, `httpx.ASGITransport` with the bare host `test`, overrides cleared on teardown. |
+| `skills/web-application/rules/_sections.md` | `SKILL.md` | The section names, impacts and one-line summaries become the playbook section declarations, regrouped into the engine's eight sections; the per-section rule lists are not carried, because the generated index lists the rules. DROP: the shared invoice-app preface (3), because each web rule is self-contained (D28). |
+| `skills/web-application/README.md` | DROP | D32: upstream README.md files are dropped; its shared-example note conflicts with D28. |
+| `skills/web-application/metadata.json` | DROP | D32: metadata.json is dropped; sections come from SKILL.md (D17). |
+| `skills/web-application/rules/_template.md` | DROP | D32: the rule template becomes the 'Writing a rule' section of catalog/README.md, not web-application content. |
 
 ## python-clean-architecture
 
@@ -330,6 +339,12 @@ review-architecture, make-testable, characterize, review and refactor prompts.
 | `commands/refactor-legacy.md` | `rules/arch-make-legacy-testable.md` | The testability blockers (11-19) and the four-phase plan (29-49: characterize, extract pure logic, ports with a composition root, unit tests) merged into the Description's steps. DROP: the frontmatter and `$ARGUMENTS` (1-9), the code-smell list (21-27, design-patterns' concern) and the reference list with plugin paths, including a non-existent testing-legacy-code.md (51-55). |
 | `commands/learn-architecture.md` | DROP | Its topic-to-file catalog is replaced by each skill's generated index, and it redirects to plugin slash commands. |
 | `testing/` | DROP | A deliberately flawed bookstore app: not a skill asset; kept as a seed for a later review-architecture eval sample. |
+| `LICENSE` | `references/LICENSE.python-clean-architecture` | Copied byte-identical (D19); every core skill that holds this source's text ships the same copy. |
+| `README.md` | DROP | D32: the plugin README (installation, usage, the command list and a summary of the concepts its references hold) is not vendored; its commands become content (D9). |
+| `.claude-plugin/plugin.json` | DROP | Plugin packaging manifest: core skills ship through the engine, not as a plugin. |
+| `.claude-plugin/marketplace.json` | DROP | Plugin marketplace manifest: core skills ship through the engine, not as a plugin. |
+| `docs/index.html` | DROP | The plugin's web landing page, not guidance. |
+| `.gitignore` | DROP | Repository tooling, not guidance. |
 
 ### python-coding
 
@@ -356,10 +371,6 @@ review-architecture, make-testable, characterize, review and refactor prompts.
 | `skills/clean-architecture/references/project-organization.md` | `rules/python-imports.md` | Lines 43-115 (import conventions): absolute imports across packages, relative imports only inside one package (the cross-package relative import as the Bad case), aliases only for conventions or long names, the style table condensed to two Notes, and the wildcard anti-pattern. The isort order is left to the repo's formatter (D10). |
 | `skills/clean-architecture/references/pattern-matching.md` | `rules/python-match-fallback.md`, `rules/python-match-destructuring.md` | python-match-fallback: lines 273-293 (trade-offs and exhaustiveness) are the skeleton: the order-status match without a fallback becomes the Bad Example, the raising case _ the Good Example, with assert_never added for Enum, Literal and union subjects. python-match-destructuring: lines 9-23 (when to use, when not) are the skeleton; lines 24-175 (literal, capture, OR, star, guard, class and mapping patterns, __match_args__) become the class- and mapping-pattern Good Example and two Notes; lines 209-270 (event processing, match vs strategy, match vs if/elif) become the typed-record events, returning values instead of printing, and Notes naming the design-patterns rules. Not vendored: the inspiration line (5), the Python-below-3.10 bullet (20), since the rules are gated on 3.10, and the API-response and quick-sort examples (178-207). |
 | `skills/clean-architecture/references/monadic-error-handling.md` | DROP | Lines 1-195: Result types conflict with the engine's exception-based errors (pca-F11); they need the returns dependency, and the example leaks a sqlite connection. |
-
-Distilled (credited by name only, no vendored text):
-
-- `rules/python-classes-and-protocols.md`
 
 ### python-testing
 

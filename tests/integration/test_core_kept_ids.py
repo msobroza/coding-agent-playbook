@@ -2,9 +2,8 @@
 
 D21 keeps the old id on the piece of a split rule that keeps the old topic, so
 the hooks' ``linked_rule`` and the prompts' ``includes_rules`` keep resolving;
-D16 freezes those lists until after the pilot. Four ids retire: while a content
-lane has not yet removed one, it stays in its original skill (their absence is
-asserted by F-02).
+D16 freezes those lists until after the pilot. Four ids retire; their absence is
+asserted in ``test_core_final_state.py`` (F-02).
 """
 
 from __future__ import annotations
@@ -13,7 +12,7 @@ from typing import Final
 
 import pytest
 
-from tests._catalog import KEPT_RULE_IDS, RETIRED_RULE_IDS, core_rules
+from tests._catalog import KEPT_RULE_IDS, core_rules
 from tests.hook_runtime.handlers.pack_repo import engine_hook, engine_hook_paths, engine_prompts
 
 pytestmark = pytest.mark.catalog
@@ -74,11 +73,3 @@ def test_kept_ids_are_exactly_the_ids_hooks_and_prompts_name() -> None:
     named = set(EXPECTED_HOOK_LINKS.values())
     named.update(rule_id for ids in EXPECTED_PROMPT_INCLUDES.values() for rule_id in ids)
     assert named == set(KEPT_RULE_IDS)
-
-
-@pytest.mark.parametrize("rule_id", sorted(RETIRED_RULE_IDS))
-def test_retired_id_keeps_its_original_skill_while_it_exists(rule_id: str) -> None:
-    rule = core_rules().get(rule_id)
-    if rule is None:
-        pytest.skip(f"{rule_id!r} is already retired; F-02 asserts its absence")
-    assert rule.frontmatter.skill == RETIRED_RULE_IDS[rule_id], rule_id
