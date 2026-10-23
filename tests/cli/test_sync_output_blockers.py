@@ -32,6 +32,11 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from pathlib import Path
 
+#: The whole-test alarm catches a sync that blocks forever, not a slow one: a test
+#: here runs its syncs in about 4 s alone but took over 60 s (the former alarm)
+#: under a loaded ``pytest -n`` run, with every sync still making progress.
+_HANG_GUARD_S = 300
+
 
 @pytest.fixture(autouse=True)
 def _fail_instead_of_hanging() -> Iterator[None]:
@@ -44,7 +49,7 @@ def _fail_instead_of_hanging() -> Iterator[None]:
         raise TimeoutError("playbook sync blocked (opening a FIFO?)")
 
     previous = signal.signal(signal.SIGALRM, _timeout)
-    signal.alarm(60)
+    signal.alarm(_HANG_GUARD_S)
     try:
         yield
     finally:

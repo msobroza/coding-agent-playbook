@@ -312,10 +312,14 @@ def test_run_check_staged_outside_a_repo_exits_zero(repo: Path) -> None:
 
 needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="git not on PATH")
 
+#: A hang guard, not a speed check: ``git add -A`` over a synced repo (500+ files)
+#: took over 10 s (the former value) under a loaded ``pytest -n`` run.
+_GIT_TIMEOUT_S = 60
+
 
 def _git(repo: Path, *args: str) -> str:
     proc = subprocess.run(
-        ["git", *args], cwd=repo, check=True, capture_output=True, text=True, timeout=10
+        ["git", *args], cwd=repo, check=True, capture_output=True, text=True, timeout=_GIT_TIMEOUT_S
     )
     return proc.stdout
 
