@@ -4,17 +4,24 @@
 layer: a sandbox allowlist or an egress proxy). ``_egress`` reads each
 segment; hosts are strings only, never resolved (a lookup is itself egress):
 
-- a new remote, a push to a target not configured at session start, a gist,
-  and an upload or copy to a host neither loopback nor in ``allowed_hosts``
-  (empty by default: any remote host) -> ask, naming the host;
-- an upload, gist or ``--body-file`` of a secret path (the rendered
+- a new remote, a push to a target not configured at session start, a gist or
+  snippet (``gh gist create``, ``glab snippet create``), mail (``git
+  send-email``, ``git imap-send``, ``sendmail``, ``msmtp``; specs/prF-forge-adapter.md
+  §14; ``allowed_hosts`` never relaxes a gist, a snippet or mail), and an upload
+  or copy to a host neither loopback nor in ``allowed_hosts`` (empty by default:
+  any remote host) -> ask, naming the host;
+- an upload, gist, snippet, mailed file or a file a forge CLI or ``playbook forge`` sends (``--body-file``,
+  ``--description-file``, ``--attach``, release assets, ``api -F k=@F``, ...;
+  ``gh``, ``glab`` and ``playbook forge`` alike) of a secret path (the rendered
   ``_secret_policy``) -> deny, unless every host is loopback;
 - pushes to remotes configured at session start (``origin``) are untouched.
 
 The configured remotes are snapshotted by the ``session_start`` companion
-(``exfil_guard:session_start``) into the session's state; without a snapshot
-(OpenCode, a missed start) the guard reads ``git remote -v`` instead, only for
-a push. Overlay ``extra_rows`` (``{argv0, regex, decision, reason}``, the
+(``exfil_guard:session_start``, ``_remotes``) into the session's state, without
+userinfo; without a snapshot (OpenCode, a missed start) the guard reads ``git
+remote -v`` instead, only for a push. A forge CLI or ``playbook forge``
+command line's host is the one its words or environment name, else the
+snapshot's remotes on its forge, else the forge's public host; it never runs git. Overlay ``extra_rows`` (``{argv0, regex, decision, reason}``, the
 destructive guard's row shape) add verdicts, never relax one. ``ipaddress``
 loads only for an address-shaped host (``judges.hosts``).
 """
@@ -22,7 +29,6 @@ loads only for an address-shaped host (``judges.hosts``).
 from __future__ import annotations
 
 import re
-from contextlib import suppress
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
@@ -31,13 +37,17 @@ from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, Handl
 from coding_agent_playbook.hook_runtime.dispatch.paths import normalize_path
 from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.handlers.safety._egress import EGRESS_ARGV0S, segment_egress
+from coding_agent_playbook.hook_runtime.handlers.safety._remotes import (
+    ForgeHosts,
+    read_snapshot,
+    write_snapshot,
+)
 from coding_agent_playbook.hook_runtime.handlers.safety._secret_policy import (
     classify_path,
     path_policy,
     spelled,
 )
 from coding_agent_playbook.hook_runtime.judges.hosts import host_matches, is_loopback
-from coding_agent_playbook.hook_runtime.state.store import StateUnavailable, session_key
 from coding_agent_playbook.security.files import user_home
 
 if TYPE_CHECKING:
@@ -48,7 +58,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.handlers.safety._egress import Egress, Remotes
     from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
-__all__ = ["CONFIG_SCHEMA", "REMOTES_DOCUMENT", "exfil_guard", "remote_snapshot"]
+__all__ = ["CONFIG_SCHEMA", "exfil_guard", "remote_snapshot"]
 
 #: One judged egress: the decision, its rule id and the model-facing reason.
 type _Verdict = tuple[Decision, str, str]
@@ -57,14 +67,16 @@ CONFIG_SCHEMA: Final[Mapping[str, ConfigKey]] = {
     "allowed_hosts": ConfigKey("list", "relax"),
     "extra_rows": ConfigKey("regex", "extend"),
 }
-#: The per-session snapshot of the configured remotes, under ``sessions/<key>/``.
-REMOTES_DOCUMENT: Final = "remotes.json"
 _CONFIRM: Final = "Confirm with the user."
 #: The egress shapes, for a command the parser could not follow (it then asks).
 _RAW_EGRESS: Final = re.compile(
-    r"\bgit\b[^\n;|&]{0,64}?\b(?:push|remote\s+(?:add|set-url))\b|\bgh\s+gist\b"
+    r"\bgit\b[^\n;|&]{0,64}?\b(?:push|remote\s+(?:add|set-url))\b|\b(?:gh\s+gist|glab\s+snippet)\b"
+    r"|\b(?:gh|glab|playbook\s+forge)\s[^\n;|&]{0,256}?(?:--body-file|--description-file"
+    r"|--notes-file|--attach|--input|--variables-file|--variables-from|--template|=@|\s-F\s"
+    r"|--push|--fill|\s-f\b|--remote|\brelease\s+(?:create|upload))"
     r"|\b(?:curl|wget)\b[^\n;|&]{0,256}?\s(?:-d\s*@|--data[a-z-]*[=\s]@|-T|--upload-file"
     r"|-F|--form|--post-file|--body-file)|\b(?:scp|rsync|sftp)\b"
+    r"|\bgit\b[^\n;|&]{0,64}?\b(?:send-email|imap-send)\b|\b(?:sendmail|msmtp)\b"
 )
 
 
@@ -90,8 +102,11 @@ def exfil_guard(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult | None
     if command.parse_error is not None or command.kind == "powershell":
         return _unreadable(command.text, ctx)
     remotes = _RemoteLookup(ev, ctx)
+    hosts = ForgeHosts(ev, ctx)
     verdicts = [
-        _judge(e, s, ev, ctx) for s in command.segments if (e := segment_egress(s, remotes))
+        _judge(e, s, ev, ctx)
+        for s in command.segments
+        if (e := segment_egress(s, remotes, env=ctx.env, forge_hosts=hosts))
     ]
     verdicts.extend(_row_verdicts(command.segments, ctx))
     found = [v for v in verdicts if v is not None]
@@ -118,13 +133,7 @@ def remote_snapshot(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult | 
         >>> remote_snapshot(session_start_event, ctx) is None  # doctest: +SKIP
         True
     """
-    if ev.repo is None or not ev.session_id:
-        return None
-    store, rel = ctx.session.store, _document(ev)
-    with suppress(StateUnavailable):
-        if store.read_json(rel).get("remotes") is None:
-            pairs = [list(pair) for pair in ctx.git.remote_urls()]
-            store.write_json(rel, {"remotes": pairs})
+    write_snapshot(ev, ctx)
     return None
 
 
@@ -138,7 +147,7 @@ class _RemoteLookup:
 
     def __call__(self) -> Remotes:
         if self._remotes is None:
-            pairs = _snapshot(self._ev, self._ctx)
+            pairs = read_snapshot(self._ev, self._ctx)
             if pairs is None:
                 pairs = list(self._ctx.git.remote_urls())
             remotes: dict[str, tuple[str, ...]] = {}
@@ -146,21 +155,6 @@ class _RemoteLookup:
                 remotes[name] = (*remotes.get(name, ()), url)
             self._remotes = remotes
         return self._remotes
-
-
-def _snapshot(ev: CanonicalEvent, ctx: HandlerContext) -> list[tuple[str, str]] | None:
-    try:
-        stored = ctx.session.store.read_json(_document(ev)).get("remotes")
-    except StateUnavailable:
-        return None
-    if not isinstance(stored, list):
-        return None
-    pairs = (pair for pair in stored if isinstance(pair, list) and len(pair) == 2)
-    return [(str(name), str(url)) for name, url in pairs]
-
-
-def _document(ev: CanonicalEvent) -> str:
-    return f"sessions/{session_key(ev.session_id)}/{REMOTES_DOCUMENT}"
 
 
 def _judge(
@@ -173,9 +167,12 @@ def _judge(
         return Decision.DENY, f"secret_{egress.kind}", reason
     if egress.kind == "body_file":
         return None
-    if egress.kind == "gist":
-        reason = f"`{egress.command}` publishes files on gist.github.com.\n{_CONFIRM}"
-        return Decision.ASK, "gist", reason
+    if egress.kind in ("gist", "snippet"):  # public by default: never relaxed by a host row
+        where = egress.hosts[0] if egress.hosts else "the forge"
+        reason = f"`{egress.command}` publishes files on {where}.\n{_CONFIRM}"
+        return Decision.ASK, egress.kind, reason
+    if egress.kind == "mail":  # a relay is not the recipient: never relaxed by a host row
+        return Decision.ASK, "mail", f"`{egress.command}` sends mail off the machine.\n{_CONFIRM}"
     allowed = HookConfig(ctx.config, CONFIG_SCHEMA).strings("allowed_hosts", blanks="keep")
     outside = [host for host in off if not host_matches(host, allowed)]
     if egress.hosts and not outside:

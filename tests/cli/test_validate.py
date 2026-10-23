@@ -507,10 +507,11 @@ def test_validate_without_config_checks_checkout_resources(tmp_path, capsys):
 def test_validate_without_config_reports_consumer_checks_skipped(tmp_path, capsys):
     assert _validate.run(_ns(tmp_path)) == 0
     skipped = [line for line in capsys.readouterr().out.splitlines() if line.startswith("skipped")]
-    assert len(skipped) == len(_validate_context.CONSUMER_CONFIG_CHECKS) == 3
+    assert len(skipped) == len(_validate_context.CONSUMER_CONFIG_CHECKS) == 4
     assert any("overlays_enabled" in line for line in skipped)
     assert any("[links] allowed_domains" in line for line in skipped)
     assert any("[hooks] / [guardrails] policy" in line for line in skipped)
+    assert any("[forge] hosts" in line for line in skipped)
 
 
 def test_validate_with_config_prints_no_config_less_note(tmp_path, make_synthetic_repo, capsys):

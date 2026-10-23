@@ -24,7 +24,6 @@ from __future__ import annotations
 import os
 import posixpath
 import re
-from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.artifacts.path_globs import fold_key
@@ -32,6 +31,10 @@ from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, clip
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, HandlerResult
 from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
+from coding_agent_playbook.hook_runtime.handlers._shared.git_config_file import (
+    ConfigEdit,
+    config_edits,
+)
 from coding_agent_playbook.hook_runtime.handlers._shared.targets import (
     file_write_paths,
     shell_write_targets,
@@ -61,7 +64,6 @@ _HOOKS_PATH_LINE: Final = re.compile(r"^\s*hookspath\s*=.*$", re.IGNORECASE | re
 _OPERAND_COMMANDS: Final = frozenset({"rm", "mv", "chmod", "chown", "ln", "unlink", "truncate"})
 #: A rebase in progress owns its plumbing (``git rebase`` runs commit-tree itself).
 _REBASE_DIRS: Final = ("rebase-merge", "rebase-apply")
-_READ_LIMIT: Final = 1024 * 1024
 _IDS_CHARS: Final = 120
 
 
@@ -146,11 +148,10 @@ def _touched(segment: Segment) -> list[str]:
 
 
 def _file_verdict(tool: ToolCall, ctx: HandlerContext, repo: RepoInfo) -> Verdict | None:
-    for path in file_write_paths(tool):
-        if _hooks_dir(path, repo, ctx.platform):
-            return Decision.DENY, "hooks_dir"
-        if _git_config(path, repo, ctx.platform) and _changes_hooks_path(tool, path):
-            return Decision.DENY, "hooks_path"
+    if any(_hooks_dir(path, repo, ctx.platform) for path in file_write_paths(tool)):
+        return Decision.DENY, "hooks_dir"
+    if any(_changes_hooks_path(edit) for edit in config_edits(tool, repo, ctx.platform)):
+        return Decision.DENY, "hooks_path"
     return None
 
 
@@ -166,41 +167,11 @@ def _hooks_dir(path: NormalizedPath, repo: RepoInfo, platform: str) -> bool:
     return False
 
 
-def _git_config(path: NormalizedPath, repo: RepoInfo, platform: str) -> bool:
-    """The repository's git config file (``.git/config``, or ``config.worktree``)."""
-    if path.key == ".git/config":
-        return True
-    candidates = {
-        os.path.join(repo.common_dir, "config"),
-        os.path.join(repo.git_dir, "config"),
-        os.path.join(repo.git_dir, "config.worktree"),
-    }
-    real = fold_key(path.realpath, platform)
-    return any(real == fold_key(candidate, platform) for candidate in candidates)
-
-
-def _changes_hooks_path(tool: ToolCall, path: NormalizedPath) -> bool:
+def _changes_hooks_path(edit: ConfigEdit) -> bool:
     """Whether the edit adds, changes or removes a ``hooksPath =`` line of the config file."""
-    from coding_agent_playbook.hook_runtime.handlers._shared.edit_preview import preview_after
-
-    before = _read(path)
-    after = preview_after(tool, before)
-    if after is None:  # cannot simulate: judge what the call writes
-        written = " ".join(f.text for f in tool.content if f.path == path.raw)
-        return "hookspath" in written.lower()
-    return _HOOKS_PATH_LINE.findall(before or "") != _HOOKS_PATH_LINE.findall(after)
-
-
-def _read(path: NormalizedPath) -> str | None:
-    from coding_agent_playbook.hook_runtime.config.reader import read_small_file
-
-    if not path.exists:
-        return None
-    try:
-        data, _ = read_small_file(Path(path.realpath), _READ_LIMIT)
-        return data.decode("utf-8")
-    except (OSError, ValueError):  # unreadable or too large: judge the whole edit
-        return None
+    if edit.after is None:  # cannot simulate: judge what the call writes
+        return "hookspath" in edit.written.lower()
+    return _HOOKS_PATH_LINE.findall(edit.before or "") != _HOOKS_PATH_LINE.findall(edit.after)
 
 
 def _rebase_in_progress(repo: RepoInfo) -> bool:

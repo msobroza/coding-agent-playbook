@@ -146,18 +146,24 @@ playbook ci --format json                     # one {step, argv, exit, duration_
 | `validate` | `playbook validate` | always |
 | `metrics` | `playbook metrics --baseline git:<merge base> --changed --no-run-tests` | always (static, never the suite) |
 | `coverage` | `playbook metrics --run-tests --select testing --baseline git:<merge base>` | `[metrics] run_tests = true`, or `--steps coverage` |
-| `gate-scan` | `playbook gate-scan`: new suppressions, skipped tests, loosened checker config | always |
+| `gate-scan` | `playbook gate-scan`: new suppressions, skipped tests, loosened checker config, removed CI steps or jobs, loosened secret or SAST scanners | always |
 | `scan-secrets` | `playbook scan-secrets` over the branch | always |
-| `commit-convention` | `cz check` on the commits after `cutover_date`, plus `$PLAYBOOK_PR_TITLE` | `[tool.commitizen]` or `[hooks.commit_convention]` is set |
+| `commit-convention` | `cz check` on the commits after `cutover_date`, plus `$PLAYBOOK_PR_TITLE` (a leading `[Draft]`, `Draft:` or `(Draft)` stripped) | `[tool.commitizen]` or `[hooks.commit_convention]` is set |
 | `commit-trailers` | `playbook check-commit-trailers` over the branch | a commit-trailer row is configured |
 | `check-deps` | `playbook check-deps`: newly declared dependencies against your policy | a dependency policy is configured |
 | `scan-sinks` | `playbook scan-sinks` over the branch | only when `--steps` names it |
 
 It exits `0` when every step that ran passed, `1` when one failed or timed out,
-and `2` on a usage error or an unresolvable base. The job needs the full history
-(`fetch-depth: 0`), and the pull-request title is attacker-controlled text: pass
-it **only through `env:`**, never inside a `run:` line, so it cannot inject shell
-commands:
+and `2` on a usage error, an unresolvable base, a blank `--base`, or an empty
+range (the base is `HEAD` or already contains it, so nothing would be checked).
+`playbook ci` never fetches and never reads a forge's variables: the CI job
+fetches the history and passes the base with `--base`.
+
+### GitHub Actions
+
+The job needs the full history (`fetch-depth: 0`), and the pull-request title is
+attacker-controlled text: pass it **only through `env:`**, never inside a `run:`
+line, so it cannot inject shell commands:
 
 ```yaml
 # .github/workflows/ci.yml
@@ -179,6 +185,278 @@ jobs:
         env:
           PLAYBOOK_PR_TITLE: ${{ github.event.pull_request.title }}
 ```
+
+### GitLab CI
+
+A GitLab *merge request pipeline* clones a shallow history (`GIT_DEPTH` 20 by default)
+and fetches only the pipeline's own ref, never the target branch, so the job
+sets `GIT_DEPTH: 0`, fetches the target branch, and passes the base explicitly.
+The title reaches `playbook ci` only through `variables:`, never inside a
+`script:` line:
+
+```yaml
+playbook-ci:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  variables:
+    GIT_DEPTH: 0
+    PLAYBOOK_PR_TITLE: $CI_MERGE_REQUEST_TITLE
+  script:
+    - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+    - playbook ci --base "${CI_MERGE_REQUEST_TARGET_BRANCH_SHA:-$CI_MERGE_REQUEST_DIFF_BASE_SHA}"
+```
+
+`CI_MERGE_REQUEST_TARGET_BRANCH_SHA` is set only in merged results pipelines;
+elsewhere it is empty and the base is `CI_MERGE_REQUEST_DIFF_BASE_SHA`, the merge
+base of the pull request's diff. The shell syntax targets Linux runners, and the
+job installs the project with its dev tools as on GitHub. A draft marker
+(`Draft:`, `[Draft]`, `(Draft)`) at the start of the title is not checked: the
+squash commit does not carry it.
+
+How far the job is a gate depends on where its definition lives. On GitLab, a
+pull request's pipeline runs that pull request's own `.gitlab-ci.yml`:
+
+1. **Free.** Add the job and turn on *Pipelines must succeed* (Settings → Merge
+   requests). On Free a pull request can otherwise edit its own pipeline: it can
+   delete the job or make it optional in the same change. gate-scan flags that
+   (a removed job, script item or `include:` entry, and `playbook-ci` gaining
+   `allow_failure: true`, `when: manual` or `when: never`), but only a reviewer
+   stops the merge.
+2. **"Pipelines must succeed" with the CI configuration in a separate protected
+   project.** Point Settings → CI/CD → General pipelines → *CI/CD configuration
+   file* at `.gitlab-ci.yml@group/ci-config`, a project the pull request's
+   authors cannot push to. The pull request then cannot change the job that
+   gates it.
+3. **Ultimate: a pipeline execution policy** that injects the `playbook-ci` job
+   into every pipeline of the projects it covers; a project's own
+   `.gitlab-ci.yml` cannot remove it.
+
+## `playbook forge`
+
+`playbook forge` runs one forge operation (an issue, pull request, label or
+check operation) on GitHub or GitLab. On every call it reads the repo's git
+config, maps the current branch's push remote to its forge, and runs that
+forge's CLI, `gh` (2.94.0 or later) or `glab` (1.115.0 or later), with the CLI's
+own login and translated arguments. Skills and agents name only `playbook
+forge`, so their text is the same on both forges; the always-rendered core skill
+`forge` teaches the operations to the assistant.
+
+It is the only engine code that contacts a forge, and only when someone runs it:
+hooks, `sync`, `check`, `validate` and `playbook ci` never do. The engine never
+reads or stores a forge token: the CLI uses its own login (`gh auth login`,
+`glab auth login`, or `GH_TOKEN` / `GITLAB_TOKEN` in the environment). The
+guards judge `playbook forge` calls from the same operation tables, so a body
+file sent through it is egress like any other.
+
+```bash
+playbook forge which                                     # forge, CLI, host, API host, repo, remote
+playbook forge issue create --title "Add X" --body-file plan.md --label ready
+playbook forge issue view 12 --comments
+playbook forge pr create --title "feat: add X" --body-file pr.md --base main
+playbook forge pr checks 34
+playbook forge -C ../other-repo pr list --state merged --json
+```
+
+| Operation | GitHub (`gh`) | GitLab (`glab`) |
+| --- | --- | --- |
+| `issue create --title --body… [--label]… [--assignee @me] [--parent n] [--blocked-by n,…] [--confidential]` | `gh issue create` | `glab issue create`; `--parent` exits 3, `--blocked-by` is a blocking link (Premium, else exit 3) |
+| `issue view <n> [--comments]`, `issue list [--state] [--label]… [--no-label] [--assignee] [--search] [--limit]` | `gh issue view/list --json` | `glab issue view -F json`, `glab issue list -O json`; notes through `glab api`, every page, system notes dropped |
+| `issue comment <n> --body…` | `gh issue comment` | a note through `glab api` |
+| `issue label <n> [--add a,b] [--remove c]`, `issue assign <n> --add @me`, `issue edit <n> [--title] [--body…]` | `gh issue edit` | `glab issue update` |
+| `issue close <n> [--comment] [--reason completed\|not-planned\|duplicate]` | `gh issue close` (one call) | a note with the reason as its closing line, then `glab issue close` |
+| `issue link-child <parent> <child>`, `issue children <parent>` | sub-issues | exit 3 |
+| `issue block <child> <blocker>`, `issue blockers <n>` | blocked-by links | `is_blocked_by` issue links (Premium, else exit 3) |
+| `label list`, `label create <name> [--color] [--description]` | `gh label` | `glab label` |
+| `pr create --title --body… [--base] [--draft]` | `gh pr create --head <branch>` | `glab mr create --source-branch <branch> --push=false` |
+| `pr view <n> [--comments]`, `pr list [--state] [--label] [--external]` | `gh pr view/list --json`; `--external` keeps authors outside the repo, with `author_association` | `glab mr view/list -F json`; `--external` looks each author up in the project's members |
+| `pr diff <n>`, `pr checkout <n>`, `pr checks <n>` | `gh pr diff/checkout/checks` | `glab mr diff --raw`, `glab mr checkout`, the jobs of `glab ci get --merge-request` |
+| `pr comment <n> --body… [--reply-to <id>]`, `pr label`, `pr edit`, `pr ready`, `pr close [--comment]` | `gh pr comment/edit/ready/close`; a reply goes into the review thread | `glab mr note create`, `glab mr update`, a note then `glab mr close` |
+| `ref view <ref>` | `#n` / `n`: the pull request, else the issue | `#n` / `n`: the issue, `!n`: the merge request; a URL by its path |
+| `which` | prints `{forge, cli, host, api_host, repo, remote}` without running the CLI | the same |
+| `auth status` | `gh auth status --hostname <host> --active` | `glab auth status --hostname <host>` (never `-t`), then `glab api user` for a token kept only in the environment |
+
+A body is `--body TEXT`, `--body-file PATH` or `--body-file -` (stdin), and on
+`issue create` and `pr create` also `--template PATH`, read as a body file. It
+always reaches the CLI on stdin, never on its command line, and every body sent
+to GitLab has each line-leading `/` indented by one space, so no quick action
+runs. Read operations print one JSON vocabulary on both forges (`number`, `url`,
+`title`, `body`, `state` as `open` / `closed` / `merged`, `labels`, `assignees`,
+`author`, `created_at`, `updated_at`, `confidential`, and `draft`, `base` and
+`head` for a pull request); write operations print the URL they created or
+changed, `{"url": …}` with `--json`.
+
+`pr create` never pushes: when the branch is not on the push remote it exits 2
+with `git push -u <remote> <branch>`. On GitLab a title with `[skip ci]`,
+`[ci skip]`, `[skip pipeline]` or `[no ci]` is refused for `pr create` and `pr
+edit`, since the pipeline would not run. There is no merge, issue deletion,
+attachment upload or CI secret or variable write.
+
+| Exit | Meaning | The agent |
+| --- | --- | --- |
+| `0` | success | continues |
+| `1` | the call or the CLI failed; the CLI's stderr passes through unchanged | reads the error |
+| `2` | a human must act: unknown forge, CLI missing or older than the minimum, not logged in, detached `HEAD`, outside a repo, host mismatch, branch not pushed | stops and passes on the one-line hint |
+| `3` | the forge or its plan lacks the operation | applies the skill's text fallback |
+
+### Which forge, which host
+
+The push remote is `branch.<b>.pushRemote`, then `remote.pushDefault`, then
+`branch.<b>.remote`, then `origin` (on a detached `HEAD`: `remote.pushDefault`,
+then `origin`); its URL is `pushurl` before `url`, read raw, and `git remote
+get-url --push` (which applies `insteadOf`) only when the raw host does not
+map. An SSH alias is resolved offline with `ssh -G`. The host maps to a forge
+through the `[forge] hosts` table, then `github.com` / `gitlab.com`, then a
+host name containing `github` or `gitlab`, then a host equal to `GH_HOST` or
+`GITLAB_HOST` / `GITLAB_URI` / `GL_HOST`. Errors name the host, never the URL.
+A host none of these name needs one committed line:
+
+```toml
+[forge]
+hosts = { "git.acme.com" = "gitlab", "ssh.acme.com" = { forge = "gitlab", api_host = "gitlab.acme.com" } }
+```
+
+A value is `"github"`, `"gitlab"`, or a table with `forge` and an optional
+`api_host` (the host the CLI talks to when it is not the remote's). Only
+`playbook forge` reads the table, and `playbook validate` reports its unknown
+keys and values. Every call tells the CLI its host in the child environment
+only: `GH_HOST=<api host>`, or `GITLAB_HOST=https://<api host>` (plus
+`GITLAB_API_HOST` when the API host is not the remote's), with prompts, update
+notifiers and telemetry off (`GH_PROMPT_DISABLED`, `GLAB_NO_PROMPT`,
+`GH_NO_UPDATE_NOTIFIER`, `GH_NO_EXTENSION_UPDATE_NOTIFIER`, `GLAB_CHECK_UPDATE`,
+`GH_TELEMETRY=false`, `GLAB_SEND_TELEMETRY=false`, `DO_NOT_TRACK`). A
+`GITLAB_API_HOST`, or a `glab` `api_host` setting, that names another host
+exits 2.
+
+### Running on Domino Data Lab
+
+In a git-based Domino project the repository is at `/mnt/code`, with `origin`
+set to the URL the project was created with; in a project on Domino's own file
+system, attached repositories are at `/repos/<name>` (and imported ones at
+`/mnt/imported/code/<name>`), and `/mnt` is not a clone. Run `playbook forge`
+from the repository, or pass `-C <path>`. gitlab.com and hosts whose name
+contains `gitlab` are detected; any other host needs its `[forge] hosts` line.
+
+Domino's stored Git credential clones the repository, but `glab` cannot use it.
+Once per user:
+
+1. Add `glab` (and `gh` for GitHub) to the compute environment's Dockerfile:
+   `sudo` is usually unavailable in a workspace, and a runtime install does not
+   reach jobs.
+2. Add `GITLAB_TOKEN` (scopes `api` and `write_repository`), or `GH_TOKEN`,
+   under Account Settings → User environment variables, and start a new
+   workspace. Domino injects it into workspaces, jobs and apps. One GitLab token
+   per user environment is the limit; several GitLab instances need a persisted
+   home and `glab auth login` per host.
+3. Add `coding-agent-playbook` to `requirements.txt`.
+
+With `DOMINO_PROJECT_ID` set, the exit-2 hints name these steps. A job launched
+from a commit has a detached `HEAD`: `pr create` then asks for `git checkout -b
+<name>`. Git actions taken in Domino's UI run outside the agent, and no guard
+sees them.
+
+`domino-forge-check.sh` checks a workspace read-only and prints no secret (URLs
+lose their user and password, tokens and credential files are reported as
+present or absent, `glab` runs without `-t`). Save it and run `bash
+domino-forge-check.sh` in a workspace terminal; it covers `origin`, the branch
+state, the credential wiring, `glab` and `sudo`, and whether the API answers:
+
+```bash
+#!/usr/bin/env bash
+# domino-forge-check.sh: what `playbook forge` needs in this Domino workspace, checked read-only.
+# It changes nothing and prints no secret: URLs lose their user and password, token variables
+# and credential files are reported as present or absent only, and `glab` runs without -t.
+# Usage: bash domino-forge-check.sh [repo-dir ...]   (default: /mnt/code, /repos/*, /mnt/imported/code/*)
+set -u
+
+redact() { sed -E 's#(://)[^/@]*@#\1<redacted>@#'; }
+present() { if [ -n "${!1:-}" ]; then echo "set"; else echo "unset"; fi; }
+row() { printf '  %-30s %s\n' "$1" "$2"; }
+first_line() { "$@" 2>/dev/null | head -n 1; }
+
+echo "== Domino"
+row "DOMINO_PROJECT_ID" "$(present DOMINO_PROJECT_ID)"
+row "working directory" "$PWD"
+
+echo "== Tools"
+for tool in git glab gh ssh curl python3 playbook; do
+  row "$tool" "$(command -v "$tool" || echo missing)"
+done
+command -v glab >/dev/null && row "glab --version" "$(first_line glab --version)"
+command -v gh >/dev/null && row "gh --version" "$(first_line gh --version)"
+if command -v sudo >/dev/null && sudo -n true 2>/dev/null; then
+  row "sudo" "works without a password"
+else
+  row "sudo" "not available without a password (install tools in the compute environment)"
+fi
+
+echo "== Credentials (presence only)"
+for var in GITLAB_TOKEN GITLAB_ACCESS_TOKEN OAUTH_TOKEN GH_TOKEN GITHUB_TOKEN GIT_ASKPASS; do
+  row "$var" "$(present "$var")"
+done
+for var in GITLAB_HOST GITLAB_API_HOST GH_HOST; do
+  row "$var" "$(printf '%s' "${!var:-unset}" | redact)"
+done
+glab_config="${GLAB_CONFIG_DIR:-$HOME/.config/glab-cli}/config.yml"
+row "glab config file" "$([ -f "$glab_config" ] && echo present || echo absent)"
+row "git-credentials file" "$([ -f "$HOME/.git-credentials" ] && echo present || echo absent)"
+
+if [ "$#" -gt 0 ]; then
+  dirs=("$@")
+else
+  dirs=(/mnt/code /repos/* /mnt/imported/code/*)
+fi
+for dir in "${dirs[@]}"; do
+  [ -d "$dir" ] || continue
+  echo "== Repository $dir"
+  if ! git -C "$dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    row "git" "not a git work tree"
+    continue
+  fi
+  branch="$(git -C "$dir" symbolic-ref -q --short HEAD)"
+  row "branch" "${branch:-(detached HEAD: run git checkout -b <name> before pr create)}"
+  remote=""
+  [ -n "$branch" ] && remote="$(git -C "$dir" config "branch.$branch.pushRemote")"
+  [ -z "$remote" ] && remote="$(git -C "$dir" config remote.pushDefault)"
+  [ -z "$remote" ] && [ -n "$branch" ] && remote="$(git -C "$dir" config "branch.$branch.remote")"
+  { [ -z "$remote" ] || [ "$remote" = "." ]; } && remote="origin"
+  url="$(git -C "$dir" config "remote.$remote.pushurl" || git -C "$dir" config "remote.$remote.url")"
+  row "push remote" "$remote"
+  row "push URL" "$(printf '%s' "${url:-none}" | redact)"
+  case "$url" in
+    *://*@*) row "credentials in the URL" "yes (redacted)" ;;
+    *) row "credentials in the URL" "no" ;;
+  esac
+  helpers="$(git -C "$dir" config --get-all credential.helper | wc -l | tr -d ' ')"
+  row "git credential helpers" "$helpers"
+  if [ -n "$branch" ]; then
+    if git -C "$dir" rev-parse --verify --quiet "refs/remotes/$remote/$branch" >/dev/null; then
+      row "branch on the remote" "yes"
+    else
+      row "branch on the remote" "no (git push -u $remote $branch before pr create)"
+    fi
+  fi
+  host="$(printf '%s' "$url" | sed -E 's#^[a-z+]+://##; s#^[^@/]*@##; s#[:/].*$##')"
+  [ -n "$host" ] || continue
+  row "host" "$host"
+  if command -v curl >/dev/null; then
+    code="$(curl -sS -o /dev/null -m 10 -w '%{http_code}' "https://$host/api/v4/version" 2>/dev/null)"
+    row "API reachable (no token sent)" "HTTP ${code:-none} (401 or 200: reachable)"
+  fi
+  if command -v glab >/dev/null; then
+    if glab auth status --hostname "$host" >/dev/null 2>&1; then
+      row "glab auth status" "logged in"
+    elif GITLAB_HOST="https://$host" glab api --hostname "$host" user >/dev/null 2>&1; then
+      row "glab auth status" "a token in the environment works"
+    else
+      row "glab auth status" "not logged in (set GITLAB_TOKEN as a user environment variable)"
+    fi
+  fi
+  if command -v playbook >/dev/null; then
+    row "playbook forge which" "$(cd "$dir" && playbook forge which 2>&1 | tr -d '\n' | tr -s ' ')"
+  fi
+done
+```
+
 
 ## Running evals
 

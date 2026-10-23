@@ -52,6 +52,7 @@ STDLIB_LEAVES: Final = frozenset(
         "detector.pep503",
         "detector.pyproject_deps",
         "detector.requirements_files",
+        "forge",
         "generated_output.atomic_io",
         "generated_output.sentinel",
         "lockfile",

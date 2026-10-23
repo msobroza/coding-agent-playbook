@@ -6,7 +6,9 @@ Multi-harness playbook engine
 One source of coding-assistant guidance (rules, prompts, skills, lifecycle
 hooks) rendered into what each assistant reads: Claude Code, OpenCode, Codex,
 Continue and every `AGENTS.md` reader. A detector keeps only what applies to the
-repo, generated files stay out of git, and nothing reaches the network.
+repo, generated files stay out of git, and nothing reaches the network except
+[`playbook forge`](docs/checks.md#playbook-forge), which runs `gh` or `glab` when
+someone calls it.
 
 ```text
  sources                  playbook sync                         outputs
@@ -77,7 +79,8 @@ upgrade, read `MIGRATION.md`.
 - [Setting up a repo](docs/setup.md): install, init, sync, config layers.
 - [Skills and bundled plugins](docs/skills.md): skill roots, core skills, plugins.
 - [Hooks](docs/hooks.md): pre-commit hooks and assistant lifecycle hooks.
-- [Checks and evals](docs/checks.md): metrics, commitizen, `playbook ci`, evals.
+- [Checks and evals](docs/checks.md): metrics, commitizen, `playbook ci` (GitHub
+  Actions, GitLab CI), `playbook forge`, evals.
 - [Contributor guide](catalog/README.md), [glossary](CONTEXT.md), [design](SPEC.md),
   [migration notes](MIGRATION.md), [decision records](docs/adr/). Consumer repos
   keep their own documents in one layout under `docs/` (`docs/specs/`,

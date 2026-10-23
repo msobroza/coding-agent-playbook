@@ -7,7 +7,9 @@ An overlay-tier mechanism: the engine ships it inert (``tier: overlay``,
 allowlist is the barrier only when managed settings enforce it) and on
 WebFetch / WebSearch (a boundary).
 
-- Hosts come from ``_net_targets`` (strings only, never resolved) and match
+- Hosts come from ``_net_targets`` (strings only, never resolved; a forge
+  command naming no host reaches the session's remotes snapshot on its forge,
+  ``_remotes``) and match
   by suffix against ``allowed_hosts`` plus ``gateway_hosts`` (the overlay's
   LLM gateway); loopback is always allowed.
 - ``enforce``: an unapproved host and ``WebSearch`` -> deny; ``ask`` mode asks
@@ -34,6 +36,7 @@ from coding_agent_playbook.hook_runtime.dispatch.decision import Decision, Handl
 from coding_agent_playbook.hook_runtime.dispatch.event import ToolClass
 from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.handlers.safety._net_targets import segment_target
+from coding_agent_playbook.hook_runtime.handlers.safety._remotes import ForgeHosts
 from coding_agent_playbook.hook_runtime.judges.hosts import host_matches, is_loopback, url_host
 
 if TYPE_CHECKING:
@@ -65,7 +68,7 @@ _RAW_NETWORK: Final = re.compile(
     r"|\b(?:Invoke-WebRequest|Invoke-RestMethod|iwr|irm|Start-BitsTransfer)\b"
     r"|\bgit\b[^\n;|&]{0,64}?\b(?:clone|fetch|pull|push|ls-remote|submodule)\b"
     r"|\b(?:pip3?|uv|uvx|pipx|poetry|pdm|conda|npm|npx)\b[^\n;|&]{0,64}?\b(?:install|add|run)\b"
-    r"|\bdocker\b[^\n;|&]{0,32}?\bpull\b",
+    r"|\bdocker\b[^\n;|&]{0,32}?\bpull\b|\b(?:gh|glab)\s+\w|\bplaybook\s+forge\b",
     re.IGNORECASE,
 )
 
@@ -124,7 +127,7 @@ def network_egress_guard(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResu
     if tool.tool_class is ToolClass.WEB:
         verdict = _web(tool, policy)
     elif tool.tool_class is ToolClass.SHELL:
-        verdict = _shell(tool, policy, _remote_lookup(ctx))
+        verdict = _shell(tool, policy, _remote_lookup(ctx), ForgeHosts(ev, ctx), ctx.env)
     else:
         return None
     return None if verdict is None else _result(verdict, mode == "enforce", ctx)
@@ -155,7 +158,13 @@ def _web(tool: ToolCall, policy: _HostPolicy) -> _Verdict | None:
     return _Verdict("ask", "webfetch_query", line)
 
 
-def _shell(tool: ToolCall, policy: _HostPolicy, remotes: Callable[[], Remotes]) -> _Verdict | None:
+def _shell(
+    tool: ToolCall,
+    policy: _HostPolicy,
+    remotes: Callable[[], Remotes],
+    forge_hosts: ForgeHosts,
+    env: Mapping[str, str],
+) -> _Verdict | None:
     command = tool.command
     if command is None:
         return None
@@ -168,7 +177,8 @@ def _shell(tool: ToolCall, policy: _HostPolicy, remotes: Callable[[], Remotes]) 
     found = [
         verdict
         for segment in command.segments
-        if (target := segment_target(segment, remotes)) is not None
+        if (target := segment_target(segment, remotes, env=env, forge_hosts=forge_hosts))
+        is not None
         and (verdict := _judge(target, policy)) is not None
     ]
     return next((v for v in found if v.strength == "block"), None) or next(iter(found), None)

@@ -442,19 +442,26 @@ _WIZARD_NEW_TEXTS = (
     "A **wizard** is a Python script that walks a human, step by step, through a manual "
     "procedure that's tedious to do by hand and tedious to re-explain to an AI every time. It "
     "opens each URL, says exactly what to click and copy, captures the values, writes them where "
-    "they belong (`.env`, or GitHub secrets it walks the human through setting), confirms at "
+    "they belong (`.env`, or the CI secrets and variables it walks the human through setting on "
+    "GitHub or GitLab), confirms at "
     "every stage, and shows how many stages are left. It might configure third-party services, "
     "run a one-off migration, or move the project from one state to another.",
     "The delightful UX is already solved by [wizard_template.py](scripts/wizard_template.py): "
     "stage-by-stage progress, confirmation gates, cross-platform URL opening (Python's "
     "`webbrowser`, printing the URL when no browser opens), hidden secret entry, idempotent "
-    "`.env` upserts, guided GitHub secret/variable steps, and a closing summary. **Your job is "
+    "`.env` upserts, guided GitHub or GitLab CI secret/variable steps, and a closing summary. **Your job is "
     "only to scope the procedure and author its stages.** The library above the `STAGES` "
     "marker is identical in every wizard; that consistency is the point: never hand-edit it.",
     "- For setup: the `.env` templates (`.env.example`, `.env.sample`, `.env.template`, "
     "`.env.dist`; never `.env` itself or any other `.env.*`, which hold live values) and "
     "`.github/workflows/*` (every `secrets.*` / `vars.*` reference is a value the wizard must "
-    "produce).",
+    "produce), or on GitLab `.gitlab-ci.yml` and the local files it `include`s (every `$NAME` / "
+    "`${NAME}` is a CI/CD variable the wizard must produce, except GitLab's predefined `CI_*`, "
+    "`GITLAB_*`, `RUNNER_*` and `CHAT_*` ones and the variables the CI files define themselves).",
+    "set `CI_FORGE` to `\"gitlab\"` when the repo's CI is GitLab's (`.gitlab-ci.yml`), so "
+    "`set_secret` and `set_var` walk the human through GitLab CI/CD variables (Settings → CI/CD "
+    "→ Variables, masked or protected)",
+    "a `secrets.*` reference in CI (on GitLab, a `$NAME` or `${NAME}` the CI files read).",
     "Copy `scripts/wizard_template.py` to the target path. Replace the example stage with one "
     "`stage` per step, in dependency order.",
     '- Check the syntax with `ast.parse`, which writes no `__pycache__/`: `python3 -c "import '
@@ -472,6 +479,10 @@ _WIZARD_REPLACED = (
     "`chmod +x",
     "`.env.*`, `README`",
     "`docker-compose*`",
+    # prF F6 (Q49): the guided steps cover GitLab CI/CD variables too.
+    "(`.env`, or GitHub secrets it walks",
+    "(`.env`, a GitHub secret, both",
+    "guided GitHub secret/variable steps",
 )
 
 
@@ -583,6 +594,13 @@ def test_wizard_library_defines_every_helper_the_skill_names() -> None:
     assert defs["wizard_stages"] > marker
     assignments = _total_stages_assignments(tree)
     assert [(line < marker, value) for line, value in assignments] == [(True, 0), (False, 1)]
+    ci_forge = [
+        (node.lineno < marker, ast.literal_eval(node.value))
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and any(isinstance(t, ast.Name) and t.id == "CI_FORGE" for t in node.targets)
+    ]
+    assert ci_forge == [(True, "github"), (False, "github")], "prF F6: the author sets CI_FORGE"
     assert _is_main_block(tree.body[-1])
     assert source.endswith(
         'if __name__ == "__main__":\n    raise SystemExit(run_wizard(wizard_stages))\n'
@@ -614,13 +632,15 @@ _WIZARD_DOCSTRINGS = {
     ),
     "set_secret": (
         "set_secret(name, value) walks the human through adding a GitHub Actions repository "
-        "secret by hand: it shows the name, never the value, waits for their confirmation and "
-        'records it for the summary; a "no" leaves it on the still-to-do list.'
+        'secret by hand, or a masked GitLab CI/CD variable when CI_FORGE is "gitlab": it shows '
+        "the name, never the value, waits for their confirmation and records it for the summary; "
+        'a "no" leaves it on the still-to-do list.'
     ),
     "set_var": (
         "set_var(name, value) walks the human through adding a GitHub Actions repository "
-        "variable (not secret) by hand: it shows the name and the value, waits for their "
-        "confirmation and records it for the summary."
+        'variable (not secret) by hand, or a GitLab CI/CD variable when CI_FORGE is "gitlab": '
+        "it shows the name and the value, waits for their confirmation and records it for the "
+        "summary."
     ),
     "wizard_stages": (
         "The stages, in dependency order: banner first, one stage() per step, finish() last."
@@ -841,6 +861,41 @@ def test_set_var_shows_the_value_and_records_it(tmp_path: Path) -> None:
     skipped = _wizard(tmp_path, stdin=["n"], calls=[["set_var", "V", "42"]])
     assert skipped["state"]["SKIPPED"] == ["GitHub variable V"]
     assert "skipped GitHub variable V; set it later" in skipped["stdout"]
+
+
+def test_gitlab_set_secret_guides_a_masked_ci_cd_variable(tmp_path: Path) -> None:
+    gitlab = {"CI_FORGE": "gitlab"}
+    done = _wizard(tmp_path, stdin=["y"], set=gitlab, calls=[["set_secret", "S", "v4lue"]])
+    assert done["state"]["WRITTEN_SECRET"] == ["S"]
+    assert "In the GitLab project: Settings → CI/CD → Variables → Add variable." in done["stdout"]
+    assert "Visibility: Masked" in done["stdout"] and "Protect variable" in done["stdout"]
+    assert "GitHub" not in done["stdout"] and "v4lue" not in done["stdout"]
+    assert done["stdout"].endswith("  ✓ set GitLab masked CI/CD variable S\n")
+    skipped = _wizard(tmp_path, stdin=["n"], set=gitlab, calls=[["set_secret", "S", "v4lue"]])
+    assert skipped["state"]["SKIPPED"] == [
+        "GitLab masked CI/CD variable S (set it by hand in the repo's CI settings)"
+    ]
+
+
+def test_gitlab_set_var_and_finish(tmp_path: Path) -> None:
+    gitlab = {"CI_FORGE": "gitlab"}
+    done = _wizard(tmp_path, stdin=["y"], set=gitlab, calls=[["set_var", "V", "42"]])
+    assert "Key V, Value: 42. Visibility: Visible" in done["stdout"]
+    assert done["stdout"].endswith("  ✓ set GitLab CI/CD variable V\n")
+    state = {**gitlab, "WRITTEN_SECRET": ["S"], "WRITTEN_VAR": ["V"]}
+    report = _wizard(tmp_path, set=state, calls=[["finish"]])
+    assert report["stdout"] == (
+        "\n  ✓ Setup complete\n  set 1 GitLab masked CI/CD variable(s): S\n"
+        "  set 1 GitLab CI/CD variable(s): V\n\n"
+    )
+
+
+def test_unknown_ci_forge_is_refused(tmp_path: Path) -> None:
+    report = _wizard(tmp_path, set={"CI_FORGE": "bitbucket"}, calls=[["set_var", "V", "1"]])
+    assert _error(report) == [
+        "ValueError",
+        'CI_FORGE must be "github" or "gitlab", not \'bitbucket\'',
+    ]
 
 
 def test_stage_counts_against_total_stages(tmp_path: Path) -> None:

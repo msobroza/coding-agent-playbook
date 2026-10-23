@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import shlex
 from typing import TYPE_CHECKING, Final
 
 import pytest
@@ -18,12 +19,15 @@ import pytest
 from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.artifacts.rule import Rule
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
+from coding_agent_playbook.forge.operations import operation_call
 from tests.plugins.mattpocock_skills._expectations import (
+    IMPOSED_TOOL_RE,
     PLUGIN_NAME,
     PLUGIN_ROOT,
     RULE_FILE_NAME,
     RULES_ROOT,
     SKILLS_ROOT,
+    forge_command_spans,
     vendored_text,
 )
 from tests.plugins.mattpocock_skills.conftest import init_probe
@@ -50,6 +54,35 @@ TRIAGE_ROLES: Final = (
     "ready-for-human",
     "wontfix",
 )
+#: The Forge issues seed (prF F6, the D13/D14 amendment): engine-authored, not upstream text.
+FORGE_SEED: Final = "references/issue-tracker-forge.md"
+FORGE_SEED_LINES: Final = 56
+#: The forge operations the Forge issues seed must name (prF section 11.1, Q30, Q39, Q44).
+FORGE_SEED_OPERATIONS: Final = frozenset(
+    {
+        "issue create",
+        "issue view",
+        "issue list",
+        "issue comment",
+        "issue label",
+        "issue close",
+        "issue assign",
+        "issue edit",
+        "issue link-child",
+        "issue children",
+        "issue block",
+        "issue blockers",
+        "pr list",
+        "pr view",
+        "pr diff",
+        "pr comment",
+        "pr label",
+        "pr close",
+        "ref view",
+    }
+)
+#: The forge operations setup runs (Q32, Q34, Q42).
+SETUP_FORGE_OPERATIONS: Final = frozenset({"which", "auth status", "label list", "label create"})
 _SETUP_SLASH_POINTER: Final = "tell the user to run `/setup-matt-pocock-skills`"
 _CF: Final = " (or `CONTEXT.md` if the repo already has one)"
 _CMF: Final = " (or `CONTEXT-MAP.md` if the repo already has one)"
@@ -67,8 +100,8 @@ NEW_TEXTS: Final[tuple[tuple[str, str, str], ...]] = (
     (
         SETUP,
         "SKILL.md",
-        "- **Issue tracker**: where issues live (local markdown by default; any other tracker "
-        "works once the user describes it)\n",
+        "- **Issue tracker**: where issues live (the forge's issues when the repo pushes to GitHub "
+        "or GitLab, local markdown otherwise; any other tracker works once the user describes it)\n",
     ),
     (
         SETUP,
@@ -94,23 +127,29 @@ NEW_TEXTS: Final[tuple[tuple[str, str, str], ...]] = (
         SETUP,
         "SKILL.md",
         '> Explainer: The "issue tracker" is where issues live for this repo. Skills like '
-        "`to-tickets` and `to-spec` read from and write to it. They need to know whether to write a "
-        "markdown file under `docs/specs/` or `docs/plans/` or follow some other workflow you describe. "
-        "Pick the place "
-        "you actually track work for this repo.\n",
+        "`to-tickets` and `to-spec` read from and write to it. They need to know whether to open "
+        "issues on the repo's forge, write a markdown file under `docs/specs/` or `docs/plans/`, or "
+        "follow some other workflow you describe. Pick the place you actually track work for this "
+        "repo.\n",
     ),
     (
         SETUP,
         "SKILL.md",
-        "Default posture: propose local markdown, even when a `git remote` points at a forge; a user "
-        "who tracks work in that forge's issues, or anywhere else, picks **Other**. Offer:\n",
+        "Default posture: when `playbook forge which` found a forge, preselect **Forge issues**, so "
+        "the user confirms it once; otherwise propose local markdown. A user who tracks work "
+        "anywhere else picks **Other**. Offer:\n\n- **Forge issues**: issues live in the repo's "
+        "GitHub or GitLab issues, reached through `playbook forge`, which runs the forge's own CLI "
+        "with its own login (offered when `playbook forge which` found a forge, and then the "
+        "default)\n- **Local markdown**: issues live as files under "
+        "`docs/plans/YYYY-MM-DD-<feature>/` in this repo (the default without a forge; needs no "
+        "remote or CLI)\n",
     ),
     (
         SETUP,
         "SKILL.md",
-        "- **Local markdown**: issues live as files under `docs/plans/YYYY-MM-DD-<feature>/` in this "
-        "repo (the "
-        "default; needs no remote or CLI)\n",
+        "- `git remote -v` and `.git/config`, then `playbook forge which`: does the current branch "
+        "push to GitHub or GitLab? Which repository? Exit 0 prints the forge and the repository; "
+        "exit 2 means it found no forge it can use, so Section A proposes local markdown.\n",
     ),
     (
         SETUP,
@@ -121,7 +160,32 @@ NEW_TEXTS: Final[tuple[tuple[str, str, str], ...]] = (
         "ticket) and the Wayfinding operations; the skill will record each answer under that "
         "section's heading\n",
     ),
-    (SETUP, "SKILL.md", "\nRecord the choice in `docs/agents/issue-tracker.md`.\n\n"),
+    (
+        SETUP,
+        "SKILL.md",
+        "\nRecord the choice in `docs/agents/issue-tracker.md`. The Forge issues seed carries a "
+        '"PRs as a request surface" flag, defaulted **off**. Leave it off and don\'t raise it: a '
+        "user who wants external PRs in the triage queue can flip the flag in the file later.\n\n",
+    ),
+    (
+        SETUP,
+        "SKILL.md",
+        "On **Forge issues**, run `playbook forge auth status` once the user confirms. Exit 0: the "
+        "forge CLI is logged in; go on. Exit 2: show the user the one-line hint it printed, the step "
+        "only they can take (install the CLI, or log in), wait until they say it's done, and run it "
+        "again. Don't fall back to local markdown, and never call a forge CLI or API yourself.\n",
+    ),
+    (
+        SETUP,
+        "SKILL.md",
+        "On **Forge issues**, then create the labels the skills apply, on GitHub and GitLab alike: "
+        "every label in the right-hand column of `docs/agents/triage-labels.md`, plus "
+        "`wayfinder:map`, `wayfinder:research`, `wayfinder:prototype`, `wayfinder:grilling` and "
+        "`wayfinder:task`. `playbook forge label list` shows the ones that exist; create each "
+        "missing one with `playbook forge label create <name> --color <RRGGBB> --description "
+        '"<meaning>"`, the meaning taken from the label table (for a `wayfinder:` label, its ticket '
+        "type).\n",
+    ),
     (
         SETUP,
         "SKILL.md",
@@ -162,7 +226,9 @@ NEW_TEXTS: Final[tuple[tuple[str, str, str], ...]] = (
     (
         SETUP,
         "SKILL.md",
-        ":\n\n- [issue-tracker-local.md](./references/issue-tracker-local.md): local-markdown issue "
+        ":\n\n- [issue-tracker-forge.md](./references/issue-tracker-forge.md): Forge issues (GitHub "
+        "or GitLab, through `playbook forge`)\n"
+        "- [issue-tracker-local.md](./references/issue-tracker-local.md): local-markdown issue "
         "tracker\n- [triage-labels.md](./references/triage-labels.md): label mapping\n"
         "- [domain.md](./references/domain.md): domain doc consumer rules + layout\n\n",
     ),
@@ -290,8 +356,6 @@ _SETUP_REPLACED: Final = (
     "GitLab Issues",
     "(good for solo projects or repos without a remote)",
     "describe the workflow in one paragraph; the skill will record it as freeform prose",
-    "PRs as a request surface",
-    "a user who wants external PRs in the triage queue",
     "Skip this section entirely if the `triage` skill isn't installed",
     "If it is installed, ask exactly one question:",
     "Do you want to keep the default triage labels?",
@@ -320,6 +384,12 @@ _SETUP_REPLACED: Final = (
     "(only if `triage` is installed)",
     "from scratch using the user's description.\n",
     "or restart from scratch.\n",
+    # prF F6 (the D13/D14 amendment) replaced these texts of the T03 result.
+    "is this a GitHub repo? Which one?",
+    "(the default; needs no remote or CLI)",
+    "Default posture: propose local markdown, even when a `git remote` points at a forge",
+    "whether to write a markdown file under `.scratch/` or follow",
+    "(local markdown by default;",
 )
 #: (skill id, path inside the skill, upstream v1.3.1 text a change replaced or removed).
 REPLACED_TEXTS: Final[tuple[tuple[str, str, str], ...]] = (
@@ -336,13 +406,15 @@ REPLACED_TEXTS: Final[tuple[tuple[str, str, str], ...]] = (
     (SETUP, "references/issue-tracker-local.md", "every file it lists is `resolved`."),
     (SETUP, "references/issue-tracker-local.md", "Decisions-so-far in `map.md`.\n"),
     ("to-tickets", "SKILL.md", "the tracker `/setup-matt-pocock-skills` configured"),
+    ("to-tickets", "SKILL.md", "(GitHub, Linear, …)"),
 )
 
 #: (skill id, path, line count): the A.T03 results, which keep upstream's LF and final newline.
 LINE_COUNTS: Final = (
-    (SETUP, "SKILL.md", 81),
+    (SETUP, "SKILL.md", 87),
     (SETUP, "references/domain.md", 51),
     (SETUP, "references/issue-tracker-local.md", 41),
+    (SETUP, "references/issue-tracker-forge.md", FORGE_SEED_LINES),
     (SETUP, "references/triage-labels.md", 15),
     ("to-spec", "SKILL.md", 78),
     ("to-tickets", "SKILL.md", 108),
@@ -440,6 +512,7 @@ def test_setup_references_inventory() -> None:
     assert sorted(p.name for p in references.iterdir()) == [
         "LICENSE",
         "domain.md",
+        "issue-tracker-forge.md",
         "issue-tracker-local.md",
         "triage-labels.md",
     ]
@@ -492,12 +565,11 @@ def test_setup_replay_guard() -> None:
         "issue-tracker-github",
         "issue-tracker-gitlab",
         "Pick the file to edit",
-        "PRs as a request surface",
         "the `triage` skill installed",
         "gh issue",
     ):
         assert removed not in text, removed
-    assert "(the default; needs no remote or CLI)" in text
+    assert "(the default without a forge; needs no remote or CLI)" in text
     assert "never edits or creates either file" in text
 
 
@@ -507,9 +579,11 @@ def test_attributions_name_the_dropped_forge_seed_tools() -> None:
     text = " ".join((PLUGIN_ROOT / "ATTRIBUTIONS.md").read_text(encoding="utf-8").split())
     for needle in (
         "They told the agent to run `gh`, `glab`, `jq` and `gh api`/`glab api`,",
-        "Only the local-markdown template ships.",
+        "Neither ships: the one Forge issues seed, `references/issue-tracker-forge.md`, replaces "
+        "both and names only `playbook forge` operations.",
     ):
         assert needle in text, needle
+    assert "Only the local-markdown template ships." not in text, "amended by prF F6 (D13, D14)"
     assert "the forge CLIs and their `api` subcommands" not in text
 
 
@@ -637,3 +711,60 @@ def test_tracker_rule_is_absent_with_the_plugin_off(tmp_path: Path) -> None:
     for rel, text in _rule_targets(repo).items():
         assert RULE_HEADING not in text and RULE_ID not in text, rel
     assert _continue_rule_files(repo) == []
+
+
+# --- the Forge issues tracker (prF F6: the D2/D13/D14 amendment) ---------------
+
+
+def _operations(skill_id: str, rel: str) -> set[str]:
+    """The ``playbook forge`` operations ``skills/<skill_id>/<rel>`` names in code spans."""
+    found: set[str] = set()
+    for _, span in forge_command_spans(SKILLS_ROOT / skill_id / rel):
+        call = operation_call(shlex.split(span)[2:])
+        assert call is not None, span
+        found.add(call.operation.name)
+    return found
+
+
+def test_forge_seed_names_its_operations_and_only_playbook_forge() -> None:
+    assert _operations(SETUP, FORGE_SEED) == FORGE_SEED_OPERATIONS
+    text = _text(SETUP, FORGE_SEED)
+    assert IMPOSED_TOOL_RE.search(text) is None, "no gh, glab, jq or API call (D2, D13)"
+
+
+def test_setup_runs_which_auth_status_and_label_create() -> None:
+    assert _operations(SETUP, "SKILL.md") == SETUP_FORGE_OPERATIONS
+    text = _text(SETUP, "SKILL.md")
+    assert "Don't fall back to local markdown, and never call a forge CLI or API yourself." in text
+    assert "preselect **Forge issues**, so the user confirms it once" in text
+    assert "on GitHub and GitLab alike" in text
+
+
+def test_forge_seed_headings() -> None:
+    text = _text(SETUP, FORGE_SEED)
+    assert text.split("\n", 1)[0] == "# Issue tracker: Forge issues"
+    assert re.findall(r"^## (.+)$", text, flags=re.MULTILINE) == [
+        "Conventions",
+        "Pull requests as a triage surface",
+        'When a skill says "publish to the issue tracker"',
+        'When a skill says "fetch the relevant ticket"',
+        'When a skill says "close" or "resolve" a ticket',
+        "Blocking",
+        "Wayfinding operations",
+    ]
+
+
+def test_forge_seed_conventions_and_text_fallbacks() -> None:
+    text = _text(SETUP, FORGE_SEED)
+    for needle in (
+        "**PRs as a request surface: no.**",
+        "one `Closes #<n>` line in its description for each ticket it completes",
+        "put `Part of #<map>` as the first line of the child's body",
+        "a `Blocked by: #<n>, #<n>` line at the top of the child's body",
+        '`playbook forge issue close <n> --comment "<why>" --reason not-planned`, never deleted',
+        "Exit code 2 means a human must act",
+        "Never fall back to local markdown, a forge CLI or a forge API.",
+        "Exit code 3 means this forge or its plan lacks the operation",
+        "Used by `wayfinder`. The **map** is a single issue with **child** issues as tickets.",
+    ):
+        assert needle in text, needle

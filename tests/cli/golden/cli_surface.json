@@ -51,6 +51,7 @@
         "metrics",
         "import-harness",
         "validate-harness",
+        "forge",
         "gate-scan",
         "ci",
         "scan-sinks",
@@ -1104,6 +1105,74 @@
           "choices": null,
           "required": false,
           "help": "promote warnings (missing routing file / content description) to errors",
+          "metavar": null
+        }
+      ],
+      "exclusive_groups": []
+    },
+    {
+      "name": "forge",
+      "help": "run a forge operation on GitHub or GitLab through gh or glab",
+      "func": "coding_agent_playbook.commands.forge.run",
+      "description": "Run one forge operation (issue, pr, label, ref, which, auth) on the forge of the current branch's push remote. Run with no operation to list them.",
+      "actions": [
+        {
+          "action": "_HelpAction",
+          "option_strings": [
+            "-h",
+            "--help"
+          ],
+          "dest": "help",
+          "nargs": 0,
+          "const": null,
+          "default": "==SUPPRESS==",
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "show this help message and exit",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "-C"
+          ],
+          "dest": "directory",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "run as if started in PATH",
+          "metavar": "PATH"
+        },
+        {
+          "action": "_StoreTrueAction",
+          "option_strings": [
+            "--json"
+          ],
+          "dest": "json",
+          "nargs": 0,
+          "const": true,
+          "default": false,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "print a write's URL as JSON",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [],
+          "dest": "words",
+          "nargs": "...",
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "the operation and its arguments",
           "metavar": null
         }
       ],

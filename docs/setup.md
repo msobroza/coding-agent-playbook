@@ -51,7 +51,11 @@ and `.claude/skills/`. To enable it as well:
 playbook init --adapters claude_code,opencode,shared_skills,continue
 ```
 
-Codex needs no adapter: it reads `AGENTS.md` and `.agents/skills/`.
+Codex needs no adapter: it reads `AGENTS.md` and `.agents/skills/`. GitLab Duo
+reads `AGENTS.md` too, but an agent that runs on the forge's servers (a GitLab
+Duo agent flow, a hosted coding agent) sees only what is committed: with the
+default `[output] commit = false` it finds no `AGENTS.md`, so set `commit = true`
+in repos that use one.
 
 Choose the spec-driven framework with `playbook init --framework superpowers | mattpocock | none` (default `none`; it writes the committed `framework` key).
 

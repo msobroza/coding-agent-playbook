@@ -84,8 +84,11 @@ class CoreSkillPins:
         return self.probe_inactive if self.probe == "reference" else frozenset(self.members)
 
 
+#: The core skill that teaches the forge operations of ``playbook forge``.
+FORGE_SKILL_ID: Final = "forge"
 #: Core skills that take no member rules: no ``playbook:`` block, an authored "Use when".
-PLAIN_CORE_SKILL_IDS: Final = frozenset({GUARDRAILS_SKILL_ID})
+#: ``forge`` is always rendered (specs/prF-forge-adapter.md §6.4, Q47).
+PLAIN_CORE_SKILL_IDS: Final = frozenset({GUARDRAILS_SKILL_ID, FORGE_SKILL_ID})
 
 
 def _discover_pins() -> tuple[CoreSkillPins, ...]:

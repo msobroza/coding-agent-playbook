@@ -35,6 +35,16 @@ def _tok(*parts: str) -> str:
 AWS_KEY = _tok("AKIA", "Z7Q2" * 4)
 GITHUB_TOKEN = _tok("gh", "p_", "a1B2" * 9)
 
+# GitLab token bodies (GitLab "token overview" and its token generators): a Devise
+# friendly token (20 chars of [0-9A-Za-z_-]) and a routable body (27-300 base64url
+# chars, ``.``, an optional 2-char version and ``.``, then 2 length + 7 CRC chars).
+_FRIENDLY20 = "A1b2-C3d4_" * 2
+_ROUTABLE = _tok("Ab1-Cd2_" * 4, ".01.", "0w", "1b2c3d4")
+_UNVERSIONED = _tok("Ab1-Cd2_" * 4, ".", "0w", "1b2c3d4")
+_SHORT_ROUTABLE = _tok("Ab1-Cd2_" * 3, "Ab", ".01.", "0w", "1b2c3d4")  # a 26-char payload
+_JWT_BODY = _tok("ey", "JhbGciOiJSUzI1NiJ9.", "ey", "JzdWIiOiIxMjMifQ.", "c2lnbmF0dXJlMTIz")
+GITLAB_TOKEN = _tok("gl", "pat-", _FRIENDLY20)
+
 #: rule id -> (a line it must flag, a near miss it must pass)
 _RULE_CASES: dict[str, tuple[str, str]] = {
     "private-key": (_tok("-----BEGIN ", "RSA PRIVATE KEY-----"), "-----BEGIN PUBLIC KEY-----"),
@@ -43,6 +53,11 @@ _RULE_CASES: dict[str, tuple[str, str]] = {
         _tok("key = 'XAKIA", "Z7Q2" * 4, "'"),
     ),
     "github-token": (f"token={GITHUB_TOKEN}", _tok("token=gh", "x_", "a1B2" * 9)),
+    "gitlab-token": (f"GITLAB_TOKEN={GITLAB_TOKEN}", _tok("GITLAB_TOKEN=gl", "pax-", _FRIENDLY20)),
+    "gitlab-runner-registration-token": (
+        _tok("--registration-token GR", "1348941", _FRIENDLY20),
+        _tok("--registration-token GR", "1348942", _FRIENDLY20),
+    ),
     "slack-token": (
         _tok("SLACK=xo", "xb-", "1234567890-abcdefghij"),
         _tok("SLACK=xo", "xq-", "1234567890-abcdefghij"),
@@ -84,6 +99,97 @@ def test_rule_table(rule_id: str) -> None:
 
     assert [f.rule_id for f in scan_text(f"x = 1\n{hit}\n", "src/app.py")] == [rule_id]
     assert scan_text(miss, "src/app.py") == []
+
+
+def _gitlab_sample(prefix: str, body: str) -> str:
+    """A GitLab-shaped sample, assembled so this file never spells one out."""
+    return _tok("gl", prefix, body)
+
+
+#: Each GitLab prefix at every documented length (hits), and a near miss of each.
+_GITLAB_HITS = [
+    pytest.param(GITLAB_TOKEN, id="glpat_legacy_20"),
+    pytest.param(_gitlab_sample("pat-", _ROUTABLE), id="glpat_routable"),
+    pytest.param(_gitlab_sample("pat-", _UNVERSIONED), id="glpat_routable_unversioned"),
+    pytest.param(_gitlab_sample("oas-", "0f1e" * 16), id="gloas_64_hex"),
+    pytest.param(_gitlab_sample("dt-", _FRIENDLY20), id="gldt_20"),
+    pytest.param(_gitlab_sample("rt-", _FRIENDLY20), id="glrt_20"),
+    pytest.param(_gitlab_sample("rt-", _tok("t3_", _FRIENDLY20)), id="glrt_partitioned"),
+    pytest.param(_gitlab_sample("rt-", _ROUTABLE), id="glrt_routable"),
+    pytest.param(_gitlab_sample("rtr-", _FRIENDLY20), id="glrtr_20"),
+    pytest.param(_gitlab_sample("rtr-", _ROUTABLE), id="glrtr_routable"),
+    pytest.param(_gitlab_sample("ptt-", _FRIENDLY20), id="glptt_20"),
+    pytest.param(_gitlab_sample("ptt-", "0f1e" * 10), id="glptt_40_hex"),
+    pytest.param(_gitlab_sample("ft-", _FRIENDLY20), id="glft_20"),
+    pytest.param(_gitlab_sample("ft-", _tok("0f1e" * 16, "-", "42")), id="glft_path_dependent"),
+    pytest.param(_gitlab_sample("cbt-", _tok("6a", "_", _FRIENDLY20)), id="glcbt_legacy"),
+    pytest.param(_gitlab_sample("cbt-", _JWT_BODY), id="glcbt_jwt"),
+    # GitLab's source makes these two JWT tokens; its token overview does not list them
+    pytest.param(_gitlab_sample("sat-", _JWT_BODY), id="glsat_jwt"),
+    pytest.param(_gitlab_sample("iamat-", _JWT_BODY), id="gliamat_jwt"),
+    pytest.param(_gitlab_sample("soat-", _FRIENDLY20), id="glsoat_20"),
+    pytest.param(_gitlab_sample("imt-", "z9y8x" * 5), id="glimt_25"),
+    pytest.param(_gitlab_sample("imt-", "z9y8x" * 4 + "w"), id="glimt_unpadded_21"),
+    pytest.param(_gitlab_sample("agent-", "Ab1-Cd2_e" * 5 + "F3g4h"), id="glagent_50"),
+    pytest.param(_gitlab_sample("agent-", _ROUTABLE), id="glagent_routable"),
+    pytest.param(_gitlab_sample("ffct-", _FRIENDLY20), id="glffct_20"),
+    pytest.param(_gitlab_sample("wt-", _ROUTABLE), id="glwt_routable"),
+]
+
+_GITLAB_MISSES = [
+    pytest.param(_gitlab_sample("pat-", _FRIENDLY20[:19]), id="glpat_19"),
+    pytest.param(_gitlab_sample("pat-", _tok(_FRIENDLY20, "x")), id="glpat_21"),
+    pytest.param(_gitlab_sample("pat-", _SHORT_ROUTABLE), id="glpat_routable_26"),
+    pytest.param(_tok("x", _gitlab_sample("pat-", _FRIENDLY20)), id="glpat_inside_a_word"),
+    pytest.param(_gitlab_sample("oas-", "0f1e" * 15 + "0f1"), id="gloas_63_hex"),
+    pytest.param(_gitlab_sample("dt-", _FRIENDLY20[:19]), id="gldt_19"),
+    pytest.param(_gitlab_sample("rt-", _tok("t4_", _FRIENDLY20)), id="glrt_unknown_partition"),
+    pytest.param(_gitlab_sample("rtx-", _FRIENDLY20), id="glrtx"),
+    pytest.param(_gitlab_sample("rtr-", _FRIENDLY20[:19]), id="glrtr_19"),
+    pytest.param(_gitlab_sample("ptt-", "0f1e" * 9 + "0f1"), id="glptt_39_hex"),
+    pytest.param(_gitlab_sample("ft-", _tok(_FRIENDLY20, "x")), id="glft_21"),
+    pytest.param(
+        _gitlab_sample("cbt-", _tok("6a7b8c", "_", _FRIENDLY20)), id="glcbt_6_char_partition"
+    ),
+    pytest.param(_gitlab_sample("cbt-", "eyJhbGciOiJSUzI1NiJ9"), id="glcbt_jwt_header_only"),
+    pytest.param(_gitlab_sample("sat-", "eyJhbGciOiJSUzI1NiJ9"), id="glsat_jwt_header_only"),
+    pytest.param(_gitlab_sample("sat-", _FRIENDLY20), id="glsat_20_no_jwt"),
+    pytest.param(_gitlab_sample("iamat-", _FRIENDLY20), id="gliamat_20_no_jwt"),
+    pytest.param(_gitlab_sample("iamat_", _JWT_BODY), id="gliamat_underscore"),
+    pytest.param(_gitlab_sample("soat-", _FRIENDLY20[:19]), id="glsoat_19"),
+    pytest.param(_gitlab_sample("imt-", "z9y8x" * 5 + "w"), id="glimt_26"),
+    pytest.param(_gitlab_sample("agent-", "Ab1-Cd2_e" * 5 + "F3g4"), id="glagent_49"),
+    pytest.param(_gitlab_sample("ffct-", _FRIENDLY20[:19]), id="glffct_19"),
+    pytest.param(_gitlab_sample("wt-", _FRIENDLY20), id="glwt_20"),
+    pytest.param(_tok("GR", "1348941", _FRIENDLY20[:19]), id="GR1348941_19"),
+    pytest.param(_tok("xGR", "1348941", _FRIENDLY20), id="GR1348941_inside_a_word"),
+]
+
+
+@pytest.mark.parametrize("token", _GITLAB_HITS)
+def test_gitlab_token_rule_matches_every_documented_prefix_and_length(token: str) -> None:
+    findings = scan_text(f'token: "{token}"\n', "ci/vars.yml")
+
+    assert [(f.rule_id, f.length) for f in findings] == [("gitlab-token", len(token))]
+
+
+@pytest.mark.parametrize(
+    "token",
+    [
+        pytest.param(GITLAB_TOKEN, id="glpat"),
+        pytest.param(_gitlab_sample("sat-", _JWT_BODY), id="glsat_jwt"),
+    ],
+)
+def test_gitlab_token_rule_matches_after_an_instance_prefix(token: str) -> None:
+    """An admin's instance prefix (``<prefix>-glpat-...``) leaves the GitLab prefix in place."""
+    findings = scan_text(f"PRIVATE-TOKEN: acme-{token}\n", "notes.md")
+
+    assert [(f.rule_id, f.length) for f in findings] == [("gitlab-token", len(token))]
+
+
+@pytest.mark.parametrize("text", _GITLAB_MISSES)
+def test_gitlab_rules_pass_near_misses(text: str) -> None:
+    assert scan_text(f'token: "{text}"\n', "ci/vars.yml") == []
 
 
 def test_finding_reports_rule_line_and_length() -> None:

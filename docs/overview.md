@@ -31,8 +31,9 @@ What the engine is, what it ships, and how its source and packages are laid out.
   copy-paste.
 - **Enterprise-friendly.** Copies, not symlinks (cross-platform,
   banking-safe). No telemetry, ever. No outbound network by default — even the
-  pre-commit hooks run locally, so it works fully offline. Distribute via
-  internal PyPI / git.
+  pre-commit hooks run locally, so it works fully offline; only
+  [`playbook forge`](checks.md#playbook-forge) contacts a forge, and only when someone
+  runs it. Distribute via internal PyPI / git.
 - **Mistakes caught before they ship.** `playbook validate` cross-checks the
   canonical source (prompt↔rule inclusion symmetry, eval-sample back-references,
   typo'd predicate keys), and a local lockfile records the engine version and
@@ -62,7 +63,8 @@ writes the shared skill root `.agents/skills/` read by Codex and OpenCode, and t
 commands (`init` / `sync` / `check` / `validate` / `render` / `eval` /
 `metrics` / `import-harness` / `validate-harness`), the off-workstation checks
 (`ci` / `gate-scan` / `scan-secrets` / `scan-sinks` / `check-deps` /
-`check-commit-trailers` / `check-notebooks` / `docs-check`), the Tier 0 eval schema
+`check-commit-trailers` / `check-notebooks` / `docs-check`), the forge operations on GitHub and
+GitLab ([`forge`](checks.md#playbook-forge), through `gh` or `glab`), the Tier 0 eval schema
 plus the v1.1 eval runner (`playbook eval --run`, deterministic layers live;
 judged rubric scoring live via `--judge`), and the code-quality metrics gate.
 v0.20 adds the opt-in [assistant lifecycle hooks](hooks.md#assistant-lifecycle-hooks):

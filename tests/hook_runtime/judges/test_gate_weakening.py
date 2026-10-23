@@ -3,7 +3,8 @@
 ``gate_weakening.scan`` takes parsed diff lines and config file pairs, never git, so
 every rule is pinned here without a repository: the added-line patterns and
 their trailing-justification escape, the TOML key diffs that loosen a checker,
-the pre-commit hook and workflow step removals, the ``.gitleaks.toml`` watch,
+the pre-commit hook and workflow step removals, the ``.gitleaks.toml`` watch
+(``scanner-config-changed``; its peers in ``test_gate_weakening_scanners``),
 the skipped paths, and the consumer layer that may only add rules.
 """
 
@@ -11,6 +12,7 @@ from __future__ import annotations
 
 import pytest
 
+from coding_agent_playbook.hook_runtime.judges._gate_weakening_files import is_workflow_path
 from coding_agent_playbook.hook_runtime.judges.gate_weakening import (
     DEFAULT_ADDED_LINE_PATTERNS,
     DEFAULT_JUSTIFICATION_REGEX,
@@ -335,6 +337,20 @@ def test_workflow_step_removal_flagged() -> None:
     assert "'mypy (strict)'" in report.findings[0].detail
 
 
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        (".github/workflows/ci.yml", True),
+        ("svc/.github/workflows/release.yaml", True),
+        (".github/workflows/sub/ci.yml", False),
+        (".github/secret_scanning.yml", False),
+        (".gitlab-ci.yml", False),
+    ],
+)
+def test_is_workflow_path_matches_github_workflows_at_any_depth(path: str, expected: bool) -> None:
+    assert is_workflow_path(path) is expected
+
+
 def test_renamed_workflow_step_with_a_reason_is_justified() -> None:
     path = ".github/workflows/ci.yml"
     removed = [RemovedLine(path, 38, "      - name: mypy (strict)")]
@@ -352,7 +368,7 @@ def test_gitleaks_change_flagged() -> None:
 
     report = scan(added, (), (), POLICY)
 
-    assert _rules(report) == ["gitleaks-config-changed"]
+    assert _rules(report) == ["scanner-config-changed"]
     assert report.exit_code == 1
 
 

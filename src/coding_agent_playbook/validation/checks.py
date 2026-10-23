@@ -82,6 +82,7 @@ from coding_agent_playbook.generated_output.source_files import refused_skill_fi
 from coding_agent_playbook.rendering.jinja import RULE_CALL_RE, jinja_syntax_error
 from coding_agent_playbook.skills.naming import agent_skill_issues, has_declared_id
 from coding_agent_playbook.validation import preflight as _sync_preflight
+from coding_agent_playbook.validation._forge import check_forge_table
 from coding_agent_playbook.validation._framework import check_framework
 from coding_agent_playbook.validation._frontmatter import (
     check_lint_codes,
@@ -429,6 +430,8 @@ def _artifact_errors(ctx: SyncContext, *, config_less: bool) -> list[ValidationE
     )
     errors.extend(links_errors)
     errors.extend(check_markdown_links(ctx.artifact_source, ctx.repo_root, links_config))
+    if not config_less:
+        errors.extend(check_forge_table(ctx.repo_root))
     errors.extend(_check_agent_skills(ctx.skills_resolved, ctx.artifact_source.list_skills()))
     errors.extend(
         check_skill_membership(rules, ctx.skills_resolved, all_rules=ctx.rule_definitions)

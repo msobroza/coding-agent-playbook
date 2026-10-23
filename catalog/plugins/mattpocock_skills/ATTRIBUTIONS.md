@@ -140,6 +140,12 @@ change from the upstream text listed in this file.
   the forge CLIs, the JavaScript package runners as instructions, JSON and
   terminal utilities, HTTP clients, OS openers, shell linters, containers,
   headless browsers, any bash script and any CDN asset.
+- **Amendment (prF F6, Q28, Q49).** `playbook forge`, the engine's own forge
+  command, is not an imposed tool: it reads the forge from git config and runs
+  the forge's CLI with its own login, so a skill never names `gh` or `glab`.
+  Only setup-matt-pocock-skills' `SKILL.md` and its Forge issues seed
+  `references/issue-tracker-forge.md` name it; `gh` and `glab` stay banned
+  everywhere.
 - **What it removed:** the forge CLIs (`gh`, `glab`: setup's GitHub and GitLab
   seeds, and in setup's own `SKILL.md` `gh issue create` at L40, the bare
   GitLab host name at L42, the `gh` option at L44 and the `glab` option and its
@@ -200,7 +206,8 @@ change from the upstream text listed in this file.
   end of file mid-run read as an empty answer; `set_secret` and `set_var` kept
   by name as guided manual steps instead of forge writes; an atomic `.env`
   upsert; a new `WRITTEN_VAR` summary line for the variables it recorded; a
-  placeholder for the dashboard address.
+  placeholder for the dashboard address; a `CI_FORGE` setting that words those
+  steps for GitLab CI/CD variables (prF F6).
 - **wizard's `SKILL.md`** reads only the `.env` templates (`.env.example`,
   `.env.sample`, `.env.template`, `.env.dist`) and the CI configuration, and
   verifies a script with `ast.parse`, which leaves no bytecode cache behind.
@@ -232,10 +239,13 @@ change from the upstream text listed in this file.
   reporter loop or pull-request surface for it to drive. A consumer may add it
   back repo-locally at `playbook/skills/triage/`; it reads the same
   `docs/agents/issue-tracker.md` and `docs/agents/triage-labels.md` (setup
-  still writes the label vocabulary), and with no request-surface flag in the
-  local seed it handles issues only.
-- setup's GitHub and GitLab tracker seeds and its PR/MR-as-request flag, and
-  setup's steps that wrote into `CLAUDE.md` or `AGENTS.md`.
+  still writes the label vocabulary). With no request-surface flag in the
+  local seed it handles issues only; the Forge issues seed carries the
+  "PRs as a request surface" flag again (prF F6), so on a forge it can triage
+  external pull requests too.
+- setup's GitHub and GitLab tracker seeds, replaced by one forge-neutral
+  Forge issues seed that names only `playbook forge` (prF F6), and setup's
+  steps that wrote into `CLAUDE.md` or `AGENTS.md`.
 - `agents/openai.yaml` in every skill.
 - wizard's automatic forge writes, its `tput` colours and its OS
   openers (`wslview`, `explorer.exe`, `xdg-open`, `open`); ANSI escapes and
@@ -314,6 +324,9 @@ These are paths inside the consumer repo, not dependencies:
   sections), `test_budget.py` (core plus each bundled plugin within 6,000
   characters of skill listing), `test_sync.py` (end-to-end init and sync), one
   test file per group of skills, and `test_inventory.py` (the whole inventory).
+  Since prF F6, G4 also checks that only setup and its Forge issues seed name
+  `playbook forge`, and that every `playbook forge` command they name is an
+  operation of the engine's forge catalogue with options it takes.
 - Generic gates that cover the plugin with no edit: the repository-wide
   self-containment scan (URLs and markers in every file), the catalog layout
   test (leaf rule, no link to a plugin-root file), the link gate with every
@@ -387,9 +400,9 @@ throughout (human-facing, Cross-skill references); only `/clear` and
 - `SKILL.md` L88 (v1.3.1): "an interactive bash script that opens each URL,
   captures each value, and writes it into `.env` and GitHub secrets" becomes
   "an interactive Python script that opens each URL, captures each value,
-  writes it into `.env`, and guides you through setting each GitHub secret or
-  variable by hand", matching the shipped `scripts/wizard_template.py` (D22,
-  D2). "Model-invoked" stays: wizard has no `disable-model-invocation`.
+  writes it into `.env`, and guides you through setting each CI secret or
+  variable by hand, on GitHub or GitLab", matching the shipped
+  `scripts/wizard_template.py` (D22, D2; forge-neutral since prF F6, Q57). "Model-invoked" stays: wizard has no `disable-model-invocation`.
 - `SKILL.md` L89 (v1.3.1): " (or `CONTEXT.md` if the repo already has one)"
   inserted after the code span `GLOSSARY.md` (D21).
 - `PHASE-BOUNDARIES.md`: moved to `references/PHASE-BOUNDARIES.md`
@@ -1180,9 +1193,11 @@ Vendored with listed changes, user-invoked.
 
 Upstream `skills/engineering/setup-matt-pocock-skills/`; synced as
 `.agents/skills/setup-matt-pocock-skills/`. Vendored with listed changes,
-user-invoked. `SKILL.md` shrinks from 116 to 81 lines; the skill directory holds
-`SKILL.md` and `references/` (`LICENSE`, `domain.md`, `issue-tracker-local.md`,
-`triage-labels.md`).
+user-invoked. `SKILL.md` shrinks from 116 to 87 lines; the skill directory holds
+`SKILL.md` and `references/` (`LICENSE`, `domain.md`, `issue-tracker-forge.md`,
+`issue-tracker-local.md`, `triage-labels.md`). The Forge issues tracker of
+prF F6 (the D2, D13 and D14 amendment of `specs/prT-mattpocock-skills.md`) is
+listed with each line it touches.
 
 `SKILL.md`:
 
@@ -1193,8 +1208,13 @@ user-invoked. `SKILL.md` shrinks from 116 to 81 lines; the skill directory holds
   "Run this only when the user asked for it by name; otherwise stop." inserted
   as its own paragraph, above the H1 (D19).
 - L11 (v1.3.1): "(GitHub by default; local markdown is also supported out of
-  the box)" became "(local markdown by default; any other tracker works once
-  the user describes it)" (D13, D14).
+  the box)" became "(the forge's issues when the repo pushes to GitHub or
+  GitLab, local markdown otherwise; any other tracker works once the user
+  describes it)" (D13, D14 as amended by prF F6).
+- L23 (v1.3.1): "is this a GitHub repo? Which one?" became "then
+  `playbook forge which`: does the current branch push to GitHub or GitLab?
+  Which repository?", with what its exit codes 0 and 2 mean for Section A
+  (prF F6, Q32).
 - L13 (v1.3.1): " (or `CONTEXT.md` if the repo already has one)" inserted after
   the code span `GLOSSARY.md` (D21).
 - L24 (v1.3.1): the `AGENTS.md`/`CLAUDE.md` check became read-only: "is there
@@ -1212,18 +1232,22 @@ user-invoked. `SKILL.md` shrinks from 116 to 81 lines; the skill directory holds
   there's no monorepo)" became "(Section C when there's no monorepo). Section B
   is written without asking." (D7, D14).
 - L40 (v1.3.1): `triage` left the explainer's skill list (D7), and the clause
-  "call `gh issue create`," went (D2, D13): "whether to write a markdown file
-  under `.scratch/` or follow some other workflow you describe".
+  "call `gh issue create`," became "open issues on the repo's forge," (D2,
+  D13, prF F6): "whether to open issues on the repo's forge, write a markdown
+  file under `.scratch/`, or follow some other workflow you describe".
 - L42 (v1.3.1): the GitHub/GitLab default posture, with the bare GitLab host
-  name, became "Default posture: propose local markdown, even when a
-  `git remote` points at a forge; a user who tracks work in that forge's
-  issues, or anywhere else, picks **Other**. Offer:" (D13, D14).
-- L44 (v1.3.1): the **GitHub** option ("uses the `gh` CLI") deleted (D2, D13,
-  D14).
-- L45 (v1.3.1): the **GitLab** option deleted; it named `glab` and carried the
-  skill's only URL (D2, D4, D13, D14).
+  name, became "Default posture: when `playbook forge which` found a forge,
+  preselect **Forge issues**, so the user confirms it once; otherwise propose
+  local markdown. A user who tracks work anywhere else picks **Other**.
+  Offer:" (D13, D14 as amended by prF F6, Q32).
+- L44-L45 (v1.3.1): the **GitHub** option ("uses the `gh` CLI") and the
+  **GitLab** option (which named `glab` and carried the skill's only URL)
+  became one **Forge issues** option: "issues live in the repo's GitHub or
+  GitLab issues, reached through `playbook forge`, which runs the forge's own
+  CLI with its own login (offered when `playbook forge which` found a forge,
+  and then the default)" (D2, D4, D13, D14, prF F6).
 - L46 (v1.3.1): "(good for solo projects or repos without a remote)" became
-  "(the default; needs no remote or CLI)" (D14).
+  "(the default without a forge; needs no remote or CLI)" (D14, prF F6).
 - L47 (v1.3.1): **Other** keeps "(Jira, Linear, etc.)" verbatim; the
   one-paragraph freeform description became a description "for each section
   of" the local seed (a link to `./references/issue-tracker-local.md`) "after
@@ -1231,8 +1255,13 @@ user-invoked. `SKILL.md` shrinks from 116 to 81 lines; the skill directory holds
   `Blocked by:` line near the top of each ticket) and the Wayfinding
   operations", recorded under each section's heading (D13, D14).
 - L49 (v1.3.1): the two sentences about the "PRs as a request surface" flag
-  deleted; "Record the choice in `docs/agents/issue-tracker.md`." stays (D7,
-  D14).
+  are kept, with "The GitHub and GitLab templates carry" becoming "The Forge
+  issues seed carries", since that seed defines the flag again (prF F6; T03
+  had deleted them, D7, D14).
+- After L49 (v1.3.1): a new paragraph runs `playbook forge auth status` on
+  **Forge issues**: exit 0 goes on; exit 2 shows the user the one-line hint as
+  the step only they can take and runs it again once they are done; never
+  falls back to local markdown or a forge CLI or API (prF F6, Q34).
 - L51-L57 (v1.3.1): Section B is no longer gated on `triage` and asks no
   question: "Always written, without asking: `to-spec` and `to-tickets` apply
   these labels.", then the five default roles, "Write them as-is.", and label
@@ -1255,19 +1284,24 @@ user-invoked. `SKILL.md` shrinks from 116 to 81 lines; the skill directory holds
   every session at these files.", and "Then write" became "Write" at L104
   (D14).
 - L106-L110 (v1.3.1): the `issue-tracker-github.md` and
-  `issue-tracker-gitlab.md` seed links deleted (D14); the three remaining links
-  point at `./references/` (D10); "(only if `triage` is installed)" deleted (D7,
-  D14).
+  `issue-tracker-gitlab.md` seed links became one link,
+  "[issue-tracker-forge.md](./references/issue-tracker-forge.md): Forge issues
+  (GitHub or GitLab, through `playbook forge`)" (D14, prF F6); the three
+  remaining links point at `./references/` (D10); "(only if `triage` is
+  installed)" deleted (D7, D14).
 - L112 (v1.3.1): the "other" tracker is written "under the same `##` headings
   as" the local seed (a link to `./references/issue-tracker-local.md`) "after
   its Conventions; keep the `## Wayfinding operations` heading verbatim, since
   `wayfinder` looks it up by name." (D14, D16).
+- After L112 (v1.3.1): a new paragraph creates the labels on **Forge issues**,
+  on GitHub and GitLab alike: the right-hand column of
+  `docs/agents/triage-labels.md` and the five `wayfinder:` labels, each missing
+  one through `playbook forge label create <name> --color <RRGGBB>
+  --description "<meaning>"` after `playbook forge label list` (prF F6, Q42).
 - L116 (v1.3.1), step 5: appended "If exploration found an old
   `## Agent skills` section in a root `CLAUDE.md` or `AGENTS.md`, tell them
   the always rule this plugin ships (`mattpocock-skills-tracker`) supersedes
   it and that they may delete it; don't edit the file yourself." (D14).
-- Kept verbatim on purpose: L23 "is this a GitHub repo? Which one?" (git is
-  allowed, D2, and the posture line uses its answer).
 
 `references/domain.md` (moved from the skill root, D10; no links; still 51
 lines):
@@ -1342,9 +1376,19 @@ Other files:
 - `issue-tracker-github.md` and `issue-tracker-gitlab.md`: not shipped. They
   told the agent to run `gh`, `glab`, `jq` and `gh api`/`glab api`, the GitLab
   one held a URL (L3), and they alone defined the "PRs (MRs) as a request
-  surface" flag that triage read. Only the local-markdown template ships. A
-  GitHub or GitLab user takes **Other** and records the same sections in their
-  own words (D2, D4, D13, D14).
+  surface" flag that triage read. Neither ships: the one Forge issues seed,
+  `references/issue-tracker-forge.md`, replaces both and names only
+  `playbook forge` operations. (D2, D4, D13, D14, as amended by prF F6.)
+- `references/issue-tracker-forge.md`: added, engine-authored after the two
+  upstream templates (prF F6, Q28). Same sections as the local seed plus
+  upstream's "Pull requests as a triage surface" with its flag defaulted
+  **no**: issue create, view, list, comment, label, close (`--reason`) and
+  assign; one `Closes #<n>` line per ticket in a pull request; blocking and
+  wayfinding through `issue link-child`, `issue children`, `issue block` and
+  `issue blockers`, with the text fallbacks `Part of #<map>` and
+  `Blocked by: #<n>` on exit 3 (Q30, Q39); obsolete or ruled-out tickets
+  closed `--reason not-planned`, never deleted (Q44); exit 2 stops with the
+  printed hint and never falls back (Q34).
 - `agents/openai.yaml`: not shipped (D10). With it Codex loses this skill's
   `policy.allow_implicit_invocation: false`; what remains is
   `disable-model-invocation`, which only Claude Code honours, and the guard
@@ -1359,9 +1403,9 @@ Other files:
 Continue: `.continue/prompts/setup-matt-pocock-skills.md` holds only the body,
 guard line included. `references/` does not travel, so the three seed links
 dangle and the agent writes `docs/agents/*.md` from the prose alone, without the
-seeds' close, blocking and Wayfinding operations conventions, the document
-layout paths, the `.scratch/` and absolute-path rules, the domain-doc consumer
-rules and the label table. No licence copy travels and
+seeds' forge operations, close, blocking and Wayfinding operations conventions,
+the document layout paths, the `.scratch/` and absolute-path rules, the
+domain-doc consumer rules and the label table. No licence copy travels and
 `disable-model-invocation` is dropped, but a Continue prompt is always started
 by the user. The always rule still reaches Continue as
 its own `.continue/rules/` file.
@@ -1622,6 +1666,9 @@ Upstream `skills/engineering/to-tickets/`; synced as
   `.scratch/<feature-slug>/issues/<NN>-<slug>.md` became
   `docs/plans/YYYY-MM-DD-<feature-slug>/<NN>-<slug>.md`, matching the shipped
   seed (document layout, D60, ADR 0006).
+- `SKILL.md` L63 (v1.3.1): "(GitHub, Linear, …)" became "(a forge's issues,
+  Linear, …)", forge-neutral now that setup ships a Forge issues tracker for
+  GitHub and GitLab alike (prF F6, Q57).
 - `references/LICENSE`: added, a byte-identical copy of the plugin `LICENSE`
   (D4).
 - `agents/openai.yaml`: not shipped (D10). With it Codex loses this skill's
@@ -1630,10 +1677,9 @@ Upstream `skills/engineering/to-tickets/`; synced as
   line (D19).
 - Kept verbatim on purpose: L11 "If not, tell the user to run
   `/setup-matt-pocock-skills`." (human-facing, D17); L21 names the glossary
-  abstractly (no D21 edit); L63 "(GitHub, Linear, …)" names products, not
-  CLIs, and its native blocking relationship now comes from the Blocking
-  section setup records (D13, D14); L65's "blockers are all done" reads as
-  closed under the seed;
+  abstractly (no D21 edit); L63's native blocking relationship comes from the
+  Blocking section setup records (D13, D14); L65's "blockers are all done" reads
+  as closed under the seed;
   L71's `# <NN>: <Ticket title>` already is the title heading and L77's
   `**Status:** ready-for-agent` is the bold line the seed's close section
   rewrites in place (D16); L105's "a prototype" is a common noun (D8); L17's
@@ -1797,23 +1843,36 @@ Vendored with listed changes, model-invoked.
   from the 300-character lint) (D22; the lint exemption is prS D24).
 - `SKILL.md` L8 (v1.3.1): "A **wizard** is a bash script" becomes "A
   **wizard** is a Python script", and "(`.env`, GitHub secrets)" becomes
-  "(`.env`, or GitHub secrets it walks the human through setting)", because the
-  forge CLI write is gone (D2, D22).
+  "(`.env`, or the CI secrets and variables it walks the human through setting
+  on GitHub or GitLab)", because the forge CLI write is gone (D2, D22) and the
+  guided steps cover GitLab CI/CD variables (prF F6, Q49).
 - `SKILL.md` L10 (v1.3.1): the link `[template.sh](template.sh)` becomes
   `[wizard_template.py](scripts/wizard_template.py)`; "cross-platform URL
   opening (including WSL)" becomes "cross-platform URL opening (Python's
   `webbrowser`, printing the URL when no browser opens)"; the
-  `gh secret`/`gh variable` writes become "guided GitHub secret/variable steps"
-  (D2, D10, D22).
+  `gh secret`/`gh variable` writes become "guided GitHub or GitLab CI
+  secret/variable steps" (D2, D10, D22; GitLab since prF F6, Q49).
 - `SKILL.md` L20 (v1.3.1): the setup read list becomes only the `.env`
   templates (`.env.example`, `.env.sample`, `.env.template`, `.env.dist`, with
   "never `.env` itself or any other `.env.*`, which hold live values") and
   `.github/workflows/*`; `.env`, `.env.*`, `README`, `docker-compose*` and
   framework config leave the list. Existing values still reach the human at run
-  time, because `ask` offers them as defaults (D22).
+  time, because `ask` offers them as defaults (D22). prF F6 (Q49, Q57) adds
+  GitLab discovery: `.gitlab-ci.yml` and the local files it `include`s, where
+  every `$NAME` / `${NAME}` is a CI/CD variable to produce, except GitLab's
+  predefined `CI_*`, `GITLAB_*`, `RUNNER_*` and `CHAT_*` ones and the
+  variables the CI files define themselves; L25's "(`.env`, a GitHub secret,
+  both, or nowhere" becomes "(`.env`, a CI secret or variable, both, or
+  nowhere".
 - `SKILL.md` L35 (v1.3.1): "Copy `template.sh`" becomes "Copy
   `scripts/wizard_template.py`"; the rest of the line, every helper name and
-  `TOTAL_STAGES` included, is verbatim (D10, D22).
+  `TOTAL_STAGES` included, is verbatim (D10, D22). prF F6 (Q49) appends to the
+  `TOTAL_STAGES` sentence: set `CI_FORGE` to `"gitlab"` when the repo's CI is
+  GitLab's, so `set_secret` and `set_var` walk the human through GitLab CI/CD
+  variables (Settings → CI/CD → Variables, masked or protected).
+- `SKILL.md` L43 (v1.3.1): "every `set_secret` name exactly matches a
+  `secrets.*` reference in CI" gains "(on GitLab, a `$NAME` or `${NAME}` the CI
+  files read)" (prF F6, Q49).
 - `SKILL.md` L41 (v1.3.1): `bash -n` and `shellcheck` become a syntax check with
   `ast.parse` (a `python3 -c` one-liner, which writes no `__pycache__/`, unlike
   `py_compile`) and "run `ruff check` or `mypy` if available" (D2, D22).
@@ -1884,6 +1943,15 @@ Vendored with listed changes, model-invoked.
   upstream's "GitHub variable NAME" still-to-do item (D2, D22).
 - `template.sh` L169-L180 (v1.3.1): `finish` gains a third summary line for the
   variables set this run (D22).
+- `scripts/wizard_template.py` (prF F6, Q49): a library constant
+  `CI_FORGE = "github"`, which the author sets to `"gitlab"` below the STAGES
+  marker as with `TOTAL_STAGES` (the example stages set it to `"github"`).
+  With `"gitlab"`, `set_secret` guides a masked GitLab CI/CD variable
+  ("Settings → CI/CD → Variables → Add variable", Visibility Masked, Protect
+  variable when only protected branches and tags need it), `set_var` a visible
+  one, and the confirmations, the still-to-do items and `finish` say "GitLab
+  masked CI/CD variable" and "GitLab CI/CD variable"; any other value raises
+  `ValueError`. With `"github"` every string is as before.
 - `scripts/wizard_template.py` (new behaviour): `run_wizard` refuses to run when
   stdin is not a terminal, before the banner, writing to stderr that the wizard
   needs a human at an interactive terminal and asking the agent to have the user

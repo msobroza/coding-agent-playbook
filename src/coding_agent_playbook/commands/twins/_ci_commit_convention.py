@@ -16,11 +16,15 @@ In squash-merge repositories the PR title becomes the commit subject, so with
 ``PLAYBOOK_PR_TITLE`` set the step also runs ``cz check --message <title>``:
 the title is one argv element read from the environment, never interpolated
 into a workflow ``run:`` line (the GitHub Actions script-injection pattern).
+A leading GitLab draft marker (``[Draft]``, ``Draft:``, ``(Draft)``, any case)
+is stripped first: it is not part of the squash commit's subject
+(specs/prF-forge-adapter.md §10.2).
 A missing ``cz`` **fails** the step: CI is the twin that must not be skipped.
 """
 
 from __future__ import annotations
 
+import re
 import shlex
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
@@ -35,13 +39,22 @@ if TYPE_CHECKING:
     from coding_agent_playbook.commands.twins.ci import CiStepRunner, StepRun
     from coding_agent_playbook.hook_runtime.git.safe_git import GitPort
 
-__all__ = ["COMMIT_STEP", "PR_TITLE_ENV", "CzCommands", "cz_commands", "run_cz_commands"]
+__all__ = [
+    "COMMIT_STEP",
+    "PR_TITLE_ENV",
+    "CzCommands",
+    "cz_commands",
+    "run_cz_commands",
+    "squash_subject",
+]
 
 COMMIT_STEP: Final = "commit-convention"
 #: The environment variable a pull-request job sets to the PR title.
 PR_TITLE_ENV: Final = "PLAYBOOK_PR_TITLE"
 #: The most commits one CI range reads; past it the range starts at the oldest one read.
 LOG_LIMIT: Final = 5_000
+#: GitLab's draft markers (``Draft:``, ``[Draft]``, ``(Draft)``), matched case-insensitively.
+_DRAFT_PREFIX: Final = re.compile(r"^\s*(?:\[draft\]|\(draft\)|draft:)\s*", re.IGNORECASE)
 CZ_MISSING: Final = (
     "cz (commitizen) not found on PATH: install the project's dev dependencies (with "
     "commitizen) in this CI job"
@@ -98,8 +111,22 @@ def cz_commands(
     commands.extend((cz, "check", "--message", commit.message) for commit in plan.commits)
     title = env.get(PR_TITLE_ENV, "")
     if title.strip():
-        commands.append((cz, "check", "--message", title))
+        commands.append((cz, "check", "--message", squash_subject(title)))
     return CzCommands(tuple(commands))
+
+
+def squash_subject(title: str) -> str:
+    """``title`` without a leading GitLab draft marker, as the squash commit will read.
+
+    A title that is nothing but the marker stays whole, so ``cz check`` still fails it.
+
+    Example::
+
+        >>> squash_subject("Draft: feat: add the recipe")
+        'feat: add the recipe'
+    """
+    stripped = _DRAFT_PREFIX.sub("", title, count=1)
+    return stripped if stripped.strip() else title
 
 
 def run_cz_commands(

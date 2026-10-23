@@ -14,6 +14,8 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import pytest
+
 from coding_agent_playbook.cli.parser import build_parser
 from coding_agent_playbook.commands.twins import ci
 from tests.conftest import _DEFAULT_CONFIG
@@ -22,8 +24,6 @@ from tests.hook_runtime.fakes import FakeGit
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    import pytest
 
 
 def _commit(real_git: Callable[..., str], root: Path, message: str) -> str:
@@ -153,6 +153,37 @@ def test_commit_convention_pr_title_is_one_argv_element(
     assert runner.calls == [(_CZ, "check", "--message", title)]
 
 
+@pytest.mark.parametrize(
+    ("title", "checked"),
+    [
+        ("Draft: feat: add the GitLab recipe", "feat: add the GitLab recipe"),
+        ("[Draft] fix(ci): fetch the target", "fix(ci): fetch the target"),
+        ("(Draft) docs: gate levels", "docs: gate levels"),
+        ("draft:feat: lower case", "feat: lower case"),
+        ("[DRAFT]   chore: shouting", "chore: shouting"),
+        ("feat: keep Draft: in the middle", "feat: keep Draft: in the middle"),
+        ("Draft:", "Draft:"),
+    ],
+)
+def test_commit_convention_strips_a_leading_draft_prefix_from_the_title(
+    tmp_path: Path,
+    real_git: Callable[..., str],
+    monkeypatch: pytest.MonkeyPatch,
+    title: str,
+    checked: str,
+) -> None:
+    """GitLab marks a draft pull request in its title; the squash commit loses the prefix.
+
+    A title that is nothing but the prefix is checked as is, so it still fails.
+    """
+    root, _ = _history(tmp_path, real_git, monkeypatch, (_OLD,), cutover="2026-10-15")
+    runner = FakeCiStepRunner()
+
+    _convention(root, runner, env={"PLAYBOOK_PR_TITLE": title})
+
+    assert runner.calls == [(_CZ, "check", "--message", checked)]
+
+
 def test_commit_convention_missing_cz_fails_the_step(
     tmp_path: Path,
     real_git: Callable[..., str],
@@ -184,7 +215,11 @@ def test_commit_convention_skipped_without_commitizen(tmp_path: Path) -> None:
 
 def _convention_output(root: Path, capsys: pytest.CaptureFixture[str]) -> tuple[int, str]:
     """Run only the commit-convention row against a fake merge base; ``(exit, stdout)``."""
-    git = FakeGit(default_branch_name="origin/main", merge_bases={("origin/main", "HEAD"): "abc"})
+    git = FakeGit(
+        default_branch_name="origin/main",
+        merge_bases={("origin/main", "HEAD"): "abc"},
+        commits={"HEAD": "def"},
+    )
     args = build_parser().parse_args(
         ["ci", "--steps", "commit-convention", "--repo-root", str(root)]
     )

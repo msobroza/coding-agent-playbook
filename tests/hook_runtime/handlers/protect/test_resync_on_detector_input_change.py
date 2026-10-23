@@ -58,6 +58,10 @@ _DOMINO_RULE: Final = (
     "---\nid: domino-runs\nname: Domino runs\ndescription: Write run outputs.\n"
     "scope: always\napplies_if:\n  domino_project: true\n---\nWrite run outputs.\n"
 )
+_CI_RULE: Final = (
+    "---\nid: ci-hygiene\nname: CI hygiene\ndescription: Pin CI images.\n"
+    "scope: always\napplies_if:\n  has_ci: true\n---\nPin CI images.\n"
+)
 
 
 class DetectSpy:
@@ -104,6 +108,7 @@ def _synced(repo: PackRepo, pyproject: str = _BASE, *, auto_sync: bool = False) 
     local = [
         repo.write("playbook/rules/docker-hygiene.md", _DOCKER_RULE),
         repo.write("playbook/rules/domino-runs.md", _DOMINO_RULE),
+        repo.write("playbook/rules/ci-hygiene.md", _CI_RULE),
     ]
     source = FileSystemArtifactSource(repo_root=repo.root)
     rules = [*source.list_rules(), *(Rule.from_markdown(p, "<repo-local>") for p in local)]
@@ -295,6 +300,22 @@ def test_new_dockerfile_flips_the_presence_flag(
     [item] = report.trace.combined.context
     assert 'rule "docker-hygiene" (source "<repo-local>")' in item
     assert ML_RULE not in item
+
+
+@pytest.mark.parametrize("ci_file", [".github/workflows/ci.yml", ".gitlab-ci.yml"])
+def test_new_ci_file_flips_has_ci_on_either_forge(
+    repo: PackRepo, deps: Callable[..., RuntimeDeps], ci_file: str
+) -> None:
+    """prF §14: a new GitLab pipeline activates the has_ci rules as a GitHub workflow does."""
+    content = "lint:\n  script: [ruff check .]\n"
+    repo.write(ci_file, content)
+    tool_input = {"file_path": str(repo.root / ci_file), "content": content}
+
+    report = _post(repo, deps(), "Write", tool_input)
+
+    [item] = report.trace.combined.context
+    assert 'rule "ci-hygiene" (source "<repo-local>")' in item
+    assert "docker-hygiene" not in item
 
 
 def test_root_requirements_edit_names_the_newly_active_rule(

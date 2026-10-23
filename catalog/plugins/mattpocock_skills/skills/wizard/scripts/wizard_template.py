@@ -55,6 +55,8 @@ RED = _sgr("31")
 
 # Author sets this at the top of the stages section.
 TOTAL_STAGES = 0
+# Author sets this too: "gitlab" when the repo's CI is GitLab's (.gitlab-ci.yml).
+CI_FORGE = "github"
 
 _STAGE_INDEX = 0
 ENV_FILE = os.environ.get("ENV_FILE") or ".env"
@@ -67,6 +69,38 @@ EXIT_NO_TERMINAL = 2
 EXIT_INTERRUPTED = 130
 _ENV_KEY_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _SCREEN_CLEAR = "\033[2J\033[3J\033[H"
+#: Per CI_FORGE: where the human adds a secret and a variable, and what each is called.
+_CI_GUIDES: dict[str, dict[str, str]] = {
+    "github": {
+        "secret_where": (
+            "In the GitHub repo: Settings → Secrets and variables → Actions → "
+            "New repository secret."
+        ),
+        "secret_how": "Name it {name} and paste the same value you just entered.",
+        "secret": "GitHub secret",
+        "var_where": (
+            "In the GitHub repo: Settings → Secrets and variables → Actions → Variables → "
+            "New repository variable."
+        ),
+        "var_how": "Name it {name} and give it this value: {value}",
+        "var": "GitHub variable",
+    },
+    "gitlab": {
+        "secret_where": "In the GitLab project: Settings → CI/CD → Variables → Add variable.",
+        "secret_how": (
+            "Key {name}, Value: paste the same value you just entered. Visibility: Masked "
+            "(GitLab masks only a single-line value of 8 or more characters); tick "
+            "Protect variable when only protected branches and tags need it."
+        ),
+        "secret": "GitLab masked CI/CD variable",
+        "var_where": "In the GitLab project: Settings → CI/CD → Variables → Add variable.",
+        "var_how": (
+            "Key {name}, Value: {value}. Visibility: Visible; tick Protect variable when "
+            "only protected branches and tags need it."
+        ),
+        "var": "GitLab CI/CD variable",
+    },
+}
 
 
 def _out(text: str) -> None:
@@ -255,36 +289,44 @@ def write_env(key: str, value: str) -> None:
     _out(f"  {GREEN}✓ wrote{RESET} {key} → {ENV_FILE}\n")
 
 
+def _ci_guide() -> dict[str, str]:
+    """The wording for CI_FORGE's secrets and variables; another value raises ValueError."""
+    guide = _CI_GUIDES.get(CI_FORGE)
+    if guide is None:
+        raise ValueError(f'CI_FORGE must be "github" or "gitlab", not {CI_FORGE!r}')
+    return guide
+
+
 def set_secret(name: str, value: str) -> None:
     """set_secret(name, value) walks the human through adding a GitHub Actions
-    repository secret by hand: it shows the name, never the value, waits for their
-    confirmation and records it for the summary; a "no" leaves it on the
-    still-to-do list."""
-    step("In the GitHub repo: Settings → Secrets and variables → Actions → New repository secret.")
-    step(f"Name it {name} and paste the same value you just entered.")
-    if confirm(f"Added the GitHub secret {name}?"):
+    repository secret by hand, or a masked GitLab CI/CD variable when CI_FORGE is
+    "gitlab": it shows the name, never the value, waits for their confirmation and
+    records it for the summary; a "no" leaves it on the still-to-do list."""
+    guide = _ci_guide()
+    step(guide["secret_where"])
+    step(guide["secret_how"].format(name=name))
+    if confirm(f"Added the {guide['secret']} {name}?"):
         WRITTEN_SECRET.append(name)
-        _out(f"  {GREEN}✓ set{RESET} GitHub secret {name}\n")
+        _out(f"  {GREEN}✓ set{RESET} {guide['secret']} {name}\n")
         return
-    SKIPPED.append(f"GitHub secret {name} (set it by hand in the repo's CI settings)")
-    warn(f"skipped GitHub secret {name}; set it later")
+    SKIPPED.append(f"{guide['secret']} {name} (set it by hand in the repo's CI settings)")
+    warn(f"skipped {guide['secret']} {name}; set it later")
 
 
 def set_var(name: str, value: str) -> None:
     """set_var(name, value) walks the human through adding a GitHub Actions repository
-    variable (not secret) by hand: it shows the name and the value, waits for their
-    confirmation and records it for the summary."""
-    step(
-        "In the GitHub repo: Settings → Secrets and variables → Actions → Variables → "
-        "New repository variable."
-    )
-    step(f"Name it {name} and give it this value: {value}")
-    if confirm(f"Added the GitHub variable {name}?"):
+    variable (not secret) by hand, or a GitLab CI/CD variable when CI_FORGE is
+    "gitlab": it shows the name and the value, waits for their confirmation and
+    records it for the summary."""
+    guide = _ci_guide()
+    step(guide["var_where"])
+    step(guide["var_how"].format(name=name, value=value))
+    if confirm(f"Added the {guide['var']} {name}?"):
         WRITTEN_VAR.append(name)
-        _out(f"  {GREEN}✓ set{RESET} GitHub variable {name}\n")
+        _out(f"  {GREEN}✓ set{RESET} {guide['var']} {name}\n")
         return
-    SKIPPED.append(f"GitHub variable {name}")
-    warn(f"skipped GitHub variable {name}; set it later")
+    SKIPPED.append(f"{guide['var']} {name}")
+    warn(f"skipped {guide['var']} {name}; set it later")
 
 
 def finish() -> None:
@@ -293,10 +335,11 @@ def finish() -> None:
     _out(f"\n{BOLD}{GREEN}  ✓ Setup complete{RESET}\n")
     if WRITTEN_ENV:
         note(f"wrote {len(WRITTEN_ENV)} value(s) to {ENV_FILE}: {' '.join(WRITTEN_ENV)}")
+    guide = _CI_GUIDES.get(CI_FORGE, _CI_GUIDES["github"])
     if WRITTEN_SECRET:
-        note(f"set {len(WRITTEN_SECRET)} GitHub secret(s): {' '.join(WRITTEN_SECRET)}")
+        note(f"set {len(WRITTEN_SECRET)} {guide['secret']}(s): {' '.join(WRITTEN_SECRET)}")
     if WRITTEN_VAR:
-        note(f"set {len(WRITTEN_VAR)} GitHub variable(s): {' '.join(WRITTEN_VAR)}")
+        note(f"set {len(WRITTEN_VAR)} {guide['var']}(s): {' '.join(WRITTEN_VAR)}")
     if SKIPPED:
         _out("\n")
         warn("still to do by hand:")
@@ -339,6 +382,7 @@ def run_wizard(stages: Callable[[], None]) -> int:
 # ──────────────────────────────────────────────────────────────────────────
 
 TOTAL_STAGES = 1
+CI_FORGE = "github"  # "gitlab" when the repo's CI is GitLab's (.gitlab-ci.yml)
 
 
 def wizard_stages() -> None:

@@ -13,6 +13,7 @@ import ast
 import hashlib
 import os
 import re
+import shlex
 import subprocess
 import sys
 import tomllib
@@ -22,6 +23,7 @@ import pytest
 
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.config.tables.links import LinksConfig
+from coding_agent_playbook.forge.operations import operation_call
 from coding_agent_playbook.validation._links import check_markdown_links
 from coding_agent_playbook.validation.preflight import bundled_plugins, unusable_overlays
 from tests._catalog import REPO_ROOT
@@ -32,7 +34,10 @@ from tests.plugins.mattpocock_skills._expectations import (
     CLAUDE_ONLY_RE,
     COUPLING_RE,
     FINAL_IDS,
+    FORGE_COMMAND,
+    FORGE_COMMAND_FILES,
     GUARD_LINE,
+    IMPOSED_TOOL_RE,
     LICENSE_FILE_NAMES,
     LICENSE_SHA256,
     LOAD_RE,
@@ -48,6 +53,7 @@ from tests.plugins.mattpocock_skills._expectations import (
     AllowEntry,
     Hit,
     command_position_hits,
+    forge_command_spans,
     hit_path,
     imposed_tool_hits,
     load_allowlist,
@@ -165,6 +171,65 @@ def test_g4_no_imposed_tool_name(skill_id: str) -> None:
 
 def test_g4_no_imposed_tool_name_in_rules() -> None:
     assert [str(hit) for path in rule_files() for hit in imposed_tool_hits(path)] == []
+
+
+@pytest.mark.parametrize(
+    ("text", "banned"),
+    [
+        ("`gh issue create`", True),
+        ("`glab issue note 3`", True),
+        ("`gh api repos/o/r/issues/1`", True),
+        ("`playbook forge issue create --title T`", False),
+        ("`playbook forge auth status`", False),
+    ],
+)
+def test_g4_bans_the_forge_clis_but_not_playbook_forge(text: str, banned: bool) -> None:
+    # The D2 amendment (prF F6, Q28): gh and glab stay imposed tools everywhere;
+    # the engine's own `playbook forge` is not one.
+    assert (IMPOSED_TOOL_RE.search(text) is not None) is banned
+
+
+def test_g4_playbook_forge_is_named_only_by_setup_and_its_forge_seed() -> None:
+    naming = {
+        p.relative_to(SKILLS_ROOT).as_posix()
+        for skill_id in _SKILLS
+        for p in skill_files(skill_id)
+        if p.suffix in {".md", ".py"} and FORGE_COMMAND in p.read_text(encoding="utf-8")
+    }
+    assert naming == FORGE_COMMAND_FILES, "only setup and the Forge issues seed name it (Q28)"
+    assert not any(FORGE_COMMAND in p.read_text(encoding="utf-8") for p in rule_files())
+
+
+def _forge_option_errors(span: str) -> list[str]:
+    """Why ``span`` (a ``playbook forge …`` command) is not a real forge operation call."""
+    call = operation_call(shlex.split(span)[2:])
+    if call is None:
+        return [f"{span!r}: no such operation"]
+    op = call.operation
+    errors: list[str] = []
+    args = list(call.args)
+    choices = dict(op.choices)
+    for index, word in enumerate(args):
+        if not word.startswith("--"):
+            continue
+        if word not in op.values | op.flags | {"--json"}:
+            errors.append(f"{span!r}: {op.name} takes no {word}")
+        elif word in choices and index + 1 < len(args):
+            value = args[index + 1]
+            if not value.startswith("<") and value not in choices[word]:
+                errors.append(f"{span!r}: {word} {value} is not one of {choices[word]}")
+    return errors
+
+
+def test_g4_every_playbook_forge_span_is_a_real_operation() -> None:
+    errors = [
+        f"{_rel(path)}:{line}: {error}"
+        for path in plugin_files()
+        if path.suffix == ".md"
+        for line, span in forge_command_spans(path)
+        for error in _forge_option_errors(span)
+    ]
+    assert errors == [], "a `playbook forge` span must name an operation of forge.operations"
 
 
 @pytest.mark.parametrize("skill_id", _SKILLS)

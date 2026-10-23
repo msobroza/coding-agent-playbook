@@ -45,19 +45,23 @@ __all__ = [
 #: Programs a guard inspects by name, beyond the launchers, runners and shells.
 _GUARDED: Final = frozenset(
     {
-        # git and its hosts: the git guards, exfil, commit convention, pre-commit bypass
-        *("git", "gh", "pre-commit", "cz", "export"),
+        # git and its forges' CLIs: the git guards, exfil, commit convention, pre-commit bypass
+        *("git", "gh", "glab", "pre-commit", "cz", "export"),
         # destructive-command-guard and the file writers the sink scans read
         *("rm", "rmdir", "find", "rsync", "chmod", "chown", "dd", "shred", "truncate"),
         *("mv", "cp", "ln", "install", "tee", "touch", "patch", ":"),
         # network clients: exfil-channel-guard, network-egress-guard
         *("curl", "wget", "http", "https", "xh", "httpie", "ssh", "scp", "sftp", "ftp"),
         *("telnet", "nc", "ncat", "netcat", "socat"),
+        # mail transfer agents: exfil-channel-guard's mail egress
+        *("sendmail", "msmtp"),
         # package managers: the dependency guards, resync-on-detector-input-change
         *("pip", "pip3", "pipx", "conda", "mamba", "micromamba", "npm", "npx", "yarn", "pnpm"),
         # readers the secret and data guards inspect
         *("cat", "head", "tail", "less", "more", "sed", "awk", "gawk", "cut", "grep"),
         *("base64", "xxd", "od", "strings", "sqlite3", "duckdb"),
+        # what prints an environment variable: secrets-path-guard's forge token prints
+        *("printenv", "echo", "printf"),
         # interpreters and code runners
         *("perl", "ruby", "node", "deno", "bun", "php", "eval", "source", "."),
         # containers and the control plane

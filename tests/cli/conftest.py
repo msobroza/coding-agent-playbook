@@ -16,9 +16,15 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
+
+from tests.cli.forge_fakes import ForgeEnv, make_forge_env
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
 
 
 @pytest.fixture(autouse=True)
@@ -46,3 +52,65 @@ def _stub_uv_sync_for_cli(monkeypatch: pytest.MonkeyPatch) -> None:
         return "/fake/uv" if binary == "uv" else real_which(binary, *args, **kwargs)
 
     monkeypatch.setattr("coding_agent_playbook.evals.run.harness_runner.shutil.which", _stub_which)
+
+
+#: Forge host, repo and prompt variables a developer's shell may set; each forge test starts
+#: without them, so it sees only what ``playbook forge`` itself sets in the child env.
+_FORGE_ENV_VARS = (
+    "GH_HOST",
+    "GH_REPO",
+    "GITLAB_HOST",
+    "GITLAB_URI",
+    "GL_HOST",
+    "GITLAB_API_HOST",
+    "GITLAB_REPO",
+    "DOMINO_PROJECT_ID",
+    "GH_PROMPT_DISABLED",
+    "GLAB_NO_PROMPT",
+    "GH_NO_UPDATE_NOTIFIER",
+    "GH_NO_EXTENSION_UPDATE_NOTIFIER",
+    "GH_TELEMETRY",
+    "DO_NOT_TRACK",
+    "GLAB_CHECK_UPDATE",
+    "GLAB_SEND_TELEMETRY",
+)
+
+
+@pytest.fixture
+def forge_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, hermetic_git_env: None) -> ForgeEnv:
+    """Fake ``gh`` / ``glab`` / ``ssh`` and the real ``git`` as the only executables on ``PATH``."""
+    env = make_forge_env(tmp_path / "fakes")
+    monkeypatch.setenv("PATH", str(env.bin_dir))
+    for name in _FORGE_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+    return env
+
+
+@pytest.fixture
+def forge_repo(tmp_path: Path, forge_env: ForgeEnv) -> Callable[..., Path]:
+    """Return ``make(url, *, branch="main", pushed=True, config=None) -> repo path``.
+
+    The repo has one commit on ``branch`` and the remote ``origin`` at ``url``;
+    ``pushed`` adds ``refs/remotes/origin/<branch>`` (the branch is on the remote);
+    ``config`` is written as the committed ``.coding-agent-playbook.toml``.
+    """
+
+    def make(
+        url: str, *, branch: str = "main", pushed: bool = True, config: str | None = None
+    ) -> Path:
+        repo = tmp_path / "repo"
+        repo.mkdir()
+
+        def git(*args: str) -> None:
+            subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, timeout=30)
+
+        git("init", "-q", "-b", branch)
+        if config is not None:
+            (repo / ".coding-agent-playbook.toml").write_text(config, encoding="utf-8")
+        git("commit", "-q", "--allow-empty", "-m", "chore: start")
+        git("remote", "add", "origin", url)
+        if pushed:
+            git("update-ref", f"refs/remotes/origin/{branch}", "HEAD")
+        return repo
+
+    return make

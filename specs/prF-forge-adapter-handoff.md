@@ -14,7 +14,7 @@ Do not re-open decisions recorded in the spec. If a fact in §16 turns out wrong
 ## Where things stand (2026-10-21)
 
 - This PR holds design docs only. Nothing is implemented.
-- Base for all code: `origin/integration/skills-and-layout`. It already contains `main` (#157, the mattpocock plugin) and every refactor ticket the forge work waited for (N17 to N21, A10, A11, B3, GC-1, A14, A15, B4a, B4b, B9). A ticket counts as done when integration has its `Closes #N` line; GitHub issues stay open until the final integration PR, so do not read issue state.
+- Base for all code: `origin/integration/forge`, cut from `main` after `integration/skills-and-layout` merged as #162. It contains #157 (the mattpocock plugin), this spec, and every refactor ticket the forge work waited for (N17 to N21, A10, A11, B3, GC-1, A14, A15, B4a, B4b, B9). A ticket counts as done when integration has its `Closes #N` line; GitHub issues stay open until the final integration PR, so do not read issue state.
 - Still open outside this work: PR #158 (blocks F6).
 - Local tools on the owner's workstation: `gh` 2.65.0 (below the 2.94.0 minimum, Q38) and no `glab`. Unit tests use fake CLIs (spec §15), so this blocks only the manual check before release.
 
@@ -52,8 +52,8 @@ Tracker conventions for this repo (there is no `docs/agents/issue-tracker.md`, s
 
 The owner starts **`/implement-spec`** (user-invoked) with the spec and the tracker issue. Follow it with one change: its "single PR branch" is replaced by the integration protocol the forge tickets share with the layout refactor (Q45):
 
-- One background **implementer subagent** per ticket on the frontier, each in its own worktree on `forge/<ID>-<slug of title, 40 chars>`, branched from `origin/integration/skills-and-layout`.
-- The **merger subagent** squashes a finished ticket onto `integration/skills-and-layout` (`git commit-tree`, fast-forward push only). Commit subject = the issue title without `F<n>: `; the squash subject adds ` (#N)`; the body ends `Closes #N`. Authored as the repo owner's configured git identity; no trailers.
+- One background **implementer subagent** per ticket on the frontier, each in its own worktree on `forge/<ID>-<slug of title, 40 chars>`, branched from `origin/integration/forge`.
+- The **merger subagent** squashes a finished ticket onto `integration/forge` (`git commit-tree`, fast-forward push only). Commit subject = the issue title without `F<n>: `; the squash subject adds ` (#N)`; the body ends `Closes #N`. Authored as the repo owner's configured git identity; no trailers.
 - After each merge, recompute the frontier from the graph above and start the next implementers.
 - Before rebasing any branch: `python -m tests.architecture.module_moves apply`, then `check`.
 - Exploration notes go outside the repo, in a shared scratch directory, so implementers do not repeat it.
@@ -79,7 +79,7 @@ The CI gate, on Python 3.12 and 3.13, fresh venv per version: `pip install -e '.
 ## Things only the owner can do
 
 - Approve the ticket breakdown and the publishing of the issues (Step 0).
-- Push to `integration/skills-and-layout`, or approve the merger subagent doing so.
+- Push to `integration/forge`, or approve the merger subagent doing so.
 - Merge PR #158 before F6.
 - Before release: upgrade `gh` to 2.94 or later, install `glab` 1.115 or later, run the manual check of spec §15, and run `domino-forge-check.sh` (F4 ships it in the README) inside a Domino workspace terminal.
 

@@ -10,11 +10,20 @@ in ``<state>`` (``SessionState.flags``):
   repository itself: the pre-tool dispatcher already sees every read (for
   secrets-path-guard), so the post-tool registration never widens to ``Read``.
   The harness's own config dirs (``~/.claude``, ``$CLAUDE_CONFIG_DIR``,
-  ``~/.config/opencode``) are the user's, not untrusted content.
+  ``~/.config/opencode``) are the user's, not untrusted content;
+- it also marks a read of forge-hosted content (``taint:forge``,
+  specs/prF-forge-adapter.md §14): a forge CLI command that prints it (``gh`` /
+  ``glab`` ``issue|pr|mr view``, ``api``, ...) or a ``playbook forge`` read
+  operation that runs one (``judges.forge_calls``), judged from the command
+  line before it runs, as a Read is.
 
 Once marked, normally allowed actions ask, naming the source: outbound network
-(exfil rows and any client to a non-loopback host, ``allowed_hosts`` or not),
-``git push``, package installs, control-plane edits (control-plane-guard's
+(exfil rows, the forge CLIs' and ``playbook forge``'s included, and any client to
+a non-loopback host, ``allowed_hosts`` or not), a forge CLI or ``playbook forge``
+command that sends data to the forge, whether its body, description, message,
+comment, notes or API field comes from a file, inline or on stdin
+(``ForgeCall.sends_data``), ``git push`` and a forge CLI command
+that pushes ``HEAD``'s branch (specs/prF-forge-adapter.md §8.3), package installs, control-plane edits (control-plane-guard's
 table) and reads of ``$HOME`` dotfiles outside the repository. The flag clears
 only with a new session, or ``taint_escalation:session_start`` with source
 ``clear``; a compaction keeps it (the summary may carry the content).
@@ -35,11 +44,12 @@ from coding_agent_playbook.hook_runtime.judges.hosts import is_loopback
 from coding_agent_playbook.security.files import user_home
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable, Mapping, Sequence
 
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, ToolCall
     from coding_agent_playbook.hook_runtime.dispatch.paths import NormalizedPath
     from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
+    from coding_agent_playbook.hook_runtime.judges.forge_calls import ForgeCall
     from coding_agent_playbook.hook_runtime.shell.parse import Segment
 
 __all__ = [
@@ -58,6 +68,7 @@ TAINT_SOURCES: Final[Mapping[str, str]] = {
     "taint:web": "web content",
     "taint:mcp": "an MCP tool's output",
     "taint:read": "a read outside the repo",
+    "taint:forge": "content from a forge",
 }
 _READS: Final = frozenset({ToolClass.READ, ToolClass.SEARCH})
 _WRITES: Final = frozenset({ToolClass.EDIT, ToolClass.WRITE, ToolClass.NOTEBOOK_EDIT})
@@ -78,9 +89,12 @@ def taint_escalation(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult |
         return None
     flags = ctx.session.flags()
     sources = [label for flag, label in TAINT_SOURCES.items() if flag in flags]
-    action = _risky_action(tool, ev, ctx) if sources else None
+    calls = _forge_calls(tool, ctx)
+    action = _risky_action(tool, ev, ctx, calls) if sources else None
     if tool.tool_classes & _READS and any(_untrusted_read(p, ctx) for p in tool.paths):
         ctx.session.set_flag("taint:read")
+    if any(call is not None and call.reads for call in calls):
+        ctx.session.set_flag("taint:forge")
     if action is None:
         return None
     rule, what = action
@@ -136,16 +150,22 @@ def taint_clear(ev: CanonicalEvent, ctx: HandlerContext) -> HandlerResult | None
 
 
 def _risky_action(
-    tool: ToolCall, ev: CanonicalEvent, ctx: HandlerContext
+    tool: ToolCall,
+    ev: CanonicalEvent,
+    ctx: HandlerContext,
+    calls: Sequence[ForgeCall | None],
 ) -> tuple[str, str] | None:
-    """``(rule, what)`` of the first risky action this call takes, else ``None``."""
+    """``(rule, what)`` of the first risky action this call takes, else ``None``.
+
+    ``calls``: each shell segment's forge CLI or ``playbook forge`` reading.
+    """
     if tool.tool_class is ToolClass.SHELL:
         command = tool.command
         if command is None:
             return None
         if command.parse_error is not None or command.kind == "powershell":
             return "unparsed", "running a command the guard could not read"
-        found = (_segment_action(segment) for segment in command.segments)
+        found = (_segment_action(s, c) for s, c in zip(command.segments, calls, strict=True))
         return next((a for a in found if a is not None), None) or _control_plane(
             ev, ctx, shell=True
         )
@@ -157,7 +177,7 @@ def _risky_action(
     )
 
 
-def _segment_action(segment: Segment) -> tuple[str, str] | None:
+def _segment_action(segment: Segment, forge: ForgeCall | None) -> tuple[str, str] | None:
     from coding_agent_playbook.hook_runtime.handlers.safety._egress import (
         network_hosts,
         segment_egress,
@@ -168,12 +188,23 @@ def _segment_action(segment: Segment) -> tuple[str, str] | None:
     git = parse_git(segment)
     if git is not None and git.subcommand == "push":
         return "push", "pushing commits"
+    if forge is not None and forge.pushes:
+        return "push", "pushing commits"
     if install_requests(segment):
         return "install", "installing packages"
-    if segment_egress(segment, dict) is not None:
+    if segment_egress(segment, dict) is not None or (forge is not None and forge.sends_data):
         return "egress", "sending data off the machine"
     host = next((h for h in network_hosts(segment) if h and not is_loopback(h)), None)
     return None if host is None else ("network", f"contacting {quote_data(host)}")
+
+
+def _forge_calls(tool: ToolCall, ctx: HandlerContext) -> tuple[ForgeCall | None, ...]:
+    """Each shell segment's forge CLI or ``playbook forge`` reading (``judges.forge_calls``)."""
+    if tool.tool_class is not ToolClass.SHELL or tool.command is None:
+        return ()
+    from coding_agent_playbook.hook_runtime.judges.forge_calls import forge_call
+
+    return tuple(forge_call(segment, ctx.env) for segment in tool.command.segments)
 
 
 def _control_plane(

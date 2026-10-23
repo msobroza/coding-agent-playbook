@@ -25,9 +25,11 @@ Then, once per repo:
 
 - Run `/setup-matt-pocock-skills`. It writes `docs/agents/issue-tracker.md`,
   `docs/agents/triage-labels.md` and `docs/agents/domain.md`, the tracker,
-  label and domain configuration the other skills read. The plugin always rule
-  (`mattpocock-skills-tracker`) points the agent at these files and asks it to
-  tell you to run setup when a skill needs one that is missing.
+  label and domain configuration the other skills read. On a repo that pushes
+  to GitHub or GitLab it proposes the Forge issues tracker, which reaches the
+  forge only through `playbook forge`; otherwise local markdown. The plugin
+  always rule (`mattpocock-skills-tracker`) points the agent at these files and
+  asks it to tell you to run setup when a skill needs one that is missing.
 - Add `.scratch/` to the repo's `.gitignore`: it holds only throwaway
   prototypes, untracked and never staged or committed. The local issue tracker
   keeps its specs in `docs/specs/` and its maps and tickets in `docs/plans/`.

@@ -333,6 +333,23 @@ def test_detector_input_newer_than_rendered_at_is_named(
     assert line.startswith('Detector inputs changed since the last sync ("pyproject.toml")')
 
 
+@pytest.mark.parametrize(
+    ("ci_file", "named"),
+    [(".github/workflows/ci.yml", ".github/workflows"), (".gitlab-ci.yml", ".gitlab-ci.yml")],
+)
+def test_ci_file_newer_than_rendered_at_is_named_on_either_forge(
+    repo: PackRepo, deps: Callable[..., RuntimeDeps], ci_file: str, named: str
+) -> None:
+    """prF §14: the probe watches the GitLab pipeline as it watches GitHub's workflows dir."""
+    repo.write(ci_file, "lint:\n  script: [ruff check .]\n")
+    after_sync = datetime.fromisoformat(RENDERED_AT).timestamp() + 3600
+    os.utime(repo.root / named, (after_sync, after_sync))
+
+    [_, line] = _lines(_start(repo, deps))
+
+    assert line.startswith(f'Detector inputs changed since the last sync ("{named}")')
+
+
 def test_escape_hatch_from_a_settings_env_is_reported(
     repo: PackRepo, deps: Callable[..., RuntimeDeps]
 ) -> None:

@@ -18,7 +18,7 @@ unchanged, in the ``docs/`` pages of ``tests._docs.USER_DOC_PAGES``; the pins re
 from __future__ import annotations
 
 import tomllib
-from typing import Any
+from typing import Any, Final
 
 import pytest
 import yaml
@@ -43,7 +43,7 @@ from coding_agent_playbook.metrics_gate.policy import (
     OPT_IN_METRICS,
     resolve_metric_selection,
 )
-from tests._catalog import CORE_ROOT
+from tests._catalog import CORE_ROOT, REPO_ROOT
 from tests._docs import user_docs
 from tests._markdown import FENCE, markdown_headings, markdown_section
 from tests.unit.test_docs_lifecycle_hooks_cli import _metric_names, _precommit_ids
@@ -239,7 +239,7 @@ def test_readme_ci_section_lists_every_ci_step(step: str) -> None:
 
 
 def test_readme_ci_snippet_passes_pr_title_only_through_env() -> None:
-    (snippet,) = _blocks(_section("## `playbook ci`"), "yaml")
+    (snippet,) = _blocks(_section("### GitHub Actions"), "yaml")
     run_lines = [line for line in snippet.splitlines() if line.strip().startswith("run:")]
     assert run_lines and not [line for line in run_lines if "github.event" in line]
     steps = yaml.safe_load(snippet)["jobs"]["playbook-ci"]["steps"]
@@ -249,3 +249,36 @@ def test_readme_ci_snippet_passes_pr_title_only_through_env() -> None:
         step for step in steps if str(step.get("uses", "")).startswith("actions/checkout")
     )
     assert checkout["with"]["fetch-depth"] == 0
+
+
+#: The GitLab job of specs/prF-forge-adapter.md §10.1, as YAML loads it.
+_GITLAB_JOB: Final = {
+    "rules": [{"if": '$CI_PIPELINE_SOURCE == "merge_request_event"'}],
+    "variables": {"GIT_DEPTH": 0, PR_TITLE_ENV: "$CI_MERGE_REQUEST_TITLE"},
+    "script": [
+        'git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"',
+        'playbook ci --base "${CI_MERGE_REQUEST_TARGET_BRANCH_SHA:-$CI_MERGE_REQUEST_DIFF_BASE_SHA}"',
+    ],
+}
+
+
+def test_readme_gitlab_ci_recipe_is_the_spec_job_with_the_title_only_in_variables() -> None:
+    (snippet,) = _blocks(_section("### GitLab CI"), "yaml")
+    assert yaml.safe_load(snippet) == {"playbook-ci": _GITLAB_JOB}
+    script_lines = [line for line in snippet.splitlines() if line.strip().startswith("- ")]
+    assert not [line for line in script_lines if "CI_MERGE_REQUEST_TITLE" in line]
+
+
+def test_readme_gitlab_ci_documents_the_three_gate_levels() -> None:
+    section = _section("### GitLab CI")
+    for level in ("Free", "Pipelines must succeed", ".gitlab-ci.yml@", "pipeline execution policy"):
+        assert level in section
+    assert "On Free a pull request can otherwise edit its own pipeline" in section
+
+
+def test_spec_ci_section_mirrors_the_gitlab_recipe() -> None:
+    spec = (REPO_ROOT / "SPEC.md").read_text(encoding="utf-8")
+    start = spec.index("### 12.11 `playbook ci`")
+    section = spec[start : spec.index("### 12.12 ", start)]
+    gitlab = [block for block in _blocks(section, "yaml") if block.startswith("playbook-ci:")]
+    assert [yaml.safe_load(block) for block in gitlab] == [{"playbook-ci": _GITLAB_JOB}]

@@ -13,7 +13,7 @@ and the protected config files before and after. Secret paths are never read.
   note too, even when justified (once per session per finding).
 
 The policy is the engine default extended by the hook's merged config
-(``added_line_patterns`` and ``protected_config_keys`` extend,
+(``added_line_patterns``, ``protected_config_keys`` and ``ci_config_globs`` extend,
 ``justification_regex`` replaces): the shipped ``HOOK.md`` adds nothing, so
 the hook and the CLI twin share ``judges.gate_weakening``'s defaults as their one source.
 ``judges.gate_weakening`` is imported only when the stage runs. The ``pre_edit``
@@ -60,12 +60,18 @@ __all__ = [
 
 STAGE_NAME: Final = "gate-integrity"
 #: The ``[hooks.gate-weakening-guard]`` keys ``judges.gate_weakening.policy_from_table`` reads.
-POLICY_KEYS: Final = ("added_line_patterns", "protected_config_keys", "justification_regex")
+POLICY_KEYS: Final = (
+    "added_line_patterns",
+    "protected_config_keys",
+    "justification_regex",
+    "ci_config_globs",
+)
 CONFIG_SCHEMA: Final[Mapping[str, ConfigKey]] = {
     "stage": ConfigKey("string", "replace", (STAGE_NAME,)),
     "added_line_patterns": ConfigKey("list", "extend"),
     "protected_config_keys": ConfigKey("list", "extend"),
     "justification_regex": ConfigKey("string"),
+    "ci_config_globs": ConfigKey("list", "extend"),
 }
 FIX_HINT: Final = "Fix the root cause or justify each inline with a trailing `# <reason>`."
 _MAX_UNTRACKED_FILES: Final = 200
@@ -132,6 +138,7 @@ class GateIntegrityStage:
         )
 
         git, secret = self.ctx.git, self._secret
+        policy = scan_policy(self.ctx.config, self.root)
         diff = git.diff_worktree("HEAD")
         untracked = [rel for rel in git.ls_untracked() if not secret(rel)]
         added = [line for line in diff.added if not secret(line.path)]
@@ -140,9 +147,9 @@ class GateIntegrityStage:
         pairs = [
             ConfigPair(path, _decoded(git.cat_head(path)), _read_text(self.root, path))
             for path in dict.fromkeys([*diff.paths, *untracked])
-            if is_config_path(path) and not secret(path)
+            if is_config_path(path, policy) and not secret(path)
         ]
-        return scan(added, removed, pairs, scan_policy(self.ctx.config, self.root))
+        return scan(added, removed, pairs, policy)
 
     def _secret(self, rel: str) -> bool:
         return self.ctx.cfg.secret_paths.matches(fold_key(rel, self.ctx.platform))

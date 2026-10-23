@@ -149,6 +149,7 @@ _OLD_TREE_FILES = frozenset(
             f"python-documentation/rules/{rule_id}.md"
             for rule_id in _SYNTHETIC_DOCUMENTATION_MEMBERS
         ),
+        "forge/SKILL.md",
     }
 )
 

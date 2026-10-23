@@ -11,8 +11,8 @@ cheap as ``re`` (the Stop stage imports it on every scanned stop).
   loosening. A table that did not exist before cannot be loosened: adopting
   commitizen or mypy is never flagged.
 - **Removals** (:func:`removal_weakenings`): a pre-commit hook ``id`` or a
-  workflow step a diff removes without re-adding in the same file, and any
-  change to ``.gitleaks.toml``.
+  workflow step a diff removes without re-adding in the same file. Scanner
+  config files (``.gitleaks.toml`` and its peers) are ``_scanner_config_gates``'.
 
 Each rule yields a :class:`FileWeakening`; ``gate_weakening`` decides justification
 from the ``tokens`` a justifying added line must mention.
@@ -29,14 +29,19 @@ from typing import TYPE_CHECKING, Final
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
 
-__all__ = ["TOML_PREFIXES", "FileWeakening", "removal_weakenings", "toml_loosenings"]
+__all__ = [
+    "TOML_PREFIXES",
+    "FileWeakening",
+    "is_workflow_path",
+    "removal_weakenings",
+    "toml_loosenings",
+]
 
 #: The TOML config files scanned, and the prefix a protected key loses in each.
 TOML_PREFIXES: Final[Mapping[str, str]] = MappingProxyType(
     {"pyproject.toml": "", "ruff.toml": "tool.ruff.", ".ruff.toml": "tool.ruff."}
 )
 _PRECOMMIT: Final = ".pre-commit-config.yaml"
-_GITLEAKS: Final = ".gitleaks.toml"
 _WORKFLOW = re.compile(r"(?:.*/)?\.github/workflows/[^/]+\.ya?ml")
 _HOOK_ID = re.compile(r"""^[ \t]*(?:-[ \t]+)?id:[ \t]*["']?([A-Za-z0-9_.-]+)""")
 _STEP = re.compile(r"""^[ \t]*-[ \t]+(?:name|uses|run):[ \t]*["']?(.*?)["']?[ \t]*(?:#.*)?$""")
@@ -60,7 +65,7 @@ _VALUE_CHARS: Final = 60
 class FileWeakening:
     """One file-level gate weakening: where, which rule, what, and what a reason must name.
 
-    Example: ``FileWeakening(".gitleaks.toml", "gitleaks-config-changed", "...", ())``.
+    Example: ``FileWeakening(".pre-commit-config.yaml", "precommit-hook-removed", "...", ("mypy",))``.
     """
 
     path: str
@@ -219,7 +224,7 @@ def _fail_under_change(was: float | None, now: float | None) -> str | None:
 def removal_weakenings(
     added: Mapping[str, Sequence[str]], removed: Mapping[str, Sequence[str]]
 ) -> list[FileWeakening]:
-    """Removed pre-commit hooks and workflow steps, and ``.gitleaks.toml`` changes.
+    """Removed pre-commit hooks and workflow steps.
 
     ``added`` and ``removed`` map each path to its added / removed line texts.
 
@@ -233,12 +238,20 @@ def removal_weakenings(
         name = _name(path)
         if name == _PRECOMMIT:
             found += _lost(path, _HOOK_ID, added.get(path, ()), removed[path], "precommit-hook")
-        elif _WORKFLOW.fullmatch(path):
+        elif is_workflow_path(path):
             found += _lost(path, _STEP, added.get(path, ()), removed[path], "workflow-step")
-    for path in sorted({*added, *removed}):
-        if _name(path) == _GITLEAKS:
-            found.append(FileWeakening(path, "gitleaks-config-changed", f"{_GITLEAKS} changed", ()))
     return found
+
+
+def is_workflow_path(path: str) -> bool:
+    """Whether ``path`` is a GitHub Actions workflow file (at any depth).
+
+    Example::
+
+        >>> is_workflow_path(".github/workflows/ci.yml"), is_workflow_path(".github/ci.yml")
+        (True, False)
+    """
+    return _WORKFLOW.fullmatch(path) is not None
 
 
 def _lost(

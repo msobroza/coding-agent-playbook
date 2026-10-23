@@ -57,6 +57,7 @@ SUBCOMMAND_TOOLS: Final = frozenset(
         "docker",
         "gh",
         "git",
+        "glab",
         "go",
         "helm",
         "kubectl",
@@ -220,7 +221,8 @@ def redacted_text(segments: Iterable[Segment]) -> str:
 
     Best effort, so only behind ``config.full_commands``: env assignments,
     ``--k=v`` and attached ``-pVALUE`` values, the word after a credential
-    flag, URL userinfo and every secret-rule match become ``<redacted>``.
+    flag (a forge CLI's own too: ``glab auth login -t``, ``judges.forge_calls``),
+    URL userinfo and every secret-rule match become ``<redacted>``.
 
     Example::
 
@@ -241,6 +243,9 @@ def redacted_text(segments: Iterable[Segment]) -> str:
 
 
 def _redacted_words(argv: Sequence[str]) -> list[str]:
+    from coding_agent_playbook.hook_runtime.judges.forge_calls import credential_flags
+
+    secret_flags = _SECRET_FLAGS | credential_flags(argv)
     words: list[str] = []
     secret_next = False
     for arg in argv:
@@ -249,7 +254,7 @@ def _redacted_words(argv: Sequence[str]) -> list[str]:
             secret_next = False
             continue
         words.append(_redacted_word(arg))
-        secret_next = arg in _SECRET_FLAGS
+        secret_next = arg in secret_flags
     return words
 
 
