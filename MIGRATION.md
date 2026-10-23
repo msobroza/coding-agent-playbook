@@ -664,7 +664,8 @@ its frontmatter), and the engine writes it as a reference inside that skill
 `docs/adr/0001-scoped-rules-are-delivered-as-skill-references.md`). Core
 ships the skills `python-coding`, `python-testing`, `python-tooling` and
 `ml-data`, plus `playbook-guardrails`, which holds the hooks' guardrail text
-when hooks are on, and new skills built from vendored upstream guidance (see
+when hooks are on, `forge`, which teaches the operations of `playbook forge`
+and is written in every repo, and new skills built from vendored upstream guidance (see
 "New core skills"). Member rules live in their skill's `rules/` directory, in
 the catalog and in the output
 (`docs/adr/0005-member-rules-live-in-their-skills-rules-directory.md`), and
