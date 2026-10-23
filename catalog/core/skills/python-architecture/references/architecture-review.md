@@ -5,7 +5,7 @@ A read-only procedure for reviewing how a whole package's modules depend on each
 ## Contents
 
 - When to review
-- 1. Read the code
+- 1. List the code in scope
 - 2. Map the layers with layer_map.py
 - 3. Configure the run for the project
 - 4. Confirm every hit
@@ -20,9 +20,9 @@ A read-only procedure for reviewing how a whole package's modules depend on each
 
 The review covers relations between modules. Function-level style (names, long functions, idioms) belongs to the python-coding skill, and the shape of code inside one module to the design-patterns skill.
 
-## 1. Read the code
+## 1. List the code in scope
 
-Read every Python file in scope, test code included, before judging any of them. Note what each module imports, at module level and inside functions, and which modules build concrete sessions, clients and settings objects.
+List the Python files in scope, test code included, and the packages that hold them. Judge none of them yet: the script maps the imports first (step 2), and every file is read in detail from step 4 on.
 
 ## 2. Map the layers with layer_map.py
 
@@ -60,6 +60,8 @@ Describe the project to the script instead of arguing with its output. First dec
 - A worker entry point under another file name needs `--root-module worker`, or its wiring imports show up as violations (`arch-composition-root`).
 
 ## 4. Confirm every hit
+
+Now read every Python file in scope, test code included, before judging any of them. Note what each module imports, at module level and inside functions, and which modules build concrete sessions, clients and settings objects.
 
 Every hit is a candidate, not a verdict: the layer map is inferred from names. Open the importing line and decide whether the module is an unrecognized composition root, a misclassified directory or a real leak. For each cycle, check whether it crosses layers, which is critical, or stays inside one package, where it usually means a module should be split or merged (`arch-break-import-cycles`).
 

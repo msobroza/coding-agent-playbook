@@ -18,11 +18,15 @@ import pytest
 from tests._catalog import core_skill_root
 from tests.core_skills._references import (
     INTERNAL_GUIDE_MAX_LINES,
+    TOC_HEADING,
+    TOC_THRESHOLD_LINES,
     backticked_ids,
     cross_skill_mentions,
     guide_line_count,
     known_rule_ids,
+    last_notes_bullets,
     names_a_rule,
+    opens_with_table_of_contents,
     reference_text,
     references_block,
     skill_rule_ids,
@@ -128,9 +132,6 @@ ROUTES_TO: Final = {
 }
 #: D49: an engine-written decision guide is at most 120 lines.
 INTERNAL_GUIDE: Final = "references/rule-neighbors.md"
-#: The content-ticket template: a reference over 100 lines opens with a table of contents.
-TOC_THRESHOLD_LINES: Final = 100
-TOC_HEADING: Final = "## Contents"
 #: The see lines this ticket adds (mapping "Body plan" columns): rule -> the reference
 #: file names its last Notes bullet names, by bare file name.
 SEE_LINES: Final = {
@@ -158,25 +159,10 @@ _NOT_A_RULE: Final = frozenset({"design-patterns"})
 _BARE_REFERENCE_RE: Final = re.compile(r"\b([a-z0-9]+(?:-[a-z0-9]+)*\.md)\b")
 #: D47's see line: the last Notes bullet ends ": see <reference>.md".
 _SEE_LINE_RE: Final = re.compile(r": see [a-z0-9-]+\.md")
-_NOTES_RE: Final = re.compile(r"^## Notes\n(.*?)(?=^## |\Z)", re.MULTILINE | re.DOTALL)
 _HEADING_RE: Final = re.compile(r"^### ([a-z0-9-]+)$", re.MULTILINE)
 _NUMBERED_ITEM_RE: Final = re.compile(r"^\d+\. .*$", re.MULTILINE)
 #: The smell-id cell of a lint-guardrails row: ``| `E722` | bare except | `bare-except` | ...``.
 _LINT_SMELL_CELL_RE: Final = re.compile(r"^\| `[^|]+` \| [^|]+ \| ([^|]+) \|", re.MULTILINE)
-
-
-def _rule_text(rule_id: str) -> str:
-    """The source text of one of the skill's rules (``.md``; none is a template)."""
-    return (SKILL_ROOT / "rules" / f"{rule_id}.md").read_text(encoding="utf-8")
-
-
-def _last_notes_bullet(rule_id: str) -> str:
-    """The last ``- `` bullet of a rule's Notes section."""
-    match = _NOTES_RE.search(_rule_text(rule_id))
-    assert match, f"{rule_id} has no Notes section"
-    bullets = [line for line in match.group(1).splitlines() if line.startswith("- ")]
-    assert bullets, f"{rule_id} has no Notes bullet"
-    return bullets[-1]
 
 
 def _smell_sections() -> dict[str, str]:
@@ -243,14 +229,12 @@ def test_long_reference_opens_with_a_table_of_contents(path: str) -> None:
     if text.count("\n") <= TOC_THRESHOLD_LINES:
         pytest.skip(f"{path} is short enough to need no table of contents")
 
-    first_section = text.find("\n## ")
-
-    assert text.find(TOC_HEADING) == first_section + 1, f"{path} opens with no {TOC_HEADING}"
+    assert opens_with_table_of_contents(text), f"{path} opens with no {TOC_HEADING}"
 
 
 @pytest.mark.parametrize("rule_id", list(SEE_LINES))
 def test_rule_notes_end_with_their_see_line(rule_id: str) -> None:
-    last = _last_notes_bullet(rule_id)
+    [last] = last_notes_bullets(SKILL_ROOT, rule_id, 1)
 
     missing = [name for name in SEE_LINES[rule_id] if name not in last]
 

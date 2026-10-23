@@ -12,6 +12,7 @@ see rows are read from the mapping through ``tests._mapping_references``.
 from __future__ import annotations
 
 import re
+from collections import Counter
 from typing import TYPE_CHECKING, Final
 
 import pytest
@@ -21,10 +22,14 @@ from tests._catalog import core_skill_root
 from tests._mapping_references import mapped_references, missing_rule_ids, rules_that_see
 from tests.core_skills._references import (
     INTERNAL_GUIDE_MAX_LINES,
+    TOC_HEADING,
+    TOC_THRESHOLD_LINES,
     backticked_ids,
     cross_skill_mentions,
     guide_line_count,
     known_rule_ids,
+    last_notes_bullets,
+    opens_with_table_of_contents,
     reference_text,
     references_block,
     skill_rule_ids,
@@ -49,23 +54,11 @@ MAPPED: Final = {
 _RULE_ID_LIKE_RE: Final = re.compile(r"(?<![\w.-])(?:arch|sqlalchemy)-[a-z0-9-]*[a-z0-9](?![\w.-])")
 #: A long option in prose or a code block: ``--root-module``.
 _FLAG_RE: Final = re.compile(r"(?<![\w-])--[a-z][a-z-]*[a-z]")
-_NOTES_RE: Final = re.compile(r"^## Notes\n(.*?)(?=^## |\Z)", re.MULTILINE | re.DOTALL)
-#: The content-ticket template: a reference over 100 lines opens with a table of contents.
-TOC_THRESHOLD_LINES: Final = 100
-
-
-def _rule_source(rule_id: str) -> str:
-    """The source text of one of the skill's rules, ``.md`` or ``.md.j2``."""
-    [path] = (SKILL_ROOT / "rules").glob(f"{rule_id}.md*")
-    return path.read_text(encoding="utf-8")
-
-
-def _last_notes_bullets(rule_id: str, count: int) -> list[str]:
-    """The last ``count`` top-level ``- `` bullets of a rule's Notes section."""
-    match = _NOTES_RE.search(_rule_source(rule_id))
-    assert match, f"{rule_id} has no Notes section"
-    bullets = [line for line in match.group(1).splitlines() if line.startswith("- ")]
-    return bullets[-count:]
+#: D47: a rule's Notes end with one see line per mapped reference it sees, so
+#: arch-dependency-direction, which sees both references, ends with two.
+SEE_LINE_COUNTS: Final = Counter(
+    rule_id for path in MAPPED for rule_id in rules_that_see(_SKILL, path)
+)
 
 
 def test_mapping_names_the_two_references_this_ticket_ships() -> None:
@@ -116,7 +109,7 @@ def test_long_reference_opens_with_a_table_of_contents(path: str) -> None:
     if text.count("\n") <= TOC_THRESHOLD_LINES:
         pytest.skip(f"{path} is short enough to need no table of contents")
 
-    assert text.find("## Contents") == text.find("\n## ") + 1, f"{path} opens with no Contents"
+    assert opens_with_table_of_contents(text), f"{path} opens with no {TOC_HEADING}"
 
 
 def test_routing_guide_stays_within_the_d49_budget() -> None:
@@ -139,8 +132,7 @@ def test_routing_guide_sends_whole_graph_coupling_to_the_review() -> None:
 
 def test_review_documents_exactly_the_flags_layer_map_accepts(layer_map: ModuleType) -> None:
     parser = layer_map.build_parser()
-    accepted = {flag for action in parser._actions for flag in action.option_strings}
-    accepted -= {"-h", "--help"}
+    accepted = set(_FLAG_RE.findall(parser.format_help())) - {"--help"}
 
     documented = set(_FLAG_RE.findall(reference_text(SKILL_ROOT, REVIEW)))
 
@@ -154,7 +146,7 @@ def test_rules_that_see_a_reference_end_their_notes_naming_it(path: str) -> None
     seeing = rules_that_see(_SKILL, path)
 
     for rule_id in seeing:
-        tail = " ".join(_last_notes_bullets(rule_id, 2))
+        tail = " ".join(last_notes_bullets(SKILL_ROOT, rule_id, SEE_LINE_COUNTS[rule_id]))
         assert f"see {name}" in tail, f"{rule_id}: Notes do not end naming {name}"
     assert seeing, f"no rule sees {path}"
 

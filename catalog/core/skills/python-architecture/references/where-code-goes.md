@@ -58,7 +58,6 @@ Coupling across the whole import graph (cycles, hidden globals, god modules impo
 
 ## Placed by other skills
 
-- Function-level idioms (names, signatures, error handling, typing): the python-coding skill. Translating domain errors at an entry point is python-coding's python-error-boundaries.
+- Function-level idioms (names, signatures, error handling, typing): the python-coding skill.
 - Code shape inside one module (patterns, principles, smells): the design-patterns skill.
 - HTTP routes and per-request database wiring: the web-application skill.
-- Test doubles, fixtures and test structure inside a test file: the python-testing skill.
