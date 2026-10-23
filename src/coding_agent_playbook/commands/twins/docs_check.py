@@ -139,6 +139,8 @@ def _checked_named(named: list[str], root: Path) -> list[str]:
 
 def _changed(base: str | None, root: Path, git: GitPort | None) -> list[str]:
     port = git if git is not None else open_git(root)
-    sha = resolve_merge_base(port, base).sha
+    # It diffs the working tree and adds untracked files, so uncommitted docs count even
+    # when HEAD is the base (prF §10.2 fails an empty range only for commit-range twins).
+    sha = resolve_merge_base(port, base, includes_worktree=True).sha
     changed = sorted({*port.diff_worktree(sha).paths, *port.ls_untracked()})
     return [rel for rel in docs_paths(changed) if (root / rel).is_file()]
