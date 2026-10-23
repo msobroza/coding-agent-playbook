@@ -13,9 +13,12 @@ from tests.core_skills._references import (
     backticked_ids,
     cross_skill_mentions,
     known_rule_ids,
+    last_notes_bullets,
     missing_sibling_guides,
     names_a_rule,
+    opens_with_table_of_contents,
     rule_id_like_names,
+    rule_source,
     skill_rule_ids,
 )
 
@@ -146,3 +149,38 @@ def test_missing_sibling_guides_reports_an_unnamed_sibling_and_a_path_prefix(
     guides = ["references/a.md", "references/b.md", "references/c.md"]
 
     assert missing_sibling_guides(tmp_path, "references/a.md", guides) == ["b.md", "references/"]
+
+
+def _skill_with_rule(tmp_path: Path, file_name: str, body: str) -> Path:
+    """A skill root under ``tmp_path`` holding one rule file ``rules/<file_name>``."""
+    (tmp_path / "rules").mkdir()
+    (tmp_path / "rules" / file_name).write_text(body, encoding="utf-8")
+    return tmp_path
+
+
+def test_last_notes_bullets_reads_a_template_rule_up_to_the_next_section(tmp_path: Path) -> None:
+    body = (
+        "# R\n\n## Notes\n\n- one\n  wrapped\n- two: see a.md\n- three: see b.md\n\n## Next\n- x\n"
+    )
+    root = _skill_with_rule(tmp_path, "arch-r.md.j2", body)
+
+    assert last_notes_bullets(root, "arch-r", 2) == ["- two: see a.md", "- three: see b.md"]
+
+
+def test_last_notes_bullets_names_the_rule_when_it_has_too_few(tmp_path: Path) -> None:
+    root = _skill_with_rule(tmp_path, "arch-r.md", "## Notes\n\n- only: see a.md\n")
+
+    with pytest.raises(AssertionError, match="arch-r: 1 Notes bullets"):
+        last_notes_bullets(root, "arch-r", 2)
+
+
+def test_rule_source_names_the_rule_when_no_file_matches(tmp_path: Path) -> None:
+    root = _skill_with_rule(tmp_path, "arch-other.md", "")
+
+    with pytest.raises(AssertionError, match=r"arch-r: expected one rules/arch-r\.md\[\.j2\]"):
+        rule_source(root, "arch-r")
+
+
+def test_opens_with_table_of_contents_checks_only_the_first_section() -> None:
+    assert opens_with_table_of_contents("# T\n\nIntro.\n\n## Contents\n\n- A\n\n## A\n")
+    assert not opens_with_table_of_contents("# T\n\n## A\n\n## Contents\n")
