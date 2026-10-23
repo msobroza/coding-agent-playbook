@@ -1,0 +1,83 @@
+---
+id: pytest-autospec
+name: pytest autospec
+description: "Where a third-party seam cannot take a parameter yet, patch the name where the code looks it up with autospec, so a call with the wrong signature fails; never a bare Mock() or MagicMock()."
+version: 1
+scope: scoped
+globs:
+  - "tests/**/*.py"
+  - "**/conftest.py"
+applies_if:
+  has_framework: ["pytest"]
+section: mocking
+priority: 21
+tags: [python, testing, pytest, mocking, autospec]
+---
+
+# Use autospec to keep mocks faithful to real signatures
+
+## Description
+
+A plain `Mock()` or `MagicMock()` accepts any attribute and any call signature, so tests keep passing after the real interface changes. Named fakes passed in as parameters come first (`pytest-test-doubles`); autospec is the fallback for a thin third-party seam the code cannot take as a parameter yet, such as an SDK client the code constructs itself. There, patch with `autospec=True` (or build the double with `create_autospec`), so the double rejects every call the real object would reject.
+
+Patch the name where the code under test looks it up (`shop.signup.email_client`), not where the SDK defines it: the code holds its own reference, so patching the defining module changes nothing it calls.
+
+## Bad Example
+
+```python
+from unittest.mock import patch
+
+
+def test_sends_welcome_email() -> None:
+    with patch("shop.signup.email_client.send") as send:  # plain Mock: accepts anything
+        signup(email="alice@example.com")
+
+    # The real signature became send(to=..., template=...) long ago;
+    # this stale assertion still passes because a plain Mock accepts any call.
+    send.assert_called_once_with("alice@example.com", "welcome")
+
+    # A misspelled assertion method is swallowed too:
+    # send.assert_caled_once()  # returns a Mock, never fails
+```
+
+## Good Example
+
+{% if has_framework("pytest-mock") %}
+```python
+from pytest_mock import MockerFixture
+
+
+def test_sends_welcome_email(mocker: MockerFixture) -> None:
+    send = mocker.patch("shop.signup.email_client.send", autospec=True)
+
+    signup(email="alice@example.com")
+
+    # Fails with TypeError if the real send() signature drifts.
+    send.assert_called_once_with(to="alice@example.com", template="welcome")
+```
+
+The project depends on pytest-mock, so the `mocker` fixture is available; `autospec=True` works the same with `unittest.mock.patch`.
+{% else %}
+```python
+from unittest.mock import patch
+
+
+def test_sends_welcome_email() -> None:
+    with patch("shop.signup.email_client.send", autospec=True) as send:
+        signup(email="alice@example.com")
+
+    # Fails with TypeError if the real send() signature drifts.
+    send.assert_called_once_with(to="alice@example.com", template="welcome")
+```
+
+`unittest.mock` ships with Python: use `patch(..., autospec=True)` as a context manager, and `create_autospec(EmailClient, instance=True)` when you build a standalone double to pass in rather than patch.
+{% endif %}
+
+## Notes
+
+- `create_autospec(RealClass)` builds a signature-checked double without patching anything.
+- `spec_set=True` also forbids setting attributes the real object lacks.
+- autospec checks signatures, not return types: give the double return values shaped like the real ones.
+- autospec on a very large class is slow; patch the narrowest name you can.
+- Once the code can take the dependency as a parameter, replace the patch with a named fake (`pytest-test-doubles`).
+- Whether autospec is the right double at all: choosing-a-test-double.md.

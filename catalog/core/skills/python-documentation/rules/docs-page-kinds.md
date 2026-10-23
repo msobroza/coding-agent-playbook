@@ -71,4 +71,4 @@ The tutorial's first steps, each runnable and each ending in a visible result:
 - A new feature usually needs a how-to guide plus its reference entry; change the tutorial only when the first-run path changes.
 - The reference build belongs to the repo's tool: where the repo uses Sphinx or MkDocs, this skill's API reference rule for that tool says how to register a new module.
 - Ask who reads the page and what they need right now; the answer picks the kind.
-- The which-document reference of this skill maps a reader's need to the page kind.
+- The page kind for each reader's need: see which-document.md.

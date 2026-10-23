@@ -442,8 +442,9 @@ def test_sync_derives_the_glob_table_from_the_rendered_member_rules(
 
     python-tooling still appears, with the globs of its ungated members (Python files,
     stubs and the ruff, mypy, pyright and pre-commit config files),
-    and python-documentation with its ungated members' globs, in member id order
-    (no CITATION.cff, so docs-citation-file's gate fails).
+    python-documentation with its ungated members' globs, in member id order
+    (no CITATION.cff, so docs-citation-file's gate fails), and python-testing
+    with its ungated pytest-first-properties on the shared test-file set.
     """
     (tmp_path / "repo").mkdir()
     repo = make_synthetic_repo(tmp_path / "repo", config_text=CONFIG + "[hooks]\nenabled = true\n")
@@ -459,6 +460,7 @@ def test_sync_derives_the_glob_table_from_the_rendered_member_rules(
             {"id": "python-architecture", "globs": ARCHITECTURE_GLOBS},
             {"id": "python-coding", "globs": ["**/*.py"]},
             {"id": "python-documentation", "globs": list(DOCUMENTATION_GLOBS)},
+            {"id": "python-testing", "globs": list(TEST_FILE_GLOBS)},
             # A repo with neither pytest nor uv: python-tooling's ungated members' globs.
             {"id": "python-tooling", "globs": list(UNGATED_GLOBS)},
         ]

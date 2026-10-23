@@ -64,14 +64,15 @@ MOVED_GUIDANCE_OWNERS: Final = (
     ("slots=True", "python-data-shapes"),
     ("monkeypatch.setenv", "pytest-monkeypatch"),
     ("from conftest import", "pytest-conftest"),
+    # The engine's skip/xfail line keeps its characterization sentence through the
+    # C-python-testing-01 split (review of #247).
+    ("quirks included", "pytest"),
 )
 #: A D46(1) owner a content lane has not created yet -> the pin that holds until it
 #: ships, and that lane. The lane that creates the owner deletes its row here
 #: (tickets.md, content-ticket template step 1), and
 #: ``test_pending_owners_are_not_shipped_yet`` fails until it does.
-PENDING_OWNERS: Final[Mapping[str, tuple[str, str, str]]] = {
-    "pytest-monkeypatch": ("monkeypatch", "pytest-test-doubles", "C-python-testing-01"),
-}
+PENDING_OWNERS: Final[Mapping[str, tuple[str, str, str]]] = {}
 #: The ``generate-tests`` prompt's line on doubles (spec H18): named fakes come first (D8).
 _GENERATE_TESTS_PROMPT: Final = CORE_ROOT / "prompts" / "generate-tests.md.j2"
 

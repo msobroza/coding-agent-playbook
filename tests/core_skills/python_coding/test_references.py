@@ -9,7 +9,6 @@ open-when line, no gate and the rule ids it routes to. D47 lists each in
 from __future__ import annotations
 
 import re
-from pathlib import PurePosixPath
 from typing import Final
 
 import pytest
@@ -18,8 +17,10 @@ from tests._catalog import core_skill_root
 from tests.core_skills._references import (
     INTERNAL_GUIDE_MAX_LINES,
     guide_line_count,
+    missing_sibling_guides,
     reference_text,
     references_block,
+    rule_id_like_names,
     skill_md_parts,
     skill_rule_ids,
 )
@@ -95,9 +96,8 @@ SEE_ALSO_SKILLS: Final = (
     "web-application",
     "ml-data",
 )
-#: A token shaped like one of this skill's rule ids (their prefixes), not part of a
-#: file name such as ``python-version-idioms.md``.
-_RULE_ID_LIKE_RE: Final = re.compile(r"(?<![\w.-])(?:python|pydantic)-[a-z0-9-]*[a-z0-9](?![\w.-])")
+#: The prefixes of this skill's rule ids.
+_RULE_ID_PREFIXES: Final = ("python", "pydantic")
 #: Names with those prefixes that are no rule of this skill: skill names.
 _NOT_THIS_SKILLS_RULES: Final = frozenset(
     {"python-coding", "python-architecture", "python-testing", "python-tooling"}
@@ -110,7 +110,7 @@ def _rule_id_like_names(text: str) -> set[str]:
     >>> sorted(_rule_id_like_names("python-version-idioms.md, python-async; python-coding"))
     ['python-async']
     """
-    return set(_RULE_ID_LIKE_RE.findall(text)) - _NOT_THIS_SKILLS_RULES
+    return rule_id_like_names(text, _RULE_ID_PREFIXES, _NOT_THIS_SKILLS_RULES)
 
 
 def test_skill_lists_each_mapped_reference_ungated_in_mapping_order() -> None:
@@ -166,8 +166,6 @@ def test_internal_guide_stays_within_the_d49_budget(path: str) -> None:
 
 @pytest.mark.parametrize("path", MAPPED_REFERENCES)
 def test_guide_ends_naming_its_sibling_guides_by_bare_file_name(path: str) -> None:
-    last_line = reference_text(SKILL_ROOT, path).rstrip("\n").rsplit("\n", 1)[-1]
-    siblings = [PurePosixPath(other).name for other in MAPPED_REFERENCES if other != path]
+    missing = missing_sibling_guides(SKILL_ROOT, path, MAPPED_REFERENCES)
 
-    assert all(name in last_line for name in siblings), last_line
-    assert "references/" not in last_line, last_line
+    assert missing == [], f"{path}'s last line lacks or misnames {missing}"

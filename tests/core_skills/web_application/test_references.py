@@ -24,6 +24,7 @@ from tests.core_skills._references import (
     names_a_rule,
     reference_text,
     references_block,
+    rule_id_like_names,
     skill_rule_ids,
 )
 
@@ -47,10 +48,8 @@ ROUTES_TO: Final = {
 }
 #: The engine-written decision guide D49 budgets.
 INTERNAL_GUIDE: Final = "references/request-lifecycle.md"
-#: A token shaped like one of this skill's rule ids (their prefixes).
-_RULE_ID_LIKE_RE: Final = re.compile(
-    r"\b(?:fastapi|web|sqlalchemy|alembic|httpx)-[a-z0-9-]*[a-z0-9]\b"
-)
+#: The prefixes of this skill's rule ids.
+_RULE_ID_PREFIXES: Final = ("fastapi", "web", "sqlalchemy", "alembic", "httpx")
 #: Names with those prefixes that are no rule of this skill: the skill itself and its
 #: example app. Other skills' rules are named "<skill>'s <id>" and checked apart.
 _NOT_THIS_SKILLS_RULES: Final = frozenset({"web-application", "fastapi-hotel-api"})
@@ -83,7 +82,7 @@ def test_reference_names_only_rule_ids_the_skill_ships(path: str) -> None:
     text = reference_text(SKILL_ROOT, path)
 
     other_skills = {rule_id for _, rule_id in cross_skill_mentions(text)}
-    named = set(_RULE_ID_LIKE_RE.findall(text)) - _NOT_THIS_SKILLS_RULES - other_skills
+    named = rule_id_like_names(text, _RULE_ID_PREFIXES, _NOT_THIS_SKILLS_RULES | other_skills)
     unknown = sorted(named - skill_rule_ids(SKILL_ROOT))
 
     assert unknown == [], f"{path} names rule ids web-application does not ship: {unknown}"

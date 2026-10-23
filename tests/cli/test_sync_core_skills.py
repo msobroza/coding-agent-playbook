@@ -2,9 +2,9 @@
 
 Core ships ``python-coding``, ``python-testing``, ``python-tooling``,
 ``ml-data`` and ``web-application``; each is written only while one of its
-member rules passes ``applies_if`` (ADR 0001). ``python-testing``'s members all
-need pytest, so the skill follows the ``pytest`` dependency in and out of the
-repo. ``python-tooling`` has ungated members (``python-static-checks`` and three
+member rules passes ``applies_if`` (ADR 0001). ``python-testing`` keeps its one
+ungated member (``pytest-first-properties``, D72) everywhere, and its pytest rules
+follow the ``pytest`` dependency in and out of the repo. ``python-tooling`` has ungated members (``python-static-checks`` and three
 more), so it stays, while ``web-application``'s rules follow ``fastapi``. The "Where guidance lives" map in
 ``AGENTS.md`` names only skills a sync writes, so it is absent when no enabled
 adapter has a native skill root.
@@ -33,6 +33,8 @@ _WEB: Final = "web-application"
 #: python-tooling's ungated members, written in every synthetic repo, and web-application's
 #: members a FastAPI repo without pytest or SQLAlchemy activates.
 _UNGATED_TOOLING_RULES: Final = [f"{rule_id}.md" for rule_id in UNGATED_MEMBERS]
+#: python-testing's ungated member (D72), written whether or not the repo uses pytest.
+_UNGATED_TESTING_RULES: Final = ["pytest-first-properties.md"]
 #: The gate keys a FastAPI repo without pytest or SQLAlchemy can satisfy.
 _FRAMEWORK_GATE_KEYS: Final = frozenset({"has_framework", "any_framework"})
 
@@ -119,9 +121,11 @@ def _synthetic_skill_repo(tmp_path: Path, make_synthetic_repo: Callable[..., Pat
 def test_python_testing_follows_the_pytest_dependency_in_and_out(
     tmp_path: Path, make_synthetic_repo: Callable[..., Path]
 ) -> None:
+    """Without pytest only the ungated pytest-first-properties is written (D72, C-python-testing-01)."""
     repo = _synthetic_skill_repo(tmp_path, make_synthetic_repo)
     assert _sync.run(_ns(repo)) == 0
-    assert [root for root in NATIVE_SKILL_ROOTS if (repo / root / _TESTING).exists()] == []
+    for root in NATIVE_SKILL_ROOTS:
+        assert _rule_files(repo, root, _TESTING) == _UNGATED_TESTING_RULES, root
 
     _set_dependencies(repo, '["click", "pytest"]')
     assert _sync.run(_ns(repo)) == 0
@@ -131,9 +135,8 @@ def test_python_testing_follows_the_pytest_dependency_in_and_out(
 
     _set_dependencies(repo, '["click"]')
     assert _sync.run(_ns(repo)) == 0
-    assert [root for root in NATIVE_SKILL_ROOTS if (repo / root / _TESTING).exists()] == []
-    assert _skill_lock_paths(repo, _TESTING) == []
-    assert "skill `python-testing`" not in (repo / "AGENTS.md").read_text(encoding="utf-8")
+    for root in NATIVE_SKILL_ROOTS:
+        assert _rule_files(repo, root, _TESTING) == _UNGATED_TESTING_RULES, root
 
 
 def test_fastapi_rules_follow_the_fastapi_dependency_in_and_out(
