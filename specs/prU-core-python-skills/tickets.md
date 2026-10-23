@@ -707,7 +707,7 @@ Acceptance:
 - README documents how to turn it on and that it needs the owner's credentials and costs money.
 - git diff main -- catalog/core/prompts shows no includes_rules change.
 
-### F-02: feat(catalog): vendor upstream Python guidance into eight core skills
+### F-02: test(catalog): add the final-state checks for the vendored core skills
 
 Lane final, size M, depends on F-01; decisions D13, D30, D31, D33, D34, D35, D36.
 
