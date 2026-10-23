@@ -716,17 +716,18 @@ Final-state tests, then the full CI-parity gate and one PR from integration/core
 - `tests/integration/test_core_final_state.py`: new: the final-state checks above
 - `tests/fixtures/upstream_inventory/pbp-fa0d3f58.txt, pca-9d627ca.txt`: new: upstream file paths at the pins
 - `tests/integration/test_core_move_is_output_neutral.py`: deleted
-- `specs/prU-core-python-skills/runner/`: deleted (the temporary implementation tooling)
+- `specs/prU-core-python-skills/runner/`: deleted by the orchestrator as the very last commit, after this ticket integrates (the integrator still runs its gate with the runner's tools)
 - test `tests/integration/test_core_final_state.py`: as above
 
+Done by the orchestrator, not the implementer (2026-10-23): the PR title and body (agents never edit PRs), marking draft PR #266 ready for review, and deleting runner/. The 3.12/3.13 gate and the wheel smoke run in CI on PR #266; the implementer runs the light gate only. main (forge, #175) was merged into the branch rather than rebased (8ec16479), with D36's counts, known-skills quote and budgets re-checked there.
+
 Acceptance:
-- specs/prU-core-python-skills/runner/ no longer exists.
 - PENDING_LEGIBILITY_TARGETS in tests/integration/test_core_always_rules.py is empty: every rule the code-legibility always rule names exists (L0-22; each content lane removes its own entries).
 - ruff check ., ruff format --check ., mypy and pytest -q pass on Python 3.12 and 3.13 in fresh environments without the metrics extra.
 - The wheel's _catalog/ equals git ls-files catalog and init in an empty scratch repo prints no warning line.
 - Final-state tests pass: no empty declared section, no retired id, every upstream file has one row, every core skill active on the probe.
 - MIGRATION.md's v0.21 claims hold on the final tree, including D-04's "Version branches instead of version gates": python-typing, python-async and the asyncio rules carry no python_version ">=3.11" gate (D40).
-- Exactly one PR into main exists with a Conventional Commits title; it is not merged by the agent; if forge #170 merged first, this branch was rebased and its counts, known-skills quote and budgets re-checked (D36).
+- Exactly one PR into main exists (#266) with a Conventional Commits title; it is not merged by an agent; D36's re-checks hold on the merged tree.
 
 ## Content tickets
 
