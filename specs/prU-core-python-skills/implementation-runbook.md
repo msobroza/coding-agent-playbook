@@ -2,24 +2,26 @@
 
 How prU is implemented, and how to resume after any interruption (a lost session, another machine, a failed wave). Decisions: [../prU-core-python-skills.md](../prU-core-python-skills.md). Tickets and waves: [tickets.md](tickets.md).
 
+Status (2026-10-23): every ticket is integrated and PR #266 into `main` is open. The runner served its purpose and the PR's last commit deleted `runner/`; `git show 2d0c6c19:specs/prU-core-python-skills/runner/README.md` still reads it, and the rest of this runbook describes how the work ran.
+
 ## Where everything is
 
 | What | Where |
 | --- | --- |
-| Decisions D1-D80, defaults, follow-ups | `specs/prU-core-python-skills.md` |
+| Decisions D1-D81, defaults, follow-ups | `specs/prU-core-python-skills.md` |
 | What to build, per skill | `specs/prU-core-python-skills/mapping-<skill>.md` |
 | Every ticket, its waves and the content-ticket template | `specs/prU-core-python-skills/tickets.md` |
 | Glossary and decision records | `CONTEXT.md`, `docs/adr/0001`-`0008` |
-| Progress | GitHub tracker issue #176 (one checkbox per ticket), ticket issues #177-#263, #264 (L0-27, D80) and #265 (L0-28) |
+| Progress | GitHub tracker issue #176 (one checkbox per ticket), ticket issues #177-#263, #264 (L0-27, D80), #265 (L0-28) and #267 (L0-29) |
 | Integrated work | branch `integration/core-python-skills` |
 | One ticket's work before integration | branch `ticket/<id>` (for example `ticket/L0-01`) |
-| The runner, the planner and the machine split (temporary, deleted by F-02) | `specs/prU-core-python-skills/runner/` |
+| The runner, the planner and the machine split (temporary, deleted at the end of PR #266) | `specs/prU-core-python-skills/runner/` at 2d0c6c19 |
 
 The mapping and ticket files were generated from verified mapping data during design. From now on they are the source of truth and are edited by hand: a scope change updates the spec's decision list, `tickets.md` and the affected mapping file in the same commit, and a new ticket gets a GitHub issue that the tracker lists.
 
 ## How tickets run
 
-Waves 0-2 ran wave by wave. From wave 3 on, tickets run in dependency order with the runner in [runner/](runner/README.md): a ticket starts as soon as every ticket it depends on is integrated, and it is integrated as soon as it is done. The wave table in `tickets.md` stays as the original grouping. The dependencies come from each ticket's "depends on" line and the content table; `runner/plan.py` reads them, checks there is no cycle, and builds a run's arguments.
+Waves 0-2 ran wave by wave. From wave 3 on, tickets run in dependency order with the runner in `runner/`: a ticket starts as soon as every ticket it depends on is integrated, and it is integrated as soon as it is done. The wave table in `tickets.md` stays as the original grouping. The dependencies come from each ticket's "depends on" line and the content table; `runner/plan.py` reads them, checks there is no cycle, and builds a run's arguments.
 
 The owner chose speed: no separate verify step and no full suite per ticket. Wave 1 ran with both, an acceptance verifier with repair rounds and the chunked full suite; the full suite now runs once, after the last ticket.
 
@@ -121,5 +123,5 @@ Two machines can implement tickets at the same time, each on its own share. `run
 
 - **F-01** adds the opt-in eval comparison (D37). It is implemented, not run: a paid run needs the owner's credentials and approval.
 - **The full gate** runs once every ticket but F-02 is integrated: `plan.py args --full-gate ...` and the runner, on machine A.
-- **F-02** deletes `runner/`, runs the full gate on Python 3.12 and 3.13 and opens the one PR from `integration/core-python-skills` into `main`. The owner reviews and merges it; agents never merge.
+- **F-02** adds the final-state checks; the full gate runs in CI on Python 3.12 and 3.13 for the one PR from `integration/core-python-skills` into `main` (#266), and the orchestrator deletes `runner/` in its last commit. The owner reviews and merges it; agents never merge.
 - After the merge, the follow-ups listed in the spec start as separate work.
