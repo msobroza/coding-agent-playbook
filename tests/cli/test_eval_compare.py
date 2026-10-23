@@ -8,7 +8,6 @@ only the ``fake`` runner runs, on one eval sample and one run per side.
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 from typing import TYPE_CHECKING, Any
 
@@ -37,22 +36,6 @@ def _committed_repo(tmp_path: Path, make_synthetic_repo: Any) -> Path:
     return repo
 
 
-def _put_fake_uv_on_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Put a ``uv`` that always succeeds first on ``PATH``, for the child eval runs.
-
-    Each compared run is a child process (``PlaybookEvalRun``), so the autouse
-    in-process ``uv`` stub of ``conftest.py`` does not reach it: without this the
-    child shells out to the real ``uv`` (absent from CI's pytest job, and a network
-    ``uv sync`` where it is installed) and prints no report (PR #266 CI).
-    """
-    fake_bin = tmp_path / "fake-bin"
-    fake_bin.mkdir()
-    fake_uv = fake_bin / "uv"
-    fake_uv.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    fake_uv.chmod(0o755)
-    monkeypatch.setenv("PATH", os.pathsep.join((str(fake_bin), os.environ.get("PATH", ""))))
-
-
 def _compare(repo: Path, out: Path, *flags: str) -> int:
     argv = ["eval", _SAMPLE, "--compare", "HEAD", "--runner", "fake", "--compare-runs", "1"]
     argv += ["--compare-out", str(out), "--repo-root", str(repo), "--format", "json", *flags]
@@ -68,9 +51,8 @@ def test_a_comparison_reports_each_side_and_keeps_every_run(
     tmp_path: Path,
     make_synthetic_repo: Any,
     capsys: pytest.CaptureFixture[str],
-    monkeypatch: pytest.MonkeyPatch,
+    fake_uv_on_path: Path,  # each compared side is a child process (PR #266 CI)
 ) -> None:
-    _put_fake_uv_on_path(tmp_path, monkeypatch)
     repo = _committed_repo(tmp_path, make_synthetic_repo)
     out = tmp_path / "out"
 

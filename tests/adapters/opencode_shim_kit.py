@@ -83,11 +83,17 @@ class DispatchCall:
 
 @dataclass(frozen=True)
 class ShimRun:
-    """One driver run: a result per step, the shim's ``console.error`` lines, every dispatch."""
+    """One driver run: a result per step, the shim's ``console.error`` lines, every dispatch.
+
+    ``calls`` holds the complete records only; ``started`` counts every dispatch
+    the fake began, complete or not, so a test that expects no dispatch
+    asserts ``started == 0`` and still catches one caught mid-write.
+    """
 
     results: list[dict[str, Any]]
     errors: list[str]
     calls: list[DispatchCall]
+    started: int
 
     @property
     def events(self) -> list[str]:
@@ -151,7 +157,16 @@ class ShimRepo:
         done = run_node(args, stdin=json.dumps(steps), cwd=self.root)
         assert done.returncode == 0, done.stderr
         body = json.loads(done.stdout)
-        return ShimRun(body["results"], body["errors"], self.calls())
+        return ShimRun(body["results"], body["errors"], self.calls(), self.started_calls())
+
+    def started_calls(self) -> int:
+        """How many dispatches the fake has begun, complete or not.
+
+        Read from ``count``, the fake's first write (before ``calls/<n>`` exists),
+        so a dispatch that started is never missed.
+        """
+        count = self.fake / "count"
+        return int(count.read_text(encoding="utf-8")) if count.exists() else 0
 
     def calls(self) -> list[DispatchCall]:
         """Every completely recorded dispatch, oldest first.

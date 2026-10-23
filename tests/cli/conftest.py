@@ -14,6 +14,7 @@ exercise the real ``_uv_sync_scratch`` paths) — that scope is not affected.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from typing import TYPE_CHECKING, Any
@@ -52,6 +53,25 @@ def _stub_uv_sync_for_cli(monkeypatch: pytest.MonkeyPatch) -> None:
         return "/fake/uv" if binary == "uv" else real_which(binary, *args, **kwargs)
 
     monkeypatch.setattr("coding_agent_playbook.evals.run.harness_runner.shutil.which", _stub_which)
+
+
+@pytest.fixture
+def fake_uv_on_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Put a ``uv`` that always succeeds first on ``PATH``; return its directory.
+
+    For tests whose eval runs happen in a **child process** (``playbook eval
+    --compare`` runs each side through ``PlaybookEvalRun``): the autouse
+    in-process stub above does not reach a child, which would otherwise shell out
+    to the real ``uv`` (absent from CI's pytest job, and a network ``uv sync``
+    where it is installed) and print no report (PR #266 CI).
+    """
+    fake_bin = tmp_path / "fake-uv-bin"
+    fake_bin.mkdir()
+    fake_uv = fake_bin / "uv"
+    fake_uv.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    fake_uv.chmod(0o755)
+    monkeypatch.setenv("PATH", os.pathsep.join((str(fake_bin), os.environ.get("PATH", ""))))
+    return fake_bin
 
 
 #: Forge host, repo and prompt variables a developer's shell may set; each forge test starts
