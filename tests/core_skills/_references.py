@@ -14,6 +14,7 @@ pointers a reference makes into other skills:
 from __future__ import annotations
 
 import re
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any, Final, NotRequired, TypedDict
 
 from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
@@ -21,7 +22,7 @@ from tests._attributions import MAPPING_SPECS_DIR
 from tests._catalog import core_skill_root
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Collection, Iterable
     from pathlib import Path
 
 #: D49: an engine-written decision guide is at most 120 lines.
@@ -127,3 +128,17 @@ def rule_id_like_names(
     alternatives = "|".join(re.escape(prefix) for prefix in prefixes)
     pattern = rf"(?<![\w.-])(?:{alternatives})-[a-z0-9-]*[a-z0-9](?![\w.-])"
     return set(re.findall(pattern, text)) - set(excluded)
+
+
+def missing_sibling_guides(skill_root: Path, path: str, guides: Collection[str]) -> list[str]:
+    """The bare file names of the other ``guides`` that ``path``'s last line does not name.
+
+    D49: a guide ends naming its siblings by bare file name, so a ``references/``
+    prefix on that line counts as missing too, reported as ``"references/"``.
+    """
+    last_line = reference_text(skill_root, path).rstrip("\n").rsplit("\n", 1)[-1]
+    siblings = [PurePosixPath(other).name for other in guides if other != path]
+    missing = [name for name in siblings if name not in last_line]
+    if "references/" in last_line:
+        missing.append("references/")
+    return missing

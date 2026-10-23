@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -12,10 +13,14 @@ from tests.core_skills._references import (
     backticked_ids,
     cross_skill_mentions,
     known_rule_ids,
+    missing_sibling_guides,
     names_a_rule,
     rule_id_like_names,
     skill_rule_ids,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 pytestmark = pytest.mark.catalog
 
@@ -104,3 +109,37 @@ def test_rule_id_like_names_leaves_out_the_excluded_names() -> None:
     named = rule_id_like_names(text, ("python", "docs"), excluded={"python-coding", "docs-check"})
 
     assert named == {"python-async"}
+
+
+def test_rule_id_like_names_takes_every_prefix_and_skips_file_and_excluded_names() -> None:
+    text = "python-async, pydantic-boundaries; python-version-idioms.md and python-coding"
+
+    named = rule_id_like_names(text, ("python", "pydantic"), {"python-coding"})
+
+    assert named == {"python-async", "pydantic-boundaries"}
+
+
+def _write_guides(root: Path, last_lines: dict[str, str]) -> None:
+    (root / "references").mkdir()
+    for path, last_line in last_lines.items():
+        (root / path).write_text(f"# Guide\n\n{last_line}\n", encoding="utf-8")
+
+
+def test_missing_sibling_guides_is_empty_when_the_last_line_names_each_sibling(
+    tmp_path: Path,
+) -> None:
+    _write_guides(tmp_path, {"references/a.md": "See b.md.", "references/b.md": "See a.md."})
+
+    assert (
+        missing_sibling_guides(tmp_path, "references/a.md", ["references/a.md", "references/b.md"])
+        == []
+    )
+
+
+def test_missing_sibling_guides_reports_an_unnamed_sibling_and_a_path_prefix(
+    tmp_path: Path,
+) -> None:
+    _write_guides(tmp_path, {"references/a.md": "See references/c.md."})
+    guides = ["references/a.md", "references/b.md", "references/c.md"]
+
+    assert missing_sibling_guides(tmp_path, "references/a.md", guides) == ["b.md", "references/"]
