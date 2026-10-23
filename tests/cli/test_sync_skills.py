@@ -20,30 +20,13 @@ from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.lockfile.model import compute_hash
 from coding_agent_playbook.sync import pipeline as _sync
 from tests._catalog import core_skill_ids
+from tests.cli.skill_sync_kit import SHARED_SKILLS_CONFIG, lock_entry_paths
 from tests.fakes import FakeGitClient, pre_gate_validate
+from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
-
-_SKILL_ROOTS = (".claude/skills", ".opencode/skills", ".agents/skills")
-
-_CONFIG_WITH_SHARED_SKILLS = """\
-schema_version = 1
-adapters_enabled = ["continue", "claude_code", "opencode", "shared_skills"]
-overlays_enabled = []
-
-[project]
-name = "synthetic"
-kind = "python-library"
-
-[engine]
-version = "0.1.0a0"
-
-[storage]
-artifact_source = "filesystem"
-state_source = "filesystem"
-"""
 
 
 def _ns(repo: Path, *, check: bool = False) -> argparse.Namespace:
@@ -60,12 +43,6 @@ def _write_repo_local_skill(repo: Path, skill_id: str) -> Path:
     )
     (skill_dir / "scripts" / "run.py").write_text("print('query')\n", encoding="utf-8")
     return skill_dir
-
-
-def _lock_paths(repo: Path) -> set[str]:
-    lockfile = FileSystemStateSource(repo_root=repo).load_lockfile()
-    assert lockfile is not None
-    return {entry.path for entry in lockfile.entries}
 
 
 def _write_legacy_skill_md(repo: Path, rel: str, text: str) -> None:
@@ -90,22 +67,22 @@ def _skill_tree(skill_dir: Path) -> dict[str, bytes]:
 
 
 def test_sync_writes_skill_to_all_three_roots_byte_identically(tmp_path, make_synthetic_repo):
-    repo = make_synthetic_repo(tmp_path, config_text=_CONFIG_WITH_SHARED_SKILLS)
+    repo = make_synthetic_repo(tmp_path, config_text=SHARED_SKILLS_CONFIG)
     _write_repo_local_skill(repo, "query-db")
 
     assert sync_cmd.run(_ns(repo)) == 0
 
-    trees = [_skill_tree(repo / root / "query-db") for root in _SKILL_ROOTS]
+    trees = [_skill_tree(repo / root / "query-db") for root in NATIVE_SKILL_ROOTS]
     assert trees[0] == trees[1] == trees[2]
     assert set(trees[0]) == {"SKILL.md", "scripts/run.py"}
     assert trees[0]["SKILL.md"].startswith(b"---\nname: query-db\n")
-    assert {f"{root}/query-db/SKILL.md" for root in _SKILL_ROOTS} <= _lock_paths(repo)
+    assert {f"{root}/query-db/SKILL.md" for root in NATIVE_SKILL_ROOTS} <= lock_entry_paths(repo)
 
 
 def test_sync_check_reports_no_drift_after_sync_and_flags_edits(
     tmp_path, make_synthetic_repo, capsys
 ):
-    repo = make_synthetic_repo(tmp_path, config_text=_CONFIG_WITH_SHARED_SKILLS)
+    repo = make_synthetic_repo(tmp_path, config_text=SHARED_SKILLS_CONFIG)
     _write_repo_local_skill(repo, "query-db")
     assert sync_cmd.run(_ns(repo)) == 0
     capsys.readouterr()
@@ -119,7 +96,7 @@ def test_sync_check_reports_no_drift_after_sync_and_flags_edits(
 
 
 def test_sync_removes_deleted_skill_from_all_three_roots(tmp_path, make_synthetic_repo, capsys):
-    repo = make_synthetic_repo(tmp_path, config_text=_CONFIG_WITH_SHARED_SKILLS)
+    repo = make_synthetic_repo(tmp_path, config_text=SHARED_SKILLS_CONFIG)
     source = _write_repo_local_skill(repo, "query-db")
     user_skill = repo / ".claude" / "skills" / "hand-written" / "SKILL.md"
     user_skill.parent.mkdir(parents=True)
@@ -130,7 +107,7 @@ def test_sync_removes_deleted_skill_from_all_three_roots(tmp_path, make_syntheti
     capsys.readouterr()
     assert sync_cmd.run(_ns(repo)) == 0
 
-    for root in _SKILL_ROOTS:
+    for root in NATIVE_SKILL_ROOTS:
         assert not (repo / root / "query-db").exists(), root
     # 3 roots x (SKILL.md + scripts/run.py) + Continue's degraded prompt copy —
     # anchored, so "17 removed" (cleanup eating fresh output) cannot pass.
@@ -171,7 +148,7 @@ def test_sync_never_touches_user_authored_skill_dir_with_colliding_id(
 ):
     """A hand-written ``.opencode/skills/query-db/`` keeps every file; the other roots
     still get the canonical skill, and ``sync --check`` sees no drift."""
-    repo = make_synthetic_repo(tmp_path, config_text=_CONFIG_WITH_SHARED_SKILLS)
+    repo = make_synthetic_repo(tmp_path, config_text=SHARED_SKILLS_CONFIG)
     _write_repo_local_skill(repo, "query-db")
     user_dir = repo / ".opencode" / "skills" / "query-db"
     (user_dir / "scripts").mkdir(parents=True)
@@ -202,7 +179,7 @@ def test_sync_takes_over_legacy_sentinel_less_claude_skill(tmp_path, make_synthe
     lockfile proves the engine wrote it, so the next sync re-owns it and the leftover
     policy cleans the stale script the engine wrote — while a file the user added
     (never in the lockfile) survives."""
-    repo = make_synthetic_repo(tmp_path, config_text=_CONFIG_WITH_SHARED_SKILLS)
+    repo = make_synthetic_repo(tmp_path, config_text=SHARED_SKILLS_CONFIG)
     source = _write_repo_local_skill(repo, "query-db")
     (source / "scripts" / "stale.py").write_text("old\n")
     assert sync_cmd.run(_ns(repo)) == 0
@@ -225,7 +202,7 @@ def test_sync_never_reclaims_an_adopted_leftover(tmp_path, make_synthetic_repo, 
     """Regression: a removed skill's edited leftovers stay listed in the lockfile; when
     the id came back, that listing re-claimed the dir the user had adopted (sentinel-less
     ``SKILL.md``) and silently overwrote their files. Only unchanged bytes prove a claim."""
-    repo = make_synthetic_repo(tmp_path, config_text=_CONFIG_WITH_SHARED_SKILLS)
+    repo = make_synthetic_repo(tmp_path, config_text=SHARED_SKILLS_CONFIG)
     source = _write_repo_local_skill(repo, "query-db")
     saved = _skill_tree(source)
     assert sync_cmd.run(_ns(repo)) == 0
@@ -253,7 +230,7 @@ def test_sync_check_names_the_blocker_of_a_refused_swap(tmp_path, make_synthetic
     two documented exceptions to check-mode parity (a file under a link leading out of
     its skill dir is the other): ``--check`` keeps failing until the user moves the
     file, so it says so instead of "run 'playbook sync'" (SPEC §12.3)."""
-    repo = make_synthetic_repo(tmp_path, config_text=_CONFIG_WITH_SHARED_SKILLS)
+    repo = make_synthetic_repo(tmp_path, config_text=SHARED_SKILLS_CONFIG)
     source = _write_repo_local_skill(repo, "query-db")
     (source / "references" / "api").mkdir(parents=True)
     (source / "references" / "api" / "v1.md").write_text("nested\n")
@@ -278,7 +255,7 @@ def test_sync_check_names_the_blocker_of_a_refused_swap(tmp_path, make_synthetic
 def test_sync_with_relative_repo_root_keeps_fresh_skill_output(
     tmp_path, make_synthetic_repo, monkeypatch, capsys
 ):
-    repo = make_synthetic_repo(tmp_path, config_text=_CONFIG_WITH_SHARED_SKILLS)
+    repo = make_synthetic_repo(tmp_path, config_text=SHARED_SKILLS_CONFIG)
     _write_repo_local_skill(repo, "query-db")
     monkeypatch.chdir(repo.parent)
     relative = argparse.Namespace(repo_root=repo.name, check=False)
@@ -287,13 +264,13 @@ def test_sync_with_relative_repo_root_keeps_fresh_skill_output(
     assert sync_cmd.run(relative) == 0
 
     assert re.search(r", 0 removed$", capsys.readouterr().out, re.MULTILINE)
-    for root in _SKILL_ROOTS:
+    for root in NATIVE_SKILL_ROOTS:
         assert (repo / root / "query-db" / "scripts" / "run.py").is_file(), root
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits")
 def test_sync_and_check_survive_read_only_source_script(tmp_path, make_synthetic_repo):
-    repo = make_synthetic_repo(tmp_path, config_text=_CONFIG_WITH_SHARED_SKILLS)
+    repo = make_synthetic_repo(tmp_path, config_text=SHARED_SKILLS_CONFIG)
     source = _write_repo_local_skill(repo, "query-db")
     (source / "scripts" / "run.py").chmod(0o555)
 
@@ -305,7 +282,7 @@ def test_sync_and_check_survive_read_only_source_script(tmp_path, make_synthetic
 def test_sync_check_and_sync_handle_reference_folder_becoming_a_file(
     tmp_path, make_synthetic_repo, capsys
 ):
-    repo = make_synthetic_repo(tmp_path, config_text=_CONFIG_WITH_SHARED_SKILLS)
+    repo = make_synthetic_repo(tmp_path, config_text=SHARED_SKILLS_CONFIG)
     source = _write_repo_local_skill(repo, "query-db")
     (source / "references" / "api").mkdir(parents=True)
     (source / "references" / "api" / "v1.md").write_text("nested\n")
@@ -318,7 +295,7 @@ def test_sync_check_and_sync_handle_reference_folder_becoming_a_file(
     assert sync_cmd.run(_ns(repo)) == 0
     assert sync_cmd.run(_ns(repo, check=True)) == 0
 
-    for root in _SKILL_ROOTS:
+    for root in NATIVE_SKILL_ROOTS:
         api = repo / root / "query-db" / "references" / "api"
         assert api.is_file(), root
         assert api.read_text() == "flat\n"
@@ -340,7 +317,7 @@ def _rename_skill_id_case_and_sync(
     """
     # Continue is on too: its degraded prompt (``.continue/prompts/<id>.md``) goes
     # through the ABC's sentinel cleanup, which must compare identity, not spelling.
-    repo = make_synthetic_repo(tmp_path, config_text=_CONFIG_WITH_SHARED_SKILLS)
+    repo = make_synthetic_repo(tmp_path, config_text=SHARED_SKILLS_CONFIG)
     source = _write_repo_local_skill(repo, "Demo")
     # ``id: Demo`` fails validate, which now gates sync: seed pre-gate output.
     assert _sync.execute(repo, validate=pre_gate_validate) == 0
@@ -353,12 +330,12 @@ def _rename_skill_id_case_and_sync(
     assert sync_cmd.run(_ns(repo)) == 0
     out: str = capsys.readouterr().out
 
-    for root in _SKILL_ROOTS:
+    for root in NATIVE_SKILL_ROOTS:
         entries = [entry.name for entry in (repo / root).iterdir()]
         assert [name for name in entries if name not in core_skill_ids()] == ["demo"], root
         assert (repo / root / "demo" / "scripts" / "run.py").is_file(), root
         assert (repo / root / "demo" / "SKILL.md").read_text().startswith("---\nname: demo\n")
-    assert not any("/Demo/" in path for path in _lock_paths(repo))
+    assert not any("/Demo/" in path for path in lock_entry_paths(repo))
     gitignore = (repo / ".gitignore").read_text()
     assert "/Demo/" not in gitignore
     assert sync_cmd.run(_ns(repo, check=True)) == 0
@@ -574,7 +551,7 @@ _PARITY_SCENARIOS = {
 def test_check_modes_agree_with_a_completed_sync(
     scenario: str, tmp_path: Path, make_synthetic_repo: Callable[..., Path]
 ) -> None:
-    repo = make_synthetic_repo(tmp_path, config_text=_CONFIG_WITH_SHARED_SKILLS)
+    repo = make_synthetic_repo(tmp_path, config_text=SHARED_SKILLS_CONFIG)
     git = _PARITY_SCENARIOS[scenario](repo)
 
     assert _sync.execute(repo, git=git) == 0

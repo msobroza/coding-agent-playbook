@@ -947,7 +947,7 @@ def test_sync_removes_bytecode_an_earlier_engine_copied(
     repo = make_synthetic_repo(tmp_path, config_text=_CONFIG_EVERY_SKILL_ROOT)
     _seed_skill_with_bytecode(repo)
     with monkeypatch.context() as patch:  # the pre-fix engine: copy every file
-        patch.setattr(source_files, "is_bytecode_cache", lambda _relative: False)
+        patch.setattr(source_files, "is_unauthored_path", lambda _relative: False)
         assert _sync.execute(repo, git=FakeGitClient()) == 0
     assert _bytecode_paths_anywhere(repo) != []
 

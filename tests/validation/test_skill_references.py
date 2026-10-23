@@ -186,6 +186,23 @@ def test_only_license_files_are_exempt_from_listing(tmp_path: Path) -> None:
     ]
 
 
+def test_tool_caches_a_tool_run_left_need_no_entry(tmp_path: Path) -> None:
+    """Regression (PR #266 CI): sync never copies tool caches, venvs or bytecode, so
+    validation must not ask for them to be listed either (``ruff check .`` plants a
+    ``.ruff_cache/`` beside an example's pyproject)."""
+    source_dir = _skill_dir(
+        tmp_path,
+        "references/guide.md",
+        "references/__pycache__/x.cpython-312.pyc",
+        "examples/app/.ruff_cache/.gitignore",
+        "examples/app/.venv/pyvenv.cfg",
+        "examples/app/.hypothesis/examples/ab",
+    )
+    entry = {"path": "references/guide.md", "open_when": "x"}
+
+    assert errors_of([make_rule()], _references_skill([entry], source_dir)) == []
+
+
 def test_a_sectioned_skill_without_references_lists_its_files(tmp_path: Path) -> None:
     source_dir = _skill_dir(tmp_path, "references/guide.md")
     skill = make_skill(source_dir=source_dir)

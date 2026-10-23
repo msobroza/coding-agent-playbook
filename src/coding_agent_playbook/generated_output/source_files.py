@@ -16,7 +16,7 @@ script in-process writes ``scripts/__pycache__/``. Copying them made the synced 
 (and its lockfile entries) depend on how, and under which Python, the engine was
 installed, so files were added and removed from one sync to the next.
 
-**Nor are tool caches and virtual environments** (``TOOL_CACHE_DIR_NAMES``): a
+**Nor are tool caches and virtual environments** (also ``SKIPPED_DIR_NAMES``): a
 ``.ruff_cache/``, ``.mypy_cache/``, ``.pytest_cache/``, ``.hypothesis/`` or ``.venv/``
 directory anywhere in a subtree. An example that ships its own ``pyproject.toml``
 gets one as soon as a tool runs over the checkout (the engine's CI runs ``ruff
@@ -32,8 +32,9 @@ and ``references/`` are byte-copied into every skills root and the
 ``agent_harness`` tree, so a copied file is *published*: hashed into the lockfile,
 committed under ``[output] commit = true``, and written to the ``playbook sync
 --check`` scratch tree. The walk starts from :func:`skill_subtree_files`, which
-silently drops Python bytecode caches (by-products, not content). Two kinds of
-source file are then never copied; each is named in a stderr warning instead:
+silently drops bytecode, tool caches and virtual environments (by-products, not
+content). Two kinds of source file are then never copied; each is named in a
+stderr warning instead:
 
 - a **secret path** (``security.paths.is_secret_path``), judged both by its name
   inside the skill and by where it resolves, so ``scripts/notes.txt ->
@@ -58,43 +59,30 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.artifacts.skill import SideDirName, Skill
 
-#: Directory names whose whole subtree a sync never copies.
-SKIPPED_DIR_NAMES: frozenset[str] = frozenset({"__pycache__"})
+#: Directory names whose whole subtree a sync never copies: the bytecode cache, tool
+#: caches and virtual environments. None of them is authored content.
+SKIPPED_DIR_NAMES: frozenset[str] = frozenset(
+    {"__pycache__", ".hypothesis", ".mypy_cache", ".pytest_cache", ".ruff_cache", ".venv"}
+)
 
 #: File suffixes a sync never copies (compiled and optimized bytecode).
 SKIPPED_SUFFIXES: frozenset[str] = frozenset({".pyc", ".pyo"})
 
-#: Tool caches and virtual environments a tool run leaves in a skill subtree: never copied.
-TOOL_CACHE_DIR_NAMES: frozenset[str] = frozenset(
-    {".hypothesis", ".mypy_cache", ".pytest_cache", ".ruff_cache", ".venv"}
-)
 
+def is_unauthored_path(relative: PurePath) -> bool:
+    """Return whether ``relative`` (inside a skill subtree) is a by-product, never copied.
 
-def is_bytecode_cache(relative: PurePath) -> bool:
-    """Return whether ``relative`` (a path inside a skill subtree) is a bytecode cache.
+    True for bytecode (a ``*.pyc``/``*.pyo`` file) and for anything under a
+    ``SKIPPED_DIR_NAMES`` directory: a bytecode cache, a tool cache or a virtual
+    environment. Judge the path *relative to* the subtree, so a source tree that
+    itself lives under such a directory is not mistaken for one.
 
-    Judge the path *relative to* the subtree, so a source tree that itself
-    lives under a ``__pycache__`` directory is not mistaken for one.
-
-    Example: ``is_bytecode_cache(PurePath("__pycache__/run.cpython-312.pyc"))``
-    -> ``True``; ``is_bytecode_cache(PurePath("run.py"))`` -> ``False``.
+    Example: ``is_unauthored_path(PurePath("app/.ruff_cache/.gitignore"))`` -> ``True``;
+    ``is_unauthored_path(PurePath(".env.example"))`` -> ``False``.
     """
     if SKIPPED_DIR_NAMES.intersection(relative.parts):
         return True
     return relative.suffix in SKIPPED_SUFFIXES
-
-
-def is_cache_path(relative: PurePath) -> bool:
-    """Return whether ``relative`` (inside a skill subtree) is a cache a sync never copies.
-
-    A bytecode cache (:func:`is_bytecode_cache`) or anything under a tool cache or
-    virtual environment directory (``TOOL_CACHE_DIR_NAMES``), judged relative to the
-    subtree like :func:`is_bytecode_cache`.
-
-    Example: ``is_cache_path(PurePath("app/.ruff_cache/.gitignore"))`` -> ``True``;
-    ``is_cache_path(PurePath(".env.example"))`` -> ``False``.
-    """
-    return is_bytecode_cache(relative) or bool(TOOL_CACHE_DIR_NAMES.intersection(relative.parts))
 
 
 def skill_subtree_files(src: Path) -> list[Path]:
@@ -109,7 +97,7 @@ def skill_subtree_files(src: Path) -> list[Path]:
     return sorted(
         path
         for path in src.rglob("*")
-        if path.is_file() and not is_cache_path(path.relative_to(src))
+        if path.is_file() and not is_unauthored_path(path.relative_to(src))
     )
 
 
