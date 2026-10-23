@@ -67,3 +67,4 @@ tests/
 - A layer name counts anywhere in a module's dotted path, so `bookings/routers.py` and `routers/bookings.py` are both interface code; singular names such as `bookings/service.py` match no layer until the skill's layer_map.py script is told about them with `--layer`.
 - A scaffolded tree lists dependencies in `pyproject.toml`, not a requirements file, and keeps test fakes under `tests/`.
 - How the tree reads to a newcomer is arch-predictable-project-tree; generic package names are arch-no-junk-drawer-packages.
+- The layer_map.py flags (`--layer`, `--allow`, `--root-module`) and how to set them for a project: see architecture-review.md.

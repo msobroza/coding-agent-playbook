@@ -41,6 +41,11 @@ playbook:
       impact: LOW
       summary: "Splitting reads from writes and storing history as events, only when the signal justifies the cost."
       open_when: "A list or dashboard view computes derived fields per request, or a design proposes read models, projections or events."
+  references:
+    - path: references/architecture-review.md
+      open_when: "Reviewing a service's whole module structure or import graph, or running layer_map.py and reading its report."
+    - path: references/where-code-goes.md
+      open_when: "Writing new code and unsure which package or layer it belongs in, or where its test goes."
 ---
 
 # Python application architecture
