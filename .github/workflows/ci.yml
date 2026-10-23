@@ -29,11 +29,15 @@ jobs:
       - name: Install package and dev tools
         run: python -m pip install -e ".[dev]"
 
+      # --no-cache: ruff writes a .ruff_cache next to every pyproject.toml it
+      # finds, the core skill examples included, and a sync copies everything
+      # under a skill's examples/, so the cache would show up in the synced
+      # skills the pytest step compares (test_sync_core_skills.py).
       - name: Ruff lint
-        run: ruff check .
+        run: ruff check --no-cache .
 
       - name: Ruff format check
-        run: ruff format --check .
+        run: ruff format --no-cache --check .
 
       - name: mypy (strict)
         run: mypy

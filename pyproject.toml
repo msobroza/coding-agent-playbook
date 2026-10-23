@@ -42,8 +42,8 @@ dev = [
     "mypy>=1.13.0",
     "pytest>=8.3.0",
     "pytest-cov>=5.0.0",
-    # CI runs the suite with `pytest -n auto`; addopts stay serial-friendly, so a
-    # local single-file run needs no -n.
+    # CI's pytest step (.github/workflows/ci.yml) runs the suite under xdist;
+    # addopts stay serial-friendly, so a local single-file run needs no -n.
     "pytest-xdist>=3.6",
     "types-pyyaml>=6.0",
     # Pinned like ruff: the contracts in [tool.importlinter] run from pytest

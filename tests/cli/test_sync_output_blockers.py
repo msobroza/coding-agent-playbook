@@ -46,7 +46,7 @@ def _fail_instead_of_hanging() -> Iterator[None]:
         return
 
     def _timeout(signum: int, frame: object) -> None:
-        raise TimeoutError("playbook sync blocked (opening a FIFO?)")
+        raise TimeoutError(f"playbook sync still running after {_HANG_GUARD_S} s (a FIFO?)")
 
     previous = signal.signal(signal.SIGALRM, _timeout)
     signal.alarm(_HANG_GUARD_S)

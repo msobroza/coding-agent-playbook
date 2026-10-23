@@ -635,17 +635,19 @@ Acceptance:
 
 Lane lane0, size S, depends on L0-28; decisions none (owner's request of 2026-10-23, after the core-rule parse cache).
 
-Once the core-rule parse cache (5fcf0e7c) removed the quadratic cost, CI time is the plain size of the suite (about 19,400 tests). pytest-xdist joins the dev extra and CI's test job runs `pytest -q -n auto`. Tests that are not safe in parallel are made safe (own tmp paths, no shared files or global state) or grouped with `xdist_group` when they must share a resource; timing-based tests stay reliable under parallel load. This ticket runs the full suite (serial and parallel) as part of its own check, an exception to the house rule.
+Once the core-rule parse cache (5fcf0e7c) removed the quadratic cost, CI time is the plain size of the suite (about 19,400 tests). pytest-xdist joins the dev extra and CI's test job runs `pytest -q -n auto --dist worksteal` (worksteal, not the default load: the slow end-to-end sync tests cluster at the end of the collection, and with load one worker ran that tail alone). Tests that are not safe in parallel are made safe (own tmp paths, no shared files or global state) or grouped with `xdist_group` when they must share a resource; timing-based tests stay reliable under parallel load. This ticket runs the full suite (serial and parallel) as part of its own check, an exception to the house rule.
 
 - `pyproject.toml`: pytest-xdist in the dev extra
-- `.github/workflows/ci.yml`: `pytest -q -n auto`
-- test `tests/**`: whatever is not parallel-safe
+- `.github/workflows/ci.yml`: `pytest -q -n auto --dist worksteal`; ruff with `--no-cache`, since a `.ruff_cache` that `ruff check .` leaves in a core skill's examples/ is synced into the skill output and fails tests/cli/test_sync_core_skills.py
+- test `tests/**`: whatever is not parallel-safe; the end-to-end `git` helpers share one hang guard (tests/cli/git_run.py)
 
 Acceptance:
 - The full suite passes with `pytest -n auto` and serially.
 - No test depends on running alone, apart from explicitly grouped and documented ones.
 - CI's test job runs in parallel and coverage still meets fail-under=80.
 - The serial and parallel local durations are reported.
+
+Measured locally (8 GB machine shared with other agent runs, so absolute times are noisy): serial 2412.6 s; `-n 4 --dist worksteal` 1152.6 s; `-n 4` with the default load mode 3146 s and 3371 s.
 
 ### D-01: docs(spec): describe rules inside skills, sections and the priority policy
 

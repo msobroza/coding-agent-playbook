@@ -11,7 +11,6 @@ never wrote is never deleted, even inside an engine-owned skill dir.
 from __future__ import annotations
 
 import shutil
-import subprocess
 import sys
 from typing import TYPE_CHECKING
 
@@ -21,6 +20,7 @@ from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.lockfile.model import compute_hash
 from coding_agent_playbook.sync import pipeline as _sync
 from tests._catalog import core_skill_ids
+from tests.cli.git_run import run_git
 from tests.conftest import _DEFAULT_CONFIG
 from tests.fakes import FakeGitClient, pre_gate_validate
 
@@ -467,28 +467,21 @@ def test_unreadable_lockfile_is_ignored_with_a_warning(
 needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="git not on PATH")
 
 
-def _git(repo: Path, *args: str) -> str:
-    proc = subprocess.run(
-        ["git", *args], cwd=repo, check=True, capture_output=True, text=True, timeout=10
-    )
-    return proc.stdout
-
-
 @needs_git
 @pytest.mark.usefixtures("hermetic_git_env")
 def test_e2e_removed_skill_output_is_never_staged(repo: Path) -> None:
-    _git(repo, "init", "-q")
+    run_git(repo, "init", "-q")
     assert _sync.execute(repo) == 0
     (repo / _SKILL_OUT / "scripts" / "run.sh").write_text("edited\n")
-    _git(repo, "add", "-A")
-    _git(repo, "commit", "-q", "--no-verify", "-m", "sources")
+    run_git(repo, "add", "-A")
+    run_git(repo, "commit", "-q", "--no-verify", "-m", "sources")
     _remove_skill_source(repo)
     assert _sync.execute(repo) == 0
-    _git(repo, "add", "-A")
-    staged = _git(repo, "diff", "--cached", "--name-only").split()
+    run_git(repo, "add", "-A")
+    staged = run_git(repo, "diff", "--cached", "--name-only").split()
     assert not any(path.startswith(".claude/") for path in staged)
     assert _sync.execute(repo, check_staged=True) == 0
-    _git(repo, "add", "-f", f"{_SKILL_OUT}/scripts/run.sh")
+    run_git(repo, "add", "-f", f"{_SKILL_OUT}/scripts/run.sh")
     assert _sync.execute(repo, check_staged=True) == 1
 
 
@@ -499,18 +492,18 @@ def test_e2e_skill_taken_over_through_a_symlink_is_never_deleted(repo: Path) -> 
     """Regression: the user moved a generated skill into ``my-skills/``, linked it back
     and committed it; the old lockfile entries resolved through the link (and git's
     ``ls-files`` cannot see through it), so sync deleted the committed files."""
-    _git(repo, "init", "-q")
+    run_git(repo, "init", "-q")
     assert _sync.execute(repo) == 0
     (repo / "my-skills").mkdir()
     (repo / _SKILL_OUT).rename(repo / "my-skills" / _SKILL)
     (repo / _SKILL_OUT).symlink_to(f"../../my-skills/{_SKILL}", target_is_directory=True)
     _remove_skill_source(repo)
-    _git(repo, "add", "my-skills")
-    _git(repo, "commit", "-q", "--no-verify", "-m", "take the skill over")
+    run_git(repo, "add", "my-skills")
+    run_git(repo, "commit", "-q", "--no-verify", "-m", "take the skill over")
     assert _sync.execute(repo) == 0
     assert (repo / "my-skills" / _SKILL / "SKILL.md").is_file()
     assert (repo / "my-skills" / _SKILL / "scripts" / "run.sh").is_file()
-    assert " D " not in _git(repo, "status", "--porcelain")
+    assert " D " not in run_git(repo, "status", "--porcelain")
     assert "my-skills" not in (repo / ".gitignore").read_text()
 
 
@@ -527,7 +520,7 @@ def test_e2e_tracked_leftover_after_a_case_only_dir_rename_is_kept(repo: Path) -
     if not insensitive:
         pytest.skip("needs a case-insensitive filesystem")
     _commit_output(repo)
-    _git(repo, "init", "-q")
+    run_git(repo, "init", "-q")
     source = repo / "playbook" / "skills" / "Demo"
     (repo / "playbook" / "skills" / _SKILL).rename(source)
     skill_md = source / "SKILL.md"
@@ -535,12 +528,12 @@ def test_e2e_tracked_leftover_after_a_case_only_dir_rename_is_kept(repo: Path) -
     (source / "scripts" / "old.sh").write_text("old\n")
     # ``id: Demo`` fails validate, which now gates sync: seed pre-gate output.
     assert _sync.execute(repo, validate=pre_gate_validate) == 0
-    _git(repo, "add", "-A")
-    _git(repo, "commit", "-q", "--no-verify", "-m", "committed output")
+    run_git(repo, "add", "-A")
+    run_git(repo, "commit", "-q", "--no-verify", "-m", "committed output")
     skill_md.write_text(skill_md.read_text().replace("id: Demo", "id: demo"))
     assert _sync.execute(repo) == 0  # renames .claude/skills/Demo -> demo
     (source / "scripts" / "old.sh").unlink()
     assert _sync.execute(repo) == 0
     assert (repo / ".claude" / "skills" / "demo" / "scripts" / "old.sh").is_file()
-    status = _git(repo, "status", "--porcelain").splitlines()
+    status = run_git(repo, "status", "--porcelain").splitlines()
     assert not [line for line in status if line.startswith(" D .claude/")], status

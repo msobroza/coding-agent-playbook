@@ -13,12 +13,12 @@ after the last table, or misspelling it.
 from __future__ import annotations
 
 import shutil
-import subprocess
 from typing import TYPE_CHECKING
 
 import pytest
 
 from coding_agent_playbook.cli import main
+from tests.cli.git_run import run_git
 from tests.conftest import _DEFAULT_CONFIG
 from tests.plugins.superpowers_expectations import PLUGIN_NAME, write_consumer_repo
 
@@ -300,10 +300,6 @@ def test_init_refuses_a_table_form_local_file_before_writing(
 # --------------------------------------------------------------------------- #
 
 
-def _git(repo: Path, *args: str) -> None:
-    subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, timeout=10)
-
-
 def _table_form_in_primary(repo: Path) -> None:
     (repo / _PRIMARY).write_text(_TABLE_FORM_CONFIG, encoding="utf-8")
 
@@ -347,10 +343,10 @@ def test_a_pack_synced_repo_is_untouched_when_the_config_switches_to_the_table_f
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     repo = write_consumer_repo(tmp_path, overlays=[PLUGIN_NAME])
-    _git(repo, "init", "-q")
+    run_git(repo, "init", "-q")
     assert _run(["sync"], repo) == 0
-    _git(repo, "add", "-A")
-    _git(repo, "commit", "-q", "--no-verify", "-m", "sources")
+    run_git(repo, "add", "-A")
+    run_git(repo, "commit", "-q", "--no-verify", "-m", "sources")
     # The pack output, its lockfile entries and the managed block all exist.
     assert (repo / ".claude" / "skills" / "brainstorming" / "SKILL.md").is_file()
     assert "brainstorming" in (repo / ".coding-agent-playbook.lock").read_text(encoding="utf-8")
