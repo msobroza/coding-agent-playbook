@@ -38,8 +38,14 @@ jobs:
       - name: mypy (strict)
         run: mypy
 
+      # pytest-xdist spreads the suite over the runner's cores; pytest-cov
+      # combines the workers' coverage data before fail-under is checked.
+      # worksteal, not the default load: the slow end-to-end sync tests
+      # (tests/cli/test_sync_*, seconds each) cluster at the end of the
+      # collection, and with load one worker ran that whole tail alone while
+      # the others sat idle (92% of the tests in 10 min, the rest in 46 min).
       - name: pytest
-        run: pytest -q
+        run: pytest -q -n auto --dist worksteal
 
       - name: playbook --version smoke test
         run: playbook --version

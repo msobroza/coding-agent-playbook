@@ -388,7 +388,7 @@ allowlist.
 
 ## Run the gate
 
-CI runs four commands from the repository root. Run them all before you push:
+CI runs these four commands from the repository root. Run them all before you push:
 
 ```bash
 ruff check .
@@ -398,7 +398,10 @@ pytest -q
 ```
 
 Run them inside the dev environment (`uv sync --extra dev`, then prefix each
-with `uv run`). CI's `ruff format --check .` also formats the Python code
+with `uv run`). CI runs pytest in parallel, as `pytest -q -n auto --dist
+worksteal` (pytest-xdist is in the dev extra), which does not change the result;
+`-n 4 --dist worksteal` reproduces a failure seen only in CI.
+CI's `ruff format --check .` also formats the Python code
 blocks inside markdown, this guide's included. The pytest suite validates the
 shipped content: link containment and self-containment for `core/` and every
 bundled plugin (see "Add a bundled plugin"), every eval sample's gate, and the

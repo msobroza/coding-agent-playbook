@@ -69,7 +69,8 @@ upgrade, read `MIGRATION.md`.
   and Notes; `catalog/README.md` ("Writing a rule") lists the keys and has the
   template.
 - **The commands to run:** `ruff check .`, `ruff format --check .`, `mypy` and
-  `pytest -q`, inside `uv sync --extra dev`.
+  `pytest -q`, inside `uv sync --extra dev`; CI runs pytest in parallel with
+  `-n auto --dist worksteal` (`catalog/README.md`, "Run the gate").
 - **PR titles** follow Conventional Commits (`feat(catalog): ...`); commitizen
   checks them.
 
