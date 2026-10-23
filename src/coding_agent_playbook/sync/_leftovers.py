@@ -65,9 +65,12 @@ if TYPE_CHECKING:
     from coding_agent_playbook.lockfile.model import LockEntry, Lockfile
     from coding_agent_playbook.sync.git_client import GitClient
 
-# User/state files an orphan entry must never resolve to, whatever an old (or
-# hand-edited) lockfile claims.
-_NEVER_ORPHANED = frozenset(
+# Repo-root user/state files an orphan entry must never resolve to, whatever an
+# old (or hand-edited) lockfile claims. Root only: a lockfile-owned ``.gitignore``
+# deeper down (one a skill example ships, or ruff's ``.ruff_cache/.gitignore`` an
+# older engine copied) is engine output like any other, and exempting it by name
+# kept a removed skill's directory alive (PR #266 CI).
+_NEVER_ORPHANED_AT_ROOT = frozenset(
     {
         GITIGNORE_FILENAME,
         LOCKFILE_NAME,
@@ -96,7 +99,7 @@ def find_orphans(
     """Return ``previous`` entries not rewritten by this sync that still exist on disk.
 
     Entries escaping ``repo_root``, crossing a symlink, under ``.git/`` or naming
-    a user/state file are never orphans, and neither is a scoped
+    a repo-root user/state file are never orphans, and neither is a scoped
     (``json:<pointer>``) entry: its file is shared with the user and only its
     managed elements are engine-owned (specs/prK-lifecycle-hooks.md §B.6). An
     entry naming the same file as a written path (or as an earlier orphan) — a
@@ -272,14 +275,14 @@ class LeftoverPolicy:
 def _owned_path(root: Path, rel: str) -> Path | None:
     """``root / rel`` if output may be judged there, else ``None`` (released).
 
-    ``None`` when ``rel`` leaves ``root``, names a user/state file, has a
+    ``None`` when ``rel`` leaves ``root``, names a repo-root user/state file, has a
     ``.git`` segment, or crosses a symlink: lockfile paths are recorded
     resolved, so a symlink on the way means the user re-pointed the path since
     (e.g. took a skill dir over by moving it and linking it back) and whatever
     it reaches now is theirs — git, too, cannot see through it.
     """
     parts = PurePosixPath(rel).parts
-    if not parts or parts[-1] in _NEVER_ORPHANED:
+    if not parts or (len(parts) == 1 and parts[0] in _NEVER_ORPHANED_AT_ROOT):
         return None
     if any(part.casefold() == _GIT_DIR for part in parts):
         return None

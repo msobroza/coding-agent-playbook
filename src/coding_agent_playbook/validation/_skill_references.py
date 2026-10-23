@@ -19,6 +19,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Final
 
+from coding_agent_playbook.generated_output.source_files import is_unauthored_path
 from coding_agent_playbook.skills.playbook_block import PLAYBOOK_BLOCK_KEY, playbook_block
 from coding_agent_playbook.skills.sections import (
     REFERENCES_KEY,
@@ -171,12 +172,17 @@ def _unlisted_problems(skill: Skill, listed: list[str]) -> list[str]:
 
 
 def _listable_files(skill_dir: Path) -> list[PurePosixPath]:
-    """Every file under references/ and examples/, sorted, minus license files."""
+    """Every file under references/ and examples/ a sync copies, sorted, minus licenses.
+
+    Tool caches, venvs and bytecode a tool run left there are skipped, as sync
+    skips them (``is_unauthored_path``), so the verdict never depends on which
+    tools ran in the checkout (PR #266 CI).
+    """
     files = [
         PurePosixPath(path.relative_to(skill_dir).as_posix())
         for name in _LISTED_DIRS
         for path in (skill_dir / name).rglob("*")
-        if path.is_file()
+        if path.is_file() and not is_unauthored_path(path.relative_to(skill_dir / name))
     ]
     return sorted(path for path in files if not _is_license(path))
 

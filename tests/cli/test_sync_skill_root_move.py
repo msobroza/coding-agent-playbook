@@ -33,7 +33,8 @@ from coding_agent_playbook.generated_output.gitignore import (
 )
 from coding_agent_playbook.sync import pipeline as _sync
 from tests._catalog import CORE_SKILLS_ROOT, core_skill_ids
-from tests.cli.test_sync_skills import _lock_paths, _skill_tree, _write_repo_local_skill
+from tests.cli.skill_sync_kit import lock_entry_paths as _lock_paths
+from tests.cli.test_sync_skills import _skill_tree, _write_repo_local_skill
 from tests.core_skill_pins.playbook_creator import PINS as PLAYBOOK_CREATOR_PINS
 from tests.core_skill_pins.python_documentation import PINS as DOCUMENTATION_PINS
 from tests.core_skill_pins.python_tooling import UNGATED_MEMBERS

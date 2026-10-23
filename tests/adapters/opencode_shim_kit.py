@@ -3,7 +3,9 @@
 ``ShimRepo`` is a tmp worktree holding the shim at its committed path, a
 ``package.json`` declaring ESM (node 18 reads a bare ``.js`` as CommonJS) and
 a per-worktree pin naming a fake ``sh`` dispatcher. The fake is the only
-process boundary: it records each call's argv and stdin under ``calls/<n>/``
+process boundary: it records each call's argv and stdin under ``calls/<n>/``,
+then marks the record complete with ``calls/<n>/done`` (a fired, not awaited,
+dispatch may still be writing it when the shim returns)
 and replays the canned stdout and exit code in ``responses/<event>.{out,code}``,
 or ``exec``s ``sleep`` for ``responses/<event>.sleep`` seconds so the shim's
 kill reaches it. ``tests/fixtures/opencode/shim_driver.mjs`` calls the server
@@ -51,6 +53,7 @@ mkdir -p "$d/calls/$n"
 echo $$ > "$d/calls/$n/pid"
 printf '%s\\n' "$@" > "$d/calls/$n/argv"
 cat > "$d/calls/$n/stdin"
+: > "$d/calls/$n/done"
 r="$d/responses/$5"
 if [ -f "$r.sleep" ]; then exec sleep "$(cat "$r.sleep")"; fi
 if [ -f "$r.out" ]; then cat "$r.out"; fi
@@ -80,11 +83,17 @@ class DispatchCall:
 
 @dataclass(frozen=True)
 class ShimRun:
-    """One driver run: a result per step, the shim's ``console.error`` lines, every dispatch."""
+    """One driver run: a result per step, the shim's ``console.error`` lines, every dispatch.
+
+    ``calls`` holds the complete records only; ``started`` counts every dispatch
+    the fake began, complete or not, so a test that expects no dispatch
+    asserts ``started == 0`` and still catches one caught mid-write.
+    """
 
     results: list[dict[str, Any]]
     errors: list[str]
     calls: list[DispatchCall]
+    started: int
 
     @property
     def events(self) -> list[str]:
@@ -148,12 +157,27 @@ class ShimRepo:
         done = run_node(args, stdin=json.dumps(steps), cwd=self.root)
         assert done.returncode == 0, done.stderr
         body = json.loads(done.stdout)
-        return ShimRun(body["results"], body["errors"], self.calls())
+        return ShimRun(body["results"], body["errors"], self.calls(), self.started_calls())
+
+    def started_calls(self) -> int:
+        """How many dispatches the fake has begun, complete or not.
+
+        Read from ``count``, the fake's first write (before ``calls/<n>`` exists),
+        so a dispatch that started is never missed.
+        """
+        count = self.fake / "count"
+        return int(count.read_text(encoding="utf-8")) if count.exists() else 0
 
     def calls(self) -> list[DispatchCall]:
-        """Every recorded dispatch, oldest first."""
-        dirs = sorted((self.fake / "calls").iterdir(), key=lambda path: int(path.name))
-        return [_call(directory) for directory in dirs]
+        """Every completely recorded dispatch, oldest first.
+
+        A record without its ``done`` marker is still being written by an async
+        (fired, not awaited) dispatch; reading it raced on CI (PR #266), so it is
+        left out until complete (``tests/adapters/test_opencode_shim_node.py``
+        polls for it).
+        """
+        dirs = [path for path in (self.fake / "calls").iterdir() if (path / "done").exists()]
+        return [_call(directory) for directory in sorted(dirs, key=lambda path: int(path.name))]
 
 
 def _call(directory: Path) -> DispatchCall:

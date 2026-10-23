@@ -48,7 +48,10 @@ def test_the_comparison_is_off_by_default() -> None:
 
 
 def test_a_comparison_reports_each_side_and_keeps_every_run(
-    tmp_path: Path, make_synthetic_repo: Any, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    make_synthetic_repo: Any,
+    capsys: pytest.CaptureFixture[str],
+    fake_uv_on_path: Path,  # each compared side is a child process (PR #266 CI)
 ) -> None:
     repo = _committed_repo(tmp_path, make_synthetic_repo)
     out = tmp_path / "out"
@@ -91,7 +94,10 @@ def test_a_sample_outside_the_compared_prompts_is_a_usage_error(
     tmp_path: Path, make_synthetic_repo: Any, capsys: pytest.CaptureFixture[str]
 ) -> None:
     make_synthetic_repo(tmp_path)
-    argv = ["eval", "explain-pure-function", "--compare", "HEAD", "--repo-root", str(tmp_path)]
+    # --runner fake: the default runner (claude_code) is checked first and needs its
+    # CLI, which CI does not have (PR #266 CI).
+    argv = ["eval", "explain-pure-function", "--compare", "HEAD", "--runner", "fake"]
+    argv += ["--repo-root", str(tmp_path)]
     assert _eval.run(build_parser().parse_args(argv)) == 2
     assert "explain-pure-function" in capsys.readouterr().err
 
