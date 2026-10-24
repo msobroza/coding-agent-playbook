@@ -13,38 +13,16 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.agent_harness.adapter import AgentHarnessAdapter
-from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
+from tests.agent_harness.test_adapter import _make_rule
 
 if TYPE_CHECKING:
     import pytest
 
 
-def _always_rule() -> Rule:
-    body = "# House style\n\nUse type hints.\n"
-    return Rule(
-        frontmatter=RuleFrontmatter(
-            id="python-house-style",
-            name="Python house style",
-            description="House style for Python",
-            scope="always",
-            globs=[],
-            priority=10,
-            tags=[],
-            applies_if={},
-            version=1,
-        ),
-        body=body,
-        template_body=body,
-        is_templated=False,
-        source_path=None,
-        source_package="test",
-    )
-
-
 def _harness_md(adapter: AgentHarnessAdapter, output_root: Path) -> str:
     """Buffer one always-rule, finalize into ``output_root`` and return ``HARNESS.md``."""
     output_root.mkdir(parents=True, exist_ok=True)
-    adapter.write_rule(_always_rule(), output_root)
+    adapter.write_rule(_make_rule(), output_root)
     adapter.finalize(output_root)
     return (output_root / "HARNESS.md").read_text(encoding="utf-8")
 
