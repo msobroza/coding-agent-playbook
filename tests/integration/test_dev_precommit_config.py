@@ -66,3 +66,15 @@ def test_dev_extra_pins_ruff_exactly() -> None:
     dev = _pyproject()["project"]["optional-dependencies"]["dev"]
     (ruff,) = [req for req in dev if req.startswith("ruff")]
     assert "==" in ruff, ruff
+
+
+def test_coverage_measures_with_sys_monitoring() -> None:
+    """The default C tracer made the sync-heavy CLI tests about 2.5x slower under coverage."""
+    assert _pyproject()["tool"]["coverage"]["run"]["core"] == "sysmon"
+
+
+def test_dev_extra_needs_a_coverage_that_reads_the_core_setting() -> None:
+    # coverage 7.9 added [run] core; 7.8 warns "Unrecognized option" (an error
+    # under filterwarnings = error) and keeps the slow tracer.
+    dev = _pyproject()["project"]["optional-dependencies"]["dev"]
+    assert "coverage>=7.9" in dev, dev

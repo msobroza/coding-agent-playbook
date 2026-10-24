@@ -42,6 +42,9 @@ dev = [
     "mypy>=1.13.0",
     "pytest>=8.3.0",
     "pytest-cov>=5.0.0",
+    # 7.9 is the first coverage that reads [tool.coverage.run] core (sysmon below);
+    # pytest-cov alone accepts far older releases.
+    "coverage>=7.9",
     # CI's pytest step (.github/workflows/ci.yml) runs the suite under xdist;
     # addopts stay serial-friendly, so a local single-file run needs no -n.
     "pytest-xdist>=3.6",
@@ -563,6 +566,13 @@ move a judge a handler still holds there first (CONTEXT: Guard twin).
 """
 
 # --- coverage ---
+
+# sys.monitoring (PEP 669) instead of the default C tracer: the tracer made the
+# sync-heavy CLI tests about 2.5x slower, while sysmon gave the same line coverage
+# (an identical TOTAL on tests/unit plus tests/cli/test_sync_check.py) at near
+# no-coverage speed. It needs Python 3.12+, which requires-python already demands.
+[tool.coverage.run]
+core = "sysmon"
 
 [tool.coverage.report]
 exclude_lines = [
