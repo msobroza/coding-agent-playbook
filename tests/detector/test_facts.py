@@ -250,6 +250,27 @@ def test_detect_skips_secret_notebooks(tmp_path: Path) -> None:
     assert facts["project_kind"] == "python-library"
 
 
+def test_detect_skips_home_anchored_secret_notebooks_for_a_relative_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # #268 (H7): a repo under ``~/.ssh/`` matched the ``~/.ssh/**`` secret glob only
+    # when spelled absolute, so ``--repo-root ../probe`` counted its notebook and
+    # flipped project_kind to ml-research across five rendered files.
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    repo = _mkdir(home, ".ssh/probe")
+    _minimal_pyproject(repo)
+    _write(repo, "nb/a.ipynb", "{}\n")
+    _mkdir(repo, "src/probe")
+    monkeypatch.chdir(_mkdir(home, ".ssh/sib"))
+
+    relative, absolute = detect(pathlib.Path("../probe")), detect(repo)
+
+    assert absolute.get("has_notebooks", False) is False
+    assert relative.get("has_notebooks", False) is False
+    assert relative["project_kind"] == absolute["project_kind"] == "python-library"
+
+
 def _minimal_pyproject(repo: Path) -> None:
     _write(
         repo,
