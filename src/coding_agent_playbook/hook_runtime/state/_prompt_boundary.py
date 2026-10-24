@@ -7,7 +7,7 @@ to the newest entry a user turn opens with: a main-thread user entry (not
 ``isMeta``, a sidechain, a compact summary or a tool result) whose text is not
 a harness echo (local-command output, ``!`` shell echoes, hook output, an
 interruption). Its slash is what :func:`slash_of_prompt` finds: a typed
-``/review`` or the harness's ``<command-name>`` wrapper.
+``/review-core`` or the harness's ``<command-name>`` wrapper.
 
 Reads are bounded: windows of 64 KiB, 1 MiB, then 8 MiB from the end, and only
 lines naming the ``"user"`` role are decoded. A user line that is not JSON
@@ -60,7 +60,7 @@ class _Unknown(Exception):
 class PromptBoundary:
     """The entry that opened the turn: its transcript ``uuid`` and the slash it ran, if any.
 
-    Example: ``PromptBoundary("u-0007", "review")`` for a ``/review`` turn.
+    Example: ``PromptBoundary("u-0007", "review-core")`` for a ``/review-core`` turn.
     """
 
     uuid: str | None
@@ -70,13 +70,13 @@ class PromptBoundary:
 def slash_of_prompt(text: str) -> str | None:
     """The slash a prompt invokes, raw or inside the command wrapper; else ``None``.
 
-    Only a prompt that *starts* with the command counts: ``please /review``
+    Only a prompt that *starts* with the command counts: ``please /review-core``
     is prose, not an invocation, and an unrecognized wrapper is no command.
 
     Example::
 
-        >>> slash_of_prompt("/security-review src/app.py")
-        'security-review'
+        >>> slash_of_prompt("/security-review-core src/app.py")
+        'security-review-core'
         >>> slash_of_prompt("fix it") is None
         True
     """

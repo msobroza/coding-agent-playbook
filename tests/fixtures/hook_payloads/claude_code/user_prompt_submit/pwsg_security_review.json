@@ -9,5 +9,5 @@
   "permission_mode": "default",
   "hook_event_name": "UserPromptSubmit",
   "prompt_id": "pr_21",
-  "prompt": "/security-review src/app.py"
+  "prompt": "/security-review-core src/app.py"
 }

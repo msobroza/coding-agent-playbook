@@ -278,7 +278,7 @@ class ClaudeCodeAdapter(Adapter):
         fence); the ``prompt_claude_command`` renderer handles that shape
         plus the ``## Before you start`` block pointing at skills (D15).
 
-        Example: ``adapter.write_prompt(prompt, repo_root)`` -> ``[.claude/commands/review.md]``.
+        Example: ``adapter.write_prompt(prompt, repo_root)`` -> ``[.claude/commands/review-core.md]``.
         """
         rendered = render_for(
             prompt.source_path or Path("inline"),

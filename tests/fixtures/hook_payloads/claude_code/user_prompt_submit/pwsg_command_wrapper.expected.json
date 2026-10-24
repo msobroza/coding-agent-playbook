@@ -8,7 +8,7 @@
     "project_dir": "/playbook-fixture/proj",
     "repo_root": "/playbook-fixture/proj",
     "permission_mode": "default",
-    "prompt": "<command-message>review is running…</command-message>\n<command-name>/review</command-name>\n<command-args>src/app.py</command-args>",
+    "prompt": "<command-message>review-core is running…</command-message>\n<command-name>/review-core</command-name>\n<command-args>src/app.py</command-args>",
     "transcript_path": "/playbook-fixture/home/.claude/projects/proj/5f1c.jsonl",
     "unattended": false,
     "truncated": false,

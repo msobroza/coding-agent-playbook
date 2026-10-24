@@ -19,7 +19,7 @@ on_error: ask
 supports: [claude_code]
 tags: [feedback, prompts]
 ---
-While a read-only playbook prompt runs (`/explain`, `/review`, `/security-review`,
+While a read-only playbook prompt runs (`/explain`, `/review-core`, `/security-review-core`,
 `/find-injected-vulnerability`), do not modify the code: report findings, and let the user
 ask for fixes in a follow-up. While `/generate-tests` runs, write only test files
 (`tests/**`, `conftest.py`); do not "fix" the code to make a test pass.

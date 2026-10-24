@@ -214,12 +214,38 @@ _Avoid_: imported, mirrored
 **Harness built-in**:
 A capability the harness itself gives the agent, such as loading a skill, running a subagent or asking the user a question; each harness names it differently and some lack it.
 
+**Harness command**:
+A slash command a harness ships itself, such as Claude Code's `/code-review` (alias `/review`) or Codex's `/review`.
+_Avoid_: built-in command (a **Harness built-in** is a capability, not a command)
+
 **Imposed tool**:
 An executable a skill tells the agent to run whatever the consumer repo is, such as a forge CLI or a bundled shell script.
 _Avoid_: external tool, dependency
 
 **Project toolchain**:
 The commands a consumer repo already runs for itself, such as its test, typecheck, lint or build commands; a skill that runs them imposes no tool.
+
+### Review
+
+**Finding**:
+A problem a review reports, tied to a file and line, with one severity.
+_Avoid_: comment, issue (an issue lives on a forge)
+
+**Severity**:
+How much a finding blocks a merge: `important` must be fixed before merge, `nit` is optional, and `pre-existing` sits on a line the change does not touch and never blocks.
+_Avoid_: priority, level; not an **Impact**, which grades a skill's sections
+
+**First pass**:
+The step of a review that reads the change and lists candidate findings, run by a fresh-context subagent; the main agent then checks each candidate against the lines it cites.
+_Avoid_: pre-review, scan
+
+**Re-review**:
+A review of an already reviewed change that covers only its new commits and gives each earlier finding one status, fixed or still open.
+_Avoid_: second review, follow-up review
+
+**Review notes**:
+An owner-written, committed file (`REVIEW.md`) that says what failure means in each area of a repo, which paths to skip and how many nits to allow; it adds checks to a review but never changes the review's output format, and the engine never generates it.
+_Avoid_: review config, review guide
 
 ### Forges
 

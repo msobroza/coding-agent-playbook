@@ -2,7 +2,7 @@
 
 While the turn's active playbook prompt (:mod:`...state.active_prompt`, resolved per
 turn) declares an ``output_contract``, every one of its regexes must match the
-last 4,000 characters of ``last_assistant_message``, e.g. ``/review``'s final
+last 4,000 characters of ``last_assistant_message``, e.g. ``/review-core``'s final
 ``approve`` / ``request changes`` verdict line.
 
 - It judges that message only. The active prompt's resolution reads at most

@@ -51,7 +51,7 @@ GATE_ID: Final = "stop-ci-parity-gate"
 PROMPTS: Final = CORE_ROOT / "prompts"
 REVIEW_NO_VERDICT: Final = "Two findings:\n- src/app.py:3 shadows `os`.\n- a nit on naming."
 MISS_LINE: Final = (
-    '[output-contract] "/review": no final answer matches '
+    '[output-contract] "/review-core": no final answer matches '
     "`(?im)^\\W*(verdict\\W*)?(approve with comments|approve|request changes)\\W*$`; end with it."
 )
 
@@ -72,7 +72,7 @@ def _unchanged() -> FakeGit:
     return FakeGit(fingerprint_value=fingerprint, head_tree_id=HEAD_TREE)
 
 
-def _activate(state: Path, payload: bytes, slash: str = "review", turn: str = "pr_17") -> None:
+def _activate(state: Path, payload: bytes, slash: str = "review-core", turn: str = "pr_17") -> None:
     """Seed the turn record an earlier call of turn ``turn`` resolved for ``/<slash>``."""
     record = TurnRecord(slash, "prompt", turn)
     write_turn_record(StateStore(state / STATE_DIR_NAME), session_of(payload), record)
@@ -84,7 +84,7 @@ def _stop(
     state: Path,
     message: str,
     *,
-    slash: str | None = "review",
+    slash: str | None = "review-core",
     git: FakeGit | None = None,
     runner: FakeStageRunner | None = None,
 ) -> SimulateReport:
@@ -160,7 +160,7 @@ def test_prompt_without_contract_or_stale_turn_inert(
 ) -> None:
     explain = _stop(repo, deps, tmp_path / "a", REVIEW_NO_VERDICT, slash="explain")
     payload = stop_payload(repo, message=REVIEW_NO_VERDICT)
-    _activate(tmp_path / "b", payload, turn="pr_16")  # a /review of an earlier turn
+    _activate(tmp_path / "b", payload, turn="pr_16")  # a /review-core of an earlier turn
     stale = stop(repo, deps, payload, git=_unchanged(), state=tmp_path / "b")
 
     assert explain.trace.combined.user_notes == ()
@@ -264,7 +264,7 @@ def test_transcript_turn_drives_the_stage(
 ) -> None:
     """K6 + finding #6: a review turn with no tool call is resolved at Stop from the transcript."""
     transcript = SessionTranscript(tmp_path / "session.jsonl")
-    transcript.command("review", "src/app.py")
+    transcript.command("review-core", "src/app.py")
     if follow_up is not None:
         transcript.typed(follow_up)
     body = json.loads(stop_payload(repo, message=REVIEW_NO_VERDICT))

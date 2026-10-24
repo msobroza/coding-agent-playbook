@@ -9,5 +9,5 @@
   "permission_mode": "default",
   "hook_event_name": "UserPromptSubmit",
   "prompt_id": "pr_22",
-  "prompt": "<command-message>review is running…</command-message>\n<command-name>/review</command-name>\n<command-args>src/app.py</command-args>"
+  "prompt": "<command-message>review-core is running…</command-message>\n<command-name>/review-core</command-name>\n<command-args>src/app.py</command-args>"
 }

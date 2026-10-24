@@ -1,8 +1,8 @@
 ---
 id: security-review
 name: Security review
-description: Review ML/Python code for vulnerabilities — unsafe deserialization first, then injection, secrets, and unsafe dynamic execution — and propose safe refactors.
-slash: security-review
+description: ML-specific security review — checks ML/Python code for unsafe deserialization first, then injection, secrets, and unsafe dynamic execution — and proposes safe refactors.
+slash: security-review-core
 version: 1
 applies_if:
   any_ml_stack: ["torch", "tensorflow", "jax", "transformers", "scikit-learn", "xgboost", "lightgbm"]

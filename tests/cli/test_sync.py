@@ -561,14 +561,45 @@ def test_sync_shipped_review_command_carries_no_rule_body(tmp_path, make_synthet
 
     assert sync_cmd.run(_ns(repo)) == 0
 
-    review = (repo / ".claude" / "commands" / "review.md").read_text(encoding="utf-8")
+    review = (repo / ".claude" / "commands" / "review-core.md").read_text(encoding="utf-8")
     assert "### Typing" not in review
     assert "### Error handling" not in review
     assert "## Before you start" in review
-    continued = (repo / ".continue" / "prompts" / "review.md").read_text(encoding="utf-8")
+    continued = (repo / ".continue" / "prompts" / "review-core.md").read_text(encoding="utf-8")
     assert continued.count("### Typing") == 1
     assert continued.count("### Error handling") == 1
     assert continued.index("## Output format") < continued.index("## Reference rules")
+
+
+#: The command directory each harness reads, under the repo root.
+_COMMAND_DIRS = (".claude/commands", ".opencode/command")
+
+
+def test_sync_renames_core_review_commands_and_removes_the_old_ones(tmp_path, make_synthetic_repo):
+    """ADR 0009: the core review prompts take the ``-core`` slash, with no alias.
+
+    The first sync's ``-core`` commands are moved to the old names, in the files
+    and in the lockfile, as an engine before v0.21 left them; the next sync
+    writes the ``-core`` commands again and removes the old files.
+    """
+    repo = make_synthetic_repo(tmp_path, pyproject_extras={"dependencies": ["torch"]})
+    assert sync_cmd.run(_ns(repo)) == 0
+    lockfile = repo / ".coding-agent-playbook.lock"
+    locked = lockfile.read_text(encoding="utf-8")
+    for directory in _COMMAND_DIRS:
+        for old in ("review", "security-review"):
+            new_path, old_path = f"{directory}/{old}-core.md", f"{directory}/{old}.md"
+            (repo / new_path).rename(repo / old_path)
+            assert f'"{new_path}"' in locked, new_path
+            locked = locked.replace(f'"{new_path}"', f'"{old_path}"')
+    lockfile.write_text(locked, encoding="utf-8")
+
+    assert sync_cmd.run(_ns(repo)) == 0
+
+    for directory in _COMMAND_DIRS:
+        commands = {path.name for path in (repo / directory).glob("*review*.md")}
+        assert {"review-core.md", "security-review-core.md"} <= commands, directory
+        assert not {"review.md", "security-review.md"} & commands, directory
 
 
 def test_sync_omits_the_pointer_line_of_a_filtered_rule(tmp_path, make_synthetic_repo):
