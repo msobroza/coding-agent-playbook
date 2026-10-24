@@ -97,12 +97,12 @@ def _shipped_prompts() -> list[Prompt]:
     return prompts
 
 
-def test_ships_twenty_six_samples() -> None:
+def test_ships_twenty_seven_samples() -> None:
     samples = _shipped_samples()
     # 10 original fixtures + 10 find-injected-vuln-* crosscommitvuln fixtures (C1-C3)
     # + 3 for the review-architecture / make-testable / characterize prompts
-    # + 3 review samples that can show the v2 review's gains (#275).
-    assert len(samples) == 26
+    # + 4 review samples that can show the v2 review's gains (#275).
+    assert len(samples) == 27
 
 
 def test_every_shipped_sample_compiles_to_gate_and_rubric_layers() -> None:
