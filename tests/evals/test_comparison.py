@@ -99,6 +99,8 @@ def test_the_compared_samples_are_those_of_the_seven_rule_including_prompts(
         "refactor-extract-helper",
         "refactor-rename-for-clarity",
         "review-architecture-layer-leak",
+        "review-diff-old-bug-on-untouched-line",
+        "review-rereview-earlier-findings",
         "review-spot-the-bug",
         "review-style-only-no-changes-needed",
         "security-review-already-safe",
