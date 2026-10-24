@@ -8,8 +8,13 @@ name: ci
 on:
   push:
     branches: [main]
+  # labeled lets the ci:full label start a run (ADR 0009). A trigger cannot
+  # filter on the label's name, so any label starts one. The jobs do not skip
+  # those runs on purpose: a skipped job reports success, so a skipped required
+  # check would pass a pull request whose previous run failed.
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened, labeled]
 
 jobs:
   test:
@@ -19,7 +24,11 @@ jobs:
       matrix:
         python-version: ["3.12", "3.13"]
     steps:
+      # The pull request's merge commit and its first parent: the lane step
+      # below diffs the two (ADR 0009).
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -38,14 +47,35 @@ jobs:
       - name: mypy (strict)
         run: mypy
 
+      # ADR 0009: a pull request whose changes are all skill content takes the
+      # skill lane, and every other case (a push, the ci:full label, any other
+      # path, a git error) the full lane. The event name and the label reach
+      # the selector only through env:, never interpolated into run:.
+      - name: Pick the test lane (ADR 0009)
+        id: lane
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          FORCE_FULL: ${{ contains(github.event.pull_request.labels.*.name, 'ci:full') }}
+        run: echo "lane=$(python -m tests.skill_lane --event "$EVENT_NAME" --force-full "$FORCE_FULL")" >> "$GITHUB_OUTPUT"
+
       # pytest-xdist spreads the suite over the runner's cores; pytest-cov
       # combines the workers' coverage data before fail-under is checked.
       # worksteal, not the default load: the slow end-to-end sync tests
       # (tests/cli/test_sync_*, seconds each) cluster at the end of the
       # collection, and with load one worker ran that whole tail alone while
       # the others sat idle (92% of the tests in 10 min, the rest in 46 min).
+      # The skill lane runs only the catalog checks, without coverage: the 80%
+      # floor holds for the whole suite only (ADR 0009). Any other lane value
+      # runs the full suite, the empty one a crashed selector leaves included.
       - name: pytest
-        run: pytest -q -n auto --dist worksteal
+        env:
+          LANE: ${{ steps.lane.outputs.lane }}
+        run: |
+          if [ "$LANE" = skill ]; then
+            pytest -q -n auto --dist worksteal -m catalog --no-cov
+          else
+            pytest -q -n auto --dist worksteal
+          fi
 
       - name: playbook --version smoke test
         run: playbook --version
@@ -72,9 +102,10 @@ jobs:
   # Dogfoods the commit convention (specs/prK-lifecycle-hooks.md §K OQ-6): only the
   # `commit-convention` step of `playbook ci` runs here, on pull requests. It checks
   # the commits after .coding-agent-playbook.toml's cutover_date against
-  # [tool.commitizen], plus the PR title. The test matrix above stays the
-  # authoritative CI-parity gate. commitizen is installed only in this job, so the
-  # matrix's ".[dev]" install is unchanged.
+  # [tool.commitizen], plus the PR title. The test matrix above is the CI-parity
+  # gate, and on a skill-only pull request it runs only its catalog checks (ADR
+  # 0009). commitizen is installed only in this job, so the matrix's ".[dev]"
+  # install is unchanged.
   playbook-ci:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest

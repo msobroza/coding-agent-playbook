@@ -3608,7 +3608,7 @@ GitHub Actions (`.github/workflows/ci.yml`, ubuntu, Python 3.12 and 3.13) runs t
 1. `python -m pip install -e ".[dev]"` (no `metrics` extra: the gate must pass without radon)
 2. `ruff check .` and `ruff format --check .`
 3. `mypy` (strict)
-4. `pytest -q` (coverage floor 80%), which also runs `playbook validate` over the engine's own content and the docs-consistency tests
+4. `pytest -q`, run in parallel (`-n auto --dist worksteal`, coverage floor 80%), which also runs `playbook validate` over the engine's own content and the docs-consistency tests. On a pull request whose changes are all skill content the step runs only the catalog checks (`pytest -m catalog`, no coverage), the skill lane of ADR 0009; the `ci:full` label and every push to `main` run the whole suite.
 5. `--version` smoke tests of `playbook`, `coding-agent-playbook` and `playbook-hook`
 6. a `playbook-hook simulate` smoke test: the committed destructive-command fixture config denies `rm -rf /` (harness-facing exit code 2, §12.13)
 

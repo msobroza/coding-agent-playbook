@@ -70,7 +70,9 @@ upgrade, read `MIGRATION.md`.
   template.
 - **The commands to run:** `ruff check .`, `ruff format --check .`, `mypy` and
   `pytest -q`, inside `uv sync --extra dev`; CI runs pytest in parallel with
-  `-n auto --dist worksteal` (`catalog/README.md`, "Run the gate").
+  `-n auto --dist worksteal` (`catalog/README.md`, "Run the gate"). A pull
+  request that changes nothing but skill content runs only the catalog checks in
+  its pytest step, the skill lane of [ADR 0009](docs/adr/0009-skill-only-pull-requests-run-only-the-catalog-checks.md).
 - **PR titles** follow Conventional Commits (`feat(catalog): ...`); commitizen
   checks them.
 

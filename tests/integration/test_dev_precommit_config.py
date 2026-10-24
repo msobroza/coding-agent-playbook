@@ -55,7 +55,7 @@ def test_ruff_format_hook_formats_markdown_like_ci() -> None:
 
 def test_catalog_checks_hook_runs_the_registered_catalog_marker() -> None:
     hook = _hooks()["catalog-checks"]
-    assert hook["entry"] == "pytest -q --no-cov -p no:cacheprovider -m catalog"
+    assert hook["entry"] == "pytest -q --no-cov -p no:cacheprovider -n auto -m catalog"
     assert hook["files"] == "^catalog/"
     assert hook["pass_filenames"] is False
     markers = _pyproject()["tool"]["pytest"]["ini_options"]["markers"]

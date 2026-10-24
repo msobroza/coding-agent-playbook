@@ -400,7 +400,17 @@ pytest -q
 Run them inside the dev environment (`uv sync --extra dev`, then prefix each
 with `uv run`). CI runs pytest in parallel, as `pytest -q -n auto --dist
 worksteal` (pytest-xdist is in the dev extra), which does not change the result;
-`-n 4 --dist worksteal` reproduces a failure seen only in CI.
+`-n 4 --dist worksteal` reproduces a failure seen only in CI. On a pull request
+whose changes are all skill content (`catalog/core/skills/`,
+`catalog/core/ATTRIBUTIONS.md`, `tests/core_skills/`, `tests/core_skill_pins/`),
+CI's pytest step runs only `pytest -m catalog`, without coverage (the skill
+lane, ADR 0009), and the other steps run as usual; the `ci:full` label runs the
+whole suite. So a test that depends on skill content must carry the `catalog`
+marker: a guard test fails when a test module that imports the skill helpers
+(the core skill pins, `tests/_core_skill_layout.py`, `tests/core_skills`, and the
+skill names of `tests/_catalog.py`) lacks it, unless the guard's exemption list
+names it with a reason, or when a test module under `tests/core_skills/` or
+`tests/core_skill_pins/` does.
 CI's `ruff format --check .` also formats the Python code
 blocks inside markdown, this guide's included. The pytest suite validates the
 shipped content: link containment and self-containment for `core/` and every
@@ -408,6 +418,6 @@ bundled plugin (see "Add a bundled plugin"), every eval sample's gate, and the
 skill inventory that `mattpocock_skills` and `superpowers` each pin.
 
 With `pre-commit install`, every commit formats markdown the way CI does, and a
-commit that touches `catalog/` also runs the catalog checks (`pytest -m catalog`).
-The hooks run a subset of the suite, so the four commands above stay the source
-of truth.
+commit that touches `catalog/` also runs the catalog checks (`pytest -m catalog`),
+in parallel with `-n auto`. The hooks run a subset of the suite, so the four
+commands above stay the source of truth.
