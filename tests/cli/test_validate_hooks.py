@@ -49,7 +49,7 @@ REDOS = (
 
 # The sample hooks bind builtins guard_x/guard_y/guard_z, which validate (H6)
 # resolves through the handler registry: install them as a real entry point.
-pytestmark = pytest.mark.usefixtures("sample_hook_handlers")
+pytestmark = [pytest.mark.usefixtures("sample_hook_handlers"), pytest.mark.catalog]
 
 
 def _config(*, overlays: tuple[str, ...] = (), extra: str = "") -> str:

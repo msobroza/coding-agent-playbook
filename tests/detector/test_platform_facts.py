@@ -23,6 +23,8 @@ from coding_agent_playbook.detector.requirements_files import (
 )
 from tests._budget_probe import write_authoring_probe, write_domino_probe, write_reference_probe
 
+pytestmark = pytest.mark.catalog
+
 _DOMINO_GATE = {"domino_project": True}
 _ENGINE_REPO = Path(__file__).resolve().parents[2]
 _OVERLAY_PYPROJECT = """\

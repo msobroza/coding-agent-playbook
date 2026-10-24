@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 
 # The sample hooks bind builtins that validate (H6) resolves through the
 # handler registry: install them as real entry points.
-pytestmark = pytest.mark.usefixtures("sample_hook_handlers")
+pytestmark = [pytest.mark.usefixtures("sample_hook_handlers"), pytest.mark.catalog]
 
 _USER_PLUGIN = ".opencode/plugins/other.js"
 _WITHOUT_OPENCODE = CONFIG.replace('"claude_code", "opencode"]', '"claude_code"]')

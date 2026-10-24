@@ -51,6 +51,8 @@ if TYPE_CHECKING:
 
     type Read = Callable[[GuardTables], object]
 
+pytestmark = pytest.mark.catalog
+
 _GLOB_EXEMPT: Final = MappingProxyType({"*token*": ("*token*.py",)})
 _DEFAULT_GATE: Final = StopGate(
     budget_s=3.0,
