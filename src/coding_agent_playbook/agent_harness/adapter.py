@@ -57,6 +57,7 @@ from coding_agent_playbook.agent_harness.hook_sidecars import (
 )
 from coding_agent_playbook.generated_output.file_identity import FileSet
 from coding_agent_playbook.generated_output.output_io import write_output_text
+from coding_agent_playbook.generated_output.repo_name import repo_dir_name
 from coding_agent_playbook.rendering.formats import render_inline_prompt_markdown
 from coding_agent_playbook.skills.naming import skill_id_of
 
@@ -68,7 +69,9 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.prompt import Prompt
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.artifacts.skill import Skill
+    from coding_agent_playbook.config.tables.hooks import HooksConfig
     from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
+    from coding_agent_playbook.lockfile.model import Lockfile
     from coding_agent_playbook.rendering.rule_registry import RuleRegistry
 
 #: The single leaf type this adapter emits (skill-shaped leaves for both skills
@@ -117,6 +120,26 @@ class AgentHarnessAdapter(Adapter):
         self._prompts: list[Prompt] = []
         self._skills: list[Skill] = []
         self._hooks: list[ResolvedHook] = []
+        self._harness_name: str | None = None
+
+    def begin_sync(
+        self,
+        repo_root: Path,
+        prior_lock: Lockfile | None,
+        *,
+        hooks_config: HooksConfig | None = None,
+    ) -> None:
+        """Remember the real repo's name for ``HARNESS.md`` (#268).
+
+        ``repo_root`` is the real repo in every mode, while :meth:`finalize`
+        writes into a scratch directory under ``sync --check``, so the name comes
+        from here and never from the output root's spelling.
+
+        Example: ``adapter.begin_sync(Path("."), None)`` inside ``/work/probe``
+        names the harness ``probe``.
+        """
+        del prior_lock, hooks_config
+        self._harness_name = repo_dir_name(repo_root)
 
     # --- buffering hooks ---------------------------------------------------
 
@@ -286,9 +309,8 @@ class AgentHarnessAdapter(Adapter):
         }
         dirs = [d for d in _TOP_LEVEL_DIRS if emitted[d]]
         target = repo_root / "HARNESS.md"
-        write_output_text(
-            target, emitter.harness_md_text(repo_root.name or "harness", dirs, always_rules)
-        )
+        name = self._harness_name or repo_dir_name(repo_root)  # no begin_sync: a direct render
+        write_output_text(target, emitter.harness_md_text(name, dirs, always_rules))
         return target
 
     # --- .leaf-detectors ---------------------------------------------------

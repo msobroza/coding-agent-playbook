@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.skill_dirs.writer import deciding_ownership_against
 from coding_agent_playbook.generated_output.gitignore import ignore_entries
+from coding_agent_playbook.generated_output.repo_name import repo_dir_name
 from coding_agent_playbook.generated_output.symlinks import real_path
 from coding_agent_playbook.sync import _leftovers as _sync_orphans
 from coding_agent_playbook.sync import _output_policy as _sync_output
@@ -65,7 +66,8 @@ def _rendered_scratch(
     """
     scratch_dir = Path(tempfile.mkdtemp(prefix="playbook-sync-check-"))
     try:
-        scratch = scratch_dir / (ctx.repo_root.resolve().name or "repo")
+        # The name write mode gives HARNESS.md, from the one helper both modes share (#268).
+        scratch = scratch_dir / repo_dir_name(ctx.repo_root)
         scratch.mkdir()
         # Skill-dir ownership is a property of the real tree, not the empty
         # scratch: skip exactly the dirs write mode would skip (SPEC §12.3).
