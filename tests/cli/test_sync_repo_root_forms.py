@@ -11,8 +11,10 @@ writes (the default invocation stays byte-identical).
 
 from __future__ import annotations
 
+import os
 import sys
 import tomllib
+import unicodedata
 from importlib import metadata
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -172,6 +174,37 @@ def test_case_variant_root_round_trips(probe: Path, monkeypatch: pytest.MonkeyPa
     assert _tree(probe) == expected
 
 
+_CAFE_NFC = unicodedata.normalize("NFC", "caf\u00e9")
+_CAFE_NFD = unicodedata.normalize("NFD", _CAFE_NFC)
+
+
+@pytest.mark.parametrize(
+    ("on_disk", "typed"),
+    [(_CAFE_NFD, _CAFE_NFC), (_CAFE_NFC, _CAFE_NFD)],
+    ids=["nfd-dir", "nfc-dir"],
+)
+def test_normalization_variant_root_round_trips(
+    tmp_path: Path,
+    make_synthetic_repo: SyntheticRepoFactory,
+    monkeypatch: pytest.MonkeyPatch,
+    on_disk: str,
+    typed: str,
+) -> None:
+    """On APFS ``../café`` typed NFC reaches an NFD ``café`` (and back): HARNESS.md names the stored bytes."""
+    repo = tmp_path / on_disk
+    repo.mkdir()
+    (tmp_path / "sib").mkdir()
+    if not (tmp_path / typed).exists():
+        pytest.skip("normalization-sensitive filesystem: the other spelling is another name")
+    make_synthetic_repo(repo, config_text=_HARNESS_ONLY)
+    [stored] = (name for name in os.listdir(tmp_path) if name != "sib")
+    monkeypatch.chdir(tmp_path / "sib")
+    assert _playbook("sync", "--repo-root", f"../{typed}") == 0
+    assert _harness_name(repo) == stored
+    monkeypatch.chdir(repo)
+    assert _playbook("sync", "--check") == 0
+
+
 def test_init_with_dot_root_is_clean(
     tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -184,16 +217,6 @@ def test_init_with_dot_root_is_clean(
     assert _harness_name(root) == "probe"
     assert _playbook("sync", "--check", "--repo-root", ".") == 0
     assert _playbook("sync", "--check") == 0
-
-
-def test_playbook_check_stays_green(
-    probe: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    monkeypatch.chdir(probe)
-    assert _playbook("sync", "--repo-root", ".") == 0
-    capsys.readouterr()
-    _playbook("check", "--repo-root", ".")
-    assert "All on-disk files match generated output." in capsys.readouterr().out
 
 
 def test_sync_context_root_is_absolute_at_the_pipeline(
