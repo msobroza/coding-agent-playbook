@@ -22,8 +22,8 @@ from tests.architecture.catalog_marker import (
     marker_report,
     stale_exemptions,
     unlisted_skill_names,
-    unmarked_skill_lane_test_modules,
     unmarked_skill_dependent_modules,
+    unmarked_skill_lane_test_modules,
 )
 
 if TYPE_CHECKING:

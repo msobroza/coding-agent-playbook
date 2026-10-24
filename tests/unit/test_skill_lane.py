@@ -15,7 +15,6 @@ from __future__ import annotations
 import subprocess
 import sys
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
@@ -25,6 +24,7 @@ from tests.skill_lane import changed_paths, in_skill_lane, lane_for, main
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
+    from pathlib import Path
 
     from tests.skill_lane import Lane
 
