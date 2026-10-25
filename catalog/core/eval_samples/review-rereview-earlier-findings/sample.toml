@@ -1,7 +1,6 @@
 id = "review-rereview-earlier-findings"
 prompt_id = "review"
 description = "Re-review of a fix commit given three earlier findings: two are fixed, the important discount finding is still open; the review must give each a status and keep blocking on the open one."
-version = 1
 
 [setup]
 files = [
