@@ -236,3 +236,6 @@ __marimo__/
 # Core skill examples (prU D48): CI builds a throwaway env inside each example.
 catalog/core/skills/*/examples/*/.venv/
 catalog/core/skills/*/examples/*/uv.lock
+
+# The docs site's catalog pages, generated at every build (docs/_ext/catalog_sphinx.py).
+docs/reference/catalog/

@@ -840,7 +840,7 @@
           "type": null,
           "choices": null,
           "required": false,
-          "help": "only the *.py files changed against the git: baseline, plus untracked ones",
+          "help": "only the .py files changed against the git: baseline, plus untracked ones",
           "metavar": null
         },
         {
