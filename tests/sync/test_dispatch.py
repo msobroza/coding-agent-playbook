@@ -8,7 +8,11 @@ file a whole-file entry, and records the exec bit of copied hook scripts.
 
 from __future__ import annotations
 
+import dataclasses
+import errno
 import os
+import random
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
@@ -22,16 +26,26 @@ from coding_agent_playbook.sync._dispatch import (
     _skill_write_provenance,
     build_lockfile,
     dispatch_to_adapters,
+    real_written_paths,
+)
+from tests.generated_output.link_zoo import (
+    build_link_zoo,
+    link_zoo_queries,
+    random_link_tree,
+    random_tree_queries,
+    relink_directory,
+    relinkable_outputs,
 )
 from tests.hook_samples import resolved_hook
 from tests.member_skill_samples import sample_member_reference, sample_member_skill
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    from collections.abc import Callable, Mapping, Sequence
 
     from coding_agent_playbook.artifacts.prompt import Prompt
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
+    from coding_agent_playbook.lockfile.model import ProvenanceKind
 
 _SCOPED = LockEntry(
     path=".claude/settings.json",
@@ -356,3 +370,192 @@ def test_build_lockfile_records_the_exec_bit_of_copied_hook_scripts(tmp_path: Pa
     assert by_path["run.sh"].sha256 == compute_hash(b"#!/bin/sh\n")
     assert by_path["data.txt"].executable is False
     assert by_path["skill.sh"].executable is False  # only copied hook scripts (§B.6)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlinks")
+def test_build_lockfile_gives_a_looping_written_path_no_entry(tmp_path: Path) -> None:
+    """Regression (Python 3.12, where ``Path.resolve()`` raises on a symlink loop): a
+    written path whose real path loops raised ``RuntimeError``; it is unreadable, so
+    it gets no entry, like any other unreadable path."""
+    (tmp_path / "AGENTS.md").write_text("x\n", encoding="utf-8")
+    (tmp_path / "self.md").symlink_to("self.md")
+
+    lockfile = build_lockfile(
+        [tmp_path / "AGENTS.md", tmp_path / "self.md", tmp_path / "self.md" / "x.md"],
+        tmp_path,
+        "0.2.0",
+        provenance={},
+    )
+
+    assert [entry.path for entry in lockfile.entries] == ["AGENTS.md"]
+
+
+def _whole_file_entries_before_batch(
+    written: Sequence[Path], repo_root: Path, provenance: Mapping[Path, Provenance]
+) -> list[LockEntry]:
+    """``build_lockfile``'s whole-file entries as of 8eb43dff (``Path.resolve()`` per path)."""
+    entries: list[LockEntry] = []
+    for path in sorted({p.resolve() for p in written}):
+        try:
+            rel = path.relative_to(repo_root.resolve()).as_posix()
+            content = path.read_bytes()
+        except (ValueError, OSError):
+            continue
+        origin = provenance.get(path)
+        if origin is None:
+            entries.append(LockEntry(path=rel, sha256=compute_hash(content), bytes=len(content)))
+            continue
+        entry = LockEntry.from_provenance(rel, content, origin)
+        if origin.kind == "hook" and os.name == "posix" and path.stat().st_mode & 0o111:
+            entry = dataclasses.replace(entry, executable=True)
+        entries.append(entry)
+    return entries
+
+
+def _loops(path: Path) -> bool:
+    """Whether ``path``'s real path loops: Python 3.12's ``Path.resolve()`` raises there."""
+    try:
+        os.stat(os.path.realpath(path))
+    except OSError as exc:
+        return exc.errno == errno.ELOOP
+    return False
+
+
+def _alternating_provenance(written: Sequence[Path]) -> dict[Path, Provenance]:
+    """Every other path tagged, alternating hook and skill provenance; keyed resolved, first wins."""
+    kinds: tuple[ProvenanceKind, ...] = ("hook", "skill")
+    provenance: dict[Path, Provenance] = {}
+    for index, path in enumerate(written[::2]):
+        origin = Provenance(kind=kinds[index % 2], artifact_id=f"a{index}")
+        provenance.setdefault(Path(os.path.realpath(path)), origin)
+    return provenance
+
+
+def _entries_now(
+    written: Sequence[Path], root: Path, provenance: Mapping[Path, Provenance]
+) -> list[LockEntry]:
+    return build_lockfile(written, root, "0.2.0", provenance=provenance).entries
+
+
+def _entries_or_error(
+    stamp: Callable[[Sequence[Path], Path, Mapping[Path, Provenance]], list[LockEntry]],
+    written: Sequence[Path],
+    root: Path,
+    provenance: Mapping[Path, Provenance],
+) -> object:
+    """``stamp(...)``, or the type and message it raises (a looping root on Python 3.12)."""
+    try:
+        return stamp(written, root, provenance)
+    except Exception as exc:  # the parity check compares any exception
+        return (type(exc), str(exc))
+
+
+def _assert_entries_match_before_batch(written: list[Path], roots: Sequence[Path]) -> None:
+    """The very entries (or exception) of the old implementation, for every root."""
+    provenance = _alternating_provenance(written)
+    for root in roots:
+        expected = _entries_or_error(_whole_file_entries_before_batch, written, root, provenance)
+        assert _entries_or_error(_entries_now, written, root, provenance) == expected, root
+
+
+def _zoo_written(tmp_path: Path) -> list[Path]:
+    """Every link-zoo spelling, plus an executable hook script, as written paths."""
+    build_link_zoo(tmp_path)
+    hook = tmp_path / "d1" / "hook.sh"
+    hook.write_bytes(b"#!/bin/sh\n")
+    hook.chmod(0o755)
+    return [hook, *link_zoo_queries(tmp_path)]
+
+
+_ZOO_ROOTS = ("", "d1", "dir_link", "chain1")
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlinks")
+def test_build_lockfile_matches_the_per_path_implementation_over_every_link_shape(
+    tmp_path: Path,
+) -> None:
+    written = [path for path in _zoo_written(tmp_path) if not _loops(path)]
+
+    _assert_entries_match_before_batch(written, [tmp_path / root for root in _ZOO_ROOTS])
+
+    lockfile = build_lockfile(
+        written, tmp_path, "0.2.0", provenance=_alternating_provenance(written)
+    )
+    assert [entry.path for entry in lockfile.entries if entry.executable] == ["d1/hook.sh"]
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlinks")
+@pytest.mark.parametrize("seed", range(3))
+def test_build_lockfile_matches_the_per_path_implementation_on_random_trees(
+    tmp_path: Path, seed: int
+) -> None:
+    rng = random.Random(seed)
+    nodes = random_link_tree(tmp_path, rng)
+    written = [path for path in random_tree_queries(nodes, rng) if not _loops(path)]
+    _assert_entries_match_before_batch(written, [tmp_path, *rng.sample(nodes, 1)])
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlinks")
+def test_build_lockfile_leaves_out_every_looping_link_shape(tmp_path: Path) -> None:
+    """Regression (Python 3.12, where ``Path.resolve()`` raises on a symlink loop): the
+    looping written paths are left out, as on 3.13, the rest stamped as before."""
+    written = _zoo_written(tmp_path)
+    loop_free = [path for path in written if not _loops(path)]
+    provenance = _alternating_provenance(written)
+    assert len(loop_free) < len(written)
+    for root in (tmp_path / root for root in _ZOO_ROOTS):
+        expected = _whole_file_entries_before_batch(loop_free, root, provenance)
+        assert build_lockfile(written, root, "0.2.0", provenance=provenance).entries == expected
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlinks")
+def test_build_lockfile_resolves_a_looping_root_only_when_a_path_was_written(
+    tmp_path: Path,
+) -> None:
+    """Pins the root guard: as of 8eb43dff the root was resolved once per written path, so
+    on Python 3.12 (where ``Path.resolve()`` raises on a symlink loop) a looping root
+    raised only when something was written; with nothing written the scoped entries
+    are stamped alone."""
+    root = tmp_path / "loop"
+    root.symlink_to("loop")
+    (tmp_path / "AGENTS.md").write_text("x\n", encoding="utf-8")
+
+    lockfile = build_lockfile([], root, "0.2.0", provenance={}, managed=[_SCOPED])
+
+    assert lockfile.entries == [_SCOPED]
+    for written in ([], [tmp_path / "AGENTS.md"]):
+        expected = _entries_or_error(_whole_file_entries_before_batch, written, root, {})
+        assert _entries_or_error(_entries_now, written, root, {}) == expected, written
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlinks")
+def test_real_written_paths_resolves_afresh_on_every_call(tmp_path: Path) -> None:
+    """Pins the batch's scope, one per call and never module-level: ``_run_sync`` and
+    ``build_lockfile`` each call it, with deletes between, so a directory relinked
+    between two calls is seen by the second, as with per-path ``Path.resolve()``."""
+    written = relinkable_outputs(tmp_path)
+    first = real_written_paths(written)
+    relink_directory(tmp_path / "out", tmp_path / "other")
+
+    second = real_written_paths(written)
+
+    assert second == {path.resolve() for path in written}
+    assert second != first
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlinks")
+def test_real_written_paths_equals_resolving_each_loop_free_path(tmp_path: Path) -> None:
+    """Characterization of ``real_written_paths`` (also ``_run_sync``'s ``resolved_written``):
+    the set ``{p.resolve() for p in written}`` the old code built, on every loop-free shape."""
+    written = [path for path in _zoo_written(tmp_path) if not _loops(path)]
+
+    assert real_written_paths(written) == {path.resolve() for path in written}
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlinks")
+def test_real_written_paths_leaves_a_loop_unresolved_instead_of_raising(tmp_path: Path) -> None:
+    """Regression (Python 3.12, where ``Path.resolve()`` raises on a symlink loop)."""
+    (tmp_path / "self.md").symlink_to("self.md")
+    looping = [tmp_path / "self.md", tmp_path / "self.md" / "x.md"]
+
+    assert real_written_paths(looping) == {Path(os.path.realpath(path)) for path in looping}

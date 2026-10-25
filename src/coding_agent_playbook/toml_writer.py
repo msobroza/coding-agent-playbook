@@ -38,13 +38,14 @@ from __future__ import annotations
 
 import datetime as dt
 import math
+import re
 import string
 import sys
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterable, Mapping
 
     #: One table :func:`dump_toml` still has to write: its ``[header]``/``[[header]]``
     #: line (``None`` for the document root), its key path, and the table itself.
@@ -52,6 +53,16 @@ if TYPE_CHECKING:
 
 #: TOML 1.0 bare keys: ``A-Za-z0-9_-`` only (``str.isalnum`` also accepts ``é``, ``²``…).
 _BARE_KEY_CHARS = frozenset(string.ascii_letters + string.digits + "-_")
+
+#: Any character a TOML basic string cannot hold raw: ``"``, ``\``, U+0000..U+001F, U+007F.
+_NEEDS_ESCAPE = re.compile(r'["\\\x00-\x1f\x7f]')
+#: The characters with a short TOML escape, in replacement order: the backslash
+#: first, so the backslashes the later escapes add are not doubled.
+_NAMED_ESCAPES = (("\\", "\\\\"), ('"', '\\"'), ("\n", "\\n"), ("\r", "\\r"), ("\t", "\\t"))
+#: The control characters with no short escape, written ``\uXXXX`` instead.
+_UNNAMED_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+#: Their escapes, built once: per-match formatting doubled the cost of a run of them.
+_UNICODE_ESCAPES = {chr(code): f"\\u{code:04X}" for code in (*range(0x20), 0x7F)}
 
 
 @dataclass(frozen=True)
@@ -73,6 +84,46 @@ def format_string(value: str) -> str:
 
         >>> format_string('say "hi"\\x7f')
         '"say \\\\"hi\\\\"\\\\u007F"'
+    """
+    if type(value) is not str:
+        return _escape_char_by_char(value)
+    # Perf: one C-level regex scan, then C-level replaces, instead of a Python
+    # step per character: 13x less CPU (250 ms -> 19 ms) on the 6,088 strings,
+    # 608,761 characters, that one sync in tests/cli/test_sync.py writes. A
+    # str.translate table was no real gain: 9% faster to 13% slower than the
+    # loop on those strings across runs, and 1.3-1.7x slower on non-ASCII text
+    # (each character it does not map costs a raised and swallowed LookupError).
+    if _NEEDS_ESCAPE.search(value) is None:
+        return f'"{value}"'
+    for char, escape in _NAMED_ESCAPES:
+        value = value.replace(char, escape)
+    return f'"{_UNNAMED_CONTROL.sub(_unicode_escape, value)}"'
+
+
+def _unicode_escape(match: re.Match[str]) -> str:
+    """The ``\\uXXXX`` escape (uppercase hex) of the one character ``match`` holds.
+
+    Example::
+
+        >>> _unicode_escape(re.fullmatch("\\x1b", "\\x1b"))
+        '\\\\u001B'
+    """
+    return _UNICODE_ESCAPES[match[0]]
+
+
+def _escape_char_by_char(value: Iterable[str]) -> str:
+    """The original per-character escaper, for any ``value`` that is not exactly a ``str``.
+
+    On those, :func:`format_string`'s fast path would change the output or the
+    error: ``format()`` writes a ``(str, Enum)`` member as ``Class.NAME``, not its
+    text, and a falsy non-``str`` YAML mapping key (``0``, ``null``) reaches it
+    through :func:`format_key` and must keep raising, e.g., ``'int' object is
+    not iterable``.
+
+    Example::
+
+        >>> _escape_char_by_char(["a", "\\n"])
+        '"a\\\\n"'
     """
     out: list[str] = ['"']
     for ch in value:

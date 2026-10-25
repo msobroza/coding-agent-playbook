@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import os
+import random
 import shutil
 import subprocess
+import sys
 import unicodedata
 from pathlib import Path, PurePosixPath
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -25,6 +28,19 @@ from coding_agent_playbook.generated_output.gitignore import (
     remove_managed_block,
     render_block,
 )
+from tests.generated_output.link_zoo import (
+    build_link_zoo,
+    link_zoo_queries,
+    random_link_tree,
+    random_tree_queries,
+    relink_directory,
+    relinkable_outputs,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable
+
+posix_only = pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks")
 
 ENTRIES = ["/AGENTS.md", "/.claude/CLAUDE.md"]
 BLOCK = f"{BLOCK_START}\n/.claude/CLAUDE.md\n/AGENTS.md\n{BLOCK_END}\n"
@@ -55,6 +71,68 @@ def test_relative_posix_paths_accepts_relative_repo_root(
 ) -> None:
     monkeypatch.chdir(tmp_path)
     assert relative_posix_paths([Path("AGENTS.md")], Path(".")) == ["AGENTS.md"]
+
+
+def _relative_posix_paths_before_batch(paths: Iterable[Path], repo_root: Path) -> list[str]:
+    """``relative_posix_paths`` as of 8eb43dff (one realpath per path), kept as the oracle."""
+    root = repo_root.resolve()
+    relative: set[str] = set()
+    for path in paths:
+        try:
+            rel = Path(os.path.realpath(path)).relative_to(root)
+        except ValueError:
+            continue
+        if rel.parts:
+            relative.add(rel.as_posix())
+    return sorted(relative)
+
+
+def _outcome(paths: list[Path], root: Path, impl: Callable[[list[Path], Path], object]) -> object:
+    """``impl(paths, root)``, or the type and message it raises (a looping root on 3.12)."""
+    try:
+        return impl(paths, root)
+    except Exception as exc:  # the parity check compares any exception
+        return (type(exc), str(exc))
+
+
+@posix_only
+def test_relative_posix_paths_matches_the_per_path_implementation_over_every_link_shape(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    build_link_zoo(tmp_path)
+    queries = link_zoo_queries(tmp_path)
+    monkeypatch.chdir(tmp_path / "d1")
+    roots = [tmp_path, tmp_path / "d1", tmp_path / "dir_link", tmp_path / "chain1"]
+    for root in [*roots, tmp_path / "self", Path("."), Path("..")]:
+        expected = _outcome(queries, root, _relative_posix_paths_before_batch)
+        assert _outcome(queries, root, relative_posix_paths) == expected, root
+
+
+@posix_only
+@pytest.mark.parametrize("seed", range(3))
+def test_relative_posix_paths_matches_the_per_path_implementation_on_random_trees(
+    tmp_path: Path, seed: int
+) -> None:
+    rng = random.Random(seed)
+    nodes = random_link_tree(tmp_path, rng)
+    queries = random_tree_queries(nodes, rng)
+    for root in [tmp_path, *rng.sample(nodes, 1)]:
+        expected = _outcome(queries, root, _relative_posix_paths_before_batch)
+        assert _outcome(queries, root, relative_posix_paths) == expected, root
+
+
+@posix_only
+def test_relative_posix_paths_resolves_afresh_on_every_call(tmp_path: Path) -> None:
+    """Pins the batch's scope, one per call and never module-level: a directory relinked
+    between two calls (one sync makes two) is seen by the second, as with per-path realpath."""
+    written = relinkable_outputs(tmp_path)
+    first = relative_posix_paths(written, tmp_path)
+    relink_directory(tmp_path / "out", tmp_path / "other")
+
+    second = relative_posix_paths(written, tmp_path)
+
+    assert second == _relative_posix_paths_before_batch(written, tmp_path)
+    assert second != first
 
 
 def test_ignore_entries_one_root_anchored_entry_per_file_plus_lockfile(tmp_path: Path) -> None:

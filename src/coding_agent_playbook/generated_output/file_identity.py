@@ -1,4 +1,4 @@
-"""Spelling-proof "is this one of the files written this sync?" (stdlib-only leaf).
+"""Spelling-proof "is this one of the files written this sync?" (stdlib and ``symlinks`` only).
 
 Comparing paths as strings is wrong on a case-insensitive filesystem (default
 macOS APFS, Windows): after a case-only rename (``Demo`` -> ``demo``) the old
@@ -14,6 +14,8 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+from coding_agent_playbook.generated_output.symlinks import BatchRealPaths
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -41,13 +43,21 @@ class FileSet:
     def of(cls, files: Iterable[Path]) -> FileSet:
         """Build a set holding every path in ``files``."""
         members = cls()
-        for path in files:
-            members.add(path)
+        # One batch: a sync's ~730 written paths share their parents, and per-path
+        # realpath here was 3,660 calls (5.5 s cumulative under cProfile) of one sync.
+        # ``files`` is read first, so nothing it does while iterated falls between lookups.
+        real = BatchRealPaths()
+        for path in list(files):
+            members._add_resolved(path, real.real(path))
         return members
 
     def add(self, path: Path) -> None:
         """Add ``path`` (its identity too, when it exists)."""
-        self.paths.add(_real(path))
+        self._add_resolved(path, _real(path))
+
+    def _add_resolved(self, path: Path, resolved: Path) -> None:
+        """Add ``path``, already resolved to ``resolved``, and its identity when it exists."""
+        self.paths.add(resolved)
         identity = file_identity(path)
         if identity is not None:
             self.identities.add(identity)

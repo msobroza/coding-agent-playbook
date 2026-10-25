@@ -52,6 +52,7 @@ import sys
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.generated_output.symlinks import BatchRealPaths
 from coding_agent_playbook.security.files import is_secret_file, user_home
 
 if TYPE_CHECKING:
@@ -180,8 +181,12 @@ def _partition(src: Path, *, home: str) -> tuple[list[Path], list[RefusedSkillFi
     skill_root = src.parent.resolve()
     copyable: list[Path] = []
     refused: list[RefusedSkillFile] = []
+    # One realpath batch for the walk, which writes nothing: its files share parents,
+    # and each was resolved twice (282 Path.resolve() calls in one sync). Every file
+    # passed is_file(), so Path.resolve() could not raise on a loop here either.
+    real = BatchRealPaths()
     for source_file in skill_subtree_files(src):
-        reason = _refusal_reason(source_file, src, skill_root, home)
+        reason = _refusal_reason(source_file, real.real(source_file), src, skill_root, home)
         if reason is None:
             copyable.append(source_file)
         else:
@@ -189,11 +194,12 @@ def _partition(src: Path, *, home: str) -> tuple[list[Path], list[RefusedSkillFi
     return copyable, refused
 
 
-def _refusal_reason(source_file: Path, src: Path, skill_root: Path, home: str) -> str | None:
-    """Why ``source_file`` must not be copied, or ``None`` when it may be."""
-    if is_secret_file(source_file, relative_to=src, home=home):
+def _refusal_reason(
+    source_file: Path, target: Path, src: Path, skill_root: Path, home: str
+) -> str | None:
+    """Why ``source_file`` (really at ``target``) must not be copied, or ``None`` when it may be."""
+    if is_secret_file(source_file, relative_to=src, home=home, resolved=target):
         return "it is a secret path, or links to one (SPEC §17.3)"
-    target = source_file.resolve()
     if not target.is_relative_to(skill_root):
         return f"it links to {target}, outside the skill's source directory {skill_root}"
     return None

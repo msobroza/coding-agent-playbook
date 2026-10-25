@@ -10,13 +10,23 @@ silently in a round-trip elsewhere.
 from __future__ import annotations
 
 import datetime as dt
+import enum
+import itertools
+import random
+import re
+import string
 import sys
 import tomllib
+from typing import TYPE_CHECKING
 
 import pytest
 
 from coding_agent_playbook import toml_writer as _toml
+from coding_agent_playbook.agent_harness.manifest import _format_scalar as _manifest_format_scalar
 from tests.toml_equality import assert_toml_identical
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 # --- scalars ---------------------------------------------------------------
 
@@ -202,6 +212,202 @@ def test_format_scalar_str_delegates_to_format_string() -> None:
     assert _toml.format_scalar('weird "x"\twith\nctrl\x00') == _toml.format_string(
         'weird "x"\twith\nctrl\x00'
     )
+
+
+@pytest.mark.parametrize(
+    ("char", "escape"),
+    [("\x00", "\\u0000"), ("\x0b", "\\u000B"), ("\x1b", "\\u001B"), ("\x7f", "\\u007F")],
+)
+def test_unicode_escape_is_four_uppercase_hex_digits(char: str, escape: str) -> None:
+    match = re.fullmatch(".", char, re.DOTALL)
+    assert match is not None
+    assert _toml._unicode_escape(match) == escape
+
+
+# --- string escaping: characterization against the per-character loop --------
+#
+# ``format_string`` escaped one character at a time in a Python loop until the
+# perf change that replaced it; the loop is kept below, verbatim, as the
+# reference the escaper must match byte for byte, exceptions included.
+
+
+def _reference_format_string(value: str) -> str:
+    """``toml_writer.format_string`` as of commit 8eb43dff, verbatim."""
+    out: list[str] = ['"']
+    for ch in value:
+        if ch == "\\":
+            out.append("\\\\")
+        elif ch == '"':
+            out.append('\\"')
+        elif ch == "\n":
+            out.append("\\n")
+        elif ch == "\r":
+            out.append("\\r")
+        elif ch == "\t":
+            out.append("\\t")
+        elif ord(ch) < 0x20 or ch == "\x7f":
+            out.append(f"\\u{ord(ch):04X}")
+        else:
+            out.append(ch)
+    out.append('"')
+    return "".join(out)
+
+
+#: A frozenset like the writer's own: ``ch in <str>`` would raise on an ``int``
+#: (iterating bytes) where a set lookup just says no.
+_REFERENCE_BARE_KEY_CHARS = frozenset(string.ascii_letters + string.digits + "-_")
+
+
+def _reference_format_key(key: str) -> str:
+    """``toml_writer.format_key`` as of commit 8eb43dff, over the reference escaper."""
+    if key and all(ch in _REFERENCE_BARE_KEY_CHARS for ch in key):
+        return key
+    return _reference_format_string(key)
+
+
+def _first_difference(actual: str, expected: str) -> int:
+    """Index of the first character two strings differ at (the shorter length if none)."""
+    pairs = enumerate(zip(actual, expected, strict=False))
+    return next((index for index, (a, b) in pairs if a != b), min(len(actual), len(expected)))
+
+
+def _outcome(render: Callable[[str], str], value: object) -> tuple[str, str]:
+    """What ``render(value)`` does: ``("ok", text)``, or the exception's type and message."""
+    try:
+        return ("ok", render(value))  # type: ignore[arg-type]  # non-str inputs on purpose
+    except Exception as error:
+        return (type(error).__name__, str(error))
+
+
+#: Every character the escaper rewrites: U+0000..U+001F, ``"``, ``\``, U+007F.
+_ESCAPED_CHARS = "".join(map(chr, range(0x20))) + '"\\\x7f'
+#: Those plus neighbours an escaper could confuse with them: the letters and hex
+#: digits of the escapes, C1 controls and separators TOML keeps raw, BOM,
+#: lone surrogates, astral characters.
+_TRICKY_CHARS = (
+    _ESCAPED_CHARS + "unrt0aAF \x80\x9f\xa0é\u2028\ufeff\ud800\udfff\U0001f600\U0010ffff"
+)
+
+_EDGE_CASES = [
+    pytest.param("", id="empty"),
+    pytest.param(_ESCAPED_CHARS, id="only-escapes"),
+    pytest.param(_ESCAPED_CHARS[::-1] * 3, id="only-escapes-reversed-repeated"),
+    pytest.param('\\\\\\""\\n\\\n', id="backslash-and-quote-runs"),
+    pytest.param("C:\\path\\u0041\\n\\x7f", id="text-that-looks-escaped"),
+    pytest.param("line\r\nline\n\ttab\r", id="crlf-and-tab"),
+    pytest.param("café — π 日本 😀 ٣", id="mixed-unicode"),
+    pytest.param("\x80\x9f\xa0\u2028\u2029\ufeff", id="c1-controls-and-separators-stay-raw"),
+    pytest.param("\ud800a\udfff\ud83d", id="lone-surrogates"),
+    pytest.param("\U00010000\U0010ffff", id="astral-bounds"),
+    pytest.param("plain ascii without escapes", id="no-escape"),
+    pytest.param("x" * 100_000, id="long-no-escape"),
+    pytest.param('# T\n\nSome "quoted" \\ text\x00\x1b[0m\t\x7f\n' * 2_000, id="long-markdown"),
+    pytest.param("\x00" * 10_000, id="long-only-nul"),
+    pytest.param("日本語\n" * 5_000, id="long-non-ascii-with-newlines"),
+]
+
+
+@pytest.mark.parametrize("value", _EDGE_CASES)
+def test_format_string_matches_the_reference_loop_on_edge_cases(value: str) -> None:
+    assert _toml.format_string(value) == _reference_format_string(value)
+
+
+def test_format_string_matches_the_reference_loop_on_every_code_point() -> None:
+    """One string of every code point U+0000..U+10FFFF, surrogates included."""
+    everything = "".join(map(chr, range(0x110000)))
+    actual, expected = _toml.format_string(everything), _reference_format_string(everything)
+    # A bool, not ``assert actual == expected``: pytest would diff 1.1M characters.
+    matches = actual == expected
+    assert matches, f"first difference at output index {_first_difference(actual, expected)}"
+
+
+def test_format_string_matches_the_reference_loop_on_every_pair_of_tricky_chars() -> None:
+    pairs = ["".join(pair) for pair in itertools.product(_TRICKY_CHARS, repeat=2)]
+    assert [p for p in pairs if _toml.format_string(p) != _reference_format_string(p)] == []
+
+
+def _generated_strings(count: int, seed: int) -> list[str]:
+    """``count`` seeded strings, each drawn from the tricky characters or all of Unicode."""
+    rng = random.Random(seed)
+    tricky = _TRICKY_CHARS + string.ascii_letters + string.digits
+    strings: list[str] = []
+    for index in range(count):
+        size = rng.randrange(0, 80)
+        if index % 2:
+            strings.append("".join(rng.choices(tricky, k=size)))
+        else:
+            strings.append("".join(chr(rng.randrange(0x110000)) for _ in range(size)))
+    return strings
+
+
+def test_format_string_matches_the_reference_loop_on_generated_strings() -> None:
+    generated = _generated_strings(4_000, seed=20261025)
+    assert [s for s in generated if _toml.format_string(s) != _reference_format_string(s)] == []
+
+
+# Deliberately not a StrEnum: only the mixin's ``format()`` differs from its text.
+class _StrEnumMixin(str, enum.Enum):  # noqa: UP042
+    """A ``(str, Enum)`` member: ``format()`` gives ``_StrEnumMixin.RED``, iterating ``r\\n``.
+
+    GREEN and SPACED need no escaping, so an escaper that sent them down a
+    ``str``-only fast path (``isinstance`` in place of ``type(...) is str``)
+    would ``format()`` them as ``_StrEnumMixin.GREEN``; RED's ``\\n`` hides that,
+    since ``str.replace`` returns a plain ``str``. SPACED is no bare key, so
+    ``format_key`` hands it to ``format_string`` too.
+    """
+
+    RED = "r\n"
+    GREEN = "green"
+    SPACED = "a b"
+
+
+class _TaggedStr(str):
+    """A plain ``str`` subclass, as a YAML loader or a schema may hand the writer."""
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param(_StrEnumMixin.RED, id="str-enum-mixin-member"),
+        pytest.param(_StrEnumMixin.GREEN, id="str-enum-mixin-member-without-escapes"),
+        pytest.param(_StrEnumMixin.SPACED, id="str-enum-mixin-member-not-a-bare-key"),
+        pytest.param(_TaggedStr('a"b\x01'), id="str-subclass"),
+        pytest.param(0, id="int-zero"),
+        pytest.param(None, id="none"),
+        pytest.param(False, id="false"),
+        pytest.param(b"", id="empty-bytes"),
+        pytest.param(b"a", id="bytes"),
+        pytest.param(["a", "\n", '"'], id="list-of-chars"),
+        pytest.param(["ab"], id="list-of-a-long-str"),
+    ],
+)
+def test_format_string_and_format_key_match_the_reference_on_non_str_input(
+    value: object,
+) -> None:
+    """Outside the ``str`` signature, yet reachable: a YAML mapping key such as ``0``
+    or ``null`` reaches ``format_key`` and then ``format_string`` (both falsy). The
+    result, or the exception type and message, is the reference loop's."""
+    assert _outcome(_toml.format_string, value) == _outcome(_reference_format_string, value)
+    assert _outcome(_toml.format_key, value) == _outcome(_reference_format_key, value)
+
+
+@pytest.mark.parametrize("value", [*_EDGE_CASES, pytest.param("bare-key_9", id="bare-key")])
+def test_format_key_matches_the_reference_on_edge_cases(value: str) -> None:
+    assert _toml.format_key(value) == _reference_format_key(value)
+
+
+@pytest.mark.parametrize("value", _EDGE_CASES)
+def test_manifest_format_scalar_matches_the_reference_on_edge_cases(value: str) -> None:
+    """The manifest writer reaches the escaper through values and inline-table keys."""
+    expected_table = f"{{ {_reference_format_key(value)} = [{_reference_format_string(value)}] }}"
+    assert _manifest_format_scalar(value) == _reference_format_string(value)
+    assert _manifest_format_scalar({value: [value]}) == expected_table
+
+
+def test_manifest_format_scalar_keeps_the_error_for_a_falsy_non_str_key() -> None:
+    """A YAML frontmatter key ``0`` in an inline table fails as it always did."""
+    with pytest.raises(TypeError, match=r"^'int' object is not iterable$"):
+        _manifest_format_scalar({0: "x"})
 
 
 # --- keys ------------------------------------------------------------------

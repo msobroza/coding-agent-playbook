@@ -55,3 +55,15 @@ def test_never_opens_the_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
 
     monkeypatch.setattr(Path, "open", refuse)
     assert is_secret_file(target, relative_to=tmp_path, home=str(tmp_path / "home"))
+
+
+def test_a_target_the_caller_resolved_is_judged_instead_of_resolving_again(tmp_path: Path) -> None:
+    """``resolved`` lets a batch of files sharing parents resolve each one once."""
+    home = tmp_path / "home"
+    innocent = tmp_path / "repo" / "notes.md"  # never created: only ``resolved`` is judged
+    credentials = home / ".aws" / "credentials"
+    repo = tmp_path / "repo"
+
+    assert is_secret_file(innocent, relative_to=repo, home=str(home), resolved=credentials)
+    assert not is_secret_file(innocent, relative_to=repo, home=str(home), resolved=innocent)
+    assert is_secret_file(repo / ".env", relative_to=repo, home=str(home), resolved=innocent)
