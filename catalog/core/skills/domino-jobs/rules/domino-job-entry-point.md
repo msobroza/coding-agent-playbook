@@ -2,7 +2,6 @@
 id: domino-job-entry-point
 name: Domino job entry point
 description: "Give each Domino job one non-interactive entry script that parses keyword arguments, does no work at import time and keeps its logic testable."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

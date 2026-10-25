@@ -2,7 +2,6 @@
 id: domino-agent-eval-out-of-band
 name: Production evaluation out of band
 description: "Score production traces in a scheduled, sequential Domino Job that logs results back, never with an evaluator on the request path."
-version: 1
 scope: scoped
 globs:
   - "**/*_eval*.py"

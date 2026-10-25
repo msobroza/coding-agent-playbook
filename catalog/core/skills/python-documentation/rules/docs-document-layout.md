@@ -2,7 +2,6 @@
 id: docs-document-layout
 name: Engineering document paths
 description: "Write the glossary, ADRs, architecture overview, specs, plans, research and framework notes at their layout paths, whatever framework is enabled."
-version: 1
 scope: scoped
 globs:
   - "docs/**"

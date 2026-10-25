@@ -2,7 +2,6 @@
 id: design-dispatch-table
 name: Dispatch table
 description: "Replace an if/elif on a key read from config or data with an immutable mapping to callables, looked up by a function that raises a domain error naming the known keys."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

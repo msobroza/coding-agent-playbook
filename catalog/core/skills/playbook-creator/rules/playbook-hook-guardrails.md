@@ -2,7 +2,6 @@
 id: playbook-hook-guardrails
 name: Hook guardrails
 description: "Write a hook's body and summary as the guidance an agent follows where the hook cannot run, and give a blocking hook a guard twin."
-version: 1
 scope: scoped
 globs:
   - "catalog/**/hooks/**/HOOK.md"

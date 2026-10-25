@@ -2,7 +2,6 @@
 id: domino-run-scoped-writes
 name: Domino run-scoped writes
 description: "Write each run's files under a run-keyed directory, through a temporary file renamed into place, with a completion marker last."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

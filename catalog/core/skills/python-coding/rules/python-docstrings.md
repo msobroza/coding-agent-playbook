@@ -2,7 +2,6 @@
 id: python-docstrings
 name: Docstrings
 description: "Every public module, class and function gets a docstring: an intent line, then one usage example."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

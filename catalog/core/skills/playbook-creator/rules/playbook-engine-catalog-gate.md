@@ -2,7 +2,6 @@
 id: playbook-engine-catalog-gate
 name: Engine catalog gate
 description: "In the engine repository, change content and the tests that pin it together, then run the catalog tests and the CI-parity gate."
-version: 1
 scope: scoped
 globs:
   - "catalog/**"

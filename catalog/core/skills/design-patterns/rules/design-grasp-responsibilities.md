@@ -2,7 +2,6 @@
 id: design-grasp-responsibilities
 name: GRASP responsibilities
 description: "Decide who creates an object, who handles a system event, and where behavior with no domain owner lives, with the GRASP creator, controller, indirection and pure fabrication principles."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

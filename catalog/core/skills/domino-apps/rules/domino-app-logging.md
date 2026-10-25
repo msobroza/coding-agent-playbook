@@ -2,7 +2,6 @@
 id: domino-app-logging
 name: App logging
 description: "Log from an App to unbuffered stdout with the pod name on each line; never to a file in the project."
-version: 1
 scope: scoped
 globs:
   - "**/app.py"

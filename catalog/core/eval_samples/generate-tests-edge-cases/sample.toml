@@ -1,7 +1,6 @@
 id = "generate-tests-edge-cases"
 prompt_id = "generate-tests"
 description = "Generate tests for a function with multiple branches, covering each branch and boundary."
-version = 1
 
 [setup]
 files = ["src/quotient.py"]

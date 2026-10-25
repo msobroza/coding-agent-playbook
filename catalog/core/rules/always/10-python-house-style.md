@@ -2,7 +2,6 @@
 id: python-house-style
 name: Python house style
 description: The seven Python conventions that hold in every file, new or edited.
-version: 3
 scope: always
 priority: 10
 tags: [always, python, style]

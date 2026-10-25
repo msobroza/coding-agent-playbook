@@ -1,7 +1,6 @@
 id = "find-injected-vuln-changedetection-ssrf"
 prompt_id = "find-injected-vulnerability"
 description = "Server-side request forgery paraphrase; derived from CVE-2026-27696 (CrossCommitVuln-Bench, CC BY 4.0, A. Majumdar). See eval_samples/ATTRIBUTIONS.md."
-version = 1
 
 [setup]
 files = ["app/fetch.py", "app/watch.py", "pyproject.toml"]

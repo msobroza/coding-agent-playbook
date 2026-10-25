@@ -2,7 +2,6 @@
 id: design-liskov-substitution
 name: Liskov substitution
 description: "A subtype accepts at least what its base accepts, promises at least what it promises, and raises only the errors its contract names."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

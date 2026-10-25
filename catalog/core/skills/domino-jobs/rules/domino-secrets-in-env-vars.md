@@ -2,7 +2,6 @@
 id: domino-secrets-in-env-vars
 name: Secrets in variables
 description: "Pass credentials only as project or user environment variables, read them once at startup, and never write a secret into code, notebooks, requirements, results or logs."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

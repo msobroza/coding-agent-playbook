@@ -2,7 +2,6 @@
 id: domino-agent-manual-spans
 name: Manual agent spans
 description: "Give steps that autologging cannot see an mlflow.trace span with a span type, and keep one instrumentation path."
-version: 1
 scope: scoped
 globs:
   - "**/*agent*.py"

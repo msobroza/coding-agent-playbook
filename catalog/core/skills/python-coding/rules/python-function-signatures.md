@@ -2,7 +2,6 @@
 id: python-function-signatures
 name: Function signatures
 description: "Make options keyword-only, pass values that travel together as one record, and split a function whose boolean flag selects a different algorithm."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

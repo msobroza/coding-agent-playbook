@@ -2,7 +2,6 @@
 id: ruff-lint
 name: Linting with ruff
 description: "Fix what the repo's ruff selection reports at its cause; never trim the selection, and suppress only with a code and a reason."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

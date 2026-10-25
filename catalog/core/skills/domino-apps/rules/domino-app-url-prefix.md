@@ -2,7 +2,6 @@
 id: domino-app-url-prefix
 name: URL prefix
 description: "Take the App's URL prefix from DOMINO_RUN_HOST_PATH at startup; never assemble it from owner, project and run id."
-version: 1
 scope: scoped
 globs:
   - "**/app.sh"

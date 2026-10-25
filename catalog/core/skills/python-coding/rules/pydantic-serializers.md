@@ -2,7 +2,6 @@
 id: pydantic-serializers
 name: Pydantic serializers
 description: "Shape a model's output with field_serializer and wrap-mode model_serializer on the model, not by editing the model_dump dict by hand."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

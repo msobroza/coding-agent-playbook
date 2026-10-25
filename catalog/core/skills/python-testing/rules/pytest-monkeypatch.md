@@ -2,7 +2,6 @@
 id: pytest-monkeypatch
 name: pytest monkeypatch
 description: "Change environment variables, the working directory, dict entries and legacy module attributes only through the monkeypatch fixture, which undoes every change; in new code, a needed patch means a parameter is missing."
-version: 1
 scope: scoped
 globs:
   - "tests/**/*.py"

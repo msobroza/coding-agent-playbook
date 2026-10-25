@@ -2,7 +2,6 @@
 id: ml-numpy-dtypes
 name: NumPy dtypes
 description: "Choose NumPy dtypes on purpose: state them at creation and at function entry, give integers headroom, use float32 for features and float64 for statistics, and avoid dtype=object."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

@@ -2,7 +2,6 @@
 id: design-lightest-construct
 name: The lightest construct
 description: "Use a function before a class, a module for stateless helpers and a dataclass for a record; a class earns its place by guarding state."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

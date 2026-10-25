@@ -2,7 +2,6 @@
 id: python-pure-core
 name: Pure core
 description: "Keep business logic free of I/O, clocks, randomness and hidden mutation; perform effects in a thin outer shell."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

@@ -2,7 +2,6 @@
 id: ruff-format
 name: Formatting with ruff
 description: "Let the configured formatter own layout and the configured sorter own import order; format only the files you changed and never hand-align."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

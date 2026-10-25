@@ -2,7 +2,6 @@
 id: domino-app-viewer-identity
 name: Viewer identity
 description: "Read the viewer from the domino-username header in one pure function that treats a missing or Anonymous value as no viewer."
-version: 1
 scope: scoped
 globs:
   - "**/app.py"

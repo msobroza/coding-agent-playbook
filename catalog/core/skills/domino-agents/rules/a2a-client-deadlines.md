@@ -2,7 +2,6 @@
 id: a2a-client-deadlines
 name: A2A client deadlines
 description: "Poll another agent's task with capped backoff under an overall deadline, handle every terminal state, and authenticate through the shared token flow."
-version: 1
 scope: scoped
 section: a2a
 priority: 62

@@ -2,7 +2,6 @@
 id: python-str-join
 name: String joining
 description: "Assemble a string from many parts with str.join, not += in a loop; use an f-string for a fixed handful of pieces."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

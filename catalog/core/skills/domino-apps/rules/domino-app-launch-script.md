@@ -2,7 +2,6 @@
 id: domino-app-launch-script
 name: Launch script
 description: "Keep the launch script small and executable, and end it by exec-ing one foreground server command."
-version: 1
 scope: scoped
 globs:
   - "**/app.sh"

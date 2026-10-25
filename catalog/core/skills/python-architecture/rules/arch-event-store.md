@@ -2,7 +2,6 @@
 id: arch-event-store
 name: Event store
 description: "Fold events with pure apply and decide functions, append with the expected stream version and reject a stale append, and never cache replay on a method."
-version: 1
 scope: scoped
 globs:
   - "**/events/**/*.py"

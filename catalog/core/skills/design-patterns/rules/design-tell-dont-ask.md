@@ -2,7 +2,6 @@
 id: design-tell-dont-ask
 name: Tell, don't ask
 description: "Tell the object that owns the data to act instead of reading its fields and deciding for it; talk only to near collaborators."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

@@ -227,8 +227,7 @@ def make_synthetic_repo():
             # repo is the path to the consumer-repo root.
 
     Prefer artifact ids the engine does not ship: a repo-local ``refactor``
-    prompt overrides the engine's without its ``eval_samples``, which fails
-    ``playbook validate`` and so makes ``playbook sync`` refuse to write.
+    prompt overrides the engine's, so the engine's samples would grade it.
     """
 
     def _build(

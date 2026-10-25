@@ -2,7 +2,6 @@
 id: domino-app-dash
 name: Dash on Domino
 description: "Give a Dash App both URL prefixes, serving routes at the root and requesting them under DOMINO_RUN_HOST_PATH, and expose its Flask server for gunicorn."
-version: 1
 scope: scoped
 globs:
   - "**/app.py"

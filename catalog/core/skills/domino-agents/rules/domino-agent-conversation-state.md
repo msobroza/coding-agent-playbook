@@ -2,7 +2,6 @@
 id: domino-agent-conversation-state
 name: Domino agent conversation state
 description: "Either drop the conversation id entirely or create it on the server and keep the history in a store outside process memory and App-local files."
-version: 1
 scope: scoped
 globs:
   - "**/app.sh"

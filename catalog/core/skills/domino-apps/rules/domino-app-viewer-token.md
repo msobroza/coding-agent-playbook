@@ -2,7 +2,6 @@
 id: domino-app-viewer-token
 name: Viewer token
 description: "Treat the viewer's token as a credential: use it per request only, never log, store, forward or put it in a URL."
-version: 1
 scope: scoped
 globs:
   - "**/app.py"

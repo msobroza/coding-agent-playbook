@@ -2,7 +2,6 @@
 id: python-type-aliases
 name: Type aliases
 description: "Name a repeated Callable signature with a role-named alias, and give identifiers that must never be mixed their own NewType."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

@@ -2,7 +2,6 @@
 id: domino-agent-endpoint-auth
 name: Domino agent model endpoint auth
 description: "Attach the rotating token to a Domino-hosted model endpoint through an httpx auth flow on one long-lived client, retrying once on a 401."
-version: 1
 scope: scoped
 globs:
   - "**/settings.py"

@@ -2,7 +2,6 @@
 id: domino-app-replica-state
 name: Domino App replica state
 description: "Keep per-viewer state in the client or an external store keyed by the verified viewer, never in the memory of one App process."
-version: 1
 scope: scoped
 globs:
   - "**/app.py"

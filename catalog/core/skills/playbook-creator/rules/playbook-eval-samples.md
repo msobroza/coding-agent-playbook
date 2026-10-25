@@ -2,7 +2,6 @@
 id: playbook-eval-samples
 name: Eval samples
 description: "Give each prompt eval samples whose deterministic gate fails on the setup and every negative and passes on the solution."
-version: 1
 scope: scoped
 globs:
   - "catalog/**/eval_samples/**"
@@ -21,7 +20,7 @@ tags: [playbook, evals]
 
 An eval sample is a reproducible test of a prompt: `eval_samples/<id>/` beside its layer's `prompts/`, with the id `<prompt-id>-<scenario>`. Its `sample.toml` holds:
 
-- `id`, `prompt_id` (the prompt lists this id in `eval_samples`), `description`, `version`.
+- `id`, `prompt_id` (the one prompt it grades; the prompt does not list its samples), `description`. Any other top-level key is an error.
 - `[setup]`: the files and the mock facts (`project_kind`, `python_version`, `frameworks`).
 - `[invocation]`: `prompt_args` and `input_variables`.
 - At least one of `[gate]` and `[rubric]`. The gate binds deterministic handles by name (`file_exists`, `file_contains`, `file_unchanged`, `file_forbidden`, `answer_matches`, a metric `threshold` or `non_regression`) and combines them in `expr`. The rubric binds judge criteria whose weights sum to 1.0, with a 0-1 `fail` cutoff.

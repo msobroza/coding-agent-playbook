@@ -343,7 +343,6 @@ _EDIT_TOML = (
 id = "synthetic-edit"
 prompt_id = "synthetic-prompt"
 description = "Add a loud greeting and a test for it."
-version = 1
 
 [setup]
 files = ["app/greet.py"]
@@ -364,7 +363,6 @@ _REVIEW_TOML = (
 id = "synthetic-review"
 prompt_id = "synthetic-prompt"
 description = "Name the injection class without editing anything."
-version = 1
 
 [setup]
 files = ["app/db.py"]
@@ -560,7 +558,6 @@ def test_loader_and_validator_ignore_solution(tmp_path: Path) -> None:
             name="Synthetic",
             description="Synthetic host prompt.",
             slash="synthetic",
-            eval_samples=["synthetic-edit", "synthetic-review"],
         ),
         body="",
         template_body="",

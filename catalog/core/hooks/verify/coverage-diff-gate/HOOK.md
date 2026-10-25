@@ -3,7 +3,6 @@ id: coverage-diff-gate
 name: Cover the changed lines
 description: The coverage Stop stage; when completion is claimed, run the suite once with coverage and block while the changed lines are under-covered or total coverage dropped since the last green run of HEAD.
 summary: Before claiming done, run the suite with coverage and cover every changed line (at least 80%).
-version: 1
 tier: opt-in
 priority: 80
 events: [stop]

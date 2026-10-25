@@ -2,7 +2,6 @@
 id: domino-app-production-server
 name: Production server
 description: "Serve a Flask or Dash App with gunicorn workers on 0.0.0.0:8888, never the built-in server, and never in debug mode."
-version: 1
 scope: scoped
 globs:
   - "**/app.sh"

@@ -656,7 +656,6 @@ def test_tracker_rule_file_is_exactly_the_a_t03_text() -> None:
         "name: Issue tracker and domain docs\n"
         "description: Where this repo's issue tracker, triage label and domain doc config lives, "
         "and that .scratch/ is never staged.\n"
-        "version: 1\n"
         "scope: always\n"
         "priority: 50\n"
         "tags: [always, tracker]\n"

@@ -50,11 +50,9 @@ def _prompt(slash: str) -> Prompt:
         name=f"{slash.title()} prompt",
         description=f"Run {slash}.",
         slash=slash,
-        version=2,
         applies_if={"language": "python"},
         input_variables=[{"name": "target"}],
         includes_rules=["style"],
-        eval_samples=["sample-1"],
         output_contract=["^DONE$"],
         write_scope={"read_only": True},
     )
@@ -159,11 +157,9 @@ def test_emit_prompt_leaves_records_the_template_body_not_the_leaf(tmp_path: Pat
             body="Review {{ target }}.\n",
             is_templated=True,
             slash="review",
-            version=2,
             applies_if={"language": "python"},
             input_variables=[{"name": "target"}],
             includes_rules=["style"],
-            eval_samples=["sample-1"],
             output_contract=["^DONE$"],
             write_scope={"read_only": True},
         )

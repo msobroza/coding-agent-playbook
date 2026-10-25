@@ -177,7 +177,6 @@ any other key, and its error names the file and the allowed keys.
 | `name` | yes | A short topic label, such as `Typing` or `Error handling`. It is the rendered title. |
 | `description` | yes | The one actionable line the skill's index shows for the rule. |
 | `scope` | yes | `scoped` for a member rule, `always` for one of the always rules. |
-| `version` | no | An integer, 1 by default. Raise it when the guidance changes. |
 | `skill` | no | Only for a scoped rule from another layer. It names the skill the rule joins. A rule inside `skills/<skill>/rules/` never names another skill, and an always rule never carries this key. |
 | `section` | for a sectioned skill | One section id from the skill's `playbook.sections`. Its impact sets the `[IMPACT]` tag of the rendered title. |
 | `priority` | no | 0-99, 50 by default. Lower sorts first. In a sectioned skill, pick it in the section's impact band: CRITICAL 20-39, HIGH 40-59, MEDIUM 60-79, LOW 80-99. Rules are ranked within the section. |
@@ -193,7 +192,6 @@ This example shows the frontmatter of a member rule:
 id: pytest-fixtures
 name: Fixtures
 description: "Share setup through small, explicit fixtures and keep their scope as narrow as the test allows."
-version: 1
 scope: scoped
 globs: ["**/test_*.py", "**/*_test.py", "**/tests/**/*.py", "**/conftest.py", "**/fakes.py"]
 section: fixtures
@@ -252,10 +250,11 @@ A prompt is a named task the user invokes explicitly, as a slash command. Follow
 these steps to add one.
 
 1. Create `core/prompts/<id>.md`.
-2. Give it frontmatter with `id`, `name`, `description`, `version` and `slash`, the
-   slash-command name. The optional keys are `applies_if`, `input_variables`,
-   `includes_rules` (the ids of the rules the prompt needs) and `eval_samples` (the
-   ids of the samples that test it). SPEC §6.2 has the full schema.
+2. Give it frontmatter with `id`, `name`, `description` and `slash`, the
+   slash-command name. The optional keys are `applies_if`, `input_variables` and
+   `includes_rules` (the ids of the rules the prompt needs). A prompt does not list
+   its eval samples: they are the samples whose `prompt_id` names it. SPEC §6.2 has
+   the full schema.
 3. List the rules the prompt needs in `includes_rules`, and never place rule text in
    the body. Claude Code and OpenCode commands then open with a generated
    `## Before you start` block, which names each scoped rule's skill and reference.
@@ -270,8 +269,8 @@ An eval sample is a reproducible test case for a prompt: a starting repo state, 
 invocation and a definition of success. Follow these steps to add one.
 
 1. Create `core/eval_samples/<sample-id>/sample.toml`. Give it `id`, `prompt_id`,
-   `description`, `version`, `[setup]` and `[invocation]`, plus the `[gate]`,
-   `[rubric]` and `[verdict]` layers (SPEC §6.5.3).
+   `description`, `[setup]` and `[invocation]`, plus the `[gate]`, `[rubric]` and
+   `[verdict]` layers (SPEC §6.5.3). Any other top-level key is a validation error.
 2. Put the starting repo in `setup/`. Include a `setup/pyproject.toml` when the
    sample depends on detector facts.
 3. Ship a reference answer in `solution/`. For an edit sample, mirror `setup/` paths
@@ -280,8 +279,8 @@ invocation and a definition of success. Follow these steps to add one.
    `solution/negatives/`. A review-only sample needs at least one. CI proves that
    the gate fails on the untouched `setup/` and on every negative, and that it passes
    on the solution.
-4. Add the sample id to the `eval_samples:` list of the prompt named by
-   `prompt_id`. A sample finds its prompt in the `prompts/` directory next to its
+4. Name the prompt the sample grades in `prompt_id`; the prompt does not list its
+   samples. A sample finds its prompt in the `prompts/` directory next to its
    layer's `eval_samples/`, so a core sample uses `core/prompts/`.
 5. Credit third-party fixture code in `core/eval_samples/ATTRIBUTIONS.md`.
 
@@ -303,7 +302,7 @@ Follow these steps to add one.
 1. Create `core/hooks/<category>/<id>/HOOK.md`, where `<category>` is the hook
    family: `protect/`, `verify/`, `feedback/`, `safety/` or `audit/`. The directory
    name is the hook id. The family folder carries no meaning.
-2. Give it frontmatter with `id`, `name`, `description`, `version`, `tier`,
+2. Give it frontmatter with `id`, `name`, `description`, `tier`,
    `events`, `handler`, `decisions`, `timeout`, `on_error` and `supports`.
    `decisions` takes only `deny`, `ask`, `context` or `none`. Add `matcher`,
    `priority` and `tags` as needed.

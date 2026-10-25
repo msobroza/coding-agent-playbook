@@ -3,15 +3,11 @@ id: security-review
 name: Security review
 description: ML-specific security review — checks ML/Python code for unsafe deserialization first, then injection, secrets, and unsafe dynamic execution — and proposes safe refactors.
 slash: security-review-core
-version: 1
 applies_if:
   any_ml_stack: ["torch", "tensorflow", "jax", "transformers", "scikit-learn", "xgboost", "lightgbm"]
 includes_rules:
   - ml-serialization-security
   - python-error-handling
-eval_samples:
-  - security-review-pickle-load
-  - security-review-already-safe
 output_contract:
   # The one-line verdict the Output format asks for (prompt-output-contract-on-stop).
   - '(?im)^\W*(verdict\W*)?(approve with comments|approve|request changes)\W*$'

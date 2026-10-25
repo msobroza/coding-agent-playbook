@@ -2,7 +2,6 @@
 id: python-custom-exceptions
 name: Custom exceptions
 description: "Derive every domain error from one project base exception, name it after the failure mode, and carry the offending identifier."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

@@ -2,7 +2,6 @@
 id: pytest-hypothesis-properties
 name: Hypothesis properties
 description: "Test properties that hold for every valid input with Hypothesis (roundtrips, invariants, bounds) instead of one hand-picked example or unseeded random input."
-version: 1
 scope: scoped
 globs:
   - "**/test_*.py"

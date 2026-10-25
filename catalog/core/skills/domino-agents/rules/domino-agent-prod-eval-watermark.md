@@ -2,7 +2,6 @@
 id: domino-agent-prod-eval-watermark
 name: Production evaluation watermark
 description: "Page through every trace in a fixed UTC window from a stored watermark, skip scored traces, and advance the watermark only after success."
-version: 1
 scope: scoped
 globs:
   - "**/*_eval*.py"

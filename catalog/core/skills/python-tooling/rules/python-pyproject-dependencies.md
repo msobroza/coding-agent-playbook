@@ -2,7 +2,6 @@
 id: python-pyproject-dependencies
 name: Declaring dependencies
 description: "Declare runtime dependencies with lower bounds, development tools in dependency groups and optional features as extras; never pin exactly in a library or touch requires-python unasked."
-version: 1
 scope: scoped
 globs:
   - "pyproject.toml"

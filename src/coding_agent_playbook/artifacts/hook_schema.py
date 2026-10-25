@@ -12,8 +12,9 @@ bounds: H2-H13) are left to ``hooks.contract.contract.classify_hook``, so
 stopping at the first (specs/prK-lifecycle-hooks.md §A.2, §B.5).
 
 Split out of ``types.py`` for the file-size budget. It imports nothing from the
-package, so ``artifacts/hook.py``, ``artifacts/hook_frontmatter.py`` and the stdlib-only
-``hooks`` package can all import it without a cycle.
+package but the stdlib-only ``artifacts.retired_keys``, so ``artifacts/hook.py``,
+``artifacts/hook_frontmatter.py`` and the stdlib-only ``hooks`` package can all
+import it without a cycle.
 """
 
 from __future__ import annotations
@@ -22,6 +23,8 @@ import dataclasses
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final, Literal, cast
+
+from coding_agent_playbook.artifacts.retired_keys import retired_key_problem
 
 if TYPE_CHECKING:
     from _typeshed import DataclassInstance
@@ -52,7 +55,6 @@ TOP_KEYS: Final = (
     "name",
     "description",
     "summary",
-    "version",
     "tier",
     "enabled",
     "mandatory",
@@ -180,11 +182,14 @@ class FieldReader:
         return HookSchemaError(self.where, self.path(key), self.data.get(key), expected)
 
     def check_keys(self, allowed: tuple[str, ...]) -> None:
-        """Raise on the first key outside ``allowed`` (H1), contract keys first-class (H8)."""
+        """Raise on the first key outside ``allowed`` (H1), contract keys first-class (H8).
+
+        A retired key (``version``, #281) names its replacement instead of the list.
+        """
         for key in self.data:
             if key in allowed:
                 continue
-            problem = (
+            problem = retired_key_problem(key) or (
                 f"{key!r}: {CONTRACT_MESSAGE}"
                 if key in CONTRACT_KEYS
                 else f"unknown key {key!r}; allowed: {', '.join(allowed)}"

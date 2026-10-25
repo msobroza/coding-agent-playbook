@@ -2,7 +2,6 @@
 id: domino-launcher-uploads
 name: Domino Launcher uploads
 description: "Check a Launcher upload's size and type, read it from its given path and write only small summary outputs, since every file touched becomes a result."
-version: 1
 scope: scoped
 globs:
   - "**/launcher*.py"

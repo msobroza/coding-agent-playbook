@@ -3,7 +3,6 @@ id: toolchain-missing-hint
 name: Toolchain missing hint
 description: When a shell command shows ruff, mypy, pytest or commitizen is not installed, name the project's install command once per session and ask the user before installing.
 summary: If a check fails because a tool is not installed, tell the user the install command and ask before installing.
-version: 1
 tier: default
 priority: 50
 events: [post_tool_use, post_tool_use_failure]

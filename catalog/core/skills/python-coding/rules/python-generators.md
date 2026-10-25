@@ -2,7 +2,6 @@
 id: python-generators
 name: Generators
 description: "Stream large or single-pass data with generator functions and generator expressions; make a list only when you walk it twice or need len or indexing."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

@@ -2,7 +2,6 @@
 id: sqlalchemy-engine-and-session-scope
 name: Engine and session scope
 description: "Build the engine and sessionmaker in the entry point from settings, open one session per job run or command, close it on every path, and let migrations own the schema."
-version: 1
 scope: scoped
 globs:
   - "**/db/**/*.py"

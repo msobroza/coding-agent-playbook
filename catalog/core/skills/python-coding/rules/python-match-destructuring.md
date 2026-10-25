@@ -2,7 +2,6 @@
 id: python-match-destructuring
 name: Match destructuring
 description: "Use match to dispatch on the shape of data (record types, decoded JSON, sequences) instead of isinstance and key-checking chains, and keep plain if/elif or a dict for value lookups."
-version: 1
 scope: scoped
 applies_if:
   python_version: ">=3.10"

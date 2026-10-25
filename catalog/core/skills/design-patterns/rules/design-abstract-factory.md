@@ -2,7 +2,6 @@
 id: design-abstract-factory
 name: Abstract factory
 description: "When several objects or functions must be swapped together as a family, bundle the matching callables in a frozen dataclass with named, typed fields, chosen once by the entry point, instead of flags that pick each member separately."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

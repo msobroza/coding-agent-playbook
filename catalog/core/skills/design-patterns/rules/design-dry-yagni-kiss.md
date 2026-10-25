@@ -2,7 +2,6 @@
 id: design-dry-yagni-kiss
 name: DRY, YAGNI and KISS
 description: "Give each piece of knowledge one home, build nothing a present need does not ask for, and pick the simplest design that works."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

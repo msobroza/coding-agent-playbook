@@ -3,7 +3,6 @@ id: control-plane-guard
 name: Control-plane guard
 description: Stop the agent disabling or rewriting its own guardrails; that configuration is user-owned.
 summary: Never edit guard configuration (`.claude/settings*.json`, `[hooks]`, `playbook/hooks/`) to loosen a guard; ask the user.
-version: 1
 tier: default
 priority: 20
 events: [pre_tool_use]

@@ -2,7 +2,6 @@
 id: a2a-mount-lifespan
 name: A2A mount and lifespan
 description: "Mount the A2A app from create_app and enter its lifespan from the parent's, so its task worker runs; one worker, one pod."
-version: 1
 scope: scoped
 section: a2a
 priority: 60

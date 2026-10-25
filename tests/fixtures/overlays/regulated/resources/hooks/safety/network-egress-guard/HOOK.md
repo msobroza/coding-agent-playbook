@@ -2,7 +2,6 @@
 id: network-egress-guard
 name: Network egress guard
 description: Restrict agent network egress to the organization allowlist.
-version: 1
 tier: default
 mandatory: true
 priority: 21

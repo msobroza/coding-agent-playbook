@@ -2,7 +2,6 @@
 id: python-frozen-dataclasses
 name: Frozen dataclasses
 description: "Freeze value records with frozen=True, give them tuple and frozenset fields, and copy every collection passed in, because frozen is shallow."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

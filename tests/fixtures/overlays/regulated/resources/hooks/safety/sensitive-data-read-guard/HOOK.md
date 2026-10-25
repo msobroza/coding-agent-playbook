@@ -2,7 +2,6 @@
 id: sensitive-data-read-guard
 name: Sensitive data read guard
 description: Ask before the agent reads raw customer data or notebook outputs (regulated overlay activation).
-version: 1
 tier: default
 enabled: true
 priority: 17

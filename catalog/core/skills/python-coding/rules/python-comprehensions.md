@@ -2,7 +2,6 @@
 id: python-comprehensions
 name: Comprehensions
 description: "Build a list, dict or set with a comprehension when each element is one simple transform or filter; keep a loop for side effects, raises or more than two clauses."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

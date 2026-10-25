@@ -2,7 +2,6 @@
 id: design-function-builder
 name: Function builder
 description: "When configuration and runtime arguments arrive together, write a function that takes the configuration once and returns a configured function, so business code receives only the runtime arguments."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

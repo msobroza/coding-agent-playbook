@@ -1,11 +1,13 @@
 """Focused unit checks on the find-injected-vulnerability prompt resource.
 
-Runs BEFORE all ten fixtures exist, so it parses the prompt frontmatter and
-body directly rather than going through validate_samples (which needs every
-eval_samples: entry to resolve on-disk — that whole-suite green lands in C4).
+Parses the prompt frontmatter and body directly rather than going through
+validate_samples; the prompt's samples are the ones whose ``prompt_id`` names
+it (#281).
 """
 
 from __future__ import annotations
+
+import tomllib
 
 import pytest
 
@@ -62,8 +64,13 @@ def test_prompt_id_is_find_injected_vulnerability() -> None:
     assert _prompt().frontmatter.id == "find-injected-vulnerability"
 
 
-def test_prompt_lists_every_fixture_id() -> None:
-    assert _prompt().frontmatter.eval_samples == _EXPECTED_EVAL_SAMPLES
+def test_every_fixture_names_the_prompt() -> None:
+    naming = [
+        path.parent.name
+        for path in (CORE_ROOT / "eval_samples").glob("*/sample.toml")
+        if tomllib.loads(path.read_text(encoding="utf-8"))["prompt_id"] == _prompt().frontmatter.id
+    ]
+    assert sorted(naming) == sorted(_EXPECTED_EVAL_SAMPLES)
 
 
 def test_prompt_body_has_no_commit_or_temporal_framing() -> None:

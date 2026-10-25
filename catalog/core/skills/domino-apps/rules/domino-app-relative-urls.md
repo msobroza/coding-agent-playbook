@@ -2,7 +2,6 @@
 id: domino-app-relative-urls
 name: Relative URLs
 description: "Build every link, redirect, fetch and asset path relative to the App's prefix; never start one at '/' or name a host."
-version: 1
 scope: scoped
 globs:
   - "**/app.py"

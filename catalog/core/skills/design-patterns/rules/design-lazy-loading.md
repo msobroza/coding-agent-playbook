@@ -2,7 +2,6 @@
 id: design-lazy-loading
 name: Lazy loading
 description: "Load an expensive value that only some paths need on first use, cache it once in a cached module function, return it immutable, and stream large data with a generator."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

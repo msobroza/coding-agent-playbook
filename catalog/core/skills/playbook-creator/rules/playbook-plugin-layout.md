@@ -2,7 +2,6 @@
 id: playbook-plugin-layout
 name: Plugin and overlay layout
 description: "Ship a bundled plugin as pure content and an overlay as an importable package, each with the layer's kind directories."
-version: 1
 scope: scoped
 globs:
   - "catalog/plugins/*/*"

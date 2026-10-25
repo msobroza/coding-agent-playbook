@@ -2,7 +2,6 @@
 id: design-review-by-severity
 name: Design review by severity
 description: "Review a module's design in a fixed scan order, back every finding with evidence you read, and rank findings by severity."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

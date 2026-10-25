@@ -2,7 +2,6 @@
 id: domino-agent-fake-llm-tests
 name: Agent tests on a fake model
 description: "Pass a fake model into create_app, switch real model requests off for the run, build settings in code, and test routes through a TestClient context."
-version: 1
 scope: scoped
 section: testing
 priority: 63

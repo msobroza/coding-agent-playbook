@@ -2,7 +2,6 @@
 id: design-name-for-intent
 name: Names that match intent
 description: "Name sibling methods and classes alike, use the matching dunder, and make every verb match what the method does."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

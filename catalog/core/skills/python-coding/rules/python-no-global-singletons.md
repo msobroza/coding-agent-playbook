@@ -2,7 +2,6 @@
 id: python-no-global-singletons
 name: No global singletons
 description: "Never expose services, clients or mutable configuration as module-level singletons, lazy get_x() globals or service locators; build them once and inject them."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

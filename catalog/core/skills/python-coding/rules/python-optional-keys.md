@@ -2,7 +2,6 @@
 id: python-optional-keys
 name: Optional keys
 description: "Use .get, setdefault and defaultdict only for keys whose absence is normal; index required keys or parse them into a typed record where data enters."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

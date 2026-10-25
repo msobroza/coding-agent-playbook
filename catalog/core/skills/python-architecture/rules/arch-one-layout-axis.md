@@ -2,7 +2,6 @@
 id: arch-one-layout-axis
 name: One layout axis
 description: "Organize packages along one axis, layer-first or feature-first, follow the axis the repo already uses, and make the architecture visible in the folder tree."
-version: 1
 scope: scoped
 globs:
   - "**/__init__.py"

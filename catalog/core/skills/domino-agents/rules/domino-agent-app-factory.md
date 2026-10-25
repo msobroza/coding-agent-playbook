@@ -2,7 +2,6 @@
 id: domino-agent-app-factory
 name: Domino agent app factory
 description: "Build the agent, its model, clients, token provider and traced request function once in create_app, with nothing agent-related at import."
-version: 1
 scope: scoped
 globs:
   - "**/app.sh"

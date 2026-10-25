@@ -2,7 +2,6 @@
 id: domino-agent-trace-entrypoint
 name: Traced request function
 description: "Put add_tracing directly on the one function that handles a request, with a typed parameter and return contract shared with evaluators."
-version: 1
 scope: scoped
 globs:
   - "**/*agent*.py"

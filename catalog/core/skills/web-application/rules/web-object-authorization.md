@@ -2,7 +2,6 @@
 id: web-object-authorization
 name: Authorize access to every object
 description: "Scope every query that loads a record by owner or tenant, answer 404 for records the caller may not see, and require authentication at the router level."
-version: 1
 scope: scoped
 globs:
   - "**/routers/**/*.py"

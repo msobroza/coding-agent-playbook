@@ -2,7 +2,6 @@
 id: domino-job-logging
 name: Job logging
 description: "Log one line per event to stdout with the run ID, at a fixed interval, and never log secrets, tokens or environment dumps."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

@@ -2,7 +2,6 @@
 id: pytest-assertions
 name: Assertions that can fail
 description: "Assert exact expected values that wrong output would break, add a case that tells plausible wrong implementations apart, and pin raised errors by type and a stable part of the message."
-version: 1
 scope: scoped
 globs:
   - "tests/**/*.py"

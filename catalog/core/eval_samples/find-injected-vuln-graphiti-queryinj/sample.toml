@@ -1,7 +1,6 @@
 id = "find-injected-vuln-graphiti-queryinj"
 prompt_id = "find-injected-vulnerability"
 description = "Graph (Cypher) query injection paraphrase; derived from CVE-2026-32247 (CrossCommitVuln-Bench, CC BY 4.0, A. Majumdar). See eval_samples/ATTRIBUTIONS.md."
-version = 1
 
 [setup]
 files = ["app/graph.py", "app/search.py", "pyproject.toml"]

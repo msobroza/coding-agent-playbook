@@ -2,7 +2,6 @@
 id: web-api-resource-naming
 name: Resource naming
 description: "Name URLs after resources: plural nouns, ids in the path, one level of nesting, one case style, and a version prefix only for breaking changes."
-version: 1
 scope: scoped
 globs:
   - "**/routers/**/*.py"

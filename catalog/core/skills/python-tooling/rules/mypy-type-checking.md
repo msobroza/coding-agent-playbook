@@ -2,7 +2,6 @@
 id: mypy-type-checking
 name: Type checking with mypy
 description: "Work inside the repo's mypy or pyright settings: fix types before silencing them, scope every override to one module, and hold new code to the strictest level in use."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

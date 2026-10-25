@@ -110,7 +110,6 @@ def _rule_entry(rule: Rule, path: str, *, by_location: bool) -> manifest.Manifes
         globs=list(fm.globs),
         applies_if=dict(fm.applies_if),
         tags=list(fm.tags),
-        version=fm.version,
         lint_codes=dict(fm.lint_codes),
         skill=None if by_location else fm.skill,
         section=fm.section,

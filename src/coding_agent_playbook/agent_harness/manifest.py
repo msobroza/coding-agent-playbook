@@ -82,7 +82,6 @@ class ManifestEntry:
     globs: list[str] = field(default_factory=list)
     applies_if: dict[str, Any] = field(default_factory=dict)
     tags: list[str] = field(default_factory=list)
-    version: int | None = None
     # Rule-only, emitted only when non-empty so existing sidecars stay byte-identical.
     lint_codes: dict[str, Any] = field(default_factory=dict)
     # Rule-only: the skill a scoped rule names (ADR 0001); emitted only when set.
@@ -96,7 +95,6 @@ class ManifestEntry:
     slash: str | None = None
     input_variables: list[dict[str, Any]] = field(default_factory=list)
     includes_rules: list[str] = field(default_factory=list)
-    eval_samples: list[str] = field(default_factory=list)
     # Emitted only when non-empty, so manifests of contract-free prompts stay byte-identical.
     output_contract: list[str] = field(default_factory=list)
     # Prompt-only, emitted only when non-empty so existing sidecars stay byte-identical.
@@ -131,16 +129,14 @@ class Manifest:
 # un-rendered source body (the harness leaf may inline/rewrite it) so the
 # lossless importer never reconstructs from the rendered file.
 _KIND_FIELDS: dict[str, tuple[str, ...]] = {
-    "rule": ("name", "body", "is_templated", "scope", "priority", "globs", "tags", "version"),
+    "rule": ("name", "body", "is_templated", "scope", "priority", "globs", "tags"),
     "prompt": (
         "name",
         "body",
         "is_templated",
         "slash",
-        "version",
         "input_variables",
         "includes_rules",
-        "eval_samples",
     ),
     "skill": ("name", "body"),
     "eval_sample": (),
@@ -193,14 +189,12 @@ def _entry_from_table(table: dict[str, Any]) -> ManifestEntry:
         globs=list(table.get("globs", [])),
         applies_if=dict(table.get("applies_if", {})),
         tags=list(table.get("tags", [])),
-        version=table.get("version"),
         lint_codes=dict(table.get("lint_codes", {})),
         skill=table.get("skill"),
         section=table.get("section"),
         slash=table.get("slash"),
         input_variables=list(table.get("input_variables", [])),
         includes_rules=list(table.get("includes_rules", [])),
-        eval_samples=list(table.get("eval_samples", [])),
         output_contract=list(table.get("output_contract", [])),
         write_scope=dict(table.get("write_scope", {})),
         extra_frontmatter=dict(table.get("extra_frontmatter", {})),

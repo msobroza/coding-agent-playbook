@@ -2,7 +2,6 @@
 id: arch-break-import-cycles
 name: Break import cycles
 description: "Break an import cycle by fixing the dependency (invert the wrong-way edge, move the shared type down, or merge), never by hiding the import inside a function."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

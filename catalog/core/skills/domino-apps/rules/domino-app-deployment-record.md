@@ -2,7 +2,6 @@
 id: domino-app-deployment-record
 name: Deployment record
 description: "Record every out-of-repo App setting (launch file, environment revision, tier, revision, URL, access, starter) in a deployment table per stage."
-version: 1
 scope: scoped
 globs:
   - "**/README.md"

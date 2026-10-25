@@ -2,7 +2,6 @@
 id: design-open-closed
 name: Open/closed
 description: "Add a new variant by adding a function, a mapping entry or a class, not by editing a growing if/elif or isinstance ladder."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

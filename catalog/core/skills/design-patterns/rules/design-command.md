@@ -2,7 +2,6 @@
 id: design-command
 name: Command
 description: "When actions must be undone, batched, queued or replayed, make each action a function that performs it and returns an undo closure built from a snapshot; a batch undoes the done steps in reverse and re-raises when one fails."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

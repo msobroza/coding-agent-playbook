@@ -2,7 +2,6 @@
 id: pytest-no-test-logic
 name: No logic in tests
 description: "Keep if, for and try out of test bodies: parametrize the cases, assert unconditionally, write expected values as literals with the arithmetic in a comment, and use pytest.raises instead of a caught flag."
-version: 1
 scope: scoped
 globs:
   - "tests/**/*.py"

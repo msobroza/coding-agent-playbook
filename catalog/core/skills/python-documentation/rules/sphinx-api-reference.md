@@ -2,7 +2,6 @@
 id: sphinx-api-reference
 name: Sphinx API reference
 description: "Generate reference pages from docstrings through the extensions conf.py already enables, register each new public module, and never copy signatures into prose."
-version: 1
 scope: scoped
 globs:
   - "docs/conf.py"

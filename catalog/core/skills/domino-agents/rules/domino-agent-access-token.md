@@ -2,7 +2,6 @@
 id: domino-agent-access-token
 name: Domino agent access token
 description: "Fetch the rotating Domino access token through one async provider with a timeout, a short cache, one lock and a domain error that never names the token."
-version: 1
 scope: scoped
 globs:
   - "**/settings.py"

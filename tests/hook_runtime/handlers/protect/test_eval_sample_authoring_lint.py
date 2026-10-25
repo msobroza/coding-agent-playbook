@@ -37,14 +37,12 @@ SAMPLE_DIR: Final = "playbook/eval_samples/demo-sample"
 SAMPLE: Final = f"{SAMPLE_DIR}/sample.toml"
 HINT: Final = "author regex patterns as TOML literal strings (single quotes)"
 _PROMPT: Final = (
-    "---\nid: demo\nname: Demo\ndescription: Demo prompt.\nslash: demo\n"
-    "eval_samples:\n  - demo-sample\n---\nReview the code.\n"
+    "---\nid: demo\nname: Demo\ndescription: Demo prompt.\nslash: demo\n---\nReview the code.\n"
 )
 VALID: Final = """\
 id = "demo-sample"
 prompt_id = "demo"
 description = "Demo."
-version = 1
 
 [setup]
 files = ["src/app.py"]

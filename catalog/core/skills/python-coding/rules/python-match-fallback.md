@@ -2,7 +2,6 @@
 id: python-match-fallback
 name: Match fallback
 description: "End every match statement with a case _ that raises with the offending value, and call assert_never there when the subject is an Enum, a Literal or a union."
-version: 1
 scope: scoped
 applies_if:
   python_version: ">=3.10"

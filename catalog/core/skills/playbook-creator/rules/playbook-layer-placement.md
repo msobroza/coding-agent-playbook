@@ -2,7 +2,6 @@
 id: playbook-layer-placement
 name: Layer placement
 description: "Put each artifact in the kind directory of the one layer that owns it, never in generated output."
-version: 1
 scope: scoped
 globs:
   - "catalog/**"

@@ -2,7 +2,6 @@
 id: python-hide-internal-state
 name: Hide internal state
 description: "A class that protects an invariant keeps its storage in underscored fields behind methods, hides internal fields from repr, and exposes what it can do, not how it stores data."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

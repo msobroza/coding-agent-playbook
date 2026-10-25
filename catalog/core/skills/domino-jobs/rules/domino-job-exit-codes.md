@@ -2,7 +2,6 @@
 id: domino-job-exit-codes
 name: Domino job exit codes
 description: "Exit 0 only after a job's outputs are complete and non-zero on any failure, because Domino, schedules and callers read nothing else."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

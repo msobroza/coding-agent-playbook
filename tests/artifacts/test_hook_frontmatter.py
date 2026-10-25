@@ -43,4 +43,5 @@ def test_hook_frontmatter_leaf_loads_nothing_but_the_hook_schema() -> None:
         "coding_agent_playbook.artifacts",
         "coding_agent_playbook.artifacts.hook_frontmatter",
         "coding_agent_playbook.artifacts.hook_schema",
+        "coding_agent_playbook.artifacts.retired_keys",
     ]

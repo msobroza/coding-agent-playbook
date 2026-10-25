@@ -2,7 +2,6 @@
 id: session-start-playbook-briefing
 name: Session-start playbook briefing
 description: Prove the guards answer (one heartbeat line) and report playbook anomalies at session start, resume and compaction.
-version: 1
 tier: default
 priority: 10
 events: [session_start]

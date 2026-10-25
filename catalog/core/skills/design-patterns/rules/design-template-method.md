@@ -2,7 +2,6 @@
 id: design-template-method
 name: Template method
 description: "When several classes copy the same sequence of steps and differ only in some steps, write the sequence once as a function that takes the varying steps through a small Protocol or callables; use an ABC template only when the base must hold state or enforce overrides."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

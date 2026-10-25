@@ -2,7 +2,6 @@
 id: python-error-boundaries
 name: Error boundaries
 description: "Raise domain errors in the core and translate them once at entry points; never let sentinels, error dicts or a KeyError cross a layer."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

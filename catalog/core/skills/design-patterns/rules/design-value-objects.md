@@ -2,7 +2,6 @@
 id: design-value-objects
 name: Value objects
 description: "Give a domain value with rules (money, rates, measurements, constrained codes) a frozen dataclass that validates on construction instead of passing a bare str, int or float."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

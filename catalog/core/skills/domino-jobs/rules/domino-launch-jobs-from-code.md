@@ -2,7 +2,6 @@
 id: domino-launch-jobs-from-code
 name: Launching jobs from code
 description: "Start Domino jobs from code with an explicit command, commit, environment and tier, wait with a deadline, and treat every final state but Succeeded as an error."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

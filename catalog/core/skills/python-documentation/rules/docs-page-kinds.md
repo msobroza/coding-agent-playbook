@@ -2,7 +2,6 @@
 id: docs-page-kinds
 name: Page kinds
 description: "Write each docs page as one kind (tutorial, how-to guide, reference or explanation), follow the repo's docs tree and link between kinds instead of mixing them."
-version: 1
 scope: scoped
 globs:
   - "docs/**"

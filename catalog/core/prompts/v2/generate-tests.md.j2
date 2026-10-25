@@ -3,7 +3,6 @@ id: generate-tests
 name: Generate tests
 description: Generate pytest tests for a function, class, or module, following the project's testing conventions.
 slash: generate-tests
-version: 1
 applies_if:
   has_framework: ["pytest"]
 input_variables:
@@ -13,10 +12,6 @@ input_variables:
 includes_rules:
   - python-typing
   - pytest
-eval_samples:
-  - generate-tests-happy-path
-  - generate-tests-edge-cases
-  - generate-tests-async-code
 write_scope:
   globs:
     - tests/**

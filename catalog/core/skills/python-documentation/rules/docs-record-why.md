@@ -2,7 +2,6 @@
 id: docs-record-why
 name: Record the why
 description: "Record a hard-to-reverse decision as an ADR at docs/adr/NNNN-slug.md, supersede accepted ADRs instead of rewriting them, and put the why of a change in its commit message."
-version: 1
 scope: scoped
 globs:
   - "docs/adr/**"

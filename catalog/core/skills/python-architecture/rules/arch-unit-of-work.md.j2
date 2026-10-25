@@ -2,7 +2,6 @@
 id: arch-unit-of-work
 name: Unit of work
 description: "When one use case writes through several repositories, give it a unit of work that shares one transaction and commit exactly once at the end of the use case; let failures propagate and roll back."
-version: 1
 scope: scoped
 globs:
   - "**/services/**/*.py"

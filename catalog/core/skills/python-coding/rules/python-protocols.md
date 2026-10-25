@@ -2,7 +2,6 @@
 id: python-protocols
 name: Protocols
 description: "Type a seam with a role-named Callable alias for one behavior or a small Protocol in the consuming module; keep an ABC for shared implementation or a hook the base calls."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

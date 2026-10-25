@@ -2,7 +2,6 @@
 id: sphinx-docs-build
 name: Sphinx build
 description: "After editing docs or documented code, run the repo's Sphinx build the way CI does and fix each new warning instead of suppressing it."
-version: 1
 scope: scoped
 globs:
   - "docs/conf.py"

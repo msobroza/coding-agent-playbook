@@ -290,7 +290,7 @@ _OPEN_MD = (
     "---\nid: open\nname: Open\ndescription: d\nscope: always\npriority: 50\n---\nOPEN-BODY\n"
 )
 _TIDY_MD = (
-    "---\nid: tidy\nname: Tidy\ndescription: d\nslash: tidy\nversion: 1\n"
+    "---\nid: tidy\nname: Tidy\ndescription: d\nslash: tidy\n"
     "includes_rules:\n  - gated\n  - open\n---\nTidy up.\n"
 )
 

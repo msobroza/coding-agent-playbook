@@ -2,7 +2,6 @@
 id: design-split-god-class
 name: Split a god class
 description: "Split a class whose methods cluster around disjoint attributes into one class per cluster, composed by the original."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

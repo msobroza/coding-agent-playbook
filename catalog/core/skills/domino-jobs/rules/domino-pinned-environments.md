@@ -2,7 +2,6 @@
 id: domino-pinned-environments
 name: Pinned environments
 description: "Bake a job's dependencies into its compute environment's Dockerfile instructions with exact versions, and keep requirements.txt to a few exactly pinned packages."
-version: 1
 scope: scoped
 globs:
   - "requirements*.txt"
