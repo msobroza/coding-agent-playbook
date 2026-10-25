@@ -5,7 +5,8 @@ Build it from the repository root, strictly (any warning fails) and offline:
     uv run scripts/build_docs.py
 
 The catalog pages are generated into ``reference/catalog/`` at every build by
-``_ext/catalog_sphinx.py``. Nothing here, nor in the built pages, reaches the
+``_ext/catalog_sphinx.py``. Source links point at the repository the build runs
+in, GitHub or GitLab (``_ext/source_host.py`` lists the variables that decide it). Nothing here, nor in the built pages, reaches the
 network: no intersphinx, no web font, and Mermaid is vendored under ``_static/``.
 """
 
@@ -19,8 +20,6 @@ from coding_agent_playbook import __version__
 sys.path.insert(0, str(Path(__file__).parent / "_ext"))
 
 project = "coding-agent-playbook"
-author = "Max Pereira"
-copyright = "Max Pereira"
 release = __version__
 
 extensions = [
@@ -30,9 +29,6 @@ extensions = [
     "sphinxcontrib.mermaid",
     "catalog_sphinx",
 ]
-
-#: The repository the site links source files on (catalog pages, the design spec).
-playbook_repo_url = "https://github.com/msobroza/coding-agent-playbook"
 
 templates_path = ["_templates"]
 html_static_path = ["_static"]
@@ -66,8 +62,8 @@ autodoc_member_order = "bysource"
 html_theme = "furo"
 html_title = project
 html_copy_source = False
+html_show_copyright = False
 html_show_sourcelink = False
-html_context = {"playbook_repo_url": playbook_repo_url}
 # Furo's default sidebar plus the repository link under the title. No "edit this
 # page" button: the include pages and the generated ones would open the wrong file.
 html_sidebars = {

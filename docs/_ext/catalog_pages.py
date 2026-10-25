@@ -221,7 +221,10 @@ def _field_list(fields: Iterable[tuple[str, str]]) -> str:
 
 
 def _source_link(path: str, source_tree_url: str) -> str:
-    return f"[`{path}`]({source_tree_url}{path})" if path else ""
+    """A link to ``path`` in the repository; the path alone when the site has no source host."""
+    if not path:
+        return ""
+    return f"[`{path}`]({source_tree_url}{path})" if source_tree_url else f"`{path}`"
 
 
 def _table(header: Sequence[str], rows: Iterable[Sequence[str]]) -> str:

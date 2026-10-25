@@ -15,7 +15,8 @@ The engine's docs were Markdown files read on GitHub. We publish them as a stati
 ## Consequences
 
 - Pages stay plain Markdown read on GitHub; MyST options (`myst_heading_anchors`) keep GitHub's heading slugs, so a link like `checks.md#playbook-forge` works on both.
-- `README.md`, `CONTEXT.md`, `MIGRATION.md` and `catalog/README.md` stay where they are and reach the site through MyST `{include}` pages; a build hook (`docs/_ext/repo_links.py`) maps links to them onto their site pages, and `SPEC.md` stays on GitHub.
+- `README.md`, `CONTEXT.md`, `MIGRATION.md` and `catalog/README.md` stay where they are and reach the site through MyST `{include}` pages; a build hook (`docs/_ext/repo_links.py`) maps links to them onto their site pages, and `SPEC.md` stays in the repository, linked from a short page.
 - Diagrams are ` ```mermaid ` blocks, which GitHub renders too. `sphinxcontrib-mermaid` would load Mermaid from a CDN, so its ES-module build is vendored, unchanged, under `docs/_static/mermaid/` (MIT, about 2.7 MB); upgrading it is a reviewed copy, as that directory's README says.
 - Help text and docstrings are parsed as reStructuredText on the site: a bare `*` or an unclosed backtick in them fails the strict build.
+- The site builds the same way on GitHub (Actions, Pages) and on a company's GitLab copy (`.gitlab-ci.yml`, GitLab Pages). Source links follow the repository of the build, read from the CI's own variables (`docs/_ext/source_host.py`), so no internal host name is ever committed.
 - The catalog pages are written at every build from the engine's own readers (`docs/_ext/`), so they never drift from `catalog/`; they are git-ignored.
