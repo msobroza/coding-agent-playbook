@@ -26,6 +26,9 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.artifacts.skill import Skill
 
+# ADR 0010: a module that reads the shipped catalog is a catalog check as a whole.
+pytestmark = pytest.mark.catalog
+
 _RULE = """\
 ---
 id: style
@@ -169,7 +172,6 @@ def test_digest_kind_names_the_value_it_cannot_digest() -> None:
         digest_kind("nope")  # type: ignore[arg-type]
 
 
-@pytest.mark.catalog
 def test_every_shipped_rule_and_skill_has_a_distinct_digest() -> None:
     rules = list(core_rules().values())
     skills = core_skills()
