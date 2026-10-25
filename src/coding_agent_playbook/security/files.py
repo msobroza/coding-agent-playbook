@@ -32,13 +32,17 @@ def user_home() -> str:
     return os.path.expanduser("~")
 
 
-def is_secret_file(path: Path, *, relative_to: Path, home: str) -> bool:
+def is_secret_file(
+    path: Path, *, relative_to: Path, home: str, resolved: Path | None = None
+) -> bool:
     """Whether ``path`` is a secret by its spelling below ``relative_to`` or by its target.
 
     The spelling (``path`` relative to ``relative_to``, or ``path`` itself when
     it lies elsewhere) is the name a reader sees; the resolved target is what a
     read would open. Either one matching the catalog makes the file secret. The
-    file is never opened.
+    file is never opened. ``resolved`` is the target when the caller already
+    resolved ``path`` (a walk resolving its files in one batch); ``None``
+    resolves it here.
 
     Example::
 
@@ -52,4 +56,4 @@ def is_secret_file(path: Path, *, relative_to: Path, home: str) -> bool:
         spelled = path
     if is_secret_path(spelled, home=home):
         return True
-    return is_secret_path(path.resolve(), home=home)
+    return is_secret_path(path.resolve() if resolved is None else resolved, home=home)
