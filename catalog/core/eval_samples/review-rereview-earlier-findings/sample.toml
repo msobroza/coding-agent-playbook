@@ -1,0 +1,51 @@
+id = "review-rereview-earlier-findings"
+prompt_id = "review"
+description = "Re-review of a fix commit given three earlier findings: two are fixed, the important discount finding is still open; the review must give each a status and keep blocking on the open one."
+version = 1
+
+[setup]
+files = [
+  "CHANGE.diff",
+  "src/cart.py",
+  "tests/test_cart.py",
+]
+project_kind = "python-application"
+
+[invocation]
+prompt_args = """re-review my fix commit in CHANGE.diff (it is already applied to the working tree). Your earlier review of src/cart.py found:
+1. src/cart.py:15 - important - remove() lets a line's quantity go negative: removing 5 pens from a cart holding 2 stores -3 and makes total_cents() too low.
+2. src/cart.py:19 - important - total_cents() accepts any discount_percent: 150 gives a negative total, and -10 charges more than the subtotal.
+3. src/cart.py:9 - nit - add() accepts a zero or negative quantity."""
+input_variables = {}
+
+[gate]
+# Review-only: the agent must report, not edit. The fix commit guards add() and
+# remove() (findings 1 and 3) but leaves total_cents() untouched, so finding 2 is
+# still open and, being important, still blocks. A correct answer from either
+# prompt set says remove() is fixed, says the discount finding is still open, and
+# ends on request changes, never an approving verdict line. An empty answer names
+# no status and has no verdict line. "not fixed" never counts as fixed.
+expr = "cart_untouched and tests_untouched and remove_fixed and discount_open and blocks and not approves"
+
+[gate.bind]
+cart_untouched  = { check = "file_unchanged", path = "src/cart.py" }
+tests_untouched = { check = "file_unchanged", path = "tests/test_cart.py" }
+# Either order, within one top-level block: a line plus its indented continuation.
+remove_fixed    = { check = "answer_matches", pattern = '(?i)\bremove\b(?:[^\n]|\n(?=[ \t\n]))*?(?<!n.t )\b(?:fixed|resolved|addressed)\b|(?<!n.t )\b(?:fixed|resolved|addressed)\b(?:[^\n]|\n(?=[ \t\n]))*?\bremove\b' }
+discount_open   = { check = "answer_matches", pattern = '(?i)(?:discount|total_cents)(?:[^\n]|\n(?=[ \t\n]))*?(?:still\s+open|remains\s+open|not\s+(?:yet\s+)?(?:fixed|addressed|resolved)|unfixed|unresolved|unaddressed)|(?:still\s+open|remains\s+open|not\s+(?:yet\s+)?(?:fixed|addressed|resolved)|unfixed|unresolved|unaddressed)(?:[^\n]|\n(?=[ \t\n]))*?(?:discount|total_cents)' }
+blocks          = { check = "answer_matches", pattern = '(?im)^\W*(?:verdict\W*)?request changes\W*$' }
+approves        = { check = "answer_matches", pattern = '(?im)^\W*(?:verdict\W*)?approve(?: with comments)?\W*$' }
+
+[rubric]
+expr = "quality"
+
+[rubric.bind]
+quality = { fail = 0.5, rubric = [
+  { judge = "The review gives each of the three earlier findings one status: remove() going negative is fixed, add() accepting a non-positive quantity is fixed, and total_cents() accepting any discount_percent is still open.", weight = 0.4 },
+  { judge = "The review keeps the still-open discount finding important (blocking) and its verdict is 'request changes'.", weight = 0.3 },
+  { judge = "The review does not raise the fixed remove() or add() findings again as new findings, and does not invent new bugs in the fix commit.", weight = 0.2 },
+  { judge = "The review cites file and line for the still-open finding (total_cents in src/cart.py) and proposes no edits of its own to the files.", weight = 0.1 },
+] }
+
+[verdict]
+trial = "gate and rubric"

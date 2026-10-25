@@ -1,0 +1,74 @@
+feat(report): add a --csv option
+
+diff --git a/src/report.py b/src/report.py
+--- a/src/report.py
++++ b/src/report.py
+@@ -1,6 +1,9 @@
+ """Monthly expense report: total spent per month, read from a ledger file."""
+ 
+ import argparse
++import csv
++import io
++import sys
+ from collections import defaultdict
+ from datetime import date
+ 
+@@ -27,11 +30,26 @@
+     return "\n".join(f"{month}  {cents / 100:>10.2f}" for month, cents in totals.items())
+ 
+ 
++def format_csv(totals: dict[str, int]) -> str:
++    """The report as CSV with a ``month,total`` header; totals keep two decimals."""
++    buffer = io.StringIO()
++    writer = csv.writer(buffer, lineterminator="\n")
++    writer.writerow(["month", "total"])
++    for month, cents in totals.items():
++        writer.writerow([month, f"{cents / 100:.2f}"])
++    return buffer.getvalue()
++
++
+ def main(argv: list[str] | None = None) -> None:
+     parser = argparse.ArgumentParser(description="Print the monthly expense report.")
+     parser.add_argument("ledger", help="path to the ledger file")
++    parser.add_argument("--csv", action="store_true", help="print the report as CSV")
+     args = parser.parse_args(argv)
+-    print(format_table(monthly_totals(read_ledger(args.ledger))))
++    totals = monthly_totals(read_ledger(args.ledger))
++    if args.csv:
++        sys.stdout.write(format_csv(totals))
++    else:
++        print(format_table(totals))
+ 
+ 
+ if __name__ == "__main__":
+diff --git a/tests/test_report.py b/tests/test_report.py
+--- a/tests/test_report.py
++++ b/tests/test_report.py
+@@ -1,6 +1,9 @@
+ from datetime import date
++from pathlib import Path
+ 
+-from src.report import format_table, monthly_totals
++import pytest
++
++from src.report import format_csv, format_table, main, monthly_totals
+ 
+ 
+ def test_monthly_totals_groups_by_month_oldest_first() -> None:
+@@ -10,3 +13,16 @@
+ 
+ def test_format_table_prints_one_line_per_month() -> None:
+     assert format_table({"2024-01": 250}) == "2024-01        2.50"
++
++
++def test_format_csv_writes_a_header_and_one_row_per_month() -> None:
++    assert format_csv({"2024-01": 250, "2024-02": 1005}) == (
++        "month,total\n2024-01,2.50\n2024-02,10.05\n"
++    )
++
++
++def test_main_prints_csv_with_the_flag(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
++    ledger = tmp_path / "ledger.csv"
++    ledger.write_text("2024-01-09,250\n2024-01-20,100\n", encoding="utf-8")
++    main([str(ledger), "--csv"])
++    assert capsys.readouterr().out == "month,total\n2024-01,3.50\n"

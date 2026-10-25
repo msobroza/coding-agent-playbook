@@ -1,0 +1,9 @@
+[project]
+name = "review-diff-old-bug-on-untouched-line-fixture"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["pytest"]
+
+[tool.pytest.ini_options]
+# Lets `tests/` import `src.inventory` under plain `pytest` as well as `python -m pytest`.
+pythonpath = ["."]
