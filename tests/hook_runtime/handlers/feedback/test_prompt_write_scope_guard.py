@@ -282,7 +282,7 @@ def test_harness_review_command_is_no_playbook_prompt(
     transcript: SessionTranscript,
     slash: str,
 ) -> None:
-    """ADR 0009: ``/review`` and ``/security-review`` are the harness's own commands again."""
+    """ADR 0010: ``/review`` and ``/security-review`` are the harness's own commands again."""
     transcript.command(slash, "src/app.py")
 
     assert _edit(repo, deps(), state, transcript) is Decision.NONE

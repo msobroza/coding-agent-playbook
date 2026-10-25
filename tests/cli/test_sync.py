@@ -576,7 +576,7 @@ _COMMAND_DIRS = (".claude/commands", ".opencode/command")
 
 
 def test_sync_renames_core_review_commands_and_removes_the_old_ones(tmp_path, make_synthetic_repo):
-    """ADR 0009: the core review prompts take the ``-core`` slash, with no alias.
+    """ADR 0010: the core review prompts take the ``-core`` slash, with no alias.
 
     The first sync's ``-core`` commands are moved to the old names, in the files
     and in the lockfile, as an engine before v0.21 left them; the next sync
