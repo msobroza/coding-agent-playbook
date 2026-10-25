@@ -76,6 +76,7 @@ from coding_agent_playbook.sync._dispatch import (
     SyncResult,
     build_lockfile,
     dispatch_to_adapters,
+    real_written_paths,
 )
 from coding_agent_playbook.sync._layout_outputs import rewrite_layout_outputs
 from coding_agent_playbook.sync._leftovers import OutputLocations
@@ -169,7 +170,8 @@ def _run_sync(ctx: SyncContext, policy: _sync_orphans.LeftoverPolicy) -> SyncRes
     """
     with judging_leftovers_with(policy.may_delete):
         recorder, hooks = _render_into(ctx, ctx.repo_root, policy.previous)
-    resolved_written: set[Path] = {p.resolve() for p in recorder.written}
+    # One realpath batch before any cleanup deletes (732 Path.resolve() calls per sync).
+    resolved_written: set[Path] = real_written_paths(recorder.written)
     removed: list[Path] = []
     for adapter in ctx.adapters.values():
         removed.extend(adapter.cleanup_stale(resolved_written, ctx.repo_root))
