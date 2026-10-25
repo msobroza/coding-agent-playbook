@@ -1,4 +1,4 @@
-"""No shipped prompt slash or skill id takes a name a target harness reserves (ADR 0010, #272).
+"""No shipped prompt slash or skill id takes a name a target harness reserves (ADR 0011, #272).
 
 A core prompt's slash, or a skill id of core or of a bundled plugin, that equals a
 harness command, a command alias or a skill a harness ships shadows the harness's
@@ -35,7 +35,7 @@ _PROMPT_FRONTMATTER_RULE: Final = (
 )
 
 #: The harness commands the prompt-frontmatter rule must name for repo-local authors:
-#: the ones spec #270 and ADR 0010 call out, and the commands all three harnesses share.
+#: the ones spec #270 and ADR 0011 call out, and the commands all three harnesses share.
 _RULE_NAMED_COMMANDS: Final = (
     "review",
     "code-review",

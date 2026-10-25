@@ -172,7 +172,7 @@ def test_every_other_pack_table_reads_what_sync_renders(
     assert tables.prompt_output_contract("review-core") == tuple(review)
     contracted = set(tables.prompts_with_output_contract())
     assert {"review-core", "security-review-core", "find-injected-vulnerability"} <= contracted
-    # ADR 0010: the harnesses' own /review and /security-review are not playbook prompts.
+    # ADR 0011: the harnesses' own /review and /security-review are not playbook prompts.
     assert not {"review", "security-review"} & contracted
     assert "explain" not in tables.prompts_with_output_contract()  # its contract is empty
     assert tables.notebook_max_bytes(1) == 5 * 1024 * 1024

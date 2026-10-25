@@ -1585,7 +1585,7 @@ the engine writes for: Claude Code's alias of its own `/code-review`, and the
 repos only) took the slash of Claude Code's own `/security-review`. On OpenCode
 the project command replaced the harness's review, and on Claude Code the hooks
 treated a typed `/review` as the playbook prompt. Both slashes now take the
-`-core` suffix (`docs/adr/0010-core-prompt-slashes-never-take-a-harness-commands-name.md`):
+`-core` suffix (`docs/adr/0011-core-prompt-slashes-never-take-a-harness-commands-name.md`):
 
 | Prompt id | Old slash | New slash |
 |---|---|---|

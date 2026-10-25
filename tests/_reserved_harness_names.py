@@ -2,7 +2,7 @@
 
 A core prompt's slash, or a skill id of core or of a bundled plugin, that equals
 one of these names shadows the harness's own command or skill in a synced repo
-(ADR 0010, spec #270). The gate lives in
+(ADR 0011, spec #270). The gate lives in
 ``tests/catalog/test_reserved_harness_names.py``; it is not a ``playbook validate``
 check, so a harness release never fails a consumer's sync.
 
