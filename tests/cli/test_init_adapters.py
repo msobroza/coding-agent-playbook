@@ -86,7 +86,7 @@ def test_init_with_continue_listed_renders_continue_rules_and_prompts(tmp_path: 
     assert _adapters_enabled(tmp_path) == _WITH_CONTINUE.split(",")
     assert (tmp_path / ".continue" / "rules" / "00-project-context.md").is_file()
     prompts = {path.name for path in (tmp_path / ".continue" / "prompts").iterdir()}
-    assert {"review.md", "refactor.md"} <= prompts
+    assert {"review-core.md", "refactor.md"} <= prompts
 
 
 def test_init_rerun_keeps_a_committed_continue(tmp_path: Path) -> None:
