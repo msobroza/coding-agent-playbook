@@ -57,7 +57,7 @@ _FORMER_README_HEADINGS = (
     "### Pre-commit hooks",
     "## Assistant lifecycle hooks",
     "### Turning them on",
-    "### The pack",
+    "### The catalog's hooks",
     "#### Protect the playbook",
     "#### Verify before done",
     "#### Edit feedback",

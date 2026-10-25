@@ -47,7 +47,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.dispatch.tail import DispatchTrace
 
-__all__ = ["SimulateArgs", "SimulateReport", "SimulateUsageError", "main", "run"]
+__all__ = ["SimulateArgs", "SimulateReport", "SimulateUsageError", "build_parser", "main", "run"]
 
 
 class SimulateUsageError(ValueError):
@@ -229,7 +229,7 @@ def main(
 
 
 def _parse(argv: Sequence[str]) -> SimulateArgs:
-    parser = _parser()
+    parser = build_parser()
     ns = parser.parse_args(list(argv))
     env: list[tuple[str, str]] = []
     for item in ns.env:
@@ -250,7 +250,14 @@ def _parse(argv: Sequence[str]) -> SimulateArgs:
     )
 
 
-def _parser() -> argparse.ArgumentParser:
+def build_parser() -> argparse.ArgumentParser:
+    """The ``playbook-hook simulate`` parser; the docs site's CLI page renders it too.
+
+    Example::
+
+        >>> build_parser().parse_args(["stop"]).harness
+        'claude_code'
+    """
     import argparse  # cold path only: never on dispatch (§D.1)
 
     parser = argparse.ArgumentParser(

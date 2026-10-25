@@ -42,6 +42,9 @@ dev = [
     "mypy>=1.13.0",
     "pytest>=8.3.0",
     "pytest-cov>=5.0.0",
+    # 7.9 is the first coverage that reads [tool.coverage.run] core (sysmon below);
+    # pytest-cov alone accepts far older releases.
+    "coverage>=7.9",
     # CI's pytest step (.github/workflows/ci.yml) runs the suite under xdist;
     # addopts stay serial-friendly, so a local single-file run needs no -n.
     "pytest-xdist>=3.6",
@@ -51,6 +54,22 @@ dev = [
     # contract type's semantics must not change the CI verdict on its own.
     "import-linter==2.15",
 ]
+# The documentation site (docs/conf.py, ADR 0009). Never part of `dev`: the test
+# matrix installs no Sphinx, and only .github/workflows/docs.yml builds the site.
+# Pinned like ruff, so a release cannot turn the docs job red on its own; sphinx
+# 9.2 needs Python 3.13 and the docs job runs on 3.12.
+docs = [
+    "sphinx==9.1.1",
+    "furo==2025.12.19",
+    "myst-parser==5.1.0",
+    "sphinx-argparse==0.6.1",
+    "sphinxcontrib-mermaid==2.1.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/msobroza/coding-agent-playbook"
+Documentation = "https://msobroza.github.io/coding-agent-playbook/"
+Source = "https://github.com/msobroza/coding-agent-playbook"
 
 [project.scripts]
 playbook = "coding_agent_playbook.cli:main"
@@ -133,7 +152,7 @@ packages = ["src/coding_agent_playbook"]
 [tool.ruff]
 target-version = "py312"
 line-length = 100
-src = ["src", "tests"]
+src = ["src", "tests", "docs/_ext", "scripts"]
 # A vendored opt-in pack (SPEC §11.5: superpowers) ships upstream text that must
 # stay byte-faithful to its source, so ruff never lints or reformats any of its
 # files.
@@ -190,8 +209,8 @@ disallow_untyped_defs = true
 disallow_incomplete_defs = true
 namespace_packages = true
 explicit_package_bases = true
-mypy_path = "src"
-files = ["src", "tests"]
+mypy_path = "src,docs/_ext,scripts"
+files = ["src", "tests", "docs/_ext", "scripts"]
 
 [[tool.mypy.overrides]]
 module = "tests.*"
@@ -210,6 +229,9 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
+# The docs site's catalog generator (docs/_ext/) and build script (scripts/) live
+# outside the package.
+pythonpath = ["docs/_ext", "scripts"]
 addopts = [
     "-ra",
     "--strict-markers",
@@ -340,6 +362,7 @@ forbidden_modules = [
     "coding_agent_playbook.generated_output.file_identity",
     "coding_agent_playbook.generated_output.gitignore",
     "coding_agent_playbook.generated_output.output_io",
+    "coding_agent_playbook.generated_output.repo_name",
     "coding_agent_playbook.generated_output.source_files",
     "coding_agent_playbook.generated_output.symlinks",
     "coding_agent_playbook.generated_output.write_guard",
@@ -402,6 +425,7 @@ forbidden_modules = [
     "coding_agent_playbook.generated_output.file_identity",
     "coding_agent_playbook.generated_output.gitignore",
     "coding_agent_playbook.generated_output.output_io",
+    "coding_agent_playbook.generated_output.repo_name",
     "coding_agent_playbook.generated_output.source_files",
     "coding_agent_playbook.generated_output.symlinks",
     "coding_agent_playbook.generated_output.write_guard",
@@ -485,6 +509,7 @@ forbidden_modules = [
     "coding_agent_playbook.generated_output.file_identity",
     "coding_agent_playbook.generated_output.gitignore",
     "coding_agent_playbook.generated_output.output_io",
+    "coding_agent_playbook.generated_output.repo_name",
     "coding_agent_playbook.generated_output.source_files",
     "coding_agent_playbook.generated_output.symlinks",
     "coding_agent_playbook.generated_output.write_guard",
@@ -563,6 +588,13 @@ move a judge a handler still holds there first (CONTEXT: Guard twin).
 """
 
 # --- coverage ---
+
+# sys.monitoring (PEP 669) instead of the default C tracer: the tracer made the
+# sync-heavy CLI tests about 2.5x slower, while sysmon gave the same line coverage
+# (an identical TOTAL on tests/unit plus tests/cli/test_sync_check.py) at near
+# no-coverage speed. It needs Python 3.12+, which requires-python already demands.
+[tool.coverage.run]
+core = "sysmon"
 
 [tool.coverage.report]
 exclude_lines = [

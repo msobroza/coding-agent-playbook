@@ -27,6 +27,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from pathlib import Path
 
+pytestmark = pytest.mark.catalog
+
 _TOOLING = "python-tooling"
 _TESTING: Final = "python-testing"
 _WEB: Final = "web-application"

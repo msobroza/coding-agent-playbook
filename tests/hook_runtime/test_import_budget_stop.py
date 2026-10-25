@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import pytest
+
 from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from tests.engine_modules import engine_module
 from tests.hook_runtime.guard_repo import GuardRepo, hook_record
@@ -25,6 +27,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.hook_runtime.dispatch.proc import SubprocessProc
+
+pytestmark = pytest.mark.catalog
 
 _COORDINATOR = engine_module("coding_agent_playbook.hook_runtime.stop.coordinator")
 _GATE_SCAN = engine_module("coding_agent_playbook.hook_runtime.judges.gate_weakening")

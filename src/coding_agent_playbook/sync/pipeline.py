@@ -63,6 +63,7 @@ from coding_agent_playbook.adapters.claude_code.settings.managed_merge import Se
 from coding_agent_playbook.adapters.registry import discover_adapters, installed_output_locations
 from coding_agent_playbook.adapters.skill_dirs.ownership import judging_leftovers_with
 from coding_agent_playbook.generated_output.gitignore import LOCKFILE_NAME
+from coding_agent_playbook.generated_output.repo_name import canonical_root
 from coding_agent_playbook.generated_output.write_guard import UserOwnedFileError
 from coding_agent_playbook.hooks.guard_config.compile import SYNC_OUTPUT_LOCATIONS
 from coding_agent_playbook.rendering.jinja import TemplateSecurityError
@@ -195,6 +196,9 @@ def execute(
 
     Programmatic entry point used by ``playbook init`` (to fire a sync after
     writing the config) and by tests that want to skip the argparse plumbing.
+    ``repo_root`` may be spelled any way (``.``, ``x/sub/..``, a symlink alias, a
+    case variant): it is resolved once (:func:`canonical_root`), so write mode and
+    both check modes see one root and derive one repo name (#268).
     ``git`` defaults to :class:`SubprocessGitClient`; tests inject a fake.
     Write and ``--check`` mode first run ``validate`` (the ``playbook
     validate`` rule set; tests inject a fake). ``hook_deps`` holds write
@@ -222,7 +226,11 @@ def execute(
     if check and check_staged:
         raise ValueError("execute(): check and check_staged are mutually exclusive, got both True")
     git_client = git if git is not None else SubprocessGitClient()
-    ctx = SyncContext.from_repo(repo_root)
+    # #268: one root for every stage and both modes. A typed ``.``, ``x/..``, symlink
+    # alias or case variant otherwise reaches the adapters as typed, so name-derived
+    # output (HARNESS.md, an out-of-tree adapter's ``output_root.name``) and the
+    # detector's home-anchored secret skips differ from what ``--check`` renders.
+    ctx = SyncContext.from_repo(canonical_root(repo_root))
     if check_staged and ctx.config.commit_output:
         return 0  # the staged-output guard is a no-op under committed output
     if not _environment_ready(ctx):

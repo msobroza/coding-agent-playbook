@@ -51,7 +51,7 @@ if TYPE_CHECKING:
 
 # The sample hooks bind the builtin guard_x, which validate (H6) resolves
 # through the handler registry: install it as a real entry point.
-pytestmark = pytest.mark.usefixtures("sample_hook_handlers")
+pytestmark = [pytest.mark.usefixtures("sample_hook_handlers"), pytest.mark.catalog]
 
 _NOTICE = "hooks available: add [hooks] enabled = true or re-run playbook init"
 

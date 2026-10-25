@@ -41,6 +41,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
+pytestmark = pytest.mark.catalog
+
 #: Facts that pass every engine hook's gate (pytest-cov: coverage-diff-gate; the
 #: Python version: typing-lint-feedback's linked rule).
 _FACTS: Final[dict[str, Any]] = {

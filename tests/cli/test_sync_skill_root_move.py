@@ -47,6 +47,8 @@ if TYPE_CHECKING:
 
     MakeRepo = Callable[..., Path]
 
+pytestmark = pytest.mark.catalog
+
 _OLD_ROOT = "shared_skills"
 _NEW_ROOT = ".agents/skills"
 _SKILL_ROOTS = (".claude/skills", ".opencode/skills", _NEW_ROOT)

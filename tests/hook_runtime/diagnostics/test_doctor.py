@@ -22,7 +22,13 @@ from coding_agent_playbook.hook_runtime.cli import main as cli_main
 from coding_agent_playbook.hook_runtime.config.pin import INTERPRETER_PIN, write_machine_pins
 from coding_agent_playbook.hook_runtime.diagnostics._doctor_checks import PROBE
 from coding_agent_playbook.hook_runtime.diagnostics._doctor_ignored import ignored_call_checks
-from coding_agent_playbook.hook_runtime.diagnostics.doctor import Check, exit_code, main, run_doctor
+from coding_agent_playbook.hook_runtime.diagnostics.doctor import (
+    Check,
+    build_parser,
+    exit_code,
+    main,
+    run_doctor,
+)
 from coding_agent_playbook.hook_runtime.dispatch.escape import WRAPPER_PREFIXES_VAR
 from coding_agent_playbook.hook_runtime.state.audit_log import GuardDecisionRecord, append_decision
 from coding_agent_playbook.hook_runtime.state.store import StateStore
@@ -465,3 +471,12 @@ def test_doctor_outside_git_still_reports_user_level_ignored_calls(
         ("repo", "broken"),
         ("ignored:not_a_repo", "ok"),
     ]
+
+
+def test_build_parser_names_the_subcommand_and_its_defaults() -> None:
+    # The docs site's CLI page renders this parser (sphinx-argparse).
+    parser = build_parser()
+
+    ns = parser.parse_args([])
+    assert parser.prog == "playbook-hook doctor"
+    assert (ns.repo, ns.repin, ns.format) == (os.curdir, None, "text")

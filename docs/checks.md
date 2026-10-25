@@ -1,10 +1,25 @@
 # Checks and evals
 
-The code-quality metrics gate, the commit-message convention, `playbook ci` and the eval runner. Back to the [README](../README.md).
+This page covers the checks the playbook runs on your code and your commits, and the
+eval runner that measures how well a prompt works. It describes the code-quality
+metrics gate, the commit-message convention, `playbook ci`, `playbook forge` and
+`playbook eval`. Back to the [README](../README.md).
 
 ## Code-quality metrics gate
 
-`playbook metrics` is a standalone, **opt-in** code-quality gate. It measures Python with deterministic static metrics — cyclomatic complexity, weighted methods per class (WMC), LCOM4, depth of inheritance, an approximate coupling-between-objects, and (with the optional extra) the maintainability index — and grades the result either against absolute thresholds or, by default, as a **non-regression** check against a baseline. It is independent of `playbook sync`: nothing about your generated assistant context depends on it.
+`playbook metrics` is a standalone code-quality gate, and it is opt-in. It measures
+Python code with deterministic static metrics: cyclomatic complexity, weighted methods
+per class (WMC), LCOM4, depth of inheritance and an approximate coupling between
+objects. With the optional extra, it also measures the maintainability index.
+
+The gate grades the result in one of two ways. It compares each metric with an
+absolute threshold, or it runs a non-regression check, which fails when the code gets
+worse than a baseline. Non-regression is the default.
+
+The gate is independent of `playbook sync`. Nothing in your generated assistant
+context depends on it.
+
+These commands show the common ways to run it:
 
 ```bash
 playbook metrics                              # measure src/ against absolute thresholds
@@ -14,9 +29,33 @@ playbook metrics --strict                     # promote warnings to failures (no
 playbook metrics --baseline git:origin/main --changed   # only the files a branch changed
 ```
 
-It exits `0` on pass, `1` on a breach, and `2` on a usage error (bad path, bad baseline, malformed `[metrics]` config). Defaults and per-metric thresholds live in a `[metrics]` table in `.coding-agent-playbook.toml`. Under the hood each metric is wrapped in a **check** (a threshold or non-regression grader) and the checks are folded into one **rubric** report — the `Metric` / `Check` / `Rubric` model (see SPEC §21). The same `[metrics]` policy drives the pre-commit hook, the `metrics` step of [`playbook ci`](#playbook-ci) and the quality Stop stages of the lifecycle hooks, and it is read from the committed config only.
+`playbook metrics` exits with one of three codes:
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | pass |
+| `1` | a breach |
+| `2` | a usage error: a bad path, a bad baseline or a malformed `[metrics]` config |
+
+Defaults and per-metric thresholds live in a `[metrics]` table in
+`.coding-agent-playbook.toml`. The same `[metrics]` policy drives the pre-commit hook,
+the `metrics` step of [`playbook ci`](#playbook-ci) and the quality Stop stages of the
+lifecycle hooks. It is read from the committed config only.
+
+Internally, each metric is wrapped in a check, which is a threshold grader or a
+non-regression grader. The checks are then folded into one rubric report. This is the
+`Metric` / `Check` / `Rubric` model shown below (SPEC §21).
+
+```mermaid
+flowchart LR
+    metric["Metric<br/>measures the code,<br/>scores it from 0 to 1"] --> check["Check<br/>a threshold or a<br/>non-regression grader"]
+    check --> rubric["Rubric<br/>folds the checks<br/>into one report"]
+    rubric --> result["Pass, or a breach<br/>exit 0 or 1"]
+```
 
 ### The metrics
+
+The table lists every metric, the families it belongs to and how it gets selected.
 
 | Metric | Families | Selected | Measures |
 | --- | --- | --- | --- |
@@ -33,19 +72,25 @@ It exits `0` on pass, `1` on a breach, and `2` on a usage error (bad path, bad b
 | `coverage` | `testing` | with `--run-tests` | line coverage per file and in total |
 | `diff_coverage` | `testing` | with `--run-tests` | the share of the changed executable lines the suite ran |
 
-Select with `--select` / `--extend-select` / `--ignore` (or the `select`,
-`extend_select` and `ignore` keys of `[metrics]`), naming metrics or the
-families `quality`, `docstrings` and `testing`. A family expands to its
-default members only, so an opt-in metric is selected by its own name: an engine
-upgrade never changes what an existing `[metrics]` measures. `--changed` limits
-a `git:` baseline run to the Python files changed against it.
+You choose the metrics with the `--select`, `--extend-select` and `--ignore` flags, or
+with the `select`, `extend_select` and `ignore` keys of `[metrics]`. Each one takes
+metric names or the family names `quality`, `docstrings` and `testing`.
+
+A family expands to its default members only, so you select an opt-in metric by its
+own name. This way, an engine upgrade never changes what an existing `[metrics]`
+table measures.
+
+`--changed` limits a run with a `git:` baseline to the Python files changed against
+that baseline.
 
 ### Clean Code for AI Agents preset
 
-Code an agent edits stays legible when functions stay short, nesting and
-argument lists stay small, files stay under a few hundred lines and public
-functions carry a docstring with a usage example. This turns those budgets
-into the gate, without editing your own ruff configuration:
+Code that an agent edits stays legible when it keeps to a few budgets. Functions stay
+short, nesting and argument lists stay small, and files stay under a few hundred
+lines. Public functions carry a docstring with a usage example.
+
+The configuration below turns those budgets into the gate, without editing your own
+ruff configuration:
 
 ```toml
 # .coding-agent-playbook.toml
@@ -60,12 +105,17 @@ warn = 1.0                       # warn above 300 lines
 fail = 0.6                       # fail above 500 lines
 ```
 
-Under the default non-regression mode, existing code that already breaks a
-budget stays quiet; only a change that makes a file worse fails.
+Under the default non-regression mode, existing code that already breaks a budget
+stays quiet. Only a change that makes a file worse fails.
 
 ### Running tests and coverage (`--run-tests`)
 
-`--run-tests` additionally runs the **execution** metrics — `test_pass_rate`, `coverage` and `diff_coverage` — which shell out to your project's own `pytest` (and `pytest-cov`) and parse the standard junit/coverage XML. These have side effects and cost, so they are **opt-in and never part of the default pre-commit hook**; run them in CI or on demand:
+`--run-tests` also runs the execution metrics: `test_pass_rate`, `coverage` and
+`diff_coverage`. These metrics shell out to your project's own `pytest` and
+`pytest-cov`, then parse the standard junit and coverage XML reports.
+
+Running them has side effects and a cost. They are therefore opt-in, and never part
+of the default pre-commit hook. Run them in CI or on demand:
 
 ```bash
 playbook metrics --run-tests                          # also run the suite + measure coverage
@@ -74,11 +124,25 @@ playbook metrics --run-tests --test-cmd "pytest -q"   # override the test comman
 playbook metrics --run-tests --select testing --baseline git:HEAD   # the playbook-coverage hook
 ```
 
-`diff_coverage` grades the change, not the whole file: the changed executable lines must be at least 80% executed. Test files and `[metrics] exclude` are never scored, and a change with no executable line passes without a fake 100%. `[metrics] run_tests = true` makes `--run-tests` the default for CI and manual runs; `--no-run-tests` overrides it, and the `playbook-metrics` pre-commit hook always passes it, so a commit never runs your suite. The engine adds no dependency for this — your target project supplies `pytest`/`pytest-cov`.
+`diff_coverage` grades the change, not the whole file. At least 80% of the changed
+executable lines must be executed. Test files and the files in `[metrics] exclude` are
+never scored. A change with no executable line passes, without a fake 100%.
+
+`[metrics] run_tests = true` makes `--run-tests` the default for CI and manual runs.
+`--no-run-tests` overrides it. The `playbook-metrics` pre-commit hook always passes
+`--no-run-tests`, so a commit never runs your suite.
+
+The engine adds no dependency for this. Your target project supplies `pytest` and
+`pytest-cov`.
 
 ### The `metrics` optional extra (maintainability index)
 
-The core gate is **stdlib-only** and runs with nothing extra installed. The maintainability index is the one metric backed by [`radon`](https://radon.readthedocs.io/), so it ships as an optional extra; without it that single metric is transparently skipped:
+The core gate uses only the Python standard library, so it runs with nothing extra
+installed. The maintainability index is the one metric backed by
+[`radon`](https://radon.readthedocs.io/), so it ships as an optional extra. Without
+the extra, that single metric is skipped transparently.
+
+This command installs the extra:
 
 ```bash
 pip install 'coding-agent-playbook[metrics]'   # adds radon for maintainability_index
@@ -86,10 +150,12 @@ pip install 'coding-agent-playbook[metrics]'   # adds radon for maintainability_
 
 ## Commit-message convention (commitizen)
 
-The playbook has no commit-message linter of its own: the convention is
-[commitizen](https://commitizen-tools.github.io/commitizen/)'s, configured where
-commitizen reads it, and every check calls `cz check`. Add commitizen to your
-dev tools (`uv add --dev commitizen`), then declare the convention:
+The playbook has no commit-message linter of its own. It uses the convention of
+[commitizen](https://commitizen-tools.github.io/commitizen/), configured where
+commitizen reads it, and every check calls `cz check`.
+
+To set it up, add commitizen to your dev tools with `uv add --dev commitizen`. Then
+declare the convention in `pyproject.toml`:
 
 ```toml
 # pyproject.toml
@@ -97,7 +163,7 @@ dev tools (`uv add --dev commitizen`), then declare the convention:
 name = "cz_conventional_commits"   # commitizen's default; use cz_customize + schema_pattern for your own
 ```
 
-A repo with history that predates the convention sets a cut-over date, so old
+A repo whose history predates the convention sets a cut-over date, so that older
 commits are grandfathered:
 
 ```toml
@@ -106,32 +172,39 @@ commits are grandfathered:
 cutover_date = "2026-10-15"   # "YYYY-MM-DD", quoted: an unquoted TOML date is an error
 ```
 
-Range checks skip every commit whose **committer** date is before
-`cutover_date`; a commit rebased or amended after it counts as new and must
-conform. Unset, every commit is checked. The convention is then enforced in
-three places:
+Range checks skip every commit whose committer date is before `cutover_date`. A commit
+rebased or amended after that date counts as new and must conform. When
+`cutover_date` is unset, every commit is checked.
 
-- the `playbook-commit-msg` pre-commit hook checks every new commit message,
-  yours included, with no cut-over (install the `commit-msg` hook type);
-- the `commit-message-convention` lifecycle hook denies an assistant's
-  `git commit` whose message fails; with
-  `[hooks.commit-message-convention] check_push = true` it also denies a
-  `git push` whose commits after the cut-over fail (off by default: the
-  commit check and `playbook-commit-msg` already see every new commit, and
-  the scan can take seconds per push);
-- the `commit-convention` step of `playbook ci` checks the branch's commits
-  after the cut-over, plus the pull-request title when `PLAYBOOK_PR_TITLE` is
-  set (in a squash-merge repo the title becomes the commit subject).
+The convention is then enforced in three places.
 
-A missing `cz` fails the CI step and the pre-commit hook loudly; the lifecycle
-hook fails open with a once-per-session hint to install it.
+The `playbook-commit-msg` pre-commit hook checks every new commit message, yours
+included, with no cut-over. It needs the `commit-msg` hook type installed.
+
+The `commit-message-convention` lifecycle hook denies a `git commit` by the assistant
+when the message fails. With `[hooks.commit-message-convention] check_push = true`,
+it also denies a `git push` whose commits after the cut-over fail. This push check is
+off by default, for two reasons. The commit check and `playbook-commit-msg` already
+see every new commit, and the scan can take seconds per push.
+
+The `commit-convention` step of `playbook ci` checks the branch's commits after the
+cut-over. When `PLAYBOOK_PR_TITLE` is set, it also checks the pull-request title,
+because in a squash-merge repo the title becomes the commit subject.
+
+A missing `cz` fails the CI step and the pre-commit hook loudly. The lifecycle hook
+fails open instead, and shows a hint to install `cz` once per session.
 
 ## `playbook ci`
 
-`playbook ci` is the one required status check: it runs every off-workstation
-twin of the lifecycle hooks against the merge base with the default branch,
-each step as a child process (no shell, a timeout per step), and reports all of
-them, with no fail-fast.
+`playbook ci` is the one required status check. It runs every off-workstation twin of
+the lifecycle hooks: the CLI commands that run the same checks as those hooks, outside
+an agent session. It checks the branch against its merge base with the default
+branch.
+
+Each step runs as a child process, with no shell and a timeout per step. `playbook ci`
+reports every step, and does not stop at the first failure.
+
+These commands show how to run it and how to choose the steps:
 
 ```bash
 playbook ci                                   # every applicable step vs the default branch
@@ -139,6 +212,8 @@ playbook ci --base origin/main --steps validate,scan-secrets
 playbook ci --steps scan-sinks                # --steps also switches on opt-in steps
 playbook ci --format json                     # one {step, argv, exit, duration_s, status} per step
 ```
+
+The table lists each step, the command it runs and when it runs.
 
 | Step | Runs | When |
 | --- | --- | --- |
@@ -153,17 +228,28 @@ playbook ci --format json                     # one {step, argv, exit, duration_
 | `check-deps` | `playbook check-deps`: newly declared dependencies against your policy | a dependency policy is configured |
 | `scan-sinks` | `playbook scan-sinks` over the branch | only when `--steps` names it |
 
-It exits `0` when every step that ran passed, `1` when one failed or timed out,
-and `2` on a usage error, an unresolvable base, a blank `--base`, or an empty
-range (the base is `HEAD` or already contains it, so nothing would be checked).
-`playbook ci` never fetches and never reads a forge's variables: the CI job
-fetches the history and passes the base with `--base`.
+`playbook ci` exits with one of three codes:
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | every step that ran passed |
+| `1` | a step failed or timed out |
+| `2` | a usage error, an unresolvable base, a blank `--base`, or an empty range |
+
+An empty range means the base is `HEAD` or already contains it, so nothing would be
+checked.
+
+`playbook ci` never fetches and never reads a forge's variables. The CI job fetches
+the history and passes the base with `--base`.
 
 ### GitHub Actions
 
-The job needs the full history (`fetch-depth: 0`), and the pull-request title is
-attacker-controlled text: pass it **only through `env:`**, never inside a `run:`
-line, so it cannot inject shell commands:
+The job below runs `playbook ci` on pull requests. It needs the full history, so the
+checkout sets `fetch-depth: 0`.
+
+> [!WARNING]
+> The pull-request title is attacker-controlled text. Pass it only through `env:`,
+> never inside a `run:` line, so that it cannot inject shell commands.
 
 ```yaml
 # .github/workflows/ci.yml
@@ -188,10 +274,10 @@ jobs:
 
 ### GitLab CI
 
-A GitLab *merge request pipeline* clones a shallow history (`GIT_DEPTH` 20 by default)
-and fetches only the pipeline's own ref, never the target branch, so the job
-sets `GIT_DEPTH: 0`, fetches the target branch, and passes the base explicitly.
-The title reaches `playbook ci` only through `variables:`, never inside a
+A GitLab *merge request pipeline* clones a shallow history, with a `GIT_DEPTH` of 20
+by default. It fetches only the pipeline's own ref, never the target branch. The job
+below therefore sets `GIT_DEPTH: 0`, fetches the target branch and passes the base
+explicitly. The title reaches `playbook ci` only through `variables:`, never inside a
 `script:` line:
 
 ```yaml
@@ -206,47 +292,56 @@ playbook-ci:
     - playbook ci --base "${CI_MERGE_REQUEST_TARGET_BRANCH_SHA:-$CI_MERGE_REQUEST_DIFF_BASE_SHA}"
 ```
 
-`CI_MERGE_REQUEST_TARGET_BRANCH_SHA` is set only in merged results pipelines;
-elsewhere it is empty and the base is `CI_MERGE_REQUEST_DIFF_BASE_SHA`, the merge
-base of the pull request's diff. The shell syntax targets Linux runners, and the
-job installs the project with its dev tools as on GitHub. A draft marker
-(`Draft:`, `[Draft]`, `(Draft)`) at the start of the title is not checked: the
-squash commit does not carry it.
+`CI_MERGE_REQUEST_TARGET_BRANCH_SHA` is set only in merged results pipelines.
+Elsewhere it is empty, and the base is `CI_MERGE_REQUEST_DIFF_BASE_SHA`, the merge
+base of the pull request's diff.
 
-How far the job is a gate depends on where its definition lives. On GitLab, a
-pull request's pipeline runs that pull request's own `.gitlab-ci.yml`:
+The shell syntax targets Linux runners. The job installs the project with its dev
+tools, as on GitHub. A draft marker at the start of the title (`Draft:`, `[Draft]` or
+`(Draft)`) is not checked, because the squash commit does not carry it.
 
-1. **Free.** Add the job and turn on *Pipelines must succeed* (Settings → Merge
+How strictly the job gates a merge depends on where its definition lives. On GitLab,
+a pull request's pipeline runs that pull request's own `.gitlab-ci.yml`. There are
+three levels:
+
+1. On Free, add the job and turn on *Pipelines must succeed* (Settings → Merge
    requests). On Free a pull request can otherwise edit its own pipeline: it can
-   delete the job or make it optional in the same change. gate-scan flags that
-   (a removed job, script item or `include:` entry, and `playbook-ci` gaining
-   `allow_failure: true`, `when: manual` or `when: never`), but only a reviewer
-   stops the merge.
-2. **"Pipelines must succeed" with the CI configuration in a separate protected
-   project.** Point Settings → CI/CD → General pipelines → *CI/CD configuration
-   file* at `.gitlab-ci.yml@group/ci-config`, a project the pull request's
-   authors cannot push to. The pull request then cannot change the job that
-   gates it.
-3. **Ultimate: a pipeline execution policy** that injects the `playbook-ci` job
-   into every pipeline of the projects it covers; a project's own
-   `.gitlab-ci.yml` cannot remove it.
+   delete the job or make it optional in the same change. The `gate-scan` step flags
+   a removed job, script item or `include:` entry, and a `playbook-ci` job that gains
+   `allow_failure: true`, `when: manual` or `when: never`. Only a reviewer stops the
+   merge, though.
+2. With "Pipelines must succeed", keep the CI configuration in a separate protected
+   project. Point Settings → CI/CD → General pipelines → *CI/CD configuration file*
+   at `.gitlab-ci.yml@group/ci-config`, a project the pull request's authors cannot
+   push to. The pull request then cannot change the job that gates it.
+3. On Ultimate, use a pipeline execution policy. It injects the `playbook-ci` job into
+   every pipeline of the projects it covers, and a project's own `.gitlab-ci.yml`
+   cannot remove it.
 
 ## `playbook forge`
 
-`playbook forge` runs one forge operation (an issue, pull request, label or
-check operation) on GitHub or GitLab. On every call it reads the repo's git
-config, maps the current branch's push remote to its forge, and runs that
-forge's CLI, `gh` (2.94.0 or later) or `glab` (1.115.0 or later), with the CLI's
-own login and translated arguments. Skills and agents name only `playbook
-forge`, so their text is the same on both forges; the always-rendered core skill
-`forge` teaches the operations to the assistant.
+`playbook forge` runs one forge operation on GitHub or GitLab. A forge is a git
+hosting service with its own CLI and CI system. A forge operation is one issue, pull
+request, label or check action, offered in the same form on every forge.
 
-It is the only engine code that contacts a forge, and only when someone runs it:
-hooks, `sync`, `check`, `validate` and `playbook ci` never do. The engine never
-reads or stores a forge token: the CLI uses its own login (`gh auth login`,
-`glab auth login`, or `GH_TOKEN` / `GITLAB_TOKEN` in the environment). The
-guards judge `playbook forge` calls from the same operation tables, so a body
-file sent through it is egress like any other.
+On every call, `playbook forge` reads the repo's git config and maps the current
+branch's push remote to its forge. It then runs that forge's CLI: `gh` 2.94.0 or
+later, or `glab` 1.115.0 or later. The CLI runs with its own login and with
+translated arguments.
+
+Skills and agents name only `playbook forge`, so their text is the same on both
+forges. The core skill `forge`, which is always rendered, teaches the operations to
+the assistant.
+
+`playbook forge` is the only engine code that contacts a forge, and only when someone
+runs it. Hooks, `sync`, `check`, `validate` and `playbook ci` never contact a forge.
+
+The engine never reads or stores a forge token. The CLI uses its own login:
+`gh auth login`, `glab auth login`, or `GH_TOKEN` or `GITLAB_TOKEN` in the
+environment. The guards judge `playbook forge` calls from the same operation tables,
+so a body file sent through it counts as egress like any other.
+
+These calls show a few operations:
 
 ```bash
 playbook forge which                                     # forge, CLI, host, API host, repo, remote
@@ -256,6 +351,8 @@ playbook forge pr create --title "feat: add X" --body-file pr.md --base main
 playbook forge pr checks 34
 playbook forge -C ../other-repo pr list --state merged --json
 ```
+
+The table maps each operation to what it runs on each forge.
 
 | Operation | GitHub (`gh`) | GitLab (`glab`) |
 | --- | --- | --- |
@@ -275,21 +372,27 @@ playbook forge -C ../other-repo pr list --state merged --json
 | `which` | prints `{forge, cli, host, api_host, repo, remote}` without running the CLI | the same |
 | `auth status` | `gh auth status --hostname <host> --active` | `glab auth status --hostname <host>` (never `-t`), then `glab api user` for a token kept only in the environment |
 
-A body is `--body TEXT`, `--body-file PATH` or `--body-file -` (stdin), and on
-`issue create` and `pr create` also `--template PATH`, read as a body file. It
-always reaches the CLI on stdin, never on its command line, and every body sent
-to GitLab has each line-leading `/` indented by one space, so no quick action
-runs. Read operations print one JSON vocabulary on both forges (`number`, `url`,
-`title`, `body`, `state` as `open` / `closed` / `merged`, `labels`, `assignees`,
-`author`, `created_at`, `updated_at`, `confidential`, and `draft`, `base` and
-`head` for a pull request); write operations print the URL they created or
-changed, `{"url": …}` with `--json`.
+You pass a body with `--body TEXT`, `--body-file PATH` or `--body-file -`, which reads
+stdin. `issue create` and `pr create` also take `--template PATH`, read as a body
+file. The body always reaches the CLI on stdin, never on its command line. In every
+body sent to GitLab, each `/` at the start of a line is indented by one space, so
+that no quick action runs.
 
-`pr create` never pushes: when the branch is not on the push remote it exits 2
-with `git push -u <remote> <branch>`. On GitLab a title with `[skip ci]`,
-`[ci skip]`, `[skip pipeline]` or `[no ci]` is refused for `pr create` and `pr
-edit`, since the pipeline would not run. There is no merge, issue deletion,
-attachment upload or CI secret or variable write.
+Read operations print the same JSON fields on both forges: `number`, `url`, `title`,
+`body`, `state` (`open`, `closed` or `merged`), `labels`, `assignees`, `author`,
+`created_at`, `updated_at` and `confidential`. A pull request also has `draft`,
+`base` and `head`. Write operations print the URL they created or changed, or
+`{"url": …}` with `--json`.
+
+`pr create` never pushes. When the branch is not on the push remote, it exits 2 with
+the hint `git push -u <remote> <branch>`. On GitLab, `pr create` and `pr edit` refuse
+a title with `[skip ci]`, `[ci skip]`, `[skip pipeline]` or `[no ci]`, since the
+pipeline would not run.
+
+`playbook forge` has no merge, no issue deletion, no attachment upload, and no CI
+secret or variable write.
+
+The exit code tells the agent what to do next:
 
 | Exit | Meaning | The agent |
 | --- | --- | --- |
@@ -300,15 +403,24 @@ attachment upload or CI secret or variable write.
 
 ### Which forge, which host
 
-The push remote is `branch.<b>.pushRemote`, then `remote.pushDefault`, then
-`branch.<b>.remote`, then `origin` (on a detached `HEAD`: `remote.pushDefault`,
-then `origin`); its URL is `pushurl` before `url`, read raw, and `git remote
-get-url --push` (which applies `insteadOf`) only when the raw host does not
-map. An SSH alias is resolved offline with `ssh -G`. The host maps to a forge
-through the `[forge] hosts` table, then `github.com` / `gitlab.com`, then a
-host name containing `github` or `gitlab`, then a host equal to `GH_HOST` or
-`GITLAB_HOST` / `GITLAB_URI` / `GL_HOST`. Errors name the host, never the URL.
-A host none of these name needs one committed line:
+`playbook forge` finds the forge from the push remote of the current branch. The push
+remote is the first of these that is set: `branch.<b>.pushRemote`,
+`remote.pushDefault`, `branch.<b>.remote`, then `origin`. On a detached `HEAD`, it is
+`remote.pushDefault`, then `origin`.
+
+The remote's URL is `pushurl` before `url`, read raw. Only when the raw host does not
+map does `playbook forge` use `git remote get-url --push`, which applies `insteadOf`.
+An SSH alias is resolved offline with `ssh -G`.
+
+The host maps to a forge through the first of these rules that matches:
+
+1. the `[forge] hosts` table
+2. `github.com` or `gitlab.com`
+3. a host name containing `github` or `gitlab`
+4. a host equal to `GH_HOST`, or to `GITLAB_HOST`, `GITLAB_URI` or `GL_HOST`
+
+Errors name the host, never the URL. A host that none of these rules names needs one
+committed line:
 
 ```toml
 [forge]
@@ -316,49 +428,53 @@ hosts = { "git.acme.com" = "gitlab", "ssh.acme.com" = { forge = "gitlab", api_ho
 ```
 
 A value is `"github"`, `"gitlab"`, or a table with `forge` and an optional
-`api_host` (the host the CLI talks to when it is not the remote's). Only
-`playbook forge` reads the table, and `playbook validate` reports its unknown
-keys and values. Every call tells the CLI its host in the child environment
-only: `GH_HOST=<api host>`, or `GITLAB_HOST=https://<api host>` (plus
-`GITLAB_API_HOST` when the API host is not the remote's), with prompts, update
-notifiers and telemetry off (`GH_PROMPT_DISABLED`, `GLAB_NO_PROMPT`,
-`GH_NO_UPDATE_NOTIFIER`, `GH_NO_EXTENSION_UPDATE_NOTIFIER`, `GLAB_CHECK_UPDATE`,
-`GH_TELEMETRY=false`, `GLAB_SEND_TELEMETRY=false`, `DO_NOT_TRACK`). A
-`GITLAB_API_HOST`, or a `glab` `api_host` setting, that names another host
-exits 2.
+`api_host`. `api_host` is the host the CLI talks to when it is not the remote's host.
+Only `playbook forge` reads the table, and `playbook validate` reports its unknown
+keys and values.
+
+Every call tells the CLI its host in the child process's environment only. It sets
+`GH_HOST=<api host>`, or `GITLAB_HOST=https://<api host>` plus `GITLAB_API_HOST` when
+the API host is not the remote's. It also turns off prompts, update notifiers and
+telemetry with `GH_PROMPT_DISABLED`, `GLAB_NO_PROMPT`, `GH_NO_UPDATE_NOTIFIER`,
+`GH_NO_EXTENSION_UPDATE_NOTIFIER`, `GLAB_CHECK_UPDATE`, `GH_TELEMETRY=false`,
+`GLAB_SEND_TELEMETRY=false` and `DO_NOT_TRACK`.
+
+A `GITLAB_API_HOST`, or a `glab` `api_host` setting, that names another host exits 2.
 
 ### Running on Domino Data Lab
 
-In a git-based Domino project the repository is at `/mnt/code`, with `origin`
-set to the URL the project was created with; in a project on Domino's own file
-system, attached repositories are at `/repos/<name>` (and imported ones at
-`/mnt/imported/code/<name>`), and `/mnt` is not a clone. Run `playbook forge`
-from the repository, or pass `-C <path>`. gitlab.com and hosts whose name
-contains `gitlab` are detected; any other host needs its `[forge] hosts` line.
+Where the repository lives depends on the kind of Domino project. In a git-based
+project, it is at `/mnt/code`, with `origin` set to the URL the project was created
+with. In a project on Domino's own file system, attached repositories are at
+`/repos/<name>` and imported ones at `/mnt/imported/code/<name>`. In that case `/mnt`
+is not a clone.
 
-Domino's stored Git credential clones the repository, but `glab` cannot use it.
-Once per user:
+Run `playbook forge` from the repository, or pass `-C <path>`. gitlab.com and hosts
+whose name contains `gitlab` are detected. Any other host needs its `[forge] hosts`
+line.
 
-1. Add `glab` (and `gh` for GitHub) to the compute environment's Dockerfile:
-   `sudo` is usually unavailable in a workspace, and a runtime install does not
-   reach jobs.
-2. Add `GITLAB_TOKEN` (scopes `api` and `write_repository`), or `GH_TOKEN`,
-   under Account Settings → User environment variables, and start a new
-   workspace. Domino injects it into workspaces, jobs and apps. One GitLab token
-   per user environment is the limit; several GitLab instances need a persisted
-   home and `glab auth login` per host.
+Domino's stored Git credential clones the repository, but `glab` cannot use it. Each
+user sets up the following once:
+
+1. Add `glab`, and `gh` for GitHub, to the compute environment's Dockerfile. `sudo`
+   is usually unavailable in a workspace, and a runtime install does not reach jobs.
+2. Add `GITLAB_TOKEN`, with the scopes `api` and `write_repository`, or `GH_TOKEN`,
+   under Account Settings → User environment variables. Then start a new workspace.
+   Domino injects the token into workspaces, jobs and apps. One GitLab token per
+   user environment is the limit, so several GitLab instances need a persisted home
+   and `glab auth login` per host.
 3. Add `coding-agent-playbook` to `requirements.txt`.
 
-With `DOMINO_PROJECT_ID` set, the exit-2 hints name these steps. A job launched
-from a commit has a detached `HEAD`: `pr create` then asks for `git checkout -b
-<name>`. Git actions taken in Domino's UI run outside the agent, and no guard
-sees them.
+When `DOMINO_PROJECT_ID` is set, the exit-2 hints name these steps. A job launched
+from a commit has a detached `HEAD`, so `pr create` asks for
+`git checkout -b <name>`. Git actions taken in Domino's UI run outside the agent, and
+no guard sees them.
 
-`domino-forge-check.sh` checks a workspace read-only and prints no secret (URLs
-lose their user and password, tokens and credential files are reported as
-present or absent, `glab` runs without `-t`). Save it and run `bash
-domino-forge-check.sh` in a workspace terminal; it covers `origin`, the branch
-state, the credential wiring, `glab` and `sudo`, and whether the API answers:
+The script below, `domino-forge-check.sh`, checks a workspace read-only. It covers
+`origin`, the branch state, the credential wiring, `glab` and `sudo`, and whether the
+API answers. It prints no secret: URLs lose their user and password, tokens and
+credential files are reported only as present or absent, and `glab` runs without
+`-t`. Save it and run `bash domino-forge-check.sh` in a workspace terminal:
 
 ```bash
 #!/usr/bin/env bash
@@ -457,10 +573,15 @@ for dir in "${dirs[@]}"; do
 done
 ```
 
-
 ## Running evals
 
-`playbook eval` enumerates the prompt-to-sample graph (`--list` / `--show`); with `--run` (v1.1) it **executes** a single sample end-to-end against an agent and grades it:
+An eval sample is a reproducible test case for a prompt: a starting repo state, an
+invocation and a definition of success. `playbook eval` works with these samples.
+With `--list` or `--show`, it prints the prompt-to-sample graph, which links each
+prompt to its eval samples. With `--run`, it executes a single sample end to end
+against an agent and grades the result.
+
+These commands run one sample with each runner and with the main options:
 
 ```bash
 playbook eval refactor-extract-helper --run --runner claude_code   # real: drive the Claude Code CLI
@@ -472,11 +593,97 @@ playbook eval refactor-extract-helper --run --prompt-set v2         # grade the 
 playbook eval refactor-extract-helper --run --format json          # machine-readable report
 ```
 
-A sample declares its success criteria as **layers** (SPEC §6.5.3): a deterministic `[gate]` (file + metric checks composed by a tiny boolean `expr`), an optional llm-judge `[rubric]` (weighted criteria), a `[verdict]` (a boolean expression over the two layers), and an optional cross-trial `[aggregate]` (`pass@k` / `pass^k`). They compile into one **rubric** of checks (the `Metric` / `Check` / `Rubric` model, SPEC §21): the `[gate]` layer — file predicates (`file_exists` / `file_contains` / `file_unchanged` / `file_forbidden`) and static/execution metric checks (0–1 normalized thresholds, non-regression vs the `setup/` baseline) — is scored **deterministically** into one report, rendered like `playbook metrics`, and the per-trial verdict is **derived** from the layer results. Two opt-in real runners ship — `claude_code` (the default, drives the `claude` CLI) and `opencode` (drives the `opencode` CLI) — both `available()`-gated on their binary and never exercised in CI; `--runner fake` is the hermetic driver for demos and CI. There is no `--run-tests` flag — a sample runs the suite iff its `[gate]` references an execution metric (`coverage` / `test_pass_rate`). Exit `0` on a passing report, `1` on a failing one, `2` on a usage error (unknown sample/runner/judge, or a real runner or judge whose CLI is not on `PATH`) or when the sample cannot be scored at all (its prompt fails to render, or the judge gives no score after its retries). Judged scores are labelled uncalibrated (a note in the text report, `"uncalibrated_judge": true` in JSON). Judged `[rubric]` scoring (v1.1 R2) is **opt-in via `--judge`**: pick a judge from the `coding_agent_playbook.judges` group (the shipped `llm` shells out to the `claude` CLI, `available()`-gated), and `--judge-samples N` averages N gradings per criterion (the old `samples` spelling of the flag is a deprecated alias until the next release). Omit `--judge` for a deterministic-only run (the rubric layer skips; a skipped layer is neutral in the verdict). A cost-tiered scheduler runs the cheap deterministic checks first and **short-circuits once the gate is lost** — so with the default `gate and rubric` verdict a failing file/metric check never spends an LLM call (a sample whose verdict or aggregate a skipped layer could change, e.g. `gate or rubric`, is always scored in full); `--full-scoring` forces every check to run for a complete report.
+The diagram shows how a run scores a sample:
+
+```mermaid
+flowchart TD
+    sample["Eval sample: a setup/ repo,<br/>a prompt and success layers"] --> runner["Runner: claude_code, opencode or fake"]
+    runner --> agent["The agent runs the prompt"]
+    agent --> gate["[gate]: file and metric checks, scored first"]
+    gate -->|the gate holds| rubric["[rubric]: criteria scored<br/>by a judge, only with --judge"]
+    gate --> verdict["[verdict]: pass or fail"]
+    rubric --> verdict
+```
+
+A sample declares its success criteria as layers (SPEC §6.5.3):
+
+| Layer | What it declares |
+| --- | --- |
+| `[gate]` | deterministic file and metric checks, composed by a small boolean `expr` |
+| `[rubric]` | optional: weighted criteria, scored by an LLM judge |
+| `[verdict]` | a boolean expression over `[gate]` and `[rubric]` |
+| `[aggregate]` | optional: a cross-trial result, `pass@k` or `pass^k` |
+
+The layers compile into one rubric of checks, with the same `Metric` / `Check` /
+`Rubric` model as the metrics gate (SPEC §21). The `[gate]` layer holds file
+predicates (`file_exists`, `file_contains`, `file_unchanged` and `file_forbidden`)
+and static or execution metric checks. A metric check uses a threshold normalized to
+0–1, or non-regression against the `setup/` baseline.
+
+The `[gate]` layer is scored deterministically into one report, rendered like the
+report of `playbook metrics`. The verdict of each trial is derived from the layer
+results.
+
+A handle is one entry of a `[gate]` or `[rubric]` layer. Instead of inlining a gate or
+a rubric, a handle can name one with `{ref = "name"}`. In the `[gate]` layer, the name
+resolves to a composed boolean gate registered with `@register_gate`, in the
+`coding_agent_playbook.gates` group. In the `[rubric]` layer, it resolves to a
+code-defined `Rubric` subclass registered with `@register_rubric`, in the
+`coding_agent_playbook.rubrics` group. Several eval samples can then share one gate
+or rubric by name. The engine ships no built-in gates or rubrics: both are
+third-party extension points.
+
+Judged scoring of the `[rubric]` layer is opt-in, with `--judge`. You pick a judge
+from the `coding_agent_playbook.judges` group. The shipped judge, `llm`, shells out to
+the `claude` CLI and is gated by `available()`. `--judge-samples N` averages N
+gradings per criterion. The flag's old spelling, `--samples`, is a deprecated alias
+until the next release.
+
+Omit `--judge` for a deterministic-only run. The rubric layer is then skipped, and a
+skipped layer is neutral in the verdict. Judged scores are labelled uncalibrated: the
+text report carries a note, and the JSON report sets `"uncalibrated_judge": true`.
+
+A cost-tiered scheduler runs the cheap deterministic checks first, and stops scoring
+once the gate is lost. With the default `gate and rubric` verdict, a failing file or
+metric check therefore never spends an LLM call. A sample whose verdict or aggregate
+a skipped layer could change, such as one with a `gate or rubric` verdict, is always
+scored in full. `--full-scoring` forces every check to run, for a complete report.
+
+A runner drives the agent. Two real runners ship, and both are opt-in. `claude_code`
+is the default and drives the `claude` CLI. `opencode` drives the `opencode` CLI.
+Each one is gated by `available()` on its binary, and CI never exercises them.
+`--runner fake` is the hermetic driver for demos and CI.
+
+`playbook eval` has no `--run-tests` flag. A sample runs the test suite if and only if
+its `[gate]` references an execution metric, `coverage` or `test_pass_rate`.
+
+A run exits with one of three codes:
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | the report passes |
+| `1` | the report fails |
+| `2` | a usage error, or a sample that cannot be scored at all |
+
+A usage error is an unknown sample, runner or judge, or a real runner or judge whose
+CLI is not on `PATH`. A sample cannot be scored at all when its prompt fails to
+render, or when the judge gives no score after its retries.
 
 ### Comparing a base ref with HEAD (opt-in, paid)
 
-`playbook eval --compare <base-ref>` compares the eval samples of the seven prompts whose included rule bodies can change (`review`, `refactor`, `make-testable`, `review-architecture`, `generate-tests`, `characterize`, `security-review`: 12 eval samples) on a base ref and on HEAD. It is **off by default**: CI and the release gate never run it. Every run drives a real agent (and the judge, with `--judge`), so it needs your own agent credentials (the `claude` or `opencode` CLI logged in) and **costs money**: the defaults make 12 eval samples x 2 sides x 3 runs = 72 agent runs.
+`playbook eval --compare <base-ref>` runs eval samples on a base ref and on HEAD, and
+compares the results. It covers the seven prompts whose included rule bodies can
+change: `review`, `refactor`, `make-testable`, `review-architecture`,
+`generate-tests`, `characterize` and `security-review`. Together they have 12 eval
+samples.
+
+The comparison is off by default: CI and the release gate never run it. Every run
+drives a real agent, and the judge too with `--judge`. It therefore needs your own
+agent credentials, with the `claude` or `opencode` CLI logged in. It also **costs
+money**: the defaults make 12 eval samples x 2 sides x 3 runs = 72 agent runs.
+
+These commands compare HEAD with `origin/main`, compare two prompt sets on one ref,
+and narrow a comparison to one eval sample:
 
 ```bash
 playbook eval --compare origin/main --judge llm                                  # base origin/main (v1) vs HEAD (v1)
@@ -484,6 +691,46 @@ playbook eval --compare HEAD --base-prompt-set v1 --prompt-set v2 --judge llm   
 playbook eval refactor-extract-helper --compare origin/main --judge llm --compare-runs 5 --format json
 ```
 
-Each side is a detached `git worktree` of its ref, and every eval sample runs there through that checkout's own engine (`playbook eval <id> --run --format json`, plus `--prompt-set` when the side's set is not v1), so the base side grades the base ref's prompts and rule bodies. `--base-prompt-set` picks the base side's prompt set and `--prompt-set` HEAD's (both default `v1`); `--compare-runs N` (default 3) is the runs per eval sample on each side; a positional `<id>` narrows the comparison to that one compared eval sample. `--runner`, `--judge`, `--judge-samples` and `--full-scoring` are checked once, as `--run` checks them, then pass through to every run, so both sides run in one invocation with the same runner and judge, and so with the model their CLIs are configured to use: pin that model in the agent CLI's own configuration before you start. The table's first line and the JSON's `runner` and `judge` keys record them. Every run's JSON report is kept under `<dir>/reports/{base,head}/<eval-sample>-<n>.json`, with `<dir>` from `--compare-out` (default: a new temporary directory, printed on stderr); keep it out of the repository. The table lists, per eval sample, each side's outcome (passing runs) and mean score with its spread (population standard deviation of the runs' `aggregate_score`). **Pass `--judge` for a judge score**: without it the compared score is the deterministic gate score only, and the column headers, the JSON's `score` key and a stderr note say so. A **regression** is a mean score drop above 0.05, or an eval sample that passes on the base (a majority of its runs pass) failing in 2 of 3 runs on HEAD. The comparison is advisory, not a merge gate: it exits `0` whatever it shows, and `2` on a usage error (an unknown or unavailable runner or judge, a bad count) or a ref that does not check out.
+Each side is a detached `git worktree` of its ref. Every eval sample runs there
+through that checkout's own engine, as `playbook eval <id> --run --format json`, plus
+`--prompt-set` when the side's set is not v1. The base side therefore grades the base
+ref's prompts and rule bodies.
 
-A handle can also `{ref = "name"}` a **named gate or rubric** instead of inlining: in the `[gate]` layer it resolves a composed boolean gate registered via `@register_gate` (the `coding_agent_playbook.gates` group), in the `[rubric]` layer a code-defined `Rubric` subclass registered via `@register_rubric` (the `coding_agent_playbook.rubrics` group) — so several tasks share one gate/rubric by name. The engine ships no builtin gates or rubrics; both are third-party extension points.
+These options shape the comparison:
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `--base-prompt-set` | `v1` | the prompt set of the base side |
+| `--prompt-set` | `v1` | the prompt set of HEAD |
+| `--compare-runs N` | 3 | the runs per eval sample on each side |
+| `--compare-out` | a new temporary directory, printed on stderr | the directory `<dir>` that keeps the reports |
+
+A positional `<id>` narrows the comparison to that one compared eval sample.
+
+`--runner`, `--judge`, `--judge-samples` and `--full-scoring` are checked once, the
+way `--run` checks them. They then pass through to every run. Both sides therefore
+run in one invocation with the same runner and judge, and so with the model their
+CLIs are configured to use. Pin that model in the agent CLI's own configuration
+before you start. The first line of the table and the `runner` and `judge` keys of the
+JSON report record the runner and the judge.
+
+Every run's JSON report is kept under
+`<dir>/reports/{base,head}/<eval-sample>-<n>.json`. Keep `<dir>` out of the
+repository.
+
+For each eval sample, the table lists each side's outcome (its passing runs) and its
+mean score with its spread. The spread is the population standard deviation of the
+runs' `aggregate_score`.
+
+> [!NOTE]
+> Pass `--judge` for a judge score. Without it, the compared score is the
+> deterministic gate score only. The column headers, the `score` key of the JSON
+> report and a note on stderr say so.
+
+A regression is a mean score drop above 0.05, or an eval sample that passes on the
+base but fails in 2 of 3 runs on HEAD. An eval sample passes on the base when a
+majority of its runs pass.
+
+The comparison is advisory, not a merge gate. It exits `0` whatever it shows. It exits
+`2` on a usage error (an unknown or unavailable runner or judge, or a bad count), or
+when a ref does not check out.

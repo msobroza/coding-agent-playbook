@@ -17,6 +17,8 @@ from tests._catalog import CORE_SKILLS_ROOT, RETIRED_RULE_IDS, core_rule_skill_i
 from tests._markdown import markdown_section
 from tests.unit.test_docs_migration_hooks import _migration
 
+pytestmark = pytest.mark.catalog
+
 _V021_HEADING = re.compile(r"^## v0\.21\b.*$", re.MULTILINE)
 _TLDR_HEADING = "### TL;DR — who needs to do anything"
 _TABLE_SEPARATOR = re.compile(r"\|(\s*:?-{3,}:?\s*\|)+")

@@ -14,12 +14,16 @@ from __future__ import annotations
 import argparse
 from typing import TYPE_CHECKING, Final
 
+import pytest
+
 from coding_agent_playbook.commands import sync as _sync
 from tests.core_skill_pins.python_tooling import UNGATED_MEMBERS
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
+
+pytestmark = pytest.mark.catalog
 
 _CONFIG: Final = """\
 schema_version = 1

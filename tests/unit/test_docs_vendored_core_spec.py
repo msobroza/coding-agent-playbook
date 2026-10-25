@@ -24,6 +24,8 @@ from tests._budget_probe import (
 )
 from tests.unit.test_docs_lifecycle_hooks_spec import _spec_section
 
+pytestmark = pytest.mark.catalog
+
 #: ``(start heading, end heading)`` of every SPEC part this ticket rewrote.
 _OWNED_PARTS = (
     ("- **0.21** — ", "\n- **0.20** — "),

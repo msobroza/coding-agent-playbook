@@ -8,7 +8,9 @@ user's ``wrapper_prefixes``, convention and trailer rows stay in their
 untracked setup. These tests read the committed repo-root files the way
 ``test_precommit_hooks_yaml.py`` does, so a later edit that switches hooks on,
 adds a policy row, moves the version source or interpolates the PR title into
-a shell line fails here.
+a shell line fails here. The ``test`` job's lane wiring (ADR 0010) is pinned
+here too: a skill-only pull request runs only the ``catalog`` checks, and every
+other case runs the whole suite.
 """
 
 from __future__ import annotations
@@ -46,6 +48,19 @@ IDENTITY_KEYS = frozenset({"schema_version", "engine", "project"})
 JOB = "playbook-ci"
 PR_TITLE_EXPR = "${{ github.event.pull_request.title }}"
 PLAYBOOK_CI_ARGV = ["playbook", "ci", "--steps", COMMIT_STEP, "--base", "origin/main"]
+TEST_JOB = "test"
+#: ``labeled`` lets the ``ci:full`` label start a run (ADR 0010); the rest are the defaults.
+PR_EVENT_TYPES = frozenset({"opened", "synchronize", "reopened", "labeled"})
+LANE_STEP_ID = "lane"
+LANE_SELECTOR = "python -m tests.skill_lane"
+#: The selector's inputs reach the shell only through env:, never interpolated into run:.
+LANE_STEP_ENV = {
+    "EVENT_NAME": "${{ github.event_name }}",
+    "FORCE_FULL": "${{ contains(github.event.pull_request.labels.*.name, 'ci:full') }}",
+}
+LANE_OUTPUT_ENV = {"LANE": "${{ steps.lane.outputs.lane }}"}
+FULL_LANE_ARGV = ["pytest", "-q", "-n", "auto", "--dist", "worksteal"]
+SKILL_LANE_ARGV = [*FULL_LANE_ARGV, "-m", "catalog", "--no-cov"]
 
 
 @pytest.fixture(autouse=True)
@@ -89,6 +104,22 @@ def _step_running(job: dict[str, Any], command: str) -> dict[str, Any]:
     step = next((s for s in job["steps"] if command in s.get("run", "")), None)
     assert step is not None, f"no step runs {command!r}; steps: {job['steps']!r}"
     return dict(step)
+
+
+def _step_with_id(job: dict[str, Any], step_id: str) -> dict[str, Any]:
+    step = next((s for s in job["steps"] if s.get("id") == step_id), None)
+    assert step is not None, f"no step has id {step_id!r}; steps: {job['steps']!r}"
+    return dict(step)
+
+
+def _checkout(job: dict[str, Any]) -> dict[str, Any]:
+    uses = [s for s in job["steps"] if str(s.get("uses", "")).startswith("actions/checkout@")]
+    assert uses, f"no actions/checkout step; steps: {job['steps']!r}"
+    return dict(uses[0])
+
+
+def _pytest_step() -> dict[str, Any]:
+    return _step_running(_job(TEST_JOB), "pytest -q")
 
 
 def test_dogfood_config_sets_only_the_commit_cutover() -> None:
@@ -153,8 +184,7 @@ def test_ci_playbook_ci_job_runs_commit_convention_on_pull_requests_only() -> No
 
 
 def test_ci_playbook_ci_job_fetches_full_history() -> None:
-    steps = _job()["steps"]
-    checkout = next(s for s in steps if str(s.get("uses", "")).startswith("actions/checkout@"))
+    checkout = _checkout(_job())
 
     assert checkout["with"]["fetch-depth"] == 0  # playbook ci diffs <merge base>..HEAD
 
@@ -182,3 +212,54 @@ def test_ci_test_matrix_and_dev_extra_stay_without_commitizen() -> None:
     # commitizen lives only in the playbook-ci job: the CI-parity gate is unchanged.
     assert install == 'python -m pip install -e ".[dev]"'
     assert not [dep for dep in dev_extra if dep.startswith("commitizen")]
+
+
+def test_ci_pull_requests_into_main_also_run_when_labelled() -> None:
+    pull_request = _workflow()[True]["pull_request"]
+
+    assert pull_request["branches"] == ["main"]
+    assert set(pull_request.get("types", [])) == PR_EVENT_TYPES, pull_request
+
+
+def test_ci_test_job_fetches_the_merge_commit_and_its_first_parent() -> None:
+    checkout = _checkout(_job(TEST_JOB))
+
+    # The selector diffs HEAD^1 against HEAD, the pull request's merge commit (ADR 0010).
+    assert checkout.get("with", {}).get("fetch-depth") == 2, checkout
+
+
+def test_ci_lane_step_runs_the_selector_on_env_inputs_only() -> None:
+    step = _step_with_id(_job(TEST_JOB), LANE_STEP_ID)
+    run = step["run"]
+
+    assert LANE_SELECTOR in run, run
+    assert '--event "$EVENT_NAME"' in run and '--force-full "$FORCE_FULL"' in run, run
+    # The key the pytest step reads (steps.lane.outputs.<key>): a typo here would
+    # send every pull request to the full lane without a failure.
+    output_key = LANE_OUTPUT_ENV["LANE"].removeprefix("${{ steps.lane.outputs.").removesuffix(" }}")
+    assert run.startswith(f'echo "{output_key}=$({LANE_SELECTOR} '), run
+    assert '>> "$GITHUB_OUTPUT"' in run, run
+    assert "${{" not in run, run
+    assert step["env"] == LANE_STEP_ENV
+
+
+def test_ci_pytest_step_runs_only_the_catalog_checks_in_the_skill_lane() -> None:
+    step = _pytest_step()
+    lines = [line.strip() for line in step["run"].splitlines() if line.strip()]
+
+    assert step.get("env") == LANE_OUTPUT_ENV
+    assert len(lines) == 5, step["run"]
+    condition, skill_lane, otherwise, full_lane, end = lines
+    # Any lane but "skill", the empty one of a crashed selector included, runs everything.
+    assert condition == 'if [ "$LANE" = skill ]; then'
+    assert shlex.split(skill_lane) == SKILL_LANE_ARGV
+    assert (otherwise, end) == ("else", "fi")
+    assert shlex.split(full_lane) == FULL_LANE_ARGV
+
+
+def test_ci_lane_step_comes_before_the_pytest_step() -> None:
+    job = _job(TEST_JOB)
+    steps = job["steps"]
+    lane = steps.index(_step_with_id(job, LANE_STEP_ID))
+
+    assert lane < steps.index(_pytest_step()), [s.get("name") for s in steps]

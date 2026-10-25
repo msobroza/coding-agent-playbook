@@ -44,6 +44,8 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
 
+pytestmark = pytest.mark.catalog
+
 posix_only = pytest.mark.skipif(sys.platform == "win32", reason="POSIX symlinks")
 
 _BOTH = ("claude_code", "opencode")

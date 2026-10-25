@@ -23,6 +23,8 @@ from tests._catalog import KEPT_RULE_IDS, core_rule_paths
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+pytestmark = pytest.mark.catalog
+
 _RULE = "---\nid: {id}\nname: {id}\ndescription: d\nscope: scoped\n{extra}---\nBody of {id}\n"
 _SKILL = "---\nid: {id}\nname: {id}\ndescription: d\nplaybook:\n  files: f\n---\nBody\n"
 
