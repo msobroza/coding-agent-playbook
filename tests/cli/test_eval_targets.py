@@ -156,8 +156,8 @@ def test_judge_settings_give_the_judge_its_model_and_samples(
     cli = FakeHarnessCli(monkeypatch, answer="1")
     _run_json(repo, capsys, "--target", "opus", "--judge", "llm", "--full-scoring")
     judge_argvs = [argv for argv in cli.argvs if argv[-2:] == ["--model", "judge-model"]]
-    assert judge_argvs, cli.argvs
-    assert len(judge_argvs) % 2 == 0  # two judge samples per criterion
+    # The refactor-extract-helper sample has 4 rubric criteria: 4 criteria x 2 samples.
+    assert len(judge_argvs) == 4 * 2, cli.argvs
 
 
 def test_zero_config_runs_claude_code_on_its_default_model(

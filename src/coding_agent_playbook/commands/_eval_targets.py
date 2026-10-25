@@ -11,6 +11,7 @@ import os
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.commands._eval_options import runner_available
+from coding_agent_playbook.config.files import CONFIG_FILENAME
 from coding_agent_playbook.evals import registry
 from coding_agent_playbook.evals.target_config import load_eval_settings
 from coding_agent_playbook.evals.targets import BUILTIN_TARGET, target_selection
@@ -20,7 +21,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.evals.targets import EvalSettings, EvalTarget
 
-_NO_TARGETS: Final = "no eval targets configured ([evals.targets] in .coding-agent-playbook.toml)"
+_NO_TARGETS: Final = f"no eval targets configured ([evals.targets] in {CONFIG_FILENAME})"
 
 
 def print_targets(repo_root: Path) -> int:
