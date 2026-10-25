@@ -7,7 +7,9 @@ Three modes:
   schema-2 lockfile with each entry's provenance (``_dispatch``), then
   applies the ``[output] commit`` policy: ``commit = false`` (default) keeps
   the managed ``.gitignore`` block current and warns about generated paths git
-  still tracks; ``commit = true`` removes the block.
+  still tracks; ``commit = true`` removes the block. Its last line names the
+  artifacts whose content digest moved since the previous lockfile
+  (``_guidance_changes``), or says no guidance changed.
 - ``--check``: re-renders into an empty scratch dir and compares against the
   on-disk files (plus, for ``commit = false``, the managed block); exits 1 on
   drift, including every **orphan** write mode would delete
@@ -78,6 +80,7 @@ from coding_agent_playbook.sync._dispatch import (
     dispatch_to_adapters,
     real_written_paths,
 )
+from coding_agent_playbook.sync._guidance_changes import guidance_changes
 from coding_agent_playbook.sync._layout_outputs import rewrite_layout_outputs
 from coding_agent_playbook.sync._leftovers import OutputLocations
 from coding_agent_playbook.sync._machine_local import SyncHookDeps
@@ -182,6 +185,7 @@ def _run_sync(ctx: SyncContext, policy: _sync_orphans.LeftoverPolicy) -> SyncRes
         provenance=dict(recorder.provenance),
         managed=tuple(recorder.managed),
         hooks=hooks,
+        artifacts=tuple(recorder.artifacts),
     )
 
 
@@ -325,6 +329,7 @@ def _run_write(ctx: SyncContext, git: GitClient, hook_deps: SyncHookDeps) -> int
         managed=result.managed,
         carried=plan.keep,
         shared=shared,
+        artifacts=result.artifacts,
     )
     ctx.state_source.save_lockfile(lockfile)
     kept = _sync_orphans.entry_paths(plan.keep, ctx.repo_root)
@@ -345,6 +350,7 @@ def _run_write(ctx: SyncContext, git: GitClient, hook_deps: SyncHookDeps) -> int
     _sync_hooks.finish_write(
         ctx, result.hooks or _sync_hooks.SyncHooks(), hook_deps, restart_notice=restart
     )
+    print(guidance_changes(policy.previous, lockfile).line())
     return 0
 
 

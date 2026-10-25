@@ -14,6 +14,11 @@ step 9). Every new field has a default and is omitted from the TOML at that defa
 lockfiles load unchanged and an older engine reading a v2 file still finds
 ``path`` / ``sha256`` / ``bytes``.
 
+Artifact digests (#281 ticket 03) follow the same rule: an entry's ``digest``
+and the top-level ``[[artifacts]]`` table (:class:`ArtifactDigest`, one per
+rule, prompt, skill and hook a sync dispatched) are omitted when empty, so the
+schema stays 2 and older readers ignore them.
+
 :func:`~coding_agent_playbook.lockfile.drift.drift_entries` is the one jinja2-free
 definition of drift against these entries, shared by ``playbook check`` and the
 hook runtime (specs/prK-hook-pack.md §E.1).
@@ -42,6 +47,7 @@ PROVENANCE_KINDS: Final[tuple[str, ...]] = get_args(ProvenanceKind)
 
 __all__ = [
     "PROVENANCE_KINDS",
+    "ArtifactDigest",
     "LockEntry",
     "Lockfile",
     "LockfileFormatError",
@@ -173,6 +179,9 @@ class LockEntry:
     adapter: str = ""
     scope: str = ""
     executable: bool = False
+    # The content digest of the artifact named by ``kind``/``artifact_id``
+    # (``catalog.digest``); ``""`` for composite and runtime output and v1/v2 files.
+    digest: str = ""
 
     # ``builtins.bytes``: inside this class body ``bytes`` names the field above.
     @classmethod
@@ -221,6 +230,7 @@ class LockEntry:
             adapter=text("adapter"),
             scope=text("scope"),
             executable=_typed_key(data, "executable", bool, where=where, default=False),
+            digest=text("digest"),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -258,12 +268,66 @@ class LockEntry:
             return False
 
 
+@dataclass(frozen=True)
+class ArtifactDigest:
+    """One ``[[artifacts]]`` record: an artifact sync dispatched and its content digest.
+
+    Recorded for every rule, prompt, skill and hook a sync rendered, including
+    the always rules that reach only composite outputs such as ``AGENTS.md``,
+    so the next sync can name what changed (#281 ticket 03). ``kind`` is a plain
+    ``str``, like :attr:`LockEntry.kind`, so a newer engine's file still loads.
+
+    Example::
+
+        ArtifactDigest(kind="rule", artifact_id="python-typing", digest="5f3c...")
+    """
+
+    kind: str
+    artifact_id: str
+    digest: str
+
+    @property
+    def key(self) -> str:
+        """``<kind>:<id>``, how the sync summary names the artifact.
+
+        Example: ``ArtifactDigest("rule", "x", "ab").key`` -> ``"rule:x"``.
+        """
+        return f"{self.kind}:{self.artifact_id}"
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any], *, where: str = "") -> ArtifactDigest:
+        """Load one ``[[artifacts]]`` table, raising :class:`LockfileFormatError` on a bad key.
+
+        Example: ``ArtifactDigest.from_dict({"kind": "rule", "artifact_id": "x", "digest": "ab"})``.
+        """
+        return cls(
+            kind=_typed_key(data, "kind", str, where=where),
+            artifact_id=_typed_key(data, "artifact_id", str, where=where),
+            digest=_typed_key(data, "digest", str, where=where),
+        )
+
+    def to_dict(self) -> dict[str, str]:
+        """The TOML table, inverse of :meth:`from_dict`."""
+        return {"kind": self.kind, "artifact_id": self.artifact_id, "digest": self.digest}
+
+
 @dataclass
 class Lockfile:
+    """The whole ``.coding-agent-playbook.lock``: ownership ``entries`` plus artifact digests.
+
+    ``artifacts`` is empty for a file written before digests existed; it is
+    omitted from the TOML when empty, and older engines ignore the table.
+
+    Example::
+
+        Lockfile(2, "0.1.0", "2026-10-25T00:00:00Z", entries=[...], artifacts=[...])
+    """
+
     schema_version: int
     engine_version: str
     rendered_at: str  # ISO-8601 UTC timestamp from when sync ran
     entries: list[LockEntry] = field(default_factory=list)
+    artifacts: list[ArtifactDigest] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> Lockfile:
@@ -290,15 +354,20 @@ class Lockfile:
             engine_version=_typed_key(data, "engine_version", str, where=""),
             rendered_at=_typed_key(data, "rendered_at", str, where=""),
             entries=entries,
+            artifacts=_artifact_digests(data),
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        """The TOML document; ``artifacts`` only when there are any (older files stay alike)."""
+        doc: dict[str, Any] = {
             "schema_version": self.schema_version,
             "engine_version": self.engine_version,
             "rendered_at": self.rendered_at,
             "entries": [entry.to_dict() for entry in self.entries],
         }
+        if self.artifacts:
+            doc["artifacts"] = [record.to_dict() for record in self.artifacts]
+        return doc
 
     def recorded_paths(self) -> frozenset[str]:
         """Every repo-relative path an entry records, scoped entries included.
@@ -315,6 +384,19 @@ class Lockfile:
             if entry.path == repo_relative_path:
                 return entry
         return None
+
+
+def _artifact_digests(data: Mapping[str, Any]) -> list[ArtifactDigest]:
+    """The ``[[artifacts]]`` tables of a parsed lockfile; ``[]`` when the file has none."""
+    raw_records = _typed_key(data, "artifacts", list, where="", default=[])
+    records: list[ArtifactDigest] = []
+    for index, raw in enumerate(raw_records):
+        if not isinstance(raw, dict):
+            raise LockfileFormatError(
+                f"artifacts[{index}]: expected a table, got {type(raw).__name__} {raw!r}"
+            )
+        records.append(ArtifactDigest.from_dict(raw, where=f"artifacts[{index}]."))
+    return records
 
 
 def generated_paths(lockfile: Lockfile | None) -> frozenset[str]:
