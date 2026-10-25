@@ -23,8 +23,8 @@ Sub-modes:
   and the committed ``[evals] default``, else ``claude_code`` on its default model,
   recorded as ``default``; ``--runner NAME`` is the target with that harness and no
   model), build that harness's runner from the ``coding_agent_playbook.runners``
-  entry-point group with the target's model, run it in a throwaway scratch dir, and render ``result.report`` (reusing
-  ``commands/metrics.py``'s text/json renderer). Exits ``0`` on a passing report,
+  entry-point group with the target's model, run it in a throwaway scratch dir,
+  and render ``result.report`` (reusing ``commands/metrics.py``'s text/json renderer). Exits ``0`` on a passing report,
   ``1`` on a failing one, ``2`` on usage errors (unknown sample,
   unknown/unavailable runner, unknown/unavailable judge, bad ``--format``) and
   when the sample cannot be scored at all (its prompt fails to render, or the judge
@@ -33,9 +33,9 @@ Sub-modes:
   ``--judge`` (R2) selects a Tier-2 judge from the
   ``coding_agent_playbook.judges`` group (``llm`` ships, opt-in/CLI-gated) so the
   sample's ``[rubric]`` criteria are scored too; omitted ⇒ deterministic-only (no
-  judge). ``[evals.judge] model`` is the judge's model for every target, and
-  ``[evals.judge] samples`` the default of ``--judge-samples N`` (else 1) is how many times the judge scores each
-  rubric criterion before averaging; it is not a count of eval samples, and a
+  judge); ``[evals.judge] model`` is the judge's model for every target.
+  ``--judge-samples N`` (default ``[evals.judge] samples``, else 1) is how many
+  times the judge scores each rubric criterion before averaging; it is not a count of eval samples, and a
   count below 1 is a usage error (exit ``2``). The old
   ``--samples N`` spelling is a deprecated alias for one release (D80): hidden
   from ``--help``, it still works, prints one stderr line naming
@@ -253,7 +253,7 @@ def _run_sample_cli(args: argparse.Namespace, repo_root: Path) -> int:
         print(f"error: no eval sample with id {sample_id!r}", file=sys.stderr)
         return 2
 
-    target = select_target(args, repo_root)
+    target = select_target(args, settings)
     runner = build_target_runner(target)
     if runner is None:
         return 2

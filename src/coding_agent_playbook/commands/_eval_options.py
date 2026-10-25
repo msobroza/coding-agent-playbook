@@ -14,16 +14,14 @@ import sys
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.evals import registry
-from coding_agent_playbook.evals.target_config import load_eval_settings
 from coding_agent_playbook.evals.targets import TargetError, resolve_target, runner_alias_target
 
 if TYPE_CHECKING:
     import argparse
-    from pathlib import Path
 
     from coding_agent_playbook.evals.judge import Judge
     from coding_agent_playbook.evals.run.harness_runner import HarnessRunner
-    from coding_agent_playbook.evals.targets import EvalTarget, JudgeSettings
+    from coding_agent_playbook.evals.targets import EvalSettings, EvalTarget, JudgeSettings
 
 # D80: the old --samples spelling stays one release as a hidden alias; it is
 # removed in the release after v0.21. Printed (not warnings.warn): pytest runs
@@ -62,8 +60,10 @@ def load_usable_runner(name: str) -> type[HarnessRunner] | None:
     return runner_cls
 
 
-def select_target(args: argparse.Namespace, repo_root: Path) -> EvalTarget:
+def select_target(args: argparse.Namespace, settings: EvalSettings) -> EvalTarget:
     """The Eval target this run drives (``evals.targets.resolve_target``'s order).
+
+    ``settings`` is the repo's ``[evals]`` (``evals.target_config.load_eval_settings``).
 
     ``--runner <name>`` stays an alias for a target with that harness and no
     model; passing it with ``--target`` raises :class:`TargetError`, as does a
@@ -71,7 +71,7 @@ def select_target(args: argparse.Namespace, repo_root: Path) -> EvalTarget:
 
     Example::
 
-        >>> select_target(argparse.Namespace(runner="fake", target=None), repo).harness  # doctest: +SKIP
+        >>> select_target(argparse.Namespace(runner="fake", target=None), settings).harness  # doctest: +SKIP
         'fake'
     """
     runner = getattr(args, "runner", None)
@@ -83,7 +83,7 @@ def select_target(args: argparse.Namespace, repo_root: Path) -> EvalTarget:
         )
     if runner is not None:
         return runner_alias_target(runner)
-    return resolve_target(load_eval_settings(repo_root), cli_value=target, env=os.environ)
+    return resolve_target(settings, cli_value=target, env=os.environ)
 
 
 def build_target_runner(target: EvalTarget) -> HarnessRunner | None:
