@@ -19,6 +19,9 @@ into a workflow ``run:`` line (the GitHub Actions script-injection pattern).
 A leading GitLab draft marker (``[Draft]``, ``Draft:``, ``(Draft)``, any case)
 is stripped first: it is not part of the squash commit's subject
 (specs/prF-forge-adapter.md §10.2).
+When the branch changes shipped catalog guidance, the title must also bump the
+release (``_ci_release_title``): the step lists ``<merge base>..HEAD``'s paths
+only when a title is set, and fails after running every ``cz`` check.
 A missing ``cz`` **fails** the step: CI is the twin that must not be skipped.
 """
 
@@ -29,6 +32,7 @@ import shlex
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.commands.twins._ci_release_title import release_title_problem
 from coding_agent_playbook.commands.twins.policy import cutover_date_value
 from coding_agent_playbook.hook_runtime.judges.commit_cutover import parse_cutover, plan_cz_checks
 
@@ -65,11 +69,15 @@ CZ_MISSING: Final = (
 class CzCommands:
     """The ``cz`` invocations the step runs (argv lists), or why it cannot run.
 
+    ``title_problem`` fails the step after the checks ran: the PR title does
+    not bump the release its catalog changes need (``""``: none).
+
     Example: ``CzCommands((("/v/bin/cz", "check", "--rev-range", "abc..HEAD"),))``.
     """
 
     commands: tuple[tuple[str, ...], ...] = ()
     error: str = ""
+    title_problem: str = ""
 
 
 def cz_commands(
@@ -110,9 +118,12 @@ def cz_commands(
         commands.append((cz, "check", "--rev-range", plan.rev_range))
     commands.extend((cz, "check", "--message", commit.message) for commit in plan.commits)
     title = env.get(PR_TITLE_ENV, "")
-    if title.strip():
-        commands.append((cz, "check", "--message", squash_subject(title)))
-    return CzCommands(tuple(commands))
+    if not title.strip():
+        return CzCommands(tuple(commands))
+    subject = squash_subject(title)
+    commands.append((cz, "check", "--message", subject))
+    problem = release_title_problem(subject, git.range_paths(merge_base, "HEAD"))
+    return CzCommands(tuple(commands), title_problem=problem)
 
 
 def squash_subject(title: str) -> str:
@@ -154,4 +165,7 @@ def run_cz_commands(
             return checks.commands[0], StepRun(None, "".join(outputs))
         if result.exit != 0 and exit_code == 0:
             exit_code = result.exit
+    if checks.title_problem:
+        outputs.append(f"{checks.title_problem}\n")
+        exit_code = exit_code or 1
     return checks.commands[0], StepRun(exit_code, "".join(outputs))
