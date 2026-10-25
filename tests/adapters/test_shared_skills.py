@@ -31,6 +31,7 @@ from coding_agent_playbook.artifacts.skill import Skill
 from coding_agent_playbook.config.model import Config, ProjectMeta
 from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.sync._hook_outputs import _generated_locations
+from tests.engine_version import ENGINE_VERSION
 from tests.fakes import FakeRuleRegistry
 
 if TYPE_CHECKING:
@@ -286,7 +287,7 @@ def test_discover_adapters_hands_shared_skills_the_rule_registry() -> None:
     config = Config(
         schema_version=1,
         project=ProjectMeta(name="x", kind="python-library"),
-        engine_version="0.1.0a0",
+        engine_version=ENGINE_VERSION,
         adapters_enabled=["shared_skills"],
     )
     registry = FakeRuleRegistry()

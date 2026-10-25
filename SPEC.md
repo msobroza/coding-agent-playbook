@@ -1457,7 +1457,7 @@ name = "risk-models"
 kind = "python-application"          # or "python-library", "ml-research", "notebook"
 description = "Counterparty risk scoring service"
 [engine]
-version = "0.4.0"                    # engine version this config was generated against
+version = "0.4.0"                    # the engine that ran init (informational: never re-stamped)
 [storage]
 # Where artifacts and state come from / go to. See Section 20.
 # v1 ships only "filesystem"; future deployments can add others.
@@ -3354,7 +3354,7 @@ Consumers pin to a minor range: `coding-agent-playbook>=0.4.0,<0.5.0`. Overlays 
 `.coding-agent-playbook.lock` is a TOML file written by `playbook sync` (write mode) through the configured `StateSource` — local state under the default `[output] commit = false`, committed with the output under `commit = true`. Schema 2 (`sync/_dispatch.py` `LOCKFILE_SCHEMA`; `lockfile/model.py` `Lockfile` / `LockEntry` / `Provenance`) records three top-level keys and one `[[entries]]` table per generated file, sorted by path, each carrying the file's **provenance** — which artifact produced it and which adapter wrote it:
 ```toml
 schema_version = 2
-engine_version = "0.1.0a0"            # [engine] version from the consumer config
+engine_version = "0.1.0a0"            # the installed engine that rendered, not [engine] version
 rendered_at = "2026-10-14T10:00:00Z"  # RFC 3339 UTC, when sync ran
 
 [[entries]]
@@ -3422,6 +3422,8 @@ artifact_id = "bnp-sql-pii-columns"
 source = "playbook_rules_bnp"
 executable = true
 ```
+`engine_version` is the installed engine that rendered (`coding_agent_playbook.__version__`), and `guard_config.json` and `machine.json` carry the same value, so one `playbook sync` after an engine upgrade clears the session briefing's engine-mismatch line and `playbook-hook doctor`'s pin warning. The consumer config's `[engine] version` is informational: `init` writes it once and sync never stamps it anywhere. A lockfile an older engine wrote, with its own version, still loads.
+
 | Field | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `path` | `str` | — | Repo-relative, forward slashes, resolved through the repo's own symlinks (with `.claude/skills -> ../.agents/skills` an entry reads `.agents/skills/…`). A written file that resolves outside the repo gets no entry (§4.2 step 8). |

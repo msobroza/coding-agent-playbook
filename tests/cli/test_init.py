@@ -18,6 +18,7 @@ from coding_agent_playbook.config.model import Config, OutputConfig, ProjectMeta
 from coding_agent_playbook.generated_output.gitignore import BLOCK_START
 from coding_agent_playbook.toml_writer import dump_toml
 from tests.cli.test_cli import break_catalog
+from tests.engine_version import ENGINE_VERSION
 from tests.hook_samples import write_hook
 from tests.toml_equality import assert_toml_identical
 from tests.unit.test_precommit import LEGACY_APPENDED, LEGACY_STARTER
@@ -173,7 +174,7 @@ def test_init_is_idempotent_does_not_clobber_existing_config(tmp_path):
         '[project]\nname="x"\nrequires-python=">=3.12"\ndependencies=[]\n'
     )
     # Pre-existing config: a user added a custom field by hand.
-    existing = """\
+    existing = f"""\
 schema_version = 1
 adapters_enabled = ["continue", "custom_adapter"]
 
@@ -182,7 +183,7 @@ name = "first-name"
 kind = "python-library"
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 
 [storage]
 artifact_source = "filesystem"
@@ -314,7 +315,7 @@ def test_init_existing_config_appends_sync_block_only(tmp_path):
     assert stages["coding-agent-playbook-no-generated-output"] == ["pre-commit"]
 
 
-_COMMIT_TRUE_CONFIG = """\
+_COMMIT_TRUE_CONFIG = f"""\
 schema_version = 1
 adapters_enabled = ["continue"]
 
@@ -323,7 +324,7 @@ name = "legacy"
 kind = "python-library"
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 
 [output]
 commit = true
@@ -412,7 +413,7 @@ def test_init_warns_about_a_hand_edited_legacy_hook(tmp_path, capsys):
 
 # --- P6: re-runs keep unmodelled tables and never persist .local.toml ---------
 
-_PLAIN_CONFIG = """\
+_PLAIN_CONFIG = f"""\
 schema_version = 1
 adapters_enabled = ["continue"]
 
@@ -421,7 +422,7 @@ name = "x"
 kind = "python-library"
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 
 [user_choices]
 docstring_style = "numpy"
@@ -716,7 +717,7 @@ def test_init_rerun_preserves_committed_tables_config_does_not_manage(tmp_path: 
     assert after["future_top_level"] == "kept"
 
 
-_STALE_COMMITTED = """\
+_STALE_COMMITTED = f"""\
 schema_version = 1
 overlays_enabled = ["coding_agent_playbook.plugins.superpowers"]
 adapters_enabled = ["continue"]
@@ -727,7 +728,7 @@ kind = "python-library"
 description = "an old description"
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 
 [detector_cache]
 python_version = "3.11"
@@ -760,7 +761,7 @@ def test_init_rerun_replaces_the_tables_config_manages_without_resurrecting(
     ]
 
 
-_COMMITTED_WITH_UNKNOWN_SUB_KEYS = """\
+_COMMITTED_WITH_UNKNOWN_SUB_KEYS = f"""\
 schema_version = 1
 
 [project]
@@ -773,7 +774,7 @@ homepage = "https://r.example"
 docs = "https://docs.r.example"
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 channel = "beta"
 
 [storage]
@@ -817,7 +818,7 @@ def test_apply_answers_replaces_answered_fields_and_keeps_the_rest(
     committed = Config(
         schema_version=1,
         project=ProjectMeta("old", "python-library", "old description"),
-        engine_version="0.1.0a0",
+        engine_version=ENGINE_VERSION,
         overlays_enabled=["some_overlay"],
         adapters_enabled=["custom"],
         storage=StorageConfig(artifact_source="custom"),
@@ -838,7 +839,7 @@ def test_apply_answers_replaces_answered_fields_and_keeps_the_rest(
     assert updated == Config(
         schema_version=1,
         project=ProjectMeta("new", "python-application"),
-        engine_version="0.1.0a0",
+        engine_version=ENGINE_VERSION,
         overlays_enabled=[],
         adapters_enabled=["custom", "continue"],
         framework="none",
@@ -926,7 +927,7 @@ def test_init_refuses_a_committed_config_missing_a_key_only_the_local_file_suppl
     without_engine = re.sub(r'\[engine\]\nversion = "[^"]*"\n\n', "", primary.read_text())
     assert "[engine]" not in without_engine  # the fixture took
     primary.write_text(without_engine)
-    local = '[engine]\nversion = "0.1.0a0"\n'
+    local = f'[engine]\nversion = "{ENGINE_VERSION}"\n'
     (tmp_path / ".coding-agent-playbook.local.toml").write_text(local)
     before = _snapshot(tmp_path)
     capsys.readouterr()

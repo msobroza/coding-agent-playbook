@@ -335,6 +335,10 @@ SMOKE_CONFIG: Final = (
 )
 
 
+#: The fixture's own engine stamp: the installed version would force a regeneration per release.
+SMOKE_ENGINE_VERSION: Final = "0.0.0+smoke-fixture"
+
+
 def smoke_guard_config_bytes() -> bytes:
     """``compile_guard_config`` for the shipped destructive-command-guard, canonical bytes."""
     from coding_agent_playbook.config.tables.hooks import GuardrailsConfig, HooksConfig
@@ -342,7 +346,7 @@ def smoke_guard_config_bytes() -> bytes:
         GuardConfigRequest,
         compile_guard_config,
     )
-    from tests.hook_runtime.handlers.pack_repo import ENGINE_VERSION, resolve_engine_hooks
+    from tests.hook_runtime.handlers.pack_repo import resolve_engine_hooks
 
     root = Path("/playbook-fixture/proj")  # absent: every repo input keeps its default
     request = GuardConfigRequest(
@@ -350,7 +354,7 @@ def smoke_guard_config_bytes() -> bytes:
         hooks=resolve_engine_hooks(["destructive-command-guard"], root),
         hooks_config=HooksConfig(enabled=True),
         guardrails=GuardrailsConfig(),
-        engine_version=ENGINE_VERSION,
+        engine_version=SMOKE_ENGINE_VERSION,
     )
     return compile_guard_config(request).data
 

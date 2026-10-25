@@ -227,14 +227,16 @@ flowchart TD
    description = "Counterparty risk scoring service"
 
    [engine]
-   version = "0.1.0a0"                  # engine version the config was written for (required)
+   version = "0.1.0a0"                  # the engine that ran init (required, informational)
 
    [output]
    commit = false     # default: generated output is gitignored (local-only)
    ```
 
    `playbook init` writes this file for you, together with `[storage]` and
-   `[detector_cache]` tables. Keep its `[engine]` table.
+   `[detector_cache]` tables. Keep its `[engine]` table. Its version is
+   informational: after an engine upgrade, `playbook sync` records the
+   installed engine in the lockfile, and you need not edit it.
 
    Running `playbook init` again rewrites the file, and so does
    `playbook check --refresh` after you add a dependency. Both rebuild it from the

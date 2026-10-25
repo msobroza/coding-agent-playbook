@@ -15,6 +15,7 @@ from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL
 from coding_agent_playbook.hooks.registrations.opencode import OPENCODE_SHIM_PATH
 from coding_agent_playbook.lockfile.model import LockEntry, Lockfile
 from coding_agent_playbook.sync._hook_outputs import opencode_restart_notice
+from tests.engine_version import ENGINE_VERSION
 
 CHANGED = f"! {OPENCODE_SHIM_PATH} changed: restart OpenCode to load it"
 REMOVED = f"! {OPENCODE_SHIM_PATH} removed: restart OpenCode to unload it"
@@ -25,7 +26,7 @@ def _entry(path: str, sha256: str, *, scope: str = "") -> LockEntry:
 
 
 def _lock(*entries: LockEntry) -> Lockfile:
-    return Lockfile(2, "0.1.0a0", "2026-10-15T00:00:00Z", list(entries))
+    return Lockfile(2, ENGINE_VERSION, "2026-10-15T00:00:00Z", list(entries))
 
 
 def test_restart_notice_when_shim_hash_changes() -> None:

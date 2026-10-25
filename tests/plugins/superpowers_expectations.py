@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from tests._catalog import plugin_files_root
+from tests.engine_version import ENGINE_VERSION
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -177,7 +178,7 @@ def consumer_config(*, overlays: list[str], adapters: tuple[str, ...] = SKILL_AD
         'kind = "python-library"\n'
         "\n"
         "[engine]\n"
-        'version = "0.1.0a0"\n'
+        f'version = "{ENGINE_VERSION}"\n'
         "\n"
         "[storage]\n"
         'artifact_source = "filesystem"\n'

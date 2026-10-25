@@ -20,6 +20,7 @@ import pytest
 from coding_agent_playbook.cli import main
 from tests.cli.git_run import run_git
 from tests.conftest import _DEFAULT_CONFIG
+from tests.engine_version import ENGINE_VERSION
 from tests.plugins.superpowers_expectations import PLUGIN_NAME, write_consumer_repo
 
 if TYPE_CHECKING:
@@ -45,7 +46,7 @@ name = "synthetic"
 kind = "python-library"
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 
 [overlays]
 enabled = ["{PLUGIN_NAME}"]

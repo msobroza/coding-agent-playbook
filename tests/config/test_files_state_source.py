@@ -25,6 +25,7 @@ from coding_agent_playbook.config.model import Config, ProjectMeta
 from coding_agent_playbook.config.tables.hooks import PolicyTables
 from tests.config._engine_trees import PACKAGE_ROOT, engine_module_file, engine_module_trees
 from tests.engine_modules import StaleModulePin
+from tests.engine_version import ENGINE_VERSION
 
 
 class _DummyStateSource(StateSource):
@@ -152,7 +153,7 @@ def test_dump_toml_escapes_control_characters(tmp_path: Path) -> None:
     config = Config(
         schema_version=1,
         project=ProjectMeta(name="r", kind="x", description="weird:\x00\x08"),
-        engine_version="0.1.0a0",
+        engine_version=ENGINE_VERSION,
     )
     source = FileSystemStateSource(repo_root=tmp_path)
     source.save_config(config)

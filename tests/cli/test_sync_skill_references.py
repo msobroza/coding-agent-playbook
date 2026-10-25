@@ -23,6 +23,7 @@ from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.generated_output.sentinel import sentinel_line
 from coding_agent_playbook.sync import pipeline as _sync
+from tests.engine_version import ENGINE_VERSION
 from tests.fakes import FakeGitClient, pre_gate_validate
 from tests.member_skill_samples import (
     skill_tree_bytes,
@@ -40,7 +41,7 @@ if TYPE_CHECKING:
 _SKILL = "risk-models"
 _UNGATED, _GATED = "risk-naming", "risk-click"
 
-_CONFIG = """\
+_CONFIG = f"""\
 schema_version = 1
 adapters_enabled = ["continue", "claude_code", "opencode", "shared_skills"]
 overlays_enabled = []
@@ -50,7 +51,7 @@ name = "synthetic"
 kind = "python-library"
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 
 [storage]
 artifact_source = "filesystem"

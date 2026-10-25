@@ -21,6 +21,7 @@ from coding_agent_playbook.commands import check as _check
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.config.tables.hooks import HooksConfig
 from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, compute_hash
+from tests.engine_version import ENGINE_VERSION
 from tests.hook_samples import resolved_hook, write_hook
 
 if TYPE_CHECKING:
@@ -29,7 +30,7 @@ if TYPE_CHECKING:
 
     SyntheticRepoFactory = Callable[..., Path]
 
-_HOOKS_ON = """\
+_HOOKS_ON = f"""\
 schema_version = 1
 adapters_enabled = ["continue", "claude_code", "opencode"]
 
@@ -38,7 +39,7 @@ name = "synthetic"
 kind = "python-library"
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 
 [hooks]
 enabled = true

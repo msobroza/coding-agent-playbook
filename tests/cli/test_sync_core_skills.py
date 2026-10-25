@@ -21,6 +21,7 @@ from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.config.files import FileSystemStateSource
 from tests.core_skill_pins.python_tooling import UNGATED_MEMBERS
 from tests.core_skill_pins.web_application import PINS as WEB_PINS
+from tests.engine_version import ENGINE_VERSION
 from tests.plugins.superpowers_expectations import NATIVE_SKILL_ROOTS
 
 if TYPE_CHECKING:
@@ -67,9 +68,9 @@ _FASTAPI_RULES: Final = sorted(
     ]
 )
 
-_CONFIG = """\
+_CONFIG = f"""\
 schema_version = 1
-adapters_enabled = {adapters}
+adapters_enabled = {{adapters}}
 overlays_enabled = []
 
 [project]
@@ -77,7 +78,7 @@ name = "synthetic"
 kind = "python-library"
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 
 [storage]
 artifact_source = "filesystem"

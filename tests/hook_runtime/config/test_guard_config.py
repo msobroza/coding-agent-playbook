@@ -32,6 +32,7 @@ from coding_agent_playbook.hook_runtime.state.store import StateStore
 from coding_agent_playbook.lockfile.model import Lockfile
 from coding_agent_playbook.security.patterns import SECRET_PATH_GLOBS
 from tests.engine_modules import engine_module
+from tests.engine_version import ENGINE_VERSION
 from tests.hook_runtime.config.guard_config_kit import (
     canonical_bytes,
     guard_document,
@@ -398,7 +399,7 @@ def test_stateless_store_parses_the_lockfile_every_time(tmp_path: Path) -> None:
 def test_lock_entry_lookup_matches_lockfile_module(document: dict[str, Any]) -> None:
     from coding_agent_playbook.hook_runtime.config.lock_digest import lock_entry_sha256
 
-    header = {"schema_version": 2, "engine_version": "0.1.0a0", "rendered_at": "t"}
+    header = {"schema_version": 2, "engine_version": ENGINE_VERSION, "rendered_at": "t"}
     entry = Lockfile.from_dict({**header, **document}).find(GUARD_CONFIG_REL)
 
     assert lock_entry_sha256(document, GUARD_CONFIG_REL) == (entry.sha256 if entry else None)

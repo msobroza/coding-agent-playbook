@@ -219,7 +219,7 @@ def write_runtime_outputs(
         hooks=hooks.resolved,
         hooks_config=hooks.config,
         guardrails=hooks.guardrails,
-        engine_version=ctx.config.engine_version or _installed_version,
+        engine_version=_installed_version,  # the rendering engine, never [engine] version
         generated=_generated_locations(ctx.adapters),
         protected=_protect_inputs(ctx, out_root, recorder),
         detect=_detect_inputs(ctx, hooks),
@@ -417,12 +417,12 @@ def finish_write(
     """
     live = runtime_enabled(ctx, hooks)
     if live:
-        version = ctx.config.engine_version or _installed_version
         roots = resolve_resource_roots(layer_packages(ctx))
         _sync_hook_local.write_pins(
             ctx.repo_root,
             deps,
-            engine_version=version,
+            # Matches the lockfile, which the briefing's machine.json probe compares with.
+            engine_version=_installed_version,
             resource_roots=roots,
             stage_tools=[r.tool for r in stop_stage_records(hooks.resolved) if r.tool],
             ruff_codes=ruff_probe_codes(hooks.resolved, ctx.repo_root),

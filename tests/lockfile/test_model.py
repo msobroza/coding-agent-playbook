@@ -27,6 +27,7 @@ from coding_agent_playbook.lockfile.model import (
     compute_hash,
     generated_paths,
 )
+from tests.engine_version import ENGINE_VERSION
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -42,7 +43,7 @@ def test_compute_hash_stable():
 def test_lockfile_roundtrip():
     lockfile = Lockfile(
         schema_version=1,
-        engine_version="0.1.0a0",
+        engine_version=ENGINE_VERSION,
         rendered_at="2026-05-28T12:00:00Z",
         entries=[
             LockEntry(path=".continue/rules/a.md", sha256="abc123", bytes=42),
@@ -57,7 +58,7 @@ def test_lockfile_roundtrip():
 def test_lockfile_roundtrip_empty_entries():
     lockfile = Lockfile(
         schema_version=1,
-        engine_version="0.1.0a0",
+        engine_version=ENGINE_VERSION,
         rendered_at="2026-05-28T12:00:00Z",
     )
     data = lockfile.to_dict()
@@ -69,7 +70,7 @@ def test_lockfile_roundtrip_empty_entries():
 def test_find_returns_entry():
     lockfile = Lockfile(
         schema_version=1,
-        engine_version="0.1.0a0",
+        engine_version=ENGINE_VERSION,
         rendered_at="2026-05-28T12:00:00Z",
         entries=[
             LockEntry(path="path/x.md", sha256="abc", bytes=1),
@@ -84,9 +85,9 @@ def test_find_returns_entry():
 
 # --- schema v2: provenance fields (specs/prK-lifecycle-hooks.md §P P4, §B.6) ---
 
-_V1_LOCKFILE_TOML = """\
+_V1_LOCKFILE_TOML = f"""\
 schema_version = 1
-engine_version = "0.1.0a0"
+engine_version = "{ENGINE_VERSION}"
 rendered_at = "2026-05-28T12:00:00Z"
 
 [[entries]]

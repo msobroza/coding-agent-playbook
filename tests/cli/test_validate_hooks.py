@@ -19,6 +19,7 @@ import pytest
 
 from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.validation import context as _validate_context
+from tests.engine_version import ENGINE_VERSION
 from tests.hook_runtime.handlers.pack_repo import engine_hook_paths
 
 if TYPE_CHECKING:
@@ -28,18 +29,18 @@ if TYPE_CHECKING:
     HookFactory = Callable[..., Path]
     PackageFactory = Callable[..., str]
 
-_CONFIG = """\
+_CONFIG = f"""\
 schema_version = 1
 adapters_enabled = ["claude_code", "opencode"]
-overlays_enabled = {overlays}
+overlays_enabled = {{overlays}}
 
 [project]
 name = "synthetic"
 kind = "python-library"
 
 [engine]
-version = "0.1.0a0"
-{extra}"""
+version = "{ENGINE_VERSION}"
+{{extra}}"""
 
 #: What ``screen_regex`` says about the classic catastrophic-backtracking shape (§E.4).
 REDOS = (

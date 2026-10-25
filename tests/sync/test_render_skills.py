@@ -22,15 +22,16 @@ from coding_agent_playbook.sync.render import (
     report_description_overflow,
 )
 from coding_agent_playbook.validation.context import SyncContext
+from tests.engine_version import ENGINE_VERSION
 from tests.member_skill_samples import write_repo_member_rule, write_repo_member_skill
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-_CONFIG = """\
+_CONFIG = f"""\
 schema_version = 1
-adapters_enabled = {adapters}
+adapters_enabled = {{adapters}}
 overlays_enabled = []
 
 [project]
@@ -38,7 +39,7 @@ name = "synthetic"
 kind = "python-library"
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 
 [storage]
 artifact_source = "filesystem"
