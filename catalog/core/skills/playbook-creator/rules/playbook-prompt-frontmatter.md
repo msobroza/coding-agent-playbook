@@ -24,7 +24,7 @@ A prompt is a task the user starts by name, as a slash command. Guidance the age
 
 A prompt is `prompts/<id>.md` or `.md.j2` with:
 
-- **Required:** `id`, `name`, `description`, `version`, and `slash`: pick a name no other prompt, skill or harness built-in command uses (nothing checks it).
+- **Required:** `id`, `name`, `description`, `version`, and `slash`: pick a name no other prompt or skill uses and no harness reserves (nothing checks it).
 - `applies_if`: the rule gate language; the prompt is written only where it holds.
 - `input_variables`: each with `name`, `description` and `required`.
 - `includes_rules`: rule ids, in the order the task needs them.
@@ -79,4 +79,5 @@ The body's `## Output format` section asks for exactly that line: `Verdict: ship
 - The opt-in output-contract stop hook checks the final answer against `output_contract`.
 - A read-only prompt also renders natively restricted on Claude Code and OpenCode.
 - In the engine's core layer, prompts' includes_rules stay frozen until the pilot ends.
+- Harnesses reserve their commands, command aliases and shipped skills, and a synced prompt with such a slash shadows the harness's own. Avoid, among others: on Claude Code `review`, `code-review`, `security-review`, `init`, `simplify`, `run`, `verify`, `debug`, `doctor`, `loop`, `batch`; on OpenCode `init`, `review`, `compact`, `undo` and `customize-opencode`; on Codex `review`, `init`, `diff`, `plan`, `agents`, `skills`, `compact` and `undo`. On a collision add a suffix, as core does with `review-core`.
 - prompt-template.md has the full skeleton.
