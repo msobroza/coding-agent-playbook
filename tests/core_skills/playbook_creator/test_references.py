@@ -222,7 +222,6 @@ def test_hook_template_checklist_covers_every_hook_contract_check() -> None:
                 "id",
                 "name",
                 "description",
-                "version",
                 "scope",
                 "section",
                 "priority",
@@ -232,7 +231,7 @@ def test_hook_template_checklist_covers_every_hook_contract_check() -> None:
                 "# lint_codes",
             ),
         ),
-        ("Always rule", ("id", "name", "description", "version", "scope", "priority")),
+        ("Always rule", ("id", "name", "description", "scope", "priority")),
     ],
 )
 def test_rule_template_skeleton_writes_every_mapped_key(

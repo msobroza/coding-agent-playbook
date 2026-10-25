@@ -47,6 +47,7 @@ STDLIB_LEAVES: Final = frozenset(
     {
         "artifacts.path_classes",
         "artifacts.path_globs",
+        "artifacts.retired_keys",
         "catalog.roots",
         "detector.bounded_read",
         "detector.pep503",

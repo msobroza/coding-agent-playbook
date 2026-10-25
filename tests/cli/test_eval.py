@@ -200,7 +200,8 @@ def test_eval_list_groups_samples_under_prompts(tmp_path, make_synthetic_repo, c
     idx_header = out.index("generate-tests")
     idx_happy = out.index("generate-tests-happy-path")
     idx_edge = out.index("generate-tests-edge-cases")
-    assert idx_header < idx_happy < idx_edge
+    # #281: samples list alphabetically by id under their prompt, not in declared order
+    assert idx_header < idx_edge < idx_happy
 
 
 def test_plural_helper_uses_singular_for_n_equals_one():

@@ -298,7 +298,7 @@ def test_best_effort_import_warns_that_scoped_rules_need_a_skill(tmp_path: Path)
     assert rule.frontmatter.skill is None
     assert (
         "rule 'python-typing': scope inferred as 'scoped' from references/ placement; "
-        "globs/applies_if/priority/tags/version not recoverable without sidecar; a scoped "
+        "globs/applies_if/priority/tags not recoverable without sidecar; a scoped "
         "rule needs 'skill: <skill-id>' before playbook sync accepts it"
     ) in result.warnings
 
