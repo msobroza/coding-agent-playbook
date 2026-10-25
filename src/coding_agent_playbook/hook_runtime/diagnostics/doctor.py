@@ -47,7 +47,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from typing import TextIO
 
-__all__ = ["Check", "exit_code", "main", "run_doctor"]
+__all__ = ["Check", "build_parser", "exit_code", "main", "run_doctor"]
 
 
 def run_doctor(
@@ -115,7 +115,7 @@ def main(
         0
     """
     try:
-        ns = _parser().parse_args(list(argv))
+        ns = build_parser().parse_args(list(argv))
     except SystemExit as exc:  # argparse already printed the usage
         return 2 if exc.code else 0
     checks = run_doctor(ns.repo, deps=deps or RuntimeDeps(), repin=ns.repin, since_days=ns.since)
@@ -133,7 +133,14 @@ def _render(checks: Sequence[Check], code: int, fmt: str) -> str:
     return "\n".join([*lines, f"playbook-hook doctor: {status}"])
 
 
-def _parser() -> argparse.ArgumentParser:
+def build_parser() -> argparse.ArgumentParser:
+    """The ``playbook-hook doctor`` parser; the docs site's CLI page renders it too.
+
+    Example::
+
+        >>> build_parser().parse_args([]).format
+        'text'
+    """
     import argparse  # cold path only: never on dispatch (§D.1)
 
     parser = argparse.ArgumentParser(

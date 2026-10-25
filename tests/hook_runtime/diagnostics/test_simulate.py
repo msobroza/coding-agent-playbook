@@ -20,7 +20,12 @@ from coding_agent_playbook.hook_runtime.diagnostics.canary import (
     canary_session_id,
     run_canaries,
 )
-from coding_agent_playbook.hook_runtime.diagnostics.simulate import SimulateArgs, main, run
+from coding_agent_playbook.hook_runtime.diagnostics.simulate import (
+    SimulateArgs,
+    build_parser,
+    main,
+    run,
+)
 from coding_agent_playbook.hook_runtime.dispatch.decision import (
     EVENT_DECISIONS,
     Decision,
@@ -373,3 +378,13 @@ def test_bash_rm_root_fixture_reports_exit_code_2(
     assert (code, report["exit_code"]) == (0, 2)
     assert report["combined"]["reason"] == golden.expected["result"]["reason"]
     assert [d["rule_id"] for d in report["decisions"]] == ["rm_root"]
+
+
+def test_build_parser_names_the_subcommand_and_offers_every_event() -> None:
+    # The docs site's CLI page renders this parser (sphinx-argparse), so its prog
+    # and its event choices are what readers see.
+    parser = build_parser()
+
+    event = next(action for action in parser._actions if action.dest == "event")
+    assert parser.prog == "playbook-hook simulate"
+    assert event.choices == [e.value for e in EventName]
