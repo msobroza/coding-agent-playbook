@@ -7,7 +7,8 @@ grandfather legacy history while a rebased or amended commit (a new committer
 date) still has to conform. The parents say whether one ``cz check --rev-range``
 covers exactly the kept commits (``hook_runtime.judges.commit_cutover``). One ``git log -z``
 call gives every field; it reads no worktree content, and ``SafeGit.run`` adds
-the hardening flags.
+the hardening flags. ``range_paths`` lists the paths a range changes (the
+step's release-title rule reads them).
 
 :class:`LogQueries` is a mixin of ``SafeGit`` beside ``range``'s
 ``RangeQueries`` (each stays under §D.1's 300-line module rule).
@@ -18,6 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Protocol
 
+from coding_agent_playbook.hook_runtime.git.parse import split_z
 from coding_agent_playbook.hook_runtime.git.range import checked_rev
 
 if TYPE_CHECKING:
@@ -54,6 +56,8 @@ class LogPort(Protocol):
 
     def commit_log(self, rev_range: str, *, limit: int) -> tuple[LoggedCommit, ...]: ...
 
+    def range_paths(self, base: str, head: str) -> tuple[str, ...]: ...
+
 
 class _Runner(Protocol):
     """The part of ``SafeGit`` the mixin calls (the mixin's self-type)."""
@@ -81,6 +85,11 @@ class LogQueries:
         """The newest ``limit`` commits of ``rev_range`` (``a..b``), newest first."""
         argv = ["log", "-z", f"--max-count={max(limit, 0)}", LOG_FORMAT, checked_rev(rev_range)]
         return parse_commit_log(self.run(argv).stdout)
+
+    def range_paths(self: _Runner, base: str, head: str) -> tuple[str, ...]:
+        """Every path ``base`` → ``head`` adds, changes or deletes (a rename: both paths)."""
+        argv = ["diff", "--name-only", "-z", "--no-renames", checked_rev(base), checked_rev(head)]
+        return split_z(self.run(argv).stdout)
 
 
 def parse_commit_log(output: bytes) -> tuple[LoggedCommit, ...]:

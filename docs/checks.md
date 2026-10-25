@@ -191,6 +191,12 @@ The `commit-convention` step of `playbook ci` checks the branch's commits after 
 cut-over. When `PLAYBOOK_PR_TITLE` is set, it also checks the pull-request title,
 because in a squash-merge repo the title becomes the commit subject.
 
+In the engine's own repository, a pull request that changes shipped rules, prompts,
+skills or hooks (`catalog/core/<kind>/` or `catalog/plugins/<plugin>/<kind>/`) must
+be titled `feat` or `fix`, or carry a breaking `!`. Any other type fails the step,
+with a message naming the changed artifacts, because commitizen would not bump the
+release for it.
+
 A missing `cz` fails the CI step and the pre-commit hook loudly. The lifecycle hook
 fails open instead, and shows a hint to install `cz` once per session.
 
@@ -223,7 +229,7 @@ The table lists each step, the command it runs and when it runs.
 | `coverage` | `playbook metrics --run-tests --select testing --baseline git:<merge base>` | `[metrics] run_tests = true`, or `--steps coverage` |
 | `gate-scan` | `playbook gate-scan`: new suppressions, skipped tests, loosened checker config, removed CI steps or jobs, loosened secret or SAST scanners | always |
 | `scan-secrets` | `playbook scan-secrets` over the branch | always |
-| `commit-convention` | `cz check` on the commits after `cutover_date`, plus `$PLAYBOOK_PR_TITLE` (a leading `[Draft]`, `Draft:` or `(Draft)` stripped) | `[tool.commitizen]` or `[hooks.commit_convention]` is set |
+| `commit-convention` | `cz check` on the commits after `cutover_date`, plus `$PLAYBOOK_PR_TITLE` (a leading `[Draft]`, `Draft:` or `(Draft)` stripped), which must be `feat`, `fix` or `!` when shipped catalog guidance changed | `[tool.commitizen]` or `[hooks.commit_convention]` is set |
 | `commit-trailers` | `playbook check-commit-trailers` over the branch | a commit-trailer row is configured |
 | `check-deps` | `playbook check-deps`: newly declared dependencies against your policy | a dependency policy is configured |
 | `scan-sinks` | `playbook scan-sinks` over the branch | only when `--steps` names it |

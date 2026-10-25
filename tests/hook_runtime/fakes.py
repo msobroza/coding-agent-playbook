@@ -144,7 +144,8 @@ class FakeGit:
     ``upstream`` answers ``upstream_ref``; ``unpushed_lines`` the ``unpushed`` patch;
     ``porcelain_status`` the ``status`` entries (``(XY, path)``); ``remote_urls`` the
     ``remotes`` map (name -> URL), as ``git remote -v`` lists it; ``commit_log`` the
-    ``logs[rev_range]`` commits, newest first (empty when absent).
+    ``logs[rev_range]`` commits, newest first (empty when absent); ``range_paths``
+    the ``changed[(base, head)]`` paths (empty when absent).
     """
 
     head_tree_id: str | None = None
@@ -167,6 +168,7 @@ class FakeGit:
     status: tuple[tuple[str, str], ...] = ()
     remotes: dict[str, str] = field(default_factory=dict)
     logs: dict[str, tuple[LoggedCommit, ...]] = field(default_factory=dict)
+    changed: dict[tuple[str, str], tuple[str, ...]] = field(default_factory=dict)
     errors: dict[str, Exception] = field(default_factory=dict)
     calls: list[tuple[str, tuple[str, ...]]] = field(default_factory=list)
 
@@ -262,6 +264,10 @@ class FakeGit:
     def commit_log(self, rev_range: str, *, limit: int) -> tuple[LoggedCommit, ...]:
         self._record("commit_log", rev_range)
         return self.logs.get(rev_range, ())[:limit]
+
+    def range_paths(self, base: str, head: str) -> tuple[str, ...]:
+        self._record("range_paths", base, head)
+        return self.changed.get((base, head), ())
 
 
 @dataclass
