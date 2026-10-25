@@ -130,9 +130,9 @@ def test_readme_links_every_docs_page(page: str) -> None:
     assert f"]({page})" in _readme(), f"README.md must link {page}"
 
 
-def test_readme_install_is_the_git_url_dev_dependency() -> None:
+def test_readme_install_is_a_local_dev_dependency() -> None:
     readme = _readme()
-    assert 'uv add --dev "coding-agent-playbook @ git+' in readme
+    assert "uv add --dev --editable ../coding-agent-playbook" in readme
     assert "Python 3.12" in readme
     assert "internal index" in _readme_prose()
     assert "uv tool install" not in readme and "pipx" not in readme  # D66: they break the pin

@@ -17,7 +17,7 @@ the default policy, `[output] commit = false`, where generated output is gitigno
 default_install_hook_types: [pre-commit, post-checkout, post-merge]
 default_stages: [pre-commit]   # keep your other always_run hooks off checkout/merge
 repos:
-  - repo: https://github.com/msobroza/coding-agent-playbook
+  - repo: https://git.example.com/your-group/coding-agent-playbook   # your Git copy of the engine
     rev: v0.1.0a0     # the engine version your project pins
     hooks:
       - id: playbook-sync                  # re-render local output after checkout / merge

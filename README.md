@@ -21,10 +21,10 @@ which runs `gh` or `glab` when someone calls it.
 
 ## Install
 
-Add the engine as a dev dependency (Python 3.12+):
+Add the engine as a dev dependency (Python 3.12+), from your local checkout of it:
 
 ```bash
-uv add --dev "coding-agent-playbook @ git+https://github.com/msobroza/coding-agent-playbook"
+uv add --dev --editable ../coding-agent-playbook   # the path to your checkout
 ```
 
 With an internal index configured, `uv add --dev coding-agent-playbook` works the
@@ -77,7 +77,7 @@ catalog checks on a skill-only PR ([ADR 0010](docs/adr/0010-skill-only-pull-requ
 
 ## Links
 
-- [Documentation site](https://msobroza.github.io/coding-agent-playbook/): these pages and the reference.
+- Documentation site: `uv run scripts/build_docs.py --serve` builds it locally, and CI publishes it with GitHub or GitLab Pages.
 - [Overview](docs/overview.md): why, status, architecture, engine packages.
 - [Setting up a repo](docs/setup.md): install, init, sync, config layers.
 - [Skills and bundled plugins](docs/skills.md): skill roots, core skills, plugins.

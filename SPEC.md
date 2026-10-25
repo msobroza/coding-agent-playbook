@@ -4,7 +4,6 @@
 | Version | 0.21 (draft) |
 | Status | Proposed |
 | Last updated | 2026-10-18 |
-| Authors | Max Pereira, with Claude |
 | Audience | Implementers, reviewers, future contributors |
 | License | Apache-2.0 (engine); organization overlays may be private |
 
@@ -3239,7 +3238,7 @@ Stage names are pre-commit's hook-type names (`pre-commit`, `post-checkout`, `po
 default_install_hook_types: [pre-commit, post-checkout, post-merge]
 default_stages: [pre-commit]     # keep other always_run hooks off checkout/merge
 repos:
-  - repo: https://github.com/msobroza/coding-agent-playbook
+  - repo: https://git.example.com/your-group/coding-agent-playbook   # the organization's Git copy of the engine
     rev: v0.1.0a0                # the engine version the project pins
     hooks:
       - id: playbook-sync

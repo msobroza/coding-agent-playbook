@@ -350,7 +350,6 @@ version = "0.1.0a0"
 description = "Multi-harness playbook engine — one canonical source, every coding assistant."
 readme = "README.md"
 license = { text = "Apache-2.0" }
-authors = [{ name = "Max Pereira" }]
 requires-python = ">=3.12"
 keywords = ["llm", "coding-assistant", "continue", "claude-code", "opencode", "agents-md"]
 classifiers = [

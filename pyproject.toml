@@ -9,7 +9,6 @@ version = "0.1.0a0"
 description = "Multi-harness playbook engine — one canonical source, every coding assistant."
 readme = "README.md"
 license = { text = "Apache-2.0" }
-authors = [{ name = "Max Pereira" }]
 requires-python = ">=3.12"
 keywords = ["llm", "coding-assistant", "continue", "claude-code", "opencode", "agents-md"]
 classifiers = [
@@ -65,11 +64,6 @@ docs = [
     "sphinx-argparse==0.6.1",
     "sphinxcontrib-mermaid==2.1.1",
 ]
-
-[project.urls]
-Homepage = "https://github.com/msobroza/coding-agent-playbook"
-Documentation = "https://msobroza.github.io/coding-agent-playbook/"
-Source = "https://github.com/msobroza/coding-agent-playbook"
 
 [project.scripts]
 playbook = "coding_agent_playbook.cli:main"
