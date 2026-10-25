@@ -20,11 +20,11 @@
   "result": {
     "decision": "none",
     "user_notes": [
-      "[output-contract] \"/review\": no final answer matches `(?im)^\\W*(verdict\\W*)?(approve with comments|approve|request changes)\\W*$`; end with it."
+      "[output-contract] \"/review-core\": no final answer matches `(?im)^\\W*(verdict\\W*)?(approve with comments|approve|request changes)\\W*$`; end with it."
     ]
   },
   "wire": {
-    "stdout": "{\"systemMessage\":\"[output-contract] \\\"/review\\\": no final answer matches `(?im)^\\\\W*(verdict\\\\W*)?(approve with comments|approve|request changes)\\\\W*$`; end with it.\"}\n",
+    "stdout": "{\"systemMessage\":\"[output-contract] \\\"/review-core\\\": no final answer matches `(?im)^\\\\W*(verdict\\\\W*)?(approve with comments|approve|request changes)\\\\W*$`; end with it.\"}\n",
     "stderr": "",
     "exit_code": 0
   }

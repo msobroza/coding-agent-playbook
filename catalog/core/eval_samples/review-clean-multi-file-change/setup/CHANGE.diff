@@ -1,0 +1,81 @@
+feat(shipping): accept parcel weights in pounds
+
+diff --git a/src/shipping.py b/src/shipping.py
+--- a/src/shipping.py
++++ b/src/shipping.py
+@@ -2,12 +2,14 @@
+ 
+ import math
+ 
++from src.units import to_kilograms
++
+ BASE_FEE_CENTS = 450
+ CENTS_PER_KILOGRAM = 120
+ 
+ 
+-def quote_cents(weight: float) -> int:
+-    """Price in cents to ship ``weight`` kilograms; every started kilogram is charged."""
++def quote_cents(weight: float, unit: str = "kg") -> int:
++    """Price in cents to ship ``weight`` in ``unit``; every started kilogram is charged."""
+     if weight <= 0:
+         raise ValueError(f"weight must be positive, got {weight}")
+-    return BASE_FEE_CENTS + CENTS_PER_KILOGRAM * math.ceil(weight)
++    return BASE_FEE_CENTS + CENTS_PER_KILOGRAM * math.ceil(to_kilograms(weight, unit))
+diff --git a/src/units.py b/src/units.py
+new file mode 100644
+--- /dev/null
++++ b/src/units.py
+@@ -0,0 +1,15 @@
++"""Weight conversions for the shipping quotes."""
++
++#: Kilograms in one of each supported unit; the pound is exact by definition.
++KILOGRAMS_PER_UNIT: dict[str, float] = {"kg": 1.0, "lb": 0.45359237}
++
++
++def to_kilograms(weight: float, unit: str) -> float:
++    """``weight`` given in ``unit``, as kilograms; an unknown unit raises ``ValueError``."""
++    try:
++        factor = KILOGRAMS_PER_UNIT[unit]
++    except KeyError:
++        raise ValueError(
++            f"unknown weight unit {unit!r}; expected one of {sorted(KILOGRAMS_PER_UNIT)}"
++        ) from None
++    return weight * factor
+diff --git a/tests/test_shipping.py b/tests/test_shipping.py
+--- a/tests/test_shipping.py
++++ b/tests/test_shipping.py
+@@ -14,3 +14,13 @@ def test_a_whole_kilogram_is_charged_once() -> None:
+ def test_a_non_positive_weight_is_rejected() -> None:
+     with pytest.raises(ValueError, match="positive"):
+         quote_cents(0)
++
++
++def test_a_weight_in_pounds_is_charged_per_started_kilogram() -> None:
++    # 5 lb is about 2.27 kg, so three kilograms are charged.
++    assert quote_cents(5, "lb") == 450 + 3 * 120
++
++
++def test_an_unknown_unit_is_rejected() -> None:
++    with pytest.raises(ValueError, match="unknown weight unit"):
++        quote_cents(1, "oz")
+diff --git a/tests/test_units.py b/tests/test_units.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test_units.py
+@@ -0,0 +1,16 @@
++import pytest
++
++from src.units import to_kilograms
++
++
++def test_kilograms_are_returned_as_given() -> None:
++    assert to_kilograms(2.5, "kg") == 2.5
++
++
++def test_pounds_convert_with_the_exact_factor() -> None:
++    assert to_kilograms(10, "lb") == pytest.approx(4.5359237)
++
++
++def test_an_unknown_unit_is_named_in_the_error() -> None:
++    with pytest.raises(ValueError, match="'oz'"):
++        to_kilograms(1, "oz")

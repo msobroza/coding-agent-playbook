@@ -2,7 +2,7 @@
 id: review
 name: Review
 description: Review the provided code or diff — find real bugs first, then style and clarity.
-slash: review
+slash: review-core
 version: 1
 includes_rules:
   - python-typing
@@ -10,6 +10,10 @@ includes_rules:
 eval_samples:
   - review-spot-the-bug
   - review-style-only-no-changes-needed
+  - review-diff-old-bug-on-untouched-line
+  - review-rereview-earlier-findings
+  - review-change-drops-part-of-request
+  - review-clean-multi-file-change
 output_contract:
   # The one-line verdict the Output format asks for (prompt-output-contract-on-stop).
   - '(?im)^\W*(verdict\W*)?(approve with comments|approve|request changes)\W*$'

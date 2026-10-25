@@ -45,11 +45,11 @@
   },
   "result": {
     "decision": "deny",
-    "reason": "/security-review is read-only: report findings; the user will ask for fixes in a follow-up."
+    "reason": "/security-review-core is read-only: report findings; the user will ask for fixes in a follow-up."
   },
   "wire": {
-    "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"/security-review is read-only: report findings; the user will ask for fixes in a follow-up.\"}}\n",
-    "stderr": "/security-review is read-only: report findings; the user will ask for fixes in a follow-up.\n",
+    "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"/security-review-core is read-only: report findings; the user will ask for fixes in a follow-up.\"}}\n",
+    "stderr": "/security-review-core is read-only: report findings; the user will ask for fixes in a follow-up.\n",
     "exit_code": 10
   }
 }

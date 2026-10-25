@@ -197,14 +197,14 @@ class GuardTables(Mapping[str, Any]):
     def prompt_output_contract(self, slash: str) -> tuple[str, ...]:
         """The non-empty str ``output_contract`` patterns of prompt ``slash`` (``()`` without).
 
-        Example: ``cfg.tables.prompt_output_contract("review")[0].startswith("(?im)")``.
+        Example: ``cfg.tables.prompt_output_contract("review-core")[0].startswith("(?im)")``.
         """
         return self._prompt_contracts.get(slash, ())
 
     def prompts_with_output_contract(self) -> tuple[str, ...]:
         """The slashes whose prompt carries at least one ``output_contract`` pattern.
 
-        Example: ``"review" in cfg.tables.prompts_with_output_contract()``.
+        Example: ``"review-core" in cfg.tables.prompts_with_output_contract()``.
         """
         return tuple(slash for slash, contract in self._prompt_contracts.items() if contract)
 

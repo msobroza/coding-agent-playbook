@@ -11,7 +11,7 @@
   "prompt_id": "pr_23",
   "tool_name": "Skill",
   "tool_input": {
-    "skill": "review"
+    "skill": "review-core"
   },
   "tool_use_id": "toolu_01PwsgSkill"
 }

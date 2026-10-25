@@ -122,7 +122,7 @@ def test_security_review_then_edit_denied(
     transcript: SessionTranscript,
 ) -> None:
     edit = hook_payload("claude_code", "pre_tool_use", "pwsg_edit_app")
-    transcript.command("security-review", "src/app.py")
+    transcript.command("security-review-core", "src/app.py")
     transcript.tool_round()
 
     report = _golden(repo, deps(), state, edit, transcript)
@@ -130,7 +130,7 @@ def test_security_review_then_edit_denied(
     combined, expected = report.trace.combined, edit.expected["result"]
     assert (combined.decision.value, combined.reason) == (expected["decision"], expected["reason"])
     assert report.trace.wire == edit.wire()
-    assert _stored(state, GOLDEN_SESSION) == TurnRecord("security-review", "prompt", "pr_1")
+    assert _stored(state, GOLDEN_SESSION) == TurnRecord("security-review-core", "prompt", "pr_1")
 
 
 def test_model_invoked_skill_review_then_edit_denied(
@@ -148,9 +148,9 @@ def test_model_invoked_skill_review_then_edit_denied(
     report = _golden(repo, deps(), state, edit, transcript)
 
     assert invoked.trace.wire == skill.wire()  # Skill itself is no write
-    assert _stored(state, GOLDEN_SESSION) == TurnRecord("review", "skill", "pr_1")
+    assert _stored(state, GOLDEN_SESSION) == TurnRecord("review-core", "skill", "pr_1")
     assert report.trace.combined.decision is Decision.DENY
-    assert report.trace.combined.reason == f"/review is read-only: {READ_ONLY_REASON}"
+    assert report.trace.combined.reason == f"/review-core is read-only: {READ_ONLY_REASON}"
 
 
 @pytest.mark.parametrize(
@@ -175,20 +175,20 @@ def test_sed_i_under_read_only_asks(
     expected: Decision,
     named: str,
 ) -> None:
-    transcript.command("review", "src/app.py")
+    transcript.command("review-core", "src/app.py")
 
     report = _tool(repo, deps(), state, transcript, "Bash", {"command": command})
 
     assert report.trace.combined.decision is expected
     if expected is Decision.ASK:
-        assert report.trace.combined.reason.startswith("/review is read-only and this command")
+        assert report.trace.combined.reason.startswith("/review-core is read-only and this command")
         assert named in report.trace.combined.reason
 
 
 def test_next_prompt_clears_scope(
     repo: PackRepo, deps: Callable[..., RuntimeDeps], state: Path, transcript: SessionTranscript
 ) -> None:
-    transcript.command("security-review", "src/app.py")
+    transcript.command("security-review-core", "src/app.py")
     during = _edit(repo, deps(), state, transcript)
 
     transcript.typed("fix it")
@@ -255,8 +255,8 @@ def test_read_only_scratch_file_outside_repo_passes(
 @pytest.mark.parametrize(
     "text",
     [
-        "<command-foo>/review</command-foo>",
-        "please /review src/app.py",
+        "<command-foo>/review-core</command-foo>",
+        "please /review-core src/app.py",
         "/refactor src/app.py",  # a playbook prompt without a write scope
         "/unknown-command",
     ],
@@ -274,6 +274,21 @@ def test_unrecognized_wrapper_records_no_scope(
     assert _stored(state) == TurnRecord(None, "prompt", "pr_1")
 
 
+@pytest.mark.parametrize("slash", ["review", "security-review"])
+def test_harness_review_command_is_no_playbook_prompt(
+    repo: PackRepo,
+    deps: Callable[..., RuntimeDeps],
+    state: Path,
+    transcript: SessionTranscript,
+    slash: str,
+) -> None:
+    """ADR 0011: ``/review`` and ``/security-review`` are the harness's own commands again."""
+    transcript.command(slash, "src/app.py")
+
+    assert _edit(repo, deps(), state, transcript) is Decision.NONE
+    assert _stored(state) == TurnRecord(None, "prompt", "pr_1")
+
+
 def test_command_wrapper_records_scope(
     repo: PackRepo,
     deps: Callable[..., RuntimeDeps],
@@ -286,14 +301,14 @@ def test_command_wrapper_records_scope(
     transcript.typed(json.loads(wrapped.raw)["prompt"])
 
     assert _edit(repo, deps(), state, transcript) is Decision.DENY
-    assert _stored(state) == TurnRecord("review", "prompt", "pr_1")
+    assert _stored(state) == TurnRecord("review-core", "prompt", "pr_1")
 
 
 def test_turn_is_resolved_once_then_read_from_state(
     repo: PackRepo, deps: Callable[..., RuntimeDeps], state: Path, transcript: SessionTranscript
 ) -> None:
     """Later calls of the turn never reopen the transcript; a new turn does (and fails open)."""
-    transcript.command("review", "src/app.py")
+    transcript.command("review-core", "src/app.py")
     first = _edit(repo, deps(), state, transcript)
     transcript.path.unlink()
 
@@ -310,7 +325,7 @@ def test_without_turn_ids_a_skill_lasts_until_the_next_prompt(
     """A harness without ``prompt_id``: the Skill record is anchored to the turn's entry."""
     transcript.typed("check the module")
     path = {"transcript_path": str(transcript.path)}
-    skill = _pointed(repo.tool_payload("Skill", {"skill": "review"}), path)
+    skill = _pointed(repo.tool_payload("Skill", {"skill": "review-core"}), path)
     edit = {"file_path": str(repo.root / "src/app.py"), "old_string": "a", "new_string": "b"}
     edit_payload = _pointed(repo.tool_payload("Edit", edit), path)
 
@@ -319,7 +334,7 @@ def test_without_turn_ids_a_skill_lasts_until_the_next_prompt(
     transcript.typed("now fix it")
     after = repo.simulate(edit_payload, deps(), state=state)
 
-    assert _stored(state) == TurnRecord("review", "skill", None, "u-0000")
+    assert _stored(state) == TurnRecord("review-core", "skill", None, "u-0000")
     assert during.trace.combined.decision is Decision.DENY
     assert after.trace.combined.decision is Decision.NONE
 
@@ -327,7 +342,7 @@ def test_without_turn_ids_a_skill_lasts_until_the_next_prompt(
 def test_unreadable_transcript_fails_open(
     repo: PackRepo, deps: Callable[..., RuntimeDeps], state: Path, transcript: SessionTranscript
 ) -> None:
-    transcript.command("review", "src/app.py")
+    transcript.command("review-core", "src/app.py")
     transcript.append('{"type":"user","uuid":"u-x","message":"no longer a message"}')
 
     assert _edit(repo, deps(), state, transcript) is Decision.NONE
@@ -420,9 +435,9 @@ def test_no_consumer_enabled_records_nothing(
     transcript: SessionTranscript,
 ) -> None:
     pack_repo.install_pack(["guard-generated-outputs"], prompts=engine_prompts())
-    transcript.command("review", "src/app.py")
+    transcript.command("review-core", "src/app.py")
 
-    _tool(pack_repo, deps(), state, transcript, "Skill", {"skill": "review"})
+    _tool(pack_repo, deps(), state, transcript, "Skill", {"skill": "review-core"})
     _edit(pack_repo, deps(), state, transcript)
 
     assert _stored(state) is None

@@ -8,7 +8,7 @@
     "project_dir": "/playbook-fixture/proj",
     "repo_root": "/playbook-fixture/proj",
     "permission_mode": "default",
-    "prompt": "/security-review src/app.py",
+    "prompt": "/security-review-core src/app.py",
     "transcript_path": "/playbook-fixture/home/.claude/projects/proj/5f1c.jsonl",
     "unattended": false,
     "truncated": false,

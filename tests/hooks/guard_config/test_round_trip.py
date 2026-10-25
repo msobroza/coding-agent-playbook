@@ -127,8 +127,10 @@ def test_compiled_config_loads_and_every_table_reads_typed(compiled_repo: Compil
         "tests",
     ]
     assert (gate.budget_s, gate.max_blocks) == (3.0, 2)
-    assert {"review", "find-injected-vulnerability"} <= set(tables.prompts_with_output_contract())
-    assert tables.prompt_output_contract("review")  # the engine review prompt has one
+    assert {"review-core", "find-injected-vulnerability"} <= set(
+        tables.prompts_with_output_contract()
+    )
+    assert tables.prompt_output_contract("review-core")  # the engine review prompt has one
     assert (tables.auto_sync(), tables.network_mode()) == (True, "enforce")
     facts = tables.facts()
     assert facts is not None and (facts["package_manager"], facts["has_notebooks"]) == ("uv", True)

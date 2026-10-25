@@ -707,6 +707,7 @@ The terms always rule, scoped rule, member rule, skill and reference mean what
 | Any Python repo (new core skills) | Nothing: the next `playbook sync` adds `design-patterns`, `python-architecture` and `python-documentation`, `web-application` with a web framework, the Domino skills in a Domino project and `playbook-creator` in a repo with a playbook layer, each with a "Where guidance lives" line. See "New core skills". |
 | Continue users, or tooling that names `.continue/rules/NN-<id>.md` files | Nothing for Continue: the next `playbook sync` renames each scoped rule's file to its new priority and settles the old names. Tooling that names a file by number should use the new name. See "Continue file names follow the impact bands". |
 | A repo with hooks on (the new `document-layout-guard`) and every repo (the new always rules) | Nothing: the next `playbook sync` adds the `code-legibility` and `document-layout` always rules and turns the guard on. To keep the guard off, add `disable = ["document-layout-guard"]` to `[hooks]`. See "New always rules and the layout guard". |
+| Anyone who types `/review` or `/security-review` for the playbook's prompts, or names those slashes in scripts or docs, and anyone overriding the `review` or `security-review` prompt | Use `/review-core` and `/security-review-core` (Claude Code and OpenCode); `/review` and `/security-review` are the harnesses' own commands again, and the next `playbook sync` removes the old command files. Prompt ids and overrides by id are unchanged; give an overriding prompt a slash that is not a harness command. See "Core review prompts take the -core slash". |
 | A repo synced with `agent_harness` on and a `--repo-root` typed as `.`, `..`, `x/sub/..`, a symlink with another name, or a case or Unicode-normalization variant of the directory name (#268) | Commit the one-time `HARNESS.md` change under `[output] commit = true`: its `name:` goes from `harness`, `..` or the typed spelling to the directory's name as stored on disk, and `playbook sync --check` stops reporting it as drift. A repo under a home-anchored secret glob (such as `~/.ssh/`) that was synced with a relative root also sees its project kind change in the rendered files once; commit that too. SPEC §12.2 "The repo root" has the rule. |
 
 ### `package_manager` and per-key validation
@@ -1575,6 +1576,38 @@ configured layout: a repo with `specs = "specs"` in `[layout]` may write
 and its full text the `playbook-guardrails` skill, and the `✓ Hooks:` summary
 counts one more hook. To keep it off, add `disable = ["document-layout-guard"]`
 to `[hooks]`.
+
+### Core review prompts take the -core slash
+
+The core `review` prompt's slash was `review`, a harness command on every harness
+the engine writes for: Claude Code's alias of its own `/code-review`, and the
+`/review` that OpenCode and Codex ship. The core `security-review` prompt (ML
+repos only) took the slash of Claude Code's own `/security-review`. On OpenCode
+the project command replaced the harness's review, and on Claude Code the hooks
+treated a typed `/review` as the playbook prompt. Both slashes now take the
+`-core` suffix (`docs/adr/0011-core-prompt-slashes-never-take-a-harness-commands-name.md`):
+
+| Prompt id | Old slash | New slash |
+|---|---|---|
+| `review` | `/review` | `/review-core` |
+| `security-review` | `/security-review` | `/security-review-core` |
+
+- **Commands.** The next `playbook sync` writes `.claude/commands/review-core.md`
+  and `.opencode/command/review-core.md` (and the `security-review-core` pair in
+  an ML repo), and removes the `review.md` and `security-review.md` files an
+  earlier sync wrote, as for any engine-owned file that is no longer rendered.
+  There is no alias: `/review` and `/security-review` run the harness's own
+  commands again.
+- **Hooks.** The read-only guard and the output contract apply to the new
+  slashes only, so a turn opened with `/review` is the harness's review and can
+  edit files when you ask it to. The guardrail lines name the new slashes.
+- **Ids.** The prompt ids stay `review` and `security-review`: eval samples,
+  prompt comparisons and an overlay or repo-local override by id keep working.
+  An override carries its own `slash:`; if it is `review` or `security-review`,
+  it goes on shadowing the harness's command, so pick a slash that no harness
+  ships, such as `review-core`.
+- **Description.** The `security-review` description now says the review is
+  ML-specific.
 
 ## v0.20 — Assistant lifecycle hooks (PR K)
 

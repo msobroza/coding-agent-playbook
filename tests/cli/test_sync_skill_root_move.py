@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.adapters.shared_skills import REVIEW_SKILL_ID
 from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.generated_output.gitignore import (
@@ -169,6 +170,8 @@ _OLD_TREE_FILES = frozenset(
             for rule_id in _SYNTHETIC_DOCUMENTATION_MEMBERS
         ),
         "forge/SKILL.md",
+        # The review prompt as the skill Codex reads (#274); the rewind moves it too.
+        "review-core/SKILL.md",
         # python-testing's ungated pytest-first-properties (D72) needs no pytest.
         "python-testing/SKILL.md",
         "python-testing/rules/pytest-first-properties.md",
@@ -339,7 +342,9 @@ def test_sync_writes_no_loose_file_at_any_skill_root(
         assert all(child.is_dir() for child in children), root
         # query-db + the superpowers skills, next to the core skills that apply here.
         not_core = {c.name for c in children if c.name not in core_skill_ids()}
-        assert not_core == {"query-db", *EXPECTED_SKILL_IDS}, root
+        # The shared root also holds the review prompt as a skill, for Codex (#274).
+        review = {REVIEW_SKILL_ID} if root == _NEW_ROOT else set()
+        assert not_core == {"query-db", *EXPECTED_SKILL_IDS, *review}, root
     for path in _lock_paths(repo):
         for root in _SKILL_ROOTS:
             below = Path(path).relative_to(root).parts if path.startswith(f"{root}/") else ()

@@ -19,7 +19,7 @@ Invariants honoured (``specs/prH-agent-harness.md`` §B + CLAUDE.md):
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import yaml
 
@@ -57,24 +57,6 @@ def routing_file(description: str, body: str) -> str:
     and carry the playbook sentinel as their first body line.
     """
     return with_sentinel_body(frontmatter_block({"description": description}), body)
-
-
-def input_variables_note(variables: Sequence[Mapping[str, Any]]) -> str:
-    """A ``## Input variables`` list telling the agent what to substitute; ``""`` without any.
-
-    Example::
-
-        >>> input_variables_note([{"name": "path", "description": "file to review"}])
-        '## Input variables\\n\\n- `path` — file to review\\n'
-    """
-    if not variables:
-        return ""
-    lines = ["## Input variables", ""]
-    for var in variables:
-        varname = str(var.get("name", ""))
-        desc = str(var.get("description", "")).strip()
-        lines.append(f"- `{varname}`" + (f" — {desc}" if desc else ""))
-    return "\n".join(lines) + "\n"
 
 
 def leaf_detectors_file(types: Mapping[str, str]) -> str:

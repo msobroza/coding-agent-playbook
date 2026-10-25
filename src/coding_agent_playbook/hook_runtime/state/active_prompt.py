@@ -201,7 +201,7 @@ def known_slashes(cfg: GuardConfig) -> frozenset[str]:
     Example::
 
         >>> sorted(known_slashes(cfg))  # doctest: +SKIP
-        ['explain', 'generate-tests', 'review']
+        ['explain', 'generate-tests', 'review-core']
     """
     slashes: set[str] = set()
     guard = cfg.hooks.get(SCOPE_GUARD_ID)

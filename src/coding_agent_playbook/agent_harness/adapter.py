@@ -39,7 +39,6 @@ leftover policy (SPEC §4.2 step 9), like every native skill root.
 
 from __future__ import annotations
 
-import dataclasses
 from typing import TYPE_CHECKING, ClassVar
 
 from coding_agent_playbook.adapters.base import Adapter
@@ -58,7 +57,7 @@ from coding_agent_playbook.agent_harness.hook_sidecars import (
 from coding_agent_playbook.generated_output.file_identity import FileSet
 from coding_agent_playbook.generated_output.output_io import write_output_text
 from coding_agent_playbook.generated_output.repo_name import repo_dir_name
-from coding_agent_playbook.rendering.formats import render_inline_prompt_markdown
+from coding_agent_playbook.rendering.prompt_skill import prompt_skill_body
 from coding_agent_playbook.skills.naming import skill_id_of
 
 if TYPE_CHECKING:
@@ -226,22 +225,14 @@ class AgentHarnessAdapter(Adapter):
         return written
 
     def _prompt_body(self, prompt: Prompt) -> str:
-        """Build a prompt-leaf body: the titled body, its rules inline, an input-variable note.
+        """Build a prompt-leaf body (``rendering.prompt_skill.prompt_skill_body``).
 
-        ``includes_rules:`` is inlined through the rule registry as the
-        ``## Reference rules`` appendix (``render_inline_prompt_markdown``): pure
-        markdown with no sentinel and no ``disallowed-tools`` block, since the
-        leaf's own ``SKILL.md`` envelope carries both. Input variables are noted
-        so the agent knows what to substitute.
+        Its rules are inlined through the rule registry as the ``## Reference
+        rules`` appendix: pure markdown with no sentinel and no
+        ``disallowed-tools`` block, since the leaf's own ``SKILL.md`` envelope
+        carries both. The shared-skills adapter renders ``review-core`` the same way.
         """
-        rendered = render_inline_prompt_markdown(
-            prompt.body, dataclasses.asdict(prompt.frontmatter), self._rule_registry
-        )
-
-        note = emitter.input_variables_note(prompt.frontmatter.input_variables)
-        if note:
-            return f"{rendered.rstrip(chr(10))}\n\n{note}"
-        return rendered
+        return prompt_skill_body(prompt, self._rule_registry)
 
     # --- rules -------------------------------------------------------------
 
