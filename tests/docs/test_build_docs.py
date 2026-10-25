@@ -112,9 +112,18 @@ def test_the_repo_layout_points_at_the_sphinx_sources() -> None:
     assert layout.html_dir == REPO_ROOT / "docs" / "_build" / "html"
 
 
-def test_the_docs_workflow_builds_through_the_script() -> None:
-    # One build command: CI must not drift from what contributors run.
-    workflow = (REPO_ROOT / ".github" / "workflows" / "docs.yml").read_text(encoding="utf-8")
+@pytest.mark.parametrize("ci_file", [".github/workflows/docs.yml", ".gitlab-ci.yml"])
+def test_github_and_gitlab_ci_build_through_the_script(ci_file: str) -> None:
+    # One build command: neither CI may drift from what contributors run.
+    ci = (REPO_ROOT / ci_file).read_text(encoding="utf-8")
 
-    assert "python scripts/build_docs.py" in workflow
-    assert "sphinx-build" not in workflow
+    assert "python scripts/build_docs.py" in ci
+    assert "sphinx-build" not in ci
+
+
+def test_gitlab_pages_publishes_the_built_site() -> None:
+    ci = (REPO_ROOT / ".gitlab-ci.yml").read_text(encoding="utf-8")
+
+    assert "\npages:\n" in ci
+    assert "mv docs/_build/html public" in ci
+    assert "$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH" in ci

@@ -40,5 +40,5 @@ glossary
 
 contributing
 adr/index
-Design spec <https://github.com/msobroza/coding-agent-playbook/blob/main/SPEC.md>
+design-spec
 ```

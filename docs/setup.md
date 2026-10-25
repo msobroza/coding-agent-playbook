@@ -30,16 +30,17 @@ flowchart TD
 
 The engine is the installable package that inspects your repo, renders the catalog
 and writes the files of each coding agent. Install it as a dev dependency of your
-project. If your organization ships its own rules and prompts in an overlay package,
-install that package too:
+project, from your local checkout of the engine (here next to your project). If your
+organization ships its own rules and prompts in an overlay package, install that
+package too:
 
 ```bash
-uv add --dev "coding-agent-playbook @ git+https://github.com/msobroza/coding-agent-playbook"   # the engine (generic content)
+uv add --dev --editable ../coding-agent-playbook   # the engine, from your checkout
 uv add --dev playbook-rules-<org>             # optional: your org's overlay
 ```
 
-If you install from an internal index, `uv add --dev coding-agent-playbook` works the
-same way. `pip` works too, with `pip install coding-agent-playbook`. The engine needs
+If your packages come from an internal index, `uv add --dev coding-agent-playbook`
+works the same way. `pip` works too, with `pip install -e ../coding-agent-playbook`. The engine needs
 Python 3.12 or later.
 
 > [!WARNING]

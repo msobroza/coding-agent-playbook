@@ -1,4 +1,6 @@
-{#- The repository link under the site title (conf.py html_sidebars). -#}
+{#- The repository link under the site title (conf.py html_sidebars); catalog_sphinx fills both values. -#}
+{%- if playbook_repo_url %}
 <div class="sidebar-repo-link" style="padding: 0 var(--sidebar-item-spacing-horizontal) var(--sidebar-item-spacing-vertical);">
-  <a class="reference external" href="{{ playbook_repo_url }}">Source on GitHub</a>
+  <a class="reference external" href="{{ playbook_repo_url }}">Source on {{ playbook_forge }}</a>
 </div>
+{%- endif %}

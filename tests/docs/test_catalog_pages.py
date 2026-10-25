@@ -109,3 +109,9 @@ def test_table_cells_are_flattened_to_one_line() -> None:
     page = render_pages(snapshot, source_tree_url=SAMPLE_TREE_URL)["skills/s.md"]
 
     assert "| R (`r`) | two lines |" in page
+
+
+def test_without_a_source_host_source_paths_are_shown_unlinked() -> None:
+    page = render_pages(SAMPLE_SNAPSHOT, source_tree_url="")["skills/python-testing.md"]
+
+    assert ":Source: `catalog/core/skills/python-testing`" in page

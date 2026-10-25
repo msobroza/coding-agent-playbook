@@ -1,0 +1,43 @@
+# GitLab CI for a GitLab copy of this repository; the public repository runs
+# .github/workflows/ instead. It builds the documentation site (docs/, ADR 0009)
+# with scripts/build_docs.py, the same strict build as the GitHub docs workflow:
+# merge requests only build it, and the default branch also publishes it with
+# GitLab Pages (Deploy > Pages shows the address). Source links on the site point
+# at this project, read from CI_PROJECT_URL (docs/_ext/source_host.py).
+#
+# Behind a company proxy, set these as CI/CD variables: PYTHON_IMAGE to a Python
+# 3.12 image from your registry, and PIP_INDEX_URL to your package mirror (pip
+# reads it from the environment).
+
+variables:
+  PYTHON_IMAGE: "python:3.12-slim"
+
+stages:
+  - test
+  - deploy
+
+.docs-site:
+  image: $PYTHON_IMAGE
+  script:
+    - python -m pip install -e ".[docs]"
+    - python scripts/build_docs.py
+
+# A merge request builds the site, so a broken page fails before it merges.
+docs:
+  extends: .docs-site
+  stage: test
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# GitLab Pages serves the `public` artifact of the job named `pages`.
+pages:
+  extends: .docs-site
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - !reference [.docs-site, script]
+    - mv docs/_build/html public
+  artifacts:
+    paths:
+      - public

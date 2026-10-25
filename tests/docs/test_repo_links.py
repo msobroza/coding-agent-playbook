@@ -37,3 +37,11 @@ def test_links_to_repo_files_point_at_their_site_home(
 )
 def test_other_links_are_left_for_myst(text: str) -> None:
     assert rewrite_repo_links(text, docname="checks", blob_url=_BLOB) == text
+
+
+def test_without_a_forge_a_repository_only_file_is_named_as_text() -> None:
+    text = "[Read SPEC.md](../SPEC.md#9-3)."
+
+    assert (
+        rewrite_repo_links(text, docname="design-spec", blob_url="") == "Read SPEC.md (`SPEC.md`)."
+    )

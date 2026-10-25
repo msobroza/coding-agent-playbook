@@ -493,8 +493,9 @@ commit that touches `catalog/` also runs the catalog checks (`pytest -m catalog`
 in parallel with `-n auto`. These pre-commit hooks run only a subset of the suite,
 so the four commands above stay the source of truth.
 
-The documentation site builds from `docs/` with the `docs` extra. CI's docs job runs
-the same script, and any warning fails the build. These commands build the site and
+The documentation site builds from `docs/` with the `docs` extra. CI runs the same
+script, in the GitHub docs workflow and in the `docs` and `pages` jobs of
+`.gitlab-ci.yml` on a GitLab copy, and any warning fails the build. These commands build the site and
 serve a local preview:
 
 ```bash
