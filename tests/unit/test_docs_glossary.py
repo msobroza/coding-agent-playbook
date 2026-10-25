@@ -50,6 +50,10 @@ _GLOSSARY_TERMS = (
     "Guardrail",
     "Skill nudge",
     "Eval sample",
+    "Graded set",
+    "Edition",
+    "Pin",
+    "Release metrics",
     "Always-loaded context",
     "Skill listing",
     "Context budget",
@@ -94,6 +98,23 @@ def test_context_md_defines_term(term: str) -> None:
     entry = re.compile(rf"^\*\*{re.escape(term)}\*\*:", re.MULTILINE)
     text = _CONTEXT_MD.read_text(encoding="utf-8")
     assert entry.search(text), f"CONTEXT.md has no entry starting '**{term}**:'"
+
+
+#: Terms the editions spec (#281) retired; the glossary must not define them again.
+_RETIRED_TERMS = ("Prompt set", "Twin")
+
+
+@pytest.mark.parametrize("term", _RETIRED_TERMS)
+def test_context_md_drops_retired_term(term: str) -> None:
+    entry = re.compile(rf"^\*\*{re.escape(term)}\*\*:", re.MULTILINE)
+    text = _CONTEXT_MD.read_text(encoding="utf-8")
+    assert not entry.search(text), f"CONTEXT.md still defines the retired term '**{term}**'"
+
+
+def test_context_md_consumer_repo_avoids_target_repo() -> None:
+    text = _CONTEXT_MD.read_text(encoding="utf-8")
+    entry = text[text.index("**Consumer repo**:") :].split("\n\n", 1)[0]
+    assert "_Avoid_: target repo" in entry, f"'Consumer repo' must avoid 'target repo': {entry!r}"
 
 
 def test_spec_section_6_1_documents_the_skill_field() -> None:

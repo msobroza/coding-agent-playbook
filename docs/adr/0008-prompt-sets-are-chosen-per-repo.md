@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by ADR 0012
 ---
 
 # A second prompt set that points to skills, chosen per repo

@@ -450,6 +450,22 @@ must check every file for URLs. Today the only entry is `superpowers`, whose
 upstream markdown holds bare-domain URLs in code samples. Its gate is
 `tests/plugins/test_superpowers_self_contained.py`. The link gate has no allowlist.
 
+## Editions and releases
+
+Every consumer repo renders the current text of the release it installed, so edit
+only the current text: the files under `core/` and `plugins/`. ADR 0012 records why.
+
+- `catalog/editions/` holds the frozen editions that pinned eval samples grade, and
+  `catalog/releases/` holds each release's manifest, notes and metrics. The release
+  script generates both. Never edit them by hand: CI fails when an edition differs
+  from its release tag, and the generated `catalog/editions/README.md` sends you to
+  the same path under `catalog/core/`.
+- A pull request that changes shipped rules, prompts, skills or hooks must have a
+  title of type `feat` or `fix`, or carry `!` for a breaking change, such as a
+  removed or renamed id. The release version is computed from these titles.
+- There is no per-artifact version field to bump. The engine computes a content
+  digest for each artifact instead.
+
 ## Run the gate
 
 CI runs these four commands from the repository root. Run them all before you push:
