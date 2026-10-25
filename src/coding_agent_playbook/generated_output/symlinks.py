@@ -9,18 +9,31 @@ errnos that mean the target is gone: missing, or a link loop.
 :func:`real_path` stands in for ``Path.resolve()`` on paths a user's link can
 make loop: on Python 3.12 ``resolve()`` raises ``RuntimeError`` on a symlink
 loop (3.13 does not, and CI runs both), so ``.claude/commands -> commands``
-crashed ``playbook sync`` there before any message.
+crashed ``playbook sync`` there before any message. :class:`BatchRealPaths` is
+:func:`real_path` for the many paths of one read-only batch.
 """
 
 from __future__ import annotations
 
 import errno
 import os
+import stat
 from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Final
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 #: Following the link fails because its target is missing or the links loop.
 _UNRESOLVABLE: Final = frozenset({errno.ENOENT, errno.ENOTDIR, errno.ELOOP})
+
+#: ``os.path.realpath`` walks ``/``-separated names (posixpath), which
+#: :class:`BatchRealPaths` relies on; elsewhere it only delegates.
+_POSIX_PATHS: Final = os.name == "posix"
+
+#: Last names ``realpath(parent)/name`` does not hold for: the root's ``""``, and
+#: ``..``, which steps out of the *resolved* parent (``Path`` drops ``.``).
+_NOT_PLAIN_NAMES: Final = frozenset({"", ".", ".."})
 
 
 def unresolvable_link_errno(path: Path) -> int | None:
@@ -51,6 +64,79 @@ def real_path(path: Path) -> Path:
     ``.claude/commands -> commands``.
     """
     return Path(os.path.realpath(path))
+
+
+class BatchRealPaths:
+    """:func:`real_path` for the paths of one read-only batch, each directory resolved once.
+
+    ``os.path.realpath`` lstats every component of every path, so the siblings
+    of a deep tree pay for their shared parents again and again (one sync:
+    132,662 lstat calls from 10,351 realpaths). Here every spelling resolved is
+    memoized, and a path whose parent is known costs one lstat proving its last
+    name is no symlink: its real path is then ``real(parent)/name``, the string
+    ``realpath`` builds. A symlinked last name, a ``..`` or root name, a relative
+    path, or a non-POSIX ``os.path`` falls back to ``os.path.realpath``, so
+    ``real(p) == real_path(p)`` for every ``p``, dangling links and loops included.
+
+    The memo is filesystem state: make one per batch computation that writes
+    nothing between its lookups; never keep one across a write, never module-level.
+
+    Example::
+
+        real = BatchRealPaths()
+        resolved = {real.real(path) for path in written}  # == {real_path(p) for p in written}
+    """
+
+    def __init__(self, *, lstat: Callable[[str], os.stat_result] = os.lstat) -> None:
+        self._lstat = lstat
+        self._known: dict[str, str] = {}
+
+    def real(self, path: Path) -> Path:
+        """``real_path(path)``, reusing what this batch already resolved."""
+        spelled = os.fspath(path)
+        if not (_POSIX_PATHS and spelled.startswith("/")):
+            return Path(os.path.realpath(spelled))  # relative: realpath reads the cwd
+        return Path(self._resolve(spelled))
+
+    def _resolve(self, spelled: str) -> str:
+        """The real path of absolute ``spelled``: up to a known ancestor, then down by name."""
+        pending: list[str] = []
+        current = spelled
+        while current not in self._known and _last_name(current) not in _NOT_PLAIN_NAMES:
+            pending.append(current)
+            current = current.rpartition("/")[0] or "/"
+        known = self._known.get(current)
+        if known is None:  # the root, or a ``..`` name
+            known = self._known[current] = os.path.realpath(current)
+        for child in reversed(pending):
+            known = self._known[child] = self._child(known, child)
+        return known
+
+    def _child(self, real_parent: str, spelled: str) -> str:
+        """``real_parent/name`` for ``spelled``'s last name, unless that name is a link."""
+        name = _last_name(spelled)
+        candidate = real_parent + name if real_parent.endswith("/") else f"{real_parent}/{name}"
+        if self._may_be_link(candidate):
+            return os.path.realpath(spelled)
+        return candidate
+
+    def _may_be_link(self, candidate: str) -> bool:
+        """Whether ``candidate`` is a symlink, judged as ``realpath``'s own lstat judges it.
+
+        A failed lstat (missing, ENOTDIR, ELOOP, EACCES) is no link to ``realpath``
+        either; a ``ValueError`` (an embedded NUL) proves nothing, so it falls back.
+        """
+        try:
+            return stat.S_ISLNK(self._lstat(candidate).st_mode)
+        except OSError:
+            return False
+        except ValueError:
+            return True
+
+
+def _last_name(spelled: str) -> str:
+    """The name after the last ``/`` (``""`` for the root)."""
+    return spelled.rpartition("/")[2]
 
 
 def link_leaving(directory: Path, root: Path) -> Path | None:
