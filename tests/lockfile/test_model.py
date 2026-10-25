@@ -19,6 +19,7 @@ from coding_agent_playbook.lockfile.drift import (
     parse_json_document,
 )
 from coding_agent_playbook.lockfile.model import (
+    ArtifactDigest,
     LockEntry,
     Lockfile,
     LockfileFormatError,
@@ -450,3 +451,43 @@ def test_recorded_paths_lists_each_path_once_scoped_entries_included() -> None:
 
 def test_generated_paths_is_empty_before_the_first_sync() -> None:
     assert generated_paths(None) == frozenset()
+
+
+# --- artifact digests (#281 ticket 03) -----------------------------------------
+
+
+def test_artifact_digests_and_entry_digest_roundtrip_through_toml(tmp_path: Path) -> None:
+    entry = LockEntry("a.md", "0" * 64, 1, kind="rule", artifact_id="x", digest="d" * 64)
+    record = ArtifactDigest(kind="rule", artifact_id="x", digest="d" * 64)
+    lockfile = Lockfile(2, "0.1.0", "t", entries=[entry], artifacts=[record])
+    state = FileSystemStateSource(repo_root=tmp_path)
+
+    state.save_lockfile(lockfile)
+
+    assert state.load_lockfile() == lockfile
+    assert record.key == "rule:x"
+
+
+def test_a_lockfile_without_digests_writes_neither_key(tmp_path: Path) -> None:
+    state = FileSystemStateSource(repo_root=tmp_path)
+    state.save_lockfile(Lockfile(2, "0.1.0", "t", entries=[LockEntry("a.md", "0" * 64, 1)]))
+
+    text = (tmp_path / ".coding-agent-playbook.lock").read_text(encoding="utf-8")
+
+    assert "digest" not in text
+    assert "artifacts" not in text
+
+
+@pytest.mark.parametrize(
+    ("artifacts", "message"),
+    [
+        ("oops", r"artifacts: expected list, got str 'oops'"),
+        (["oops"], r"artifacts\[0\]: expected a table, got str 'oops'"),
+        ([{"kind": "rule", "artifact_id": "x"}], r"artifacts\[0\]\.digest: missing"),
+    ],
+)
+def test_bad_artifacts_tables_name_the_key_and_value(artifacts: object, message: str) -> None:
+    data = {"schema_version": 2, "engine_version": "0", "rendered_at": "", "artifacts": artifacts}
+
+    with pytest.raises(LockfileFormatError, match=message):
+        Lockfile.from_dict(data)

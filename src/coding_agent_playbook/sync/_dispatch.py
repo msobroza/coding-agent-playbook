@@ -30,8 +30,10 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook.artifacts.identity import artifact_id_of
 from coding_agent_playbook.artifacts.member_reference import member_reference_path
+from coding_agent_playbook.catalog.digest import artifact_digest, digest_kind
 from coding_agent_playbook.generated_output.symlinks import BatchRealPaths
 from coding_agent_playbook.lockfile.model import (
+    ArtifactDigest,
     LockEntry,
     Lockfile,
     Provenance,
@@ -46,6 +48,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from coding_agent_playbook.adapters.base import Adapter
+    from coding_agent_playbook.artifacts.hook import Hook
     from coding_agent_playbook.artifacts.member_reference import MemberReference
     from coding_agent_playbook.artifacts.prompt import Prompt
     from coding_agent_playbook.artifacts.rule import Rule
@@ -70,7 +73,8 @@ class SyncResult:
     files the adapters' ``cleanup_stale`` (and a file/folder swap) deleted;
     ``managed`` holds the scoped (per-JSON-element) lock entries hook-capable
     adapters contribute (§C.1.4); ``hooks`` the hooks the render dispatched
-    (``None`` when built by hand), for write mode's pins and summary.
+    (``None`` when built by hand), for write mode's pins and summary;
+    ``artifacts`` the content digest of every dispatched artifact (#281 03).
 
     Example::
 
@@ -84,6 +88,7 @@ class SyncResult:
     provenance: Mapping[Path, Provenance]
     managed: tuple[LockEntry, ...] = ()
     hooks: SyncHooks | None = None
+    artifacts: tuple[ArtifactDigest, ...] = ()
 
 
 @dataclass
@@ -105,6 +110,8 @@ class ProvenanceRecorder:
     managed: list[LockEntry] = field(default_factory=list)
     # What the layout adapter rewrote in ``written`` (D71), for validate's report.
     layout_rewrites: list[FileRewrite] = field(default_factory=list)
+    # The digest of every dispatched artifact, sorted by (kind, id) (#281 03).
+    artifacts: list[ArtifactDigest] = field(default_factory=list)
 
     def record(self, paths: Iterable[Path], provenance: Provenance) -> None:
         """Append ``paths`` and tag each (resolved) path with ``provenance``."""
@@ -173,6 +180,9 @@ def dispatch_to_adapters(
     """
     plan = hooks if hooks is not None else HookDispatch()
     recorder = ProvenanceRecorder()
+    recorder.artifacts = artifact_records(
+        (*rules, *prompts, *_all_skills(adapters, skills, plan), *_hook_definitions(plan))
+    )
     skill_roots = native_skill_roots(adapters)
     for name, adapter in adapters.items():
         adapter.note_native_skill_roots(skill_roots)
@@ -186,6 +196,34 @@ def dispatch_to_adapters(
         _record_finalize(recorder, name, adapter, output_root)
         recorder.managed.extend(adapter.managed_lock_entries())
     return recorder
+
+
+def artifact_records(artifacts: Iterable[Rule | Prompt | Skill | Hook]) -> list[ArtifactDigest]:
+    """One :class:`ArtifactDigest` per artifact, sorted by ``(kind, id)``; a repeated id keeps the last.
+
+    Example::
+
+        artifact_records([rule])  # [ArtifactDigest("rule", "style", "5f3c...")]
+    """
+    records = {
+        (digest_kind(item), artifact_id_of(item)): artifact_digest(item) for item in artifacts
+    }
+    return [ArtifactDigest(kind, aid, digest) for (kind, aid), digest in sorted(records.items())]
+
+
+def _all_skills(
+    adapters: Mapping[str, Adapter], skills: Sequence[Skill], plan: HookDispatch
+) -> Sequence[Skill]:
+    """``skills``, plus the guardrails skill when at least one adapter writes it."""
+    extra = plan.guardrails_skill
+    if extra is None or not any(a.writes_guardrails_skill(plan.hooks) for a in adapters.values()):
+        return skills
+    return (*skills, extra)
+
+
+def _hook_definitions(plan: HookDispatch) -> list[Hook]:
+    """The merged ``Hook`` behind each dispatched hook; a hand-built one without it is skipped."""
+    return [hook.definition for hook in plan.hooks if hook.definition is not None]
 
 
 def _skills_for(adapter: Adapter, skills: Sequence[Skill], plan: HookDispatch) -> Sequence[Skill]:
@@ -308,6 +346,7 @@ def build_lockfile(
     managed: Sequence[LockEntry] = (),
     carried: Sequence[LockEntry] = (),
     shared: Collection[str] = (),
+    artifacts: Sequence[ArtifactDigest] = (),
 ) -> Lockfile:
     """Stamp a schema-2 lockfile.
 
@@ -322,19 +361,24 @@ def build_lockfile(
     no whole-file entry; the scoped entries follow. ``carried`` are the kept
     orphans (``_leftovers``): output an earlier sync wrote that is still
     engine-owned, so their old entries ride along unchanged (§B.6).
+    ``artifacts`` become the ``[[artifacts]]`` table, and each new whole-file
+    entry naming one of them (same ``kind`` and ``artifact_id``) records its
+    ``digest`` (#281 03).
 
     Example::
 
         build_lockfile(r.written, root, "0.2.0", provenance=r.provenance, carried=plan.keep)
     """
     not_whole = {entry.path for entry in managed} | set(shared)
+    digests = {(record.kind, record.artifact_id): record.digest for record in artifacts}
     entries: list[LockEntry] = []
     resolved = sorted(real_written_paths(written))
     root = repo_root.resolve() if resolved else repo_root  # once, not once per path
     for path in resolved:
         entry = _whole_file_entry(path, root, provenance.get(path))
         if entry is not None and entry.path not in not_whole:
-            entries.append(entry)
+            digest = digests.get((entry.kind, entry.artifact_id), "")
+            entries.append(dataclasses.replace(entry, digest=digest))
     entries.extend(managed)
     entries.extend(sorted(carried, key=lambda entry: entry.path))
     # RFC 3339 Zulu timestamp for the lockfile per SPEC §14.4
@@ -344,6 +388,7 @@ def build_lockfile(
         engine_version=engine_version,
         rendered_at=rendered_at,
         entries=entries,
+        artifacts=list(artifacts),
     )
 
 

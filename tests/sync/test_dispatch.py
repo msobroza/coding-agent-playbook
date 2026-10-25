@@ -20,7 +20,13 @@ import pytest
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.shared_skills import SharedSkillsAdapter
 from coding_agent_playbook.config.tables.hooks import HooksConfig
-from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, Provenance, compute_hash
+from coding_agent_playbook.lockfile.model import (
+    ArtifactDigest,
+    LockEntry,
+    Lockfile,
+    Provenance,
+    compute_hash,
+)
 from coding_agent_playbook.sync._dispatch import (
     HookDispatch,
     _skill_write_provenance,
@@ -559,3 +565,58 @@ def test_real_written_paths_leaves_a_loop_unresolved_instead_of_raising(tmp_path
     looping = [tmp_path / "self.md", tmp_path / "self.md" / "x.md"]
 
     assert real_written_paths(looping) == {Path(os.path.realpath(path)) for path in looping}
+
+
+# --- artifact digests (#281 ticket 03) -----------------------------------------
+
+
+class FakeGuardrailsAdapter(FakeRuntimeAdapter):
+    """Writes the guardrails skill when told to (``writes``), and nothing else of note."""
+
+    name = "fake_guardrails"
+
+    def __init__(self, *, writes: bool) -> None:
+        self.writes = writes
+
+    def writes_guardrails_skill(self, hooks: Sequence[ResolvedHook]) -> bool:
+        return self.writes
+
+
+@pytest.mark.parametrize("writes", [True, False])
+def test_dispatch_records_a_digest_per_artifact_and_hook(tmp_path: Path, writes: bool) -> None:
+    guardrails = sample_member_skill("playbook-guardrails")
+    recorder = dispatch_to_adapters(
+        {"fake_guardrails": FakeGuardrailsAdapter(writes=writes)},
+        [],
+        [],
+        [sample_member_skill("python-coding")],
+        tmp_path,
+        hooks=HookDispatch([resolved_hook("guard-a")], guardrails_skill=guardrails),
+    )
+
+    keys = [record.key for record in recorder.artifacts]
+    guardrails_keys = ["skill:playbook-guardrails"] if writes else []
+    assert keys == ["hook:guard-a", *guardrails_keys, "skill:python-coding"]
+    assert all(len(record.digest) == 64 for record in recorder.artifacts)
+
+
+def test_build_lockfile_stamps_each_entry_with_its_artifacts_digest(tmp_path: Path) -> None:
+    rule_file, composite = tmp_path / "rule.md", tmp_path / "AGENTS.md"
+    rule_file.write_bytes(b"r\n")
+    composite.write_bytes(b"c\n")
+    records = [ArtifactDigest("rule", "x", "d" * 64), ArtifactDigest("rule", "always", "e" * 64)]
+
+    lockfile = build_lockfile(
+        [rule_file, composite],
+        tmp_path,
+        "0.2.0",
+        provenance={
+            rule_file.resolve(): Provenance(kind="rule", artifact_id="x"),
+            composite.resolve(): Provenance(kind="composite"),
+        },
+        artifacts=records,
+    )
+
+    by_path = {entry.path: entry.digest for entry in lockfile.entries}
+    assert by_path == {"rule.md": "d" * 64, "AGENTS.md": ""}
+    assert lockfile.artifacts == records
