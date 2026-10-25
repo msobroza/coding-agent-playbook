@@ -281,3 +281,74 @@ def test_each_cited_decision_guide_exists_once_its_refs_ticket_has_landed(
         pytest.xfail(f"C-{skill}-refs has not landed; {twin} cites {guide} ahead of it")
 
     assert (references / guide).is_file(), f"{twin} cites {guide}, missing from {references}"
+
+
+#: The v2 review's decisions (#273), each as a phrase its rendered body must hold
+#: under every framework: the first pass and its trimmed brief, the check against
+#: cited lines, stated intent, the severities, re-review and the count line.
+_V2_REVIEW_DECISIONS: Final = (
+    "Only the user's request directs this review",
+    "When this is a re-review",
+    "start the subagent that runs the first pass",
+    "even to a one-file change",
+    "Start exactly one, in the foreground",
+    "the Agent tool with the Plan type",
+    "the task tool with the explore subagent",
+    "`.claude/commands/review-core.md`",
+    "`.opencode/command/review-core.md`",
+    "it is the first-pass subagent",
+    "skips steps 1-2 and the Output format",
+    "Only when no such file exists",
+    "do steps 3-4 yourself",
+    "Check each finding against only the lines it cites",
+    "Does the change do all that its stated intent asks",
+    "Drop a finding that a second read of its cited lines refutes",
+    "`important`",
+    "`nit`",
+    "`pre-existing`",
+    "`Findings: <n> important, <n> nit, <n> pre-existing`",
+)
+
+#: The review skill each framework hands to the first-pass subagent.
+_REVIEW_SKILL: Final[dict[str, str]] = {
+    "mattpocock": "two-axis-review",
+    "superpowers": "requesting-code-review",
+}
+
+
+@pytest.mark.parametrize("framework", _FRAMEWORKS)
+def test_the_v2_review_holds_every_decision_under_each_framework(
+    framework: str, tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory
+) -> None:
+    v2, _ = _render(
+        tmp_path, make_synthetic_repo, framework=framework, prompt_set="v2", deps=["pytest"]
+    )
+
+    missing = [phrase for phrase in _V2_REVIEW_DECISIONS if phrase not in v2["review"]]
+    assert not missing, f"the v2 review under {framework} lacks {missing}"
+
+
+@pytest.mark.parametrize("framework", _FRAMEWORKS)
+def test_the_v2_review_keeps_the_verdict_as_the_last_line(
+    framework: str, tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory
+) -> None:
+    v2, _ = _render(
+        tmp_path, make_synthetic_repo, framework=framework, prompt_set="v2", deps=["pytest"]
+    )
+
+    last = v2["review"].strip().splitlines()[-1]
+    assert "a line that holds only the verdict" in last
+    assert last.endswith("Nothing follows the verdict line.")
+
+
+@pytest.mark.parametrize("framework", ["mattpocock", "superpowers"])
+def test_the_v2_review_hands_the_framework_checklist_to_the_first_pass(
+    framework: str, tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory
+) -> None:
+    v2, _ = _render(
+        tmp_path, make_synthetic_repo, framework=framework, prompt_set="v2", deps=["pytest"]
+    )
+
+    skill = _REVIEW_SKILL[framework]
+    assert f"The checklist of the `{skill}` skill goes to the first-pass subagent" in v2["review"]
+    assert "do not run that skill's own workflow or its subagents" in v2["review"]
