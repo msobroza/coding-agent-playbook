@@ -19,7 +19,7 @@ from coding_agent_playbook.config.schema import ConfigError, check_layout_table
 _BASE: dict[str, Any] = {
     "schema_version": 1,
     "project": {"name": "x", "kind": "python-library"},
-    "engine": {"version": "0.1.0"},
+    "engine": {"version": "9.9.9"},
 }
 
 

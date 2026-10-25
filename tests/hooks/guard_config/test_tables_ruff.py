@@ -82,7 +82,7 @@ def test_guard_config_ruff_tables_machine_independent(tmp_path: Path) -> None:
         deps = SyncHookDeps(
             pins=pins, which=lambda _: None, proc=FakeRuff(rules=rules), rule_cache=lambda _: None
         )
-        write_pins(tmp_path, deps, engine_version="0.2.0", ruff_codes=["B006", "UP045"])
+        write_pins(tmp_path, deps, engine_version="9.9.9", ruff_codes=["B006", "UP045"])
         configs.append(compile_guard_config(request_for(tmp_path)).data)
         drops.append(pins.drops)
 

@@ -162,7 +162,7 @@ def test_write_pins_prefers_the_project_venv_ruff(tmp_path: Path) -> None:
     pins = FakePinWriter()
     deps = SyncHookDeps(pins=pins, which={"ruff": "/usr/bin/ruff", "cz": "/usr/bin/cz"}.get)
 
-    write_pins(tmp_path, deps, engine_version="0.2.0")
+    write_pins(tmp_path, deps, engine_version="9.9.9")
 
     assert pins.tools == {"ruff": [str(venv_ruff)], "cz": ["/usr/bin/cz"]}
     assert pins.drops == {}  # no hook asked for extra codes: ruff was never spawned

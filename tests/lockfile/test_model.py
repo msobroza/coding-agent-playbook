@@ -133,7 +133,7 @@ def test_v2_roundtrip_all_fields(tmp_path: Path) -> None:
     """Every v2 field survives to_dict -> TOML on disk -> tomllib -> from_dict."""
     original = Lockfile(
         schema_version=2,
-        engine_version="0.2.0",
+        engine_version="9.9.9",
         rendered_at="2026-10-14T10:00:00Z",
         entries=[
             LockEntry(
@@ -180,7 +180,7 @@ def test_default_valued_fields_omitted_from_toml(tmp_path: Path) -> None:
 
     lockfile = Lockfile(
         schema_version=2,
-        engine_version="0.2.0",
+        engine_version="9.9.9",
         rendered_at="2026-10-14T10:00:00Z",
         entries=[rule_entry, bare_entry],
     )
@@ -214,7 +214,7 @@ def test_lock_entry_from_provenance_copies_fields() -> None:
     )
 
 
-_HEADER = {"schema_version": 2, "engine_version": "0.2.0", "rendered_at": "2026-10-14T10:00:00Z"}
+_HEADER = {"schema_version": 2, "engine_version": "9.9.9", "rendered_at": "2026-10-14T10:00:00Z"}
 _ENTRY = {"path": "AGENTS.md", "sha256": "ab", "bytes": 2}
 
 
@@ -292,7 +292,7 @@ def test_scoped_entry_roundtrips_with_scope_and_omits_defaults(tmp_path: Path) -
         "adapter",
         "scope",
     ]
-    lockfile = Lockfile(2, "0.2.0", "2026-10-14T10:00:00Z", entries=[entry])
+    lockfile = Lockfile(2, "9.9.9", "2026-10-14T10:00:00Z", entries=[entry])
     state = FileSystemStateSource(repo_root=tmp_path)
     state.save_lockfile(lockfile)
 
@@ -318,7 +318,7 @@ def _whole(root: Path, rel: str, content: bytes, *, executable: bool = False) ->
 
 
 def _lock(*entries: LockEntry) -> Lockfile:
-    return Lockfile(2, "0.2.0", "2026-10-14T10:00:00Z", entries=list(entries))
+    return Lockfile(2, "9.9.9", "2026-10-14T10:00:00Z", entries=list(entries))
 
 
 def test_drift_entries_missing_and_hash_mismatch(tmp_path: Path) -> None:

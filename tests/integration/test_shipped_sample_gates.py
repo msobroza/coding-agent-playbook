@@ -380,7 +380,7 @@ names_class = { check = "answer_matches", pattern = '(?i)sql\s*injection|cwe[-\s
     + _RUBRIC_AND_VERDICT
 )
 
-_PYPROJECT = '[project]\nname = "synthetic-fixture"\nversion = "0.1.0"\ndependencies = ["pytest"]\n'
+_PYPROJECT = '[project]\nname = "synthetic-fixture"\nversion = "9.9.9"\ndependencies = ["pytest"]\n'
 _GREET = 'def greet(name: str) -> str:\n    return f"hi {name}"\n'
 _LOUD = _GREET + "\n\ndef greet_loudly(name: str) -> str:\n    return greet(name).upper()\n"
 _DB = (

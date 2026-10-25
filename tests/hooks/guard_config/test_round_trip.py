@@ -76,7 +76,7 @@ def compiled_repo(tmp_path: Path, make_package: Callable[..., str]) -> CompiledR
         ),
         hooks_config=HooksConfig(enabled=True, auto_sync=True),
         guardrails=GuardrailsConfig(),
-        engine_version="0.2.0",
+        engine_version="9.9.9",
         protected=ProtectInputs(
             rows_of(("AGENTS.md", "composite", "", ""), (".claude/rules/x.md", "rule", "tdd", "p")),
             (),
@@ -147,7 +147,7 @@ def test_written_schema_version_is_supported_by_the_runtime(tmp_path: Path) -> N
         hooks=(),
         hooks_config=HooksConfig(enabled=True),
         guardrails=GuardrailsConfig(),
-        engine_version="0.2.0",
+        engine_version="9.9.9",
     )
 
     version = compile_guard_config(request).document["schema_version"]

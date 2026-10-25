@@ -55,14 +55,14 @@ def test_envelope_and_k3_tables_present(repo: Path, tmp_path: Path) -> None:
             state_ttl_days=3,
         ),
         guardrails=GuardrailsConfig(secrets=extra),
-        engine_version="0.2.0",
+        engine_version="9.9.9",
         generated=(".continue/rules/", "AGENTS.md"),
     )
 
     cfg = compiled_document(request)
 
     assert cfg["schema_version"] == 1
-    assert cfg["engine_version"] == "0.2.0"
+    assert cfg["engine_version"] == "9.9.9"
     assert cfg["unattended_ask"] == "warn"
     assert cfg["logging"] == {"decisions": False, "audit": False, "audit_mode": ""}
     assert cfg["shell"]["wrapper_prefixes"] == ["proxy"]

@@ -271,7 +271,7 @@ def test_input_variables_and_facts_reach_the_template(tmp_path: Path) -> None:
     sample = _synthetic_sample(
         tmp_path,
         "{{ project_name }}|{{ project_kind }}|{{ target }}|{{ has_ml_dep('torch') }}\n",
-        pyproject='[project]\nname = "demo-fixture"\nversion = "0.1.0"\n',
+        pyproject='[project]\nname = "demo-fixture"\nversion = "9.9.9"\n',
         setup=SampleSetup(project_kind="ml-research", extra_facts={"ml_stack": ["torch"]}),
     )
     sample.invocation.input_variables["target"] = "src/x.py::f"
@@ -326,7 +326,7 @@ def test_input_variables_win_over_facts_and_project_metadata(tmp_path: Path) -> 
     sample = _synthetic_sample(
         tmp_path,
         "{{ project_name }}|{{ project_kind }}\n",
-        pyproject='[project]\nname = "from-pyproject"\nversion = "0.1.0"\n',
+        pyproject='[project]\nname = "from-pyproject"\nversion = "9.9.9"\n',
         setup=SampleSetup(project_kind="ml-research"),
     )
     sample.invocation.input_variables.update(project_name="from-invocation", project_kind="cli")

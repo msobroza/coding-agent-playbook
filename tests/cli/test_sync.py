@@ -346,7 +346,7 @@ def test_build_lockfile_scoped_entries_replace_whole_file_entry(tmp_path: Path) 
     lockfile = _sync_lockfile.build_lockfile(
         [settings, agents],
         tmp_path,
-        "0.2.0",
+        "9.9.9",
         provenance={agents.resolve(): composite, settings.resolve(): composite},
         managed=(scoped,),
     )
@@ -377,7 +377,7 @@ def test_build_lockfile_appends_carried_orphans_unchanged(tmp_path: Path) -> Non
         adapter="claude_code",
     )
     lockfile = _sync_lockfile.build_lockfile(
-        [agents], tmp_path, "0.2.0", provenance={}, carried=(carried,)
+        [agents], tmp_path, "9.9.9", provenance={}, carried=(carried,)
     )
     assert lockfile.entries[0].path == "AGENTS.md"
     assert lockfile.entries[0].kind == ""  # no recorded origin: v1 unknown provenance
