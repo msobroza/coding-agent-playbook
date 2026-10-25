@@ -13,6 +13,7 @@ import datetime as dt
 import enum
 import itertools
 import random
+import re
 import string
 import sys
 import tomllib
@@ -211,6 +212,16 @@ def test_format_scalar_str_delegates_to_format_string() -> None:
     assert _toml.format_scalar('weird "x"\twith\nctrl\x00') == _toml.format_string(
         'weird "x"\twith\nctrl\x00'
     )
+
+
+@pytest.mark.parametrize(
+    ("char", "escape"),
+    [("\x00", "\\u0000"), ("\x0b", "\\u000B"), ("\x1b", "\\u001B"), ("\x7f", "\\u007F")],
+)
+def test_unicode_escape_is_four_uppercase_hex_digits(char: str, escape: str) -> None:
+    match = re.fullmatch(".", char, re.DOTALL)
+    assert match is not None
+    assert _toml._unicode_escape(match) == escape
 
 
 # --- string escaping: characterization against the per-character loop --------
