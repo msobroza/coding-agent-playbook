@@ -12,7 +12,6 @@ from coding_agent_playbook.agent_harness.emitter import (
     frontmatter_block,
     harness_md_text,
     harnessleaf_path,
-    input_variables_note,
     inside_skill_dir,
     leaf_detectors_file,
     routing_file,
@@ -21,6 +20,7 @@ from coding_agent_playbook.agent_harness.leaf_detectors import HARNESS_LEAF_MARK
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.generated_output.sentinel import SENTINEL
 from coding_agent_playbook.rendering.formats import with_sentinel_body
+from coding_agent_playbook.rendering.prompt_skill import input_variables_note
 
 if TYPE_CHECKING:
     from pathlib import Path

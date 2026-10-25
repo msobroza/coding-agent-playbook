@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.adapters.shared_skills import REVIEW_SKILL_ID
 from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.lockfile.model import compute_hash
@@ -332,7 +333,9 @@ def _rename_skill_id_case_and_sync(
 
     for root in NATIVE_SKILL_ROOTS:
         entries = [entry.name for entry in (repo / root).iterdir()]
-        assert [name for name in entries if name not in core_skill_ids()] == ["demo"], root
+        # The shared root also holds the review prompt as a skill, for Codex (#274).
+        generated = core_skill_ids() | {REVIEW_SKILL_ID}
+        assert [name for name in entries if name not in generated] == ["demo"], root
         assert (repo / root / "demo" / "scripts" / "run.py").is_file(), root
         assert (repo / root / "demo" / "SKILL.md").read_text().startswith("---\nname: demo\n")
     assert not any("/Demo/" in path for path in lock_entry_paths(repo))

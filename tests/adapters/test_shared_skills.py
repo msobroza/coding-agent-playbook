@@ -2,7 +2,8 @@
 
 The adapter writes the shared skill root ``.agents/skills/`` and declares the
 pre-v0.21 root ``shared_skills/`` as a retired output location
-(specs/prS-skills-context.md section 5.4.1).
+(specs/prS-skills-context.md section 5.4.1). Of the prompts it writes only the
+review prompt, as the ``review-core`` skill Codex reads (#274).
 """
 
 from __future__ import annotations
@@ -17,9 +18,13 @@ from coding_agent_playbook.adapters.claude_code.adapter import ClaudeCodeAdapter
 from coding_agent_playbook.adapters.opencode import OpenCodeAdapter
 from coding_agent_playbook.adapters.registry import discover_adapters, installed_output_locations
 from coding_agent_playbook.adapters.shared_skills import (
+    REVIEW_PROMPT_ID,
+    REVIEW_SKILL_ID,
     SHARED_SKILLS_ROOT,
     SharedSkillsAdapter,
 )
+from coding_agent_playbook.agent_harness.adapter import AgentHarnessAdapter
+from coding_agent_playbook.artifacts.frontmatter import split_frontmatter
 from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
 from coding_agent_playbook.artifacts.rule import Rule, RuleFrontmatter
 from coding_agent_playbook.artifacts.skill import Skill
@@ -52,11 +57,21 @@ def _make_rule() -> Rule:
     )
 
 
-def _make_prompt() -> Prompt:
+def _make_prompt(
+    prompt_id: str = "p", *, slash: str = "p", includes_rules: list[str] | None = None
+) -> Prompt:
+    body = "Review the diff.\n\n## Output format\n\nEnd with the verdict.\n"
     return Prompt(
-        frontmatter=PromptFrontmatter(id="p", name="P", description="d", slash="p"),
-        body="Body\n",
-        template_body="Body\n",
+        frontmatter=PromptFrontmatter(
+            id=prompt_id,
+            name="Review",
+            description="Review the provided code or diff.",
+            slash=slash,
+            includes_rules=list(includes_rules or []),
+            input_variables=[{"name": "target", "description": "what to review"}],
+        ),
+        body=body,
+        template_body=body,
         is_templated=False,
         source_path=None,
         source_package="test",
@@ -166,12 +181,64 @@ def test_shared_skills_entry_point_is_registered() -> None:
     assert ep.load() is SharedSkillsAdapter
 
 
-def test_write_rule_and_prompt_are_noops(tmp_path: Path) -> None:
+def test_write_rule_and_every_prompt_but_review_are_noops(tmp_path: Path) -> None:
+    """#274: only the review prompt reaches this root; a prompt with its slash but not its id does not."""
     adapter = SharedSkillsAdapter()
     assert adapter.write_rule(_make_rule(), tmp_path) == []
     assert adapter.write_prompt(_make_prompt(), tmp_path) == []
+    assert adapter.write_prompt(_make_prompt("tidy", slash=REVIEW_SKILL_ID), tmp_path) == []
     assert adapter.finalize(tmp_path) == []
     assert list(tmp_path.iterdir()) == []
+
+
+_REVIEW_REGISTRY = FakeRuleRegistry({"python-typing": "### Typing\n\nAnnotate every function.\n"})
+
+
+def _write_review(tmp_path: Path) -> list[Path]:
+    review = _make_prompt(REVIEW_PROMPT_ID, slash="review-core", includes_rules=["python-typing"])
+    return SharedSkillsAdapter(rule_registry=_REVIEW_REGISTRY).write_prompt(review, tmp_path)
+
+
+def test_write_prompt_writes_the_review_prompt_as_the_review_core_skill(tmp_path: Path) -> None:
+    """#274: Codex gets the review as ``$review-core``: a skill, not a command, rules inlined."""
+    written = _write_review(tmp_path)
+
+    skill_md = tmp_path / ".agents" / "skills" / "review-core" / "SKILL.md"
+    assert written == [skill_md]
+    frontmatter, body = split_frontmatter(skill_md.read_text(encoding="utf-8"))
+    assert frontmatter == {
+        "name": "review-core",
+        "id": "review-core",
+        "description": "Review the provided code or diff.",
+    }
+    assert body.startswith(f"<!-- {SENTINEL} -->\n\n# Review\n")
+    assert "## Reference rules" in body
+    assert "Annotate every function." in body
+    assert "## Input variables" in body
+    assert "## Before you start" not in body
+
+
+def test_review_core_body_is_the_agent_harness_prompt_leaf_body(tmp_path: Path) -> None:
+    """The prompt-as-skill pattern is shared: only the frontmatter differs from the harness leaf."""
+    [skill_md] = _write_review(tmp_path / "shared")
+    harness = AgentHarnessAdapter(rule_registry=_REVIEW_REGISTRY)
+    review = _make_prompt(REVIEW_PROMPT_ID, slash="review-core", includes_rules=["python-typing"])
+    harness.write_prompt(review, tmp_path / "harness")
+    harness.finalize(tmp_path / "harness")
+    leaf = tmp_path / "harness" / "prompts" / "review-core" / "SKILL.md"
+
+    shared_body = split_frontmatter(skill_md.read_text(encoding="utf-8"))[1]
+    assert shared_body == split_frontmatter(leaf.read_text(encoding="utf-8"))[1]
+
+
+def test_write_prompt_never_overwrites_a_hand_written_review_core(tmp_path: Path) -> None:
+    """The skill goes through the ``SkillWriter``, so a user's own ``review-core`` dir wins."""
+    user_md = tmp_path / ".agents" / "skills" / "review-core" / "SKILL.md"
+    user_md.parent.mkdir(parents=True)
+    user_md.write_text("---\nname: review-core\ndescription: mine\n---\nmine\n", encoding="utf-8")
+
+    assert _write_review(tmp_path) == []
+    assert user_md.read_text(encoding="utf-8").endswith("mine\n")
 
 
 def test_write_skill_writes_agents_skills_dir(tmp_path: Path) -> None:
@@ -213,9 +280,8 @@ def test_cleanup_stale_never_deletes_skill_files(tmp_path: Path) -> None:
     assert user_md.is_file()
 
 
-def test_discover_adapters_builds_shared_skills_without_rule_registry() -> None:
-    """``discover_adapters`` passes ``rule_registry``; the adapter takes none,
-    so its no-arg fallback constructs it (like ``agents_md``)."""
+def test_discover_adapters_hands_shared_skills_the_rule_registry() -> None:
+    """#274: the registry inlines the ``review-core`` skill's rules, so the adapter takes it."""
 
     config = Config(
         schema_version=1,
@@ -223,6 +289,8 @@ def test_discover_adapters_builds_shared_skills_without_rule_registry() -> None:
         engine_version="0.1.0a0",
         adapters_enabled=["shared_skills"],
     )
-    adapters = discover_adapters(config, rule_registry=FakeRuleRegistry())
+    registry = FakeRuleRegistry()
+    adapters = discover_adapters(config, rule_registry=registry)
     assert isinstance(adapters["shared_skills"], SharedSkillsAdapter)
+    assert adapters["shared_skills"]._rule_registry is registry
     assert set(adapters) == {"shared_skills", "agents_md"}
