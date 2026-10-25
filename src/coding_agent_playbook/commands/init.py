@@ -12,6 +12,7 @@ questions go through an injected ``ask`` (CP-3, specs/prT-package-layout.md AC.5
 
 from __future__ import annotations
 
+import dataclasses
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,6 +33,7 @@ from coding_agent_playbook.commands._init_overlays import (
     warn_deprecated_flag_overlays,
 )
 from coding_agent_playbook.config.files import CONFIG_FILENAME, CONFIG_LOCAL_FILENAME, ConfigFiles
+from coding_agent_playbook.generated_output.repo_name import canonical_root
 from coding_agent_playbook.precommit import write_pre_commit
 from coding_agent_playbook.sync import pipeline as _sync
 
@@ -188,7 +190,10 @@ def run(args: argparse.Namespace, *, ask: Ask = console_ask) -> int:
         >>> run(argparse.Namespace(non_interactive=True, name="r", kind="notebook"))  # doctest: +SKIP
         0
     """
-    init_args = InitArgs.from_namespace(args)
+    parsed = InitArgs.from_namespace(args)
+    # Resolved once, as sync does (#268): the answers, the config and the closing
+    # ``sync.execute`` all see the same root, never ``Path(".")``.
+    init_args = dataclasses.replace(parsed, repo_root=canonical_root(parsed.repo_root))
     repo_root = init_args.repo_root
     answers = collect_answers(init_args, ask)
     answers["overlays"], deprecated_flags = canonical_overlay_list(answers["overlays"])
