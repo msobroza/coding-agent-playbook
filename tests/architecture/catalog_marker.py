@@ -1,6 +1,6 @@
 """Which test modules depend on skill content, and whether each one carries the ``catalog`` marker.
 
-ADR 0009: a pull request that changes only skill content runs ``pytest -m catalog``
+ADR 0010: a pull request that changes only skill content runs ``pytest -m catalog``
 (the skill lane), so the lane is only as sound as the marker. A test module is
 skill-dependent when it imports a skill helper, directly or through helper modules
 under ``tests/``. Such a module (unless :data:`MARKER_EXEMPTIONS` names it), and
@@ -52,7 +52,7 @@ SKILL_HELPER_NAMES: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
 #: Skill-dependent test modules that carry no marker on purpose, each with why. They
 #: read core skill ids only to adapt to whatever core ships, so a skill edit cannot
 #: change their result, and they are among the slowest sync tests: marking them
-#: would add about half again to the skill lane (ADR 0009). The full lane on every
+#: would add about half again to the skill lane (ADR 0010). The full lane on every
 #: push to main still runs them. An entry that no longer applies fails the guard.
 MARKER_EXEMPTIONS: Final[Mapping[str, str]] = MappingProxyType(
     {
@@ -69,7 +69,7 @@ _CATALOG_MARK: Final = "pytest.mark.catalog"
 _STATEMENT_NODES: Final = (ast.stmt, ast.excepthandler, ast.match_case)
 #: Test-shaped files under tests/fixtures/ are sample trees for other tests, not tests.
 _FIXTURES_DIR: Final = "fixtures"
-#: The test directories that are skill-lane paths (ADR 0009), under ``tests/``.
+#: The test directories that are skill-lane paths (ADR 0010), under ``tests/``.
 _SKILL_LANE_TEST_DIRS: Final = ("core_skills", "core_skill_pins")
 _MARKER_FIX_HINT: Final = (
     "Fix: add pytestmark = pytest.mark.catalog at module level"
@@ -435,6 +435,6 @@ def marker_report(offenders: Iterable[UnmarkedModule]) -> str:
     lines = [offender.describe() for offender in offenders]
     header = (
         f"{len(lines)} test module(s) lack the catalog marker"
-        " (ADR 0009: the skill lane runs only -m catalog):"
+        " (ADR 0010: the skill lane runs only -m catalog):"
     )
     return "\n".join([header, *lines, _MARKER_FIX_HINT])

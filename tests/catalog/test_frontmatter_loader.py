@@ -5,7 +5,7 @@ libyaml, because a sync parses hundreds of frontmatters. The C loader and the
 pure-Python ``yaml.SafeLoader`` are separate implementations, so this pins, on the
 content the engine actually ships, that the faster one changes no parsed value.
 Without libyaml both sides are ``yaml.SafeLoader`` and the check holds trivially.
-It is a ``catalog`` check, so a skill edit runs it in the skill lane (ADR 0009).
+It is a ``catalog`` check, so a skill edit runs it in the skill lane (ADR 0010).
 """
 
 from __future__ import annotations

@@ -222,8 +222,13 @@ def _walk_skips(path: Path, repo_root: Path, *, home: str) -> bool:
 
 
 def _has_notebooks(repo_root: Path) -> bool:
+    # Walk from an absolute root: the ``~/`` secret globs match absolute paths only, so a
+    # relative ``../probe`` under ``~/.ssh/`` counted its notebooks and flipped
+    # project_kind (#268, H7). absolute(), not resolve(): links stay as typed, and the
+    # matcher normalises any ``..`` left in the path.
+    root = repo_root.absolute()
     home = user_home()
-    return any(not _walk_skips(path, repo_root, home=home) for path in repo_root.rglob("*.ipynb"))
+    return any(not _walk_skips(path, root, home=home) for path in root.rglob("*.ipynb"))
 
 
 def _has_dockerfile(repo_root: Path) -> bool:

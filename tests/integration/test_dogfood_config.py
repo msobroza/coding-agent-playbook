@@ -8,7 +8,7 @@ user's ``wrapper_prefixes``, convention and trailer rows stay in their
 untracked setup. These tests read the committed repo-root files the way
 ``test_precommit_hooks_yaml.py`` does, so a later edit that switches hooks on,
 adds a policy row, moves the version source or interpolates the PR title into
-a shell line fails here. The ``test`` job's lane wiring (ADR 0009) is pinned
+a shell line fails here. The ``test`` job's lane wiring (ADR 0010) is pinned
 here too: a skill-only pull request runs only the ``catalog`` checks, and every
 other case runs the whole suite.
 """
@@ -49,7 +49,7 @@ JOB = "playbook-ci"
 PR_TITLE_EXPR = "${{ github.event.pull_request.title }}"
 PLAYBOOK_CI_ARGV = ["playbook", "ci", "--steps", COMMIT_STEP, "--base", "origin/main"]
 TEST_JOB = "test"
-#: ``labeled`` lets the ``ci:full`` label start a run (ADR 0009); the rest are the defaults.
+#: ``labeled`` lets the ``ci:full`` label start a run (ADR 0010); the rest are the defaults.
 PR_EVENT_TYPES = frozenset({"opened", "synchronize", "reopened", "labeled"})
 LANE_STEP_ID = "lane"
 LANE_SELECTOR = "python -m tests.skill_lane"
@@ -224,7 +224,7 @@ def test_ci_pull_requests_into_main_also_run_when_labelled() -> None:
 def test_ci_test_job_fetches_the_merge_commit_and_its_first_parent() -> None:
     checkout = _checkout(_job(TEST_JOB))
 
-    # The selector diffs HEAD^1 against HEAD, the pull request's merge commit (ADR 0009).
+    # The selector diffs HEAD^1 against HEAD, the pull request's merge commit (ADR 0010).
     assert checkout.get("with", {}).get("fetch-depth") == 2, checkout
 
 

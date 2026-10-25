@@ -326,7 +326,7 @@ def configure(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--changed",
         action="store_true",
-        help="only the *.py files changed against the git: baseline, plus untracked ones",
+        help="only the .py files changed against the git: baseline, plus untracked ones",
     )
     _add_selection_flags(parser)
     _add_mode_and_output_flags(parser)

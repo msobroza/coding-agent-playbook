@@ -1,4 +1,4 @@
-"""The catalog-marker guard (ADR 0009): a test that depends on skill content runs in the skill lane.
+"""The catalog-marker guard (ADR 0010): a test that depends on skill content runs in the skill lane.
 
 The skill lane runs only ``pytest -m catalog``, so a test module that imports
 skill helpers but lacks the module-level marker would never run on the pull
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 # The guard is itself a catalog check: a skill-lane pull request must not be
-# able to drop a marker without this test running (ADR 0009).
+# able to drop a marker without this test running (ADR 0010).
 pytestmark = pytest.mark.catalog
 
 _TESTS_ROOT = REPO_ROOT / "tests"
@@ -334,7 +334,7 @@ def test_the_report_names_the_module_the_helper_the_route_and_the_fix() -> None:
     report = marker_report([direct, through, core])
 
     assert report.splitlines() == [
-        "3 test module(s) lack the catalog marker (ADR 0009: the skill lane runs only -m catalog):",
+        "3 test module(s) lack the catalog marker (ADR 0010: the skill lane runs only -m catalog):",
         "- tests/cli/test_a.py: reaches tests.core_skill_pins directly",
         "- tests/cli/test_b.py: reaches tests._catalog.CORE_SKILLS_ROOT"
         " through tests._mapping -> tests._attributions",

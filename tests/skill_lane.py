@@ -1,4 +1,4 @@
-"""Pick the CI test lane for a change: the skill lane or the full lane (ADR 0009).
+"""Pick the CI test lane for a change: the skill lane or the full lane (ADR 0010).
 
 A pull request whose changed paths are all skill content runs only the
 ``catalog``-marked tests (the skill lane); every other change runs the whole
@@ -27,14 +27,14 @@ type Lane = Literal["skill", "full"]
 #: ``run_git(repo, args)`` runs ``git *args`` in ``repo``; a non-zero exit is returned, not raised.
 type GitRunner = Callable[[Path, Sequence[str]], subprocess.CompletedProcess[str]]
 
-#: The skill-content directories of ADR 0009. The trailing slash keeps a
+#: The skill-content directories of ADR 0010. The trailing slash keeps a
 #: look-alike such as ``tests/core_skills_extra/`` out of the skill lane.
 SKILL_LANE_PREFIXES: Final = (
     "catalog/core/skills/",
     "tests/core_skills/",
     "tests/core_skill_pins/",
 )
-#: The skill-content files of ADR 0009 that live outside those directories.
+#: The skill-content files of ADR 0010 that live outside those directories.
 SKILL_LANE_FILES: Final = frozenset({"catalog/core/ATTRIBUTIONS.md"})
 
 #: HEAD is GitHub's pull-request merge commit and its first parent the base
@@ -46,7 +46,7 @@ _REPO_ROOT: Final = Path(__file__).resolve().parents[1]
 
 
 def in_skill_lane(path: str) -> bool:
-    """Say whether one repo-relative changed path is skill content (ADR 0009).
+    """Say whether one repo-relative changed path is skill content (ADR 0010).
 
     A name git C-quotes (non-ASCII) starts with ``"``, so it falls to the full lane.
 
@@ -106,7 +106,7 @@ def changed_paths(repo: Path, run_git: GitRunner = run_git_subprocess) -> list[s
         completed = run_git(repo, _DIFF_ARGS)
     except (OSError, ValueError, subprocess.SubprocessError):
         # A timeout, no git binary or undecodable output: unclear, so the
-        # caller picks the full lane (ADR 0009) instead of failing the job.
+        # caller picks the full lane (ADR 0010) instead of failing the job.
         return None
     if completed.returncode != 0:
         return None
@@ -116,7 +116,7 @@ def changed_paths(repo: Path, run_git: GitRunner = run_git_subprocess) -> list[s
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m tests.skill_lane",
-        description="Print the CI test lane (skill or full) for this run (ADR 0009).",
+        description="Print the CI test lane (skill or full) for this run (ADR 0010).",
     )
     parser.add_argument("--event", required=True, help="the run's github.event_name")
     # A string, not a flag: the workflow passes its label expression's

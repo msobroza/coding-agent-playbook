@@ -1,4 +1,4 @@
-"""Tests for ``tests/skill_lane.py``: the CI lane selector (ADR 0009).
+"""Tests for ``tests/skill_lane.py``: the CI lane selector (ADR 0010).
 
 :func:`lane_for` is pure, so the path sets are table-tested. :func:`main` takes
 its git runner as a parameter, so the fail-to-full cases use :class:`FakeGit`

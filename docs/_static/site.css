@@ -1,0 +1,12 @@
+/* sphinxcontrib-mermaid draws every diagram 500px tall at full width, which
+   leaves wide flowcharts floating in empty space and blows small ones up.
+   Show each diagram at its natural size instead, shrunk only to fit. */
+pre.mermaid {
+    text-align: center;
+}
+
+pre.mermaid > svg {
+    width: auto !important;
+    height: auto !important;
+    max-width: 100% !important;
+}

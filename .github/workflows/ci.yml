@@ -8,7 +8,7 @@ name: ci
 on:
   push:
     branches: [main]
-  # labeled lets the ci:full label start a run (ADR 0009). A trigger cannot
+  # labeled lets the ci:full label start a run (ADR 0010). A trigger cannot
   # filter on the label's name, so any label starts one. The jobs do not skip
   # those runs on purpose: a skipped job reports success, so a skipped required
   # check would pass a pull request whose previous run failed.
@@ -25,7 +25,7 @@ jobs:
         python-version: ["3.12", "3.13"]
     steps:
       # The pull request's merge commit and its first parent: the lane step
-      # below diffs the two (ADR 0009).
+      # below diffs the two (ADR 0010).
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2
@@ -47,11 +47,11 @@ jobs:
       - name: mypy (strict)
         run: mypy
 
-      # ADR 0009: a pull request whose changes are all skill content takes the
+      # ADR 0010: a pull request whose changes are all skill content takes the
       # skill lane, and every other case (a push, the ci:full label, any other
       # path, a git error) the full lane. The event name and the label reach
       # the selector only through env:, never interpolated into run:.
-      - name: Pick the test lane (ADR 0009)
+      - name: Pick the test lane (ADR 0010)
         id: lane
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -65,7 +65,7 @@ jobs:
       # collection, and with load one worker ran that whole tail alone while
       # the others sat idle (92% of the tests in 10 min, the rest in 46 min).
       # The skill lane runs only the catalog checks, without coverage: the 80%
-      # floor holds for the whole suite only (ADR 0009). Any other lane value
+      # floor holds for the whole suite only (ADR 0010). Any other lane value
       # runs the full suite, the empty one a crashed selector leaves included.
       - name: pytest
         env:

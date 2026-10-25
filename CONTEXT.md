@@ -62,6 +62,10 @@ _Avoid_: prompt copy, prompt override
 An assistant lifecycle handler that runs on agent events (before a tool, after an edit, at stop) and can block, warn or feed back to the agent.
 _Avoid_: bare "hook" for the git kind; say **pre-commit hook**
 
+**Hook family**:
+One of the five purpose groups the catalog's hooks are filed under: protect, verify, feedback, safety and audit.
+_Avoid_: hook pack, hook group (a Claude Code settings matcher group), category
+
 **Guardrail**:
 The text form of a hook for a harness that cannot run it: one line in always-loaded context, with the full text in the guardrails skill.
 _Avoid_: advisory, advisory rule
@@ -123,11 +127,11 @@ _Avoid_: docs structure, folder convention
 
 **Framework**:
 The bundled plugin or overlay that supplies the spec-driven workflow skills an agent follows from idea to merge (planning, test-first work, review). A consumer repo enables at most one, chosen by name. It declares itself in a metadata file, and may map its own document paths onto the document layout there.
+_Avoid_: methodology, workflow pack
 
 **Capability**:
 A standard role a framework fills with one of its skills (clarify, spec, plan, tdd, debug, review, verify). The skill declares the role in its own frontmatter, so core content can name the role instead of a framework's skill.
 _Avoid_: hook point, extension
-_Avoid_: methodology, workflow pack
 
 **Overlay**:
 An organization's package that adds a layer on top of core.
@@ -150,6 +154,10 @@ The engine part that writes rendered content in one harness's native format and 
 
 **Layout adapter**:
 The sync step that rewrites the document layout's default path prefixes, and the prefixes a framework maps onto it, in the generated outputs to the repo's configured document layout. It writes no harness format, so it is not an Adapter.
+
+**Extension point**:
+An entry-point group through which an installed package adds engine code, such as an adapter, an artifact source, a metric or a hook handler.
+_Avoid_: plugin API, hook point
 
 **Harness**:
 A coding-agent runtime the engine writes files for, such as Claude Code, OpenCode, Codex, Continue or Cursor.

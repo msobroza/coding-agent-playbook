@@ -6,7 +6,7 @@
 # well as Python, as CI's `ruff format --check .` does, and `--force-exclude`
 # keeps pyproject's extend-exclude (the vendored superpowers markdown) in force
 # even though pre-commit passes file names explicitly. The catalog checks (the
-# `catalog` pytest marker, CI's skill lane in ADR 0009) run only when a commit
+# `catalog` pytest marker, CI's skill lane in ADR 0010) run only when a commit
 # touches catalog/, spread over the cores with pytest-xdist's `-n auto`. The
 # full test suite stays CI's job. Consumer-facing hooks are in
 # .pre-commit-hooks.yaml.
