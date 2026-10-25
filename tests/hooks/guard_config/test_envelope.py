@@ -36,6 +36,8 @@ from tests.hooks.guard_config.compile_kit import compiled_document, request_for,
 if TYPE_CHECKING:
     from pathlib import Path
 
+pytestmark = pytest.mark.catalog
+
 
 # --- the envelope and the hook records -------------------------------------------------
 

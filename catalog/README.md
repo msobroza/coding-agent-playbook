@@ -469,6 +469,17 @@ pytest-xdist, which is in the dev extra. Running in parallel does not change the
 result. To reproduce a failure seen only in CI, run pytest with
 `-n 4 --dist worksteal`.
 
+On a pull request whose changes are all skill content (`catalog/core/skills/`,
+`catalog/core/ATTRIBUTIONS.md`, `tests/core_skills/`, `tests/core_skill_pins/`),
+CI's pytest step runs only `pytest -m catalog`, without coverage. This is the
+skill lane of ADR 0010. The other steps run as usual, and the `ci:full` label
+runs the whole suite. So a test that depends on skill content must carry the
+`catalog` marker. A guard test fails when a test module that imports the skill
+helpers lacks it, unless the guard's exemption list names it with a reason. The
+skill helpers are the core skill pins, `tests/_core_skill_layout.py`,
+`tests/core_skills`, and the skill names of `tests/_catalog.py`. Every test module
+under `tests/core_skills/` or `tests/core_skill_pins/` needs the marker too.
+
 CI's `ruff format --check .` also formats the Python code blocks inside markdown,
 including the ones in this guide. The pytest suite validates the shipped content:
 
@@ -478,9 +489,9 @@ including the ones in this guide. The pytest suite validates the shipped content
 - the skill inventory that `mattpocock_skills` and `superpowers` each pin
 
 If you run `pre-commit install`, every commit formats markdown the way CI does. A
-commit that touches `catalog/` also runs the catalog checks (`pytest -m catalog`).
-These pre-commit hooks run only a subset of the suite, so the four commands above
-stay the source of truth.
+commit that touches `catalog/` also runs the catalog checks (`pytest -m catalog`),
+in parallel with `-n auto`. These pre-commit hooks run only a subset of the suite,
+so the four commands above stay the source of truth.
 
 The documentation site builds from `docs/` with the `docs` extra. CI's docs job runs
 the same script, and any warning fails the build. These commands build the site and

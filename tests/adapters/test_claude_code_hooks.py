@@ -62,6 +62,8 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hooks.resolution.resolved import ResolvedHook
 
+pytestmark = pytest.mark.catalog
+
 _ON = HooksConfig(enabled=True)
 _BRIEFING = "session-start-playbook-briefing"
 _CLAUDE_MD = ".claude/CLAUDE.md"

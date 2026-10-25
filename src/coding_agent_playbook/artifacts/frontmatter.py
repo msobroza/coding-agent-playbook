@@ -12,7 +12,8 @@ output while keeping ``template_body`` as the source.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+import contextlib
+from typing import TYPE_CHECKING, Any, Final
 
 import yaml
 
@@ -20,6 +21,31 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 _FENCE = "---"
+#: ``yaml.CSafeLoader`` exists only when PyYAML is built with libyaml.
+_WITH_LIBYAML: Final = yaml.__with_libyaml__
+
+
+def _load_yaml(chunk: str, *, with_libyaml: bool = _WITH_LIBYAML) -> object:
+    """Parse one frontmatter chunk with libyaml when PyYAML has it, else in pure Python.
+
+    The pure-Python SafeLoader was about 25% of a sync run (a sync parses hundreds
+    of frontmatters); CSafeLoader is about 5.8x faster and gives the same mapping
+    for every shipped frontmatter (tests/catalog/test_frontmatter_loader.py).
+    libyaml is more lenient elsewhere (it accepts some tabs SafeLoader rejects),
+    so a consumer's file can load on a libyaml build and fail without one. Its
+    errors carry no source snippet or caret, so a chunk it rejects is parsed
+    again in pure Python, whose error is raised: the same text on every build.
+    Both calls name their Loader literally, as the unsafe-deserialization guard
+    requires.
+
+    Example::
+
+        _load_yaml("id: x\\n")  # {"id": "x"}
+    """
+    if with_libyaml:
+        with contextlib.suppress(yaml.YAMLError):
+            return yaml.load(chunk, Loader=yaml.CSafeLoader)
+    return yaml.load(chunk, Loader=yaml.SafeLoader)
 
 
 def split_frontmatter(text: str) -> tuple[dict[str, Any], str]:
@@ -29,7 +55,7 @@ def split_frontmatter(text: str) -> tuple[dict[str, Any], str]:
         raise ValueError("artifact must start with a '---' frontmatter fence")
     for index in range(1, len(lines)):
         if lines[index].rstrip("\r\n") == _FENCE:
-            data = yaml.safe_load("".join(lines[1:index])) or {}
+            data = _load_yaml("".join(lines[1:index])) or {}
             if not isinstance(data, dict):
                 raise ValueError("frontmatter must be a YAML mapping")
             return data, "".join(lines[index + 1 :])

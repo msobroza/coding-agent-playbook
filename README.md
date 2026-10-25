@@ -72,8 +72,8 @@ Description, Bad Example, Good Example and Notes; "Writing a rule" in
 
 Before you push, run `ruff check .`, `ruff format --check .`, `mypy` and
 `pytest -q` inside `uv sync --extra dev`. CI runs pytest in parallel with
-`-n auto --dist worksteal` ("Run the gate" in `catalog/README.md`). PR titles
-follow Conventional Commits (`feat(catalog): ...`), which commitizen checks.
+`-n auto --dist worksteal` ("Run the gate" in `catalog/README.md`), and only the
+catalog checks on a skill-only PR ([ADR 0010](docs/adr/0010-skill-only-pull-requests-run-only-the-catalog-checks.md)). PR titles follow Conventional Commits (`feat(catalog): ...`), which commitizen checks.
 
 ## Links
 

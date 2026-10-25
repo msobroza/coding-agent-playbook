@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 
     SyntheticRepoFactory = Callable[..., Path]
 
-pytestmark = pytest.mark.usefixtures("sample_hook_handlers")
+pytestmark = [pytest.mark.usefixtures("sample_hook_handlers"), pytest.mark.catalog]
 
 
 @pytest.fixture

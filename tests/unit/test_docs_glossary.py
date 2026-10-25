@@ -25,6 +25,8 @@ from tests.unit.test_docs_lifecycle_hooks_spec import _spec_section
 from tests.unit.test_docs_readme_hooks import _blocks
 from tests.unit.test_docs_readme_hooks import _section as _readme_section
 
+pytestmark = pytest.mark.catalog
+
 _CONTEXT_MD = REPO_ROOT / "CONTEXT.md"
 
 #: The wording the docs used while core shipped no skills (before v0.21).

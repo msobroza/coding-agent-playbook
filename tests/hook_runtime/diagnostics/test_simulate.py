@@ -44,6 +44,8 @@ if TYPE_CHECKING:
     from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent
     from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext
 
+pytestmark = pytest.mark.catalog
+
 _TOOL_EVENTS = {EventName.PRE_TOOL_USE, EventName.POST_TOOL_USE, EventName.POST_TOOL_USE_FAILURE}
 
 

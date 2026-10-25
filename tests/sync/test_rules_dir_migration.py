@@ -17,6 +17,8 @@ from __future__ import annotations
 import shutil
 from typing import TYPE_CHECKING
 
+import pytest
+
 from coding_agent_playbook.config.files import FileSystemStateSource
 from coding_agent_playbook.sync import pipeline as _sync
 from tests._catalog import CORE_SKILLS_ROOT
@@ -27,9 +29,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    import pytest
-
     MakeRepo = Callable[..., Path]
+
+pytestmark = pytest.mark.catalog
 
 _SKILL_ROOTS = (".claude/skills", ".opencode/skills", ".agents/skills")
 _SKILL = "python-coding"
