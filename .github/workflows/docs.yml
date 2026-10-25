@@ -1,0 +1,61 @@
+name: docs
+
+# Builds the documentation site (docs/conf.py, ADR 0009) strictly: any warning
+# fails. Pull requests only build it; a push to main also publishes it to GitHub
+# Pages. Like ci.yml, it installs with pip and uses first-party actions only, so it
+# runs in restricted GitHub environments too. The Pages source must be set to
+# "GitHub Actions" in the repository settings before the first deploy.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # sphinx 9.2 needs Python 3.13; the `docs` extra pins the last 3.12 release.
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package and docs tools
+        run: python -m pip install -e ".[docs]"
+
+      # The same strict build contributors run (warnings are errors).
+      - name: Build the site
+        run: python scripts/build_docs.py
+
+      - name: Upload the site for Pages
+        if: github.event_name == 'push'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/_build/html
+
+  deploy:
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    # Only this job may write to Pages. One deploy runs at a time; a newer push
+    # replaces a deploy still waiting, and a running one is never cancelled.
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

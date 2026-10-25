@@ -1,10 +1,16 @@
 # Hooks
 
-The pre-commit hooks a consumer repo installs and the assistant lifecycle hooks that run inside a session. Back to the [README](../README.md).
+This page covers the two kinds of hooks the playbook uses. The first half explains
+the pre-commit hooks a consumer repo (a repository the playbook is installed into)
+installs, which run when git commits, checks out or merges. The second half explains
+the assistant lifecycle hooks, which run inside an assistant's session. See the
+[glossary](../CONTEXT.md) for the terms. Back to the [README](../README.md).
 
 ## Pre-commit integration
 
-`coding-agent-playbook` ships a `.pre-commit-hooks.yaml` so consumer repos can wire the playbook into their pre-commit pipeline directly. With the default `[output] commit = false` (generated output is gitignored):
+`coding-agent-playbook` ships a `.pre-commit-hooks.yaml` file, so a consumer repo can
+add the playbook to its pre-commit pipeline directly. The configuration below is for
+the default policy, `[output] commit = false`, where generated output is gitignored:
 
 ```yaml
 # In your repo's .pre-commit-config.yaml:
@@ -20,87 +26,154 @@ repos:
         additional_dependencies: [playbook-rules-<org>]
 ```
 
-> **Overlay users, read this.** These hooks are `language: python`, so pre-commit
-> runs them in its **own** virtualenv holding only the engine at `rev:` — not your
-> project environment. List every overlay package (and any out-of-tree adapter)
-> under `additional_dependencies` and keep `rev` on the engine version you pin.
-> Otherwise `playbook sync` refuses to run ("overlay package(s) or bundled
-> plugin(s) in overlays_enabled are not usable here", each overlay package
-> `not importable`) instead of silently re-rendering without your org's rules. The
-> simpler option: use the `repo: local` + `language: system` hooks `playbook init`
-> writes (below), which run the `playbook` from your project environment.
+> [!WARNING]
+> If you use an overlay, read this. These pre-commit hooks are `language: python`, so
+> pre-commit runs them in its own virtualenv. That virtualenv holds only the engine at
+> `rev:`, not your project environment. List every overlay package, and any
+> out-of-tree adapter, under `additional_dependencies`, and keep `rev` on the engine
+> version you pin. Otherwise `playbook sync` refuses to run instead of silently
+> re-rendering without your organization's rules. It reports "overlay package(s) or
+> bundled plugin(s) in overlays_enabled are not usable here" and marks each overlay
+> package `not importable`. The simpler option is to use the `repo: local` and
+> `language: system` hooks that `playbook init` writes (described below). They run
+> the `playbook` from your project environment.
 
-Install all three git hook types — `default_install_hook_types` makes a plain `pre-commit install` do it, or be explicit:
+Next, install all three git hook types. With `default_install_hook_types` set, a
+plain `pre-commit install` does it. You can also name them explicitly:
 
 ```bash
 pre-commit install --hook-type pre-commit --hook-type post-checkout --hook-type post-merge
 ```
 
-(Explicit `--hook-type` flags replace `default_install_hook_types`, so always name all three.) From then on every checkout and pull re-renders `.claude/`, `.opencode/`, `.agents/skills/`, `AGENTS.md` and, when enabled, `.continue/` locally with the engine and overlays already installed — after pulling a dependency bump, run `uv sync` (or your equivalent) and then `playbook sync` — and a commit that stages any of them fails with the exact `git rm -r --cached -- …` to unstage it. The new stage names need pre-commit ≥ 3.2.
+Explicit `--hook-type` flags replace `default_install_hook_types`, so always name all
+three. The new stage names need pre-commit ≥ 3.2.
 
-Repos that set `[output] commit = true` keep the **legacy** flow instead: use `- id: playbook-sync-check`, which fails a commit when the committed output drifts from what the engine would produce.
+From then on, every checkout and pull re-renders `.claude/`, `.opencode/`,
+`.agents/skills/`, `AGENTS.md` and, when enabled, `.continue/`. The render runs
+locally, with the engine and overlays already installed. After you pull a dependency
+bump, run `uv sync` (or your equivalent) and then `playbook sync`. A commit that
+stages any of these paths fails, and the error gives the exact
+`git rm -r --cached -- …` command that unstages them.
 
-`playbook init` writes a starter `.pre-commit-config.yaml` for you — an **air-gapped-friendly** config whose hooks are all `repo: local` + `language: system` (the playbook hooks for your `[output] commit` policy plus `ruff`/`ruff-format`/`mypy`), so pre-commit never clones a remote hook repo and the playbook hooks see your overlays. The flip side: those tools must already be installed in your environment, since `language: system` runs them from PATH rather than installing them. Re-running `init` on a config from before v0.16 swaps its old `playbook sync --check` hook for the two new ones (or tells you to delete it if you edited it). See SPEC.md §13.2 for the full template and the hooks deliberately left out.
+Repos that set `[output] commit = true` keep the legacy flow instead. They use
+`- id: playbook-sync-check`, which fails a commit when the committed output drifts
+from what the engine would produce.
+
+`playbook init` writes a starter `.pre-commit-config.yaml` for you. The starter suits
+air-gapped machines, because every pre-commit hook in it is `repo: local` and
+`language: system`. It holds the playbook hooks for your `[output] commit` policy,
+plus `ruff`, `ruff-format` and `mypy`. As a result, pre-commit never clones a remote
+hook repo, and the playbook hooks see your overlays. The trade-off is that those
+tools must already be installed in your environment, because `language: system`
+runs them from `PATH` instead of installing them.
+
+If you re-run `init` on a config from before v0.16, it swaps the old
+`playbook sync --check` pre-commit hook for the two new ones. If you edited that old
+hook, `init` tells you to delete it instead. See SPEC.md §13.2 for the full template
+and the pre-commit hooks deliberately left out.
 
 ### Pre-commit hooks
 
-These run at `git commit` (or checkout, merge, commit-msg), for humans and
-assistants alike. They are not the [assistant lifecycle hooks](#assistant-lifecycle-hooks),
-which run inside an assistant's session; most lifecycle guards have one of these as
-their off-workstation twin.
+The pre-commit hooks below run at `git commit`, or at checkout, merge or the
+`commit-msg` stage, for people and assistants alike. They are not the
+[assistant lifecycle hooks](#assistant-lifecycle-hooks), which run inside an
+assistant's session. Most lifecycle guards have one of these as their off-workstation
+twin, which runs the same check outside the assistant's session.
 
 | Hook ID | When it runs | What it does |
 | --- | --- | --- |
 | `playbook-sync` | `post-checkout`, `post-merge` | Runs `playbook sync` to re-render the gitignored output. Default policy (`[output] commit = false`). |
-| `playbook-no-generated-output` | Every commit | Runs `playbook sync --check-staged`; fails the commit when generated output is staged. Default policy. |
-| `playbook-sync-check` | Every commit | **Legacy** (`[output] commit = true`): runs `playbook sync --check`; fails the commit on drift. |
-| `playbook-validate` | Manual only (`pre-commit run --hook-stage manual playbook-validate`) | Runs `playbook validate`; surfaces canonical-source mistakes (typo'd `applies_if` keys, orphan eval samples, etc.). Overlay-author-facing. |
-| `playbook-metrics` | Every commit (Python files) | Runs `playbook metrics --baseline git:HEAD --no-run-tests`; fails the commit when staged Python worsens vs `HEAD`. **Static only**: `--no-run-tests` keeps your test suite out even when `[metrics] run_tests = true`. |
-| `playbook-coverage` | Manual only (`pre-commit run playbook-coverage --hook-stage manual`, or move it to `pre-push`) | **Runs your test suite** with coverage: changed lines must be at least 80% executed (`diff_coverage`) and total coverage must not drop below `HEAD`. Needs `pytest-cov` in your project. |
-| `playbook-secrets` | Every commit | Runs `playbook scan-secrets --staged`; fails when staged lines add a known token format (cloud keys, GitHub and GitLab tokens, chat and LLM API keys, PEM private keys, JWTs, URLs with inline passwords) or a credential file (`.env*`, `*.pem`, …) is staged. Output is masked. The stdlib, air-gapped stand-in for gitleaks. |
-| `playbook-commit-msg` | `commit-msg` | Runs commitizen's `cz check --commit-msg-file` against your [`[tool.commitizen]` convention](checks.md#commit-message-convention-commitizen). `language: system`: `cz` comes from your environment, and a machine without it fails loudly. |
-| `playbook-notebooks` | Every commit (notebooks) | Runs `playbook check-notebooks`; fails when a staged notebook keeps cell outputs (they may embed data rows). For ML / data-science repos. |
-| `playbook-scan-sinks` | Every commit (Python, notebooks) | Runs `playbook scan-sinks --staged`; fails when staged code adds an unsafe deserialization sink (`pickle.loads`, `torch.load(weights_only=False)`, …). For ML repos. |
-| `playbook-docs` | Every commit (documentation: `*.md`, `*.rst`, `docs/**`, `mkdocs.yml`) | Runs `playbook docs-check` on the staged docs: relative links and Python code blocks of changed Markdown, then only the docs tools your repo configures (`mkdocs build --strict`, `sphinx-build -W --keep-going`, doctests your pytest `addopts` collect, markdownlint, doc8). A configured tool that is not installed is skipped with an install hint. `[guardrails.docs] mode = "off"` (or `"warn"`) switches it. |
+| `playbook-no-generated-output` | Every commit | Runs `playbook sync --check-staged` and fails the commit when generated output is staged. Default policy. |
+| `playbook-sync-check` | Every commit | Legacy policy (`[output] commit = true`). Runs `playbook sync --check` and fails the commit on drift. |
+| `playbook-validate` | Manual only (`pre-commit run --hook-stage manual playbook-validate`) | Runs `playbook validate`, which surfaces canonical-source mistakes (typo'd `applies_if` keys, orphan eval samples, etc.). Meant for overlay authors. |
+| `playbook-metrics` | Every commit (Python files) | Runs `playbook metrics --baseline git:HEAD --no-run-tests` and fails the commit when staged Python worsens against `HEAD`. **Static only**: `--no-run-tests` keeps your test suite out, even when `[metrics] run_tests = true`. |
+| `playbook-coverage` | Manual only (`pre-commit run playbook-coverage --hook-stage manual`, or move it to `pre-push`) | **Runs your test suite** with coverage. Changed lines must be at least 80% executed (`diff_coverage`), and total coverage must not drop below `HEAD`. Needs `pytest-cov` in your project. |
+| `playbook-secrets` | Every commit | Runs `playbook scan-secrets --staged`. Fails when staged lines add a known token format (cloud keys, GitHub and GitLab tokens, chat and LLM API keys, PEM private keys, JWTs, URLs with inline passwords) or when a credential file (`.env*`, `*.pem`, …) is staged. Output is masked. It is the stdlib, air-gapped stand-in for gitleaks. |
+| `playbook-commit-msg` | `commit-msg` | Runs commitizen's `cz check --commit-msg-file` against your [`[tool.commitizen]` convention](checks.md#commit-message-convention-commitizen). It is `language: system`, so `cz` comes from your environment, and a machine without it fails loudly. |
+| `playbook-notebooks` | Every commit (notebooks) | Runs `playbook check-notebooks` and fails when a staged notebook keeps cell outputs, which may embed data rows. For ML and data-science repos. |
+| `playbook-scan-sinks` | Every commit (Python, notebooks) | Runs `playbook scan-sinks --staged` and fails when staged code adds an unsafe deserialization sink (`pickle.loads`, `torch.load(weights_only=False)`, …). For ML repos. |
+| `playbook-docs` | Every commit (documentation: `*.md`, `*.rst`, `docs/**`, `mkdocs.yml`) | Runs `playbook docs-check` on the staged docs. It checks the relative links and Python code blocks of changed Markdown, then runs only the docs tools your repo configures (`mkdocs build --strict`, `sphinx-build -W --keep-going`, doctests your pytest `addopts` collect, markdownlint, doc8). A configured tool that is not installed is skipped with an install hint. `[guardrails.docs] mode = "off"` turns it off, and `"warn"` reports without failing. |
 
-`playbook-commit-msg` needs the `commit-msg` hook type: add it to
+`playbook-commit-msg` needs the `commit-msg` git hook type. Add it to
 `default_install_hook_types` (`[pre-commit, post-checkout, post-merge, commit-msg]`),
-or append `--hook-type commit-msg` to the `pre-commit install` line above. The
-air-gapped starter `playbook init` writes carries `repo: local` twins of these:
-`coding-agent-playbook-metrics` (with `--no-run-tests`), the manual
-`coding-agent-playbook-coverage`, `coding-agent-playbook-secrets` and
-`coding-agent-playbook-docs` (`playbook docs-check`), plus, only
-when the repo opted into them, `coding-agent-playbook-commit-msg` (commitizen) and
-`coding-agent-playbook-commit-trailers` (`playbook check-commit-trailers`, the
-commit-trailer rows of `[hooks.git-commit-push-policy-guard]`), both at the
-`commit-msg` stage, which the starter then installs. Run against an existing
-`.pre-commit-config.yaml`, `init` adds only the sync hooks it lacks, so copy any
-new hook you want into yours by hand (SPEC §13.2).
+or append `--hook-type commit-msg` to the `pre-commit install` line above.
+
+The air-gapped starter that `playbook init` writes carries `repo: local` twins of
+these pre-commit hooks:
+
+- `coding-agent-playbook-metrics`, with `--no-run-tests`.
+- `coding-agent-playbook-coverage`, which is manual.
+- `coding-agent-playbook-secrets`.
+- `coding-agent-playbook-docs`, which runs `playbook docs-check`.
+
+Two more are added only when the repo opted into them. `coding-agent-playbook-commit-msg`
+runs commitizen. `coding-agent-playbook-commit-trailers` runs
+`playbook check-commit-trailers`, which applies the commit-trailer rows of
+`[hooks.git-commit-push-policy-guard]`. Both run at the `commit-msg` stage, which the
+starter then installs.
+
+When you run `init` against an existing `.pre-commit-config.yaml`, it adds only the
+sync pre-commit hooks the file lacks. Copy any new pre-commit hook you want into your
+file by hand (SPEC §13.2).
 
 ## Assistant lifecycle hooks
 
-Lifecycle hooks are the fourth canonical kind, next to rules, prompts and
-skills: a `<id>/HOOK.md` directory whose static frontmatter binds assistant
-events (`pre_tool_use`, `post_tool_use`, `stop`, `session_start`, …) to a
-handler. The engine ships a pack of them in `catalog/core/hooks/`: guards that
-protect the playbook's own outputs, verify the work before the assistant says it
-is done, feed lint back after an edit, keep secrets and destructive commands
-out, and keep a local audit trail. Claude Code and OpenCode enforce them natively; every other
-assistant reads the same guidance as text. Overlays (`<pkg>/resources/hooks/`),
-bundled plugins (`catalog/plugins/<name>/hooks/`) and `playbook/hooks/` can add
-their own (SPEC §6.6.7).
+An assistant lifecycle hook is a handler that runs on an assistant's events, such as
+before a tool call, after an edit or when the assistant stops. It can block the
+action, warn, or feed information back to the agent. Lifecycle hooks are the fourth
+canonical kind, next to rules, prompts and skills. Each hook is a `<id>/HOOK.md`
+directory whose static frontmatter binds assistant events (`pre_tool_use`,
+`post_tool_use`, `stop`, `session_start`, …) to a handler.
+
+The engine ships its own set of hooks in `catalog/core/hooks/`. They are guards,
+filed under five hook families, one per job:
+
+- Protect the playbook's own outputs.
+- Verify the work before the assistant says it is done.
+- Feed lint back after an edit.
+- Keep secrets and destructive commands out.
+- Keep a local audit trail.
+
+Claude Code and OpenCode enforce these hooks natively. Every other assistant reads
+the same guidance as text. Overlays (`<pkg>/resources/hooks/`), bundled plugins
+(`catalog/plugins/<name>/hooks/`) and `playbook/hooks/` can add their own hooks
+(SPEC §6.6.7).
+
+The diagram below follows one event from the assistant to the answer it gets back.
+The harness is Claude Code or OpenCode. The launcher is
+`.claude/hooks/playbook/launch.sh` or the OpenCode plugin.
+
+```mermaid
+sequenceDiagram
+    participant H as Harness
+    participant L as Launcher
+    participant D as playbook-hook
+    participant G as Handlers
+    H->>L: event (pre_tool_use, stop, ...)
+    L->>D: dispatch, pinned Python
+    D->>D: read guard_config.json
+    D->>G: run the hooks on for it
+    G-->>D: decisions
+    D-->>H: deny, ask, context or none
+```
+
+The launcher passes the event to the `playbook-hook` dispatcher, using the pinned
+Python interpreter. The dispatcher reads `guard_config.json`, runs the hooks that are
+on for the event, and sends the harness the result: deny, ask, context or none.
 
 ### Turning them on
 
-Hooks are **off until a repo opts in**, and an engine upgrade never turns them
-on: with no `[hooks] enabled = true`, every mode of `playbook sync` renders byte
-for byte what it rendered before (apart from the Claude Code rules' one-time
-move to `.claude/rules/coding-agent-playbook.md`, SPEC §10.3.1), and write mode
-prints one line, `hooks available: add [hooks] enabled = true or re-run playbook
-init`. `playbook init` asks `Enable assistant lifecycle hooks? [Y/n]` and writes
-your answer;
-`playbook init --no-hooks` writes `enabled = false` without asking. Or edit the
-committed config yourself:
+Hooks are off until a repo opts in, and an engine upgrade never turns them on.
+Without `[hooks] enabled = true`, every mode of `playbook sync` renders byte for byte
+what it rendered before. The one exception is the one-time move of the Claude Code
+rules to `.claude/rules/coding-agent-playbook.md` (SPEC §10.3.1). In write mode, sync
+also prints one line:
+`hooks available: add [hooks] enabled = true or re-run playbook init`.
+
+`playbook init` asks `Enable assistant lifecycle hooks? [Y/n]` and writes your
+answer. `playbook init --no-hooks` writes `enabled = false` without asking. You can
+also edit the committed config yourself. The example below shows the main keys of
+the `[hooks]` table:
 
 ```toml
 # .coding-agent-playbook.toml
@@ -116,8 +189,8 @@ stages = ["typecheck", "tests"]      # execution stages: they run your code, so 
 max_blocks = 2                       # also need a trust approval (below)
 ```
 
-Policy shared with the off-workstation twins lives in `[guardrails]`, which
-applies even with hooks off:
+Some policy is shared with the off-workstation twins of the hooks. It lives in the
+`[guardrails]` table, which applies even when hooks are off:
 
 ```toml
 [guardrails.git]
@@ -128,16 +201,20 @@ allow_paths = ["tests/fixtures/sample.env"]   # exempt paths, such as test fixtu
 extra_globs = ["~/.glab/config.yml"]          # more credential files, such as glab's GLAB_CONFIG_DIR
 ```
 
-The secret guards know GitHub and GitLab tokens, the credential files of `gh`
-and `glab`, and the GitLab Runner's `config.toml`. Two GitLab setups need one
-committed row each. When `GLAB_CONFIG_DIR` (or `XDG_CONFIG_HOME`) moves `glab`'s
-config, add that directory's `config.yml` to `extra_globs`, as above; do the
-same for a Windows runner's `config.toml`, which has no fixed path, written
-with forward slashes (`"C:/GitLab-Runner/config.toml"`). When an administrator
-replaced the `glpat-` personal access token prefix, add a pattern for the new
-prefix, starting with the prefix itself so the scan stays fast.
-secret-content-guard and stop-diff-sweep both apply it; the `playbook
-scan-secrets` and `playbook ci` scans keep the built-in rules:
+The secret guards know GitHub and GitLab tokens, the credential files of `gh` and
+`glab`, and the GitLab Runner's `config.toml`. Two GitLab setups need one committed
+row each.
+
+The first is a moved `glab` config. When `GLAB_CONFIG_DIR` or `XDG_CONFIG_HOME` moves
+`glab`'s config, add that directory's `config.yml` to `extra_globs`, as above. Do the
+same for a Windows runner's `config.toml`, which has no fixed path. Write its path
+with forward slashes, as in `"C:/GitLab-Runner/config.toml"`.
+
+The second is a replaced token prefix. When an administrator replaced the `glpat-`
+personal access token prefix, add a pattern for the new prefix. Start the pattern
+with the prefix itself, so the scan stays fast. `secret-content-guard` and
+`stop-diff-sweep` both apply it. The `playbook scan-secrets` and `playbook ci` scans
+keep the built-in rules. In this example the new prefix is `acmepat-`:
 
 ```toml
 [hooks.secret-content-guard]
@@ -146,26 +223,40 @@ extra_patterns = [
 ]
 ```
 
-Then run `playbook sync`. With hooks on it writes `guard_config.json`, the
-Claude Code registrations and launcher, and the OpenCode plugin; pins this
-worktree's Python interpreter; and prints a `✓ Hooks:` summary line counting
-the enabled and skipped hooks per adapter. `playbook check` lists every hook
-with its state per adapter: `enforced`, `degraded` (registered, with a gap),
-`advisory` (text only) or `—`, so advice is never mistaken for enforcement.
-`[hooks]`, `[guardrails]` and `[metrics]` are team policy: they are read from
-the committed file only, and `.coding-agent-playbook.local.toml` cannot set
-them (a developer deviates at run time, below).
+Then run `playbook sync`. With hooks on, sync also does three things:
 
-### The pack
+- It writes `guard_config.json`, the Claude Code registrations and launcher, and the
+  OpenCode plugin.
+- It pins this worktree's Python interpreter.
+- It prints a `✓ Hooks:` summary line that counts the enabled and skipped hooks per
+  adapter.
 
-Tiers: `default` hooks are on in any repo that enabled hooks; `opt-in` hooks
-ship off and are turned on through `tiers` or `enable`; `overlay` hooks are
-mechanisms that ship inert and that only an organization overlay activates,
-with its own data (an overlay can also make a hook `mandatory`, which
-`[hooks] disable` cannot turn off). "Enforced on" says where the hook blocks or
-answers natively; "checked on OpenCode" means OpenCode reports but cannot block
-(its Stop event is evidence-only and its session start rides an experimental
-API). Everywhere else, the hook's guidance reaches the assistant as text.
+`playbook check` lists every hook with its state for each adapter, so advice is never
+mistaken for enforcement. The state is `enforced`, `degraded` (registered, with a
+gap), `advisory` (text only), or an em dash when the hook reaches that adapter in
+neither way.
+
+`[hooks]`, `[guardrails]` and `[metrics]` are team policy. They are read from the
+committed file only, and `.coding-agent-playbook.local.toml` cannot set them. A
+developer deviates at run time instead, with the
+[kill switches and escape hatches](#kill-switches-and-escape-hatches) below.
+
+### The catalog's hooks
+
+The tables below list every hook the catalog ships, one table per hook family. Each
+hook has a tier, which decides when it is on:
+
+- `default` hooks are on in any repo that enabled hooks.
+- `opt-in` hooks ship off. You turn them on through `tiers` or `enable`.
+- `overlay` hooks are mechanisms that ship inert. Only an organization overlay
+  activates them, with its own data.
+
+An overlay can also make a hook `mandatory`, which `[hooks] disable` cannot turn off.
+
+The "Enforced on" column says where the hook blocks or answers natively. "Checked on
+OpenCode" means that OpenCode reports but cannot block, because its Stop event is
+evidence-only and its session start relies on an experimental API. On every other
+assistant, the hook's guidance reaches the assistant as text.
 
 #### Protect the playbook
 
@@ -183,9 +274,9 @@ API). Everywhere else, the hook's guidance reaches the assistant as text.
 
 #### Verify before done
 
-The Stop hooks are stages of one coordinator, `stop-ci-parity-gate`: they run
-in a fixed order, once per working tree, and a red tree gets one combined
-reason, at most `max_blocks` times per stop chain.
+Stop hooks run when the assistant is about to end its turn. They are stages of one
+coordinator, `stop-ci-parity-gate`. The stages run in a fixed order, once per working
+tree. A red tree gets one combined reason, at most `max_blocks` times per stop chain.
 
 | Hook | Tier | Enforced on | What it does |
 | --- | --- | --- | --- |
@@ -241,6 +332,10 @@ reason, at most `max_blocks` times per stop chain.
 
 ### Where hooks run
 
+Only Claude Code and OpenCode run the hooks. Every other assistant gets the same
+guidance as text, which the playbook calls a guardrail. The table shows how the hooks
+reach each assistant.
+
 | Assistant | How the hooks reach it |
 | --- | --- |
 | Claude Code | Natively, on every event: one managed matcher group per event in `.claude/settings.json`, each running `.claude/hooks/playbook/launch.sh`. Your keys, your hook groups and `.claude/settings.local.json` are never touched, and a hand-edited managed group is restored with a warning. |
@@ -251,8 +346,10 @@ reason, at most `max_blocks` times per stop chain.
 
 ### Kill switches and escape hatches
 
-They are read only from the environment of the hook process, with exact values,
-so set them where you start the assistant (`PLAYBOOK_HOOKS=off claude`):
+These environment variables let a developer switch hooks off, or relax them, at run
+time. The hook process reads them only from its own environment, and only with the
+exact values below. Set them where you start the assistant, for example
+`PLAYBOOK_HOOKS=off claude`.
 
 | Variable | Effect |
 | --- | --- |
@@ -263,24 +360,31 @@ so set them where you start the assistant (`PLAYBOOK_HOOKS=off claude`):
 | `PLAYBOOK_HOOK_WRAPPER_PREFIXES=proxy,proxy run` | Your own command launchers: the guards and the "tests pass" check judge the command after them. An entry naming a command the guards inspect (`git`, `rm`, `sudo`, `uv`, …) is ignored, and `playbook-hook doctor` warns. |
 | `PLAYBOOK_HOOK_UNATTENDED=1` | Mark a headless run: an `ask` becomes what `[hooks] unattended_ask` says. |
 
-A `VAR=1 cmd` prefix inside an assistant's shell command never counts, and a
-variable set through a settings file's `env` object is ignored and reported.
+A `VAR=1 cmd` prefix inside an assistant's shell command never counts. A variable set
+through a settings file's `env` object is ignored and reported.
 
 ### Trust
 
-The engine's own hooks run builtin handlers only. A hook that runs an external
-command or script, from an overlay or from `playbook/hooks/`, runs only when its
-source is listed in `[hooks] allow_code_from` (`"<repo-local>"` or an overlay
-package name) **and** you approved its command and script hash on this machine.
-An interactive `playbook sync` (stdin and stdout are terminals) asks `[y/N]` for
-each pending item; the answer is stored per user outside the repository, shared
-by the clone's worktrees, and any change to the command or script asks again.
-Execution Stop stages that run your code (`typecheck`, `tests`, `coverage`) are
-approved the same way. There is no non-interactive approve flag, so a scripted
-machine bootstrap needs one interactive `playbook sync` per machine. The pinned
-interpreter is not a trust approval.
+Trust decides which hook code may run on your machine. The engine's own hooks run
+built-in handlers only. A hook that runs an external command or script, from an
+overlay or from `playbook/hooks/`, runs only when two conditions hold. First, its
+source is listed in `[hooks] allow_code_from`, as `"<repo-local>"` or as an overlay
+package name. Second, you approved its command and script hash on this machine.
+
+An interactive `playbook sync`, where stdin and stdout are terminals, asks `[y/N]` for
+each pending item. The answer is stored per user, outside the repository, and is
+shared by the clone's worktrees. Any change to the command or script asks again.
+Execution Stop stages, which run your code (`typecheck`, `tests`, `coverage`), are
+approved the same way.
+
+There is no non-interactive approve flag. A scripted machine bootstrap therefore
+needs one interactive `playbook sync` per machine. The pinned interpreter is not a
+trust approval.
 
 ### Checking that they run
+
+The `playbook-hook` command has two tools for this. `doctor` reports the health of
+the hooks in this worktree, and `simulate` shows what one event would return:
 
 ```bash
 playbook-hook doctor              # pin, state dir, guard_config.json digest, trust, wrappers, OpenCode, decision-log summary
@@ -289,64 +393,77 @@ playbook-hook simulate pre_tool_use --harness claude_code < payload.json   # wha
 playbook-hook simulate pre_tool_use --env PLAYBOOK_HOOKS=off < payload.json  # try a kill switch
 ```
 
-`doctor` is read-only apart from `--repin`; it exits 0 when healthy, 1 when
-degraded and 2 when broken. `simulate` runs the exact dispatch pipeline on one
-payload (the JSON the harness would send on stdin) with a throwaway state
-directory, so your real decision log is never touched. With
-`session-start-playbook-briefing` on, Claude Code shows `PLAYBOOK-GUARDS: OK` at
-session start, and `.claude/rules/coding-agent-playbook.md` ends with a line asking
-Claude to tell you when that heartbeat is missing.
+`doctor` is read-only, apart from `--repin`. It exits 0 when healthy, 1 when degraded
+and 2 when broken.
+
+`simulate` runs the exact dispatch pipeline on one payload, the JSON the harness would
+send on stdin. It uses a throwaway state directory, so your real decision log is
+never touched.
+
+With `session-start-playbook-briefing` on, Claude Code shows `PLAYBOOK-GUARDS: OK` at
+session start. This heartbeat line proves the guards answer.
+`.claude/rules/coding-agent-playbook.md` ends with a line asking Claude to tell you
+when that heartbeat is missing.
 
 ### Caveats
 
-- **Start Claude Code at the repository root.** Claude Code reads project
-  settings only from the `.claude/` of the directory a session starts in: a
-  session started in a subdirectory loads no playbook hook, and the heartbeat
-  cannot report it either.
-- **Claude Code holds project hooks until you accept the folder's trust
-  dialog**; `-p` and SDK runs count as trusted. Anthropic-hosted cloud sessions
-  run no project hook, and `disableAllHooks` or a managed
-  `allowManagedHooksOnly` policy silently drops them.
-- **Windows** works with Git Bash, which Claude Code uses for shell-form hooks.
-  On a PowerShell-only install the hook command fails and Claude Code shows a
-  non-blocking hook error: the hooks are fail-open there.
-- **Copilot CLI** and other tools also read `.claude/settings.json`. The
-  dispatcher ignores a payload that is not Claude Code's, but Copilot CLI's
-  `preToolUse` fails closed on errors: verify a repo used with Copilot CLI
-  (Windows above all) against the real CLI before relying on its hooks.
-- **Gemini CLI:** never run `gemini hooks migrate` on playbook-managed entries.
-  Its `--from-claude` conversion copies `timeout` (seconds) into a milliseconds
-  field.
-- **OpenCode ≥ 1.18.29** is required (`playbook-hook doctor` warns below it).
-  The plugin targets OpenCode's V1 plugin API; under V2 an inert `setup()` stub
-  loads without error and logs that the hooks are inactive, and the `AGENTS.md`
-  guidance remains.
-- **Generated, not committed.** Under the default `[output] commit = false`
-  the launcher, the plugin and `guard_config.json` are local output, rendered in
-  each clone by `playbook sync`; until then a registration is inert, never
-  blocking.
+Each assistant loads and runs project hooks in its own way. These caveats tell you
+where the hooks may not run as you expect.
+
+Start Claude Code at the repository root. Claude Code reads project settings only
+from the `.claude/` of the directory a session starts in. A session started in a
+subdirectory loads no playbook hook, and the heartbeat cannot report it either.
+
+Claude Code holds project hooks until you accept the folder's trust dialog. `-p` and
+SDK runs count as trusted. Anthropic-hosted cloud sessions run no project hook. The
+`disableAllHooks` setting, or a managed `allowManagedHooksOnly` policy, silently drops
+them.
+
+On Windows, the hooks work with Git Bash, which Claude Code uses for shell-form hooks.
+On a PowerShell-only install, the hook command fails and Claude Code shows a
+non-blocking hook error. The hooks are fail-open there.
+
+Copilot CLI and other tools also read `.claude/settings.json`. The dispatcher ignores
+a payload that is not Claude Code's, but Copilot CLI's `preToolUse` fails closed on
+errors. If you use a repo with Copilot CLI, verify it against the real CLI before you
+rely on its hooks, above all on Windows.
+
+With Gemini CLI, never run `gemini hooks migrate` on playbook-managed entries. Its
+`--from-claude` conversion copies `timeout`, which is in seconds, into a milliseconds
+field.
+
+OpenCode ≥ 1.18.29 is required, and `playbook-hook doctor` warns below it. The plugin
+targets OpenCode's V1 plugin API. Under V2, an inert `setup()` stub loads without
+error and logs that the hooks are inactive, and the `AGENTS.md` guidance remains.
+
+The hook files are generated, not committed. Under the default
+`[output] commit = false`, the launcher, the plugin and `guard_config.json` are local
+output, which `playbook sync` renders in each clone. Until then, a registration is
+inert and never blocks.
 
 ### Invariants
 
-- Every hook decision is one of `deny | ask | context | none`; a hook never
-  rewrites a tool's input.
-- `dispatch` exits 0 or 10 (a decided deny); a raw 2 is never a deny, and a
-  broken install fails open instead of blocking your assistant (unless an
-  overlay opted into its strict mode).
-- An engine upgrade never adds executable hooks: an absent `[hooks]` table (or
-  one without `enabled = true`) means no hook output: no settings entries,
-  launcher, shim or advisory text.
-- `.local.toml` never carries policy: `[hooks]`, `[guardrails]` and `[metrics]`
-  there are ignored.
+The hooks always keep these promises:
+
+- Every hook decision is one of `deny | ask | context | none`. A hook never rewrites
+  a tool's input.
+- `dispatch` exits 0 or 10 (a decided deny), and a raw 2 is never a deny. A broken
+  install fails open instead of blocking your assistant, unless an overlay opted into
+  its strict mode.
+- An engine upgrade never adds executable hooks. An absent `[hooks]` table, or one
+  without `enabled = true`, means no hook output: no settings entries, launcher, shim
+  or guardrail text.
+- `.local.toml` never carries policy. `[hooks]`, `[guardrails]` and `[metrics]` there
+  are ignored.
 - No repository or overlay code runs without your user-local trust approval.
-- `settings.local.json` is never written, and user keys, hook groups and
-  permission entries in `.claude/settings.json` stay untouched.
-- Committed outputs are machine-independent; the interpreter and tool pins live
-  under the git directory.
-- No telemetry and no network: guards never connect to a host, and the decision
-  log stays local and stores no content (no commands, paths, prompts or values).
-- A Stop stage that errors, times out or finds its tool missing is reported as
-  not verified, never as green.
-- Every speed bump has an off-workstation twin, a pre-commit hook or a
-  `playbook ci` step.
-- Hooks are git-only in v1: outside a git work tree nothing is pinned.
+- `settings.local.json` is never written. User keys, hook groups and permission
+  entries in `.claude/settings.json` stay untouched.
+- Committed outputs are machine-independent. The interpreter and tool pins live under
+  the git directory.
+- No telemetry and no network. Guards never connect to a host, and the decision log
+  stays local and stores no content (no commands, paths, prompts or values).
+- A Stop stage that errors, times out or finds its tool missing is reported as not
+  verified, never as green.
+- Every speed bump, meaning a guard that runs on your own machine, has an
+  off-workstation twin: a pre-commit hook or a `playbook ci` step.
+- Hooks are git-only in v1. Outside a git work tree, nothing is pinned.

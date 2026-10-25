@@ -1,126 +1,214 @@
 # Setting up a repo
 
-Installing the engine in a consumer repo, initializing it, generating its output and choosing what applies. Back to the [README](../README.md).
+This page shows how to add the playbook to a consumer repo, that is, a repository the
+playbook is installed into. You install the engine, initialize the repo, generate its
+output and choose which content applies. The [glossary](../CONTEXT.md) defines the
+terms used here. Back to the [README](../README.md).
 
 ## Using the playbook in an external repo
 
-Add the playbook to any repo that should get generated assistant context
-(`.claude/`, `.opencode/`, `AGENTS.md`, `.agents/skills/`, and `.continue/` when
-enabled) from the
-canonical rules, prompts, and skills.
+Add the playbook to any repo whose coding agents should get context generated from
+the catalog's canonical rules, prompts and skills. The engine writes this context,
+its generated output, into `.claude/`, `.opencode/`, `AGENTS.md` and
+`.agents/skills/`. It also writes `.continue/` when you enable it.
+
+The diagram shows the whole procedure. You run the first steps once. After that, the
+git hooks re-run `playbook sync` after every checkout and pull, and you run it by
+hand when you edit `playbook/` or the config.
+
+```mermaid
+flowchart TD
+    install["Install the engine: uv add --dev"] --> init["playbook init: writes the committed config"]
+    init --> commit["Commit the config, .gitignore<br/>and .pre-commit-config.yaml"]
+    commit --> hooks["pre-commit install,<br/>with the checkout and merge hooks"]
+    hooks --> sync["playbook sync: writes the generated output"]
+    git["git checkout or pull"] -->|post-checkout and<br/>post-merge hooks| sync
+    edit["Edit playbook/ or the config"] -->|run it by hand| sync
+```
 
 ### 1. Install
 
-Install the engine as a dev dependency, plus any organization overlay packages
-that ship your team's rules and prompts:
+The engine is the installable package that inspects your repo, renders the catalog
+and writes the files of each coding agent. Install it as a dev dependency of your
+project. If your organization ships its own rules and prompts in an overlay package,
+install that package too:
 
 ```bash
 uv add --dev "coding-agent-playbook @ git+https://github.com/msobroza/coding-agent-playbook"   # the engine (generic content)
 uv add --dev playbook-rules-<org>             # optional: your org's overlay
 ```
 
-From an internal index, `uv add --dev coding-agent-playbook` works the same way;
-`pip` works too: `pip install coding-agent-playbook`. The engine needs Python
-3.12+. Install it per project, never with `uv tool install` or `pipx`: the
-hooks pin the project's interpreter.
+If you install from an internal index, `uv add --dev coding-agent-playbook` works the
+same way. `pip` works too, with `pip install coding-agent-playbook`. The engine needs
+Python 3.12 or later.
+
+> [!WARNING]
+> The hooks pin the project's interpreter, so install the engine per project. Never
+> install it with `uv tool install` or `pipx`.
 
 ### 2. Initialize
+
+Run `playbook init` once to set up the repo:
 
 ```bash
 playbook init
 ```
 
-`playbook init` detects your stack, asks whether to enable the
-[assistant lifecycle hooks](hooks.md#assistant-lifecycle-hooks) (`--no-hooks` skips
-them), then writes:
+`playbook init` first detects your stack. It then asks whether to enable the
+[assistant lifecycle hooks](hooks.md#assistant-lifecycle-hooks), handlers that run on
+agent events, for example before a tool runs or after an edit. Pass `--no-hooks` to
+skip them. Then it writes three files:
 
-- `.coding-agent-playbook.toml` — the committed project config (below),
-  including `[output] commit = false` and your `[hooks] enabled` answer;
-- `.coding-agent-playbook.local.toml` — personal per-engineer overrides
-  (gitignored automatically);
-- a merged `.pre-commit-config.yaml`;
-- and runs `playbook sync` once to generate the initial artifacts (and the
-  managed `.gitignore` block that keeps them out of git).
+- `.coding-agent-playbook.toml`, the committed project config shown in step 4 below.
+  It includes `[output] commit = false` and your answer as `[hooks] enabled`.
+- `.coding-agent-playbook.local.toml`, which holds each engineer's personal
+  overrides. It is gitignored automatically.
+- A merged `.pre-commit-config.yaml`.
 
-Without `--adapters`, `init` enables `claude_code`, `opencode` and
-`shared_skills` (`AGENTS.md` is always written). Continue is opt-in since
-v0.21: its upstream is in maintenance, and its IDE already reads `AGENTS.md`
-and `.claude/skills/`. To enable it as well:
+Last, it runs `playbook sync` once. This generates the initial output, and the
+managed block in `.gitignore` that keeps that output out of git.
+
+An adapter writes the files of one harness, a coding-agent runtime such as Claude
+Code or OpenCode, in that harness's native format. Without `--adapters`, `init`
+enables `claude_code`, `opencode` and `shared_skills`. `AGENTS.md` is always written,
+whatever adapters you enable.
+
+Continue is opt-in since v0.21. Its upstream is in maintenance, and its IDE already
+reads `AGENTS.md` and `.claude/skills/`. To enable it as well, run:
 
 ```bash
 playbook init --adapters claude_code,opencode,shared_skills,continue
 ```
 
-Codex needs no adapter: it reads `AGENTS.md` and `.agents/skills/`. GitLab Duo
-reads `AGENTS.md` too, but an agent that runs on the forge's servers (a GitLab
-Duo agent flow, a hosted coding agent) sees only what is committed: with the
-default `[output] commit = false` it finds no `AGENTS.md`, so set `commit = true`
-in repos that use one.
+Codex needs no adapter, because it reads `AGENTS.md` and `.agents/skills/`. GitLab Duo
+reads `AGENTS.md` too.
 
-Choose the spec-driven framework with `playbook init --framework superpowers | mattpocock | none` (default `none`; it writes the committed `framework` key).
+> [!NOTE]
+> An agent that runs on the forge's servers sees only what is committed. A forge is
+> the git hosting service, such as GitHub or GitLab. A GitLab Duo agent flow and a
+> hosted coding agent are two examples. With the default `[output] commit = false`
+> such an agent finds no `AGENTS.md`, so set `commit = true` in repos that use one.
 
-Choose the prompt set with the top-level key `prompts = "v1"` or `prompts = "v2"` (default `v1`). The v2 prompt set keeps the v1 names and `includes_rules` and also tells the agent which skills to load and how to check its work; switching changes only the prompt text, so the command list stays the same, and a prompt with no v2 twin in `prompts/v2/` keeps its v1 text. Eval samples keep grading v1; `playbook eval <id> --run --prompt-set v2` grades v2.
+A framework is the bundled plugin or overlay that supplies the spec-driven workflow
+skills an agent follows from idea to merge. Choose it with
+`playbook init --framework superpowers | mattpocock | none`. The default is `none`.
+The option writes the committed `framework` key.
 
-Then install the git hooks — all three hook types, so the auto-sync runs after
-checkouts and pulls:
+A prompt set is one complete version of the core prompts, the slash commands you
+invoke by name. Choose it with the top-level key `prompts = "v1"` or
+`prompts = "v2"`. The default is `v1`.
+
+The v2 prompt set keeps the v1 names and `includes_rules`. It also tells the agent
+which skills to load and how to check its work. Switching changes only the prompt
+text, so the command list stays the same. A prompt with no v2 twin, that is, no
+prompt of the same id in `prompts/v2/`, keeps its v1 text. Eval samples keep grading
+v1. To grade v2, run `playbook eval <id> --run --prompt-set v2`.
+
+Next, install the git hooks with pre-commit. Install all three hook types, so that
+the automatic sync runs after checkouts and pulls:
 
 ```bash
 pre-commit install --hook-type pre-commit --hook-type post-checkout --hook-type post-merge
 ```
 
-Commit `.coding-agent-playbook.toml`, `.pre-commit-config.yaml`, and
-`.gitignore` — **not** the generated files.
+Commit `.coding-agent-playbook.toml`, `.pre-commit-config.yaml` and `.gitignore`. Do
+**not** commit the generated files.
 
 ### 3. Generate
+
+`playbook sync` writes the generated output, and it is the command you run most:
 
 ```bash
 playbook sync     # regenerate .claude/, .opencode/, AGENTS.md, .agents/skills/ (+ .continue/)
 ```
 
-`playbook sync` is the workhorse. The generated output is **local-only**: it is
-not in the repository, so **run `playbook sync` once right after cloning** (then
-install the hooks as above). Output an earlier sync left behind — a skill you
-removed, an adapter you disabled — is deleted when untouched, and otherwise kept
-gitignored, so it can never slip into a commit. (`playbook sync --check` is for
-the legacy committed-output flow and CI there; under the default it is only
-meaningful in a working copy that has already been synced.) From then on the `post-checkout` / `post-merge`
-hook re-runs it after every checkout and pull; run it by hand whenever you
-change `playbook/` or the config. `AGENTS.md` is always generated regardless of
-which adapters are enabled (as long as at least one always rule, Where line (a skill with member
-rules and a `playbook.files` phrase, while an enabled adapter writes a skills root) or hook advisory applies). A member rule (one in a skill's `rules/`, or a scoped rule that names a skill with `skill:`) is not in it: it
-arrives in that skill's `rules/` directory, and a generated `## Where guidance lives`
-section maps file kinds to those skills (the core skills are listed under "Rules inside skills" in [skills.md](skills.md#rules-inside-skills)).
-Claude Code gets the same always-rule sections and the same map in `.claude/rules/coding-agent-playbook.md`,
-which it loads natively; the generated `.claude/CLAUDE.md` is a rule-free stub, so
-OpenCode v1 (which attaches that file when it reads under `.claude/`) never loads
-the rules twice (SPEC §10.3.1). Any other `.claude/rules/` file is yours, and
-`sync` exits 1 rather than overwrite a file of yours already named
-`coding-agent-playbook.md` there, write over a hard link at it, or write through
-a symlink on the way to it (a symlinked `.claude` or `.claude/rules`, or a link
-at the file itself); a symlinked or hard-linked `.claude/CLAUDE.md` (such as a
-link to `../AGENTS.md`) stops it the same way.
+By default the generated output is local-only. It is not in the repository, so run
+`playbook sync` once right after you clone a repo, then install the hooks as in
+step 2. From then on, the `post-checkout` and `post-merge` hooks re-run it after
+every checkout and pull. Run it by hand whenever you change `playbook/` or the
+config.
 
-What `sync` does with git, by `[output] commit` in `.coding-agent-playbook.toml`:
+Sync also handles output that an earlier sync left behind, such as the files of a
+skill you removed or of an adapter you disabled. It deletes such a file when the file
+is untouched. Otherwise it keeps the file gitignored, so it can never slip into a
+commit.
 
-- **`commit = false` (default)** — `sync` writes every generated path into a
-  managed block of `.gitignore` (between
-  `# >>> coding-agent-playbook (managed — do not edit) >>>` and
-  `# <<< coding-agent-playbook <<<`; everything outside the block is left
-  byte-for-byte alone). If git still tracks generated files — e.g. a repo
-  migrating from committed output — `sync` warns and prints the exact
-  `git rm -r --cached -- …` to run (it never touches git state itself).
-  `playbook sync --check-staged` fails when a commit stages generated output.
-- **`commit = true`** (legacy) — output is committed, `sync` removes the managed
-  block, and `playbook sync --check` fails a commit on drift.
+> [!NOTE]
+> `playbook sync --check` is for the legacy flow that commits the output, and for CI
+> in that flow. Under the default it is only meaningful in a working copy that has
+> already been synced.
+
+`AGENTS.md` holds the always rules, the rules that nearly every task needs. A member
+rule is not in it. A member rule is a rule in a skill's `rules/` directory, or a
+scoped rule that names a skill with `skill:`. It arrives in that skill's `rules/`
+directory instead, and a generated `## Where guidance lives` section maps file kinds
+to those skills. The core skills are listed under "Rules inside skills" in
+[skills.md](skills.md#rules-inside-skills).
+
+`AGENTS.md` is generated whatever adapters are enabled, as long as at least one of
+these applies:
+
+- An always rule.
+- A Where line, that is, a line of the `## Where guidance lives` map. A skill gets
+  one when it has member rules and a `playbook.files` phrase, and an enabled adapter
+  writes a skill root.
+- A guardrail, the one-line text form of a hook.
+
+Claude Code gets the same always-rule sections and the same map in
+`.claude/rules/coding-agent-playbook.md`, which it loads natively. The generated
+`.claude/CLAUDE.md` is a stub with no rules in it. OpenCode v1 attaches that file
+when it reads under `.claude/`, so the stub keeps OpenCode from loading the rules
+twice (SPEC §10.3.1).
+
+Any other file in `.claude/rules/` is yours. `sync` exits 1 rather than do any of
+the following:
+
+- Overwrite a file of yours already named `coding-agent-playbook.md` there.
+- Write over a hard link at that path.
+- Write through a symlink on the way to it, such as a symlinked `.claude` or
+  `.claude/rules`, or a link at the file itself.
+
+A symlinked or hard-linked `.claude/CLAUDE.md`, such as a link to `../AGENTS.md`,
+stops it the same way.
+
+What `sync` does with git depends on `[output] commit` in
+`.coding-agent-playbook.toml`.
+
+With `commit = false`, the default, `sync` writes every generated path into a managed
+block of `.gitignore`. Everything outside the block is left byte-for-byte alone. The
+block starts and ends with these two lines:
+
+```text
+# >>> coding-agent-playbook (managed — do not edit) >>>
+# <<< coding-agent-playbook <<<
+```
+
+Git may still track generated files, for example in a repo migrating from committed
+output. In that case `sync` warns and prints the exact `git rm -r --cached -- …`
+command to run. It never touches git state itself. `playbook sync --check-staged`
+fails when a commit stages generated output.
+
+With `commit = true`, the legacy mode, the output is committed. `sync` removes the
+managed block, and `playbook sync --check` fails a commit on drift.
 
 ### 4. Define which resources apply
 
-Three layers compose, later overriding earlier **by artifact `id`** (SPEC §11):
+The content a repo gets comes from three layers. A layer is one source of catalog
+content. When two layers hold an artifact with the same `id`, the later layer wins
+(SPEC §11). The diagram shows the order:
 
-1. **Engine generic content** — ships with `coding-agent-playbook` (kept in
-   the engine repository's `catalog/core/`).
-2. **Overlay packages** — installed org packages, enabled (and ordered) in config.
-   They're auto-discovered through Python entry points; you just list them:
+```mermaid
+flowchart TD
+    core["1. Core: the engine's catalog/core/"] --> overlays["2. Overlays and bundled plugins,<br/>in the order the config lists them"]
+    overlays --> local["3. Local layer: the repo's playbook/"]
+    local --> result["One artifact per id: the latest layer wins"]
+```
+
+1. Core, the engine's generic content, ships with `coding-agent-playbook`. It is
+   kept in the engine repository's `catalog/core/`.
+2. Overlay packages are organization packages you install. You enable them in the
+   config, in the order they apply. The engine finds them by their package name, so
+   you only list them:
 
    ```toml
    # .coding-agent-playbook.toml
@@ -144,30 +232,38 @@ Three layers compose, later overriding earlier **by artifact `id`** (SPEC §11):
    commit = false     # default: generated output is gitignored (local-only)
    ```
 
-   (`playbook init` writes this file for you, plus `[storage]` and
-   `[detector_cache]` tables; keep its `[engine]` table. Re-running
-   `playbook init`, or `playbook check --refresh` after adding a dependency,
-   rewrites it from the committed file alone: init's answers and the fresh
-   `[detector_cache]` replace their keys, every other value is kept (tables
-   the engine does not manage, such as `[hooks]`, `[links]` and `[metrics]`,
-   included), but comments and layout are not.)
+   `playbook init` writes this file for you, together with `[storage]` and
+   `[detector_cache]` tables. Keep its `[engine]` table.
+
+   Running `playbook init` again rewrites the file, and so does
+   `playbook check --refresh` after you add a dependency. Both rebuild it from the
+   committed file alone. Init's answers and the fresh `[detector_cache]` replace
+   their keys. Every other value is kept, including tables the engine does not
+   manage, such as `[hooks]`, `[links]` and `[metrics]`. Comments and layout are not
+   kept.
 
    The enabled lists are top-level keys only, so they go **above the first
-   `[table]` header**. Every command that loads the config (`sync`, `check`,
-   `validate`, `render`, `eval`, `init`) stops with an `error:` (exit 2),
-   naming the file and the exact line to write instead, before anything is
-   written, when it finds: an `[overlays]` / `[adapters]` table (or
-   `overlays.enabled = …`); an `overlays_enabled` / `adapters_enabled` key
-   written after a `[table]` header, which TOML nests in that table (say,
-   appended to the end of the file); a misspelled key such as
-   `overlay_enabled`; or a value that is not a list of non-empty strings. A
-   personal `.coding-agent-playbook.local.toml` can set `adapters_enabled` too,
-   above its `[user_choices]` header; its list replaces the committed one for
-   your checkout only — no command writes the local file into the committed
-   config.
+   `[table]` header**. TOML nests a key written after a header inside that table.
 
-3. **Repo-local `playbook/`** — drop in per-repo rules, prompts, skills, or eval
-   samples; anything here wins on `id` collision:
+   Every command that loads the config checks for the following mistakes before
+   anything is written. These commands are `sync`, `check`, `validate`, `render`,
+   `eval` and `init`. Each stops with an `error:` (exit 2) when it finds one of them:
+
+   - An `[overlays]` or `[adapters]` table, or `overlays.enabled = …`.
+   - An `overlays_enabled` or `adapters_enabled` key written after a `[table]`
+     header, for example appended to the end of the file. TOML nests it in that
+     table.
+   - A misspelled key such as `overlay_enabled`.
+   - A value that is not a list of non-empty strings.
+
+   The error names the file and the exact line to write instead.
+
+   A personal `.coding-agent-playbook.local.toml` can set `adapters_enabled` too,
+   above its `[user_choices]` header. Its list replaces the committed one for your
+   checkout only. No command writes the local file into the committed config.
+
+3. The local layer is the repo's own `playbook/` directory. Put per-repo rules,
+   prompts, skills or eval samples there. Anything in it wins on an `id` collision:
 
    ```text
    playbook/
@@ -178,11 +274,17 @@ Three layers compose, later overriding earlier **by artifact `id`** (SPEC §11):
    └── eval_samples/
    ```
 
-Not every resource renders everywhere: the detector inspects the repo and each
-artifact's `applies_if` predicate gates it (a FastAPI rule won't ship to a
-non-FastAPI repo; the ML serialization-security rule ships only to repos with an
-ML stack; the uv workflow reference ships only to repos the detector sees as uv
-projects, that is with a `uv.lock`). A skill that owns rules follows them: it is
-written only when at least one of its rules applies. Run `playbook check` to see
-the detected facts and exactly which rules/prompts are active — the fastest way
-to debug *"why isn't my rule appearing?"*
+Not every resource renders in every repo. The detector inspects the repo and
+records facts about it, such as its Python version and ML stack. Each artifact's
+`applies_if` predicate then decides whether the artifact is written. For example:
+
+- A FastAPI rule does not ship to a repo without FastAPI.
+- The ML serialization-security rule ships only to repos with an ML stack.
+- The uv workflow reference ships only to repos the detector sees as uv projects,
+  that is, repos with a `uv.lock`.
+
+A skill that owns rules follows them. It is written only when at least one of its
+rules applies.
+
+Run `playbook check` to see the detected facts and exactly which rules and prompts
+are active. It is the fastest way to find out why one of your rules does not appear.
