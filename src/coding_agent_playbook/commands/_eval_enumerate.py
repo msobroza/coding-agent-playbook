@@ -6,13 +6,15 @@ import sys
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.catalog.roots import is_bundled_layer
+from coding_agent_playbook.evals.targets import BUILTIN_TARGET
 
 if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.prompt import Prompt
     from coding_agent_playbook.evals.sample import EvalSample
 
-#: Default runner when ``--runner`` is omitted (the one thin real runner).
-_DEFAULT_RUNNER = "claude_code"
+#: Default runner when neither ``--runner`` nor an Eval target picks one: the
+#: built-in target's harness, so the two cannot drift apart.
+_DEFAULT_RUNNER = BUILTIN_TARGET.harness
 
 
 _RUN_HINT_TEMPLATE = (

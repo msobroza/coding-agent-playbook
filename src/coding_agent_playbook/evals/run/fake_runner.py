@@ -58,9 +58,12 @@ class FakeRunner(HarnessRunner):
 
     ``mutation`` is applied to the scratch tree in :meth:`_invoke_agent`;
     ``transcript`` and ``returncode`` are the canned :class:`AgentRun` fields.
+    ``model`` is only recorded (there is no model to send it to), so a
+    ``fake:<model>`` Eval target runs hermetically and its result names the model.
     """
 
     name = "fake"
+    accepts_model = True
 
     def __init__(
         self,
@@ -68,7 +71,9 @@ class FakeRunner(HarnessRunner):
         *,
         transcript: str = "[fake agent run]",
         returncode: int = 0,
+        model: str | None = None,
     ) -> None:
+        self.model = model
         self._mutation = mutation
         self._transcript = transcript
         self._returncode = returncode

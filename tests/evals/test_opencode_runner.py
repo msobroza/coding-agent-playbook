@@ -252,3 +252,30 @@ def test_real_opencode_smoke(tmp_path: Path) -> None:  # pragma: no cover - opt-
     runner = OpenCodeRunner()
     run = runner._invoke_agent("create a file named DONE.txt", baseline.repo_root)
     assert isinstance(run.transcript, str)
+
+
+# --------------------------------------------------------------------------- #
+# Eval target model (spec #281 ticket 05)
+# --------------------------------------------------------------------------- #
+
+
+def test_target_model_reaches_the_cli_unchanged(tmp_path: Path) -> None:
+    """A target's model is passed as ``--model <model>``, exactly as written."""
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    echo_argv = "import sys; sys.stdout.write(repr(sys.argv[1:]))"
+    runner = OpenCodeRunner(command=[sys.executable, "-c", echo_argv, "{prompt}"], model="org/m:v1")
+
+    run = runner._invoke_agent("PROMPT", scratch)
+
+    assert run.transcript == repr(["PROMPT", "--model", "org/m:v1"])
+    assert runner.model == "org/m:v1"
+
+
+def test_default_command_with_a_model_adds_the_model_flag() -> None:
+    runner = OpenCodeRunner(model="claude-opus-5-5")
+    assert runner._build_command("p") == ["opencode", "run", "p", "--model", "claude-opus-5-5"]
+
+
+def test_no_model_leaves_the_cli_on_its_default_model() -> None:
+    assert "--model" not in OpenCodeRunner()._build_command("p")
