@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook.artifacts.identity import artifact_id_of
 from coding_agent_playbook.artifacts.member_reference import member_reference_path
+from coding_agent_playbook.generated_output.symlinks import BatchRealPaths
 from coding_agent_playbook.lockfile.model import (
     LockEntry,
     Lockfile,
@@ -328,8 +329,10 @@ def build_lockfile(
     """
     not_whole = {entry.path for entry in managed} | set(shared)
     entries: list[LockEntry] = []
-    for path in sorted({p.resolve() for p in written}):
-        entry = _whole_file_entry(path, repo_root, provenance.get(path))
+    resolved = sorted(real_written_paths(written))
+    root = repo_root.resolve() if resolved else repo_root  # once, not once per path
+    for path in resolved:
+        entry = _whole_file_entry(path, root, provenance.get(path))
         if entry is not None and entry.path not in not_whole:
             entries.append(entry)
     entries.extend(managed)
@@ -344,9 +347,27 @@ def build_lockfile(
     )
 
 
-def _whole_file_entry(path: Path, repo_root: Path, origin: Provenance | None) -> LockEntry | None:
+def real_written_paths(written: Iterable[Path]) -> set[Path]:
+    """The real paths of ``written``, resolved through one realpath batch.
+
+    One batch, since the ~730 written paths of a sync share their parents
+    (``Path.resolve()`` per path was 732 calls, 1.25 s cumulative under cProfile,
+    in ``build_lockfile`` alone). Realpath, not ``Path.resolve()``: a written path
+    may pass through a user's linked output dir, and Python 3.12's ``resolve()``
+    raises on a symlink loop (3.13's is realpath). The caller writes nothing
+    while it resolves.
+
+    Example::
+
+        real_written_paths([repo / "AGENTS.md", repo / "AGENTS.md"])  # {<real repo>/AGENTS.md}
+    """
+    real = BatchRealPaths()
+    return {real.real(path) for path in written}
+
+
+def _whole_file_entry(path: Path, real_root: Path, origin: Provenance | None) -> LockEntry | None:
     """Whole-file entry for resolved ``path``; ``None`` if it is outside the repo or unreadable."""
-    rel = _repo_relative(path, repo_root)
+    rel = _repo_relative(path, real_root)
     if rel is None:
         return None
     try:
@@ -366,9 +387,9 @@ def _is_executable(path: Path) -> bool:
     return os.name == "posix" and bool(path.stat().st_mode & 0o111)
 
 
-def _repo_relative(path: Path, repo_root: Path) -> str | None:
-    """POSIX resolved ``path`` relative to the resolved ``repo_root``; ``None`` outside it."""
+def _repo_relative(path: Path, real_root: Path) -> str | None:
+    """POSIX resolved ``path`` relative to the resolved repo root ``real_root``; ``None`` outside it."""
     try:
-        return path.relative_to(repo_root.resolve()).as_posix()
+        return path.relative_to(real_root).as_posix()
     except ValueError:
         return None
