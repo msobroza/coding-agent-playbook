@@ -1,6 +1,5 @@
 id = "generate-tests/happy-path"
 description = "Generate tests for a simple pure function with no edge cases."
-edition = "v0.1.0"
 
 [setup]
 files = ["src/calculator.py"]

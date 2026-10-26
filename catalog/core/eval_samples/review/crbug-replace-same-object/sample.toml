@@ -1,6 +1,5 @@
 id = "review/crbug-replace-same-object"
 description = "Review a change that removes duplicate references in Scene.replace but loses the object when it replaces an object with itself. Paraphrases the bug a reviewer caught in manim pull request 4242, from CRBugBench; see eval_samples/ATTRIBUTIONS.md."
-edition = "v0.1.0"
 
 [setup]
 files = [

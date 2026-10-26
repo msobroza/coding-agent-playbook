@@ -1,6 +1,5 @@
 id = "refactor/extract-helper"
 description = "Happy path: an overly long function with a self-contained chunk gets the chunk extracted into a named helper."
-edition = "v0.1.0"
 
 [setup]
 files = ["src/report.py", "tests/test_report.py"]

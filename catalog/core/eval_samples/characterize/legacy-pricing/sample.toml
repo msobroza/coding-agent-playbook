@@ -1,6 +1,5 @@
 id = "characterize/legacy-pricing"
 description = "Edit task: pin an untested legacy pricing module whose docstring promises a bulk discount from 10 units while the code starts at 11, which rounds halves to even and ships free only strictly above 5000 cents, and which appends to an audit file on every call; the tests must pin those quirks as they are, never fix the source."
-edition = "v0.1.0"
 
 [setup]
 files = ["src/pricing.py"]

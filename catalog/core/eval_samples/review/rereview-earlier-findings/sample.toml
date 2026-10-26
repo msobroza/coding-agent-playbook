@@ -1,6 +1,5 @@
 id = "review/rereview-earlier-findings"
 description = "Re-review of a fix commit given three earlier findings: two are fixed, the important discount finding is still open; the review must give each a status and keep blocking on the open one."
-edition = "v0.1.0"
 
 [setup]
 files = [
