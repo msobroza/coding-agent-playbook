@@ -57,7 +57,7 @@ MISS_LINE: Final = (
 
 
 def _engine_prompts() -> list[Prompt]:
-    names = ("review.md.j2", "find-injected-vulnerability.md.j2", "explain.md")
+    names = ("review.md.j2", "find-injected-vulnerability.md.j2", "explain.md.j2")
     return [Prompt.from_markdown(PROMPTS / name, "coding_agent_playbook") for name in names]
 
 
