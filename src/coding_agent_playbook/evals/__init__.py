@@ -7,4 +7,6 @@ for ``validate_samples`` and ``EvalValidationError``). ``compile/`` turns a samp
 gate, rubric and aggregate blocks into grading-kernel checks, and ``run/`` runs a
 sample against a harness and scores the result. ``evals.comparison`` compares a
 base ref's runs with HEAD's (the opt-in ``playbook eval --compare``, D37).
+``evals.targets`` holds the Eval targets (harness + model) a run picks from, and
+``evals.target_config`` reads them from the ``[evals]`` table of the consumer config.
 """

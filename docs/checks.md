@@ -593,6 +593,9 @@ These commands run one sample with each runner and with the main options:
 playbook eval refactor-extract-helper --run --runner claude_code   # real: drive the Claude Code CLI
 playbook eval refactor-extract-helper --run --runner opencode       # real: drive the OpenCode CLI
 playbook eval refactor-extract-helper --run --runner fake          # hermetic demo / CI: no network, no CLI
+playbook eval refactor-extract-helper --run --target claude-opus    # a named eval target from [evals.targets]
+playbook eval refactor-extract-helper --run --target opencode:my-org/coder-32b  # harness:model, no config
+playbook eval --targets                                             # list the targets and whether each CLI is installed
 playbook eval refactor-extract-helper --run --judge llm --judge-samples 3 # also score [rubric] via an LLM judge
 playbook eval refactor-extract-helper --run --full-scoring          # run every check (no short-circuit)
 playbook eval refactor-extract-helper --run --prompt-set v2         # grade the v2 prompt set (default v1)
@@ -659,6 +662,45 @@ A runner drives the agent. Two real runners ship, and both are opt-in. `claude_c
 is the default and drives the `claude` CLI. `opencode` drives the `opencode` CLI.
 Each one is gated by `available()` on its binary, and CI never exercises them.
 `--runner fake` is the hermetic driver for demos and CI.
+
+### Eval targets
+
+An eval target is a harness and a model, named once in the `[evals]` table of the
+committed config. The model is sent to the harness exactly as written, as
+`--model <model>`, so any model a deployment serves works the day it ships:
+
+```toml
+[evals]
+default = "claude-opus"
+release = ["claude-opus"]          # the targets release metrics run on
+
+[evals.targets.claude-opus]
+harness = "claude_code"            # a runner name: claude_code, opencode or fake
+model = "claude-opus-5-5"
+runs = 3                           # optional
+label = "Claude Opus"              # optional, display only
+
+[evals.judge]                      # one judge for every target
+model = "claude-opus-5-5"          # the LLM judge's --model
+samples = 3                        # the default of --judge-samples
+```
+
+The machine-local `.coding-agent-playbook.local.toml` may add targets (under new
+names), change `default` and override `[evals.judge]` keys; `release` is committed
+only. A run picks its target from the first of these that names one:
+
+1. `--target <name>` or `--target <harness>:<model>` (split at the first colon);
+2. the `PLAYBOOK_EVAL_TARGET` environment variable;
+3. the local file's `default`;
+4. the committed file's `default`;
+5. otherwise Claude Code on its own default model, recorded as `default`.
+
+`--runner <name>` still works: it is the target with that harness and no model, and
+cannot be combined with `--target`. An unknown target name is a usage error that
+lists the configured names. Each result records the target's name, harness,
+requested model and the model the harness reported (`null` when it reports none):
+the JSON report's `target` object, and a `target:` line in the text report.
+`--compare` does not take `--target` yet.
 
 `playbook eval` has no `--run-tests` flag. A sample runs the test suite if and only if
 its `[gate]` references an execution metric, `coverage` or `test_pass_rate`.

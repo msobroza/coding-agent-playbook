@@ -39,6 +39,8 @@ import subprocess
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
+from coding_agent_playbook.evals.run.cli_argv import PROMPT_TOKEN, build_cli_argv
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -63,6 +65,9 @@ class Judge(ABC):
     """
 
     name: str
+    #: Whether the constructor takes ``model=`` (``[evals.judge] model``). A judge
+    #: that does not is refused when that key is set.
+    accepts_model: bool = False
 
     @classmethod
     def available(cls) -> bool:
@@ -99,12 +104,9 @@ class Judge(ABC):
 #: Name of the Claude executable looked up on ``PATH`` by :class:`LLMJudge`.
 _CLI = "claude"
 
-#: Placeholder token in a command template, replaced by the grading prompt.
-_PROMPT_TOKEN = "{prompt}"
-
 #: Default command: the ``claude`` CLI in non-interactive print mode. The bare
 #: ``{prompt}`` token is interpolated with the grading prompt per invocation.
-_DEFAULT_COMMAND: tuple[str, ...] = (_CLI, "-p", _PROMPT_TOKEN)
+_DEFAULT_COMMAND: tuple[str, ...] = (_CLI, "-p", PROMPT_TOKEN)
 
 #: Default wall-clock bound (seconds) for one grading invocation.
 _DEFAULT_TIMEOUT = 120.0
@@ -190,7 +192,8 @@ class LLMJudge(Judge):
     each invocation. A failed invocation (it cannot be launched, exits non-zero,
     times out, or answers anything but one number in ``[0, 1]``) is retried up
     to ``retries`` times — immediately, with no backoff — and then raises
-    :class:`JudgeError`.
+    :class:`JudgeError`. ``model`` (``[evals.judge] model``) is passed as
+    ``--model <model>``, exactly as written; ``None`` keeps the CLI's default.
 
     Opt-in and **never run in CI**: no top-level import needs the CLI, the
     executable is discovered at call time, and :meth:`available` is ``False`` when
@@ -198,6 +201,7 @@ class LLMJudge(Judge):
     """
 
     name = "llm"
+    accepts_model = True
 
     def __init__(
         self,
@@ -205,6 +209,7 @@ class LLMJudge(Judge):
         command: Sequence[str] | None = None,
         timeout: float = _DEFAULT_TIMEOUT,
         retries: int = _DEFAULT_RETRIES,
+        model: str | None = None,
     ) -> None:
         if retries < 0:
             raise ValueError(f"LLMJudge retries must be >= 0, got {retries}")
@@ -213,6 +218,7 @@ class LLMJudge(Judge):
         self._command: tuple[str, ...] = tuple(command) if command is not None else _DEFAULT_COMMAND
         self._timeout = timeout
         self._retries = retries
+        self.model = model
 
     @classmethod
     def available(cls) -> bool:
@@ -220,14 +226,8 @@ class LLMJudge(Judge):
         return shutil.which(_CLI) is not None
 
     def _build_command(self, prompt: str) -> list[str]:
-        """Interpolate ``prompt`` into the configured command template.
-
-        Each ``{prompt}`` token is replaced by the prompt; if the template has no
-        token, the prompt is appended as a final argument.
-        """
-        if any(_PROMPT_TOKEN in part for part in self._command):
-            return [part.replace(_PROMPT_TOKEN, prompt) for part in self._command]
-        return [*self._command, prompt]
+        """The argv for one grading: the template with ``prompt`` and the model (``cli_argv``)."""
+        return build_cli_argv(self._command, prompt, self.model)
 
     def _grade_once(self, criterion: str, artifact: Any) -> float:
         """One graded sample: up to ``1 + retries`` attempts, else :class:`JudgeError`."""

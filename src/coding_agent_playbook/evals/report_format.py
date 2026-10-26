@@ -31,12 +31,15 @@ def sample_result_to_dict(result: SampleResult) -> dict[str, object]:
     :class:`~coding_agent_playbook.grading.rubric.Rubric` produced, each with
     its flattened per-scope :class:`ScopeDetail` ``subresults``. The flat
     ``findings`` list is kept too (transitional) so existing JSON consumers that
-    read ``report.findings`` keep working.
+    read ``report.findings`` keep working. ``target`` records the Eval target:
+    its name, harness, the requested model and the model the harness reported
+    (``None`` for the harness default, or when the harness reports none).
     """
     report = result.report
     out: dict[str, object] = {
         "sample_id": result.sample_id,
         "harness": result.harness,
+        "target": _target_to_dict(result),
         "passed": result.passed,
         "aggregate_score": result.aggregate_score,
         "duration_seconds": result.duration_seconds,
@@ -57,6 +60,29 @@ def sample_result_to_dict(result: SampleResult) -> dict[str, object]:
         out["aggregate"] = _check_to_dict(result.aggregate)
         out["trial_verdicts"] = [t.verdict for t in result.trials]
     return out
+
+
+def _target_to_dict(result: SampleResult) -> dict[str, object]:
+    """The Eval target a result was run with (spec #281: target, harness, both models)."""
+    return {
+        "name": result.target,
+        "harness": result.harness,
+        "model": result.requested_model,
+        "reported_model": result.reported_model,
+    }
+
+
+def _target_line(result: SampleResult) -> str:
+    """The text-report line naming the target, its harness and the models.
+
+    Example::
+
+        target: claude-opus (claude_code, model claude-opus-5-5, reported claude-opus-5-5)
+    """
+    name = result.target if result.target is not None else result.harness
+    model = result.requested_model or "harness default"
+    reported = f", reported {result.reported_model}" if result.reported_model else ""
+    return f"  target: {name} ({result.harness}, model {model}{reported})"
 
 
 def _check_to_dict(check: CheckResult) -> dict[str, object]:
@@ -126,6 +152,7 @@ def format_sample_result_text(result: SampleResult) -> str:
 
     if _any_trial_judge_scored(result):
         lines.append(_UNCALIBRATED_NOTE)
+    lines.append(_target_line(result))
 
     footer = (
         f"  sample: {result.sample_id} via {result.harness} — {verdict} "

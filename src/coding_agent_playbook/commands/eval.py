@@ -14,11 +14,17 @@ Sub-modes:
   Invocation / Expected / Rubric).
 - ``playbook eval <id>`` (no ``--run``): prints how to run the sample. Exits 0 if
   the sample is known, exits 1 if it isn't (so typos still surface).
-- ``playbook eval <id> --run [--runner NAME] [--judge NAME] [--judge-samples N]
-  [--prompt-set v1|v2] [--format text|json]``: load the sample, select the runner ``NAME`` from the
-  ``coding_agent_playbook.runners`` entry-point group (default ``claude_code``),
-  run it in a throwaway scratch dir, and render ``result.report`` (reusing
-  ``commands/metrics.py``'s text/json renderer). Exits ``0`` on a passing report,
+- ``playbook eval --targets``: list the Eval targets of the ``[evals]`` config,
+  where each comes from and whether its harness CLI is installed
+  (``commands/_eval_targets.py``).
+- ``playbook eval <id> --run [--target NAME|HARNESS:MODEL] [--runner NAME] [--judge NAME]
+  [--judge-samples N] [--prompt-set v1|v2] [--format text|json]``: load the sample,
+  pick its Eval target (``--target``, then ``PLAYBOOK_EVAL_TARGET``, then the local
+  and the committed ``[evals] default``, else ``claude_code`` on its default model,
+  recorded as ``default``; ``--runner NAME`` is the target with that harness and no
+  model), build that harness's runner from the ``coding_agent_playbook.runners``
+  entry-point group with the target's model, run it in a throwaway scratch dir,
+  and render ``result.report`` (reusing ``commands/metrics.py``'s text/json renderer). Exits ``0`` on a passing report,
   ``1`` on a failing one, ``2`` on usage errors (unknown sample,
   unknown/unavailable runner, unknown/unavailable judge, bad ``--format``) and
   when the sample cannot be scored at all (its prompt fails to render, or the judge
@@ -27,8 +33,9 @@ Sub-modes:
   ``--judge`` (R2) selects a Tier-2 judge from the
   ``coding_agent_playbook.judges`` group (``llm`` ships, opt-in/CLI-gated) so the
   sample's ``[rubric]`` criteria are scored too; omitted ⇒ deterministic-only (no
-  judge). ``--judge-samples N`` (default 1) is how many times the judge scores each
-  rubric criterion before averaging; it is not a count of eval samples, and a
+  judge); ``[evals.judge] model`` is the judge's model for every target.
+  ``--judge-samples N`` (default ``[evals.judge] samples``, else 1) is how many
+  times the judge scores each rubric criterion before averaging; it is not a count of eval samples, and a
   count below 1 is a usage error (exit ``2``). The old
   ``--samples N`` spelling is a deprecated alias for one release (D80): hidden
   from ``--help``, it still works, prints one stderr line naming
@@ -55,28 +62,32 @@ import argparse
 import json
 import sys
 import tempfile
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.catalog.prompt_sets import DEFAULT_PROMPT_SET, PROMPT_SETS
 from coding_agent_playbook.commands._eval_compare import configure_compare, run_compare
 from coding_agent_playbook.commands._eval_enumerate import (
-    _DEFAULT_RUNNER,
     _print_list,
     _print_run_hint,
     _print_show,
 )
 from coding_agent_playbook.commands._eval_options import (
+    build_judge,
+    build_target_runner,
     judge_sample_count,
-    load_usable_judge,
-    load_usable_runner,
+    select_target,
 )
+from coding_agent_playbook.commands._eval_targets import print_targets
 from coding_agent_playbook.evals.judge import JudgeError
 from coding_agent_playbook.evals.prompting import PromptResolutionError
 from coding_agent_playbook.evals.report_format import (
     format_sample_result_text,
     sample_result_to_dict,
 )
+from coding_agent_playbook.evals.target_config import load_eval_settings
+from coding_agent_playbook.evals.targets import TargetError
 from coding_agent_playbook.validation.context import SyncContext
 
 if TYPE_CHECKING:
@@ -106,6 +117,12 @@ def configure(parser: argparse.ArgumentParser) -> None:
     eval_group = parser.add_mutually_exclusive_group()
     eval_group.add_argument("--list", action="store_true")
     eval_group.add_argument("--show", help="show one sample by id")
+    eval_group.add_argument(
+        "--targets",
+        action="store_true",
+        help="list the eval targets ([evals] config), where each comes from and "
+        "whether its harness CLI is installed",
+    )
     parser.add_argument("id", nargs="?", help="sample id (enumerate, or run with --run)")
     # PR R1d — execute one sample end-to-end and grade it through the unified
     # EvaluationReport. Whether execution evaluators run is the sample's own
@@ -118,7 +135,13 @@ def configure(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--runner",
         help="runner name from the coding_agent_playbook.runners group "
-        "(default: claude_code; use 'fake' for a hermetic no-op run)",
+        "(default: claude_code; use 'fake' for a hermetic no-op run); "
+        "the eval target with that harness and no model",
+    )
+    parser.add_argument(
+        "--target",
+        help="eval target to run: a name from [evals.targets] or HARNESS:MODEL "
+        "(default: $PLAYBOOK_EVAL_TARGET, then [evals] default, then claude_code)",
     )
     parser.add_argument(
         "--prompt-set",
@@ -170,7 +193,12 @@ def run(args: argparse.Namespace) -> int:
 
     # ``--compare`` (D37) is opt-in and paid: it runs eval samples on two checkouts.
     if getattr(args, "compare", None) is not None:
+        if getattr(args, "target", None) is not None:
+            raise TargetError("--compare does not take --target yet; pick the agent with --runner")
         return run_compare(args, repo_root)
+
+    if getattr(args, "targets", False):
+        return print_targets(repo_root)
 
     # ``--run`` is the only path that *executes* a sample; it has its own loading
     # (one sample by id) so it never pays for the full list+resolve unless the sample
@@ -210,7 +238,8 @@ def _run_sample_cli(args: argparse.Namespace, repo_root: Path) -> int:
         print(f"error: unknown --format {fmt!r}", file=sys.stderr)
         return 2
 
-    judge_samples = judge_sample_count(args)
+    settings = load_eval_settings(repo_root)
+    judge_samples = judge_sample_count(args, default=settings.judge.samples or 1)
     if judge_samples is None:
         return 2
 
@@ -224,8 +253,9 @@ def _run_sample_cli(args: argparse.Namespace, repo_root: Path) -> int:
         print(f"error: no eval sample with id {sample_id!r}", file=sys.stderr)
         return 2
 
-    runner_cls = load_usable_runner(getattr(args, "runner", None) or _DEFAULT_RUNNER)
-    if runner_cls is None:
+    target = select_target(args, settings)
+    runner = build_target_runner(target)
+    if runner is None:
         return 2
 
     # --judge selects a Tier-2 judge from the judges entry-point group. Omitted =>
@@ -233,16 +263,14 @@ def _run_sample_cli(args: argparse.Namespace, repo_root: Path) -> int:
     judge_name = getattr(args, "judge", None)
     judge: Judge | None = None
     if judge_name is not None:
-        judge_cls = load_usable_judge(judge_name)
-        if judge_cls is None:
+        judge = build_judge(judge_name, settings.judge)
+        if judge is None:
             return 2
-        judge = judge_cls()
 
     # Fail-fast is ON by default (a lost deterministic gate skips the costlier
     # judge tier); --full-scoring grades every check unconditionally.
     fail_fast = not bool(getattr(args, "full_scoring", False))
 
-    runner = runner_cls()
     try:
         with tempfile.TemporaryDirectory(prefix="playbook-eval-") as tmp:
             result = runner.run_sample(
@@ -257,6 +285,7 @@ def _run_sample_cli(args: argparse.Namespace, repo_root: Path) -> int:
         # Neither a pass nor a fail: no verdict exists, so never exit 0/1 here.
         print(f"error: sample {sample_id!r} could not be scored: {exc}", file=sys.stderr)
         return 2
+    result = replace(result, target=target.name)
 
     if fmt == "json":
         print(json.dumps(sample_result_to_dict(result), indent=2, sort_keys=True))

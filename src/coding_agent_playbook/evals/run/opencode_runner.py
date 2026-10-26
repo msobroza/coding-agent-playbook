@@ -38,6 +38,7 @@ import subprocess
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.evals.run.agent_env import unattended_agent_env
+from coding_agent_playbook.evals.run.cli_argv import PROMPT_TOKEN, build_cli_argv
 from coding_agent_playbook.evals.run.harness_runner import AgentRun, HarnessRunner
 
 if TYPE_CHECKING:
@@ -47,12 +48,9 @@ if TYPE_CHECKING:
 #: Name of the OpenCode executable looked up on ``PATH``.
 _CLI = "opencode"
 
-#: Placeholder token in a command template, replaced by the rendered prompt.
-_PROMPT_TOKEN = "{prompt}"
-
 #: Default command: the ``opencode`` CLI in non-interactive run mode. The bare
 #: ``{prompt}`` token is interpolated with the rendered prompt per invocation.
-_DEFAULT_COMMAND: tuple[str, ...] = (_CLI, "run", _PROMPT_TOKEN)
+_DEFAULT_COMMAND: tuple[str, ...] = (_CLI, "run", PROMPT_TOKEN)
 
 #: Default wall-clock bound (seconds) for one agent invocation.
 _DEFAULT_TIMEOUT = 600.0
@@ -65,17 +63,22 @@ class OpenCodeRunner(HarnessRunner):
     ``{prompt}`` token (anywhere in the list) is replaced by the rendered prompt.
     When the template contains no token, the prompt is appended as a trailing
     argument so a custom command still receives it. ``timeout`` bounds the run.
+    ``model`` (an Eval target's model) is passed as ``--model <model>``, exactly
+    as written; ``None`` leaves the CLI on its own default model.
     """
 
     name = "opencode"
     requires_resolved_prompt = True
+    accepts_model = True
 
     def __init__(
         self,
         *,
         command: Sequence[str] | None = None,
         timeout: float = _DEFAULT_TIMEOUT,
+        model: str | None = None,
     ) -> None:
+        self.model = model
         self._command: tuple[str, ...] = tuple(command) if command is not None else _DEFAULT_COMMAND
         self._timeout = timeout
 
@@ -89,14 +92,8 @@ class OpenCodeRunner(HarnessRunner):
         return shutil.which(_CLI) is not None
 
     def _build_command(self, prompt: str) -> list[str]:
-        """Interpolate ``prompt`` into the configured command template.
-
-        Each ``{prompt}`` token is replaced by the prompt; if the template has no
-        token, the prompt is appended as a final argument.
-        """
-        if any(_PROMPT_TOKEN in part for part in self._command):
-            return [part.replace(_PROMPT_TOKEN, prompt) for part in self._command]
-        return [*self._command, prompt]
+        """The argv for one run: the template with ``prompt`` and the model (``cli_argv``)."""
+        return build_cli_argv(self._command, prompt, self.model)
 
     def _invoke_agent(self, prompt: str, scratch_dir: Path) -> AgentRun:
         """Run the configured command with ``cwd=scratch_dir`` and capture output.

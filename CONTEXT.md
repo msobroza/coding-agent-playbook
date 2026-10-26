@@ -81,6 +81,10 @@ _Avoid_: prompt set, twin, v1/v2 prompts, snapshot, baseline
 An eval sample's reference to the edition it grades, which freezes the whole experiment: the edition's text, the sample and its starting repo state. A sample without a pin grades the current text.
 _Avoid_: lock, freeze (freezing is the act of creating a pin)
 
+**Eval target**:
+A harness and a model that eval runs drive, named once in the `[evals]` config; the model is sent to the harness exactly as written.
+_Avoid_: eval runner (a runner is the code that drives one harness), model alias
+
 ### Context
 
 **Always-loaded context**:
