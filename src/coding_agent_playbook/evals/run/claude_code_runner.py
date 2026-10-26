@@ -37,12 +37,15 @@ import subprocess
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.evals.run.agent_env import unattended_agent_env
+from coding_agent_playbook.evals.run.claude_code_route import routed_argv, routed_env
 from coding_agent_playbook.evals.run.cli_argv import PROMPT_TOKEN, build_cli_argv
 from coding_agent_playbook.evals.run.harness_runner import AgentRun, HarnessRunner
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
+
+    from coding_agent_playbook.evals.run.claude_code_route import ClaudeCodeRoute
 
 #: Name of the Claude Code executable looked up on ``PATH``.
 _CLI = "claude"
@@ -63,12 +66,15 @@ class ClaudeCodeRunner(HarnessRunner):
     When the template contains no token, the prompt is appended as a trailing
     argument so a custom command still receives it. ``timeout`` bounds the run.
     ``model`` (an Eval target's model) is passed as ``--model <model>``, exactly
-    as written; ``None`` leaves the CLI on its own default model.
+    as written; ``None`` leaves the CLI on its own default model. ``route``
+    (an Eval target's endpoint) isolates the run and points it at that endpoint
+    (``claude_code_route``); ``None`` keeps the user's own Claude Code settings.
     """
 
     name = "claude_code"
     requires_resolved_prompt = True
     accepts_model = True
+    accepts_endpoint = True
 
     def __init__(
         self,
@@ -76,8 +82,10 @@ class ClaudeCodeRunner(HarnessRunner):
         command: Sequence[str] | None = None,
         timeout: float = _DEFAULT_TIMEOUT,
         model: str | None = None,
+        route: ClaudeCodeRoute | None = None,
     ) -> None:
         self.model = model
+        self.route = route
         self._command: tuple[str, ...] = tuple(command) if command is not None else _DEFAULT_COMMAND
         self._timeout = timeout
 
@@ -92,7 +100,7 @@ class ClaudeCodeRunner(HarnessRunner):
 
     def _build_command(self, prompt: str) -> list[str]:
         """The argv for one run: the template with ``prompt`` and the model (``cli_argv``)."""
-        return build_cli_argv(self._command, prompt, self.model)
+        return routed_argv(build_cli_argv(self._command, prompt, self.model), self.route)
 
     def _invoke_agent(self, prompt: str, scratch_dir: Path) -> AgentRun:
         """Run the configured command with ``cwd=scratch_dir`` and capture output.
@@ -101,18 +109,22 @@ class ClaudeCodeRunner(HarnessRunner):
         is recorded (``0`` = the agent loop completed). No shell is used — the
         command is an explicit arg-list — and the working directory is the agent's
         scratch repo so any edits land in the tree the scoring layers read. The
-        child env is marked unattended, so lifecycle-hook asks degrade to deny.
+        child env is marked unattended, so lifecycle-hook asks degrade to deny; on
+        an endpoint it is isolated too, and the token is redacted from the transcript.
         """
-        completed = subprocess.run(
-            self._build_command(prompt),
-            cwd=scratch_dir,
-            env=unattended_agent_env(),
-            capture_output=True,
-            text=True,
-            timeout=self._timeout,
-            check=False,
-        )
+        with routed_env(self.route, unattended_agent_env()) as env:
+            completed = subprocess.run(
+                self._build_command(prompt),
+                cwd=scratch_dir,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=self._timeout,
+                check=False,
+            )
         transcript = completed.stdout
         if completed.stderr:
             transcript = f"{transcript}{completed.stderr}" if transcript else completed.stderr
+        if self.route is not None:
+            transcript = self.route.redact(transcript)
         return AgentRun(transcript=transcript, returncode=completed.returncode)

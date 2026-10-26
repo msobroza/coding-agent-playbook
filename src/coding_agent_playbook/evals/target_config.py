@@ -1,4 +1,4 @@
-"""The ``[evals]`` table of the consumer config: named Eval targets, the default and the judge.
+"""The ``[evals]`` table of the consumer config: named Eval targets, endpoints, the default and the judge.
 
 ``Config`` does not own ``[evals]`` (it rides along in ``extra_tables``); this
 module reads it from both files, like ``metrics_gate.config`` reads ``[metrics]``.
@@ -16,9 +16,20 @@ list; the local file may add targets, change the default and override
     runs = 3                    # optional
     label = "Claude Opus"       # optional, display only
 
+    [evals.targets.internal-claude]
+    harness = "claude_code"
+    endpoint = "internal"       # an [evals.endpoints.<name>] block
+    model = "internal-opus"     # required on an endpoint
+    small_model = "internal-haiku"  # optional, defaults to model
+
     [evals.judge]
     model = "claude-opus-5-5"
     samples = 3
+    endpoint = "internal"       # optional
+
+``[evals.endpoints]`` is read by ``evals.endpoint_config``. A committed target or
+judge may name only a committed endpoint. Claude Code speaks only the Anthropic
+Messages API, so a Claude Code target or the judge on another API is refused.
 
 Every mistake is a :class:`~coding_agent_playbook.config.schema.ConfigError`
 naming the file, the key, the value and the expected shape.
@@ -32,6 +43,15 @@ from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.config.files import CONFIG_FILENAME, CONFIG_LOCAL_FILENAME, ConfigFiles
 from coding_agent_playbook.config.schema import ConfigError
+from coding_agent_playbook.evals.config_shapes import (
+    optional_count,
+    optional_text,
+    refuse_unknown_keys,
+    table,
+    text,
+)
+from coding_agent_playbook.evals.endpoint_config import parse_endpoints
+from coding_agent_playbook.evals.endpoints import API_ANTHROPIC
 from coding_agent_playbook.evals.targets import (
     EvalSettings,
     EvalTarget,
@@ -44,16 +64,21 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-#: The keys of one ``[evals.targets.<name>]`` table (ticket 06 adds the endpoint keys).
-_TARGET_KEYS: Final = frozenset({"harness", "model", "runs", "label"})
+    from coding_agent_playbook.evals.endpoints import Endpoint
+
+#: The keys of one ``[evals.targets.<name>]`` table.
+_TARGET_KEYS: Final = frozenset({"harness", "model", "runs", "label", "endpoint", "small_model"})
 #: The keys of ``[evals]`` in the committed file.
-_COMMITTED_KEYS: Final = frozenset({"default", "release", "targets", "judge"})
+_COMMITTED_KEYS: Final = frozenset({"default", "release", "targets", "judge", "endpoints"})
 #: The keys of ``[evals]`` in the local file: no ``release`` (release metrics are the team's).
-_LOCAL_KEYS: Final = frozenset({"default", "targets", "judge"})
+_LOCAL_KEYS: Final = frozenset({"default", "targets", "judge", "endpoints"})
 #: The keys of ``[evals.judge]``.
-_JUDGE_KEYS: Final = frozenset({"model", "samples"})
+_JUDGE_KEYS: Final = frozenset({"model", "samples", "endpoint"})
 #: A target name: no ``:``, which would read as the ``<harness>:<model>`` shorthand.
 _TARGET_NAME: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+#: The harness that speaks only the Anthropic Messages API (the LLM judge drives it too).
+_CLAUDE_CODE: Final = "claude_code"
+_OPENCODE_HINT: Final = 'use harness = "opencode" for this endpoint'
 
 
 def load_eval_settings(repo_root: Path) -> EvalSettings:
@@ -77,7 +102,9 @@ def parse_eval_settings(committed: object, local: object) -> EvalSettings:
 
     Local targets are added to the committed ones (redefining a committed name is
     an error); each file's ``default`` is kept apart for the resolution order;
-    local ``[evals.judge]`` keys override committed ones.
+    local ``[evals.judge]`` keys override committed ones. A committed target or
+    judge sees the committed endpoints only, each with any token part the local
+    file adds.
 
     Example::
 
@@ -86,15 +113,17 @@ def parse_eval_settings(committed: object, local: object) -> EvalSettings:
     """
     committed_table = _evals_table(committed, CONFIG_FILENAME, _COMMITTED_KEYS)
     local_table = _evals_table(local, CONFIG_LOCAL_FILENAME, _LOCAL_KEYS)
-    committed_targets = _targets(committed_table, CONFIG_FILENAME)
-    local_targets = _targets(local_table, CONFIG_LOCAL_FILENAME)
+    committed_names, endpoints = parse_endpoints(committed_table, local_table)
+    committed_endpoints = {name: endpoints[name] for name in committed_names}
+    committed_targets = _targets(committed_table, CONFIG_FILENAME, committed_endpoints)
+    local_targets = _targets(local_table, CONFIG_LOCAL_FILENAME, endpoints)
     _refuse_redefined(committed_targets, local_targets)
     settings = EvalSettings(
         targets={**committed_targets, **local_targets},
         committed_default=_default(committed_table, CONFIG_FILENAME),
         local_default=_default(local_table, CONFIG_LOCAL_FILENAME),
         release=_release(committed_table, committed_targets),
-        judge=_judge(committed_table, local_table),
+        judge=_judge(committed_table, local_table, committed_endpoints, endpoints),
     )
     _check_defaults(settings, committed_targets)
     return settings
@@ -102,72 +131,81 @@ def parse_eval_settings(committed: object, local: object) -> EvalSettings:
 
 def _evals_table(value: object, source: str, allowed: frozenset[str]) -> Mapping[str, object]:
     """``value`` as an ``[evals]`` table with only ``allowed`` keys, else ``ConfigError``."""
-    table = _table(value, source, "[evals]")
-    _refuse_unknown_keys(table, source, "[evals]", allowed)
-    return table
+    evals = table(value, source, "[evals]")
+    refuse_unknown_keys(evals, source, "[evals]", allowed)
+    return evals
 
 
-def _table(value: object, source: str, label: str) -> Mapping[str, object]:
-    if not isinstance(value, dict):
-        raise ConfigError(f"{source}: {label} must be a table, got {value!r}")
-    return value
-
-
-def _refuse_unknown_keys(
-    table: Mapping[str, object], source: str, label: str, allowed: frozenset[str]
-) -> None:
-    unknown = sorted(set(table) - allowed)
-    if unknown:
-        raise ConfigError(
-            f"{source}: {label} has unknown key(s) {unknown}; expected only {sorted(allowed)}"
-        )
-
-
-def _targets(table: Mapping[str, object], source: str) -> dict[str, EvalTarget]:
+def _targets(
+    evals: Mapping[str, object], source: str, endpoints: Mapping[str, Endpoint]
+) -> dict[str, EvalTarget]:
     """Each ``[evals.targets.<name>]`` of one file, checked, as an :class:`EvalTarget`."""
-    targets = _table(table.get("targets", {}), source, "[evals.targets]")
-    return {name: _target(name, spec, source) for name, spec in targets.items()}
+    targets = table(evals.get("targets", {}), source, "[evals.targets]")
+    return {name: _target(name, spec, source, endpoints) for name, spec in targets.items()}
 
 
-def _target(name: str, value: object, source: str) -> EvalTarget:
+def _target(name: str, value: object, source: str, endpoints: Mapping[str, Endpoint]) -> EvalTarget:
     label = f"[evals.targets.{name}]"
     if not _TARGET_NAME.fullmatch(name):
         raise ConfigError(
             f"{source}: {label}: a target name is letters, digits, '.', '_' or '-' "
             f"(no ':', which reads as <harness>:<model>), got {name!r}"
         )
-    spec = _table(value, source, label)
-    _refuse_unknown_keys(spec, source, label, _TARGET_KEYS)
+    spec = table(value, source, label)
+    refuse_unknown_keys(spec, source, label, _TARGET_KEYS)
     if "harness" not in spec:
         raise ConfigError(f'{source}: {label} needs harness = "<runner name>", e.g. "claude_code"')
-    return EvalTarget(
+    target = EvalTarget(
         name=name,
-        harness=_text(spec, "harness", source, label),
-        model=_optional_text(spec, "model", source, label),
-        runs=_optional_count(spec, "runs", source, label),
-        label=_optional_text(spec, "label", source, label),
+        harness=text(spec, "harness", source, label),
+        model=optional_text(spec, "model", source, label),
+        runs=optional_count(spec, "runs", source, label),
+        label=optional_text(spec, "label", source, label),
         source=source,
+        endpoint=_endpoint_ref(spec, source, label, endpoints),
+        small_model=optional_text(spec, "small_model", source, label),
     )
+    _check_target_endpoint(target, source, label)
+    return target
 
 
-def _text(table: Mapping[str, object], key: str, source: str, label: str) -> str:
-    value = table[key]
-    if not isinstance(value, str) or not value.strip():
-        raise ConfigError(f"{source}: {label} {key} must be a non-empty string, got {value!r}")
-    return value
-
-
-def _optional_text(table: Mapping[str, object], key: str, source: str, label: str) -> str | None:
-    return _text(table, key, source, label) if key in table else None
-
-
-def _optional_count(table: Mapping[str, object], key: str, source: str, label: str) -> int | None:
-    if key not in table:
+def _endpoint_ref(
+    spec: Mapping[str, object], source: str, label: str, endpoints: Mapping[str, Endpoint]
+) -> Endpoint | None:
+    """The endpoint ``spec["endpoint"]`` names among those ``source`` may see, else ``None``."""
+    name = optional_text(spec, "endpoint", source, label)
+    if name is None:
         return None
-    value = table[key]
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise ConfigError(f"{source}: {label} {key} must be an integer >= 1, got {value!r}")
-    return value
+    endpoint = endpoints.get(name)
+    if endpoint is None:
+        visible = sorted(endpoints) or "(none)"
+        raise ConfigError(
+            f"{source}: {label} endpoint {name!r} is not declared; endpoints {source} "
+            f"can name: {visible}"
+        )
+    return endpoint
+
+
+def _check_target_endpoint(target: EvalTarget, source: str, label: str) -> None:
+    """An endpoint target needs a model, and Claude Code an ``anthropic`` endpoint."""
+    if target.endpoint is None:
+        if target.small_model is not None:
+            raise ConfigError(f"{source}: {label} small_model needs an endpoint")
+        return
+    if target.model is None:
+        raise ConfigError(
+            f"{source}: {label} needs model = the id endpoint {target.endpoint.name!r} serves"
+        )
+    if target.harness == _CLAUDE_CODE:
+        _require_anthropic(target.endpoint, source, label, "Claude Code")
+
+
+def _require_anthropic(endpoint: Endpoint, source: str, label: str, who: str) -> None:
+    if endpoint.api != API_ANTHROPIC:
+        raise ConfigError(
+            f"{source}: {label} {who} speaks only api = {API_ANTHROPIC!r}, but endpoint "
+            f"{endpoint.name!r} has api = {endpoint.api!r}; {_OPENCODE_HINT}"
+        )
 
 
 def _refuse_redefined(committed: Mapping[str, EvalTarget], local: Mapping[str, EvalTarget]) -> None:
@@ -179,13 +217,13 @@ def _refuse_redefined(committed: Mapping[str, EvalTarget], local: Mapping[str, E
         )
 
 
-def _default(table: Mapping[str, object], source: str) -> str | None:
-    return _optional_text(table, "default", source, "[evals]")
+def _default(evals: Mapping[str, object], source: str) -> str | None:
+    return optional_text(evals, "default", source, "[evals]")
 
 
-def _release(table: Mapping[str, object], targets: Mapping[str, EvalTarget]) -> tuple[str, ...]:
+def _release(evals: Mapping[str, object], targets: Mapping[str, EvalTarget]) -> tuple[str, ...]:
     """The committed ``release`` list: names of committed targets only."""
-    value = table.get("release", [])
+    value = evals.get("release", [])
     if not isinstance(value, list) or not all(isinstance(name, str) for name in value):
         raise ConfigError(
             f"{CONFIG_FILENAME}: [evals] release must be a list of target names, got {value!r}"
@@ -199,18 +237,44 @@ def _release(table: Mapping[str, object], targets: Mapping[str, EvalTarget]) -> 
     return tuple(value)
 
 
-def _judge(committed: Mapping[str, object], local: Mapping[str, object]) -> JudgeSettings:
+def _judge(
+    committed: Mapping[str, object],
+    local: Mapping[str, object],
+    committed_endpoints: Mapping[str, Endpoint],
+    endpoints: Mapping[str, Endpoint],
+) -> JudgeSettings:
     """``[evals.judge]``: the committed keys, each overridden by the local file's."""
+    label = "[evals.judge]"
     settings = JudgeSettings()
-    for table, source in ((committed, CONFIG_FILENAME), (local, CONFIG_LOCAL_FILENAME)):
-        judge = _table(table.get("judge", {}), source, "[evals.judge]")
-        _refuse_unknown_keys(judge, source, "[evals.judge]", _JUDGE_KEYS)
+    layers = (
+        (committed, CONFIG_FILENAME, committed_endpoints),
+        (local, CONFIG_LOCAL_FILENAME, endpoints),
+    )
+    for evals, source, visible in layers:
+        judge = table(evals.get("judge", {}), source, label)
+        refuse_unknown_keys(judge, source, label, _JUDGE_KEYS)
         if "model" in judge:
-            settings = replace(settings, model=_text(judge, "model", source, "[evals.judge]"))
+            settings = replace(settings, model=text(judge, "model", source, label))
         if "samples" in judge:
-            samples = _optional_count(judge, "samples", source, "[evals.judge]")
-            settings = replace(settings, samples=samples)
+            settings = replace(settings, samples=optional_count(judge, "samples", source, label))
+        if "endpoint" in judge:
+            endpoint = _endpoint_ref(judge, source, label, visible)
+            settings = replace(settings, endpoint=endpoint)
+    _check_judge_endpoint(settings)
     return settings
+
+
+def _check_judge_endpoint(settings: JudgeSettings) -> None:
+    """The judge drives Claude Code: an ``anthropic`` endpoint, and an explicit model."""
+    endpoint = settings.endpoint
+    if endpoint is None:
+        return
+    label = "[evals.judge]"
+    _require_anthropic(endpoint, endpoint.source, label, "the LLM judge (Claude Code)")
+    if settings.model is None:
+        raise ConfigError(
+            f"{endpoint.source}: {label} needs model = the id endpoint {endpoint.name!r} serves"
+        )
 
 
 def _check_defaults(settings: EvalSettings, committed_targets: Mapping[str, EvalTarget]) -> None:

@@ -16,7 +16,8 @@ Sub-modes:
   the sample is known, exits 1 if it isn't (so typos still surface).
 - ``playbook eval --targets``: list the Eval targets of the ``[evals]`` config,
   where each comes from and whether its harness CLI is installed
-  (``commands/_eval_targets.py``).
+  (``commands/_eval_targets.py``); ``--targets --check`` also runs a one-turn
+  prompt through each target's harness and exits ``1`` if any fails.
 - ``playbook eval <id> --run [--target NAME|HARNESS:MODEL] [--runner NAME] [--judge NAME]
   [--judge-samples N] [--prompt-set v1|v2] [--format text|json]``: load the sample,
   pick its Eval target (``--target``, then ``PLAYBOOK_EVAL_TARGET``, then the local
@@ -79,7 +80,7 @@ from coding_agent_playbook.commands._eval_options import (
     judge_sample_count,
     select_target,
 )
-from coding_agent_playbook.commands._eval_targets import print_targets
+from coding_agent_playbook.commands._eval_targets import check_targets, print_targets
 from coding_agent_playbook.evals.judge import JudgeError
 from coding_agent_playbook.evals.prompting import PromptResolutionError
 from coding_agent_playbook.evals.report_format import (
@@ -122,6 +123,12 @@ def configure(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="list the eval targets ([evals] config), where each comes from and "
         "whether its harness CLI is installed",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="with --targets: run a one-turn prompt through each target's harness "
+        "(paid; the harness makes the calls, the engine makes none)",
     )
     parser.add_argument("id", nargs="?", help="sample id (enumerate, or run with --run)")
     # PR R1d — execute one sample end-to-end and grade it through the unified
@@ -197,7 +204,14 @@ def run(args: argparse.Namespace) -> int:
             raise TargetError("--compare does not take --target yet; pick the agent with --runner")
         return run_compare(args, repo_root)
 
+    if getattr(args, "check", False) and not getattr(args, "targets", False):
+        print(
+            "error: --check goes with --targets (playbook eval --targets --check)", file=sys.stderr
+        )
+        return 2
     if getattr(args, "targets", False):
+        if getattr(args, "check", False):
+            return check_targets(repo_root)
         return print_targets(repo_root)
 
     # ``--run`` is the only path that *executes* a sample; it has its own loading
@@ -285,7 +299,13 @@ def _run_sample_cli(args: argparse.Namespace, repo_root: Path) -> int:
         # Neither a pass nor a fail: no verdict exists, so never exit 0/1 here.
         print(f"error: sample {sample_id!r} could not be scored: {exc}", file=sys.stderr)
         return 2
-    result = replace(result, target=target.name)
+    endpoint = target.endpoint
+    result = replace(
+        result,
+        target=target.name,
+        endpoint=endpoint.name if endpoint is not None else None,
+        endpoint_fingerprint=endpoint.fingerprint if endpoint is not None else None,
+    )
 
     if fmt == "json":
         print(json.dumps(sample_result_to_dict(result), indent=2, sort_keys=True))

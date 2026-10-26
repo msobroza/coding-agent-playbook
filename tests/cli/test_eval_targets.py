@@ -102,6 +102,8 @@ def test_committed_default_target_runs_and_is_recorded(
         "harness": "fake",
         "model": "committed-model",
         "reported_model": None,
+        "endpoint": None,
+        "harness_settings": "personal",
     }
 
 
@@ -177,6 +179,8 @@ def test_zero_config_runs_claude_code_on_its_default_model(
         "harness": "claude_code",
         "model": None,
         "reported_model": None,
+        "endpoint": None,
+        "harness_settings": "personal",
     }
 
 
@@ -189,7 +193,10 @@ def test_runner_flag_is_the_harness_without_a_model(
 
 def test_text_report_names_the_target(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
     main(["eval", _SAMPLE, "--run", "--repo-root", str(repo)])
-    assert "target: committed-fake (fake, model committed-model)" in capsys.readouterr().out
+    assert (
+        "target: committed-fake (fake, model committed-model, personal harness settings)"
+        in capsys.readouterr().out
+    )
 
 
 def test_unknown_target_lists_the_configured_names(

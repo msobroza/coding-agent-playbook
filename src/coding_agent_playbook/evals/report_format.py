@@ -63,26 +63,45 @@ def sample_result_to_dict(result: SampleResult) -> dict[str, object]:
 
 
 def _target_to_dict(result: SampleResult) -> dict[str, object]:
-    """The Eval target a result was run with (spec #281: target, harness, both models)."""
+    """The Eval target a result was run with (spec #281: target, harness, both models).
+
+    ``endpoint`` is the endpoint's name and URL fingerprint (never the URL or the
+    token), ``None`` without one; ``harness_settings`` is ``isolated`` on an
+    endpoint and ``personal`` otherwise (the user's own harness settings and login).
+    """
+    endpoint: dict[str, object] | None = None
+    if result.endpoint is not None:
+        endpoint = {"name": result.endpoint, "fingerprint": result.endpoint_fingerprint}
     return {
         "name": result.target,
         "harness": result.harness,
         "model": result.requested_model,
         "reported_model": result.reported_model,
+        "endpoint": endpoint,
+        "harness_settings": _harness_settings(result),
     }
 
 
+def _harness_settings(result: SampleResult) -> str:
+    return "personal" if result.endpoint is None else "isolated"
+
+
 def _target_line(result: SampleResult) -> str:
-    """The text-report line naming the target, its harness and the models.
+    """The text-report line naming the target, its harness, the models and the endpoint.
 
     Example::
 
-        target: claude-opus (claude_code, model claude-opus-5-5, reported claude-opus-5-5)
+        target: claude-opus (claude_code, model claude-opus-5-5, reported claude-opus-5-5, personal harness settings)
+        target: internal (claude_code, model coder, endpoint internal 3f2a9c1b0d4e, isolated)
     """
     name = result.target if result.target is not None else result.harness
     model = result.requested_model or "harness default"
     reported = f", reported {result.reported_model}" if result.reported_model else ""
-    return f"  target: {name} ({result.harness}, model {model}{reported})"
+    if result.endpoint is None:
+        where = "personal harness settings"
+    else:
+        where = f"endpoint {result.endpoint} {result.endpoint_fingerprint}, isolated"
+    return f"  target: {name} ({result.harness}, model {model}{reported}, {where})"
 
 
 def _check_to_dict(check: CheckResult) -> dict[str, object]:

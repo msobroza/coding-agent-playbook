@@ -22,6 +22,8 @@ from coding_agent_playbook.exit_two import ExitTwoError
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from coding_agent_playbook.evals.endpoints import Endpoint
+
 #: The environment variable that picks a target when ``--target`` is absent.
 TARGET_ENV_VAR: Final = "PLAYBOOK_EVAL_TARGET"
 
@@ -52,7 +54,9 @@ class EvalTarget:
     ``None`` leaving the harness on its own default. ``runs`` and ``label`` are
     optional (``label`` is display only). ``source`` says where the target is
     defined: a config file name, ``--target``, ``--runner``, the environment
-    variable or :data:`BUILTIN_SOURCE`.
+    variable or :data:`BUILTIN_SOURCE`. ``endpoint`` is the custom endpoint the
+    harness reaches (``None``: the harness's own settings and login), and
+    ``small_model`` the background model sent there (``None``: ``model``).
 
     Example::
 
@@ -66,6 +70,8 @@ class EvalTarget:
     runs: int | None = None
     label: str | None = None
     source: str = BUILTIN_SOURCE
+    endpoint: Endpoint | None = None
+    small_model: str | None = None
 
     @property
     def display_model(self) -> str:
@@ -88,7 +94,8 @@ class JudgeSettings:
     """``[evals.judge]``: the LLM judge's model and judge samples, for every target.
 
     ``None`` keeps today's behaviour (the judge CLI's default model; one judge
-    sample unless ``--judge-samples`` says otherwise).
+    sample unless ``--judge-samples`` says otherwise; the CLI's own settings and
+    login, unless ``endpoint`` names a custom endpoint).
 
     Example::
 
@@ -98,6 +105,7 @@ class JudgeSettings:
 
     model: str | None = None
     samples: int | None = None
+    endpoint: Endpoint | None = None
 
 
 @dataclass(frozen=True)
@@ -199,7 +207,7 @@ def runner_alias_target(runner: str) -> EvalTarget:
 
     Example::
 
-        >>> runner_alias_target("fake")
-        EvalTarget(name='fake', harness='fake', model=None, runs=None, label=None, source='--runner')
+        >>> runner_alias_target("fake").source
+        '--runner'
     """
     return EvalTarget(name=runner, harness=runner, source="--runner")

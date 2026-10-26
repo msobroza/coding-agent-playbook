@@ -110,6 +110,9 @@ class SampleResult:
     a runner is driven directly), ``requested_model`` the model the runner sent
     to its harness (``None``: the harness default) and ``reported_model`` the
     model id the harness reported for the first trial, when it reports one.
+    ``endpoint`` and ``endpoint_fingerprint`` name the target's endpoint and a
+    digest of its URL (never the URL); ``None`` when the run used the harness's
+    personal settings.
     """
 
     sample_id: str
@@ -124,6 +127,8 @@ class SampleResult:
     target: str | None = None
     requested_model: str | None = None
     reported_model: str | None = None
+    endpoint: str | None = None
+    endpoint_fingerprint: str | None = None
 
 
 @dataclass
@@ -372,6 +377,9 @@ class HarnessRunner(ABC):
     #: Whether the constructor takes ``model=`` (an Eval target's model). The
     #: CLI runners do; a runner that does not is refused for a target with a model.
     accepts_model: bool = False
+    #: Whether the constructor takes ``route=`` (an Eval target's endpoint wiring).
+    #: A runner that does not is refused for a target with an endpoint.
+    accepts_endpoint: bool = False
     #: The model sent to the harness; ``None`` leaves it on its own default.
     model: str | None = None
     #: When True, ``run_sample`` resolves the prompt strictly (raises on an
@@ -528,6 +536,16 @@ class HarnessRunner(ABC):
             requested_model=self.model,
             reported_model=first.reported_model,
         )
+
+    def probe(self, prompt: str, scratch_dir: Path) -> AgentRun:
+        """One agent turn on ``prompt`` in ``scratch_dir``, ungraded (``eval --targets --check``).
+
+        Example::
+
+            >>> FakeRunner().probe("Reply OK.", Path("/tmp/x")).returncode  # doctest: +SKIP
+            0
+        """
+        return self._invoke_agent(prompt, scratch_dir)
 
     @abstractmethod
     def _invoke_agent(self, prompt: str, scratch_dir: Path) -> AgentRun:

@@ -39,10 +39,13 @@ import subprocess
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
+from coding_agent_playbook.evals.run.claude_code_route import routed_argv, routed_env
 from coding_agent_playbook.evals.run.cli_argv import PROMPT_TOKEN, build_cli_argv
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+    from coding_agent_playbook.evals.run.claude_code_route import ClaudeCodeRoute
 
 
 class JudgeError(RuntimeError):
@@ -68,6 +71,8 @@ class Judge(ABC):
     #: Whether the constructor takes ``model=`` (``[evals.judge] model``). A judge
     #: that does not is refused when that key is set.
     accepts_model: bool = False
+    #: Whether the constructor takes ``route=`` (``[evals.judge] endpoint``).
+    accepts_endpoint: bool = False
 
     @classmethod
     def available(cls) -> bool:
@@ -194,6 +199,8 @@ class LLMJudge(Judge):
     to ``retries`` times — immediately, with no backoff — and then raises
     :class:`JudgeError`. ``model`` (``[evals.judge] model``) is passed as
     ``--model <model>``, exactly as written; ``None`` keeps the CLI's default.
+    ``route`` (``[evals.judge] endpoint``) isolates each grading and points it at
+    that endpoint; ``None`` keeps the CLI's own settings and login.
 
     Opt-in and **never run in CI**: no top-level import needs the CLI, the
     executable is discovered at call time, and :meth:`available` is ``False`` when
@@ -202,6 +209,7 @@ class LLMJudge(Judge):
 
     name = "llm"
     accepts_model = True
+    accepts_endpoint = True
 
     def __init__(
         self,
@@ -210,6 +218,7 @@ class LLMJudge(Judge):
         timeout: float = _DEFAULT_TIMEOUT,
         retries: int = _DEFAULT_RETRIES,
         model: str | None = None,
+        route: ClaudeCodeRoute | None = None,
     ) -> None:
         if retries < 0:
             raise ValueError(f"LLMJudge retries must be >= 0, got {retries}")
@@ -219,6 +228,7 @@ class LLMJudge(Judge):
         self._timeout = timeout
         self._retries = retries
         self.model = model
+        self.route = route
 
     @classmethod
     def available(cls) -> bool:
@@ -227,7 +237,7 @@ class LLMJudge(Judge):
 
     def _build_command(self, prompt: str) -> list[str]:
         """The argv for one grading: the template with ``prompt`` and the model (``cli_argv``)."""
-        return build_cli_argv(self._command, prompt, self.model)
+        return routed_argv(build_cli_argv(self._command, prompt, self.model), self.route)
 
     def _grade_once(self, criterion: str, artifact: Any) -> float:
         """One graded sample: up to ``1 + retries`` attempts, else :class:`JudgeError`."""
@@ -250,30 +260,35 @@ class LLMJudge(Judge):
     def _attempt(self, prompt: str) -> float:
         """Run the CLI once; its score, or :class:`JudgeError` saying why not."""
         try:
-            completed = subprocess.run(
-                self._build_command(prompt),
-                capture_output=True,
-                text=True,
-                # Undecodable bytes become U+FFFD and then fail the parse as
-                # off-format, instead of escaping as UnicodeDecodeError.
-                encoding="utf-8",
-                errors="replace",
-                timeout=self._timeout,
-                check=False,
-            )
+            with routed_env(self.route, None) as env:
+                completed = subprocess.run(
+                    self._build_command(prompt),
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    # Undecodable bytes become U+FFFD and then fail the parse as
+                    # off-format, instead of escaping as UnicodeDecodeError.
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=self._timeout,
+                    check=False,
+                )
         except subprocess.TimeoutExpired as exc:
             raise JudgeError(f"timed out after {self._timeout:g}s") from exc
         except OSError as exc:  # e.g. not executable, or E2BIG for a huge artifact
             raise JudgeError(f"could not launch {self._command[0]!r}: {exc}") from exc
         if completed.returncode != 0:
-            output = _excerpt(completed.stderr.strip() or completed.stdout)
+            output = self._redact(_excerpt(completed.stderr.strip() or completed.stdout))
             raise JudgeError(f"exited {completed.returncode}: {output}")
         score = parse_score(completed.stdout)
         if score is None:
-            raise JudgeError(
-                f"answered off-format (want one number in [0, 1]): {_excerpt(completed.stdout)!r}"
-            )
+            output = self._redact(_excerpt(completed.stdout))
+            raise JudgeError(f"answered off-format (want one number in [0, 1]): {output!r}")
         return score
+
+    def _redact(self, text: str) -> str:
+        """``text`` without the endpoint token: a judge error must never carry it."""
+        return text if self.route is None else self.route.redact(text)
 
     def score_criterion(self, criterion: str, artifact: Any, n: int = 1) -> float:
         """Average ``n`` independent CLI gradings of ``criterion`` over ``artifact``."""
