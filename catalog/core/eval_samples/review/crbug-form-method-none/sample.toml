@@ -1,5 +1,6 @@
 id = "review/crbug-form-method-none"
 description = "Review a change that restricts form submissions to GET and POST but calls .upper() on a method=None keyword that used to mean GET. Paraphrases the bug a reviewer caught in scrapy pull request 3794, from CRBugBench; see eval_samples/ATTRIBUTIONS.md."
+edition = "v0.1.0"
 
 [setup]
 files = [

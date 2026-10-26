@@ -1,5 +1,6 @@
 id = "make-testable/inject-clock"
 description = "Edit task: a reminder job reads datetime.now() and builds a live SmsGateway inside its business function; the agent extracts the due-window decision into a pure function, injects the clock and a Protocol- or Callable-typed sender wired in the CLI composition root, and adds named fakes while the characterization tests stay unchanged."
+edition = "v0.1.0"
 
 [setup]
 files = [

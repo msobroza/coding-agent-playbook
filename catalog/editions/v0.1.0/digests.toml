@@ -1,0 +1,306 @@
+# Written by `scripts/release.py freeze`. Never edit it by hand.
+
+schema_version = 1
+tag = "v0.1.0"
+commit = "dff065f4c2363f5ac50f6c24091b38fb718c834c"
+
+[[artifacts]]
+kind = "notice"
+id = "core/ATTRIBUTIONS.md"
+path = "core/ATTRIBUTIONS.md"
+sha256 = "53182c3ff5f480d12b3ad79d01441537b869606344e61028bdd96bde8371f7cd"
+
+[[artifacts]]
+kind = "notice"
+id = "core/skills/ml-data/references/LICENSE.python-best-practices"
+path = "core/skills/ml-data/references/LICENSE.python-best-practices"
+sha256 = "5f2aed106f011d7f40db3a248ada7456350188c72a2e3aa8768ef251415fdc5c"
+
+[[artifacts]]
+kind = "notice"
+id = "core/skills/python-coding/references/LICENSE.python-best-practices"
+path = "core/skills/python-coding/references/LICENSE.python-best-practices"
+sha256 = "5f2aed106f011d7f40db3a248ada7456350188c72a2e3aa8768ef251415fdc5c"
+
+[[artifacts]]
+kind = "notice"
+id = "core/skills/python-coding/references/LICENSE.python-clean-architecture"
+path = "core/skills/python-coding/references/LICENSE.python-clean-architecture"
+sha256 = "80c4860b8cedcb4efa41ef98e33e3e79a43314442444b3470c3d68cae66025f8"
+
+[[artifacts]]
+kind = "notice"
+id = "core/skills/python-testing/references/LICENSE.python-best-practices"
+path = "core/skills/python-testing/references/LICENSE.python-best-practices"
+sha256 = "5f2aed106f011d7f40db3a248ada7456350188c72a2e3aa8768ef251415fdc5c"
+
+[[artifacts]]
+kind = "notice"
+id = "core/skills/python-testing/references/LICENSE.python-clean-architecture"
+path = "core/skills/python-testing/references/LICENSE.python-clean-architecture"
+sha256 = "80c4860b8cedcb4efa41ef98e33e3e79a43314442444b3470c3d68cae66025f8"
+
+[[artifacts]]
+kind = "prompt"
+id = "characterize"
+path = "core/prompts/characterize.md"
+sha256 = "92f1e908c91134e6c04a39e773b0ceb485c6bce81dea5e18378da90bb41fe826"
+
+[[artifacts]]
+kind = "prompt"
+id = "explain"
+path = "core/prompts/explain.md"
+sha256 = "8ac3b98df416c6bb0c47668d8285fb6bf780d15d1595933c3fc8d07d94059431"
+
+[[artifacts]]
+kind = "prompt"
+id = "find-injected-vulnerability"
+path = "core/prompts/find-injected-vulnerability.md.j2"
+sha256 = "2379746795791840f97aa4da5c0e56b4aa18313f6b3cd2abad87f6b5c3110116"
+
+[[artifacts]]
+kind = "prompt"
+id = "generate-tests"
+path = "core/prompts/generate-tests.md.j2"
+sha256 = "afd4072091f64da9a1f6c01d6a92de681ceeaee3cdc3b5867be5323719bdf92e"
+
+[[artifacts]]
+kind = "prompt"
+id = "make-testable"
+path = "core/prompts/make-testable.md"
+sha256 = "4d68084339bd3911095ea4d4c0e28ec7f453428c518b96ffdfe42d854ffd469c"
+
+[[artifacts]]
+kind = "prompt"
+id = "refactor"
+path = "core/prompts/refactor.md"
+sha256 = "744a4cd03910b25e68d977c150437bc3d6202a21dba5e3af49ba3a40706ec57b"
+
+[[artifacts]]
+kind = "prompt"
+id = "review"
+path = "core/prompts/review.md.j2"
+sha256 = "e72bd5f6d626a4a5e264dc5600e75647f649d3ff02f7c2797d6099ab63afab3e"
+
+[[artifacts]]
+kind = "prompt"
+id = "review-architecture"
+path = "core/prompts/review-architecture.md"
+sha256 = "8269b1e07f93d81851eacfecd27cd7d31464fa8996dc25198236a5688f509da7"
+
+[[artifacts]]
+kind = "prompt"
+id = "security-review"
+path = "core/prompts/security-review.md.j2"
+sha256 = "f0d10a7170ee039487d96c55a508bd8452dcc091ae464b57936a78cfc9a1295f"
+
+[[artifacts]]
+kind = "rule"
+id = "ml-serialization-security"
+path = "core/skills/ml-data/rules/ml-serialization-security.md.j2"
+sha256 = "55156eaba02746370f6609dd485d33c404dbaebf2ec82c40d3ec35c0307cec70"
+
+[[artifacts]]
+kind = "rule"
+id = "pytest"
+path = "core/skills/python-testing/rules/pytest.md.j2"
+sha256 = "6148375deb1c850e2dd6d51204555bceb63c5912f1637a1a114e47345111b7c9"
+
+[[artifacts]]
+kind = "rule"
+id = "python-dependency-injection"
+path = "core/skills/python-coding/rules/python-dependency-injection.md"
+sha256 = "7dd6eaf10f45e702e63c1e47771d5b91822d71e44ec5f7da2ebf91b91eec587f"
+
+[[artifacts]]
+kind = "rule"
+id = "python-error-handling"
+path = "core/skills/python-coding/rules/python-error-handling.md"
+sha256 = "e45106818b57ae689221620851003290272b8c3381c72b21bc5c9b070acfb850"
+
+[[artifacts]]
+kind = "rule"
+id = "python-pure-core"
+path = "core/skills/python-coding/rules/python-pure-core.md"
+sha256 = "5fbb9045996987ce40515b6e9a904bc4465a9300807a9e12b609a03f37884952"
+
+[[artifacts]]
+kind = "rule"
+id = "python-typing"
+path = "core/skills/python-coding/rules/python-typing.md.j2"
+sha256 = "81f4b086440b4fa44e07ff4b75f38dc78ce312595a70cfdca74dc0d3c8ffad4f"
+
+[[pins]]
+sample = "characterize/legacy-pricing"
+rendered_prompt_digest = "70c57cc887b5ff95236254913ee9213e49b6a5a8fee563939b6358cdb5962d47"
+sample_digest = "2af08312fc9593152ea1a04f660cada90334d9f1e6f6ba3b2134a9939f5dd829"
+
+[[pins]]
+sample = "explain/pure-function"
+rendered_prompt_digest = "5f41a1c9e8639e8c90f4729b735fa73730567f8c8993aa98f08ecc10fbf9f112"
+sample_digest = "6efeda70a14d0fdc1da1104e768e0efb29540927bfa6c3e157e9c9dcdbcee237"
+
+[[pins]]
+sample = "find-injected-vulnerability/aiplatform-xss"
+rendered_prompt_digest = "9deec6148ec0e38c53117165674888046818da3aa9fda73b9e99d04a69b5a074"
+sample_digest = "dbe7234c53faea18cdebf61fbc477cd905a98896ee9b38378fe6b3fca177da26"
+
+[[pins]]
+sample = "find-injected-vulnerability/authlib-sigbypass"
+rendered_prompt_digest = "9deec6148ec0e38c53117165674888046818da3aa9fda73b9e99d04a69b5a074"
+sample_digest = "67e6a2fc1124be6e008f80c92073be03718b5402f7ebc05de360d7d6b18257dd"
+
+[[pins]]
+sample = "find-injected-vulnerability/changedetection-pathtraversal"
+rendered_prompt_digest = "9deec6148ec0e38c53117165674888046818da3aa9fda73b9e99d04a69b5a074"
+sample_digest = "0ca2068cd32f6a1ac1d413c3867a9de17c1f4b18533fb009e3c51e8134ea0019"
+
+[[pins]]
+sample = "find-injected-vulnerability/changedetection-ssrf"
+rendered_prompt_digest = "9deec6148ec0e38c53117165674888046818da3aa9fda73b9e99d04a69b5a074"
+sample_digest = "38d732494e0c0ba024c9dca9302790d904013b7798fb0958a4e1956ba11ada39"
+
+[[pins]]
+sample = "find-injected-vulnerability/graphiti-queryinj"
+rendered_prompt_digest = "9deec6148ec0e38c53117165674888046818da3aa9fda73b9e99d04a69b5a074"
+sample_digest = "19c56b79fc6c662859f9e6639fa3bdcb8e010c7b2f08c4a31136465c051c34eb"
+
+[[pins]]
+sample = "find-injected-vulnerability/langroid-codeinj"
+rendered_prompt_digest = "9deec6148ec0e38c53117165674888046818da3aa9fda73b9e99d04a69b5a074"
+sample_digest = "78cd09d84528acd7be2dd182a5ec6f6895b86ae32aec374536e1452cde34b8d6"
+
+[[pins]]
+sample = "find-injected-vulnerability/modoboa-cmdi"
+rendered_prompt_digest = "9deec6148ec0e38c53117165674888046818da3aa9fda73b9e99d04a69b5a074"
+sample_digest = "711c541da050b852959abe42c50fcda0e012cfd498bca2713f195cb6a1612993"
+
+[[pins]]
+sample = "find-injected-vulnerability/ormar-sqli"
+rendered_prompt_digest = "9deec6148ec0e38c53117165674888046818da3aa9fda73b9e99d04a69b5a074"
+sample_digest = "1dc4c34a7d91a50860d7ae1631aa7b70803e5a907f5149cd888e1f8f4e2f6440"
+
+[[pins]]
+sample = "find-injected-vulnerability/pydash-massassign"
+rendered_prompt_digest = "9deec6148ec0e38c53117165674888046818da3aa9fda73b9e99d04a69b5a074"
+sample_digest = "9e26f51108f86eff282aba657681fb1de568fb19779b31a6487bd2bb31836332"
+
+[[pins]]
+sample = "find-injected-vulnerability/pytorch-deserial"
+rendered_prompt_digest = "9deec6148ec0e38c53117165674888046818da3aa9fda73b9e99d04a69b5a074"
+sample_digest = "5615a6c1234c9865a8984807dcc9fd6ba68f28d29adb2cb1ae3644190d6d0b64"
+
+[[pins]]
+sample = "generate-tests/async-code"
+rendered_prompt_digest = "66609e3c88b9e3279563812af7e7336290a4350b6e44f96abb6471a81501f897"
+sample_digest = "ad985178a0e1d0f1d8da1c5f46bb1397dd876282d412d7d1574c7b004b150c0e"
+
+[[pins]]
+sample = "generate-tests/edge-cases"
+rendered_prompt_digest = "60805f02732dcb9c9400527e3cabb1281ae2ae016c2da68e04b735188083a492"
+sample_digest = "166cd8e790b0100fbb06637aead0625dfb6ca56655e8fb16c522b89aec7f0abe"
+
+[[pins]]
+sample = "generate-tests/happy-path"
+rendered_prompt_digest = "b8d449a76934189c7a91281358c8d43f2394546bd59480aef563387b5a872269"
+sample_digest = "b92246665e08ee468ad0c2b8d373b05c555bfb518be05dbeccece741d5841d7b"
+
+[[pins]]
+sample = "make-testable/inject-clock"
+rendered_prompt_digest = "3b0f66373e1ddea4c37ffc71d5aaab39f99d2f7cf37007487dddd65930748024"
+sample_digest = "d07dfc1e777ce5eeefcb8358124fd86c3f5b4ba5d52e22a66814285c0aec2fd9"
+
+[[pins]]
+sample = "refactor/extract-helper"
+rendered_prompt_digest = "e66eb538986feccd3a9680206f577e419458184acffcdd300f22bedc060220ac"
+sample_digest = "d9830f419aab7380baebfa560827c5ecebc565e2894cb643b1413662662b348a"
+
+[[pins]]
+sample = "refactor/rename-for-clarity"
+rendered_prompt_digest = "33e7c99b87e4009bbbd60e80fe8c3255a6582325ad12ef880e5e4e54138bb1c1"
+sample_digest = "2a0860eb3325bdef0e7d34f47fe69fa8571d8810060df2ecd00b5e9b1e5f8ab5"
+
+[[pins]]
+sample = "review-architecture/layer-leak"
+rendered_prompt_digest = "bdc9786f1468e4755d843c6472d917597e9edb647700fda18b5b9f71c658955e"
+sample_digest = "9189ed9ebbc450fe247ebb19f199267af3f9a14dd00705e2e4781d9757a1b5eb"
+
+[[pins]]
+sample = "review/change-drops-part-of-request"
+rendered_prompt_digest = "c5cd11b8136a1be92fe5cf96941d666a463dc1f20f020ffbfe609a239d825f9d"
+sample_digest = "70143397a8f5a4ca8b9099f24caaac7bc547a6fce17a2f16f94bb2bb8a5dd9e4"
+
+[[pins]]
+sample = "review/clean-multi-file-change"
+rendered_prompt_digest = "11a33bdd4f0af4bdbfa5078e8afc809605aa65d7a3d9dbbf3bb0a079496af082"
+sample_digest = "f164cd19d679f84de931f053f9075a133349a8ad997a515c2e96a2e993c77942"
+
+[[pins]]
+sample = "review/crbug-audio-input-args"
+rendered_prompt_digest = "1d2d1db6cf07820a03f1431405de0e1e3d24879940bd19292ada502572194dcc"
+sample_digest = "26fa7da5f7f22df92cd4d6db6235e07be17d1d7a8d4fe9c1ad0a4615778aed73"
+
+[[pins]]
+sample = "review/crbug-basic-auth-not"
+rendered_prompt_digest = "5524951ee526ab44eb7d29f3b090fc5313235e7412275fdd45de6fbbbf994c79"
+sample_digest = "0b45d1e5a36adbe07b6290969fc4b046f032e57f0326b0b3c71ed8cef2bbf694"
+
+[[pins]]
+sample = "review/crbug-form-method-none"
+rendered_prompt_digest = "d1c1f828a2f8a3ac234ac9a71a102d77e84acf315e583ea7291a68015f5a1cc8"
+sample_digest = "76924fe5ea79608ee02971535223c4e9045acea98f84044940f1ef5fb736adec"
+
+[[pins]]
+sample = "review/crbug-ftp-active-string"
+rendered_prompt_digest = "ea3966481d9f14e4957bbbcb7232f4fccf9a318c3c2d2ad9321ca5da3a6bf34d"
+sample_digest = "6c0398bf5462f824cec2ebdb11d09072e1777358365e5b5b50d79cffeb5a4a18"
+
+[[pins]]
+sample = "review/crbug-log-textio"
+rendered_prompt_digest = "8c8bb140cc7017b6fd5223a551fa5188242d6dfcd55a62c2f78b01b16bc7ec2a"
+sample_digest = "b51b2cbb7d86decfa91d492065bcad4dc2b7b39d38dbbeb45724444c480a5991"
+
+[[pins]]
+sample = "review/crbug-netrc-env-path"
+rendered_prompt_digest = "d27c0ef905d2a077e56c0e9567db6bd949db46351f75d71223bc2810170baf70"
+sample_digest = "bd1e7c679ac865605941a53c80c447373086509a3cdf7ceb8748b41209e3a3ad"
+
+[[pins]]
+sample = "review/crbug-replace-same-object"
+rendered_prompt_digest = "277e8f672d045e51f6e6e272a16a1eecb4d621103319810e9de15f846dbadef0"
+sample_digest = "532e0e3c1d42d9a4214f9d430e8ffa03c40230ac6a6734ec872728d75bbc62dd"
+
+[[pins]]
+sample = "review/crbug-xtrim-maxlen-minid"
+rendered_prompt_digest = "31cbb332acd7b3cd0d14fd06be4c3b9f2203fcadeeac3c3a39b8258b3fd4d6a1"
+sample_digest = "417634bc66ecf3dced3712262f5ba0e85bd8a76f25af9a27d43695ce1f740ca7"
+
+[[pins]]
+sample = "review/diff-old-bug-on-untouched-line"
+rendered_prompt_digest = "a00597542618becb9eafdf29aa9316063878626af55ceaa5021939bf7f6e4ae3"
+sample_digest = "0aae7c81c7403890400cadd6b911c9893d66829880120cda2de3daef59c78bd9"
+
+[[pins]]
+sample = "review/rereview-earlier-findings"
+rendered_prompt_digest = "9d472e50b4d397cc9e93998461bf865b25d8ddd1692b18e82768f0263349fc62"
+sample_digest = "9fe46c7a47b392584f065e60bfcf089818f0a4f9a713ca274eab4aa5d0fc7e81"
+
+[[pins]]
+sample = "review/spot-the-bug"
+rendered_prompt_digest = "5b971598dbcfbcdca19077f87f97fe2b8752d08294ec894a08878e9d903f8499"
+sample_digest = "970649a86575fd4e4f4581bc25d6138112935fdc612dabd9002c7e8f8e491961"
+
+[[pins]]
+sample = "review/style-only-no-changes-needed"
+rendered_prompt_digest = "bf1d86e98b66408db0f9f84bac1ad8aa1f352bf04bf657b28a689131508838e1"
+sample_digest = "5ab63c44b1568185a01ffceb75d7b62bf6fa7571924f19bd30c39eb27d80c974"
+
+[[pins]]
+sample = "security-review/already-safe"
+rendered_prompt_digest = "6fd763c74a49c456206f01a7724bf943ecca940bc4656e24b32419d7d1aa961d"
+sample_digest = "9931a693e0b9b40b47ae27670e65519be2fda6cde9e0943738bda6d6bec5ef0d"
+
+[[pins]]
+sample = "security-review/pickle-load"
+rendered_prompt_digest = "56fc559120aa88aae51e28a26b67a563727d2b1f5347de420b67dc721d3f2190"
+sample_digest = "bc044fbd7465b8fc0088fef4a534a81eee11765eb93fae0a20a83637ace1a476"

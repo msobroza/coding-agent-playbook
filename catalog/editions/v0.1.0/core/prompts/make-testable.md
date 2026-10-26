@@ -1,0 +1,43 @@
+---
+id: make-testable
+name: Make testable
+description: "Behavior-preserving workflow: pin the target with tests, extract its pure logic, and lift hard-wired clocks, clients, sessions, singletons and globals into injected parameters covered by named fakes."
+slash: make-testable
+input_variables:
+  - name: target
+    description: Module, class or function to make testable (e.g. "src/billing/invoices.py::charge_overdue")
+    required: true
+includes_rules:
+  - python-dependency-injection
+  - python-pure-core
+---
+
+# Make testable
+
+Code that reads the clock, builds its own client or reaches for a global can only be tested by patching, and patch-based tests break on every move. This workflow splits such code into a pure core plus injected dependencies, one behavior-preserving step at a time, so the result is tested with plain arguments and named fakes.
+
+## Ground rules
+
+- **Preserve behavior.** Same inputs, outputs, exceptions, and side effects in the same order. Add no features and fix no bugs; report a likely bug instead.
+- **Stay on the target.** Touch the target, its callers, the composition root and tests, nothing else.
+- **Non-interactive.** Work on the target the user named. Record assumptions in the report instead of stopping to ask.
+- **Existing tests are the contract.** Never edit, delete or weaken them. They stay green after every step.
+
+## Workflow
+
+1. **Read.** Open the target, every caller (grep its name), and the composition root: the entry point, app factory or CLI root that builds concrete objects.
+2. **Get a green baseline.** Run the tests before any edit. If they are red, stop and report; never refactor on a broken baseline. If nothing exercises the target, first write characterization tests that pin what it does today, odd outputs included, through paths that need no network. A characterization test that has to patch the clock or a global is temporary: replace it with a fake-driven test once the parameter exists.
+3. **Inventory the hard dependencies.** List what the target creates or reaches for, with `path:line`: database sessions and connections, HTTP or SDK clients, the clock, randomness and id generation, environment variables, module globals, singletons and service locators, configuration lookups, `print` and `input`.
+4. **Extract the pure core.** Move the decision logic into a function that takes the values those dependencies produced (the current time, a config value, the loaded records) and returns a result. What remains is a thin shell that gathers inputs, calls the core and acts on its answer.
+5. **Lift each remaining dependency into a parameter.** Type it with a role-named `Callable` alias for a single behavior or a small `Protocol` declared in the consuming module for several methods, and give it no default that builds the concrete object. Update every caller and the composition root in the same step, so the root is the only place that constructs the client, passes the real clock or loads settings. Plain parameters suffice; add no container or registry. If an existing test or a caller outside the repository relies on the old signature, keep that entry point as a thin wrapper that only wires production dependencies and delegates.
+6. **Add named fakes and tests.** Write one fake class per `Protocol`, named for what it replaces (`FakeSmsSender`, `FakeInvoiceStore`), that records calls or returns canned data and does no I/O. Put fakes in `tests/fakes.py` when `tests/` is a package, otherwise in the test module that uses them; never create a `conftest.py` for them. A `Callable` dependency needs no class: pass a lambda or a small function. Test the core with argument-to-return assertions and the shell through its fakes, never by patching what you just lifted.
+7. **Run every test again.** Existing and new tests must pass. If an existing test fails, the step changed behavior: undo it rather than touching the test.
+
+## Output format
+
+A short report with four sections:
+
+1. **Dependencies**: one row per hard dependency giving what it was, where it lived (`path:line`), what replaced it, and where it is wired now.
+2. **Moves**: one bullet per refactoring step, in the order you made them.
+3. **Tests**: the new tests and fakes (file and name), then the test command you ran and its result before and after the change.
+4. **Notes**: any likely bug the characterization tests pinned, any compatibility wrapper you kept, and anything you left untouched and why.

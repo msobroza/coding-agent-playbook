@@ -1,5 +1,6 @@
 id = "review/spot-the-bug"
 description = "Happy path: code has a real correctness bug (off-by-one); a good review catches it before style nits."
+edition = "v0.1.0"
 
 [setup]
 files = ["src/pagination.py"]

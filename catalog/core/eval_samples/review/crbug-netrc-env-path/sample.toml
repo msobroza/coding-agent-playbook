@@ -1,5 +1,6 @@
 id = "review/crbug-netrc-env-path"
 description = "Review a change that makes get_netrc_auth honour a NETRC variable holding the netrc file's path, but still expands that path under the home directory. Paraphrases the bug a reviewer caught in requests pull request 5643, from CRBugBench; see eval_samples/ATTRIBUTIONS.md."
+edition = "v0.1.0"
 
 [setup]
 files = [

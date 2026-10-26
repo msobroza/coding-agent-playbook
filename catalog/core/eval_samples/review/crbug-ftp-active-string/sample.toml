@@ -1,5 +1,6 @@
 id = "review/crbug-ftp-active-string"
 description = "Review a change adding an FTP active-mode setting that reads it as a raw value, so the text 'False' from the command line turns active mode on. Paraphrases the bug a reviewer caught in scrapy pull request 3829, from CRBugBench; see eval_samples/ATTRIBUTIONS.md."
+edition = "v0.1.0"
 
 [setup]
 files = [

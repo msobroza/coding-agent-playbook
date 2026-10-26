@@ -1,5 +1,6 @@
 id = "review-architecture/layer-leak"
 description = "Review-only: a layered order service whose business module builds its own SQLite store, with an orders <-> storage cycle hidden by a function-local import; a TYPE_CHECKING import is a control that must not be flagged."
+edition = "v0.1.0"
 
 [setup]
 files = [

@@ -1,5 +1,6 @@
 id = "security-review/pickle-load"
 description = "Happy path: a model loader unpickles untrusted artifacts (pickle.load of a registry file, pickle.loads of a queue payload); a good security review flags the RCE and proposes a pickle-free refactor."
+edition = "v0.1.0"
 
 [setup]
 files = ["src/unsafe_model_loader.py"]

@@ -1,5 +1,6 @@
 id = "review/crbug-audio-input-args"
 description = "Review a change that builds the audio ffmpeg command from the camera's input args but concatenates a plain argument string onto a list. Paraphrases the bug frigate pull request 8156 introduced and pull request 8924 fixed, from CRBugBench; see eval_samples/ATTRIBUTIONS.md."
+edition = "v0.1.0"
 
 [setup]
 files = [

@@ -27,7 +27,7 @@ from coding_agent_playbook.evals.targets import TARGET_ENV_VAR
 from coding_agent_playbook.grading.types import EvaluationReport
 from coding_agent_playbook.validation.context import SyncContext
 from tests.cli import claude_cli_fakes
-from tests.edition_fixtures import SAMPLE_ID, TAG
+from tests.edition_fixtures import SAMPLE_ID, TAG, write_sample
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -285,9 +285,13 @@ def test_full_scoring_reaches_every_recorded_run(
         return _canned_run(runner, sample)
 
     monkeypatch.setattr(FakeRunner, "run_sample", recording_run)
-    rc, _ = _record(repo, _SAMPLE, "--target", "fake-pinned", "--runs", "2", *flags)
+    rc, out = _record(repo, _SAMPLE, "--target", "fake-pinned", "--runs", "2", *flags)
     assert rc == 0
-    assert seen == [fail_fast, fail_fast]
+    # Count from the file: a shipped sample pinned to an edition records control runs too.
+    data = _load(out)
+    recorded = sum(e["runs"] for side in ("samples", "controls") for e in data[side].values())
+    assert recorded >= 2
+    assert seen == [fail_fast] * recorded
 
 
 def test_a_bad_prompt_on_any_sample_fails_before_the_first_paid_run(
@@ -343,8 +347,10 @@ def test_a_pinned_sample_also_runs_on_its_edition_as_a_control(
     assert "(+1 edition controls)" in captured.out
 
 
-def test_an_unpinned_sample_records_no_control(repo: Path) -> None:
-    rc, out = _record(repo, _SAMPLE, "--target", "fake-pinned")
+def test_an_unpinned_sample_records_no_control(engine_catalog: Path, consumer: Path) -> None:
+    # The shipped samples are all pinned once an edition is frozen, so write an unpinned one.
+    write_sample(engine_catalog / "core", edition=None, name="unpinned")
+    rc, out = _record(consumer, "review/unpinned", "--target", "fake-pinned")
     assert rc == 0
     assert _load(out)["controls"] == {}
 
