@@ -8,7 +8,8 @@ through git (and, by hand, the forge CLI) and let these pure functions decide:
   ``[project]`` version, never HEAD, so a pull request merged after the release
   never slips into its tag;
 - :func:`check_base`: that commit's parent must be the base ``prepare`` recorded
-  in the release's manifest, else main moved under the release pull request;
+  in the release's manifest, else main moved under the release pull request
+  (:class:`BaseMoved`: that release is never tagged, ``prepare`` supersedes it);
 - :func:`check_tests_passed`: the CI test jobs on that commit all succeeded;
 - :func:`tag_action`: tags are never moved: a tag already at the commit is a
   no-op (or only a push), one elsewhere is a refusal.
@@ -30,6 +31,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "TEST_JOB",
+    "BaseMoved",
     "JobResult",
     "Revision",
     "TagAction",
@@ -51,6 +53,14 @@ _COMPLETED: Final = "completed"
 
 class TagRefusal(Exception):
     """Tagging must not happen; the message says why and what to do."""
+
+
+class BaseMoved(TagRefusal):
+    """The release commit's parent is not its recorded base: that release is superseded.
+
+    It is never tagged; ``prepare --version <higher>`` releases over it
+    (``scripts/release.py`` ``_previous_release``), the only way forward.
+    """
 
 
 @dataclass(frozen=True)
@@ -145,9 +155,11 @@ def check_base(version: str, commit: str, parent: str, manifest: ReleaseManifest
             f"not {version}"
         )
     if parent != manifest.base:
-        raise TagRefusal(
+        raise BaseMoved(
             f"release commit {commit} has parent {parent}, but prepare recorded the base "
-            f"{manifest.base}: main moved under the release pull request; re-run prepare"
+            f"{manifest.base}: main moved under the release pull request, so "
+            f"{release_tag(version)} is never tagged; run `scripts/release.py prepare "
+            f"--version <higher than {version}>` to release over it"
         )
 
 

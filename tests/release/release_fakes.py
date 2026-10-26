@@ -198,11 +198,16 @@ class FakeTagHost:
         return Completed(128, "", f"path {path} does not exist in {sha}")
 
     def _ls_remote(self, args: list[str]) -> Completed:
-        tag = args[-1].removeprefix("refs/tags/")
-        target = self.remote_tags.get(tag)
-        if target is None:
-            return Completed(0)
-        return Completed(0, f"{'7a9' * 13}\trefs/tags/{tag}\n{target}\trefs/tags/{tag}^{{}}\n")
+        """Like real git: only the refs a pattern names exactly, the peeled one only if asked."""
+        patterns = {arg for arg in args if arg.startswith("refs/")}
+        lines = []
+        for tag, target in self.remote_tags.items():
+            ref = f"refs/tags/{tag}"
+            if ref in patterns:
+                lines.append(f"{'7a9' * 13}\t{ref}\n")  # the annotated tag object
+            if f"{ref}^{{}}" in patterns:
+                lines.append(f"{target}\t{ref}^{{}}\n")
+        return Completed(0, "".join(lines))
 
     def _cat_file(self, args: list[str]) -> Completed:
         tag = args[-1].removeprefix("refs/tags/")

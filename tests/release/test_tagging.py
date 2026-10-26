@@ -14,6 +14,7 @@ import pytest
 from coding_agent_playbook.release.manifest import ReleaseManifest
 from coding_agent_playbook.release.tagging import (
     TEST_JOB,
+    BaseMoved,
     Revision,
     TagAction,
     TagRefusal,
@@ -98,7 +99,7 @@ def test_a_parent_equal_to_the_recorded_base_passes() -> None:
 
 
 def test_a_base_mismatch_is_a_refusal_naming_both_commits() -> None:
-    with pytest.raises(TagRefusal, match=f"{OTHER}.*{BASE}.*re-run prepare"):
+    with pytest.raises(BaseMoved, match=f"{OTHER}.*{BASE}.*prepare --version"):
         check_base(VERSION, RELEASE, OTHER, _manifest())
 
 

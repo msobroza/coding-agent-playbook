@@ -15,6 +15,8 @@ re-runs itself (``prepare-checkout``) on that checkout's own engine, which:
 1. refuses unless the tag of the current ``[project]`` version exists (otherwise
    that release is merged but not tagged) and no release pull request is open;
    with no release tag at all it is the first release and needs ``--version``;
+   an untagged release whose base moved under its pull request is superseded,
+   never tagged: ``--version`` releases over it, from the last release tag;
 2. takes the next version from commitizen over the Conventional Commits since
    that tag, raised to at least a minor when the graded set's digests changed;
 3. writes ``catalog/releases/<version>/manifest.toml`` and ``notes.md``
@@ -67,7 +69,7 @@ from coding_agent_playbook.release.versions import (
     raises_minor,
     release_tag,
 )
-from release_tag import tag_release
+from release_tag import superseded, tag_release
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -254,7 +256,7 @@ def plan_release(
     if head != base:
         raise ReleaseError(f"the checkout is at {head}, not at the base {base}")
     current = _project_version(tools.cwd)
-    previous = _previous_release(tools, current, base)
+    previous = _previous_release(tools, current, base, version)
     _refuse_open_release_pull(tools)
     previous_manifest = None if previous is None else _manifest_of(tools.cwd, previous)
     manifest = snapshot(base)
@@ -280,8 +282,13 @@ def _project_version(checkout: Path) -> str:
     return str(project["version"])
 
 
-def _previous_release(tools: Tools, current: str, base: str) -> str | None:
-    """The version of the last release, or ``None`` for the first; refuses an untagged one."""
+def _previous_release(tools: Tools, current: str, base: str, version: str | None) -> str | None:
+    """The version of the last release, or ``None`` for the first; refuses an untagged one.
+
+    An untagged ``current`` whose release commit lost its base (main moved under
+    its pull request, ``release_tag.superseded``) is never tagged: with an explicit
+    ``version`` the release goes over it, from the last release tag.
+    """
     tags = tools.git("tag", "--list", "v*").split()
     tag = release_tag(current)
     if tag in tags:
@@ -290,10 +297,31 @@ def _previous_release(tools: Tools, current: str, base: str) -> str | None:
         return current
     if not any(is_release_tag(name) for name in tags):
         return None
-    raise ReleaseError(
-        f"release {tag} is merged but not tagged: tag it first, then re-run prepare "
-        f"(the version in {_PYPROJECT} is {current} and no tag {tag} exists)"
-    )
+    reason = superseded(tools, current, base)
+    if reason is None:
+        raise ReleaseError(
+            f"release {tag} is merged but not tagged: tag it first, then re-run prepare "
+            f"(the version in {_PYPROJECT} is {current} and no tag {tag} exists)"
+        )
+    if version is None:
+        # cz finds no tag for the current version and would count every commit since
+        # the start of history, so the version over a superseded release is explicit.
+        raise ReleaseError(
+            f"release {tag} is superseded ({reason}): pass --version, higher than {current}, "
+            "for the release over it"
+        )
+    return _last_release(tools, base)
+
+
+def _last_release(tools: Tools, base: str) -> str:
+    """The version of the newest final release tag merged into ``base``."""
+    merged = tools.git("tag", "--list", "v*", "--merged", base, "--sort=-v:refname").split()
+    final = next((name for name in merged if is_release_tag(name)), None)
+    if final is None:
+        raise ReleaseError(
+            f"no final release tag is an ancestor of {REMOTE}/{MAIN_BRANCH} ({base})"
+        )
+    return final.removeprefix("v")
 
 
 def _refuse_open_release_pull(tools: Tools) -> None:

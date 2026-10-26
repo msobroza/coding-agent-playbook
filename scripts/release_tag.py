@@ -13,7 +13,9 @@ this module only gathers their inputs and runs the outcome:
    release commit to that commit's run); by hand the ``test`` jobs of the
    release commit's CI run must be green, read through ``gh``: ``playbook forge``
    has no per-commit CI operation, and the tag job exists only in GitHub Actions;
-6. the commit's parent must be the base in its ``catalog/releases/<v>/manifest.toml``;
+6. the commit's parent must be the base in its ``catalog/releases/<v>/manifest.toml``,
+   else the release is superseded (:func:`superseded`): never tagged, ``prepare``
+   releases the next version over it;
 7. ``git tag --annotate`` on that commit and ``git push origin refs/tags/vX``,
    never ``-f``: a release tag is immutable.
 """
@@ -32,6 +34,7 @@ from coding_agent_playbook.release.manifest import (
     release_dir,
 )
 from coding_agent_playbook.release.tagging import (
+    BaseMoved,
     Revision,
     TagAction,
     TagRefusal,
@@ -102,6 +105,27 @@ def tag_release(tools: TagTools, *, tested_commit: str | None) -> str:
     return f"tagged {tag} at {commit}"
 
 
+def superseded(tools: TagTools, version: str, tip: str) -> str | None:
+    """Why release ``version`` on ``tip`` can never be tagged (main moved under it), else ``None``.
+
+    ``prepare`` asks it of an untagged current version: a superseded release is
+    released over by the next version instead of refusing (PR #314 review).
+    Any other refusal (no release commit, no manifest) is ``None``: not superseded.
+
+    Example::
+
+        reason = superseded(tools, "1.2.0", base)  # "release commit … has parent …" or None
+    """
+    try:
+        commit = find_release_commit(version, _revisions(tools, tip))
+        check_base(version, commit, _parent(tools, commit), _manifest_at(tools, commit, version))
+    except BaseMoved as exc:
+        return str(exc)
+    except TagRefusal:
+        return None
+    return None
+
+
 def _version_at(tools: TagTools, commit: str) -> str | None:
     done = tools.run(["git", "show", f"{commit}:{_PYPROJECT}"])
     if done.returncode != 0:
@@ -121,7 +145,10 @@ def _revisions(tools: TagTools, tip: str) -> Iterator[Revision]:
 
 def _tag_state(tools: TagTools, tag: str) -> TagState:
     ref = f"refs/tags/{tag}"
-    remote = _remote_target(tools.git("ls-remote", "--tags", REMOTE, ref), ref)
+    # Name the peeled ref too: for an exact-ref pattern git lists only that ref, so an
+    # annotated tag would read as its tag object, not its commit (PR #314 review).
+    listing = tools.git("ls-remote", "--tags", REMOTE, ref, f"{ref}{_PEELED}")
+    remote = _remote_target(listing, ref)
     local = tools.run(["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"])
     if local.returncode != 0:
         return TagState(remote=remote, local=None)

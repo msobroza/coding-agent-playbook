@@ -86,7 +86,7 @@ def test_tag_refuses_when_the_parent_is_not_the_recorded_base(
 
     assert _tag(host, tmp_path) == 1
 
-    assert "re-run prepare" in capsys.readouterr().err
+    assert "prepare --version" in capsys.readouterr().err
     assert not _tagged(host)
     assert not _pushed(host)
 
