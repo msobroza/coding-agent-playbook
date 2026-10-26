@@ -6,6 +6,7 @@ numbers can be checked exactly.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 
 import pytest
@@ -19,10 +20,12 @@ from coding_agent_playbook.evals.release_metrics import (
 )
 from coding_agent_playbook.evals.release_metrics_schema import (
     SCHEMA_VERSION,
+    SETUP_PART_TYPES,
     ReleaseMetricsError,
     validate_release_metrics,
 )
 from coding_agent_playbook.evals.run.harness_runner import SampleResult
+from coding_agent_playbook.evals.setup_digest import SetupParts
 from coding_agent_playbook.evals.targets import EvalTarget
 from coding_agent_playbook.evals.token_usage import TokenPrice, TokenUsage
 from coding_agent_playbook.grading.scope import CostTier, Determinism
@@ -305,3 +308,59 @@ def test_validation_rejects_an_isolated_key_that_is_not_a_bool() -> None:
         validate_release_metrics(metrics)
     metrics["target"]["isolated"] = False
     validate_release_metrics(metrics)
+
+
+_SETUP = SetupParts(
+    harness="opencode",
+    harness_version="1.2.3",
+    model="my-org/coder-32b",
+    endpoint_fingerprint=None,
+    small_model=None,
+    runs=1,
+    judge_model=None,
+    judge_samples=None,
+    judge_version=None,
+    fail_fast=True,
+    isolated=True,
+    scoring_digest="d" * 64,
+)
+
+
+def test_a_record_with_setup_parts_writes_the_setup_digest_and_its_parts() -> None:
+    # #329 ticket 04: the file names its setup, so a later record can say which part changed.
+    recorded = RecordedTarget(
+        _PRICED, harness_version="1.2.3", judge_model=None, runs=1, isolated=True, setup=_SETUP
+    )
+    metrics = build_release_metrics(release="9.9.9", commit=None, recorded=recorded, samples=[])
+    validate_release_metrics(json.loads(json.dumps(metrics)))
+    assert metrics["setup_digest"] == _SETUP.digest
+    assert metrics["setup"] == _SETUP.as_dict()
+
+
+def test_a_file_without_setup_digest_leaves_the_keys_out_and_validates() -> None:
+    metrics = _build(_PRICED, _runs("review/a", _result(1.0, passed=True)))
+    assert "setup_digest" not in metrics
+    assert "setup" not in metrics
+    validate_release_metrics(metrics)  # files recorded before #329 ticket 04
+    validate_release_metrics(metrics_file("9.9.9", {"review/a": sample_entry(0.9)}))
+
+
+def test_validation_types_the_setup_digest_and_each_part() -> None:
+    metrics = metrics_file("9.9.9", {"review/a": sample_entry(0.9)})
+    metrics["setup_digest"] = None
+    metrics["setup"] = _SETUP.as_dict() | {"runs": "one", "fail_fast": 1}
+    del metrics["setup"]["harness"]
+    with pytest.raises(ReleaseMetricsError) as caught:
+        validate_release_metrics(metrics)
+    message = str(caught.value)
+    assert "setup_digest: expected str, got None" in message
+    assert "setup.runs: expected int, got 'one'" in message
+    assert "setup.fail_fast: expected bool, got 1" in message
+    assert "setup.harness: missing" in message
+    metrics["setup"] = "parts"
+    with pytest.raises(ReleaseMetricsError, match="setup: expected dict, got 'parts'"):
+        validate_release_metrics(metrics)
+
+
+def test_the_schema_types_every_setup_part() -> None:
+    assert set(SETUP_PART_TYPES) == {field.name for field in dataclasses.fields(SetupParts)}

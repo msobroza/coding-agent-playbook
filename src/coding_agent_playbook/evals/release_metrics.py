@@ -28,6 +28,8 @@ from coding_agent_playbook.evals.release_metrics_schema import (
     INPUTS_DIGEST_KEY,
     ISOLATED_KEY,
     SCHEMA_VERSION,
+    SETUP_DIGEST_KEY,
+    SETUP_KEY,
 )
 from coding_agent_playbook.grading.types import CheckResult
 
@@ -35,6 +37,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
 
     from coding_agent_playbook.evals.run.harness_runner import SampleResult
+    from coding_agent_playbook.evals.setup_digest import SetupParts
     from coding_agent_playbook.evals.targets import EvalTarget
     from coding_agent_playbook.evals.token_usage import TokenPrice
 
@@ -78,6 +81,8 @@ class RecordedTarget:
 
     ``isolated`` says the harness and the judge ran without the user's personal
     settings (#329 ticket 02); ``None`` leaves the key out of the block.
+    ``setup`` is the record's setup parts (#329 ticket 04), written as the
+    file's ``setup_digest`` and ``setup``; ``None`` leaves both keys out.
 
     Example::
 
@@ -90,6 +95,7 @@ class RecordedTarget:
     judge_model: str | None
     runs: int
     isolated: bool | None = None
+    setup: SetupParts | None = None
 
 
 def build_release_metrics(
@@ -113,7 +119,7 @@ def build_release_metrics(
     price = recorded.target.price
     entries = {runs.sample_id: _sample_entry(runs, price) for runs in samples}
     control_entries = {runs.sample_id: _sample_entry(runs, price) for runs in controls}
-    return {
+    return _setup_keys(recorded.setup) | {
         "schema_version": SCHEMA_VERSION,
         "release": release,
         "previous": None,
@@ -123,6 +129,13 @@ def build_release_metrics(
         "samples": dict(sorted(entries.items())),
         CONTROLS_KEY: dict(sorted(control_entries.items())),
     }
+
+
+def _setup_keys(setup: SetupParts | None) -> dict[str, object]:
+    """The file's ``setup_digest`` and ``setup`` parts; none without setup parts."""
+    if setup is None:
+        return {}
+    return {SETUP_DIGEST_KEY: setup.digest, SETUP_KEY: setup.as_dict()}
 
 
 def _target_block(recorded: RecordedTarget, samples: Sequence[SampleRuns]) -> dict[str, object]:

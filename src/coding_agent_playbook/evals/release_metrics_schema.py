@@ -15,7 +15,11 @@ One file holds one release's scores on one Eval target
                   "passes", "runs", "mean_score", "stdev", "checks": {"<check id>": score},
                   "duration_seconds_mean", "tokens_mean", "cost_usd_mean",
                   "inputs_digest"?}},
-      "controls": {"<sample id>": {the same keys, "graded": "<edition tag>"}}
+      "controls": {"<sample id>": {the same keys, "graded": "<edition tag>"}},
+      "setup_digest"?: "<sha256>",
+      "setup"?: {"harness", "harness_version", "model", "endpoint_fingerprint",
+                 "small_model", "runs", "judge_model", "judge_samples",
+                 "judge_version", "fail_fast", "isolated", "scoring_digest"}
     }
 
 ``controls`` (#281 ticket 15) holds the pinned samples' runs on their frozen
@@ -32,6 +36,12 @@ so a file written before it still validates; when present it is a string.
 ``target.isolated`` (#329 ticket 02) is ``true`` when the harness and the judge
 ran with an empty config directory, without the user's personal settings
 (``evals.record_isolation``). It is optional too; when present it is a bool.
+
+``setup_digest`` (#329 ticket 04) is the sha256 of everything outside the
+samples that decides scores, and ``setup`` holds its named parts
+(``evals.setup_digest.SetupParts``), so a later record can name the part that
+differs. Both are optional, so a file written before them still validates; when
+present, the digest is a string and every part is present and typed.
 
 ``previous`` is ``null`` until the regression check compares the file with the
 previous release; that check may add comparison keys (``vs_previous`` per
@@ -57,10 +67,16 @@ CONTROLS_KEY: Final = "controls"
 INPUTS_DIGEST_KEY: Final = "inputs_digest"
 #: The optional target key saying the run was isolated from personal settings.
 ISOLATED_KEY: Final = "isolated"
+#: The optional top-level key of the setup digest (#329 ticket 04).
+SETUP_DIGEST_KEY: Final = "setup_digest"
+#: The optional top-level key of the setup digest's named parts.
+SETUP_KEY: Final = "setup"
 
 _STR: Final = (str,)
 _OPT_STR: Final = (str, type(None))
 _INT: Final = (int,)
+_OPT_INT: Final = (int, type(None))
+_OPT_BOOL: Final = (bool, type(None))
 _NUM: Final = (int, float)
 _OPT_NUM: Final = (int, float, type(None))
 _OPT_OBJ: Final = (dict, type(None))
@@ -75,6 +91,23 @@ _TOP: Final[_Fields] = {
     "target": (dict,),
     "summary": (dict,),
     "samples": (dict,),
+}
+#: Top-level keys added under version 1: absent in older files, typed when present.
+_OPTIONAL_TOP: Final[_Fields] = {SETUP_DIGEST_KEY: _STR, SETUP_KEY: (dict,)}
+#: The setup digest's parts (``evals.setup_digest.SetupParts``), all present when ``setup`` is.
+SETUP_PART_TYPES: Final[_Fields] = {
+    "harness": _STR,
+    "harness_version": _OPT_STR,
+    "model": _OPT_STR,
+    "endpoint_fingerprint": _OPT_STR,
+    "small_model": _OPT_STR,
+    "runs": _INT,
+    "judge_model": _OPT_STR,
+    "judge_samples": _OPT_INT,
+    "judge_version": _OPT_STR,
+    "fail_fast": (bool,),
+    "isolated": _OPT_BOOL,
+    "scoring_digest": _STR,
 }
 _TARGET: Final[_Fields] = {
     "name": _STR,
@@ -152,6 +185,8 @@ def _problems(data: object) -> list[str]:
         )
     problems += _nested(data, "target", _TARGET)
     problems += _nested(data, "summary", _SUMMARY)
+    problems += _check_fields(data, _OPTIONAL_TOP, "", optional=True)
+    problems += _nested(data, SETUP_KEY, SETUP_PART_TYPES)
     target = data.get("target")
     if isinstance(target, dict):
         problems += _check_fields(target, _OPTIONAL_TARGET, "target.", optional=True)
