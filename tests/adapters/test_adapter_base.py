@@ -203,7 +203,7 @@ def test_default_cleanup_never_deletes_a_written_file_under_another_name(tmp_pat
 # --- the hook additions (specs/prK-lifecycle-hooks.md §C.1.1) ---------------------------
 
 
-_LOCK = Lockfile(schema_version=2, engine_version="0.1.0", rendered_at="2026-10-15T00:00:00Z")
+_LOCK = Lockfile(schema_version=2, engine_version="9.9.9", rendered_at="2026-10-15T00:00:00Z")
 
 
 class _RuleRecordingAdapter(_DummyAdapter):

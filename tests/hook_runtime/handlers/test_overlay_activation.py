@@ -20,6 +20,7 @@ import pytest
 from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.sync import pipeline as _sync
 from tests.cli.hook_repo import GUARD_CONFIG, SETTINGS, hook_deps
+from tests.engine_version import ENGINE_VERSION
 from tests.fakes import FakeGitClient
 
 if TYPE_CHECKING:
@@ -34,22 +35,22 @@ OVERLAY_IDS: Final = ("network-egress-guard", "pii-prompt-guard", "sensitive-dat
 NETWORK: Final = "network-egress-guard"
 #: The fixture overlay's approved hosts (allowed, then the gateway).
 OVERLAY_HOSTS: Final = ["artifactory.bank.example", "git.bank.example"]
-_CONFIG: Final = """\
+_CONFIG: Final = f"""\
 schema_version = 1
 adapters_enabled = ["claude_code", "opencode"]
-overlays_enabled = [{overlays}]
+overlays_enabled = [{{overlays}}]
 
 [project]
 name = "synthetic"
 kind = "python-library"
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 
 [storage]
 artifact_source = "filesystem"
 state_source = "filesystem"
-{extra}"""
+{{extra}}"""
 _HOOKS_ON: Final = "\n[hooks]\nenabled = true\n"
 
 

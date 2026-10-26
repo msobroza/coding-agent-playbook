@@ -29,9 +29,10 @@ from coding_agent_playbook.hook_runtime.handlers.protect._briefing_probes import
     installed_engine_version,
 )
 from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME
+from tests.engine_version import ENGINE_VERSION
 from tests.hook_runtime.fakes import FakeGit
 from tests.hook_runtime.guard_repo import canonical, hook_record
-from tests.hook_runtime.handlers.pack_repo import ENGINE_VERSION, RENDERED_AT, PackRepo
+from tests.hook_runtime.handlers.pack_repo import RENDERED_AT, PackRepo
 
 if TYPE_CHECKING:
     from collections.abc import Callable

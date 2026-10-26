@@ -33,6 +33,7 @@ from coding_agent_playbook.hook_runtime.dispatch.escape import WRAPPER_PREFIXES_
 from coding_agent_playbook.hook_runtime.state.audit_log import GuardDecisionRecord, append_decision
 from coding_agent_playbook.hook_runtime.state.store import StateStore
 from coding_agent_playbook.security.trust import HandlerApproval, sha256_of_json
+from tests.engine_version import ENGINE_VERSION
 from tests.hook_runtime.fakes import FakeClock, FakeProc, FakeTrustStore
 from tests.hook_runtime.guard_repo import GuardRepo, hook_record
 
@@ -42,7 +43,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.hook_runtime.dispatch.deps import RuntimeDeps
 
-_PROBE_OK = json.dumps({"version": [3, 13], "isolated": 1, "engine": "0.1.0a0"}).encode()
+_PROBE_OK = json.dumps({"version": [3, 13], "isolated": 1, "engine": ENGINE_VERSION}).encode()
 
 
 def _healthy(tmp_path: Path) -> tuple[GuardRepo, str]:
@@ -57,7 +58,7 @@ def _healthy(tmp_path: Path) -> tuple[GuardRepo, str]:
     python.chmod(0o755)
     (repo.state_root / INTERPRETER_PIN).write_text(f"{python}\n", encoding="utf-8")
     write_machine_pins(
-        tools={"ruff": [str(python)]}, engine_version="0.1.0a0", git_dir=repo.repo.git_dir
+        tools={"ruff": [str(python)]}, engine_version=ENGINE_VERSION, git_dir=repo.repo.git_dir
     )
     return repo, str(python)
 
@@ -146,13 +147,13 @@ def test_doctor_digest_mismatch_or_missing_pin_is_degraded_or_broken(
     ("stdout", "returncode", "severity", "needle"),
     [
         (
-            json.dumps({"version": [3, 8], "isolated": 1, "engine": "0.1.0a0"}).encode(),
+            json.dumps({"version": [3, 8], "isolated": 1, "engine": ENGINE_VERSION}).encode(),
             0,
             "broken",
             ">= 3.12",
         ),
         (
-            json.dumps({"version": [3, 13], "isolated": 0, "engine": "0.1.0a0"}).encode(),
+            json.dumps({"version": [3, 13], "isolated": 0, "engine": ENGINE_VERSION}).encode(),
             0,
             "broken",
             "-I",

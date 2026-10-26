@@ -18,13 +18,14 @@ import pytest
 from coding_agent_playbook.config.files import ConfigFiles
 from coding_agent_playbook.config.model import Config, ProjectMeta
 from coding_agent_playbook.config.schema import ConfigError
+from tests.engine_version import ENGINE_VERSION
 from tests.toml_equality import assert_toml_identical
 
 if TYPE_CHECKING:
     from pathlib import Path
 
 
-CONFIG_PRIMARY = """\
+CONFIG_PRIMARY = f"""\
 schema_version = 1
 
 [project]
@@ -32,7 +33,7 @@ name = "my-app"
 kind = "python-application"
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 
 [storage]
 artifact_source = "filesystem"
@@ -55,7 +56,7 @@ def test_load_reads_the_committed_file(tmp_path: Path) -> None:
     assert config.schema_version == 1
     assert config.project.name == "my-app"
     assert config.project.kind == "python-application"
-    assert config.engine_version == "0.1.0a0"
+    assert config.engine_version == ENGINE_VERSION
     assert config.user_choices == {"banking_mode": False}
 
 
@@ -74,13 +75,13 @@ def test_load_deep_merges_nested_tables(tmp_path: Path) -> None:
     replaced wholesale (code-quality review I3, coupled with C1's nested
     support)."""
     (tmp_path / ".coding-agent-playbook.toml").write_text(
-        textwrap.dedent("""
+        textwrap.dedent(f"""
             schema_version = 1
             [project]
             name = "r"
             kind = "python-application"
             [engine]
-            version = "0.1.0a0"
+            version = "{ENGINE_VERSION}"
             [detector_cache]
             python_version = "3.12"
             [detector_cache.frameworks]
@@ -147,7 +148,7 @@ def test_write_committed_of_a_config_round_trips(tmp_path: Path) -> None:
             kind="python-application",
             description="An example app",
         ),
-        engine_version="0.1.0a0",
+        engine_version=ENGINE_VERSION,
         overlays_enabled=["playbook-rules-bnp"],
         adapters_enabled=["continue", "claude_code"],
         detector_cache={"python_version": "3.12"},
@@ -174,7 +175,7 @@ def test_write_then_load_keeps_a_nested_detector_cache(tmp_path: Path) -> None:
     config = Config(
         schema_version=1,
         project=ProjectMeta(name="r", kind="python-application"),
-        engine_version="0.1.0a0",
+        engine_version=ENGINE_VERSION,
         detector_cache={
             "python_version": "3.12",
             "frameworks": {"fastapi": "0.110.0", "pydantic": "2.9.2"},
@@ -334,7 +335,7 @@ def test_a_rewrite_keeps_unknown_keys_of_managed_tables(tmp_path: Path) -> None:
 def test_preview_is_load_after_the_write_and_writes_nothing(tmp_path: Path) -> None:
     (tmp_path / ".coding-agent-playbook.local.toml").write_text(CONFIG_LOCAL_EVERYTHING)
     files = ConfigFiles(tmp_path)
-    config = Config(1, ProjectMeta("x", "python-library"), "0.1.0a0", adapters_enabled=["a"])
+    config = Config(1, ProjectMeta("x", "python-library"), ENGINE_VERSION, adapters_enabled=["a"])
 
     table = {**config.to_dict(), "links": {"allowed_domains": []}}
 
@@ -378,7 +379,7 @@ def test_every_read_of_a_misread_local_file_names_the_local_file(
         with pytest.raises(ConfigError, match=expected):
             read()
     with pytest.raises(ConfigError, match=expected):
-        files.preview(Config(1, ProjectMeta("x", "python-library"), "0.1.0a0").to_dict())
+        files.preview(Config(1, ProjectMeta("x", "python-library"), ENGINE_VERSION).to_dict())
 
 
 @pytest.mark.parametrize(("shape", "message"), _MISREAD_SHAPES)
@@ -413,7 +414,7 @@ def test_write_then_load_keeps_keys_that_need_quotes(tmp_path: Path) -> None:
     config = Config(
         1,
         ProjectMeta("x", "python-library"),
-        "0.1.0a0",
+        ENGINE_VERSION,
         detector_cache={"dependencies": {"ruamel.yaml": ">=0.17", "zope.interface": ""}},
         user_choices={"docs.style": "google", '"q"': 1},
     )

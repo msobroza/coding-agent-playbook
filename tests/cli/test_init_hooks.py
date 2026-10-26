@@ -16,6 +16,7 @@ import pytest
 
 from coding_agent_playbook.cli.parser import build_parser
 from coding_agent_playbook.commands import init as _init
+from tests.engine_version import ENGINE_VERSION
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -111,7 +112,7 @@ def test_no_hooks_flag_leaves_hooks_off(
     assert _hooks_table(tmp_path) == {"enabled": False}
 
 
-_EXISTING = """\
+_EXISTING = f"""\
 schema_version = 1
 adapters_enabled = ["continue"]
 
@@ -120,7 +121,7 @@ name = "r"
 kind = "python-library"
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 """
 
 

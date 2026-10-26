@@ -24,11 +24,12 @@ from coding_agent_playbook.config.model import (
     parse_output_config,
 )
 from coding_agent_playbook.config.schema import ConfigError, check_enabled_keys
+from tests.engine_version import ENGINE_VERSION
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-_BASE = """\
+_BASE = f"""\
 schema_version = 1
 
 [project]
@@ -36,7 +37,7 @@ name = "x"
 kind = "python-library"
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 """
 
 _PRIMARY = ".coding-agent-playbook.toml"
@@ -203,7 +204,7 @@ def test_a_key_nested_in_a_table_is_refused(key: str, tables: str, where: str | 
 def test_a_key_nested_under_project_is_refused() -> None:
     data = tomllib.loads(
         'schema_version = 1\n[project]\nname = "x"\nkind = "python-library"\n'
-        'overlays_enabled = ["o_pkg"]\n[engine]\nversion = "0.1.0a0"\n'
+        f'overlays_enabled = ["o_pkg"]\n[engine]\nversion = "{ENGINE_VERSION}"\n'
     )
     with pytest.raises(ConfigError, match=r"^cfg\.toml: 'overlays_enabled' in the \[project\]"):
         check_enabled_keys(data, source="cfg.toml")
@@ -322,7 +323,7 @@ def test_to_dict_passes_the_check_and_round_trips() -> None:
     config = Config(
         schema_version=1,
         project=ProjectMeta(name="x", kind="python-library"),
-        engine_version="0.1.0a0",
+        engine_version=ENGINE_VERSION,
         overlays_enabled=["coding_agent_playbook.plugins.superpowers"],
         adapters_enabled=["continue", "claude_code"],
         output=OutputConfig(commit=False),

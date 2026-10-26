@@ -16,11 +16,12 @@ from typing import TYPE_CHECKING, Final
 import pytest
 
 from coding_agent_playbook.cli import main
+from tests.engine_version import ENGINE_VERSION
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-CONFIG: Final = """\
+CONFIG: Final = f"""\
 schema_version = 1
 adapters_enabled = ["claude_code"]
 overlays_enabled = []
@@ -30,8 +31,8 @@ name = "consumer"
 kind = "python-library"
 
 [engine]
-version = "0.1.0a0"
-{tables}"""
+version = "{ENGINE_VERSION}"
+{{tables}}"""
 ROWS: Final = """
 [hooks]
 enabled = false

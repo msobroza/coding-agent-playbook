@@ -14,9 +14,10 @@ import pytest
 
 from coding_agent_playbook.config.model import Config
 from coding_agent_playbook.config.schema import ConfigError
+from tests.engine_version import ENGINE_VERSION
 
 _PRIMARY = ".coding-agent-playbook.toml"
-_BASE = """\
+_BASE = f"""\
 schema_version = 1
 
 [project]
@@ -24,7 +25,7 @@ name = "x"
 kind = "python-library"
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 """
 
 

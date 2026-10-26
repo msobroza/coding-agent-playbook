@@ -24,6 +24,7 @@ from coding_agent_playbook.catalog.resolve import Collision
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.config.tables.hooks import PolicyTables
 from coding_agent_playbook.validation.context import SyncContext
+from tests.engine_version import ENGINE_VERSION
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -215,7 +216,7 @@ def test_from_config_merges_hook_layers_across_packages(
     ]
 
 
-_POLICY_CONFIG = """\
+_POLICY_CONFIG = f"""\
 schema_version = 1
 adapters_enabled = ["claude_code"]
 
@@ -224,7 +225,7 @@ name = "synthetic"
 kind = "python-library"
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 
 [hooks]
 enabled = true

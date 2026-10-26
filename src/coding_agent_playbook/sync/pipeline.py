@@ -61,6 +61,7 @@ from __future__ import annotations
 import sys
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook import __version__ as _installed_version
 from coding_agent_playbook.adapters.claude_code.settings.managed_merge import SettingsMergeError
 from coding_agent_playbook.adapters.registry import discover_adapters, installed_output_locations
 from coding_agent_playbook.adapters.skill_dirs.ownership import judging_leftovers_with
@@ -324,7 +325,8 @@ def _run_write(ctx: SyncContext, git: GitClient, hook_deps: SyncHookDeps) -> int
     lockfile = build_lockfile(
         written,
         ctx.repo_root,
-        ctx.config.engine_version,
+        # The engine that rendered, not [engine] version: init writes that once (#283).
+        _installed_version,
         provenance=result.provenance,
         managed=result.managed,
         carried=plan.keep,

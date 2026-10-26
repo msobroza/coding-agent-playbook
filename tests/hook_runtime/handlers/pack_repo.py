@@ -53,6 +53,7 @@ from coding_agent_playbook.hooks.resolution.merge import merge_hook_layers
 from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, compute_hash
 from coding_agent_playbook.sync._protect import adapter_output_dirs
 from tests._catalog import CORE_ROOT, core_rules
+from tests.engine_version import ENGINE_VERSION
 from tests.hook_payloads import PROJECT_DIR, HookPayloadCase
 from tests.hook_runtime.guard_repo import GuardRepo
 
@@ -74,8 +75,7 @@ ENGINE_HOOKS = CORE_ROOT / "hooks"
 FIXTURE_OVERLAYS = Path(__file__).resolve().parents[2] / "fixtures" / "overlays"
 #: Every enabled adapter of the fixture consumer.
 ADAPTERS = ("claude_code", "continue", "opencode", "agents_md")
-#: The fixture engine version and sync time :meth:`PackRepo.lock_outputs` records.
-ENGINE_VERSION = "0.1.0a0"
+#: The sync time :meth:`PackRepo.lock_outputs` records (beside the installed ``ENGINE_VERSION``).
 RENDERED_AT = "2026-10-14T10:00:00Z"
 
 

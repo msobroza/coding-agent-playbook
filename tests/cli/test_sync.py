@@ -27,6 +27,7 @@ from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, Provenance
 from coding_agent_playbook.sync import _dispatch as _sync_lockfile
 from coding_agent_playbook.sync import pipeline as _sync
 from coding_agent_playbook.validation.context import SyncContext
+from tests.engine_version import ENGINE_VERSION
 from tests.fakes import FakeGitClient
 
 if TYPE_CHECKING:
@@ -247,7 +248,7 @@ def test_sync_rewrites_v1_lockfile_as_v2(
     """A v1 lockfile on disk loads, and the first sync rewrites it as schema 2."""
     repo = make_synthetic_repo(tmp_path, rules=[("x", "Body\n")])
     (repo / ".coding-agent-playbook.lock").write_text(
-        'schema_version = 1\nengine_version = "0.1.0a0"\n'
+        f'schema_version = 1\nengine_version = "{ENGINE_VERSION}"\n'
         'rendered_at = "2026-05-28T12:00:00Z"\n\n'
         '[[entries]]\npath = "AGENTS.md"\nsha256 = "abc"\nbytes = 3\n',
         encoding="utf-8",
@@ -345,7 +346,7 @@ def test_build_lockfile_scoped_entries_replace_whole_file_entry(tmp_path: Path) 
     lockfile = _sync_lockfile.build_lockfile(
         [settings, agents],
         tmp_path,
-        "0.2.0",
+        "9.9.9",
         provenance={agents.resolve(): composite, settings.resolve(): composite},
         managed=(scoped,),
     )
@@ -376,7 +377,7 @@ def test_build_lockfile_appends_carried_orphans_unchanged(tmp_path: Path) -> Non
         adapter="claude_code",
     )
     lockfile = _sync_lockfile.build_lockfile(
-        [agents], tmp_path, "0.2.0", provenance={}, carried=(carried,)
+        [agents], tmp_path, "9.9.9", provenance={}, carried=(carried,)
     )
     assert lockfile.entries[0].path == "AGENTS.md"
     assert lockfile.entries[0].kind == ""  # no recorded origin: v1 unknown provenance
@@ -443,7 +444,7 @@ def test_kept_orphan_keeps_its_provenance(
 # --- includes_rules: commands point at skills, Continue inlines (D15) -----------
 
 
-_ALL_PROMPT_ADAPTERS_CONFIG = """\
+_ALL_PROMPT_ADAPTERS_CONFIG = f"""\
 schema_version = 1
 adapters_enabled = ["continue", "claude_code", "opencode", "agent_harness"]
 overlays_enabled = []
@@ -453,7 +454,7 @@ name = "synthetic"
 kind = "python-library"
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 
 [storage]
 artifact_source = "filesystem"

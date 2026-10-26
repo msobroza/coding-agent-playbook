@@ -65,7 +65,7 @@ def test_state_source_saves_lockfile_through_the_byte_writer(tmp_path: Path) -> 
     user_tmp = tmp_path / ".coding-agent-playbook.lock.tmp"
     user_tmp.write_bytes(b"user")
     state = FileSystemStateSource(repo_root=tmp_path)
-    state.save_lockfile(Lockfile(2, "0.2.0", "2026-10-14T10:00:00Z"))
+    state.save_lockfile(Lockfile(2, "9.9.9", "2026-10-14T10:00:00Z"))
 
     data = (tmp_path / ".coding-agent-playbook.lock").read_bytes()
     assert b"\r\n" not in data

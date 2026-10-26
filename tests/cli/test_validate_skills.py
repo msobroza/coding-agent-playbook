@@ -21,6 +21,7 @@ import pytest
 from coding_agent_playbook.commands import sync as _sync
 from coding_agent_playbook.commands import validate as _validate
 from tests._catalog import core_rule_skill_ids
+from tests.engine_version import ENGINE_VERSION
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -49,7 +50,7 @@ name = "synthetic"
 kind = "python-library"
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 """
 
 
