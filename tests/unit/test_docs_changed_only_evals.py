@@ -109,3 +109,20 @@ def test_release_metrics_entry_no_longer_scores_every_sample() -> None:
     assert "carried entr" in entry.lower(), (
         f"'Release metrics' must mention carried entries: {entry!r}"
     )
+
+
+def test_release_metrics_entry_reruns_edition_controls_not_every_pinned_sample() -> None:
+    entry = _glossary_entry("Release metrics").lower()
+    assert "edition control" in entry, f"'Release metrics' must name edition controls: {entry!r}"
+    assert "every pinned sample" not in entry, f"only edition controls rerun: {entry!r}"
+    assert "new" in entry, f"'Release metrics' must rerun new samples: {entry!r}"
+
+
+def test_inputs_digest_entry_reruns_a_sample_missing_from_the_previous_file() -> None:
+    entry = _glossary_entry("Inputs digest").lower()
+    assert "missing" in entry, f"'Inputs digest' must rerun a missing entry: {entry!r}"
+
+
+def test_carried_entry_excludes_edition_controls() -> None:
+    entry = _glossary_entry("Carried entry").lower()
+    assert "edition control" in entry, f"'Carried entry' must exclude edition controls: {entry!r}"
