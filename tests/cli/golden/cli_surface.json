@@ -856,6 +856,51 @@
           "required": false,
           "help": "with --run: write the release metrics file (schema version 1) of the samples on one target to PATH; refuses unpinned models",
           "metavar": "PATH"
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--check-regressions"
+          ],
+          "dest": "check_regressions",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "compare the release metrics file NEW with --against BASELINE (same target); exits 1 on an unaccepted regression and stores the comparison in NEW",
+          "metavar": "NEW"
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--against"
+          ],
+          "dest": "against",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "--check-regressions: the previous release's metrics file for the same target",
+          "metavar": "BASELINE"
+        },
+        {
+          "action": "_AppendAction",
+          "option_strings": [
+            "--accept"
+          ],
+          "dest": "accept",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "--check-regressions: accept the regression of SAMPLE, storing REASON in NEW (repeatable)",
+          "metavar": "SAMPLE=REASON"
         }
       ],
       "exclusive_groups": [
