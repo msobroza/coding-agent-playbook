@@ -18,6 +18,7 @@ import os
 import subprocess
 import sys
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
@@ -50,7 +51,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.evals.judge import Judge
     from coding_agent_playbook.evals.run.harness_runner import HarnessRunner, SampleResult
     from coding_agent_playbook.evals.sample import EvalSample
-    from coding_agent_playbook.evals.targets import EvalSettings
+    from coding_agent_playbook.evals.targets import EvalSettings, EvalTarget
 
 #: Wall-clock bound (seconds) of the ``git rev-parse HEAD`` that names the commit.
 _GIT_TIMEOUT: Final = 30.0
@@ -102,18 +103,12 @@ def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings
     uses_judge = getattr(args, "judge", None) is not None
     check_recordable(target, judge_model=settings.judge.model, uses_judge=uses_judge)
     samples = _selected_samples(args, repo_root)
-    runner = build_target_runner(target)
-    judge = build_judge(args.judge, settings.judge) if uses_judge else None
-    judge_samples = judge_sample_count(args, default=settings.judge.samples or 1)
-    if runner is None or (uses_judge and judge is None) or judge_samples is None:
+    plan = _build_plan(args, settings, target, runs)
+    if plan is None:
         return 2
-    plan = _RecordPlan(runner, judge, judge_samples, runs, args.prompt_set)
-    recorded_samples = [
-        plan.run(sample, index, len(samples)) for index, sample in enumerate(samples)
-    ]
     recorded = RecordedTarget(
         target=target,
-        harness_version=harness_cli_version(runner.cli),
+        harness_version=harness_cli_version(plan.runner.cli),
         judge_model=settings.judge.model if uses_judge else None,
         runs=runs,
     )
@@ -121,7 +116,7 @@ def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings
         release=coding_agent_playbook.__version__,
         commit=_head_commit(repo_root),
         recorded=recorded,
-        samples=recorded_samples,
+        samples=[plan.run(sample, index, len(samples)) for index, sample in enumerate(samples)],
     )
     validate_release_metrics(metrics)
     _write(out_path, metrics)
@@ -129,31 +124,37 @@ def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings
     return 0
 
 
+def _build_plan(
+    args: argparse.Namespace, settings: EvalSettings, target: EvalTarget, runs: int
+) -> _RecordPlan | None:
+    """The runner, judge and judge sample count of the run; ``None`` after an error line."""
+    runner = build_target_runner(target)
+    judge_name = getattr(args, "judge", None)
+    judge = build_judge(judge_name, settings.judge) if judge_name is not None else None
+    judge_samples = judge_sample_count(args, default=settings.judge.samples or 1)
+    if runner is None or (judge_name is not None and judge is None) or judge_samples is None:
+        return None
+    return _RecordPlan(runner, judge, judge_samples, runs, args.prompt_set)
+
+
+@dataclass(frozen=True)
 class _RecordPlan:
     """How each sample runs: the runner, the judge, the run count and the prompt set."""
 
-    def __init__(
-        self,
-        runner: HarnessRunner,
-        judge: Judge | None,
-        judge_samples: int,
-        runs: int,
-        prompt_set: PromptSet,
-    ) -> None:
-        self._runner = runner
-        self._judge = judge
-        self._judge_samples = judge_samples
-        self._runs = runs
-        self._prompt_set = prompt_set
+    runner: HarnessRunner
+    judge: Judge | None
+    judge_samples: int
+    runs: int
+    prompt_set: PromptSet
 
     def run(self, sample: EvalSample, index: int, total: int) -> SampleRuns:
         """``sample``'s runs and digests, each run reported on stderr as it ends."""
         results = []
-        for run_index in range(self._runs):
+        for run_index in range(self.runs):
             result = self._run_once(sample)
             verdict = "PASS" if result.passed else "FAIL"
             print(
-                f"[{index + 1}/{total}] {sample.id} run {run_index + 1}/{self._runs}: "
+                f"[{index + 1}/{total}] {sample.id} run {run_index + 1}/{self.runs}: "
                 f"{verdict} (score={result.aggregate_score:.3f})",
                 file=sys.stderr,
             )
@@ -162,7 +163,7 @@ class _RecordPlan:
             sample_id=sample.id,
             prompt_id=sample.prompt_id,
             graded=GRADED_HEAD,
-            prompt_digest=prompt_digest(sample, self._prompt_set),
+            prompt_digest=prompt_digest(sample, self.prompt_set),
             sample_digest=sample_digest(sample),
             results=results,
         )
@@ -170,12 +171,12 @@ class _RecordPlan:
     def _run_once(self, sample: EvalSample) -> SampleResult:
         try:
             with tempfile.TemporaryDirectory(prefix="playbook-record-") as tmp:
-                return self._runner.run_sample(
+                return self.runner.run_sample(
                     sample,
                     Path(tmp) / "scratch",
-                    judge=self._judge,
-                    judge_samples=self._judge_samples,
-                    prompt_set=self._prompt_set,
+                    judge=self.judge,
+                    judge_samples=self.judge_samples,
+                    prompt_set=self.prompt_set,
                 )
         except (PromptResolutionError, JudgeError) as exc:
             raise RecordRefusedError(
