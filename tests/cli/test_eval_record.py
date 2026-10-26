@@ -8,6 +8,7 @@ answers ``claude --version`` and ``claude -p`` with canned output.
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from typing import TYPE_CHECKING, Any
 
@@ -26,6 +27,7 @@ from coding_agent_playbook.evals.targets import TARGET_ENV_VAR
 from coding_agent_playbook.grading.types import EvaluationReport
 from coding_agent_playbook.validation.context import SyncContext
 from tests.cli import claude_cli_fakes
+from tests.edition_fixtures import SAMPLE_ID, TAG
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -309,4 +311,51 @@ def test_a_bad_prompt_on_any_sample_fails_before_the_first_paid_run(
     assert rc == 2
     assert f"sample {last!r} has no prompt to run" in capsys.readouterr().err
     assert cli.argvs == []
+    assert not out.exists()
+
+
+@pytest.fixture
+def consumer(tmp_path: Path, make_synthetic_repo: Any, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A consumer repo beside the ``engine_catalog`` copy, naming the ``fake-pinned`` target."""
+    monkeypatch.delenv(TARGET_ENV_VAR, raising=False)
+    (tmp_path / "consumer").mkdir()
+    repo: Path = make_synthetic_repo(tmp_path / "consumer")
+    committed = repo / CONFIG_FILENAME
+    committed.write_text(committed.read_text(encoding="utf-8") + _EVALS, encoding="utf-8")
+    return repo
+
+
+def test_a_pinned_sample_also_runs_on_its_edition_as_a_control(
+    engine_catalog: Path, consumer: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Ticket 15: every sample grades the current text; a pinned one also grades its edition.
+    rc, out = _record(consumer, SAMPLE_ID, "--target", "fake-pinned", "--runs", "2")
+    assert rc == 0
+    data = _load(out)
+    head, control = data["samples"][SAMPLE_ID], data["controls"][SAMPLE_ID]
+    assert (head["graded"], control["graded"]) == ("head", TAG)
+    assert (head["runs"], control["runs"]) == (2, 2)
+    assert head["sample_digest"] == control["sample_digest"]
+    assert head["prompt_digest"] != control["prompt_digest"]
+    assert data["summary"]["samples"] == 1  # the controls stay out of the summary
+    captured = capsys.readouterr()
+    assert f"{SAMPLE_ID} (control, edition {TAG}) run 2/2" in captured.err
+    assert "(+1 edition controls)" in captured.out
+
+
+def test_an_unpinned_sample_records_no_control(repo: Path) -> None:
+    rc, out = _record(repo, _SAMPLE, "--target", "fake-pinned")
+    assert rc == 0
+    assert _load(out)["controls"] == {}
+
+
+def test_a_pin_whose_edition_cannot_load_is_refused_before_any_run(
+    engine_catalog: Path, consumer: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    shutil.rmtree(engine_catalog / "editions" / TAG)
+    rc, out = _record(consumer, SAMPLE_ID, "--target", "fake-pinned")
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert f"pinned sample {SAMPLE_ID!r} cannot run on edition {TAG} as a control" in err
+    assert "run 1/1" not in err
     assert not out.exists()

@@ -16,6 +16,7 @@ from coding_agent_playbook.evals.release_regression import (
     RegressionCheckError,
     annotate_release_metrics,
     check_regressions,
+    parse_acceptances,
 )
 from coding_agent_playbook.evals.release_regression_format import (
     format_regression_table,
@@ -188,3 +189,28 @@ def test_the_json_view_is_stable() -> None:
     assert data["blocked"] is False
     assert (data["release"], data["previous"], data["target"]) == (_NEW, _OLD, "claude-opus")
     assert data["samples"][0]["accepted"] == "expected"
+
+
+def _with_control(release: str, mean: float, *, edition: str = "v9.9.7") -> dict[str, Any]:
+    control = sample_entry(mean, graded=edition)
+    return metrics_file(release, {"s": sample_entry(0.9)}, controls={"s": control})
+
+
+def test_a_control_that_moved_on_its_frozen_edition_is_noted_and_never_blocks() -> None:
+    # Ticket 15: the edition did not change, so the model or the harness did.
+    check = check_regressions(_with_control(_NEW, 0.5), _with_control(_OLD, 0.9))
+    (note,) = (n for n in check.notes if n.startswith("control"))
+    assert "'s' on frozen edition v9.9.7 moved (mean score drops 0.400" in note
+    assert "the model or harness drifted" in note
+    assert not check.blocked
+
+
+def test_a_control_on_another_edition_is_not_compared() -> None:
+    check = check_regressions(_with_control(_NEW, 0.5, edition="v9.9.8"), _with_control(_OLD, 0.9))
+    assert not [n for n in check.notes if n.startswith("control")]
+
+
+def test_parse_acceptances_strips_and_refuses_a_value_without_a_reason() -> None:
+    assert parse_acceptances(["s = a reason "]) == {"s": "a reason"}
+    with pytest.raises(RegressionCheckError, match="SAMPLE=REASON"):
+        parse_acceptances(["s="])

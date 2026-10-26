@@ -21,7 +21,10 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from coding_agent_playbook.catalog import roots as catalog_roots
+from tests._catalog import REPO_ROOT
 from tests.cli.forge_fakes import ForgeEnv, make_forge_env
+from tests.edition_fixtures import TAG, freeze_fixture_edition, write_sample
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -53,6 +56,23 @@ def _stub_uv_sync_for_cli(monkeypatch: pytest.MonkeyPatch) -> None:
         return "/fake/uv" if binary == "uv" else real_which(binary, *args, **kwargs)
 
     monkeypatch.setattr("coding_agent_playbook.evals.run.harness_runner.shutil.which", _stub_which)
+
+
+@pytest.fixture
+def engine_catalog(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A copy of the engine catalog with ``review/pinned`` pinned to a frozen fixture edition.
+
+    The engine resolves its catalog from the copy (a checkout layout, ``src/<pkg>``
+    next to ``catalog/``), so the pinned sample runs like a shipped one (#281 ticket 09).
+    """
+    catalog = tmp_path / "engine" / "catalog"
+    shutil.copytree(REPO_ROOT / "catalog", catalog)
+    monkeypatch.setattr(
+        catalog_roots, "_PACKAGE_DIR", tmp_path / "engine" / "src" / "coding_agent_playbook"
+    )
+    write_sample(catalog / "core", edition=TAG)
+    freeze_fixture_edition(catalog)
+    return catalog
 
 
 @pytest.fixture

@@ -20,11 +20,12 @@ def sample_entry(
     digest: str = DIGEST,
     cost: float | None = None,
     tokens: float | None = None,
+    graded: str = "head",
 ) -> dict[str, Any]:
-    """One ``samples.<id>`` entry with ``passes`` of ``runs`` and a ``mean`` score."""
+    """One ``samples.<id>`` (or ``controls.<id>``) entry with ``passes`` of ``runs``."""
     return {
         "prompt_id": "review",
-        "graded": "head",
+        "graded": graded,
         "prompt_digest": "prompt-digest-1",
         "sample_digest": digest,
         "passes": passes,
@@ -44,13 +45,20 @@ def metrics_file(
     *,
     target: str = "claude-opus",
     harness_version: str | None = "2.1.300",
+    commit: str | None = None,
+    controls: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """A whole release metrics file of ``samples`` on ``target``."""
-    return {
+    """A whole release metrics file of ``samples`` on ``target``.
+
+    ``controls`` adds the pinned samples' edition runs; ``None`` leaves the key out,
+    as files written before ticket 15 did.
+    """
+    extra = {} if controls is None else {"controls": controls}
+    return extra | {
         "schema_version": 1,
         "release": release,
         "previous": None,
-        "commit": None,
+        "commit": commit,
         "target": {
             "name": target,
             "harness": "claude_code",

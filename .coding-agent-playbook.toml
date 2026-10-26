@@ -1,8 +1,15 @@
 # The engine repo's own playbook config: DOGFOODING ONLY (specs/prK-lifecycle-hooks.md §K OQ-6).
 #
-# It exists so that the `commit-convention` step of `playbook ci` (the playbook-ci
-# job in .github/workflows/ci.yml) skips the history that predates the commitizen
-# convention ([tool.commitizen] in pyproject.toml). Nothing else belongs here.
+# It exists for two things, and nothing else belongs here:
+#
+# - so that the `commit-convention` step of `playbook ci` (the playbook-ci job in
+#   .github/workflows/ci.yml) skips the history that predates the commitizen
+#   convention ([tool.commitizen] in pyproject.toml);
+# - so that `scripts/release.py prepare --eval` knows the engine's release
+#   targets ([evals] release, #281 ticket 15). Those runs are paid and only the
+#   maintainer starts them; no `default` is set, so a plain `playbook eval --run`
+#   here keeps the built-in target. Personal targets and endpoints go in an
+#   untracked `.coding-agent-playbook.local.toml`.
 #
 # - Lifecycle hooks stay OFF: no `[hooks] enabled`, and no wrapper_prefixes,
 #   convention or trailer rows. Those stay in each developer's untracked setup;
@@ -28,3 +35,17 @@ kind = "python-library"
 # commits whose committer date is earlier. It is the merge date of the hooks PR:
 # move it if the PR lands on another day.
 cutover_date = "2026-10-15"
+
+[evals]
+# The targets every release measures (catalog/releases/<version>/metrics/<name>.json).
+# Models are pinned ids, never moving aliases: `--record` refuses those.
+release = ["claude-opus"]
+
+[evals.targets.claude-opus]
+harness = "claude_code"
+model = "claude-opus-5-5"
+runs = 3
+
+[evals.judge]
+model = "claude-opus-5-5"
+samples = 3

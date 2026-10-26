@@ -24,6 +24,7 @@ from coding_agent_playbook.evals.release_regression import (
     RegressionCheckError,
     annotate_release_metrics,
     check_regressions,
+    parse_acceptances,
 )
 from coding_agent_playbook.evals.release_regression_format import (
     format_regression_table,
@@ -80,7 +81,7 @@ def run_regressions(args: argparse.Namespace) -> int:
     if getattr(args, "run", False):
         raise RegressionCheckError("--check-regressions reads two files; drop --run")
     new_path, baseline_path = _paths(args)
-    accepted = _acceptances(getattr(args, "accept", None) or [])
+    accepted = parse_acceptances(getattr(args, "accept", None) or [])
     new = _load(new_path)
     check = check_regressions(new, _load(baseline_path), accepted=accepted)
     annotated = annotate_release_metrics(new, check)
@@ -103,17 +104,6 @@ def _paths(args: argparse.Namespace) -> tuple[Path, Path]:
             "--check-regressions needs --against BASELINE, the previous release's file"
         )
     return Path(new), Path(baseline)
-
-
-def _acceptances(values: list[str]) -> dict[str, str]:
-    """``SAMPLE=REASON`` values by sample; refuse one without a sample or a reason."""
-    accepted: dict[str, str] = {}
-    for value in values:
-        sample_id, _, reason = value.partition("=")
-        if not sample_id.strip() or not reason.strip():
-            raise RegressionCheckError(f"--accept expects SAMPLE=REASON, got {value!r}")
-        accepted[sample_id.strip()] = reason.strip()
-    return accepted
 
 
 def _load(path: Path) -> dict[str, object]:

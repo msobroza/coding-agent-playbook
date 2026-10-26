@@ -10,6 +10,10 @@ Per sample it records passes out of runs, the mean and the population standard
 deviation of the sample score, the mean score of each check that ran, the mean
 duration, the mean tokens and the mean cost. Cost comes only from the target's
 ``price``; without one, or when a run reported no tokens, it is ``null``.
+
+A pinned sample also runs on its edition as a **control** (#281 ticket 15): those
+runs go under ``controls`` in the same per-sample shape, with ``graded`` the
+edition tag, and stay out of the summary, which scores the current text only.
 """
 
 from __future__ import annotations
@@ -19,7 +23,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.evals.release_metrics_schema import SCHEMA_VERSION
+from coding_agent_playbook.evals.release_metrics_schema import CONTROLS_KEY, SCHEMA_VERSION
 from coding_agent_playbook.grading.types import CheckResult
 
 if TYPE_CHECKING:
@@ -82,8 +86,12 @@ def build_release_metrics(
     commit: str | None,
     recorded: RecordedTarget,
     samples: Sequence[SampleRuns],
+    controls: Sequence[SampleRuns] = (),
 ) -> dict[str, object]:
     """The release metrics file of ``samples`` on ``recorded``'s target, as JSON-ready data.
+
+    ``controls`` are the pinned samples' runs on their editions: ``controls`` in
+    the file, left out of the summary.
 
     Example::
 
@@ -92,6 +100,7 @@ def build_release_metrics(
     """
     price = recorded.target.price
     entries = {runs.sample_id: _sample_entry(runs, price) for runs in samples}
+    control_entries = {runs.sample_id: _sample_entry(runs, price) for runs in controls}
     return {
         "schema_version": SCHEMA_VERSION,
         "release": release,
@@ -100,6 +109,7 @@ def build_release_metrics(
         "target": _target_block(recorded, samples),
         "summary": _summary(samples, price),
         "samples": dict(sorted(entries.items())),
+        CONTROLS_KEY: dict(sorted(control_entries.items())),
     }
 
 

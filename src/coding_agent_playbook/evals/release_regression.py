@@ -9,6 +9,11 @@ changed is ``not_comparable``, and one the baseline lacks is ``new``. A harness
 version change is noted as a likely cause, and a cost rise above 25% (tokens per
 run when either cost is ``null``) is a warning only.
 
+The ``controls`` (pinned samples run on their frozen editions, #281 ticket 15)
+never block: a control that regressed or improved against the baseline's control
+on the same edition is noted, because its text did not change and the model or
+harness must have.
+
 A regression is *accepted* with a reason; :func:`annotate_release_metrics`
 stores it in the new file (``samples.<id>.vs_previous.accepted``), so a rerun
 against the same baseline keeps it. The check is *blocked* while any regression
@@ -27,10 +32,11 @@ from coding_agent_playbook.evals.comparison import (
     improvement_reasons,
     regression_reasons,
 )
+from coding_agent_playbook.evals.release_metrics_schema import CONTROLS_KEY
 from coding_agent_playbook.exit_two import ExitTwoError
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
 
 type SampleStatus = Literal["ok", "improvement", "regression", "not_comparable", "new"]
 type _Entry = Mapping[str, object]
@@ -137,8 +143,29 @@ def check_regressions(
         for sample_id, entry in sorted(new_samples.items())
     )
     verdicts = _accept(verdicts, reasons, accepted or {})
-    notes = _harness_notes(new, baseline) + _dropped_notes(new_samples, old_samples)
+    notes = (
+        _harness_notes(new, baseline)
+        + _dropped_notes(new_samples, old_samples)
+        + _control_notes(new, baseline, str(new["release"]))
+    )
     return RegressionCheck(str(new["release"]), previous, target, verdicts, notes)
+
+
+def parse_acceptances(values: Sequence[str]) -> dict[str, str]:
+    """``SAMPLE=REASON`` values (``--accept``) by sample; refuse one without a sample or a reason.
+
+    Example::
+
+        >>> parse_acceptances(["review/x=the rubric is stricter"])
+        {'review/x': 'the rubric is stricter'}
+    """
+    accepted: dict[str, str] = {}
+    for value in values:
+        sample_id, _, reason = value.partition("=")
+        if not sample_id.strip() or not reason.strip():
+            raise RegressionCheckError(f"--accept expects SAMPLE=REASON, got {value!r}")
+        accepted[sample_id.strip()] = reason.strip()
+    return accepted
 
 
 def annotate_release_metrics(
@@ -276,6 +303,27 @@ def _dropped_notes(new: Mapping[str, _Entry], old: Mapping[str, _Entry]) -> tupl
     )
 
 
+def _control_notes(
+    new: Mapping[str, object], baseline: Mapping[str, object], release: str
+) -> tuple[str, ...]:
+    """A note per control whose score moved on an unchanged edition and sample."""
+    old_controls = _samples(baseline, CONTROLS_KEY)
+    notes = []
+    for sample_id, entry in sorted(_samples(new, CONTROLS_KEY).items()):
+        old = old_controls.get(sample_id)
+        same = old is not None and all(entry[k] == old[k] for k in ("graded", "sample_digest"))
+        if old is None or not same:
+            continue
+        before, now = _side(old), _side(entry)
+        moved = regression_reasons(before, now, release) or improvement_reasons(before, now)
+        if moved:
+            notes.append(
+                f"control {sample_id!r} on frozen edition {entry['graded']} moved "
+                f"({'; '.join(moved)}): its text is unchanged, so the model or harness drifted"
+            )
+    return tuple(notes)
+
+
 def _side(entry: _Entry) -> SideSummary:
     """A file entry as ``--compare``'s per-side summary: passes of runs, mean and spread."""
     return SideSummary(
@@ -291,8 +339,8 @@ def _target(data: Mapping[str, object]) -> Mapping[str, object]:
     return target if isinstance(target, dict) else {}
 
 
-def _samples(data: Mapping[str, object]) -> dict[str, _Entry]:
-    samples = data.get("samples")
+def _samples(data: Mapping[str, object], key: str = "samples") -> dict[str, _Entry]:
+    samples = data.get(key)
     return dict(samples) if isinstance(samples, dict) else {}
 
 

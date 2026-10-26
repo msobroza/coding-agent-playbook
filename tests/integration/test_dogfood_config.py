@@ -10,7 +10,9 @@ untracked setup. These tests read the committed repo-root files the way
 adds a policy row, moves the version source or interpolates the PR title into
 a shell line fails here. The ``test`` job's lane wiring (ADR 0010) is pinned
 here too: a skill-only pull request runs only the ``catalog`` checks, and every
-other case runs the whole suite.
+other case runs the whole suite. The config's only other table is ``[evals]``:
+the release targets ``scripts/release.py prepare --eval`` records (#281 ticket 15),
+with pinned models and no ``default``.
 """
 
 from __future__ import annotations
@@ -36,6 +38,8 @@ from coding_agent_playbook.config.tables.hooks import (
     HooksConfig,
     policy_tables,
 )
+from coding_agent_playbook.evals.model_pins import check_recordable
+from coding_agent_playbook.evals.target_config import load_eval_settings
 from coding_agent_playbook.hook_runtime.judges.commit_cutover import parse_cutover
 from release import COMMITIZEN_REQUIREMENT
 
@@ -123,12 +127,24 @@ def _pytest_step() -> dict[str, Any]:
     return _step_running(_job(TEST_JOB), "pytest -q")
 
 
-def test_dogfood_config_sets_only_the_commit_cutover() -> None:
+def test_dogfood_config_sets_only_the_commit_cutover_and_the_release_targets() -> None:
     data = _toml(CONFIG_PATH)
 
-    assert set(data) == IDENTITY_KEYS | {"hooks"}, sorted(data)
+    assert set(data) == IDENTITY_KEYS | {"hooks", "evals"}, sorted(data)
     assert set(data["hooks"]) == {"commit_convention"}, data["hooks"]
     assert set(data["hooks"]["commit_convention"]) == {"cutover_date"}
+    # No `default`: a plain `playbook eval --run` here keeps the built-in target.
+    assert set(data["evals"]) == {"release", "targets", "judge"}, sorted(data["evals"])
+
+
+def test_dogfood_release_targets_are_recordable() -> None:
+    settings = load_eval_settings(ROOT)
+
+    assert settings.release, "[evals] release must name the engine's release targets"
+    assert settings.committed_default is None
+    for name in settings.release:
+        # What `prepare --eval` runs: `eval --record --judge llm` refuses moving models.
+        check_recordable(settings.targets[name], judge_model=settings.judge.model, uses_judge=True)
 
 
 def test_dogfood_cutover_is_an_iso_date_string() -> None:

@@ -826,6 +826,13 @@ The file is JSON with `"schema_version": 1`. It holds:
 | `target` | `name`, `harness`, `harness_version` (the CLI's `--version`), `model`, `reported_model` (the model the harness reported most often), `label`, `endpoint`, `price`, `judge_model` and `runs` |
 | `summary` | `samples`, `runs`, `pass_rate` over every run, `mean_score` over the samples, total `tokens` and `cost_usd` |
 | `samples.<id>` | `prompt_id`, `graded` (`head`, the current text), `prompt_digest` (the prompt's artifact digest), `sample_digest` (`sample.toml` and `setup/`), `passes` out of `runs`, `mean_score`, `stdev`, `checks` (the mean score of each check that ran), `duration_seconds_mean`, `tokens_mean` and `cost_usd_mean` |
+| `controls.<id>` | a pinned sample's runs on its frozen edition, in the same shape, with `graded` the edition tag; left out of `summary` |
+
+Every sample grades the current text. A sample pinned to an edition also runs on
+that edition as a control, `N` times too, so `--record` costs one more set of runs
+per pinned sample. Its edition is loaded and its prompt rendered before any run.
+Since the edition's text never changes, a control that moves between two
+releases points at a model or harness drift rather than at the guidance.
 
 Cost comes only from the target's `price`. Without one it is `null`, and so are
 tokens and cost when a run's harness reported no tokens. The harness's own cost
@@ -858,7 +865,8 @@ Per sample:
 - a cost per run rise above 25%, or a token rise when either cost is `null`, is a
   warning only.
 
-A harness version change between the files is noted as a likely cause.
+A harness version change between the files is noted as a likely cause, and so is
+a control whose score moved on the same edition; controls never block.
 `--accept SAMPLE=REASON` (repeatable) accepts one regression; accepting a sample
 that did not regress is refused. The command stores the comparison in the new
 file: `previous`, each sample's `vs_previous` (`mean_score`, `delta`, `status`,
@@ -870,6 +878,30 @@ baseline.
 It prints a table, or JSON with `--format json`, and exits 0 when no regression
 is unaccepted, 1 when one is, and 2 when the files are not release metrics, are
 for different targets, or an `--accept` is malformed.
+
+### Release metrics at release time
+
+`uv run scripts/release.py prepare --eval` adds the release metrics to the release
+pull request. In its scratch checkout of `origin/main`, before any release file is
+written, it runs `playbook eval --run --all --target <name> --record
+catalog/releases/<version>/metrics/<name>.json` on that checkout's engine for every
+target in the `[evals] release` list of the committed `.coding-agent-playbook.toml`,
+with `--judge llm` when `[evals.judge] model` is set. It sets each file's `release`
+to the version being prepared and compares it with the previous release's file for
+the same target, as `--check-regressions` does, storing the comparison in the file.
+A target without a previous file is recorded without a comparison.
+
+- `--accept SAMPLE=REASON` (repeatable) accepts that sample's regression on every
+  target where it regressed; one that regressed on no target is refused.
+- An unaccepted regression refuses the pull request. The run prints each target's
+  table and exits 1.
+- On a refusal after recording, the recorded files are copied to a kept temporary
+  directory named in the error. `--reuse-metrics DIR` reads a target's file from
+  there instead of running it again, if it was recorded on the same base commit.
+
+The pull request body adds a `Release metrics` section to the notes, with one line
+per target and its notes. These runs are paid and only the maintainer starts them;
+CI never does.
 
 `playbook eval` has no `--run-tests` flag. A sample runs the test suite if and only if
 its `[gate]` references an execution metric, `coverage` or `test_pass_rate`.

@@ -39,7 +39,12 @@ class FakeCzForgeOverRealGit:
     commands: list[list[str]] = field(default_factory=list)
 
     def __call__(
-        self, argv: Sequence[str], *, cwd: Path, env: Mapping[str, str] | None = None
+        self,
+        argv: Sequence[str],
+        *,
+        cwd: Path,
+        env: Mapping[str, str] | None = None,
+        timeout: float | None = None,
     ) -> Completed:
         command = list(argv)
         self.commands.append(command)
@@ -47,7 +52,7 @@ class FakeCzForgeOverRealGit:
             return self._cz_bump(command[-3], cwd)
         if "forge" in command:
             return Completed(0, "[]" if "list" in command else f"{PR_URL}\n")
-        return run_process(command, cwd=cwd, env=env)
+        return run_process(command, cwd=cwd, env=env, timeout=timeout)
 
     @staticmethod
     def _cz_bump(version: str, cwd: Path) -> Completed:
