@@ -105,3 +105,6 @@ benchmarks/results/<run-name>/
   <experiment>/<sample>/score.json       engine report + judge settings
   summary.csv, summary.md, *.png         written by plot_results.py
 ```
+
+`<sample>` is the sample id with its slash flattened (`review/spot-the-bug` is
+stored as `review-spot-the-bug`), so every sample keeps one directory.

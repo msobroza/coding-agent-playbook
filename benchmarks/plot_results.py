@@ -95,13 +95,12 @@ def load_rows(run_root: Path) -> list[RunRow]:
 
 
 def _gate_exprs() -> dict[str, str]:
-    import tomllib
-
-    samples = _bench.REPO_ROOT / "catalog" / "core" / "eval_samples"
-    specs = (tomllib.loads(p.read_text(encoding="utf-8")) for p in samples.glob("*/*/sample.toml"))
     # Key each gate by its <task>/<name> id and by the flat id runs before #302 recorded.
     return {
-        key: s["gate"]["expr"] for s in specs for key in (s["id"], s["id"].replace("/", "-", 1))
+        key: s.gate.expr or next(iter(s.gate.bind))  # a None expr names the sole handle
+        for s in _bench.review_samples()
+        if s.gate is not None
+        for key in (s.id, _bench.run_key(s.id))
     }
 
 
@@ -124,7 +123,8 @@ def _row(payload: dict, exprs: dict[str, str]) -> RunRow:
 
 
 def _short(sample_id: str) -> str:
-    return sample_id.removeprefix("review-")
+    # New runs record "review/<name>", runs before #302 "review-<name>".
+    return sample_id.removeprefix("review/").removeprefix("review-")
 
 
 def _label(key: str) -> str:
