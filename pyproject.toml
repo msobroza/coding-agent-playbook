@@ -163,8 +163,8 @@ src = ["src", "tests", "docs/_ext", "scripts"]
 extend-exclude = [
     "catalog/plugins/superpowers",
     "catalog/plugins/mattpocock_skills/**/*.md",
-    "catalog/core/eval_samples/*/setup",
-    "catalog/plugins/*/eval_samples/*/setup",
+    "catalog/core/eval_samples/*/*/setup",
+    "catalog/plugins/*/eval_samples/*/*/setup",
     # Release manifests and notes are written only by scripts/release.py and are
     # part of the release commit: a formatter must never rewrite them (ADR 0012).
     "catalog/releases",

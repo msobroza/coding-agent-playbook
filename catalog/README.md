@@ -31,7 +31,7 @@ catalog/
 │   │   ├── references/       long-form documents, plus LICENSE.<source> copies
 │   │   ├── scripts/          stdlib-only helpers the rules name
 │   │   └── examples/         runnable example code, where a skill has one
-│   └── eval_samples/         one <sample-id>/ per sample, plus ATTRIBUTIONS.md
+│   └── eval_samples/         one <prompt>/<name>/ per sample, plus ATTRIBUTIONS.md
 └── plugins/                  bundled plugins: off until a consumer enables one
     └── <name>/
         ├── README.md         what the plugin is and how to enable it
@@ -266,11 +266,15 @@ these steps to add one.
 ## Add an eval sample
 
 An eval sample is a reproducible test case for a prompt: a starting repo state, an
-invocation and a definition of success. Follow these steps to add one.
+invocation and a definition of success. The eval samples of one prompt form its
+task, and they live in a directory named after the prompt's id. Follow these
+steps to add one.
 
-1. Create `core/eval_samples/<sample-id>/sample.toml`. Give it `id`, `prompt_id`,
+1. Create `core/eval_samples/<prompt>/<name>/sample.toml`, where `<prompt>` is the id
+   of the prompt the sample grades. Give it `id = "<prompt>/<name>"`,
    `description`, `[setup]` and `[invocation]`, plus the `[gate]`, `[rubric]` and
-   `[verdict]` layers (SPEC §6.5.3). Any other top-level key is a validation error.
+   `[verdict]` layers (SPEC §6.5.3). Any other top-level key is a validation error,
+   `prompt_id` included: the task directory names the prompt.
 2. Put the starting repo in `setup/`. Include a `setup/pyproject.toml` when the
    sample depends on detector facts.
 3. Ship a reference answer in `solution/`. For an edit sample, mirror `setup/` paths
@@ -279,18 +283,20 @@ invocation and a definition of success. Follow these steps to add one.
    `solution/negatives/`. A review-only sample needs at least one. CI proves that
    the gate fails on the untouched `setup/` and on every negative, and that it passes
    on the solution.
-4. Name the prompt the sample grades in `prompt_id`; the prompt does not list its
-   samples. A sample finds its prompt in the `prompts/` directory next to its
-   layer's `eval_samples/`, so a core sample uses `core/prompts/`.
+4. Check the task: the prompt does not list its samples, and a task directory that
+   names no prompt fails `playbook validate`. A sample finds its prompt in the
+   `prompts/` directory next to its layer's `eval_samples/`, so a core sample uses
+   `core/prompts/`. `playbook eval <prompt>` selects every sample of the task.
 5. Credit third-party fixture code in `core/eval_samples/ATTRIBUTIONS.md`.
 
 Eval samples belong to a layer, like every other kind. A bundled plugin ships its
-own samples in `plugins/<name>/eval_samples/<sample-id>/`, laid out as above. Each of
+own samples in `plugins/<name>/eval_samples/<prompt>/<sample>/`, laid out as above. Each of
 its samples finds its prompt in `plugins/<name>/prompts/`. `playbook eval --list`
-lists a plugin's samples only in a repo that enables the plugin.
+lists a plugin's samples only in a repo that enables the plugin. A later layer may
+add samples to a task of an earlier one, but a sample id found twice fails.
 
 Ruff never lints or reformats `setup/` in either location:
-`core/eval_samples/*/setup` and `plugins/*/eval_samples/*/setup`. Mypy never reads
+`core/eval_samples/*/*/setup` and `plugins/*/eval_samples/*/*/setup`. Mypy never reads
 this tree.
 
 ## Add a hook

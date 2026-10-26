@@ -240,7 +240,8 @@ def _layer_passed(report: EvaluationReport, layer: str) -> bool | None:
 
 
 def _saved_runs(run_name: str) -> list[tuple[EvalSample, Path]]:
-    samples = {s.id: s for s in _bench.review_samples()}
+    # Run dirs are named by run_key(sample.id), not by the <task>/<name> id itself.
+    samples = {_bench.run_key(s.id): s for s in _bench.review_samples()}
     root = _bench.RESULTS_ROOT / run_name
     runs = sorted(root.glob("*/*/agent.json"))
     if not runs:

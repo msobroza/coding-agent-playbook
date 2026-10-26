@@ -22,7 +22,6 @@ def test_loader_and_validator_define_their_entry_points() -> None:
     from coding_agent_playbook.evals import validator as validator_mod
 
     assert loader_mod.load_eval_sample_from_dir.__module__ == loader_mod.__name__
-    assert loader_mod.discover_eval_sample_dirs.__module__ == loader_mod.__name__
     assert validator_mod.validate_samples.__module__ == validator_mod.__name__
     assert validator_mod.EvalValidationError.__module__ == validator_mod.__name__
 

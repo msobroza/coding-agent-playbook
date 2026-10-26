@@ -44,6 +44,7 @@ from coding_agent_playbook.evals.release_metrics_schema import validate_release_
 from coding_agent_playbook.evals.run.git_env import without_repo_location
 from coding_agent_playbook.evals.run.harness_version import harness_cli_version
 from coding_agent_playbook.evals.sample_digest import prompt_digest, sample_digest
+from coding_agent_playbook.evals.task_registry import TaskRegistry, TaskRegistryError
 from coding_agent_playbook.validation.context import SyncContext
 
 if TYPE_CHECKING:
@@ -231,21 +232,24 @@ def _run_count(flag: int | None, target_runs: int | None) -> int:
 
 
 def _selected_samples(args: argparse.Namespace, repo_root: Path) -> list[EvalSample]:
-    """Every sample (``--all``) or the one ``<id>`` names, sorted by id."""
+    """Every sample (``--all``) or those ``<task>`` or ``<task>/<name>`` selects, sorted by id."""
     sample_id = getattr(args, "id", None)
     every = getattr(args, "all_samples", False)
     if every == (sample_id is not None):
         raise RecordRefusedError(
-            "--record runs either --all samples or one sample <id>, "
+            "--record runs either --all samples or one sample or task (<task>/<name> or <task>), "
             f"got --all={every} and id={sample_id!r}"
         )
-    samples = sorted(SyncContext.from_repo(repo_root).artifact_source.list_eval_samples(), key=_id)
-    if every:
-        return samples
-    chosen = [sample for sample in samples if sample.id == sample_id]
-    if not chosen:
-        raise RecordRefusedError(f"no eval sample with id {sample_id!r}")
-    return chosen
+    ctx = SyncContext.from_repo(repo_root)
+    try:
+        registry = TaskRegistry.from_catalog(ctx.artifact_source, ctx.prompts_resolved)
+        if every:
+            chosen = [sample for task in registry.tasks() for sample in task.samples]
+        else:
+            chosen = list(registry.select(str(sample_id)))
+    except TaskRegistryError as exc:
+        raise RecordRefusedError(str(exc)) from exc
+    return sorted(chosen, key=_id)
 
 
 def _id(sample: EvalSample) -> str:

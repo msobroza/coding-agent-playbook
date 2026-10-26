@@ -1,7 +1,7 @@
 """guard-eval-fixtures: protect frozen eval ``setup/`` fixtures from agent "fixes" (specs/prK-hook-pack.md §E.1).
 
 Opt-in, ``pre_tool_use``. A target is a fixture when it matches
-``guard_config.eval.fixture_globs`` (default ``**/eval_samples/*/setup/**``):
+``guard_config.eval.fixture_globs`` (default ``**/eval_samples/*/*/setup/**``):
 the file tool's write paths, every Bash write target (``sed -i``, redirects,
 ``cp`` destinations) and the path operands of a formatter (``ruff format``,
 ``ruff [check] --fix``, ``black``, ``isort``). It passes when:

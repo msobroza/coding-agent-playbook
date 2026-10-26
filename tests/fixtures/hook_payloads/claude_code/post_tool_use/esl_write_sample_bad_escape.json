@@ -10,12 +10,12 @@
   "hook_event_name": "PostToolUse",
   "tool_name": "Edit",
   "tool_input": {
-    "file_path": "/playbook-fixture/proj/playbook/eval_samples/demo-sample/sample.toml",
+    "file_path": "/playbook-fixture/proj/playbook/eval_samples/demo/demo-sample/sample.toml",
     "old_string": "expr = \"untouched\"\n",
     "new_string": "expr = \"untouched\"\npattern = \"\\s+\"\n"
   },
   "tool_response": {
-    "filePath": "/playbook-fixture/proj/playbook/eval_samples/demo-sample/sample.toml",
+    "filePath": "/playbook-fixture/proj/playbook/eval_samples/demo/demo-sample/sample.toml",
     "success": true
   },
   "tool_use_id": "toolu_01EtlEscape"

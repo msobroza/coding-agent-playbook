@@ -8,10 +8,10 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from coding_agent_playbook.evals.judge import StubJudge
-from coding_agent_playbook.evals.loader import load_eval_sample_from_dir
 from coding_agent_playbook.evals.run.harness_runner import capture, materialize
 from coding_agent_playbook.evals.run.scoring import score
 from coding_agent_playbook.evals.sample import Verdict
+from coding_agent_playbook.evals.task_registry import load_task_sample
 from tests._catalog import CORE_ROOT
 from tests.integration.ccv_answers import CORRECT_ANSWER
 
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.catalog
 
 _SAMPLES_ROOT = CORE_ROOT / "eval_samples"
-_FIXTURE = _SAMPLES_ROOT / "find-injected-vuln-modoboa-cmdi"
+_FIXTURE = _SAMPLES_ROOT / "find-injected-vulnerability" / "modoboa-cmdi"
 
 
 @pytest.fixture
@@ -40,7 +40,7 @@ def stub_uv_sync(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _sample() -> Any:
-    return load_eval_sample_from_dir(_FIXTURE, source_package="coding_agent_playbook")
+    return load_task_sample(_FIXTURE, source_package="coding_agent_playbook")
 
 
 def test_fixture_compiles_gate_and_rubric() -> None:
@@ -53,7 +53,7 @@ def test_fixture_compiles_gate_and_rubric() -> None:
 def test_fixture_runs_with_stub_judge(tmp_path: Path, stub_uv_sync: None) -> None:
     sample = _sample()
     baseline = materialize(sample, tmp_path / "scratch")
-    candidate = capture(baseline.repo_root, baseline, CORRECT_ANSWER[_FIXTURE.name])
+    candidate = capture(baseline.repo_root, baseline, CORRECT_ANSWER[sample.id])
     report = score(sample, baseline, candidate, judge=StubJudge(default=0.9))
     gate = next(c for c in report.checks if c.check_id == "gate")
     rubric = next(c for c in report.checks if c.check_id == "rubric")

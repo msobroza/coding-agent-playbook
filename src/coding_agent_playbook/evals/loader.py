@@ -1,4 +1,9 @@
-"""Eval-sample loader. Parses ``eval_samples/<id>/sample.toml`` into ``EvalSample``."""
+"""Eval-sample loader: parses one sample directory's ``sample.toml`` into an ``EvalSample``.
+
+It never walks ``eval_samples/``: :mod:`coding_agent_playbook.evals.task_registry`
+finds the sample directories and passes in the task (the prompt id) each one
+belongs to.
+"""
 
 from __future__ import annotations
 
@@ -8,45 +13,30 @@ from typing import TYPE_CHECKING
 from coding_agent_playbook.evals.sample import EvalSample
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
     from pathlib import Path
-
-
-def discover_eval_sample_dirs(root: Path) -> Iterator[Path]:
-    """Yield each ``<root>/<id>/`` subdir that contains a ``sample.toml``.
-
-    Skips dot-prefixed directories (``.git``, ``.cache``, ``__pycache__``, etc.)
-    so accidentally nested infrastructure doesn't get loaded as samples. Results
-    are sorted alphabetically by directory name for deterministic ordering in
-    ``playbook eval --list`` output.
-
-    Returns nothing (no exception) when ``root`` does not exist — overlay
-    packages can ship without an ``eval_samples/`` directory.
-    """
-    if not root.is_dir():
-        return
-    for entry in sorted(root.iterdir()):
-        if not entry.is_dir():
-            continue
-        if entry.name.startswith("."):
-            continue
-        if (entry / "sample.toml").is_file():
-            yield entry
 
 
 def load_eval_sample_from_dir(
     sample_dir: Path,
     *,
+    task: str,
     source_package: str,
 ) -> EvalSample:
-    """Load and parse the ``sample.toml`` inside ``sample_dir`` into an ``EvalSample``.
+    """Load the ``sample.toml`` inside ``sample_dir``, a sample of the prompt ``task``.
 
-    Raises :exc:`FileNotFoundError` if ``sample.toml`` is missing.
+    The sample's id must be ``<task>/<sample_dir.name>``, so the id always says
+    where the sample lives.
 
-    Wraps any TOML parse error or schema violation from
-    :meth:`EvalSample.from_dict` into a :exc:`ValueError` whose message embeds
-    the full ``sample.toml`` path so users can jump straight to the offending
-    file.
+    Raises :exc:`FileNotFoundError` if ``sample.toml`` is missing, and
+    :exc:`ValueError` (its message starting with the ``sample.toml`` path, for
+    jump-to-file) on malformed TOML, a schema violation or an id that does not
+    match the directory.
+
+    Example::
+
+        >>> load_eval_sample_from_dir(Path("eval_samples/review/spot-the-bug"),
+        ...     task="review", source_package="coding_agent_playbook").id  # doctest: +SKIP
+        'review/spot-the-bug'
     """
     sample_toml = sample_dir / "sample.toml"
     if not sample_toml.is_file():
@@ -57,6 +47,15 @@ def load_eval_sample_from_dir(
     except tomllib.TOMLDecodeError as exc:
         raise ValueError(f"{sample_toml}: malformed TOML: {exc}") from exc
     try:
-        return EvalSample.from_dict(data, source_path=sample_toml, source_package=source_package)
+        sample = EvalSample.from_dict(
+            data, prompt_id=task, source_path=sample_toml, source_package=source_package
+        )
     except ValueError as exc:
         raise ValueError(f"{sample_toml}: {exc}") from exc
+    expected_id = f"{task}/{sample_dir.name}"
+    if sample.id != expected_id:
+        raise ValueError(
+            f"{sample_toml}: id {sample.id!r} does not match its directory; "
+            f"a sample in eval_samples/{expected_id}/ has id {expected_id!r}"
+        )
+    return sample

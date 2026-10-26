@@ -32,7 +32,7 @@ def _sample(tmp_path: Path, *, with_v2: bool = True) -> EvalSample:
     _write_prompt(layer / "prompts" / "synthetic.md", "Version one.\n")
     if with_v2:
         _write_prompt(layer / "prompts" / "v2" / "synthetic.md", "Version two.\n")
-    sample_dir = layer / "eval_samples" / "synthetic-sample"
+    sample_dir = layer / "eval_samples" / "synthetic" / "synthetic-sample"
     (sample_dir / "setup").mkdir(parents=True)
     return EvalSample(
         id="synthetic-sample",

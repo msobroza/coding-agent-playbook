@@ -605,7 +605,7 @@
           "type": null,
           "choices": null,
           "required": false,
-          "help": "sample id (enumerate, or run with --run)",
+          "help": "a task (every sample of one prompt) or a sample id <task>/<name> (enumerate, or run with --run)",
           "metavar": null
         },
         {
@@ -620,7 +620,7 @@
           "type": null,
           "choices": null,
           "required": false,
-          "help": "execute the sample <id> through a runner and grade it (SPEC §15)",
+          "help": "execute the samples <task> or <task>/<name> selects through a runner and grade them (SPEC §15)",
           "metavar": null
         },
         {

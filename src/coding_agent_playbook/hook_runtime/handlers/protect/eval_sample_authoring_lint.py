@@ -1,17 +1,17 @@
 """eval-sample-authoring-lint: parse and trial-compile an edited eval sample (specs/prK-hook-pack.md §E.1).
 
-After an Edit or Write of ``**/eval_samples/<id>/sample.toml`` or its
+After an Edit or Write of ``**/eval_samples/<prompt>/<name>/sample.toml`` or its
 ``setup/pyproject.toml`` (the matcher keeps it inert in repos without
 ``eval_samples/``), it:
 
 1. parses ``sample.toml`` with ``tomllib``; an escape error adds the hint
    ``author regex patterns as TOML literal strings (single quotes); \\s is an
    invalid escape in a basic string``;
-2. trial-compiles **that one sample** in-process: ``evals.loader`` then
-   ``evals.validator.validate_samples`` (unknown refs, unbound ``expr``
-   identifiers, rubric weights, verdicts, ``answer_matches`` regexes, setup
-   files and ``prompt_id``), keeping only
-   errors anchored at this sample. Prompts come from ``FileSystemArtifactSource``
+2. trial-compiles **that one sample** in-process: ``evals.task_registry`` loads
+   it, ``evals.validator.validate_samples`` checks it (unknown refs, unbound
+   ``expr`` identifiers, rubric weights, verdicts, ``answer_matches`` regexes,
+   setup files) and the task registry checks its task directory names a prompt,
+   keeping only errors anchored at this sample. Prompts come from ``FileSystemArtifactSource``
    (engine, ``overlays_enabled`` from ``protected.resource_roots``, the sample's
    own layer — ``catalog/core/``, ``catalog/plugins/<name>/`` or an overlay
    checkout's ``resources/`` — and repo-local). Errors are context, not a block: a
@@ -111,10 +111,10 @@ def _lint(sample_dir: Path, root: str, cfg: GuardConfig) -> tuple[EvalSample | N
     problems = _toml_problems(toml)
     if problems:
         return None, problems
-    from coding_agent_playbook.evals.loader import load_eval_sample_from_dir  # branch-local
+    from coding_agent_playbook.evals.task_registry import load_task_sample  # branch-local
 
     try:
-        sample = load_eval_sample_from_dir(sample_dir, source_package=_label(sample_dir, root))
+        sample = load_task_sample(sample_dir, source_package=_label(sample_dir, root))
     except (FileNotFoundError, ValueError) as exc:
         return None, [str(exc).replace(f"{toml}: ", "sample.toml: ")]
     return sample, _compile_problems(sample, _prompts(sample_dir, root, cfg))
@@ -134,14 +134,16 @@ def _toml_problems(toml: Path) -> list[str]:
 
 
 def _compile_problems(sample: EvalSample, prompts: list[Prompt] | None) -> list[str]:
-    """The validator's errors anchored at ``sample``; the prompt rules only when prompts loaded."""
+    """The validator's errors anchored at ``sample``; the task's prompt check only when prompts loaded."""
+    from coding_agent_playbook.evals.task_registry import TaskRegistry  # branch-local
     from coding_agent_playbook.evals.validator import validate_samples  # branch-local
 
-    errors = validate_samples([sample], prompts or [])
+    errors = validate_samples([sample])
     anchored = [e.message for e in errors if e.path == sample.source_path]
     if prompts is None:
-        return [message for message in anchored if not message.startswith("prompt")]
-    return anchored
+        return anchored
+    _, task_errors = TaskRegistry.collect([sample], (p.frontmatter.id for p in prompts))
+    return [*[str(e) for e in task_errors], *anchored]
 
 
 def _problem_line(problem: str) -> str:
@@ -158,8 +160,13 @@ def _parse_problems(message: str) -> list[str]:
 
 def _label(sample_dir: Path, root: str) -> str:
     """The layer label validate gives the sample: ``<repo-local>`` or its package dir name."""
-    layer = sample_dir.parent.parent
+    layer = _layer_root(sample_dir)
     return _REPO_LOCAL if layer == Path(root) / "playbook" else layer.parent.name
+
+
+def _layer_root(sample_dir: Path) -> Path:
+    """The layer holding ``<layer>/eval_samples/<prompt>/<name>``."""
+    return sample_dir.parents[2]
 
 
 def _prompts(sample_dir: Path, root: str, cfg: GuardConfig) -> list[Prompt] | None:
@@ -168,7 +175,7 @@ def _prompts(sample_dir: Path, root: str, cfg: GuardConfig) -> list[Prompt] | No
     from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 
     packages = _layer_packages(cfg) or [ENGINE_PACKAGE]
-    layer = sample_dir.parent.parent
+    layer = _layer_root(sample_dir)
     extra = () if _label(sample_dir, root) == _REPO_LOCAL else (layer,)
     source = FileSystemArtifactSource(
         repo_root=Path(root),

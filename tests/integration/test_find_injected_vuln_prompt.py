@@ -1,17 +1,16 @@
 """Focused unit checks on the find-injected-vulnerability prompt resource.
 
 Parses the prompt frontmatter and body directly rather than going through
-validate_samples; the prompt's samples are the ones whose ``prompt_id`` names
-it (#281).
+validate_samples; the prompt's samples are its task's, the samples under
+``eval_samples/find-injected-vulnerability/`` (#302).
 """
 
 from __future__ import annotations
 
-import tomllib
-
 import pytest
 
 from coding_agent_playbook.artifacts.prompt import Prompt
+from coding_agent_playbook.evals.task_registry import load_layer_samples
 from tests._catalog import CORE_ROOT
 
 pytestmark = pytest.mark.catalog
@@ -19,16 +18,16 @@ pytestmark = pytest.mark.catalog
 _PROMPT = CORE_ROOT / "prompts" / "find-injected-vulnerability.md.j2"
 
 _EXPECTED_EVAL_SAMPLES = [
-    "find-injected-vuln-modoboa-cmdi",
-    "find-injected-vuln-ormar-sqli",
-    "find-injected-vuln-changedetection-ssrf",
-    "find-injected-vuln-langroid-codeinj",
-    "find-injected-vuln-pytorch-deserial",
-    "find-injected-vuln-changedetection-pathtraversal",
-    "find-injected-vuln-authlib-sigbypass",
-    "find-injected-vuln-graphiti-queryinj",
-    "find-injected-vuln-pydash-massassign",
-    "find-injected-vuln-aiplatform-xss",
+    "find-injected-vulnerability/modoboa-cmdi",
+    "find-injected-vulnerability/ormar-sqli",
+    "find-injected-vulnerability/changedetection-ssrf",
+    "find-injected-vulnerability/langroid-codeinj",
+    "find-injected-vulnerability/pytorch-deserial",
+    "find-injected-vulnerability/changedetection-pathtraversal",
+    "find-injected-vulnerability/authlib-sigbypass",
+    "find-injected-vulnerability/graphiti-queryinj",
+    "find-injected-vulnerability/pydash-massassign",
+    "find-injected-vulnerability/aiplatform-xss",
 ]
 
 # v2 framing bans (spec §5.2 / §7.1) — none may appear in the model-facing body.
@@ -66,9 +65,9 @@ def test_prompt_id_is_find_injected_vulnerability() -> None:
 
 def test_every_fixture_names_the_prompt() -> None:
     naming = [
-        path.parent.name
-        for path in (CORE_ROOT / "eval_samples").glob("*/sample.toml")
-        if tomllib.loads(path.read_text(encoding="utf-8"))["prompt_id"] == _prompt().frontmatter.id
+        sample.id
+        for sample in load_layer_samples(CORE_ROOT / "eval_samples", "coding_agent_playbook")
+        if sample.prompt_id == _prompt().frontmatter.id
     ]
     assert sorted(naming) == sorted(_EXPECTED_EVAL_SAMPLES)
 

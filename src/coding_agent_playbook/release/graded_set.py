@@ -2,9 +2,9 @@
 
 :func:`graded_set` is the only definition (CONTEXT.md: Graded set). It takes the
 graded prompt ids as an argument, so the caller decides where they come from:
-today :func:`core_graded_prompt_ids` reads each core sample's ``prompt_id``; once
-samples live in task directories (#281 ticket 04b) the task registry's prompt ids
-are passed instead, and nothing here changes.
+today :func:`core_graded_prompt_ids` reads each core sample's ``prompt_id``, which
+the sample's task directory sets (#302); passing the task registry's prompt ids
+(``evals.task_registry``) instead changes nothing here.
 
 Only the engine's own layer is graded: editions exist for core only (ADR 0012).
 """

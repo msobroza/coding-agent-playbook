@@ -20,43 +20,43 @@ from __future__ import annotations
 
 #: fixture id -> a correct answer naming that fixture's vulnerability class.
 CORRECT_ANSWER: dict[str, str] = {
-    "find-injected-vuln-modoboa-cmdi": (
+    "find-injected-vulnerability/modoboa-cmdi": (
         "This is an OS command injection (CWE-78): a user-controlled mailbox path "
         "reaches a subprocess call built as a shell string."
     ),
-    "find-injected-vuln-ormar-sqli": (
+    "find-injected-vulnerability/ormar-sqli": (
         "This is a SQL injection (CWE-89): a user-supplied filter value is "
         "concatenated into a raw SQL string and executed."
     ),
-    "find-injected-vuln-changedetection-ssrf": (
+    "find-injected-vulnerability/changedetection-ssrf": (
         "This is an SSRF (CWE-918): a user-supplied URL is fetched server-side "
         "with no host allowlist."
     ),
-    "find-injected-vuln-langroid-codeinj": (
+    "find-injected-vulnerability/langroid-codeinj": (
         "This is a code injection (CWE-94): untrusted tool arguments reach a "
         "dynamic evaluation sink, giving arbitrary code execution."
     ),
-    "find-injected-vuln-pytorch-deserial": (
+    "find-injected-vulnerability/pytorch-deserial": (
         "This is an unsafe deserialization (CWE-502): an untrusted checkpoint is "
         "loaded through a pickle-backed loader."
     ),
-    "find-injected-vuln-changedetection-pathtraversal": (
+    "find-injected-vulnerability/changedetection-pathtraversal": (
         "This is a path traversal (CWE-22): an unsanitised user path segment is "
         "joined onto the storage root."
     ),
-    "find-injected-vuln-authlib-sigbypass": (
+    "find-injected-vulnerability/authlib-sigbypass": (
         "This is a signature verification bypass (CWE-347): the token's algorithm "
         "is taken from the token itself, so verification can be skipped."
     ),
-    "find-injected-vuln-graphiti-queryinj": (
+    "find-injected-vulnerability/graphiti-queryinj": (
         "This is a query injection (CWE-943): user input is interpolated into a "
         "Cypher graph query instead of being parameterised."
     ),
-    "find-injected-vuln-pydash-massassign": (
+    "find-injected-vulnerability/pydash-massassign": (
         "This is a mass assignment (CWE-915): a user-controlled key path can set "
         "arbitrary object attributes during a deep merge."
     ),
-    "find-injected-vuln-aiplatform-xss": (
+    "find-injected-vulnerability/aiplatform-xss": (
         "This is an XSS (CWE-79): user-supplied text is rendered into the page without escaping."
     ),
 }

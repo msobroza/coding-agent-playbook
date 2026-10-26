@@ -81,7 +81,6 @@ def _make_sample(
 ) -> EvalSample:
     data: dict[str, Any] = {
         "id": "t-agg",
-        "prompt_id": "refactor",
         "description": "aggregate fixture",
         "verdict": {"trial": verdict},
     }
@@ -90,7 +89,7 @@ def _make_sample(
     if aggregate is not None:
         data["aggregate"] = aggregate
     return EvalSample.from_dict(
-        data, source_path=sample_dir / "sample.toml", source_package="<test>"
+        data, source_path=sample_dir / "sample.toml", prompt_id="refactor", source_package="<test>"
     )
 
 
@@ -279,14 +278,16 @@ def test_aggregate_over_skipped_rubric_falls_back_to_every_trial_verdict(
     """
     data: dict[str, Any] = {
         "id": "t-agg-rubric",
-        "prompt_id": "refactor",
         "description": "aggregate over a judge-less rubric",
         "gate": _gate(),
         "rubric": _judged_rubric(),
         "aggregate": _aggregate("pass_at_k", k=2, over="rubric", fail=0.5),
     }
     sample = EvalSample.from_dict(
-        data, source_path=tmp_path / "sample" / "sample.toml", source_package="<test>"
+        data,
+        source_path=tmp_path / "sample" / "sample.toml",
+        prompt_id="refactor",
+        source_package="<test>",
     )
 
     result = _SequenceRunner(passes).run_sample(sample, tmp_path / "scratch")
@@ -327,14 +328,16 @@ def test_aggregate_over_a_layer_does_not_depend_on_the_short_circuit(
     """
     data: dict[str, Any] = {
         "id": "t-agg-ff",
-        "prompt_id": "refactor",
         "description": "aggregate over the rubric, judge configured",
         "gate": _gate(),
         "rubric": _judged_rubric(),
         "aggregate": _aggregate("pass_pow_k", k=3, over="rubric", fail=1.0),
     }
     sample = EvalSample.from_dict(
-        data, source_path=tmp_path / "sample" / "sample.toml", source_package="<test>"
+        data,
+        source_path=tmp_path / "sample" / "sample.toml",
+        prompt_id="refactor",
+        source_package="<test>",
     )
     judge = _MadeFileJudge()
 
@@ -354,7 +357,6 @@ def test_aggregate_over_the_verdict_keeps_the_short_circuit(tmp_path: Path) -> N
     """Over ``verdict`` the short-circuit cannot change the result, so it stays on."""
     data: dict[str, Any] = {
         "id": "t-agg-verdict",
-        "prompt_id": "refactor",
         "description": "aggregate over the verdict",
         "gate": _gate(),
         "rubric": _judged_rubric(),
@@ -362,7 +364,10 @@ def test_aggregate_over_the_verdict_keeps_the_short_circuit(tmp_path: Path) -> N
         "aggregate": _aggregate("pass_at_k", k=3, over="verdict", fail=0.5),
     }
     sample = EvalSample.from_dict(
-        data, source_path=tmp_path / "sample" / "sample.toml", source_package="<test>"
+        data,
+        source_path=tmp_path / "sample" / "sample.toml",
+        prompt_id="refactor",
+        source_package="<test>",
     )
     judge = _MadeFileJudge()
 
@@ -379,14 +384,16 @@ def test_aggregate_over_a_cheapest_tier_gate_keeps_sparing_the_judge(tmp_path: P
     short-circuit stays on and a failing gate never invokes the judge."""
     data: dict[str, Any] = {
         "id": "t-agg-gate",
-        "prompt_id": "refactor",
         "description": "aggregate over a deterministic gate",
         "gate": _gate(),
         "rubric": _judged_rubric(),
         "aggregate": _aggregate("pass_at_k", k=3, over="gate", fail=0.5),
     }
     sample = EvalSample.from_dict(
-        data, source_path=tmp_path / "sample" / "sample.toml", source_package="<test>"
+        data,
+        source_path=tmp_path / "sample" / "sample.toml",
+        prompt_id="refactor",
+        source_package="<test>",
     )
     judge = _MadeFileJudge()
 
@@ -409,7 +416,6 @@ def test_aggregate_over_a_costlier_gate_is_graded_in_every_trial(
     """
     data: dict[str, Any] = {
         "id": "t-agg-inverted",
-        "prompt_id": "refactor",
         "description": "aggregate over a judged gate",
         "gate": {
             "expr": "q",
@@ -419,7 +425,10 @@ def test_aggregate_over_a_costlier_gate_is_graded_in_every_trial(
         "aggregate": _aggregate("pass_at_k", k=2, over="gate", fail=0.5),
     }
     sample = EvalSample.from_dict(
-        data, source_path=tmp_path / "sample" / "sample.toml", source_package="<test>"
+        data,
+        source_path=tmp_path / "sample" / "sample.toml",
+        prompt_id="refactor",
+        source_package="<test>",
     )
     judge = _MadeFileJudge()
 
@@ -454,13 +463,13 @@ def test_short_circuit_never_changes_a_non_conjunctive_verdict(
     sample = EvalSample.from_dict(
         {
             "id": "t-verdict",
-            "prompt_id": "refactor",
             "description": "non-conjunctive verdict",
             "gate": _gate(),
             "rubric": _judged_rubric(),
             "verdict": {"trial": verdict},
         },
         source_path=tmp_path / "sample" / "sample.toml",
+        prompt_id="refactor",
         source_package="<test>",
     )
 

@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
     import pytest
 
-_SAMPLE = "refactor-extract-helper"
+_SAMPLE = "refactor/extract-helper"
 
 
 def _committed_repo(tmp_path: Path, make_synthetic_repo: Any) -> Path:
@@ -96,10 +96,10 @@ def test_a_sample_outside_the_compared_prompts_is_a_usage_error(
     make_synthetic_repo(tmp_path)
     # --runner fake: the default runner (claude_code) is checked first and needs its
     # CLI, which CI does not have (PR #266 CI).
-    argv = ["eval", "explain-pure-function", "--compare", "HEAD", "--runner", "fake"]
+    argv = ["eval", "explain/pure-function", "--compare", "HEAD", "--runner", "fake"]
     argv += ["--repo-root", str(tmp_path)]
     assert _eval.run(build_parser().parse_args(argv)) == 2
-    assert "explain-pure-function" in capsys.readouterr().err
+    assert "explain/pure-function" in capsys.readouterr().err
 
 
 def _compare_args(*flags: str) -> argparse.Namespace:

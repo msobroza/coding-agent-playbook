@@ -38,10 +38,7 @@ from coding_agent_playbook.catalog.skill_rules import (
     iter_skill_dirs,
     iter_skill_rule_files,
 )
-from coding_agent_playbook.evals.loader import (
-    discover_eval_sample_dirs,
-    load_eval_sample_from_dir,
-)
+from coding_agent_playbook.evals.task_registry import TaskRegistryError, collect_layer_samples
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
@@ -159,6 +156,22 @@ class ArtifactSource(ABC):
 
     @abstractmethod
     def list_eval_samples(self) -> list[EvalSample]: ...
+
+    def collect_eval_samples(self) -> tuple[list[EvalSample], list[TaskRegistryError]]:
+        """Every well-formed eval sample plus the load errors, never raising.
+
+        What ``playbook validate`` reads. This default can only record the one
+        error a failing :meth:`list_eval_samples` raises; a source that sees each
+        sample overrides it.
+
+        Example::
+
+            >>> samples, errors = source.collect_eval_samples()  # doctest: +SKIP
+        """
+        try:
+            return self.list_eval_samples(), []
+        except (FileNotFoundError, ValueError) as exc:
+            return [], [TaskRegistryError(str(exc))]
 
 
 def _resource_subdir(package: str, subdir: str) -> Path | None:
@@ -517,25 +530,34 @@ class FileSystemArtifactSource(ArtifactSource):
         return [h for walk in walks for h in walk.hooks], [e for walk in walks for e in walk.errors]
 
     def list_eval_samples(self) -> list[EvalSample]:
-        """Walk every layer's ``eval_samples/<id>/`` (:meth:`layer_roots` order).
+        """Every layer's eval samples, raising the first load error :meth:`collect_eval_samples` finds."""
+        samples, errors = self.collect_eval_samples()
+        if errors:
+            raise errors[0]
+        return samples
+
+    def collect_eval_samples(self) -> tuple[list[EvalSample], list[TaskRegistryError]]:
+        """Every layer's ``eval_samples/<prompt>/<name>/`` (:meth:`layer_roots` order), never raising.
 
         Each layer's ``eval_samples/`` (``catalog/core/eval_samples/`` for the
         engine, ``catalog/plugins/<name>/eval_samples/`` for a bundled plugin,
         ``<pkg>/resources/eval_samples/`` for an overlay package, then
-        ``<repo>/playbook/eval_samples/``). Later layers do NOT override earlier
-        ones here — ``catalog.resolve``'s :class:`OverlayResolver` handles ID-based
-        collision semantics for rules/prompts/skills, but eval samples are
-        aggregated as-is in v1 (no per-layer override pass yet; the
-        collision-by-id pattern is identical and lands when first overlay ships
-        eval samples). Each sample's ``source_package`` is its layer's label (the
-        engine package, a bundled-plugin or overlay-package name, or
-        ``"<repo-local>"``).
+        ``<repo>/playbook/eval_samples/``) is walked by the task registry's
+        :func:`~coding_agent_playbook.evals.task_registry.collect_layer_samples`.
+        Samples are aggregated as-is: grouping them into tasks, and refusing a
+        sample id found twice, is :class:`~coding_agent_playbook.evals.task_registry.TaskRegistry`'s
+        job. Each sample's ``source_package`` is its layer's label (the engine
+        package, a bundled-plugin or overlay-package name, or ``"<repo-local>"``).
+
+        Example::
+
+            >>> FileSystemArtifactSource(repo_root=Path("/no/such/repo")).collect_eval_samples()[1]
+            []
         """
-        return [
-            load_eval_sample_from_dir(sample_dir, source_package=label)
-            for label, root in self.layer_roots("eval_samples")
-            for sample_dir in discover_eval_sample_dirs(root)
+        walks = [
+            collect_layer_samples(root, label) for label, root in self.layer_roots("eval_samples")
         ]
+        return [s for walk in walks for s in walk[0]], [e for walk in walks for e in walk[1]]
 
 
 def engine_package_of(source: ArtifactSource) -> str:

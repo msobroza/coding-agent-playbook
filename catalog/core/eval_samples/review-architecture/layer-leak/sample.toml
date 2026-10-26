@@ -1,0 +1,55 @@
+id = "review-architecture/layer-leak"
+description = "Review-only: a layered order service whose business module builds its own SQLite store, with an orders <-> storage cycle hidden by a function-local import; a TYPE_CHECKING import is a control that must not be flagged."
+
+[setup]
+files = [
+  "shop/__init__.py",
+  "shop/models.py",
+  "shop/orders.py",
+  "shop/storage.py",
+  "shop/api.py",
+  "shop/main.py",
+  "tests/test_orders.py",
+]
+project_kind = "python-application"
+
+[invocation]
+prompt_args = "review the architecture of the shop package"
+input_variables = { target = "shop" }
+
+[gate]
+# Review-only: the agent must report, not edit. The answer handles are a cheap,
+# token-free floor in front of the judge (fail_fast skips the JUDGED tier when
+# they fail). The prompt's template always prints a Cycles heading and the layer
+# map always lists orders.py, so bare keywords prove nothing: a correct review
+# names the store in the same block as the orders module, writes the
+# storage -> orders back edge (or a two-way edge), never answers the Cycles
+# section with "none found", and never marks an orders/storage edge "ok".
+expr = "orders_untouched and storage_untouched and api_untouched and main_untouched and names_leak and names_cycle and not says_no_cycle and not edge_marked_ok"
+
+[gate.bind]
+orders_untouched  = { check = "file_unchanged", path = "shop/orders.py" }
+storage_untouched = { check = "file_unchanged", path = "shop/storage.py" }
+api_untouched     = { check = "file_unchanged", path = "shop/api.py" }
+main_untouched    = { check = "file_unchanged", path = "shop/main.py" }
+# Any phrasing, either order, within one top-level block: a line plus its
+# indented continuation, so a list of fine modules on separate bullets never matches.
+names_leak     = { check = "answer_matches", pattern = '(?i)(?:orders\.py|shop[./]orders\b|place_order)(?:[^\n]|\n(?=[ \t\n]))*?SqliteOrderStore|SqliteOrderStore(?:[^\n]|\n(?=[ \t\n]))*?(?:orders\.py|shop[./]orders\b|place_order)' }
+# Only a review that saw the function-local import writes the back edge.
+names_cycle    = { check = "answer_matches", pattern = '(?i)storage(?:\.py)?(?::\d+)?`?\s*(?:->|→|<->|↔)\s*`?(?:shop[./])?orders\b|orders(?:\.py)?(?::\d+)?`?\s*(?:<->|↔)\s*`?(?:shop[./])?storage\b' }
+says_no_cycle  = { check = "answer_matches", pattern = '(?im)\bcycles?\W{0,8}(?:none found|no cycles? found|(?:none|no cycles?)\W*$)' }
+edge_marked_ok = { check = "answer_matches", pattern = '(?i)(?:orders(?:\.py)?`?\s*(?:->|→)\s*`?(?:shop[./])?storage|storage(?:\.py)?`?\s*(?:->|→)\s*`?(?:shop[./])?orders)(?:\.py)?`?(?:\s*\([^)\n]*\))?\s*:\s*ok\b' }
+
+[rubric]
+expr = "quality"
+
+[rubric.bind]
+quality = { fail = 0.5, rubric = [
+  { judge = "The review reports, as a Critical finding with a line in shop/orders.py, that place_order constructs the concrete SqliteOrderStore (with a hard-coded 'orders.db' path) inside business logic, and proposes injecting a store abstraction (a Protocol or a callable) that the entry point in shop/main.py builds and passes down.", weight = 0.35 },
+  { judge = "The review reports the shop.orders <-> shop.storage import cycle, says the function-local import inside SqliteOrderStore.save only hides it, and proposes a concrete way to break it (for example moving order_total next to Order in shop/models.py, or passing the total into save).", weight = 0.3 },
+  { judge = "The review presents a layer map (api.py transport, orders.py business, storage.py persistence, models.py shared models, main.py entry point / composition root) with dependency flows marked ok or violation, and cites path:line for each finding.", weight = 0.2 },
+  { judge = "The review does not flag legitimate edges as violations: the `if TYPE_CHECKING:` import in shop/api.py, api.py -> orders.py, and any module importing shop/models.py. It proposes fixes as snippets without claiming to have edited any file.", weight = 0.15 },
+] }
+
+[verdict]
+trial = "gate and rubric"

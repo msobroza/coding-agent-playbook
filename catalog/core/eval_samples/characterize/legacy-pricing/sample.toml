@@ -1,0 +1,39 @@
+id = "characterize/legacy-pricing"
+description = "Edit task: pin an untested legacy pricing module whose docstring promises a bulk discount from 10 units while the code starts at 11, which rounds halves to even and ships free only strictly above 5000 cents, and which appends to an audit file on every call; the tests must pin those quirks as they are, never fix the source."
+
+[setup]
+files = ["src/pricing.py"]
+project_kind = "python-application"
+
+[invocation]
+prompt_args = "pin down what src/pricing.py does today before we refactor it; the invoicing job reconciles against its exact totals"
+input_variables = { target = "src/pricing.py" }
+
+[gate]
+# The deterministic floor in front of the judge: a test module exists at the
+# mirrored path, defines tests, exercises the pricing module, the source is
+# byte-identical, and the suite passes against it. "Fixing" the bulk boundary or
+# the rounding fails here, in the source or in a test's expectation.
+expr = "tests_exist and defines_tests and exercises_pricing and source_unchanged and suite_green"
+
+[gate.bind]
+tests_exist       = { check = "file_exists", path = "tests/test_pricing.py" }
+defines_tests     = { check = "file_contains", path = "tests/test_pricing.py", pattern = '(?m)^\s*(async\s+)?def test_' }
+exercises_pricing = { check = "file_contains", path = "tests/test_pricing.py", pattern = '\b(line_total|apply_coupon|order_total)\b' }
+source_unchanged  = { check = "file_unchanged", path = "src/pricing.py" }
+suite_green       = { check = "tests_pass" }
+
+[rubric]
+expr = "quality"
+
+[rubric.bind]
+quality = { fail = 0.5, rubric = [
+  { judge = "The tests pin the bulk-discount boundary as the code behaves today: line_total(unit, 10) pays full price and 11 units get the discount. The 10-unit case is asserted as current behavior (named or commented as pinned, or asserted as the docstring's intent under xfail(strict=True)), never by editing the source to use >=.", weight = 0.3 },
+  { judge = "The rounding is pinned with exact literals rather than recomputed with the production formula: HALF and the bulk discount round a half cent to the even value (for example apply_coupon(25, 'HALF') == 12), and the member discount rounds down (999 cents becomes 950 before shipping).", weight = 0.2 },
+  { judge = "Every branch is reached through the public functions: zero and negative quantity, no coupon, an unknown or lowercase coupon, a FLAT coupon larger than the subtotal (negative result), FLAT with no amount raising ValueError, and the free-shipping threshold at 5000 (pays shipping) and just above it (ships free).", weight = 0.25 },
+  { judge = "The audit-file side effect is neutralized at the narrowest seam (tmp_path with monkeypatch.chdir, monkeypatch.setattr on AUDIT_LOG, or a named fake), so running the suite writes nothing into the repository, and at least one test asserts the line order_total appends.", weight = 0.15 },
+  { judge = "Only test files are added or changed; no source file is edited or added. Tests that pin suspicious behavior say so by name (for example a currently_ prefix) or comment, and nothing is skipped or marked with a non-strict xfail.", weight = 0.1 },
+] }
+
+[verdict]
+trial = "gate and rubric"

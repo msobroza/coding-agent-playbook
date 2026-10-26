@@ -2,7 +2,7 @@
 
 Rules, prompts, hooks and eval samples no longer carry ``version:`` (the engine
 computes a content digest), and prompts no longer list ``eval_samples:`` (a
-prompt's samples are the ones whose ``prompt_id`` names it). ``sample.toml``
+prompt's samples are the ones in its task directory). ``sample.toml``
 rejects any unknown top-level key, so a misspelled key cannot pass silently.
 """
 
@@ -22,11 +22,10 @@ if TYPE_CHECKING:
     HookFactory = Callable[..., Path]
 
 _DIGEST_HINT = "the engine now computes a content digest"
-_SAMPLES_HINT = "a prompt's eval samples are the samples whose prompt_id names it"
+_SAMPLES_HINT = "a prompt's eval samples are the samples in its task directory"
 
 _SAMPLE_TOML = """\
-id = "{prompt}-case"
-prompt_id = "{prompt}"
+id = "{prompt}/case"
 description = "d"
 {extra}
 [setup]
@@ -63,7 +62,7 @@ def _write_prompt(repo: Path, prompt_id: str, extra_yaml: str = "") -> Path:
 
 
 def _write_sample(repo: Path, prompt_id: str, extra_toml: str) -> Path:
-    path = repo / "playbook" / "eval_samples" / f"{prompt_id}-case" / "sample.toml"
+    path = repo / "playbook" / "eval_samples" / prompt_id / "case" / "sample.toml"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(_SAMPLE_TOML.format(prompt=prompt_id, extra=extra_toml), encoding="utf-8")
     return path
@@ -175,3 +174,65 @@ def test_a_prompt_whose_sample_names_it_validates_without_a_list(
     rc, output = _validate(repo, capsys)
 
     assert rc == 0, output
+
+
+def test_a_sample_with_prompt_id_fails_pointing_to_the_task_layout(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = make_synthetic_repo(tmp_path)
+    _write_prompt(repo, "p")
+    sample = _write_sample(repo, "p", 'prompt_id = "p"\n')
+
+    rc, output = _validate(repo, capsys)
+
+    assert rc == 1
+    assert f"FAIL {sample}: {sample}: unknown top-level key 'prompt_id': the task" in output
+    assert "eval_samples/<prompt>/<name>/sample.toml" in output
+
+
+def test_a_task_directory_naming_no_prompt_fails_naming_the_directory(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = make_synthetic_repo(tmp_path)
+    sample = _write_sample(repo, "deleted-prompt", "")
+    task_dir = sample.parent.parent
+
+    rc, output = _validate(repo, capsys)
+
+    assert rc == 1
+    assert f"FAIL {task_dir}: {task_dir}: task directory names no prompt" in output
+
+
+def test_a_local_sample_reusing_a_core_sample_id_fails_naming_both(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = make_synthetic_repo(tmp_path)
+    local = repo / "playbook" / "eval_samples" / "review" / "spot-the-bug" / "sample.toml"
+    local.parent.mkdir(parents=True)
+    local.write_text(
+        _SAMPLE_TOML.format(prompt="review", extra="").replace(
+            "review/case", "review/spot-the-bug"
+        ),
+        encoding="utf-8",
+    )
+
+    rc, output = _validate(repo, capsys)
+
+    assert rc == 1
+    assert "eval sample id 'review/spot-the-bug' is registered twice" in output
+    assert str(local) in output
+
+
+def test_a_sample_in_the_old_flat_layout_fails_pointing_to_the_task_layout(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = make_synthetic_repo(tmp_path)
+    _write_prompt(repo, "p")
+    flat = repo / "playbook" / "eval_samples" / "p-case"
+    flat.mkdir(parents=True)
+    (flat / "sample.toml").write_text('id = "p-case"\ndescription = "d"\n', encoding="utf-8")
+
+    rc, output = _validate(repo, capsys)
+
+    assert rc == 1
+    assert f"{flat}: an eval sample sits directly in eval_samples/" in output

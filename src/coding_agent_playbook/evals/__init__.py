@@ -2,7 +2,7 @@
 
 Deliberately empty: import the defining module (``evals.sample`` for ``EvalSample``,
 ``SampleSetup``, ``SampleInvocation`` and ``Layer``; ``evals.loader`` for
-``load_eval_sample_from_dir`` and ``discover_eval_sample_dirs``; ``evals.validator``
+``load_eval_sample_from_dir``; ``evals.task_registry`` for the tasks and ``TaskRegistry``; ``evals.validator``
 for ``validate_samples`` and ``EvalValidationError``). ``compile/`` turns a sample's
 gate, rubric and aggregate blocks into grading-kernel checks, and ``run/`` runs a
 sample against a harness and scores the result. ``evals.comparison`` compares a

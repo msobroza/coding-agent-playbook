@@ -1,8 +1,8 @@
-"""Invariants over the review-crbug-* samples, paraphrased from CRBugBench bugs.
+"""Invariants over the review/crbug-* samples, paraphrased from CRBugBench bugs.
 
 Each sample ships a small fixture with a change (``CHANGE.diff``) already applied,
 and its rubric names the one bug that change introduces. A fixture that drifts
-from its rubric grades every reviewer wrong (review-spot-the-bug once described
+from its rubric grades every reviewer wrong (review/spot-the-bug once described
 an off-by-one its code did not have), so this module proves, per sample:
 
 - the planted bug reproduces on the shipped ``setup/`` tree;
@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.evals.loader import load_eval_sample_from_dir
+from coding_agent_playbook.evals.task_registry import load_layer_samples, load_task_sample
 from tests._catalog import CORE_ROOT
 
 if TYPE_CHECKING:
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.catalog
 
 _SAMPLES_ROOT = CORE_ROOT / "eval_samples"
-_PREFIX = "review-crbug-"
+_PREFIX = "review/crbug-"
 
 
 @dataclass(frozen=True)
@@ -50,7 +50,7 @@ class Planted:
 
 PLANTED = (
     Planted(
-        "review-crbug-netrc-env-path",
+        "review/crbug-netrc-env-path",
         "src/netrc_auth.py",
         (
             (
@@ -70,7 +70,7 @@ print("OK" if get_netrc_auth("example.com") == ("alice", "s3cret") else "BUG")
         ("expanduser", "absolute", "home directory", "relative"),
     ),
     Planted(
-        "review-crbug-basic-auth-not",
+        "review/crbug-basic-auth-not",
         "src/auth.py",
         (
             ("(!hmac.compare_digest(given.username", "(not hmac.compare_digest(given.username"),
@@ -89,7 +89,7 @@ else:
         ("syntax", "!", "operator", "negat"),
     ),
     Planted(
-        "review-crbug-xtrim-maxlen-minid",
+        "review/crbug-xtrim-maxlen-minid",
         "src/streams.py",
         (
             (
@@ -113,7 +113,7 @@ else:
         ("exclusive", "both", "dataerror", "neither", "at most one"),
     ),
     Planted(
-        "review-crbug-replace-same-object",
+        "review/crbug-replace-same-object",
         "src/scene.py",
         (
             (
@@ -135,7 +135,7 @@ else:
         ("itself", "same object", "identity", "with the same"),
     ),
     Planted(
-        "review-crbug-form-method-none",
+        "review/crbug-form-method-none",
         "src/forms.py",
         (
             (
@@ -155,7 +155,7 @@ else:
         ("none", "null", "backward", "compatib"),
     ),
     Planted(
-        "review-crbug-ftp-active-string",
+        "review/crbug-ftp-active-string",
         "src/feedstorage.py",
         (
             (
@@ -173,7 +173,7 @@ print("BUG" if storage.active else "OK")
         ("getbool", "string", "truthy", "=false", "bool"),
     ),
     Planted(
-        "review-crbug-log-textio",
+        "review/crbug-log-textio",
         "src/service.py",
         (
             ("import os\n", "import io\nimport os\n"),
@@ -191,7 +191,7 @@ print("OK" if log.closed else "BUG")
         ("textio", "iobase", "isinstance", "typing"),
     ),
     Planted(
-        "review-crbug-audio-input-args",
+        "review/crbug-audio-input-args",
         "src/audio.py",
         (
             (
@@ -252,7 +252,8 @@ def _apply_fix(planted: Planted, tree: Path) -> None:
 
 
 def test_every_crbug_sample_has_a_planted_bug() -> None:
-    shipped = sorted(d.name for d in _SAMPLES_ROOT.iterdir() if d.name.startswith(_PREFIX))
+    samples = load_layer_samples(_SAMPLES_ROOT, "coding_agent_playbook")
+    shipped = sorted(s.id for s in samples if s.id.startswith(_PREFIX))
     assert shipped == sorted(_BY_ID), "add the sample's planted bug to PLANTED (or remove it)"
 
 
@@ -270,7 +271,7 @@ def test_the_known_fix_removes_the_bug(planted: Planted, tmp_path: Path) -> None
 
 @pytest.mark.parametrize("planted", PLANTED, ids=lambda p: p.sample_id)
 def test_the_request_does_not_name_the_bug(planted: Planted) -> None:
-    sample = load_eval_sample_from_dir(
+    sample = load_task_sample(
         _SAMPLES_ROOT / planted.sample_id, source_package="coding_agent_playbook"
     )
     request = sample.invocation.prompt_args.lower()

@@ -84,7 +84,7 @@ class ComparisonPlan:
 
     Example::
 
-        >>> plan = ComparisonPlan(["refactor-extract-helper"], 3, PlaybookEvalRun(),  # doctest: +SKIP
+        >>> plan = ComparisonPlan(["refactor/extract-helper"], 3, PlaybookEvalRun(),  # doctest: +SKIP
         ...                       git_worktree_checkout(repo), work_dir)
     """
 
@@ -220,6 +220,8 @@ def _run_side(plan: ComparisonPlan, side: ComparisonSide, name: str) -> dict[str
 
 
 def _keep_report(reports: Path, stem: str, run: EvalRunOutput) -> None:
+    # A sample id is <task>/<name> (#302), so each task's reports get their own directory.
+    (reports / stem).parent.mkdir(parents=True, exist_ok=True)
     (reports / f"{stem}.json").write_text(run.stdout, encoding="utf-8")
     if run.stderr:
         (reports / f"{stem}.stderr.txt").write_text(run.stderr, encoding="utf-8")

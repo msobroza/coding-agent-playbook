@@ -19,6 +19,7 @@ from coding_agent_playbook.evals.comparison import (
     comparison_to_dict,
     format_comparison_table,
 )
+from coding_agent_playbook.evals.task_registry import TaskRegistry
 from coding_agent_playbook.validation.context import SyncContext
 
 if TYPE_CHECKING:
@@ -89,32 +90,33 @@ def test_the_compared_samples_are_those_of_the_seven_rule_including_prompts(
     tmp_path: Path, make_synthetic_repo: Any
 ) -> None:
     make_synthetic_repo(tmp_path)
-    shipped = SyncContext.from_repo(tmp_path).artifact_source.list_eval_samples()
-    assert compared_sample_ids(shipped) == [
-        "characterize-legacy-pricing",
-        "generate-tests-async-code",
-        "generate-tests-edge-cases",
-        "generate-tests-happy-path",
-        "make-testable-inject-clock",
-        "refactor-extract-helper",
-        "refactor-rename-for-clarity",
-        "review-architecture-layer-leak",
-        "review-change-drops-part-of-request",
-        "review-clean-multi-file-change",
-        "review-crbug-audio-input-args",
-        "review-crbug-basic-auth-not",
-        "review-crbug-form-method-none",
-        "review-crbug-ftp-active-string",
-        "review-crbug-log-textio",
-        "review-crbug-netrc-env-path",
-        "review-crbug-replace-same-object",
-        "review-crbug-xtrim-maxlen-minid",
-        "review-diff-old-bug-on-untouched-line",
-        "review-rereview-earlier-findings",
-        "review-spot-the-bug",
-        "review-style-only-no-changes-needed",
-        "security-review-already-safe",
-        "security-review-pickle-load",
+    ctx = SyncContext.from_repo(tmp_path)
+    registry = TaskRegistry.from_catalog(ctx.artifact_source, ctx.prompts_resolved)
+    assert compared_sample_ids(registry) == [
+        "characterize/legacy-pricing",
+        "generate-tests/async-code",
+        "generate-tests/edge-cases",
+        "generate-tests/happy-path",
+        "make-testable/inject-clock",
+        "refactor/extract-helper",
+        "refactor/rename-for-clarity",
+        "review-architecture/layer-leak",
+        "review/change-drops-part-of-request",
+        "review/clean-multi-file-change",
+        "review/crbug-audio-input-args",
+        "review/crbug-basic-auth-not",
+        "review/crbug-form-method-none",
+        "review/crbug-ftp-active-string",
+        "review/crbug-log-textio",
+        "review/crbug-netrc-env-path",
+        "review/crbug-replace-same-object",
+        "review/crbug-xtrim-maxlen-minid",
+        "review/diff-old-bug-on-untouched-line",
+        "review/rereview-earlier-findings",
+        "review/spot-the-bug",
+        "review/style-only-no-changes-needed",
+        "security-review/already-safe",
+        "security-review/pickle-load",
     ]
 
 

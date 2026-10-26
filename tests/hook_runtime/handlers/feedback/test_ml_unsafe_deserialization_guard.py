@@ -216,7 +216,7 @@ def test_notebook_cell_np_load_allow_pickle_denied(
 
 
 def test_eval_sample_setup_path_inactive(repo: PackRepo, deps: Callable[..., RuntimeDeps]) -> None:
-    rel = "pkg/eval_samples/find-injected-vuln-x/setup/app/loader.py"
+    rel = "pkg/eval_samples/find-injected-vulnerability/x/setup/app/loader.py"
 
     report = _write(repo, deps, rel, "import pickle\nx = pickle.loads(b)\n")
 

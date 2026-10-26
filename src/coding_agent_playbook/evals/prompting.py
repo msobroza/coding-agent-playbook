@@ -44,6 +44,7 @@ from coding_agent_playbook.catalog.prompt_sets import (
 from coding_agent_playbook.catalog.resolve import OverlayResolver
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.detector.facts import detect
+from coding_agent_playbook.evals.task_registry import sample_layer_root
 from coding_agent_playbook.rendering.jinja import TemplateSecurityError
 from coding_agent_playbook.rendering.session import RenderSession, TemplateContext
 
@@ -145,10 +146,10 @@ def _placeholder(sample: EvalSample, *, strict: bool) -> str:
     """The unresolvable-prompt fallback: a placeholder, or a strict-mode error."""
     if strict:
         raise PromptResolutionError(
-            f"prompt_id {sample.prompt_id!r} for sample {sample.id!r} resolved to no "
+            f"prompt {sample.prompt_id!r} for sample {sample.id!r} resolved to no "
             "shipped prompt; a real runner cannot be driven with a placeholder. "
-            "Check the sample's prompt_id and that the prompts/ directory next to the "
-            "sample's eval_samples/ holds that prompt."
+            "Check that the prompts/ directory next to the sample's eval_samples/ "
+            "holds the prompt its task directory names."
         )
     return f"[prompt:{sample.prompt_id}] {sample.invocation.prompt_args}".strip()
 
@@ -319,20 +320,19 @@ def _infer_prompts_dir(sample_toml: Path) -> Path | None:
     """Locate the ``prompts/`` dir of the layer holding the sample's ``eval_samples/``.
 
     Every layer keeps its kind directories side by side, so a sample at
-    ``<layer>/eval_samples/<dir>/sample.toml`` has its prompts at
+    ``<layer>/eval_samples/<prompt>/<name>/sample.toml`` has its prompts at
     ``<layer>/prompts``, whatever ``<layer>`` is (``catalog/core``,
-    ``<pkg>/resources``, ``playbook``). Returns ``None`` when the sample dir's
-    parent is not ``eval_samples`` (e.g. a synthetic test sample). The path is not
-    resolved, so a symlinked sample dir maps to the layer it is reached through.
+    ``<pkg>/resources``, ``playbook``). Returns ``None`` when the sample is not
+    in a task directory of an ``eval_samples/`` (e.g. a synthetic test sample);
+    the task registry's :func:`sample_layer_root` knows the layout.
 
     Example::
 
-        >>> _infer_prompts_dir(Path("catalog/core/eval_samples/t/sample.toml"))
+        >>> _infer_prompts_dir(Path("catalog/core/eval_samples/review/t/sample.toml"))
         PosixPath('catalog/core/prompts')
     """
-    if sample_toml.parent.parent.name != "eval_samples":
-        return None
-    return sample_toml.parents[2] / "prompts"
+    layer = sample_layer_root(sample_toml)
+    return None if layer is None else layer / "prompts"
 
 
 __all__ = ["PromptResolutionError", "render_prompt", "resolve_sample_prompt"]

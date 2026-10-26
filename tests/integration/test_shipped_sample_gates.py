@@ -44,13 +44,13 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.artifacts.prompt import Prompt, PromptFrontmatter
-from coding_agent_playbook.evals.loader import (
-    discover_eval_sample_dirs,
-    load_eval_sample_from_dir,
-)
 from coding_agent_playbook.evals.run.harness_runner import capture, materialize
 from coding_agent_playbook.evals.run.scoring import score
+from coding_agent_playbook.evals.task_registry import (
+    TaskRegistry,
+    load_layer_samples,
+    load_task_sample,
+)
 from coding_agent_playbook.evals.validator import validate_samples
 from coding_agent_playbook.grading.types import CheckResult
 from tests._catalog import CORE_ROOT, bundled_eval_sample_roots
@@ -75,26 +75,26 @@ _TRANSCRIPT = Path("transcript.md")
 #: Shipped before the solution/ convention (frozen 2026-10-14). Never add to it.
 LEGACY_SAMPLES_WITHOUT_SOLUTION = frozenset(
     {
-        "explain-pure-function",
-        "find-injected-vuln-aiplatform-xss",
-        "find-injected-vuln-authlib-sigbypass",
-        "find-injected-vuln-changedetection-pathtraversal",
-        "find-injected-vuln-changedetection-ssrf",
-        "find-injected-vuln-graphiti-queryinj",
-        "find-injected-vuln-langroid-codeinj",
-        "find-injected-vuln-modoboa-cmdi",
-        "find-injected-vuln-ormar-sqli",
-        "find-injected-vuln-pydash-massassign",
-        "find-injected-vuln-pytorch-deserial",
-        "generate-tests-async-code",
-        "generate-tests-edge-cases",
-        "generate-tests-happy-path",
-        "refactor-extract-helper",
-        "refactor-rename-for-clarity",
-        "review-spot-the-bug",
-        "review-style-only-no-changes-needed",
-        "security-review-already-safe",
-        "security-review-pickle-load",
+        "explain/pure-function",
+        "find-injected-vulnerability/aiplatform-xss",
+        "find-injected-vulnerability/authlib-sigbypass",
+        "find-injected-vulnerability/changedetection-pathtraversal",
+        "find-injected-vulnerability/changedetection-ssrf",
+        "find-injected-vulnerability/graphiti-queryinj",
+        "find-injected-vulnerability/langroid-codeinj",
+        "find-injected-vulnerability/modoboa-cmdi",
+        "find-injected-vulnerability/ormar-sqli",
+        "find-injected-vulnerability/pydash-massassign",
+        "find-injected-vulnerability/pytorch-deserial",
+        "generate-tests/async-code",
+        "generate-tests/edge-cases",
+        "generate-tests/happy-path",
+        "refactor/extract-helper",
+        "refactor/rename-for-clarity",
+        "review/spot-the-bug",
+        "review/style-only-no-changes-needed",
+        "security-review/already-safe",
+        "security-review/pickle-load",
     }
 )
 
@@ -231,7 +231,16 @@ def describe(result: CheckResult) -> str:
 
 def _shipped_sample_dirs() -> list[Path]:
     """Core's eval samples, then every bundled plugin's (eval samples are per layer)."""
-    return [d for root in bundled_eval_sample_roots() for d in discover_eval_sample_dirs(root)]
+    return [
+        sample.source_path.parent
+        for root in bundled_eval_sample_roots()
+        for sample in load_layer_samples(root, root.parent.name)
+    ]
+
+
+def _sample_id(sample_dir: Path) -> str:
+    """The id of the sample at ``.../eval_samples/<task>/<name>``: ``<task>/<name>``."""
+    return f"{sample_dir.parent.name}/{sample_dir.name}"
 
 
 # Fail collection loudly: an empty or mis-pointed root would turn every gate proof
@@ -248,10 +257,10 @@ def _shipped_negatives() -> list[tuple[Path, Path]]:
 
 
 def _load(sample_dir: Path, package: str = "coding_agent_playbook") -> EvalSample:
-    return load_eval_sample_from_dir(sample_dir, source_package=package)
+    return load_task_sample(sample_dir, source_package=package)
 
 
-@pytest.mark.parametrize("sample_dir", _solved_sample_dirs(), ids=lambda d: d.name)
+@pytest.mark.parametrize("sample_dir", _solved_sample_dirs(), ids=_sample_id)
 def test_shipped_gate_fails_on_pristine_setup(
     sample_dir: Path, tmp_path: Path, stub_uv_sync: None
 ) -> None:
@@ -262,7 +271,7 @@ def test_shipped_gate_fails_on_pristine_setup(
     )
 
 
-@pytest.mark.parametrize("sample_dir", _solved_sample_dirs(), ids=lambda d: d.name)
+@pytest.mark.parametrize("sample_dir", _solved_sample_dirs(), ids=_sample_id)
 def test_shipped_gate_passes_with_reference_solution(
     sample_dir: Path, tmp_path: Path, stub_uv_sync: None
 ) -> None:
@@ -286,9 +295,9 @@ def test_shipped_gate_rejects_every_negative(
 
 def test_every_new_sample_ships_a_solution() -> None:
     missing = sorted(
-        d.name
+        _sample_id(d)
         for d in _shipped_sample_dirs()
-        if d.name not in LEGACY_SAMPLES_WITHOUT_SOLUTION and not (d / _SOLUTION_DIR).is_dir()
+        if _sample_id(d) not in LEGACY_SAMPLES_WITHOUT_SOLUTION and not (d / _SOLUTION_DIR).is_dir()
     )
     assert missing == [], (
         f"eval samples without a solution/ gate proof: {missing}. Add solution/ (edited files "
@@ -298,7 +307,7 @@ def test_every_new_sample_ships_a_solution() -> None:
 
 def test_every_review_only_sample_ships_a_negative() -> None:
     missing = sorted(
-        d.name
+        _sample_id(d)
         for d in _solved_sample_dirs()
         if is_review_only(d / _SOLUTION_DIR) and not negative_paths(d / _SOLUTION_DIR)
     )
@@ -310,7 +319,7 @@ def test_every_review_only_sample_ships_a_negative() -> None:
 
 
 def test_legacy_list_has_no_stale_entries() -> None:
-    shipped = {d.name: d for d in _shipped_sample_dirs()}
+    shipped = {_sample_id(d): d for d in _shipped_sample_dirs()}
     gone = sorted(LEGACY_SAMPLES_WITHOUT_SOLUTION - shipped.keys())
     solved = sorted(
         t
@@ -340,8 +349,7 @@ trial = "gate and rubric"
 
 _EDIT_TOML = (
     r"""
-id = "synthetic-edit"
-prompt_id = "synthetic-prompt"
+id = "synthetic-prompt/synthetic-edit"
 description = "Add a loud greeting and a test for it."
 
 [setup]
@@ -360,8 +368,7 @@ has_test = { check = "file_exists", path = "tests/test_greet.py" }
 
 _REVIEW_TOML = (
     r"""
-id = "synthetic-review"
-prompt_id = "synthetic-prompt"
+id = "synthetic-prompt/synthetic-review"
 description = "Name the injection class without editing anything."
 
 [setup]
@@ -398,7 +405,7 @@ def write_tree(root: Path, files: dict[str, str]) -> None:
 
 
 def _edit_sample(root: Path) -> Path:
-    sample_dir = root / "synthetic-edit"
+    sample_dir = root / "synthetic-prompt" / "synthetic-edit"
     write_tree(
         sample_dir,
         {
@@ -418,7 +425,7 @@ def _edit_sample(root: Path) -> Path:
 
 
 def _review_sample(root: Path) -> Path:
-    sample_dir = root / "synthetic-review"
+    sample_dir = root / "synthetic-prompt" / "synthetic-review"
     write_tree(
         sample_dir,
         {
@@ -547,23 +554,12 @@ def test_loader_and_validator_ignore_solution(tmp_path: Path) -> None:
     _edit_sample(root)
     _review_sample(root)
 
-    assert [d.name for d in discover_eval_sample_dirs(root)] == [
-        "synthetic-edit",
-        "synthetic-review",
+    samples = load_layer_samples(root, "tests")
+    assert [s.id for s in samples] == [
+        "synthetic-prompt/synthetic-edit",
+        "synthetic-prompt/synthetic-review",
     ]
-    samples = [_load(d, "tests") for d in discover_eval_sample_dirs(root)]
-    prompt = Prompt(
-        frontmatter=PromptFrontmatter(
-            id="synthetic-prompt",
-            name="Synthetic",
-            description="Synthetic host prompt.",
-            slash="synthetic",
-        ),
-        body="",
-        template_body="",
-        is_templated=False,
-        source_path=None,
-        source_package="tests",
-    )
-    errors = validate_samples(samples, [prompt])
+    _, task_errors = TaskRegistry.collect(samples, ["synthetic-prompt"])
+    errors = validate_samples(samples)
+    assert task_errors == []
     assert errors == [], "\n".join(f"{e.path}: {e.message}" for e in errors)

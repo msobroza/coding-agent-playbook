@@ -274,13 +274,12 @@ def test_validate_flags_jinja_syntax_error(tmp_path, make_synthetic_repo, capsys
 
 
 def test_validate_flags_orphan_eval_sample(tmp_path, make_synthetic_repo, capsys):
-    """An on-disk sample.toml referencing a non-existent prompt."""
+    """An on-disk sample in a task directory that names a non-existent prompt."""
     repo = make_synthetic_repo(tmp_path)
-    sample_dir = repo / "playbook" / "eval_samples" / "orphan-sample"
+    sample_dir = repo / "playbook" / "eval_samples" / "deleted-prompt" / "orphan-sample"
     sample_dir.mkdir(parents=True, exist_ok=True)
     (sample_dir / "sample.toml").write_text(
-        'id = "orphan-sample"\n'
-        'prompt_id = "deleted-prompt"\n'
+        'id = "deleted-prompt/orphan-sample"\n'
         'description = "An orphan that points at a deleted prompt"\n',
         encoding="utf-8",
     )

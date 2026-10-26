@@ -109,7 +109,7 @@ def test_a_docs_title_on_a_non_catalog_change_passes(
         real_git,
         "README.md",
         "docs/guide.md",
-        "catalog/core/eval_samples/review-spot-the-bug/sample.toml",
+        "catalog/core/eval_samples/review/spot-the-bug/sample.toml",
         "catalog/plugins/mattpocock_skills/ATTRIBUTIONS.md",
     )
 
@@ -167,7 +167,7 @@ def test_the_rule_lists_the_paths_of_the_merge_base_range(
         ("catalog/core/hooks/safety/secret-content-guard/HOOK.md", True),
         ("catalog/plugins/superpowers/skills/x/SKILL.md", True),
         ("catalog/plugins/mattpocock_skills/rules/a.md", True),
-        ("catalog/core/eval_samples/review-spot-the-bug/sample.toml", False),
+        ("catalog/core/eval_samples/review/spot-the-bug/sample.toml", False),
         ("catalog/plugins/superpowers/README.md", False),
         ("catalog/plugins/rules/a.md", False),
         ("catalog/editions/v0.1.0/core/rules/always/a.md", False),

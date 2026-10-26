@@ -12,9 +12,9 @@ an :class:`EvalValidationError`. The compiler already validates: at-least-one
 layer present, unknown check ids / metric names / gate-refs / rubric-refs,
 malformed handle bindings, expression identifiers ⊄ bind keys, the rubric
 weight-sum, and verdict identifiers ⊄ present layers. The non-schema rules
-(setup.files exist, an authored ``setup/pyproject.toml`` parses, prompt_id
-resolves) and a light ``[aggregate]``
-shape check are kept here.
+(setup.files exist, an authored ``setup/pyproject.toml`` parses) and a light
+``[aggregate]`` shape check are kept here. Whether a sample's task names a
+prompt is the task registry's check (``evals.task_registry``).
 """
 
 from __future__ import annotations
@@ -26,7 +26,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from coding_agent_playbook.artifacts.prompt import Prompt
     from coding_agent_playbook.evals.sample import EvalSample
 
 #: The aggregate handle ``metric`` axis the multi-trial layer recognizes.
@@ -44,11 +43,8 @@ class EvalValidationError:
     message: str
 
 
-def validate_samples(
-    samples: list[EvalSample],
-    prompts: list[Prompt],
-) -> list[EvalValidationError]:
-    """Run the SPEC §15.2 checks against the loaded sample + prompt lists.
+def validate_samples(samples: list[EvalSample]) -> list[EvalValidationError]:
+    """Run the SPEC §15.2 checks against the loaded samples.
 
     The rules:
 
@@ -64,14 +60,16 @@ def validate_samples(
     4. Each sample's ``setup.files`` must exist under ``<sample_dir>/setup/``.
        When ``setup/pyproject.toml`` is present it must parse as TOML; dep
        installability is the runner's concern (``uv sync``), not the validator's.
-    5. Each sample's ``prompt_id`` resolves to a known prompt. A prompt's
-       samples are exactly the samples whose ``prompt_id`` names it; prompts
-       no longer list them (#281), so there is no back-reference to check.
 
+    The task registry checks that each sample's task names a prompt.
     Aggregates every violation; never raises. Empty list means OK.
+
+    Example::
+
+        >>> validate_samples([sample])  # doctest: +SKIP
+        []
     """
     errors: list[EvalValidationError] = []
-    prompts_by_id = {p.frontmatter.id: p for p in prompts}
 
     for sample in samples:
         # Rule 2: the gate/rubric/verdict schema must compile.
@@ -106,15 +104,6 @@ def validate_samples(
                         message=f"setup/pyproject.toml is not valid TOML: {exc}",
                     )
                 )
-
-        # Rule 5: prompt_id must resolve to a known prompt.
-        if sample.prompt_id not in prompts_by_id:
-            errors.append(
-                EvalValidationError(
-                    path=sample.source_path,
-                    message=f"prompt_id {sample.prompt_id!r} does not exist",
-                )
-            )
 
     return errors
 

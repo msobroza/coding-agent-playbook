@@ -20,7 +20,7 @@ from tests.conftest import _DEFAULT_CONFIG
 if TYPE_CHECKING:
     from pathlib import Path
 
-_SHIPPED_SAMPLE = "refactor-extract-helper"
+_SHIPPED_SAMPLE = "refactor/extract-helper"
 
 
 @pytest.fixture

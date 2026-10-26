@@ -162,7 +162,9 @@ def test_changed_without_git_baseline_exits_two(
 def test_exclude_skips_eval_fixture_setup_even_when_passed_explicitly(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    needle = _write(repo / "eval_samples" / "t1" / "setup" / "needle.py", _HIGH_CC_SOURCE)
+    needle = _write(
+        repo / "eval_samples" / "review" / "t1" / "setup" / "needle.py", _HIGH_CC_SOURCE
+    )
 
     rc = _cli(str(needle), "--mode", "absolute", "--repo-root", str(repo))
 

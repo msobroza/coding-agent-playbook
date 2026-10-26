@@ -195,16 +195,19 @@ def strip_ansi(text: str) -> str:
 def review_samples(only: list[str] | None = None) -> list[EvalSample]:
     """The engine's ``review`` eval samples, optionally narrowed to ``only`` ids.
 
+    The task registry owns the walk of ``eval_samples/`` (#302); this asks it for
+    the ``review`` task instead of filtering every sample by prompt id.
+
     Example::
 
-        [s.id for s in review_samples(["review-spot-the-bug"])]
+        [s.id for s in review_samples(["review/spot-the-bug"])]
     """
+    from coding_agent_playbook.evals.task_registry import TaskRegistry
     from coding_agent_playbook.validation.context import SyncContext
 
     ctx = SyncContext.from_repo(REPO_ROOT)
-    samples = [
-        s for s in ctx.artifact_source.list_eval_samples() if s.prompt_id == REVIEW_PROMPT_ID
-    ]
+    registry = TaskRegistry.from_catalog(ctx.artifact_source, ctx.prompts_resolved)
+    samples = list(registry.samples_of(REVIEW_PROMPT_ID))
     if not only:
         return samples
     missing = sorted(set(only) - {s.id for s in samples})
@@ -213,11 +216,25 @@ def review_samples(only: list[str] | None = None) -> list[EvalSample]:
     return [s for s in samples if s.id in only]
 
 
+def run_key(sample_id: str) -> str:
+    """The one-level directory name of ``sample_id`` under a run's experiment dir.
+
+    Sample ids are ``<task>/<name>`` since #302; flattening the slash keeps one
+    directory per sample, so the runs recorded before #302 (``review-<name>``)
+    and new runs share a layout.
+
+    Example::
+
+        run_key("review/spot-the-bug")  # "review-spot-the-bug"
+    """
+    return sample_id.replace("/", "-")
+
+
 def run_dir(run_name: str, experiment_key: str, sample_id: str) -> Path:
     """Where one experiment x sample run keeps its results (prompt, transcript, scores)."""
-    return RESULTS_ROOT / run_name / experiment_key / sample_id
+    return RESULTS_ROOT / run_name / experiment_key / run_key(sample_id)
 
 
 def scratch_dir(run_name: str, experiment_key: str, sample_id: str) -> Path:
     """The agent's working tree for one run, under :data:`WORK_ROOT`."""
-    return WORK_ROOT / run_name / experiment_key / sample_id / "scratch"
+    return WORK_ROOT / run_name / experiment_key / run_key(sample_id) / "scratch"

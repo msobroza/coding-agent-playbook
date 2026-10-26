@@ -6,7 +6,7 @@ Nothing here runs in CI.
 ## Review: Qwen3.6 27B in OpenCode and Claude Code, five reviewers
 
 Grades the eval samples of the core `review` prompt (`prompt_id = "review"`):
-the six original `review-*` samples and the eight `review-crbug-*` samples that
+the six original `review/*` samples and the eight `review/crbug-*` samples that
 paraphrase bugs from the CRBugBench code-review benchmark (see
 `catalog/core/eval_samples/ATTRIBUTIONS.md`). `summary.md` reports the two sets
 apart as well as together. Each runs under five reviewer setups, all driving the
@@ -105,3 +105,6 @@ benchmarks/results/<run-name>/
   <experiment>/<sample>/score.json       engine report + judge settings
   summary.csv, summary.md, *.png         written by plot_results.py
 ```
+
+`<sample>` is the sample id with its slash flattened (`review/spot-the-bug` is
+stored as `review-spot-the-bug`), so every sample keeps one directory.

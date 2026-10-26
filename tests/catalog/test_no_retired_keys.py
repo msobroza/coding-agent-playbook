@@ -41,7 +41,7 @@ def _sample_tomls() -> list[Path]:
         path
         for root in (CORE_ROOT, PLUGINS_ROOT)
         for path in root.rglob("sample.toml")
-        if path.parent.parent.name == "eval_samples"
+        if path.parents[2].name == "eval_samples"
     )
 
 

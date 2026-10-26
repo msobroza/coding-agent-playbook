@@ -22,7 +22,7 @@ from tests.cli.claude_cli_fakes import FakeClaudeCli
 if TYPE_CHECKING:
     from pathlib import Path
 
-_SAMPLE = "refactor-extract-helper"
+_SAMPLE = "refactor/extract-helper"
 _TOKEN = "fake-endpoint-token-0000"
 _URL = "https://llm.internal.example"
 

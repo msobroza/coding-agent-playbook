@@ -95,11 +95,13 @@ def load_rows(run_root: Path) -> list[RunRow]:
 
 
 def _gate_exprs() -> dict[str, str]:
-    import tomllib
-
-    samples = _bench.REPO_ROOT / "catalog" / "core" / "eval_samples"
-    specs = (tomllib.loads(p.read_text(encoding="utf-8")) for p in samples.glob("*/sample.toml"))
-    return {s["id"]: s["gate"]["expr"] for s in specs}
+    # Key each gate by its <task>/<name> id and by the flat id runs before #302 recorded.
+    return {
+        key: s.gate.expr or next(iter(s.gate.bind))  # a None expr names the sole handle
+        for s in _bench.review_samples()
+        if s.gate is not None
+        for key in (s.id, _bench.run_key(s.id))
+    }
 
 
 def _row(payload: dict, exprs: dict[str, str]) -> RunRow:
@@ -121,7 +123,8 @@ def _row(payload: dict, exprs: dict[str, str]) -> RunRow:
 
 
 def _short(sample_id: str) -> str:
-    return sample_id.removeprefix("review-")
+    # New runs record "review/<name>", runs before #302 "review-<name>".
+    return sample_id.removeprefix("review/").removeprefix("review-")
 
 
 def _label(key: str) -> str:
@@ -189,9 +192,11 @@ def sample_set(sample_id: str) -> str:
 
     Example::
 
-        sample_set("review-crbug-log-textio")  # "CRBugBench"
+        sample_set("review/crbug-log-textio")  # "CRBugBench"
     """
-    return "CRBugBench" if sample_id.startswith("review-crbug-") else "original"
+    # Runs recorded before #302 carry the flat ids (review-crbug-*).
+    crbug = sample_id.startswith(("review/crbug-", "review-crbug-"))
+    return "CRBugBench" if crbug else "original"
 
 
 def _set_totals(rows: list[RunRow]) -> list[str]:

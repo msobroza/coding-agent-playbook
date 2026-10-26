@@ -25,7 +25,7 @@ name its source (:func:`plugin_policy_for`). For ``catalog/core/`` the checks
 are decided per file by :func:`policy_for`:
 
 * by default -> URLs and plugin markers are both violations. That includes the
-  eval fixtures under ``eval_samples/<id>/setup/`` and ``solution/``: they ship in
+  eval fixtures under ``eval_samples/<prompt>/<name>/setup/`` and ``solution/``: they ship in
   the wheel and are copied into the agent's scratch repo. No fixture needs a URL
   today; if one ever does, allow only a reserved example host (``example.com``,
   ``*.test``, ``*.invalid``, ``localhost``) for that one path;
@@ -104,7 +104,7 @@ _EXAMPLES_SUBDIR = "examples"
 _LICENSE_COPIES_CITING_A_URL = frozenset({"LICENSE.simple-agent-api"})
 
 _EVAL_SAMPLES_SUBDIR = "eval_samples"
-#: Per-sample fixture trees: ``eval_samples/<id>/setup/**`` and ``eval_samples/<id>/solution/**``.
+#: Per-sample fixture trees: ``eval_samples/<prompt>/<name>/{setup,solution}/**``.
 _FIXTURE_DIRS = frozenset({"setup", "solution"})
 _ATTRIBUTIONS_NAME = "ATTRIBUTIONS.md"
 
@@ -243,9 +243,9 @@ def _plugin_prefix(plugin_dir: Path) -> str:
 
 
 def _is_fixture(rel: Path) -> bool:
-    """True for ``eval_samples/<id>/setup/**`` and ``eval_samples/<id>/solution/**``."""
+    """True for ``eval_samples/<prompt>/<name>/setup/**`` and ``.../<name>/solution/**``."""
     parts = rel.parts
-    return len(parts) > 3 and parts[0] == _EVAL_SAMPLES_SUBDIR and parts[2] in _FIXTURE_DIRS
+    return len(parts) > 4 and parts[0] == _EVAL_SAMPLES_SUBDIR and parts[3] in _FIXTURE_DIRS
 
 
 def _is_hidden(path: Path, root: Path) -> bool:
@@ -503,13 +503,19 @@ _LICENSE_COPY = ScanPolicy(urls=True, markers=False)
     [
         ("skills/python-coding/rules/python-pure-core.md", _SKILL_MD),
         ("prompts/characterize.md", ScanPolicy(urls=True, markers=True)),
-        ("eval_samples/some-sample/sample.toml", ScanPolicy(urls=True, markers=True)),
-        ("eval_samples/some-sample/setup/app/db.py", ScanPolicy(urls=True, markers=True)),
-        ("eval_samples/some-sample/solution/transcript.md", ScanPolicy(urls=True, markers=True)),
+        ("eval_samples/review/some-sample/sample.toml", ScanPolicy(urls=True, markers=True)),
+        ("eval_samples/review/some-sample/setup/app/db.py", ScanPolicy(urls=True, markers=True)),
+        (
+            "eval_samples/review/some-sample/solution/transcript.md",
+            ScanPolicy(urls=True, markers=True),
+        ),
         ("ATTRIBUTIONS.md", ScanPolicy(urls=True, markers=False)),
         ("eval_samples/ATTRIBUTIONS.md", ScanPolicy(urls=False, markers=True)),
-        ("eval_samples/some-sample/ATTRIBUTIONS.md", ScanPolicy(urls=False, markers=True)),
-        ("eval_samples/some-sample/setup/ATTRIBUTIONS.md", ScanPolicy(urls=True, markers=True)),
+        ("eval_samples/review/some-sample/ATTRIBUTIONS.md", ScanPolicy(urls=False, markers=True)),
+        (
+            "eval_samples/review/some-sample/setup/ATTRIBUTIONS.md",
+            ScanPolicy(urls=True, markers=True),
+        ),
         ("rules/ATTRIBUTIONS.md", ScanPolicy(urls=True, markers=True)),
         ("skills/s/SKILL.md", _SKILL_MD),
         ("skills/s/references/guide.md", _SKILL_MD),
@@ -578,11 +584,11 @@ def test_scan_targets_on_a_synthetic_tree(tmp_path: Path) -> None:
         "prompts/p.md.j2": "clean\n",
         "skills/s/scripts/run.py": "# mktoronto\n",
         "eval_samples/ATTRIBUTIONS.md": "Licence: https://licence.example\n",
-        "eval_samples/t/sample.toml": 'description = "see www.example.org"\n',
-        "eval_samples/t/setup/app.py": 'URL = "https://api.example.org"\n',
-        "eval_samples/t/setup/ATTRIBUTIONS.md": "https://example.org\n",
-        "eval_samples/t/solution/transcript.md": "Adapted from Arjan's example.\n",
-        "eval_samples/t/solution/negatives/wrong.md": "clean\n",
+        "eval_samples/review/t/sample.toml": 'description = "see www.example.org"\n',
+        "eval_samples/review/t/setup/app.py": 'URL = "https://api.example.org"\n',
+        "eval_samples/review/t/setup/ATTRIBUTIONS.md": "https://example.org\n",
+        "eval_samples/review/t/solution/transcript.md": "Adapted from Arjan's example.\n",
+        "eval_samples/review/t/solution/negatives/wrong.md": "clean\n",
         "rules/.cache/junk.md": "https://example.org\n",
     }
     write_tree(tmp_path, files)
@@ -590,10 +596,10 @@ def test_scan_targets_on_a_synthetic_tree(tmp_path: Path) -> None:
     violations = [v.render() for t in scan_targets(tmp_path) for v in scan_file(t)]
 
     assert violations == [
-        "eval_samples/t/sample.toml:1: url: 'www.example.org\"'",
-        "eval_samples/t/setup/ATTRIBUTIONS.md:1: url: 'https://example.org'",
-        "eval_samples/t/setup/app.py:1: url: 'https://api.example.org\"'",
-        "eval_samples/t/solution/transcript.md:1: plugin-marker: 'Arjan'",
+        "eval_samples/review/t/sample.toml:1: url: 'www.example.org\"'",
+        "eval_samples/review/t/setup/ATTRIBUTIONS.md:1: url: 'https://example.org'",
+        "eval_samples/review/t/setup/app.py:1: url: 'https://api.example.org\"'",
+        "eval_samples/review/t/solution/transcript.md:1: plugin-marker: 'Arjan'",
         "rules/a.md:1: url: 'https://example.org'",
         "skills/s/scripts/run.py:1: plugin-marker: 'mktoronto'",
     ]
