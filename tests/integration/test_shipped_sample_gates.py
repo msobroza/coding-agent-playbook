@@ -44,6 +44,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE
 from coding_agent_playbook.evals.run.harness_runner import capture, materialize
 from coding_agent_playbook.evals.run.scoring import score
 from coding_agent_playbook.evals.task_registry import (
@@ -234,8 +235,17 @@ def _shipped_sample_dirs() -> list[Path]:
     return [
         sample.source_path.parent
         for root in bundled_eval_sample_roots()
-        for sample in load_layer_samples(root, root.parent.name)
+        for sample in load_layer_samples(root, _layer_package(root))
     ]
+
+
+def _layer_package(samples_root: Path) -> str:
+    """Core's samples load as the engine's, as the artifact source loads them.
+
+    Only the engine's samples may pin an edition (``evals.sample``), so loading
+    core as ``"core"`` would refuse the first pinned sample (#281 ticket 13).
+    """
+    return ENGINE_PACKAGE if samples_root == _SAMPLES_ROOT else samples_root.parent.name
 
 
 def _sample_id(sample_dir: Path) -> str:
@@ -256,8 +266,12 @@ def _shipped_negatives() -> list[tuple[Path, Path]]:
     return [(d, neg) for d in _solved_sample_dirs() for neg in negative_paths(d / _SOLUTION_DIR)]
 
 
-def _load(sample_dir: Path, package: str = "coding_agent_playbook") -> EvalSample:
+def _load(sample_dir: Path, package: str = ENGINE_PACKAGE) -> EvalSample:
     return load_task_sample(sample_dir, source_package=package)
+
+
+def test_core_samples_are_collected_as_the_engines_so_a_pinned_one_loads() -> None:
+    assert _layer_package(_SAMPLES_ROOT) == ENGINE_PACKAGE
 
 
 @pytest.mark.parametrize("sample_dir", _solved_sample_dirs(), ids=_sample_id)

@@ -7,6 +7,9 @@ engine installed::
     uv run scripts/release.py prepare                  # next version from the commits
     uv run scripts/release.py prepare --version 0.1.0  # the first release, or an override
     uv run scripts/release.py tag                      # by hand, when CI could not tag
+    uv run scripts/release.py freeze v0.1.0            # an edition and its pins, as a PR
+    uv run scripts/release.py unfreeze v0.1.0          # the reverse, as a PR
+    uv run scripts/release.py check-editions           # CI: editions equal their tags' blobs
 
 ``prepare`` fetches ``origin`` with its tags and works in a throwaway detached
 worktree at ``origin/main``, so the caller's tree is never touched. There it
@@ -32,6 +35,12 @@ run leaves no worktree, no local release branch and no change in the caller's
 tree, and a re-run starts over from ``origin/main`` (it overwrites a release
 branch a failed run pushed, with a lease). Exit codes: 0 done, 1 refused or
 failed, 2 usage.
+
+``freeze vX`` and ``unfreeze vX`` (``release_edition``) run the same way: a
+scratch worktree at ``origin/main``, the checkout's own engine
+(``freeze-checkout``), one commit on ``freeze/vX`` or ``unfreeze/vX``, pushed
+with a lease, and a pull request opened (or the open one reused), so a re-run is
+idempotent. ``check-editions`` runs in place, in the CI job with full history.
 """
 
 from __future__ import annotations
@@ -41,20 +50,18 @@ import dataclasses
 import json
 import os
 import shutil
-import subprocess
 import sys
 import tempfile
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, Protocol
+from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.evals.prompting import PromptResolutionError
 from coding_agent_playbook.release.changes import diff_entries, graded_set_changed
-from coding_agent_playbook.release.graded_set import GradedSetError
 from coding_agent_playbook.release.manifest import (
     MANIFEST_FILENAME,
     NOTES_FILENAME,
-    ManifestError,
     ReleaseManifest,
     read_manifest,
     release_dir,
@@ -69,97 +76,35 @@ from coding_agent_playbook.release.versions import (
     raises_minor,
     release_tag,
 )
+from release_edition import (
+    FREEZE,
+    UNFREEZE,
+    EditionChange,
+    EditionRefusal,
+    check_editions,
+    edition_branch,
+    freeze_change,
+    unfreeze_change,
+)
 from release_tag import superseded, tag_release
+from release_tools import COMMITIZEN_REQUIREMENT as COMMITIZEN_REQUIREMENT
+from release_tools import MAIN_BRANCH, REMOTE, Runner, Tools, commit_push_open, on_branch
+from release_tools import Completed as Completed
+from release_tools import ReleaseError as ReleaseError
+from release_tools import run_process as run_process
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Callable, Sequence
 
-#: The commitizen this script runs, and the range the playbook-ci job installs.
-COMMITIZEN_REQUIREMENT: Final = "commitizen>=4.13,<5"
-REMOTE: Final = "origin"
-MAIN_BRANCH: Final = "main"
 RELEASE_BRANCH_PREFIX: Final = "release/"
 FAILED_EXIT: Final = 1
 #: commitizen's exit codes for "no bump-worthy commit" and "no commit at all".
 CZ_NO_INCREMENT: Final = 21
 CZ_NO_COMMITS: Final = 3
-#: Bounds every shell-out: git, uv, commitizen and the forge CLI all run unattended.
-COMMAND_TIMEOUT_SECONDS: Final = 600
 _CATALOG: Final = "catalog"
 _PYPROJECT: Final = "pyproject.toml"
 _FIELD: Final = "\x1f"
 _RECORD: Final = "\x1e"
-
-
-class ReleaseError(Exception):
-    """A refusal or a failed step; the message says what to do."""
-
-
-@dataclass(frozen=True)
-class Completed:
-    """What a finished command returned."""
-
-    returncode: int
-    stdout: str = ""
-    stderr: str = ""
-
-
-class Runner(Protocol):
-    """Runs one command; the tests pass a named fake."""
-
-    def __call__(
-        self, argv: Sequence[str], *, cwd: Path, env: Mapping[str, str] | None = None
-    ) -> Completed: ...
-
-
-def run_process(
-    argv: Sequence[str], *, cwd: Path, env: Mapping[str, str] | None = None
-) -> Completed:
-    """Run ``argv`` in ``cwd`` with a timeout; a missing program exits 127."""
-    try:
-        done = subprocess.run(
-            list(argv),
-            cwd=cwd,
-            env=None if env is None else dict(env),
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=COMMAND_TIMEOUT_SECONDS,
-        )
-    except FileNotFoundError:
-        return Completed(127, "", f"{argv[0]}: command not found")
-    except subprocess.TimeoutExpired:
-        return Completed(124, "", f"{argv[0]}: timed out after {COMMAND_TIMEOUT_SECONDS}s")
-    return Completed(done.returncode, done.stdout, done.stderr)
-
-
-@dataclass(frozen=True)
-class Tools:
-    """git, commitizen and ``playbook forge``, run in ``cwd`` through ``runner``."""
-
-    runner: Runner
-    cwd: Path
-
-    def run(self, argv: Sequence[str]) -> Completed:
-        return self.runner(argv, cwd=self.cwd)
-
-    def checked(self, argv: Sequence[str]) -> str:
-        """Run ``argv``; its stdout, or a :class:`ReleaseError` naming it and its stderr."""
-        done = self.run(argv)
-        if done.returncode != 0:
-            detail = (done.stderr or done.stdout).strip()
-            raise ReleaseError(f"`{' '.join(argv)}` exited {done.returncode}: {detail}")
-        return done.stdout
-
-    def git(self, *args: str) -> str:
-        return self.checked(["git", *args])
-
-    def cz(self, *args: str) -> Completed:
-        return self.run(["uv", "tool", "run", "--from", COMMITIZEN_REQUIREMENT, "cz", *args])
-
-    def forge(self, *args: str) -> str:
-        cli = [sys.executable, "-m", "coding_agent_playbook.cli", "forge", "-C", str(self.cwd)]
-        return self.checked([*cli, *args])
 
 
 # --------------------------------------------------------------------------- #
@@ -167,18 +112,46 @@ class Tools:
 # --------------------------------------------------------------------------- #
 
 
+def _make_scratch() -> Path:
+    return Path(tempfile.mkdtemp(prefix="playbook-release-"))
+
+
 def prepare(
     repo: Path,
     *,
     version: str | None,
     runner: Runner = run_process,
-    make_scratch: Callable[[], Path] = lambda: Path(tempfile.mkdtemp(prefix="playbook-release-")),
+    make_scratch: Callable[[], Path] = _make_scratch,
 ) -> int:
     """Fetch, check ``origin/main`` out in a scratch worktree and run ``prepare-checkout`` there.
 
     The worktree is removed whatever happens, so the caller's repository keeps
     no trace of a failed run.
     """
+    extra = ["--version", version] if version else []
+    return _in_scratch_checkout(repo, "prepare-checkout", extra, runner, make_scratch)
+
+
+def edition_command(
+    repo: Path,
+    command: str,
+    tag: str,
+    *,
+    runner: Runner = run_process,
+    make_scratch: Callable[[], Path] = _make_scratch,
+) -> int:
+    """``freeze``/``unfreeze`` ``tag``: ``<command>-checkout`` in a scratch worktree, like prepare."""
+    return _in_scratch_checkout(repo, f"{command}-checkout", ["--tag", tag], runner, make_scratch)
+
+
+def _in_scratch_checkout(
+    repo: Path,
+    inner: str,
+    extra: list[str],
+    runner: Runner,
+    make_scratch: Callable[[], Path],
+) -> int:
+    """Run ``release.py <inner> --base <origin/main> <extra>`` in a throwaway worktree."""
     tools = Tools(runner, repo)
     tools.git("fetch", "--tags", REMOTE)
     base = tools.git("rev-parse", "--verify", f"{REMOTE}/{MAIN_BRANCH}^{{commit}}").strip()
@@ -186,7 +159,8 @@ def prepare(
     checkout = scratch / "checkout"
     try:
         tools.git("worktree", "add", "--detach", str(checkout), base)
-        done = runner(_checkout_argv(checkout, base, version), cwd=checkout, env=_env(checkout))
+        argv = _checkout_argv(checkout, inner, base, extra)
+        done = runner(argv, cwd=checkout, env=_env(checkout))
     finally:
         tools.run(["git", "worktree", "remove", "--force", str(checkout)])
         tools.run(["git", "worktree", "prune"])
@@ -196,10 +170,9 @@ def prepare(
     return done.returncode
 
 
-def _checkout_argv(checkout: Path, base: str, version: str | None) -> list[str]:
+def _checkout_argv(checkout: Path, inner: str, base: str, extra: list[str]) -> list[str]:
     script = checkout / "scripts" / Path(__file__).name
-    argv = [sys.executable, str(script), "prepare-checkout", "--base", base]
-    return [*argv, "--version", version] if version else argv
+    return [sys.executable, str(script), inner, "--base", base, *extra]
 
 
 def _env(checkout: Path) -> dict[str, str]:
@@ -240,21 +213,30 @@ def prepare_checkout(
     pull request's URL as ``playbook forge`` prints it.
     """
     plan = plan_release(tools, base=base, version=version, snapshot=snapshot)
-    tools.git("switch", "--force-create", plan.branch)
-    try:
-        return _publish(tools, plan)
-    finally:
-        tools.run(["git", "switch", "--detach", "--discard-changes", base])
-        tools.run(["git", "branch", "--delete", "--force", plan.branch])
+    return on_branch(tools, base, plan.branch, lambda: _publish(tools, plan))
+
+
+def edition_checkout(tools: Tools, *, base: str, command: str, tag: str) -> str:
+    """``freeze``/``unfreeze`` ``tag`` in the checkout at ``tools.cwd`` and open its PR."""
+    _refuse_moved_head(tools, base)
+    change_of = freeze_change if command == FREEZE else unfreeze_change
+    branch = edition_branch(command, tag)
+
+    def publish() -> str:
+        change: EditionChange = change_of(tools, tag)
+        with tempfile.TemporaryDirectory(prefix="playbook-edition-") as scratch:
+            body = Path(scratch) / "body.md"
+            body.write_text(change.body, encoding="utf-8")
+            return commit_push_open(tools, branch, change.title, change.paths, body)
+
+    return on_branch(tools, base, branch, publish)
 
 
 def plan_release(
     tools: Tools, *, base: str, version: str | None, snapshot: Callable[[str], ReleaseManifest]
 ) -> Plan:
     """Run the preflight and decide the version; nothing is written yet."""
-    head = tools.git("rev-parse", "HEAD").strip()
-    if head != base:
-        raise ReleaseError(f"the checkout is at {head}, not at the base {base}")
+    _refuse_moved_head(tools, base)
     current = _project_version(tools.cwd)
     previous = _previous_release(tools, current, base, version)
     _refuse_open_release_pull(tools)
@@ -269,6 +251,12 @@ def plan_release(
         manifest=dataclasses.replace(manifest, version=chosen),
         previous_manifest=previous_manifest,
     )
+
+
+def _refuse_moved_head(tools: Tools, base: str) -> None:
+    head = tools.git("rev-parse", "HEAD").strip()
+    if head != base:
+        raise ReleaseError(f"the checkout is at {head}, not at the base {base}")
 
 
 def _refuse_existing_tag(tools: Tools, version: str) -> None:
@@ -391,16 +379,7 @@ def _publish(tools: Tools, plan: Plan) -> str:
             f"`cz bump {plan.version}` exited {bumped.returncode}: {bumped.stderr.strip()}"
         )
     release_path = notes.parent.relative_to(tools.cwd).as_posix()
-    tools.git("add", "--", _PYPROJECT, release_path)
-    tools.git("commit", "--quiet", "--message", plan.title)
-    leftover = tools.git("status", "--porcelain").strip()
-    if leftover:
-        raise ReleaseError(f"the release commit left changes behind:\n{leftover}")
-    tools.git("push", "--force-with-lease", REMOTE, f"HEAD:refs/heads/{plan.branch}")
-    url = tools.forge(
-        "pr", "create", "--base", MAIN_BRANCH, "--title", plan.title, "--body-file", str(notes)
-    )
-    return url.strip()
+    return commit_push_open(tools, plan.branch, plan.title, (_PYPROJECT, release_path), notes)
 
 
 def _write_release_files(tools: Tools, plan: Plan) -> Path:
@@ -473,6 +452,12 @@ def _parser() -> argparse.ArgumentParser:
         metavar="SHA",
         help="the CI tag job's commit, whose tests passed: tag only it, skip the CI lookup",
     )
+    for name, what in ((FREEZE, "freeze edition TAG"), (UNFREEZE, "unfreeze edition TAG")):
+        commands.add_parser(name, help=f"open a PR to {what}").add_argument("tag", metavar="TAG")
+        hidden = commands.add_parser(f"{name}-checkout", help=argparse.SUPPRESS)
+        hidden.add_argument("--base", required=True)
+        hidden.add_argument("--tag", required=True)
+    commands.add_parser("check-editions", help="CI: every edition file equals its tag's blob")
     return parser
 
 
@@ -487,19 +472,42 @@ def main(
     args = _parser().parse_args(argv)
     here = Path.cwd() if cwd is None else cwd
     try:
-        if args.command == "prepare":
-            return prepare(here, version=args.version, runner=runner)
-        if args.command == "tag":
-            print(f"release: {tag_release(Tools(runner, here), tested_commit=args.tested_commit)}")
-            return 0
-        build = _default_snapshot(here) if snapshot is None else snapshot
-        url = prepare_checkout(
-            Tools(runner, here), base=args.base, version=args.version, snapshot=build
-        )
-    except (ReleaseError, ManifestError, GradedSetError, TagRefusal) as exc:
+        return _dispatch(args, Tools(runner, here), snapshot)
+    # ValueError: a bad manifest, digests file, sample or graded set, each naming its file.
+    except (ReleaseError, EditionRefusal, TagRefusal, PromptResolutionError, ValueError) as exc:
         print(f"release: {exc}", file=sys.stderr)
         return FAILED_EXIT
+
+
+def _dispatch(
+    args: argparse.Namespace, tools: Tools, snapshot: Callable[[str], ReleaseManifest] | None
+) -> int:
+    command: str = args.command
+    if command == "prepare":
+        return prepare(tools.cwd, version=args.version, runner=tools.runner)
+    if command in (FREEZE, UNFREEZE):
+        return edition_command(tools.cwd, command, args.tag, runner=tools.runner)
+    if command == "tag":
+        print(f"release: {tag_release(tools, tested_commit=args.tested_commit)}")
+        return 0
+    if command == "check-editions":
+        return _report_editions(check_editions(tools))
+    if command == "prepare-checkout":
+        build = _default_snapshot(tools.cwd) if snapshot is None else snapshot
+        url = prepare_checkout(tools, base=args.base, version=args.version, snapshot=build)
+    else:
+        name = command.removesuffix("-checkout")
+        url = edition_checkout(tools, base=args.base, command=name, tag=args.tag)
     print(f"release: opened {url}")
+    return 0
+
+
+def _report_editions(problems: list[str]) -> int:
+    for problem in problems:
+        print(f"release: {problem}", file=sys.stderr)
+    if problems:
+        return FAILED_EXIT
+    print("release: every edition file equals its tag's blob")
     return 0
 
 

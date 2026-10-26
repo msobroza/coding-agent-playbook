@@ -1,6 +1,7 @@
 """Named fakes for ``scripts/release.py``: git, commitizen and ``playbook forge`` in one host.
 
-:class:`FakeTagHost` is the same idea for ``release.py tag`` (git and ``gh``).
+:class:`FakeTagHost` is the same idea for ``release.py tag`` (git and ``gh``), and
+:class:`FakeForgeOverRealGit` runs the real git with only the forge faked.
 :class:`FakeReleaseHost` answers the commands the script runs from a small state
 (tags, open pull requests, commitizen's answers, the log) and records each one,
 so the tests assert on what the script ran and wrote, and never start a process.
@@ -13,7 +14,7 @@ import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from release import Completed
+from release import Completed, run_process
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -31,7 +32,9 @@ class FakeReleaseHost:
 
     ``cz_next`` maps the extra ``--get-next`` arguments (``()`` or
     ``("--increment", "MINOR")``) to ``(exit code, stdout)``. ``fail_on`` names a
-    command word (``"push"``, ``"commit"``, ``"pr create"``) that exits 1.
+    command word (``"push"``, ``"commit"``, ``"pr create"``) that exits 1;
+    ``staged`` is what ``git diff --cached --name-only`` prints. Any
+    ``<command>-checkout`` re-run is the inner step: it prints ``inner out``.
     """
 
     tags: list[str] = field(default_factory=list)
@@ -41,6 +44,7 @@ class FakeReleaseHost:
     head: str = BASE
     fail_on: str | None = None
     status: str = ""
+    staged: str = "pyproject.toml\n"
     inner_exit: int = 0
     commands: list[list[str]] = field(default_factory=list)
     envs: list[Mapping[str, str] | None] = field(default_factory=list)
@@ -54,7 +58,7 @@ class FakeReleaseHost:
         words = " ".join(command)
         if self.fail_on is not None and f" {self.fail_on}" in f" {words}":
             return Completed(1, "", f"{self.fail_on} failed")
-        if "prepare-checkout" in command:
+        if any(word.endswith("-checkout") for word in command):
             return Completed(self.inner_exit, "inner out\n", "")
         if "cz" in command:
             return self._cz(command[command.index("cz") + 1 :], cwd)
@@ -77,6 +81,7 @@ class FakeReleaseHost:
             "tag": lambda _: Completed(0, "".join(f"{t}\n" for t in self.tags)),
             "log": lambda _: Completed(0, self._log_text()),
             "status": lambda _: Completed(0, self.status),
+            "diff": lambda _: Completed(0, self.staged),
         }
         handler = handlers.get(args[0])
         return handler(args) if handler else Completed(0)
@@ -226,3 +231,28 @@ class FakeTagHost:
         if args[:2] == ["run", "list"]:
             return Completed(0, "4242\n")  # `--jq .[].databaseId`
         return Completed(0, self.jobs)
+
+
+@dataclass
+class FakeForgeOverRealGit:
+    """The real git (and every other command) with only ``playbook forge pr`` faked.
+
+    ``open_pulls`` is what ``pr list`` prints; ``pr create`` prints ``PR_URL``.
+    """
+
+    open_pulls: list[dict[str, object]] = field(default_factory=list)
+    commands: list[list[str]] = field(default_factory=list)
+
+    def __call__(
+        self, argv: Sequence[str], *, cwd: Path, env: Mapping[str, str] | None = None
+    ) -> Completed:
+        command = list(argv)
+        self.commands.append(command)
+        if "forge" in command:
+            listing = "list" in command
+            return Completed(0, json.dumps(self.open_pulls) if listing else f"{PR_URL}\n")
+        return run_process(command, cwd=cwd, env=env)
+
+    def created(self) -> list[list[str]]:
+        """Every ``forge pr create`` command run."""
+        return [c for c in self.commands if "forge" in c and "create" in c]

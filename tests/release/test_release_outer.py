@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from release import ReleaseError, main, prepare
+from release import ReleaseError, edition_command, main, prepare
 from tests.release.release_fakes import BASE, FakeReleaseHost
 
 if TYPE_CHECKING:
@@ -75,3 +75,27 @@ def test_a_failed_fetch_is_reported(tmp_path: Path, capsys: pytest.CaptureFixtur
 
     assert "`git fetch --tags origin` exited 1" in capsys.readouterr().err
     assert not host.ran("worktree", "add")
+
+
+@pytest.mark.parametrize("command", ["freeze", "unfreeze"])
+def test_freeze_and_unfreeze_run_their_checkout_step_on_origin_main_like_prepare(
+    tmp_path: Path, command: str
+) -> None:
+    host = FakeReleaseHost()
+    scratch = _scratch(tmp_path)
+    checkout = scratch / "checkout"
+
+    code = edition_command(tmp_path, command, "v9.9.9", runner=host, make_scratch=lambda: scratch)
+
+    assert code == 0
+    inner = next(c for c in host.commands if f"{command}-checkout" in c)
+    assert inner[2:] == [f"{command}-checkout", "--base", BASE, "--tag", "v9.9.9"]
+    assert host.ran("worktree", "remove", "--force", str(checkout))
+
+
+def test_the_freeze_command_line_reaches_the_scratch_checkout(tmp_path: Path) -> None:
+    host = FakeReleaseHost()
+
+    assert main(["freeze", "v9.9.9"], cwd=tmp_path, runner=host) == 0
+
+    assert any(c[2:4] == ["freeze-checkout", "--base"] for c in host.commands)

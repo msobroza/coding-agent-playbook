@@ -2,8 +2,9 @@
 
 :func:`write_fixture_catalog` builds, under ``tmp_path``, a catalog with one core
 prompt (``review``, including the rule ``typing``), that rule, and a core eval
-sample ``review/pinned``. :func:`freeze_fixture_edition` then does what ticket
-13's ``freeze`` will do: copies the prompt and the rule into
+sample ``review/pinned``. :func:`freeze_fixture_edition` then does what
+``scripts/release.py freeze`` does from a tag (``release.edition_freeze``,
+``evals.edition_pins``): copies the prompt and the rule into
 ``editions/<tag>/core/`` (the frozen files carry the retired ``version`` and
 ``eval_samples`` keys, as old releases did), pins the sample and records the
 digests. No git and no real tag is involved.

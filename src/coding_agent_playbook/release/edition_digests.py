@@ -5,7 +5,7 @@ An **edition** (CONTEXT.md) is a frozen copy of the graded set as the release
 their path relative to ``catalog/`` (``core/prompts/review.md.j2``), next to one
 small file that says what the copy is and what the pins froze::
 
-    # Written by `playbook freeze`. Never edit it by hand.
+    # Written by `scripts/release.py freeze`. Never edit it by hand.
     schema_version = 1
     tag = "v0.1.0"                 # the release the copy comes from
     commit = "<sha>"               # the commit that tag names
@@ -21,8 +21,15 @@ small file that says what the copy is and what the pins froze::
     rendered_prompt_digest = "<sha256 of the prompt text the sample renders>"
     sample_digest = "<evals.sample_digest.sample_digest of the sample>"
 
-Ticket 13's ``freeze`` writes it; the edition loader (``release.edition``) and
-the offline edition checks (``evals.edition_checks``) read it.
+The sample digest covers ``sample.toml`` as pinned: it is taken after
+``edition = "<tag>"`` is written into it. The edition directory holds only the
+digests file and the listed files; the README saying the directories are
+generated sits beside them, at ``catalog/editions/README.md``.
+
+``scripts/release.py freeze`` writes it (``release.edition_freeze``,
+``evals.edition_pins``); the edition loader (``release.edition``), the offline
+edition checks (``evals.edition_checks``) and the CI tag check
+(``release.edition_freeze.edition_tag_problems``) read it.
 :func:`render_edition_digests` and :func:`parse_edition_digests` round-trip exactly.
 """
 
@@ -58,7 +65,7 @@ EDITION_KINDS: Final = ("prompt", "rule")
 _CORE_PREFIX: Final = "core"
 _SCHEMA_VERSION: Final = 1
 
-_HEADER: Final = "# Written by `playbook freeze`. Never edit it by hand.\n\n"
+_HEADER: Final = "# Written by `scripts/release.py freeze`. Never edit it by hand.\n\n"
 _TOP_KEYS: Final = frozenset({"schema_version", "tag", "commit", "artifacts", "pins"})
 _ARTIFACT_KEYS: Final = ("kind", "id", "path", "sha256")
 _PIN_KEYS: Final = ("sample", "rendered_prompt_digest", "sample_digest")

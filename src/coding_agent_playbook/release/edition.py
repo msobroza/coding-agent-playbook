@@ -11,7 +11,10 @@ An edition (CONTEXT.md) lives at ``catalog/editions/<tag>/``: its digests file
 - **Lenient**: frozen files are what an old release shipped, so they may carry
   keys today's loaders refuse (the retired ``version`` and ``eval_samples``, or
   a key a later release drops). The loader keeps only the frontmatter keys
-  rendering needs and ignores the rest.
+  rendering needs and ignores the rest. It still builds today's
+  ``PromptFrontmatter`` and ``RuleFrontmatter``, so a key a later release makes
+  required (or a value check it tightens) must keep frozen files loading: give
+  the new field a default, or fill it here, before any edition lacks it.
 
 :func:`edition_file_problems` compares the files with the digests file, the
 offline check CI runs on every edition.
@@ -176,7 +179,9 @@ def edition_file_problems(root: Path) -> list[str]:
     """Why the files under ``root`` do not match its digests file; ``[]`` when they do.
 
     A listed file that is missing or whose bytes differ, and a file the digests
-    file does not list, are each one problem naming the path.
+    file does not list, are each one problem naming the path. The editions
+    README sits beside the edition directories (``catalog/editions/README.md``),
+    never inside one, so it is not a stray file here.
 
     Example::
 
