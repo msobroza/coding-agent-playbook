@@ -1,4 +1,4 @@
-"""The content digests release metrics record per eval sample: the sample's and its prompt's (ticket 07).
+"""The content digests recorded per eval sample: the sample's and its prompt's (tickets 07, 09).
 
 :func:`sample_digest` covers the experiment a sample defines apart from the
 prompt text: its ``sample.toml`` bytes and every file of its ``setup/`` tree (the
@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.catalog.digest import artifact_digest
 from coding_agent_playbook.catalog.prompt_sets import DEFAULT_PROMPT_SET
-from coding_agent_playbook.evals.prompting import resolve_sample_prompt
+from coding_agent_playbook.evals.prompting import render_prompt, resolve_sample_prompt
 from coding_agent_playbook.lockfile.canonical_json import canonical_json
 
 if TYPE_CHECKING:
@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.catalog.prompt_sets import PromptSet
     from coding_agent_playbook.evals.sample import EvalSample
+    from coding_agent_playbook.release.edition import Edition
 
 #: Bytecode caches a local run may leave in ``setup/``; they are not part of the sample.
 _SKIPPED_DIRS: Final = frozenset({"__pycache__"})
@@ -49,16 +50,38 @@ def sample_digest(sample: EvalSample) -> str:
     return _sha256(canonical_json(payload))
 
 
-def prompt_digest(sample: EvalSample, prompt_set: PromptSet = DEFAULT_PROMPT_SET) -> str | None:
+def prompt_digest(
+    sample: EvalSample,
+    prompt_set: PromptSet = DEFAULT_PROMPT_SET,
+    *,
+    edition: Edition | None = None,
+) -> str | None:
     """The ``artifact_digest`` of the prompt ``sample`` grades, ``None`` when it resolves to none.
+
+    With ``edition``, the digest of the edition's frozen prompt.
 
     Example::
 
         >>> prompt_digest(sample)  # doctest: +SKIP
         '5f3c...'
     """
-    prompt = resolve_sample_prompt(sample, prompt_set)
+    prompt = resolve_sample_prompt(sample, prompt_set, edition)
     return artifact_digest(prompt) if prompt is not None else None
+
+
+def rendered_prompt_digest(sample: EvalSample, edition: Edition) -> str:
+    """The sha256 hex digest of the prompt text ``sample`` renders from ``edition``.
+
+    A pin records it (``release.edition_digests``), so an engine change that
+    alters what a pinned sample puts in front of the agent fails the offline
+    edition checks. Raises ``PromptResolutionError`` like :func:`render_prompt`.
+
+    Example::
+
+        >>> rendered_prompt_digest(sample, load_edition(root))  # doctest: +SKIP
+        '7d0e...'
+    """
+    return _sha256(render_prompt(sample, strict=True, edition=edition).encode("utf-8"))
 
 
 def _tree_hashes(root: Path) -> dict[str, str]:

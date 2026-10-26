@@ -465,6 +465,14 @@ only the current text: the files under `core/` and `plugins/`. ADR 0012 records 
   script generates both. Never edit them by hand: CI fails when an edition differs
   from its release tag, and the generated `catalog/editions/README.md` sends you to
   the same path under `catalog/core/`.
+- A core sample with `edition = "vX"` in its `sample.toml` is pinned: it grades
+  the frozen copy in `catalog/editions/vX/`, ignores overlay and local overrides,
+  and its result line says `graded edition vX (frozen; overrides ignored)`.
+  `playbook eval --edition head` grades the current text instead. Only core
+  samples may carry `edition`. Each edition's `digests.toml` records its tag
+  commit, its files' digests and, per pin, the rendered prompt's digest and the
+  sample's digest. Offline tests fail when a pin names no edition, an edition
+  has no pin, or a change to the engine or the sample moves a recorded digest.
 - A pull request that changes shipped rules, prompts, skills or hooks must have a
   title of type `feat` or `fix`, or carry `!` for a breaking change, such as a
   removed or renamed id. The release version is computed from these titles.

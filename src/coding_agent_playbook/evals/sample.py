@@ -28,11 +28,13 @@ tests iff it references an execution metric, and ``strict`` defaults ``False``.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, Literal
 
 from coding_agent_playbook.artifacts.retired_keys import retired_key_problem
+from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evals.compile.compiler import CompiledSample
@@ -47,6 +49,7 @@ _WEIGHT_SUM_TOLERANCE = 1e-3
 SAMPLE_TOP_KEYS: Final = (
     "id",
     "description",
+    "edition",
     "setup",
     "invocation",
     "gate",
@@ -63,6 +66,10 @@ _MOVED_SAMPLE_KEYS: Final[dict[str, str]] = {
         "eval_samples/<prompt>/<name>/sample.toml and delete the 'prompt_id' line"
     ),
 }
+
+
+#: A release tag, the name of an edition directory (``v0.1.0``, ``v1.2.0rc1``).
+_EDITION_TAG: Final = re.compile(r"v[0-9][0-9A-Za-z.+-]*")
 
 
 @dataclass
@@ -171,6 +178,7 @@ class EvalSample:
         default_factory=lambda: Verdict(mode="boolean", trial=_DEFAULT_VERDICT)
     )
     aggregate: Layer | None = None
+    edition: str | None = None
 
     @classmethod
     def from_dict(
@@ -211,6 +219,7 @@ class EvalSample:
             _parse_layer(data["aggregate"], block="aggregate") if "aggregate" in data else None
         )
         verdict = _parse_verdict(data.get("verdict", {}))
+        edition = _parse_edition(data.get("edition"), source_package=source_package)
 
         return cls(
             id=sample_id,
@@ -224,6 +233,7 @@ class EvalSample:
             rubric=rubric,
             verdict=verdict,
             aggregate=aggregate,
+            edition=edition,
         )
 
     def compiled(self) -> CompiledSample:
@@ -295,6 +305,30 @@ def _reject_unknown_top_keys(data: dict[str, Any]) -> None:
             raise ValueError(f"unknown top-level key {key!r}: {moved}")
         allowed = ", ".join(SAMPLE_TOP_KEYS)
         raise ValueError(f"unknown top-level key {key!r}; allowed keys: {allowed}")
+
+
+def _parse_edition(raw: Any, *, source_package: str) -> str | None:
+    """The pinned edition's tag, ``None`` when unpinned; only a core sample may pin one.
+
+    Editions exist for the engine's layer only (ADR 0012), so an overlay,
+    bundled plugin or repo-local sample carrying the key is an error.
+
+    Example::
+
+        >>> _parse_edition("v0.1.0", source_package="coding_agent_playbook")
+        'v0.1.0'
+    """
+    if raw is None:
+        return None
+    if not isinstance(raw, str) or _EDITION_TAG.fullmatch(raw) is None:
+        raise ValueError(f"'edition' must be a release tag such as \"v0.1.0\", got {raw!r}")
+    if source_package != ENGINE_PACKAGE:
+        raise ValueError(
+            f"'edition' pins a sample to a frozen edition of the engine's graded set, and "
+            f"only core samples (catalog/core/eval_samples/) may carry it; this sample "
+            f"belongs to {source_package!r}: delete the 'edition' line"
+        )
+    return raw
 
 
 def _require_str(data: dict[str, Any], key: str) -> str:

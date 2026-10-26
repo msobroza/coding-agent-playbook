@@ -48,6 +48,7 @@ from coding_agent_playbook.evals.token_usage import TokenUsage, sum_usage
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from coding_agent_playbook.evals.graded_source import GradedRecord
     from coding_agent_playbook.evals.sample import EvalSample
     from coding_agent_playbook.grading.check import Check
     from coding_agent_playbook.grading.types import (
@@ -56,6 +57,7 @@ if TYPE_CHECKING:
         JudgeLike,
         TrialResult,
     )
+    from coding_agent_playbook.release.edition import Edition
 
 
 # --------------------------------------------------------------------------- #
@@ -121,6 +123,8 @@ class SampleResult:
     personal settings.
     ``usage`` is the token usage summed over every trial (``None`` when any
     trial's harness reported none).
+    ``graded`` records what the run graded (an edition or the current text, with
+    digests; ``playbook eval`` sets it, #281 ticket 09).
     """
 
     sample_id: str
@@ -138,6 +142,7 @@ class SampleResult:
     endpoint: str | None = None
     endpoint_fingerprint: str | None = None
     usage: TokenUsage | None = None
+    graded: GradedRecord | None = None
 
 
 @dataclass
@@ -415,6 +420,7 @@ class HarnessRunner(ABC):
         judge_samples: int = 1,
         fail_fast: bool = True,
         prompt_set: PromptSet = DEFAULT_PROMPT_SET,
+        edition: Edition | None = None,
     ) -> SampleResult:
         """Run ``sample`` over ``N`` trials in ``scratch_dir`` and grade a :class:`SampleResult`.
 
@@ -434,6 +440,7 @@ class HarnessRunner(ABC):
         strict resolution still raises :class:`PromptResolutionError` before any
         trial runs. ``prompt_set`` is the prompt set it renders from (D76): v1 by
         default, as every sample grades; the eval comparison (D37) passes another.
+        ``edition`` renders a pinned sample's frozen edition instead (#281 ticket 09).
 
         With an ``[aggregate]`` layer the sample verdict is that layer's pass/fail —
         the :class:`~coding_agent_playbook.evals.checks.aggregate.AggregateCheck`\\ s
@@ -457,7 +464,9 @@ class HarnessRunner(ABC):
         started = monotonic()
         # Resolve the prompt first (identical across trials) so a real runner's
         # strict resolution raises before any trial.
-        prompt = render_prompt(sample, strict=self.requires_resolved_prompt, prompt_set=prompt_set)
+        prompt = render_prompt(
+            sample, strict=self.requires_resolved_prompt, prompt_set=prompt_set, edition=edition
+        )
         compiled = compile_eval_sample(sample)
         n = compiled.trials_needed
 
