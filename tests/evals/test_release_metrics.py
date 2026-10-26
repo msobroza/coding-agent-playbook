@@ -318,6 +318,7 @@ _SETUP = SetupParts(
     small_model=None,
     runs=1,
     judge_model=None,
+    judge_endpoint_fingerprint=None,
     judge_samples=None,
     judge_version=None,
     fail_fast=True,

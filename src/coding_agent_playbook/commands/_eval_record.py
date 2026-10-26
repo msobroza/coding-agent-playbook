@@ -57,7 +57,7 @@ from coding_agent_playbook.evals.release_metrics_schema import validate_release_
 from coding_agent_playbook.evals.run.git_env import without_repo_location
 from coding_agent_playbook.evals.run.harness_version import harness_cli_version
 from coding_agent_playbook.evals.sample_digest import inputs_digest, prompt_digest, sample_digest
-from coding_agent_playbook.evals.setup_digest import SetupParts, scoring_digest
+from coding_agent_playbook.evals.setup_digest import UNKNOWN_VERSION, SetupParts, scoring_digest
 from coding_agent_playbook.evals.task_registry import TaskRegistry, TaskRegistryError
 from coding_agent_playbook.release.edition import EditionError
 from coding_agent_playbook.validation.context import SyncContext
@@ -65,6 +65,7 @@ from coding_agent_playbook.validation.context import SyncContext
 if TYPE_CHECKING:
     import argparse
 
+    from coding_agent_playbook.evals.endpoints import Endpoint
     from coding_agent_playbook.evals.judge import Judge
     from coding_agent_playbook.evals.run.harness_runner import HarnessRunner, SampleResult
     from coding_agent_playbook.evals.sample import EvalSample
@@ -170,7 +171,8 @@ def _build_plan(
     if runner is None or (judge_name is not None and judge is None) or judge_samples is None:
         return None
     fail_fast = not getattr(args, "full_scoring", False)
-    return _RecordPlan(runner, judge, judge_samples, runs, fail_fast)
+    judge_endpoint = settings.judge.endpoint if judge is not None else None
+    return _RecordPlan(runner, judge, judge_samples, runs, fail_fast, judge_endpoint)
 
 
 def _check_credentials(target: EvalTarget, settings: EvalSettings, judge_name: str | None) -> bool:
@@ -228,6 +230,8 @@ class _RecordPlan:
     judge_samples: int
     runs: int
     fail_fast: bool = True
+    #: ``[evals.judge] endpoint``, set only when the run has a judge.
+    judge_endpoint: Endpoint | None = None
 
     def recorded_target(
         self, target: EvalTarget, *, judge_model: str | None, isolated: bool
@@ -235,7 +239,8 @@ class _RecordPlan:
         """The target block's facts and the setup parts (#329 ticket 04) of this run.
 
         The harness and judge CLIs' versions are probed once each (once in all
-        when both are the same CLI), time-bounded; a failed probe is ``None``.
+        when both are the same CLI), time-bounded; a failed probe is ``None`` in
+        the target block and :data:`UNKNOWN_VERSION` in the setup parts.
         """
         judge_cli = self.judge.cli if self.judge is not None else None
         versions = _cli_versions(self.runner.cli, judge_cli)
@@ -246,7 +251,8 @@ class _RecordPlan:
             runs=self.runs,
             isolated=isolated,
         )
-        return dataclasses.replace(recorded, setup=self._setup_parts(recorded, versions[judge_cli]))
+        judge_version = _setup_version(judge_cli, versions[judge_cli])
+        return dataclasses.replace(recorded, setup=self._setup_parts(recorded, judge_version))
 
     def _setup_parts(self, recorded: RecordedTarget, judge_version: str | None) -> SetupParts:
         """Everything outside the samples that decides this run's scores, by name."""
@@ -254,14 +260,13 @@ class _RecordPlan:
         judged = self.judge is not None
         return SetupParts(
             harness=target.harness,
-            harness_version=recorded.harness_version,
+            harness_version=_setup_version(self.runner.cli, recorded.harness_version),
             model=target.model,
-            endpoint_fingerprint=(
-                target.endpoint.fingerprint if target.endpoint is not None else None
-            ),
+            endpoint_fingerprint=_fingerprint(target.endpoint),
             small_model=target.small_model,
             runs=recorded.runs,
             judge_model=recorded.judge_model,
+            judge_endpoint_fingerprint=_fingerprint(self.judge_endpoint) if judged else None,
             judge_samples=self.judge_samples if judged else None,
             judge_version=judge_version,
             fail_fast=self.fail_fast,
@@ -366,6 +371,22 @@ def _cli_versions(*clis: str | None) -> dict[str | None, str | None]:
         {None: None}
     """
     return {cli: harness_cli_version(cli) for cli in dict.fromkeys(clis)}
+
+
+def _setup_version(cli: str | None, version: str | None) -> str | None:
+    """A CLI's setup part: :data:`UNKNOWN_VERSION` when its probe failed, ``None`` without a CLI.
+
+    Example::
+
+        >>> _setup_version("claude", None), _setup_version(None, None), _setup_version("claude", "2")
+        ('unknown', None, '2')
+    """
+    return UNKNOWN_VERSION if cli is not None and version is None else version
+
+
+def _fingerprint(endpoint: Endpoint | None) -> str | None:
+    """The endpoint's URL fingerprint, or ``None`` without an endpoint."""
+    return endpoint.fingerprint if endpoint is not None else None
 
 
 def _record_path(args: argparse.Namespace) -> Path:

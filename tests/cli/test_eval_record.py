@@ -16,6 +16,7 @@ import pytest
 
 import coding_agent_playbook
 from coding_agent_playbook.cli import main
+from coding_agent_playbook.commands import _eval_record
 from coding_agent_playbook.commands._eval_record import _ran_isolated
 from coding_agent_playbook.config.files import CONFIG_FILENAME
 from coding_agent_playbook.evals import registry
@@ -31,9 +32,11 @@ from coding_agent_playbook.evals.run.fake_runner import FakeRunner
 from coding_agent_playbook.evals.run.harness_runner import SampleResult
 from coding_agent_playbook.evals.sample_digest import inputs_digest
 from coding_agent_playbook.evals.setup_digest import (
+    UNKNOWN_VERSION,
     SetupParts,
     differing_setup_parts,
     scoring_digest,
+    setups_match,
 )
 from coding_agent_playbook.evals.targets import TARGET_ENV_VAR
 from coding_agent_playbook.evals.task_registry import load_task_sample
@@ -693,6 +696,7 @@ def test_a_record_writes_its_setup_parts_and_digest(repo: Path) -> None:
         "small_model": None,
         "runs": 2,
         "judge_model": None,
+        "judge_endpoint_fingerprint": None,
         "judge_samples": None,
         "judge_version": None,
         "fail_fast": True,
@@ -764,11 +768,128 @@ def test_the_judge_cli_version_is_probed_once_with_a_time_bound(
     assert setup["judge_version"] == "2.1.300"
 
 
-def test_a_failed_judge_version_probe_records_null(
+def test_a_failed_judge_version_probe_records_an_unknown_version(
     repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # A failed probe proves nothing, so the part is UNKNOWN_VERSION, which never matches.
     _with_pinned_judge(repo)
     _VersionProbes(monkeypatch, version_rc=1)
     rc, out = _record(repo, _SAMPLE, "--target", "fake-pinned", "--judge", "llm")
     assert rc == 0
-    assert _load(out)["setup"]["judge_version"] is None
+    setup = _load(out)["setup"]
+    assert setup["judge_version"] == UNKNOWN_VERSION
+    assert differing_setup_parts(setup, setup) == ("judge_version",)
+
+
+class _FailedHarnessProbe(FakeClaudeCli):
+    """:class:`FakeClaudeCli` whose ``claude --version`` fails."""
+
+    def _run(self, args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if args[:1] == ["claude"] and args[1:] == ["--version"]:
+            return subprocess.CompletedProcess(args, 1, "", "boom")
+        return super()._run(args, **kwargs)
+
+
+def test_a_failed_harness_version_probe_is_unknown_in_the_setup_only(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _FailedHarnessProbe(monkeypatch)
+    rc, out = _record(repo, _SAMPLE, "--target", "opus", "--runs", "1")
+    assert rc == 0
+    data = _load(out)
+    assert data["setup"]["harness_version"] == UNKNOWN_VERSION
+    assert data["target"]["harness_version"] is None
+
+
+def test_a_runner_without_a_cli_records_a_null_version_that_matches(repo: Path) -> None:
+    _rc, first = _record(repo, _SAMPLE, "--target", "fake-pinned")
+    _rc, second = _record(repo, _SAMPLE, "--target", "fake-pinned")
+    first_setup, second_setup = _load(first)["setup"], _load(second)["setup"]
+    assert first_setup["harness_version"] is None
+    assert setups_match(first_setup, second_setup)
+
+
+def test_a_shared_harness_and_judge_cli_is_probed_once(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _with_pinned_judge(repo)
+    cli = claude_cli_fakes.FakeClaudeCli(monkeypatch, answer="1")
+    probes: list[list[str]] = []
+    inner = subprocess.run
+
+    def counting(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if list(args[1:]) == ["--version"]:
+            probes.append(list(args))
+        return inner(args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", counting)
+    flags = ("--target", "opus", "--runs", "1", "--judge", "llm", "--full-scoring")
+    rc, out = _record(repo, _SAMPLE, *flags)
+    assert rc == 0, cli.calls
+    assert probes == [["claude", "--version"]]
+    setup = _load(out)["setup"]
+    expected = claude_cli_fakes.FAKE_CLAUDE_VERSION
+    assert setup["harness_version"] == setup["judge_version"] == expected
+
+
+def test_cli_versions_probes_each_distinct_cli_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    probed: list[str | None] = []
+
+    def fake_probe(cli: str | None) -> str | None:
+        probed.append(cli)
+        return None if cli is None else f"{cli}-9.9.9"
+
+    monkeypatch.setattr(_eval_record, "harness_cli_version", fake_probe)
+    assert _eval_record._cli_versions("claude", "claude") == {"claude": "claude-9.9.9"}
+    assert _eval_record._cli_versions(None, "claude") == {None: None, "claude": "claude-9.9.9"}
+    assert probed == ["claude", None, "claude"]
+
+
+@pytest.mark.parametrize(
+    ("cli", "version", "expected"),
+    [("claude", None, UNKNOWN_VERSION), (None, None, None), ("claude", "9.9.9", "9.9.9")],
+)
+def test_setup_version_marks_only_a_failed_probe_unknown(
+    cli: str | None, version: str | None, expected: str | None
+) -> None:
+    assert _eval_record._setup_version(cli, version) == expected
+
+
+_JUDGE_ENDPOINT_URL = "https://judge.internal.example"
+_JUDGE_ENDPOINT_EVALS = f"""
+[evals.endpoints.judge-server]
+api = "anthropic"
+base_url = "{_JUDGE_ENDPOINT_URL}"
+token_env = "JUDGE_LLM_TOKEN"
+
+[evals.judge]
+endpoint = "judge-server"
+model = "internal-judge"
+"""
+
+
+def test_the_judge_endpoint_fingerprint_is_a_setup_part(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    committed = repo / CONFIG_FILENAME
+    text = _ENDPOINT_EVALS + _JUDGE_ENDPOINT_EVALS
+    committed.write_text(committed.read_text(encoding="utf-8") + text, encoding="utf-8")
+    monkeypatch.setenv("INTERNAL_LLM_TOKEN", _ENDPOINT_TOKEN)
+    monkeypatch.setenv("JUDGE_LLM_TOKEN", _ENDPOINT_TOKEN)
+    cli = claude_cli_fakes.FakeClaudeCli(monkeypatch, answer="1")
+    flags = ("--target", "internal-claude", "--runs", "1", "--judge", "llm", "--full-scoring")
+    rc, out = _record(repo, _SAMPLE, *flags)
+    assert rc == 0, cli.calls
+    setup = _load(out)["setup"]
+    assert setup["judge_endpoint_fingerprint"] == endpoint_fingerprint(_JUDGE_ENDPOINT_URL)
+    assert setup["judge_endpoint_fingerprint"] != setup["endpoint_fingerprint"]
+
+
+def test_a_judge_without_an_endpoint_has_no_judge_endpoint_part(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _with_pinned_judge(repo)
+    _VersionProbes(monkeypatch)
+    rc, out = _record(repo, _SAMPLE, "--target", "fake-pinned", "--judge", "llm")
+    assert rc == 0
+    assert _load(out)["setup"]["judge_endpoint_fingerprint"] is None

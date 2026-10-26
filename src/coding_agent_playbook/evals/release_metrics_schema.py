@@ -18,8 +18,9 @@ One file holds one release's scores on one Eval target
       "controls": {"<sample id>": {the same keys, "graded": "<edition tag>"}},
       "setup_digest"?: "<sha256>",
       "setup"?: {"harness", "harness_version", "model", "endpoint_fingerprint",
-                 "small_model", "runs", "judge_model", "judge_samples",
-                 "judge_version", "fail_fast", "isolated", "scoring_digest"}
+                 "small_model", "runs", "judge_model", "judge_endpoint_fingerprint",
+                 "judge_samples", "judge_version", "fail_fast", "isolated",
+                 "scoring_digest"}
     }
 
 ``controls`` (#281 ticket 15) holds the pinned samples' runs on their frozen
@@ -103,6 +104,7 @@ SETUP_PART_TYPES: Final[_Fields] = {
     "small_model": _OPT_STR,
     "runs": _INT,
     "judge_model": _OPT_STR,
+    "judge_endpoint_fingerprint": _OPT_STR,
     "judge_samples": _OPT_INT,
     "judge_version": _OPT_STR,
     "fail_fast": (bool,),
