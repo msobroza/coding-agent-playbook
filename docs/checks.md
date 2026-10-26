@@ -618,6 +618,17 @@ flowchart TD
     rubric --> verdict
 ```
 
+Each run copies the sample's `setup/` into a scratch git repo. When `setup/` has a
+`pyproject.toml`, `uv sync` installs its dependencies into `<scratch>/.venv`. The
+agent runs with the sample's environment on `PATH`: `<scratch>/.venv/bin` comes
+first and `VIRTUAL_ENV` names that venv, for Claude Code and OpenCode runs, with or
+without an endpoint. So `python` and `pytest` in the agent's shell are the
+sample's own. A setup whose code lives under `src/` declares
+`[tool.pytest.ini_options] pythonpath`, so plain `pytest` imports it and no agent
+has to edit the sample's config. The `tests_pass` check is different: it runs
+`python -m pytest --cov` with the playbook's own interpreter, which has
+`pytest-cov`, in the candidate tree.
+
 A sample declares its success criteria as layers (SPEC §6.5.3):
 
 | Layer | What it declares |
