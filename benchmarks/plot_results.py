@@ -70,6 +70,7 @@ class RunRow:
     first_match: int | None = None
     n_items: int | None = None
     second_pass_ran: bool | None = None  # v2 runs: did the bug-only pass start?
+    subagent_starts: dict[str, int] | None = None  # Claude Code: foreground/background counts
 
 
 def _layer(payload: dict, layer: str) -> bool | None:
@@ -137,6 +138,7 @@ def _row(payload: dict, exprs: dict[str, str]) -> RunRow:
         second_pass_ran=payload["agent"].get(
             "second_pass_ran", payload["agent"].get("native_pass_ran")
         ),
+        subagent_starts=payload["agent"].get("subagent_starts"),
     )
 
 
@@ -327,8 +329,18 @@ def _second_pass_calls(rows: list[RunRow]) -> list[str]:
         known = [r for r in mine if r.second_pass_ran is not None]
         ran = sum(r.second_pass_ran is True for r in known)
         unknown = f" ({len(mine) - len(known)} runs not recorded)" if len(known) < len(mine) else ""
-        out.append(f"- {_label(key)}: {ran} of {len(known)} runs{unknown}")
+        out.append(f"- {_label(key)}: {ran} of {len(known)} runs{unknown}{_background(mine)}")
     return out
+
+
+def _background(rows: list[RunRow]) -> str:
+    """How many of ``rows``' recorded subagent starts were background tasks, as a suffix."""
+    starts = [r.subagent_starts for r in rows if r.subagent_starts is not None]
+    if not starts:
+        return ""
+    total = sum(sum(s.values()) for s in starts)
+    background = sum(s.get("background", 0) for s in starts)
+    return f"; {background} of {total} subagent starts in the background"
 
 
 def _sample_grid(rows: list[RunRow]) -> list[str]:

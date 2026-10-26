@@ -83,7 +83,10 @@
       "Agent:Explore",
       "Read"
     ],
-    "second_pass_ran": true
+    "second_pass_ran": true,
+    "subagent_starts": {
+      "foreground": 2
+    }
   },
   "judge": {
     "backend": "anthropic",

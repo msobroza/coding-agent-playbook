@@ -83,7 +83,8 @@
       "Bash",
       "Bash"
     ],
-    "second_pass_ran": false
+    "second_pass_ran": false,
+    "subagent_starts": {}
   },
   "judge": {
     "backend": "anthropic",

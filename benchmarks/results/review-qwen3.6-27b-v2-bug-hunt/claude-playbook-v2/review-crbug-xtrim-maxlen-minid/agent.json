@@ -46,5 +46,8 @@
     "ScheduleWakeup",
     "ScheduleWakeup"
   ],
-  "second_pass_ran": true
+  "second_pass_ran": true,
+  "subagent_starts": {
+    "background": 2
+  }
 }

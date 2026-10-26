@@ -39,5 +39,9 @@
     "Skill:code-review",
     "Read"
   ],
-  "second_pass_ran": true
+  "second_pass_ran": true,
+  "subagent_starts": {
+    "background": 1,
+    "foreground": 1
+  }
 }

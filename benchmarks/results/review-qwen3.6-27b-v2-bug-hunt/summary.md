@@ -26,7 +26,7 @@ Did the review catch the known defect? Strict counts the judge's `yes`; lenient 
 ## Did the second pass run? (v2 setups)
 
 - OpenCode + playbook v2: 11 of 14 runs
-- Claude Code + playbook v2: 13 of 14 runs
+- Claude Code + playbook v2: 13 of 14 runs; 13 of 26 subagent starts in the background
 
 ## Per sample (verdict, judge score)
 
@@ -53,4 +53,4 @@ Did the review catch the known defect? Strict counts the judge's `yes`; lenient 
 
 ## Runs the judge could not score
 
-- Claude Code + playbook v2 / crbug-audio-input-args: tps://support.claude.com/en/articles/8106465 Details: `[reasoning_extraction]` Request ID: req_011CgQxF5nxKScQtu2hJQHMf Message ID: msg_011CgQxF6A3LxNszNdRuV6GR
+- Claude Code + playbook v2 / crbug-audio-input-args:  1: Warning: no stdin data received in 3s, proceeding without it. If piping from a slow command, redirect stdin explicitly: < /dev/null to skip, or wait longer.

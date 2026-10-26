@@ -16,6 +16,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import collections
 import functools
 import json
 import os
@@ -194,16 +195,20 @@ def opencode_tool_calls(stdout: str) -> list[str]:
 
 
 def parse_stream_json(stdout: str) -> tuple[str | None, list[str]]:
-    """The final answer and the main loop's tool calls from ``claude -p`` stream-JSON output.
+    """Every answer and the main loop's tool calls from ``claude -p`` stream-JSON output.
 
-    A Skill or Task call is named with its skill or subagent type. Subagents' own
-    calls (events with a ``parent_tool_use_id``) are left out.
+    Each turn ends in its own ``result`` event: a subagent started in the
+    background starts another turn when it finishes, so the review can be in an
+    earlier result than the last one. All of them are kept, in order. A Skill or
+    Task call is named with its skill or subagent type, plus ``:background`` when
+    the model asked for a background task. Subagents' own calls (events with a
+    ``parent_tool_use_id``) are left out.
 
     Example::
 
-        parse_stream_json(out)  # ("Findings: ...", ["Read", "Skill:code-review", "Task:Plan"])
+        parse_stream_json(out)  # ("Findings: ...", ["Read", "Skill:code-review", "Agent:Plan"])
     """
-    answer: str | None = None
+    answers: list[str] = []
     calls: list[str] = []
     for line in stdout.splitlines():
         try:
@@ -211,18 +216,19 @@ def parse_stream_json(stdout: str) -> tuple[str | None, list[str]]:
         except json.JSONDecodeError:
             continue
         if event.get("type") == "result":
-            answer = event.get("result")
+            answers.append(str(event.get("result") or "").strip())
         elif event.get("type") == "assistant" and not event.get("parent_tool_use_id"):
             blocks = event.get("message", {}).get("content", [])
             calls += [_call_name(b) for b in blocks if b.get("type") == "tool_use"]
-    return answer, calls
+    return ("\n\n".join(a for a in answers if a) if answers else None), calls
 
 
 def _call_name(block: dict[str, object]) -> str:
     given = block.get("input")
     inputs = given if isinstance(given, dict) else {}
     detail = inputs.get("skill") or inputs.get("subagent_type")
-    return f"{block['name']}:{detail}" if detail else str(block["name"])
+    name = f"{block['name']}:{detail}" if detail else str(block["name"])
+    return f"{name}:background" if inputs.get("run_in_background") is True else name
 
 
 #: Tool calls that start a subagent: Claude Code's Agent (Task in older builds), OpenCode's task.
@@ -249,10 +255,36 @@ def second_pass_ran(experiment: _bench.Experiment, tool_calls: Sequence[str]) ->
     return sum(call.split(":")[0] in _SUBAGENT_TOOLS for call in tool_calls) >= 2
 
 
+def _claude_config_dir(scratch: Path) -> Path:
+    # The run's own empty CLAUDE_CONFIG_DIR, beside its scratch tree.
+    return scratch.parent / "claude-config"
+
+
+def subagent_starts(scratch: Path) -> dict[str, int] | None:
+    """How a Claude Code run started its subagents, by Claude Code's own record; None elsewhere.
+
+    Claude Code writes one ``meta.json`` per subagent under the run's config
+    dir, whose ``requestShape`` is ``foreground`` or ``background``. A pass left
+    in the background can still be running when ``claude -p`` answers and exits.
+
+    Example::
+
+        subagent_starts(scratch)  # {"foreground": 2}
+    """
+    config_dir = _claude_config_dir(scratch)
+    if not config_dir.is_dir():
+        return None
+    metas = config_dir.glob("projects/*/*/subagents/*.meta.json")
+    shapes = collections.Counter(
+        str(json.loads(meta.read_text(encoding="utf-8")).get("requestShape")) for meta in metas
+    )
+    return dict(shapes)
+
+
 def build_runner(experiment: _bench.Experiment, scratch: Path, timeout: float) -> HarnessRunner:
     """The engine runner that drives ``experiment``'s harness in ``scratch``."""
     if experiment.harness == "claude":
-        config_dir = scratch.parent / "claude-config"
+        config_dir = _claude_config_dir(scratch)
         config_dir.mkdir(parents=True, exist_ok=True)
         extra_env = _bench.claude_agent_env(_bench.require_env("OPENROUTER_API_KEY"), config_dir)
         return OpenRouterClaudeRunner(
@@ -387,6 +419,7 @@ def run_one(experiment: _bench.Experiment, sample: EvalSample, args: argparse.Na
         "setup_snapshot": str(baseline.setup_snapshot),
         "main_loop_tools": getattr(runner, "tool_calls", None),
         "second_pass_ran": second_pass_ran(experiment, getattr(runner, "tool_calls", [])),
+        "subagent_starts": subagent_starts(scratch),
     }
     (out / "agent.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
     if not args.keep_venvs:

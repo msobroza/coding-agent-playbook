@@ -22,7 +22,7 @@ the same model:
 | `claude-v2-over-code-review` | Claude Code | prototype: v2 with `/code-review` as its first pass | the current prompt with steps 1-2 rewritten: the Skill tool runs `/code-review` on the request, and the later steps verify, rate and decide (`run_agents.native_first_pass`) |
 | `opencode-v2-dual`, `claude-v2-dual` | both | recorded prototype: v2's subagent with the harness's own reviewer alongside | each run's `prompt.txt`; the review's step 1 now ships this in general form, so `run_agents.py` no longer re-runs them |
 
-Two result sets are committed. `review-opencode-qwen3.6-27b/` holds every setup
+Three result sets are committed. `review-opencode-qwen3.6-27b/` holds every setup
 above, run when prompt sets still existed: `playbook-v2` there is the former
 prompt set v2, whose first pass was one subagent.
 `review-qwen3.6-27b-v2-bug-hunt/` holds `playbook-v2` and `claude-playbook-v2`
@@ -31,6 +31,11 @@ first-pass subagent, and a pass that only hunts bugs. That second pass is the
 harness's own reviewer where it runs as a tool (the Skill tool with
 `code-review` on Claude Code), else a second read-only subagent with a bug-hunt
 brief (OpenCode, whose `/review` no tool can start).
+`review-qwen3.6-27b-foreground-rule/` holds `claude-playbook-v2` again, run after
+step 1 was told to start both passes in the foreground, in one message, and on
+Claude Code never to set the Agent tool's `run_in_background`: in the run before
+it, Claude Code started half of its subagents as background tasks, and one run
+answered before its passes replied.
 
 - **Harnesses:** OpenCode 1.19.4 (`opencode run --pure --dir <scratch>`) and
   Claude Code 2.1.292 (`claude -p --permission-mode acceptEdits`, isolated as
@@ -66,7 +71,10 @@ brief (OpenCode, whose `/review` no tool can start).
   (`main_loop_tools`, from Claude Code's stream-JSON and OpenCode's JSON events)
   and `second_pass_ran`: the `code-review` skill was called, or two subagents
   were started. `summary.md` counts it per v2 setup; runs recorded before this
-  field show the prototypes' older `native_pass_ran`, or none.
+  field show the prototypes' older `native_pass_ran`, or none. Claude Code runs
+  also record `subagent_starts`, foreground and background, from the
+  `meta.json` Claude Code writes per subagent (backfilled from those files for
+  `review-qwen3.6-27b-v2-bug-hunt/`).
 
 ```mermaid
 flowchart LR
@@ -141,6 +149,14 @@ runs it already finished; `--force` redoes them. Every phase takes `--run-name`
   never to OpenCode runs in the same batch. Claude Code does not know the model
   and logs an `unrecognized_model` line on stderr, which ends up at the end of
   those transcripts.
+- A Claude Code transcript joins the `result` of every turn. A subagent the model
+  starts in the background begins another turn when it finishes, so the review
+  can sit in an earlier turn than the last; the main loop's tool calls mark such
+  calls `:background`. Claude Code runs recorded before this change kept only
+  the last turn's answer: in `review-opencode-qwen3.6-27b/` and
+  `review-qwen3.6-27b-v2-bug-hunt/`, a run that started a subagent in the
+  background (see `subagent_starts`, or its `prompt.txt` and transcript) may
+  have lost its review to a short follow-up.
 
 ### Layout
 

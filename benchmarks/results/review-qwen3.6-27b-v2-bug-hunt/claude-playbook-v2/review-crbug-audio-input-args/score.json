@@ -84,7 +84,11 @@
       "Read",
       "Read"
     ],
-    "second_pass_ran": true
+    "second_pass_ran": true,
+    "subagent_starts": {
+      "foreground": 1,
+      "background": 1
+    }
   },
   "judge": {
     "backend": "anthropic",
