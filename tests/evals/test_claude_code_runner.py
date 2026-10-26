@@ -181,6 +181,47 @@ def test_invoke_agent_child_env_keeps_parent_path(
     assert run.transcript == f"{os.environ['PATH']}|kept"
 
 
+_PRINT_VENV = (
+    "import os, sys; "
+    "sys.stdout.write(os.environ['PATH'].split(os.pathsep)[0] + '|' "
+    "+ os.environ.get('VIRTUAL_ENV', '<unset>'))"
+)
+
+
+@pytest.mark.parametrize(
+    "route",
+    [
+        None,
+        ClaudeCodeKeyRoute("k0"),
+        ClaudeCodeRoute(Endpoint("e", "anthropic", "https://x"), "m", token="t0k3n"),
+    ],
+    ids=["plain", "key-isolated", "routed"],
+)
+def test_invoke_agent_runs_on_the_scratch_venv(
+    tmp_path: Path, route: ClaudeCodeKeyRoute | ClaudeCodeRoute | None
+) -> None:
+    """The agent's ``python``/``pytest`` are the sample's, synced by ``materialize``."""
+    scratch = tmp_path / "scratch"
+    (scratch / ".venv" / "bin").mkdir(parents=True)
+    runner = ClaudeCodeRunner(command=[sys.executable, "-c", _PRINT_VENV], route=route)
+
+    run = runner._invoke_agent("p", scratch)
+
+    venv = scratch.absolute() / ".venv"
+    assert run.transcript == f"{venv / 'bin'}|{venv}"
+
+
+def test_invoke_agent_without_a_scratch_venv_keeps_the_parent_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("VIRTUAL_ENV", raising=False)
+    runner = ClaudeCodeRunner(command=[sys.executable, "-c", _PRINT_VENV])
+
+    run = runner._invoke_agent("p", tmp_path)
+
+    assert run.transcript == f"{os.environ['PATH'].split(os.pathsep)[0]}|<unset>"
+
+
 # --------------------------------------------------------------------------- #
 # Prompt-strictness: a real runner must not be fed a placeholder
 # --------------------------------------------------------------------------- #
