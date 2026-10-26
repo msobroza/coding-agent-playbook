@@ -111,20 +111,20 @@ def test_a_pushed_annotated_tag_makes_every_later_run_a_no_op(
     real_git: Callable[..., str], tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     repo = _repo(real_git, tmp_path)
-    release = repo.commit("chore(release): v1.0.0", version="1.0.0")
+    release = repo.commit("chore(release): v1.0.9", version="1.0.9")
 
     assert repo.tag("--tested-commit", release) == 0
-    assert f"tagged v1.0.0 at {release}" in capsys.readouterr().out
-    assert repo.git("cat-file", "-t", "refs/tags/v1.0.0", cwd=repo.work).strip() == "tag"
+    assert f"tagged v1.0.9 at {release}" in capsys.readouterr().out
+    assert repo.git("cat-file", "-t", "refs/tags/v1.0.9", cwd=repo.work).strip() == "tag"
 
     assert repo.tag("--tested-commit", release) == 0  # the same commit, re-run
-    assert f"v1.0.0 already points at {release}" in capsys.readouterr().out
+    assert f"v1.0.9 already points at {release}" in capsys.readouterr().out
 
     later = repo.commit("feat: later")
     assert repo.tag("--tested-commit", later) == 0  # the next push to main
     assert repo.tag() == 0  # the manual fallback
     out = capsys.readouterr().out
-    assert out.count(f"v1.0.0 already points at {release}") == 2
+    assert out.count(f"v1.0.9 already points at {release}") == 2
 
 
 def test_a_release_whose_base_moved_is_superseded_by_prepare_version_then_tagged(
@@ -135,7 +135,7 @@ def test_a_release_whose_base_moved_is_superseded_by_prepare_version_then_tagged
     assert repo.tag("--tested-commit", first) == 0
     prepared_on = repo.head()
     repo.commit("feat: merged while the release pull request was open")
-    stale = repo.commit("chore(release): v1.0.0", version="1.0.0", base=prepared_on)
+    stale = repo.commit("chore(release): v1.0.9", version="1.0.9", base=prepared_on)
 
     assert repo.tag("--tested-commit", stale) == 1
     assert "prepare --version" in capsys.readouterr().err
@@ -143,7 +143,7 @@ def test_a_release_whose_base_moved_is_superseded_by_prepare_version_then_tagged
     host = FakeCzForgeOverRealGit()
     argv = ["prepare-checkout", "--base", stale]
     assert main(argv, cwd=repo.work, runner=host, snapshot=_empty_snapshot) == 1
-    assert "pass --version, higher than 1.0.0" in capsys.readouterr().err
+    assert "pass --version, higher than 1.0.9" in capsys.readouterr().err
 
     assert (
         main([*argv, "--version", "1.1.0"], cwd=repo.work, runner=host, snapshot=_empty_snapshot)
@@ -163,7 +163,7 @@ def test_a_release_whose_base_moved_is_superseded_by_prepare_version_then_tagged
 
     assert repo.tag("--tested-commit", merged) == 0
     assert f"tagged v1.1.0 at {merged}" in capsys.readouterr().out
-    assert repo.git("tag", "--list", "v1.0.0", cwd=repo.work).strip() == ""
+    assert repo.git("tag", "--list", "v1.0.9", cwd=repo.work).strip() == ""
 
 
 def _empty_snapshot(base: str) -> ReleaseManifest:
