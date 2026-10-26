@@ -126,7 +126,7 @@ _OUTPUT_EXCERPT_CHARS = 200
 
 #: The fixed grading prompt. ``{criterion}``/``{artifact}`` are filled per call;
 #: the judge is told to emit a single bare ``0-1`` float so parsing stays robust.
-_GRADING_PROMPT = (
+GRADING_PROMPT = (
     "You are grading whether an artifact satisfies a single rubric criterion.\n"
     "Criterion: {criterion}\n"
     "Artifact:\n"
@@ -266,7 +266,7 @@ class LLMJudge(Judge):
 
     def _grade_once(self, criterion: str, artifact: Any) -> float:
         """One graded sample: up to ``1 + retries`` attempts, else :class:`JudgeError`."""
-        prompt = _GRADING_PROMPT.format(criterion=criterion, artifact=str(artifact))
+        prompt = GRADING_PROMPT.format(criterion=criterion, artifact=str(artifact))
         if "\x00" in prompt:
             # argv cannot carry a NUL (subprocess raises ValueError); retrying
             # cannot help, so fail now. A binary-ish diff can contain one.
