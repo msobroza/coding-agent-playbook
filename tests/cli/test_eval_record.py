@@ -19,15 +19,20 @@ from coding_agent_playbook.cli import main
 from coding_agent_playbook.config.files import CONFIG_FILENAME
 from coding_agent_playbook.evals.endpoints import endpoint_fingerprint
 from coding_agent_playbook.evals.judge import LLMJudge
+from coding_agent_playbook.evals.prompting import render_prompt
 from coding_agent_playbook.evals.release_metrics_schema import validate_release_metrics
 from coding_agent_playbook.evals.run.claude_code_runner import ClaudeCodeRunner
 from coding_agent_playbook.evals.run.fake_runner import FakeRunner
 from coding_agent_playbook.evals.run.harness_runner import SampleResult
+from coding_agent_playbook.evals.sample_digest import inputs_digest
 from coding_agent_playbook.evals.targets import TARGET_ENV_VAR
+from coding_agent_playbook.evals.task_registry import load_task_sample
 from coding_agent_playbook.grading.types import EvaluationReport
+from coding_agent_playbook.release.edition import load_edition
+from coding_agent_playbook.release.edition_digests import edition_dir
 from coding_agent_playbook.validation.context import SyncContext
 from tests.cli import claude_cli_fakes
-from tests.edition_fixtures import SAMPLE_ID, TAG, write_sample
+from tests.edition_fixtures import ENGINE, SAMPLE_ID, TAG, write_sample
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -365,3 +370,47 @@ def test_a_pin_whose_edition_cannot_load_is_refused_before_any_run(
     assert f"pinned sample {SAMPLE_ID!r} cannot run on edition {TAG} as a control" in err
     assert "run 1/1" not in err
     assert not out.exists()
+
+
+def _pinned_sample(engine_catalog: Path) -> EvalSample:
+    return load_task_sample(
+        engine_catalog / "core/eval_samples/review/pinned", source_package=ENGINE
+    )
+
+
+def test_head_and_control_entries_record_the_inputs_digest_of_their_render(
+    engine_catalog: Path, consumer: Path
+) -> None:
+    # #329 ticket 03: the head entry hashes the current text, the control its edition's.
+    rc, out = _record(consumer, SAMPLE_ID, "--target", "fake-pinned")
+    assert rc == 0
+    data = _load(out)
+    sample = _pinned_sample(engine_catalog)
+    edition = load_edition(edition_dir(engine_catalog, TAG))
+    head_text = render_prompt(sample, strict=False)
+    control_text = render_prompt(sample, strict=False, edition=edition)
+    assert data["samples"][SAMPLE_ID]["inputs_digest"] == inputs_digest(sample, head_text)
+    assert data["controls"][SAMPLE_ID]["inputs_digest"] == inputs_digest(sample, control_text)
+
+
+def test_the_inputs_digest_comes_from_the_render_checked_before_the_runs(
+    engine_catalog: Path, consumer: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The check before the first paid run renders each side once; the digest reuses it.
+    from coding_agent_playbook.commands import _eval_record
+
+    calls: list[str] = []
+
+    def canned_render(sample: EvalSample, **kwargs: Any) -> str:
+        side = "control" if kwargs.get("edition") is not None else "head"
+        calls.append(side)
+        return f"{side} text"
+
+    monkeypatch.setattr(_eval_record, "render_prompt", canned_render)
+    rc, out = _record(consumer, SAMPLE_ID, "--target", "fake-pinned", "--runs", "2")
+    assert rc == 0
+    assert sorted(calls) == ["control", "head"]
+    data = _load(out)
+    sample = _pinned_sample(engine_catalog)
+    assert data["samples"][SAMPLE_ID]["inputs_digest"] == inputs_digest(sample, "head text")
+    assert data["controls"][SAMPLE_ID]["inputs_digest"] == inputs_digest(sample, "control text")

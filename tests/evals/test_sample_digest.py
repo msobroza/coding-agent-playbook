@@ -5,8 +5,7 @@ Ticket 07 of #281 added the sample and prompt digests, ticket 03 of #329 the inp
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 import pytest
 
@@ -15,6 +14,9 @@ from coding_agent_playbook.evals.prompting import render_prompt
 from coding_agent_playbook.evals.sample import EvalSample
 from coding_agent_playbook.evals.sample_digest import inputs_digest, prompt_digest, sample_digest
 from coding_agent_playbook.evals.task_registry import load_task_sample
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 _PROMPT = """\
 ---

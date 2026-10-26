@@ -264,7 +264,9 @@ def test_an_entry_without_an_inputs_digest_leaves_the_key_out_and_validates() ->
 def test_validation_rejects_an_inputs_digest_that_is_not_a_string() -> None:
     metrics = _build(_PRICED, _runs("review/a", _result(1.0, passed=True)))
     _sample_entry(metrics, "review/a")["inputs_digest"] = None
-    with pytest.raises(ReleaseMetricsError, match=r"samples\.review/a\.inputs_digest: expected str"):
+    with pytest.raises(
+        ReleaseMetricsError, match=r"samples\.review/a\.inputs_digest: expected str"
+    ):
         validate_release_metrics(metrics)
 
 

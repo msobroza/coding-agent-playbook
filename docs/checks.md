@@ -824,8 +824,8 @@ The file is JSON with `"schema_version": 1`. It holds:
 | `previous` | `null`; the regression check sets the baseline release it compared with |
 | `target` | `name`, `harness`, `harness_version` (the CLI's `--version`), `model`, `reported_model` (the model the harness reported most often), `label`, `endpoint`, `price`, `judge_model` and `runs` |
 | `summary` | `samples`, `runs`, `pass_rate` over every run, `mean_score` over the samples, total `tokens` and `cost_usd` |
-| `samples.<id>` | `prompt_id`, `graded` (`head`, the current text), `prompt_digest` (the prompt's artifact digest), `sample_digest` (`sample.toml` and `setup/`), `passes` out of `runs`, `mean_score`, `stdev`, `checks` (the mean score of each check that ran), `duration_seconds_mean`, `tokens_mean` and `cost_usd_mean` |
-| `controls.<id>` | a pinned sample's runs on its frozen edition, in the same shape, with `graded` the edition tag; left out of `summary` |
+| `samples.<id>` | `prompt_id`, `graded` (`head`, the current text), `prompt_digest` (the prompt's artifact digest), `sample_digest` (`sample.toml` and `setup/`), `inputs_digest` (the strict render of what the agent received, rules included, with `sample_digest`; absent in older files), `passes` out of `runs`, `mean_score`, `stdev`, `checks` (the mean score of each check that ran), `duration_seconds_mean`, `tokens_mean` and `cost_usd_mean` |
+| `controls.<id>` | a pinned sample's runs on its frozen edition, in the same shape, with `graded` the edition tag and `inputs_digest` hashing the edition's render; left out of `summary` |
 
 Every sample grades the current text. A sample pinned to an edition also runs on
 that edition as a control, `N` times too, so `--record` costs one more set of runs
