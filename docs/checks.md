@@ -817,7 +817,7 @@ The file is JSON with `"schema_version": 1`. It holds:
 | Key | What it records |
 | --- | --- |
 | `release`, `commit` | the engine version, and the checked-out commit (`null` outside git) |
-| `previous` | `null`; the regression check fills it when it compares two releases |
+| `previous` | `null`; the regression check sets the baseline release it compared with |
 | `target` | `name`, `harness`, `harness_version` (the CLI's `--version`), `model`, `reported_model` (the model the harness reported most often), `label`, `endpoint`, `price`, `judge_model` and `runs` |
 | `summary` | `samples`, `runs`, `pass_rate` over every run, `mean_score` over the samples, total `tokens` and `cost_usd` |
 | `samples.<id>` | `prompt_id`, `graded` (`head`, the current text), `prompt_digest` (the prompt's artifact digest), `sample_digest` (`sample.toml` and `setup/`), `passes` out of `runs`, `mean_score`, `stdev`, `checks` (the mean score of each check that ran), `duration_seconds_mean`, `tokens_mean` and `cost_usd_mean` |
@@ -832,6 +832,39 @@ emitted, so it undercounts them) and reports no model.
 
 A reader ignores keys it does not know, so comparison keys can be added under
 version 1. Removing or retyping a key needs version 2.
+
+### Regression check
+
+`playbook eval --check-regressions <new> --against <baseline>` compares a release
+metrics file with the previous release's file for the same target:
+
+```bash
+playbook eval --check-regressions catalog/releases/0.3.0/metrics/claude-opus.json \
+  --against catalog/releases/0.2.0/metrics/claude-opus.json \
+  --accept review-spot-the-bug="the new rubric is stricter"
+```
+
+Per sample:
+
+- a mean score drop above 0.05, or passing most runs before and failing most now,
+  is a `regression` (the same rule as `--compare`); the mirror is an `improvement`;
+- a sample whose `sample_digest` changed is `not_comparable`, never a regression;
+- a sample the baseline lacks is `new`; one the new file lacks is noted;
+- a cost per run rise above 25%, or a token rise when either cost is `null`, is a
+  warning only.
+
+A harness version change between the files is noted as a likely cause.
+`--accept SAMPLE=REASON` (repeatable) accepts one regression; accepting a sample
+that did not regress is refused. The command stores the comparison in the new
+file: `previous`, each sample's `vs_previous` (`mean_score`, `delta`, `status`,
+`reasons`, `warnings` and the `accepted` reason) and `regressions`,
+`accepted_regressions`, `improvements` and `not_comparable` in the summary. A
+reason stored there still holds when the check runs again against the same
+baseline.
+
+It prints a table, or JSON with `--format json`, and exits 0 when no regression
+is unaccepted, 1 when one is, and 2 when the files are not release metrics, are
+for different targets, or an `--accept` is malformed.
 
 `playbook eval` has no `--run-tests` flag. A sample runs the test suite if and only if
 its `[gate]` references an execution metric, `coverage` or `test_pass_rate`.

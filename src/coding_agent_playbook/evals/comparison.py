@@ -195,14 +195,49 @@ def compare_sample(
         ('mean score drops 0.200',)
     """
     base_summary, head_summary = SideSummary.of(base), SideSummary.of(head)
+    reasons = regression_reasons(base_summary, head_summary)
+    return SampleComparison(sample_id, base_summary, head_summary, reasons)
+
+
+def regression_reasons(
+    base: SideSummary, head: SideSummary, head_label: str = "head"
+) -> tuple[str, ...]:
+    """Why ``head`` regressed from ``base`` by the D37 thresholds (empty: it did not).
+
+    The one home of the rule: ``--compare`` and the release regression check
+    (``evals.release_regression``) both call it.
+
+    Example::
+
+        >>> regression_reasons(SideSummary(3, 3, 0.9, 0.0), SideSummary(3, 1, 0.9, 0.0), "new")
+        ('fails 2 of 3 runs on new',)
+    """
     reasons: list[str] = []
-    if base_summary.mean is not None and head_summary.mean is not None:
-        drop = round(base_summary.mean - head_summary.mean, _DIGITS)
+    if base.mean is not None and head.mean is not None:
+        drop = round(base.mean - head.mean, _DIGITS)
         if drop > MAX_SCORE_DROP:
             reasons.append(f"mean score drops {drop:.3f}")
-    if base_summary.passes_overall and head_summary.fails_overall:
-        reasons.append(f"fails {head_summary.failures} of {head_summary.count} runs on head")
-    return SampleComparison(sample_id, base_summary, head_summary, tuple(reasons))
+    if base.passes_overall and head.fails_overall:
+        reasons.append(f"fails {head.failures} of {head.count} runs on {head_label}")
+    return tuple(reasons)
+
+
+def improvement_reasons(base: SideSummary, head: SideSummary) -> tuple[str, ...]:
+    """Why ``head`` improved on ``base``: the mirror of :func:`regression_reasons`.
+
+    Example::
+
+        >>> improvement_reasons(SideSummary(3, 0, 0.5, 0.0), SideSummary(3, 3, 0.9, 0.0))
+        ('mean score rises 0.400', 'passes 3 of 3 runs')
+    """
+    reasons: list[str] = []
+    if base.mean is not None and head.mean is not None:
+        rise = round(head.mean - base.mean, _DIGITS)
+        if rise > MAX_SCORE_DROP:
+            reasons.append(f"mean score rises {rise:.3f}")
+    if base.fails_overall and head.passes_overall:
+        reasons.append(f"passes {head.passes} of {head.count} runs")
+    return tuple(reasons)
 
 
 def format_comparison_table(rows: Sequence[SampleComparison], setup: ComparisonSetup) -> str:

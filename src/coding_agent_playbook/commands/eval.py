@@ -52,6 +52,11 @@ Sub-modes:
   a release metrics file (schema version 1); it refuses a target without an
   explicit model, a moving model alias and an unpinned judge model.
 
+  ``--check-regressions NEW --against BASELINE [--accept SAMPLE=REASON]`` (spec #281
+  ticket 08; ``commands/_eval_regressions.py``) compares two release metrics files
+  of one target, stores the comparison in NEW and exits ``1`` on an unaccepted
+  regression.
+
   ``--compare BASE_REF`` (D37, opt-in and paid; ``commands/_eval_compare.py``)
   runs the eval samples of the rule-including prompts on a checkout of
   ``BASE_REF`` and of HEAD and prints a comparison table that flags regressions.
@@ -86,6 +91,11 @@ from coding_agent_playbook.commands._eval_options import (
     select_target,
 )
 from coding_agent_playbook.commands._eval_record import configure_record, run_record, wants_record
+from coding_agent_playbook.commands._eval_regressions import (
+    configure_regressions,
+    run_regressions,
+    wants_regressions,
+)
 from coding_agent_playbook.commands._eval_targets import check_targets, print_targets
 from coding_agent_playbook.evals.judge import JudgeError
 from coding_agent_playbook.evals.model_pins import RecordRefusedError
@@ -168,6 +178,7 @@ def configure(parser: argparse.ArgumentParser) -> None:
     _configure_scoring(parser)
     configure_compare(parser)
     configure_record(parser)
+    configure_regressions(parser)
 
 
 def _configure_scoring(parser: argparse.ArgumentParser) -> None:
@@ -205,6 +216,10 @@ def _configure_scoring(parser: argparse.ArgumentParser) -> None:
 
 def run(args: argparse.Namespace) -> int:
     repo_root = Path(getattr(args, "repo_root", None) or Path.cwd())
+
+    # ``--check-regressions`` (spec #281 ticket 08) only reads two metrics files.
+    if wants_regressions(args):
+        return run_regressions(args)
 
     # ``--compare`` (D37) is opt-in and paid: it runs eval samples on two checkouts.
     if getattr(args, "compare", None) is not None:
