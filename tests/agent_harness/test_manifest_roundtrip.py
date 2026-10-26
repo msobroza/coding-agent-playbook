@@ -43,7 +43,6 @@ def _rule_entry() -> ManifestEntry:
         globs=[],
         applies_if={},
         tags=["python"],
-        version=1,
     )
 
 
@@ -60,7 +59,6 @@ def _scoped_rule_entry() -> ManifestEntry:
         globs=["**/*.sql"],
         applies_if={"language": "sql"},
         tags=[],
-        version=2,
     )
 
 
@@ -75,9 +73,7 @@ def _prompt_entry() -> ManifestEntry:
         slash="refactor",
         input_variables=[{"name": "target", "required": True}],
         includes_rules=["python-house-style"],
-        eval_samples=["refactor-001"],
         applies_if={},
-        version=3,
     )
 
 
@@ -126,6 +122,25 @@ def test_roundtrip_rule(tmp_path: Path) -> None:
 def test_roundtrip_prompt(tmp_path: Path) -> None:
     write_manifest(tmp_path, [_prompt_entry()])
     manifest = read_manifest(tmp_path)
+    assert manifest is not None
+    assert manifest.entries == [_prompt_entry()]
+
+
+def test_a_manifest_written_before_281_still_reads_and_drops_the_retired_fields(
+    tmp_path: Path,
+) -> None:
+    # Sidecars written before #281 carry ``version`` and ``eval_samples``; the
+    # entries no longer have those fields, so reading ignores them.
+    write_manifest(tmp_path, [_prompt_entry()])
+    path = tmp_path / ".playbook" / "manifest.toml"
+    legacy = path.read_text(encoding="utf-8").replace(
+        'slash = "refactor"\n', 'slash = "refactor"\nversion = 3\neval_samples = ["refactor-001"]\n'
+    )
+    path.write_text(legacy, encoding="utf-8")
+
+    manifest = read_manifest(tmp_path)
+
+    assert "version = 3" in legacy
     assert manifest is not None
     assert manifest.entries == [_prompt_entry()]
 
@@ -296,7 +311,6 @@ def test_roundtrip_special_chars_in_strings(tmp_path: Path) -> None:
         globs=['has"quote', "back\\slash", "tab\tchar", "line\nbreak", "ret\rurn", "ctrl\x01x"],
         applies_if={"note": 'a "quoted" value'},
         tags=[],
-        version=1,
     )
     write_manifest(tmp_path, [entry])
     manifest = read_manifest(tmp_path)
@@ -409,7 +423,6 @@ _GOLDEN_MANIFEST = (
     "priority = 10\n"
     'globs = ["**/*.py"]\n'
     'tags = ["python"]\n'
-    "version = 1\n"
     'applies_if = { language = "python", "has framework" = ["fastapi"] }\n'
     "\n"
     "[[artifact]]\n"
@@ -420,10 +433,8 @@ _GOLDEN_MANIFEST = (
     'body = "Refactor.\\n"\n'
     "is_templated = true\n"
     'slash = "refactor"\n'
-    "version = 3\n"
     'input_variables = [{ name = "target", required = true }]\n'
     'includes_rules = ["python-house-style"]\n'
-    'eval_samples = ["refactor-001"]\n'
     "applies_if = {}\n"
     "\n"
     "[[artifact]]\n"
@@ -463,7 +474,6 @@ def test_manifest_bytes_are_unchanged_by_the_shared_toml_primitives(tmp_path: Pa
             globs=["**/*.py"],
             applies_if={"language": "python", "has framework": ["fastapi"]},
             tags=["python"],
-            version=1,
         ),
         ManifestEntry(
             kind="prompt",
@@ -475,9 +485,7 @@ def test_manifest_bytes_are_unchanged_by_the_shared_toml_primitives(tmp_path: Pa
             slash="refactor",
             input_variables=[{"name": "target", "required": True}],
             includes_rules=["python-house-style"],
-            eval_samples=["refactor-001"],
             applies_if={},
-            version=3,
         ),
         ManifestEntry(
             kind="skill",

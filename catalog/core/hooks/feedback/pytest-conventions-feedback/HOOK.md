@@ -2,7 +2,6 @@
 id: pytest-conventions-feedback
 name: pytest conventions feedback
 description: Report unittest-style asserts, parametrize shape, broad pytest.raises and composite asserts on the lines a test edit changed (warn only; AST heuristics opt-in).
-version: 1
 tier: default
 priority: 60
 events: [post_tool_use]

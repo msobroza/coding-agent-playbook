@@ -2,7 +2,6 @@
 id: playbook-rule-frontmatter
 name: Rule frontmatter
 description: "Write static YAML frontmatter with only the engine's keys: id, name, description and scope, plus the optional ones."
-version: 1
 scope: scoped
 globs:
   - "catalog/**/rules/**/*.md"
@@ -22,7 +21,7 @@ tags: [playbook, rules]
 
 ## Description
 
-A rule's frontmatter is static YAML, parsed before any template runs. Required: `id`, `name`, `description`, `scope`. Optional: `version`, `section`, `skill`, `globs`, `applies_if`, `priority`, `tags`, `lint_codes`. Any other key (`impact:`, `title:`, `see:`) is a validation error naming the file and the allowed keys.
+A rule's frontmatter is static YAML, parsed before any template runs. Required: `id`, `name`, `description`, `scope`. Optional: `section`, `skill`, `globs`, `applies_if`, `priority`, `tags`, `lint_codes`. Any other key (`impact:`, `title:`, `see:`) is a validation error naming the file and the allowed keys.
 
 | Key | What it drives |
 | --- | --- |
@@ -35,7 +34,6 @@ A rule's frontmatter is static YAML, parsed before any template runs. Required: 
 | `globs` | The skill nudge on the first edit of a matching file, and Continue's attachment |
 | `applies_if` | The gate on detector facts (`playbook-rule-gates`) |
 | `lint_codes` | `{warn, when}`: ruff codes a linked lint hook reports against this rule, as warnings only |
-| `version` | Bumped on a breaking change |
 
 A rule inside `skills/<x>/rules/` is a member of `<x>` by its directory: it never declares `skill:`.
 
@@ -62,7 +60,6 @@ description: "Invoice ids for {{ project_name }}"
 id: acme-invoice-ids
 name: Invoice ids
 description: "Generate invoice ids from the ledger sequence, never from timestamps."
-version: 1
 scope: scoped
 section: ledger
 priority: 21

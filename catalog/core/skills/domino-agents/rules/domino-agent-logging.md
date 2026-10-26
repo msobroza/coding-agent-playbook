@@ -2,7 +2,6 @@
 id: domino-agent-logging
 name: Domino agent logging
 description: "Log one event per request with named fields, keep prompts and answers in the trace instead of the logs, and never print."
-version: 1
 scope: scoped
 globs:
   - "**/app.sh"

@@ -27,6 +27,7 @@ from coding_agent_playbook.config.model import (
 )
 from coding_agent_playbook.config.schema import ConfigError
 from coding_agent_playbook.metrics_gate.config import parse_metrics_config
+from tests.engine_version import ENGINE_VERSION
 
 
 def test_config_from_dict_minimal():
@@ -36,12 +37,12 @@ def test_config_from_dict_minimal():
             "name": "my-app",
             "kind": "python-application",
         },
-        "engine": {"version": "0.1.0a0"},
+        "engine": {"version": ENGINE_VERSION},
     }
     config = Config.from_dict(data)
     assert config.schema_version == 1
     assert config.project == ProjectMeta(name="my-app", kind="python-application")
-    assert config.engine_version == "0.1.0a0"
+    assert config.engine_version == ENGINE_VERSION
     assert config.overlays_enabled == []
     assert config.adapters_enabled == []
     assert config.storage == StorageConfig()
@@ -57,7 +58,7 @@ def test_config_roundtrip_full():
             "kind": "python-application",
             "description": "An example application",
         },
-        "engine": {"version": "0.1.0a0"},
+        "engine": {"version": ENGINE_VERSION},
         "overlays_enabled": ["playbook-rules-bnp"],
         "adapters_enabled": ["continue", "claude_code", "agents_md"],
         "storage": {
@@ -80,7 +81,7 @@ def test_storage_section_absent_defaults_to_filesystem():
     data = {
         "schema_version": 1,
         "project": {"name": "x", "kind": "python-library"},
-        "engine": {"version": "0.1.0a0"},
+        "engine": {"version": ENGINE_VERSION},
     }
     config = Config.from_dict(data)
     assert config.storage.artifact_source == "filesystem"
@@ -91,7 +92,7 @@ def test_to_dict_omits_blank_description_and_empty_lists():
     config = Config(
         schema_version=1,
         project=ProjectMeta(name="x", kind="python-library"),
-        engine_version="0.1.0a0",
+        engine_version=ENGINE_VERSION,
     )
     result = config.to_dict()
     assert "description" not in result["project"]
@@ -112,7 +113,7 @@ def test_to_dict_omits_blank_description_and_empty_lists():
 _MINIMAL = {
     "schema_version": 1,
     "project": {"name": "x", "kind": "python-library"},
-    "engine": {"version": "0.1.0a0"},
+    "engine": {"version": ENGINE_VERSION},
 }
 
 
@@ -159,7 +160,7 @@ def test_output_round_trips_through_toml_dump(tmp_path):
     config = Config(
         schema_version=1,
         project=ProjectMeta(name="x", kind="python-library"),
-        engine_version="0.1.0a0",
+        engine_version=ENGINE_VERSION,
         output=OutputConfig(commit=False),
     )
     state = FileSystemStateSource(repo_root=tmp_path)
@@ -255,12 +256,12 @@ def test_extra_tables_never_shadow_modelled_keys():
     config = Config(
         schema_version=1,
         project=ProjectMeta(name="x", kind="python-library"),
-        engine_version="0.1.0a0",
+        engine_version=ENGINE_VERSION,
         extra_tables={"project": {"name": "evil"}, "engine": {}, "hooks": {"a": 1}},
     )
     result = config.to_dict()
     assert result["project"] == {"name": "x", "kind": "python-library"}
-    assert result["engine"] == {"version": "0.1.0a0"}
+    assert result["engine"] == {"version": ENGINE_VERSION}
     assert result["hooks"] == {"a": 1}
 
 
@@ -272,7 +273,7 @@ def test_extra_tables_never_shadow_modelled_keys():
 _FULL: dict[str, Any] = {
     "schema_version": 1,
     "project": {"name": "x", "kind": "python-library", "description": "d"},
-    "engine": {"version": "0.1.0a0"},
+    "engine": {"version": ENGINE_VERSION},
     "overlays_enabled": ["pkg"],
     "adapters_enabled": ["continue"],
     "framework": "superpowers",
@@ -436,7 +437,7 @@ def test_unmanaged_config_entries_of_a_config_only_table_is_empty() -> None:
 _FULL_WITH_UNKNOWN_SUB_KEYS: dict[str, Any] = {
     **_FULL,
     "project": {**_FULL["project"], "homepage": "https://x.example"},
-    "engine": {"version": "0.1.0a0", "channel": "beta"},
+    "engine": {"version": ENGINE_VERSION, "channel": "beta"},
     "storage": {**_FULL["storage"], "cache_dir": ".cache"},
     "output": {"commit": True, "note": {"why": "legacy"}},
     "detector_cache": {"python_version": "3.12", "stale": True},

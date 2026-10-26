@@ -2,7 +2,6 @@
 id: design-domain-events
 name: Domain events
 description: "When core logic ends by calling several unrelated side-effect systems, publish a frozen event to a dispatcher built in the entry point and let handlers subscribed by event class react."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

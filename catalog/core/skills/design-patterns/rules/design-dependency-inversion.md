@@ -2,7 +2,6 @@
 id: design-dependency-inversion
 name: Dependency inversion
 description: "Type a volatile collaborator as an abstraction its consumer owns, a Callable alias or a small Protocol, so the consumer stops depending on the implementation's module."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

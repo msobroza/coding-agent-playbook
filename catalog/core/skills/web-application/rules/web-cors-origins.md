@@ -2,7 +2,6 @@
 id: web-cors-origins
 name: List allowed CORS origins explicitly
 description: "Read the exact list of trusted CORS origins from settings, default to none, never allow every origin together with credentials, and allow only the methods and headers the frontend uses."
-version: 1
 scope: scoped
 globs:
   - "**/main.py"

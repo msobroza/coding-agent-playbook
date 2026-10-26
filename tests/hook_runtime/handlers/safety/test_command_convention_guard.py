@@ -14,6 +14,7 @@ import pytest
 
 from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
+from tests.engine_version import ENGINE_VERSION
 from tests.hook_runtime.fakes import FakeGit
 
 if TYPE_CHECKING:
@@ -109,7 +110,7 @@ def test_redos_row_fails_validate(
     (repo / ".coding-agent-playbook.toml").write_text(
         'schema_version = 1\nadapters_enabled = ["claude_code"]\noverlays_enabled = []\n\n'
         '[project]\nname = "synthetic"\nkind = "python-library"\n\n'
-        '[engine]\nversion = "0.1.0a0"\n\n'
+        f'[engine]\nversion = "{ENGINE_VERSION}"\n\n'
         "[hooks]\nenabled = true\nenable = ['command-convention-guard']\n\n"
         "[hooks.command-convention-guard]\n"
         "rules = [{regex = '(a+)+$', decision = 'deny', message = 'x'}]\n",

@@ -2,7 +2,6 @@
 id: playbook-skill-files
 name: Skill files
 description: "Ship only rules, listed references, stdlib scripts and complete examples in a skill directory."
-version: 1
 scope: scoped
 globs:
   - "catalog/**/skills/*/references/**"

@@ -2,7 +2,6 @@
 id: fastapi-openapi-metadata
 name: FastAPI OpenAPI metadata
 description: "Document every route in the generated OpenAPI schema: a response model, the success status, a summary, router tags and every non-2xx outcome in responses=."
-version: 1
 scope: scoped
 globs:
   - "**/routers/**/*.py"

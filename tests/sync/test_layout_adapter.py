@@ -40,7 +40,6 @@ id: acme-spec-format
 name: Acme spec format
 description: Report formatting findings after a spec is edited.
 summary: After editing a spec, fix what the formatter reports.
-version: 1
 tier: default
 priority: 50
 events: [post_tool_use]

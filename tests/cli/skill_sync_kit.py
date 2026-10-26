@@ -15,12 +15,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.config.files import FileSystemStateSource
+from tests.engine_version import ENGINE_VERSION
 
 if TYPE_CHECKING:
     from pathlib import Path
 
 #: A synthetic repo config whose adapters write every native skills root.
-SHARED_SKILLS_CONFIG: Final = """\
+SHARED_SKILLS_CONFIG: Final = f"""\
 schema_version = 1
 adapters_enabled = ["continue", "claude_code", "opencode", "shared_skills"]
 overlays_enabled = []
@@ -30,7 +31,7 @@ name = "synthetic"
 kind = "python-library"
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 
 [storage]
 artifact_source = "filesystem"

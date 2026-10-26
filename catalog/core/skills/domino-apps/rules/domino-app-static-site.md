@@ -2,7 +2,6 @@
 id: domino-app-static-site
 name: Static site on Domino
 description: "Serve a static Domino App from a dedicated folder of published files on 0.0.0.0:8888, never from the project's working directory."
-version: 1
 scope: scoped
 globs:
   - "**/app.py"

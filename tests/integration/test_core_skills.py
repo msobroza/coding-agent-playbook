@@ -377,8 +377,8 @@ def test_core_skill_members_in_index_order(pins: CoreSkillPins) -> None:
 def test_pinned_rule_frontmatter(skill_id: str, rule_id: str) -> None:
     """Spec 9.4.1 / 9.6.1: the pinned frontmatter; distilled rules have no ``lint_codes`` (D23)."""
     pin, front = PINS_BY_SKILL[skill_id].rules[rule_id], core_rules()[rule_id].frontmatter
-    actual = (front.skill, front.scope, front.version, front.name, tuple(front.globs))
-    assert actual == (skill_id, "scoped", pin.version, pin.name, pin.globs), f"{rule_id}: {actual}"
+    actual = (front.skill, front.scope, front.name, tuple(front.globs))
+    assert actual == (skill_id, "scoped", pin.name, pin.globs), f"{rule_id}: {actual}"
     assert (front.applies_if, front.priority) == (pin.applies_if, pin.priority), rule_id
     assert tuple(front.tags) == pin.tags, f"{rule_id}: tags {front.tags}"
     assert front.lint_codes == pin.lint_codes, f"{rule_id} carries lint_codes {front.lint_codes}"

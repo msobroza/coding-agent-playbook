@@ -2,7 +2,6 @@
 id: python-idioms
 name: Idioms
 description: "Match the file's conventions, keep os.path for legacy str APIs, read whole files with read_text, use f-strings, and never shadow builtins."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

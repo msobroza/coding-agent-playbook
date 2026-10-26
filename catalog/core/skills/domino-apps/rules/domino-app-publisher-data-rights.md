@@ -2,7 +2,6 @@
 id: domino-app-publisher-data-rights
 name: Publisher data rights
 description: "Treat mounted Datasets, volumes and data sources as the publisher's access; read per-viewer data through a port built from the viewer's identity."
-version: 1
 scope: scoped
 globs:
   - "**/app.py"

@@ -341,30 +341,6 @@ def test_shipped_prompt_contracts_compile() -> None:
     )
 
 
-def test_validate_flags_missing_eval_sample_for_prompt(tmp_path, make_synthetic_repo, capsys):
-    """A prompt declares eval_samples: [...] but the sample dir doesn't exist."""
-    repo = make_synthetic_repo(tmp_path)
-    prompts_dir = repo / "playbook" / "prompts"
-    prompts_dir.mkdir(parents=True, exist_ok=True)
-    (prompts_dir / "claims-sample.md").write_text(
-        "---\n"
-        "id: claims-sample\n"
-        "name: Claims\n"
-        "description: claims a sample that does not exist\n"
-        "slash: claims\n"
-        "eval_samples:\n"
-        "  - foo-bar\n"
-        "---\n"
-        "body\n",
-        encoding="utf-8",
-    )
-    rc = _validate.run(_ns(repo))
-    assert rc == 1
-    out = capsys.readouterr().out
-    assert "foo-bar" in out
-    assert "not found" in out
-
-
 def _write_skill(repo: Path, dirname: str, frontmatter: str) -> None:
     skill_dir = repo / "playbook" / "skills" / dirname
     skill_dir.mkdir(parents=True, exist_ok=True)

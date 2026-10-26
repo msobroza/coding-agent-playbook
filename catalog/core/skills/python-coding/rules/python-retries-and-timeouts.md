@@ -2,7 +2,6 @@
 id: python-retries-and-timeouts
 name: Timeouts and retries
 description: "Every outbound call gets an explicit timeout; idempotent calls get a small, bounded, transient-only retry."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

@@ -2,7 +2,6 @@
 id: ml-unsafe-deserialization-guard
 name: ML unsafe deserialization guard
 description: Deny an edit that adds pickle-based loads or other unsafe deserialization to Python code or notebook cells; flag version-dependent loads and code-executing calls.
-version: 1
 tier: default
 priority: 40
 events: [pre_tool_use]

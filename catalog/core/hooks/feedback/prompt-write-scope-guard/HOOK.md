@@ -3,7 +3,6 @@ id: prompt-write-scope-guard
 name: Prompt write-scope guard
 description: Keep read-only playbook prompts from editing the code and test-writing prompts inside their test globs.
 summary: During a read-only playbook prompt, do not modify code; during `/generate-tests`, write only test files.
-version: 1
 tier: default
 priority: 40
 events: [pre_tool_use]

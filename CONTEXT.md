@@ -50,14 +50,6 @@ _Avoid_: severity, importance
 A named task the user invokes explicitly, as a slash command.
 _Avoid_: command, template
 
-**Prompt set**:
-One complete version of the core prompts, chosen per consumer repo; the same prompt names render from whichever set the repo selects.
-_Avoid_: prompt variant, v2 prompts
-
-**Twin**:
-The prompt of another prompt set with the same id as a v1 prompt; it replaces that prompt's text only, keeping its name, slash command and included rules. Not a **Guard twin**.
-_Avoid_: prompt copy, prompt override
-
 **Hook**:
 An assistant lifecycle handler that runs on agent events (before a tool, after an edit, at stop) and can block, warn or feed back to the agent.
 _Avoid_: bare "hook" for the git kind; say **pre-commit hook**
@@ -77,6 +69,21 @@ _Avoid_: reminder, hint
 **Eval sample**:
 A reproducible test case for a prompt: a starting repo state, an invocation and a definition of success.
 _Avoid_: eval task
+
+**Graded set**:
+The prompts that eval samples grade, plus the rules those prompts include: everything an eval run puts in front of the agent.
+
+**Edition**:
+A frozen copy of the graded set as one release shipped it, named after that release. It exists only in the engine and only while a pin needs it; a consumer repo never renders one and always gets the current text.
+_Avoid_: prompt set, twin, v1/v2 prompts, snapshot, baseline
+
+**Pin**:
+An eval sample's reference to the edition it grades, which freezes the whole experiment: the edition's text, the sample and its starting repo state. A sample without a pin grades the current text.
+_Avoid_: lock, freeze (freezing is the act of creating a pin)
+
+**Eval target**:
+A harness and a model that eval runs drive, named once in the `[evals]` config; the model is sent to the harness exactly as written.
+_Avoid_: eval runner (a runner is the code that drives one harness), model alias
 
 ### Context
 
@@ -177,6 +184,7 @@ A named OpenCode mode with its own model, permissions and system prompt; it is n
 
 **Consumer repo**:
 A repository the playbook is installed into.
+_Avoid_: target repo
 
 **Consumer config**:
 The committed config file and the machine-local overrides file in a consumer repo that steer sync and the hooks.
@@ -206,6 +214,10 @@ _Avoid_: bare "samples" (an **Eval sample** is the test case)
 **Grading kernel**:
 The engine's shared machinery for scoring work (metrics, checks, rubrics and how they compose), used by eval samples and the metrics gate.
 _Avoid_: evaluators
+
+**Release metrics**:
+The scores of every eval sample for one release under one harness and model, compared with the previous release's to flag regressions.
+_Avoid_: benchmark, scorecard
 
 ### Third-party content
 

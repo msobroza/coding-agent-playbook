@@ -2,7 +2,6 @@
 id: design-interface-segregation
 name: Interface segregation
 description: "Let each consumer depend on a small Protocol with only the methods it calls; split an interface when implementers stub methods or callers use separate halves."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

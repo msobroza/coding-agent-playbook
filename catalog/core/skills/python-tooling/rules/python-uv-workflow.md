@@ -2,7 +2,6 @@
 id: python-uv-workflow
 name: uv workflow
 description: "In a uv project, change dependencies only through uv, run everything through the project environment, and leave uv.lock to uv."
-version: 1
 scope: scoped
 globs:
   - "pyproject.toml"

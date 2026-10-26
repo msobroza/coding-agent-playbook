@@ -2,7 +2,6 @@
 id: python-small-units
 name: Small units
 description: "Keep each function to one job in about 4 to 20 lines and each file under about 500 lines, ideally 200 to 300."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

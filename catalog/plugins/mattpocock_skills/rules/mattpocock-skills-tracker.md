@@ -2,7 +2,6 @@
 id: mattpocock-skills-tracker
 name: Issue tracker and domain docs
 description: Where this repo's issue tracker, triage label and domain doc config lives, and that .scratch/ is never staged.
-version: 1
 scope: always
 priority: 50
 tags: [always, tracker]

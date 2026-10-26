@@ -2,7 +2,6 @@
 id: domino-app-workspace-preview
 name: Workspace preview
 description: "Preview an App from a workspace with a separate dev script on a free port; never reuse the preview URL as the published App's prefix."
-version: 1
 scope: scoped
 globs:
   - "**/app.sh"

@@ -19,6 +19,7 @@ from coding_agent_playbook.lockfile.drift import (
     parse_json_document,
 )
 from coding_agent_playbook.lockfile.model import (
+    ArtifactDigest,
     LockEntry,
     Lockfile,
     LockfileFormatError,
@@ -26,6 +27,7 @@ from coding_agent_playbook.lockfile.model import (
     compute_hash,
     generated_paths,
 )
+from tests.engine_version import ENGINE_VERSION
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -41,7 +43,7 @@ def test_compute_hash_stable():
 def test_lockfile_roundtrip():
     lockfile = Lockfile(
         schema_version=1,
-        engine_version="0.1.0a0",
+        engine_version=ENGINE_VERSION,
         rendered_at="2026-05-28T12:00:00Z",
         entries=[
             LockEntry(path=".continue/rules/a.md", sha256="abc123", bytes=42),
@@ -56,7 +58,7 @@ def test_lockfile_roundtrip():
 def test_lockfile_roundtrip_empty_entries():
     lockfile = Lockfile(
         schema_version=1,
-        engine_version="0.1.0a0",
+        engine_version=ENGINE_VERSION,
         rendered_at="2026-05-28T12:00:00Z",
     )
     data = lockfile.to_dict()
@@ -68,7 +70,7 @@ def test_lockfile_roundtrip_empty_entries():
 def test_find_returns_entry():
     lockfile = Lockfile(
         schema_version=1,
-        engine_version="0.1.0a0",
+        engine_version=ENGINE_VERSION,
         rendered_at="2026-05-28T12:00:00Z",
         entries=[
             LockEntry(path="path/x.md", sha256="abc", bytes=1),
@@ -83,9 +85,9 @@ def test_find_returns_entry():
 
 # --- schema v2: provenance fields (specs/prK-lifecycle-hooks.md §P P4, §B.6) ---
 
-_V1_LOCKFILE_TOML = """\
+_V1_LOCKFILE_TOML = f"""\
 schema_version = 1
-engine_version = "0.1.0a0"
+engine_version = "{ENGINE_VERSION}"
 rendered_at = "2026-05-28T12:00:00Z"
 
 [[entries]]
@@ -131,7 +133,7 @@ def test_v2_roundtrip_all_fields(tmp_path: Path) -> None:
     """Every v2 field survives to_dict -> TOML on disk -> tomllib -> from_dict."""
     original = Lockfile(
         schema_version=2,
-        engine_version="0.2.0",
+        engine_version="9.9.9",
         rendered_at="2026-10-14T10:00:00Z",
         entries=[
             LockEntry(
@@ -178,7 +180,7 @@ def test_default_valued_fields_omitted_from_toml(tmp_path: Path) -> None:
 
     lockfile = Lockfile(
         schema_version=2,
-        engine_version="0.2.0",
+        engine_version="9.9.9",
         rendered_at="2026-10-14T10:00:00Z",
         entries=[rule_entry, bare_entry],
     )
@@ -212,7 +214,7 @@ def test_lock_entry_from_provenance_copies_fields() -> None:
     )
 
 
-_HEADER = {"schema_version": 2, "engine_version": "0.2.0", "rendered_at": "2026-10-14T10:00:00Z"}
+_HEADER = {"schema_version": 2, "engine_version": "9.9.9", "rendered_at": "2026-10-14T10:00:00Z"}
 _ENTRY = {"path": "AGENTS.md", "sha256": "ab", "bytes": 2}
 
 
@@ -290,7 +292,7 @@ def test_scoped_entry_roundtrips_with_scope_and_omits_defaults(tmp_path: Path) -
         "adapter",
         "scope",
     ]
-    lockfile = Lockfile(2, "0.2.0", "2026-10-14T10:00:00Z", entries=[entry])
+    lockfile = Lockfile(2, "9.9.9", "2026-10-14T10:00:00Z", entries=[entry])
     state = FileSystemStateSource(repo_root=tmp_path)
     state.save_lockfile(lockfile)
 
@@ -316,7 +318,7 @@ def _whole(root: Path, rel: str, content: bytes, *, executable: bool = False) ->
 
 
 def _lock(*entries: LockEntry) -> Lockfile:
-    return Lockfile(2, "0.2.0", "2026-10-14T10:00:00Z", entries=list(entries))
+    return Lockfile(2, "9.9.9", "2026-10-14T10:00:00Z", entries=list(entries))
 
 
 def test_drift_entries_missing_and_hash_mismatch(tmp_path: Path) -> None:
@@ -450,3 +452,43 @@ def test_recorded_paths_lists_each_path_once_scoped_entries_included() -> None:
 
 def test_generated_paths_is_empty_before_the_first_sync() -> None:
     assert generated_paths(None) == frozenset()
+
+
+# --- artifact digests (#281 ticket 03) -----------------------------------------
+
+
+def test_artifact_digests_and_entry_digest_roundtrip_through_toml(tmp_path: Path) -> None:
+    entry = LockEntry("a.md", "0" * 64, 1, kind="rule", artifact_id="x", digest="d" * 64)
+    record = ArtifactDigest(kind="rule", artifact_id="x", digest="d" * 64)
+    lockfile = Lockfile(2, "9.9.9", "t", entries=[entry], artifacts=[record])
+    state = FileSystemStateSource(repo_root=tmp_path)
+
+    state.save_lockfile(lockfile)
+
+    assert state.load_lockfile() == lockfile
+    assert record.key == "rule:x"
+
+
+def test_a_lockfile_without_digests_writes_neither_key(tmp_path: Path) -> None:
+    state = FileSystemStateSource(repo_root=tmp_path)
+    state.save_lockfile(Lockfile(2, "9.9.9", "t", entries=[LockEntry("a.md", "0" * 64, 1)]))
+
+    text = (tmp_path / ".coding-agent-playbook.lock").read_text(encoding="utf-8")
+
+    assert "digest" not in text
+    assert "artifacts" not in text
+
+
+@pytest.mark.parametrize(
+    ("artifacts", "message"),
+    [
+        ("oops", r"artifacts: expected list, got str 'oops'"),
+        (["oops"], r"artifacts\[0\]: expected a table, got str 'oops'"),
+        ([{"kind": "rule", "artifact_id": "x"}], r"artifacts\[0\]\.digest: missing"),
+    ],
+)
+def test_bad_artifacts_tables_name_the_key_and_value(artifacts: object, message: str) -> None:
+    data = {"schema_version": 2, "engine_version": "0", "rendered_at": "", "artifacts": artifacts}
+
+    with pytest.raises(LockfileFormatError, match=message):
+        Lockfile.from_dict(data)

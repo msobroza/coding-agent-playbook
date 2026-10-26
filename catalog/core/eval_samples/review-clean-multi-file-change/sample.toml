@@ -1,7 +1,6 @@
 id = "review-clean-multi-file-change"
 prompt_id = "review"
 description = "Review a correct four-file diff (a new src/units.py, its use in src/shipping.py, and tests for both) that lets shipping quotes take pounds; the review must not invent a blocking finding."
-version = 1
 
 [setup]
 files = [

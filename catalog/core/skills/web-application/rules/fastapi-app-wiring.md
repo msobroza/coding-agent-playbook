@@ -2,7 +2,6 @@
 id: fastapi-app-wiring
 name: FastAPI app wiring
 description: "Build the FastAPI app in a create_app(settings) factory, acquire long-lived resources in its lifespan and release them after yield, and let only the ASGI entrypoint read the environment."
-version: 2
 scope: scoped
 globs:
   - "**/main.py"

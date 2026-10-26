@@ -2,7 +2,6 @@
 id: domino-app-starter-settings
 name: Starter's settings
 description: "Remember that user-level variables and data credentials come from whoever last started the App; log who that was and which settings were found."
-version: 1
 scope: scoped
 globs:
   - "**/app.py"

@@ -2,7 +2,6 @@
 id: pydantic-typed-settings
 name: Typed settings
 description: "Load all configuration into one BaseSettings class at startup: required per-environment values, SecretStr secrets, built once and passed in."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

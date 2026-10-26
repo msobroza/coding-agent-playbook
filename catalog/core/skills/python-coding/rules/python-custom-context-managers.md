@@ -2,7 +2,6 @@
 id: python-custom-context-managers
 name: Custom context managers
 description: "Turn a repeated acquire, try/finally, release shape into a context manager whose teardown copes with partial setup and never swallows errors."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

@@ -73,7 +73,7 @@ def test_protected_entries_mirror_lockfile_provenance(tmp_path: Path) -> None:
     rows = protected_rows(provenance, managed, tmp_path, shared=shared)
 
     lock = build_lockfile(
-        list(provenance), tmp_path, "0.2.0", provenance=provenance, managed=managed, shared=shared
+        list(provenance), tmp_path, "9.9.9", provenance=provenance, managed=managed, shared=shared
     )
     columns = ("path", "kind", "artifact_id", "source", "scope")
     assert [{c: row.to_json()[c] for c in columns} for row in rows] == [
@@ -192,7 +192,7 @@ def test_runtime_reads_the_protect_tables_back(tmp_path: Path) -> None:
         hooks=(),
         hooks_config=HooksConfig(enabled=True),
         guardrails=GuardrailsConfig(),
-        engine_version="0.2.0",
+        engine_version="9.9.9",
         protected=ProtectInputs(entries=protected_rows(provenance, managed, tmp_path)),
     )
 

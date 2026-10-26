@@ -2,7 +2,6 @@
 id: domino-app-flask
 name: Flask on Domino
 description: "Mount a Flask App at DOMINO_RUN_HOST_PATH with a small WSGI middleware so url_for and redirects keep the prefix and the proxy's https scheme."
-version: 1
 scope: scoped
 globs:
   - "**/app.py"

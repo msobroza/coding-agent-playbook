@@ -2,7 +2,6 @@
 id: playbook-override-by-id
 name: Override by id
 description: "Extend a layer with a new prefixed id; reuse an existing id only to replace that artifact whole."
-version: 1
 scope: scoped
 globs:
   - "catalog/**"

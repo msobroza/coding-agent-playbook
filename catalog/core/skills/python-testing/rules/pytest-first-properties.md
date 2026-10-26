@@ -2,7 +2,6 @@
 id: pytest-first-properties
 name: F.I.R.S.T test properties
 description: "Unit tests are Fast, Independent, Repeatable, Self-validating and Timely, and one documented command runs the whole suite headless with parseable output."
-version: 1
 scope: scoped
 globs:
   - "**/test_*.py"

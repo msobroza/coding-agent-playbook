@@ -19,7 +19,6 @@ _FULL_SAMPLE_TOML = """\
 id = "generate-tests-happy-path"
 prompt_id = "generate-tests"
 description = "Generate tests for a simple pure function with no edge cases"
-version = 1
 
 [setup]
 files = ["src/calculator.py"]

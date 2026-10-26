@@ -2,7 +2,6 @@
 id: python-enums
 name: Enums for closed sets
 description: "Model a closed set of options as an Enum, or a Literal in a signature, never as bare strings, and dispatch on it with match and a raising fallback."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

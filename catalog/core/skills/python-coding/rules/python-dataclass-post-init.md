@@ -2,7 +2,6 @@
 id: python-dataclass-post-init
 name: Dataclass post-init
 description: "Validate and normalize dataclass fields in __post_init__, raising with the offending value; derive values with @property, and keep field(init=False) for values computed once."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

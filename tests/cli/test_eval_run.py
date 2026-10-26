@@ -340,7 +340,6 @@ def test_run_failing_gate_exits_1(
             id = "synthetic"
             prompt_id = "refactor"
             description = "synthetic worsening sample"
-            version = 1
 
             [setup]
             files = ["mod.py"]

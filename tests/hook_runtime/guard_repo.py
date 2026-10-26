@@ -22,6 +22,7 @@ from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL, L
 from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
 from coding_agent_playbook.hook_runtime.harness.wire import CLAUDE_EVENT_NAMES
 from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME, StateStore
+from tests.engine_version import ENGINE_VERSION
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -112,7 +113,7 @@ class GuardRepo:
         """Write ``guard_config.json`` holding ``records`` and the lockfile entry vouching for it."""
         document: dict[str, Any] = {
             "schema_version": 1,
-            "engine_version": "0.1.0a0",
+            "engine_version": ENGINE_VERSION,
             "hooks": {record["id"]: dict(record) for record in records},
             "logging": {"decisions": True, "audit": False, "audit_mode": ""},
             **overrides,
@@ -126,7 +127,7 @@ class GuardRepo:
 
     def write_lock(self, sha256: str) -> None:
         text = (
-            'schema_version = 2\nengine_version = "0.1.0a0"\n'
+            f'schema_version = 2\nengine_version = "{ENGINE_VERSION}"\n'
             f'\n[[entries]]\npath = "{GUARD_CONFIG_REL}"\nsha256 = "{sha256}"\n'
             'bytes = 10\nkind = "runtime"\n'
         )

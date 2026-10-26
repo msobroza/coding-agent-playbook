@@ -2,7 +2,6 @@
 id: domino-flow-task-purity
 name: Pure Flow tasks
 description: "A Flow task maps versioned inputs to its declared outputs and touches no shared state, so retries, timeouts and the cache stay safe; bump cache_version when its logic changes."
-version: 1
 scope: scoped
 globs:
   - "**/flows/**/*.py"

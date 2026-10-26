@@ -2,7 +2,6 @@
 id: mkdocs-docs-build
 name: MkDocs build
 description: "After editing docs, mkdocs.yml or documented code, run the repo's MkDocs build strictly, as CI does, and fix each warning; never deploy inside a change."
-version: 1
 scope: scoped
 globs:
   - "mkdocs.yml"

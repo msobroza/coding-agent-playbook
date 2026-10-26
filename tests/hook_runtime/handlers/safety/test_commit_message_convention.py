@@ -19,6 +19,7 @@ from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.event import Harness
 from coding_agent_playbook.hook_runtime.git.safe_git import LoggedCommit
 from coding_agent_playbook.hook_runtime.handlers.safety._cz import REWRITE_HINT
+from tests.engine_version import ENGINE_VERSION
 from tests.hook_runtime.fakes import FakeGit
 from tests.hook_runtime.tool_fakes import FakeCz
 
@@ -63,7 +64,7 @@ def repo(pack_repo: PackRepo, cz_program: Path) -> PackRepo:
 
 def _pin(repo: PackRepo, program: Path) -> None:
     git_dir = str(repo.root / ".git")
-    write_machine_pins(tools={"cz": [str(program)]}, engine_version="0.1.0a0", git_dir=git_dir)
+    write_machine_pins(tools={"cz": [str(program)]}, engine_version=ENGINE_VERSION, git_dir=git_dir)
 
 
 def _git(**fields: Any) -> FakeGit:
@@ -392,7 +393,7 @@ def test_cutover_date_rendered_from_the_commit_convention_table(pack_repo: PackR
         hooks=resolve_engine_hooks([HOOK_ID], pack_repo.root),
         hooks_config=HooksConfig(enabled=True, commit_convention=convention),
         guardrails=GuardrailsConfig(),
-        engine_version="0.1.0a0",
+        engine_version=ENGINE_VERSION,
     )
 
     compiled = compile_guard_config(request).document

@@ -2,7 +2,6 @@
 id: domino-job-stats-file
 name: Job stats file
 description: "Write dominostats.json on every run as one flat object of metric name to finite number, with the same keys each time."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

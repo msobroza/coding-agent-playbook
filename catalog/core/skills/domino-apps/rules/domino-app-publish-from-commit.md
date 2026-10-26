@@ -2,7 +2,6 @@
 id: domino-app-publish-from-commit
 name: Publish from a commit
 description: "Publish an App from a pushed, tagged revision and record each release in the repo; roll back by republishing an older tag."
-version: 1
 scope: scoped
 globs:
   - "**/app.sh"

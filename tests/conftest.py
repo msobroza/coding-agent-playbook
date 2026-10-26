@@ -28,6 +28,7 @@ import pytest
 
 from coding_agent_playbook.evals.run.git_env import REPO_LOCATION_GIT_VARS
 from tests.attendance_env import ATTENDANCE_ENV_VARS
+from tests.engine_version import ENGINE_VERSION
 from tests.hook_samples import write_hook
 
 if TYPE_CHECKING:
@@ -51,7 +52,7 @@ def pytest_sessionstart(session: pytest.Session) -> None:
         os.environ.pop(name, None)
 
 
-_DEFAULT_CONFIG = """\
+_DEFAULT_CONFIG = f"""\
 schema_version = 1
 adapters_enabled = ["continue", "claude_code", "opencode"]
 overlays_enabled = []
@@ -61,7 +62,7 @@ name = "synthetic"
 kind = "python-library"
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 
 [storage]
 artifact_source = "filesystem"
@@ -227,8 +228,7 @@ def make_synthetic_repo():
             # repo is the path to the consumer-repo root.
 
     Prefer artifact ids the engine does not ship: a repo-local ``refactor``
-    prompt overrides the engine's without its ``eval_samples``, which fails
-    ``playbook validate`` and so makes ``playbook sync`` refuse to write.
+    prompt overrides the engine's, so the engine's samples would grade it.
     """
 
     def _build(

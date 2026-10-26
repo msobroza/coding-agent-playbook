@@ -2,7 +2,6 @@
 id: pydantic-special-types
 name: Pydantic special types
 description: "Type emails, secrets, URLs, identifiers and positive counts with Pydantic's validated types, and money with Decimal, never str or float."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

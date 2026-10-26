@@ -2,7 +2,6 @@
 id: mkdocs-api-reference
 name: MkDocs API reference
 description: "Where mkdocs.yml enables an API plugin, write identifier blocks instead of copied signatures and give each new public module its block and nav entry."
-version: 1
 scope: scoped
 globs:
   - "mkdocs.yml"

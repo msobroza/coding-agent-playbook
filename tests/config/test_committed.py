@@ -25,6 +25,7 @@ from coding_agent_playbook.config.model import Config
 from coding_agent_playbook.config.schema import ConfigError
 from tests.config._engine_trees import engine_module_file, engine_module_trees
 from tests.engine_modules import engine_module
+from tests.engine_version import ENGINE_VERSION
 from tests.toml_equality import assert_toml_identical
 
 if TYPE_CHECKING:
@@ -35,7 +36,7 @@ _PRIMARY = ".coding-agent-playbook.toml"
 _LOCAL = ".coding-agent-playbook.local.toml"
 
 #: What ``Config.to_dict`` writes for itself, plus what it does not own.
-_COMMITTED = """\
+_COMMITTED = f"""\
 schema_version = 1
 adapters_enabled = ["continue"]
 
@@ -45,7 +46,7 @@ kind = "python-library"
 homepage = "https://x.example"
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 
 [storage]
 artifact_source = "filesystem"
@@ -119,7 +120,7 @@ def test_a_plan_refuses_a_local_file_that_breaks_the_result_before_writing(
 
 
 #: A hand-written committed file holding every value ``Config.to_dict`` normalizes.
-_HAND_WRITTEN = """\
+_HAND_WRITTEN = f"""\
 schema_version = 1
 overlays_enabled = []
 adapters_enabled = []
@@ -130,7 +131,7 @@ kind = "python-library"
 description = ""
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 
 [storage]
 state_source = "filesystem"
@@ -189,8 +190,8 @@ def test_plan_detector_cache_refresh_appends_a_missing_detector_cache(tmp_path: 
 def test_a_plan_refuses_a_committed_file_missing_a_key_only_the_local_file_has(
     tmp_path: Path, plan: str
 ) -> None:
-    files = _files(tmp_path, local='[engine]\nversion = "0.1.0a0"\n')
-    (tmp_path / _PRIMARY).write_text(_COMMITTED.replace('version = "0.1.0a0"\n', ""))
+    files = _files(tmp_path, local=f'[engine]\nversion = "{ENGINE_VERSION}"\n')
+    (tmp_path / _PRIMARY).write_text(_COMMITTED.replace(f'version = "{ENGINE_VERSION}"\n', ""))
 
     expected = f"^{re.escape(_PRIMARY)}: " + r"the required key engine\.version"
     with pytest.raises(ConfigError, match=expected):

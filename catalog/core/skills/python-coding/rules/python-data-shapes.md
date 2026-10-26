@@ -2,7 +2,6 @@
 id: python-data-shapes
 name: Data shapes
 description: "Model records as dataclasses, not hand-written classes, string dicts or parallel lists; default_factory for mutable defaults; at most three tuple values; name magic constants."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

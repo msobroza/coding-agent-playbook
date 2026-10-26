@@ -566,6 +566,36 @@
           "metavar": null
         },
         {
+          "action": "_StoreTrueAction",
+          "option_strings": [
+            "--targets"
+          ],
+          "dest": "targets",
+          "nargs": 0,
+          "const": true,
+          "default": false,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "list the eval targets ([evals] config), where each comes from and whether its harness CLI is installed",
+          "metavar": null
+        },
+        {
+          "action": "_StoreTrueAction",
+          "option_strings": [
+            "--check"
+          ],
+          "dest": "check",
+          "nargs": 0,
+          "const": true,
+          "default": false,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "with --targets: run a one-turn prompt through each target's harness (paid; the harness makes the calls, the engine makes none)",
+          "metavar": null
+        },
+        {
           "action": "_StoreAction",
           "option_strings": [],
           "dest": "id",
@@ -605,7 +635,22 @@
           "type": null,
           "choices": null,
           "required": false,
-          "help": "runner name from the coding_agent_playbook.runners group (default: claude_code; use 'fake' for a hermetic no-op run)",
+          "help": "runner name from the coding_agent_playbook.runners group (default: claude_code; use 'fake' for a hermetic no-op run); the eval target with that harness and no model",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--target"
+          ],
+          "dest": "target",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "eval target to run: a name from [evals.targets] or HARNESS:MODEL (default: $PLAYBOOK_EVAL_TARGET, then [evals] default, then claude_code)",
           "metavar": null
         },
         {
@@ -773,7 +818,8 @@
           "required": false,
           "dests": [
             "list",
-            "show"
+            "show",
+            "targets"
           ]
         }
       ]

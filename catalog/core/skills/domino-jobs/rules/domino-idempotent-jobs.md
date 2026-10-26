@@ -2,7 +2,6 @@
 id: domino-idempotent-jobs
 name: Idempotent jobs
 description: "Take the unit of work as an argument, skip work already done, write atomically and make every side effect an upsert, so re-runs and retries repeat safely."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

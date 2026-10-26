@@ -139,7 +139,7 @@ def _best_effort_prompt(leaf: SkillLeaf, result: ImportResult, source_package: s
     slash = leaf.path.name
     body = strip_sentinel(leaf.body)
     result.warnings.append(
-        f"prompt {slash!r}: includes_rules/input_variables/version not recoverable "
+        f"prompt {slash!r}: includes_rules/input_variables not recoverable "
         "without sidecar; defaulted"
     )
     result.prompts.append(
@@ -214,7 +214,7 @@ def _scope_warning(rule_id: str, scope: RuleScope, placement: str, *, needs_skil
     skill_hint = "; a scoped rule needs 'skill: <skill-id>' before playbook sync accepts it"
     return (
         f"rule {rule_id!r}: scope inferred as {scope!r} from {placement}/ placement; "
-        "globs/applies_if/priority/tags/version not recoverable without sidecar"
+        "globs/applies_if/priority/tags not recoverable without sidecar"
         + (skill_hint if needs_skill else "")
     )
 

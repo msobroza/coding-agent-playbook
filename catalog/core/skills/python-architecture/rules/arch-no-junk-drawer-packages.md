@@ -2,7 +2,6 @@
 id: arch-no-junk-drawer-packages
 name: No junk-drawer packages
 description: "Never name a package or module utils, helpers, common, misc or managers: place each function in the package of the concept it serves."
-version: 1
 scope: scoped
 globs:
   - "**/utils/**/*.py"

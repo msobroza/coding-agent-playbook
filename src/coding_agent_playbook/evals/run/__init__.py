@@ -3,7 +3,9 @@
 Deliberately empty: import the defining module. ``harness_runner`` holds the runner
 interface and the workspace, ``scoring`` the scoring, ``fake_runner``,
 ``claude_code_runner`` and ``opencode_runner`` the runners the
-``coding_agent_playbook.runners`` entry points name, ``agent_env`` and ``git_env``
-the environment a run gives the agent and its git calls, and ``comparison_runner``
+``coding_agent_playbook.runners`` entry points name, ``cli_argv`` the argv the CLI
+runners and the LLM judge spawn, ``claude_code_route`` how a Claude Code run or the
+judge reaches a custom endpoint, ``agent_env`` and ``git_env`` the environment a run
+gives the agent and its git calls, and ``comparison_runner``
 the opt-in runs of the same tasks on a base ref and on HEAD.
 """

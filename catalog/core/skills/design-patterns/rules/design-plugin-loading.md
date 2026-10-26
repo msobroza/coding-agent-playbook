@@ -2,7 +2,6 @@
 id: design-plugin-loading
 name: Plugin loading
 description: "Let other packages add variants through explicit register(registry) calls from the entry point or installed entry points, never by importing module names read from config."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

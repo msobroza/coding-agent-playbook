@@ -3,15 +3,12 @@ id: review-architecture
 name: Review architecture
 description: "Read-only architecture review: map modules into layers, trace the import graph and its cycles, and report boundary, coupling and composition-root violations by severity."
 slash: review-architecture
-version: 1
 input_variables:
   - name: target
     description: Package, directory or module to review (e.g. "src/app"); the whole repository when omitted
     required: false
 includes_rules:
   - python-dependency-injection
-eval_samples:
-  - review-architecture-layer-leak
 ---
 
 # Review architecture

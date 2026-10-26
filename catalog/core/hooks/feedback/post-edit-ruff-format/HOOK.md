@@ -3,7 +3,6 @@ id: post-edit-ruff-format
 name: Post-edit ruff format
 description: Format already-clean Python files after an edit (safe import and pyupgrade fixes only) and report the ruff findings CI fails on for the changed lines.
 summary: After editing a Python file, run `ruff check` and `ruff format` on it as CI does, and fix what they report.
-version: 1
 tier: default
 priority: 50
 events: [post_tool_use]

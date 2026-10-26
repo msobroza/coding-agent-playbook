@@ -2,7 +2,6 @@
 id: python-closures-and-partial
 name: Closures and partial
 description: "Fit a function to a narrower callable signature with functools.partial or a closure instead of a one-method configuration class, and keep lambdas for throwaway inline callables."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

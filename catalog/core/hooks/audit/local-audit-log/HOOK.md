@@ -2,7 +2,6 @@
 id: local-audit-log
 name: Local audit log
 description: Record each tool call, prompt and session boundary as a structure-only local audit line (command names and flag names, masked paths, prompt digests; never values, prompt text or file contents).
-version: 1
 tier: opt-in
 priority: 91
 events: [session_start, user_prompt_submit, post_tool_use, post_tool_use_failure, session_end]

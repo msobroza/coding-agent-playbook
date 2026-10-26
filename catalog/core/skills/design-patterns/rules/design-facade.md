@@ -2,7 +2,6 @@
 id: design-facade
 name: Facade
 description: "When callers repeat the same sequence of calls into a subsystem, put the sequence behind one function or a small facade holding the collaborators it was given, exposing only the operations callers use and no subsystem types."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

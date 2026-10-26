@@ -2,7 +2,6 @@
 id: docs-readme-essentials
 name: README essentials
 description: "Keep the README short and true: what it is, install with the real distribution name, a minimal runnable example, links to docs, architecture, contributing and license."
-version: 1
 scope: scoped
 globs:
   - "README*"

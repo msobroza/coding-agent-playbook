@@ -2,7 +2,6 @@
 id: web-api-pagination
 name: Web API pagination
 description: "Bound and paginate every list endpoint: a server-enforced maximum page size, a stable order, keyset cursors and one page shape."
-version: 1
 scope: scoped
 globs:
   - "**/routers/**/*.py"

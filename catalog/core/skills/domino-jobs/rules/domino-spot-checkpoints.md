@@ -2,7 +2,6 @@
 id: domino-spot-checkpoints
 name: Spot checkpoints
 description: "On spot hardware tiers, save checkpoints periodically under the artifacts directory, named by step and rank, and resume from the newest one at startup."
-version: 1
 scope: scoped
 globs:
   - "**/train*.py"

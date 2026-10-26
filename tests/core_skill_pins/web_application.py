@@ -143,7 +143,6 @@ _API_DESIGN_RULES: Final = {
         globs=("**/*.py",),
         priority=41,
         name="FastAPI error boundaries",
-        version=2,  # rewritten from the upstream skeleton (C-web-application-03)
         tags=("python", "fastapi", "errors"),
         section="api-design",
     ),
@@ -171,7 +170,6 @@ _APP_STRUCTURE_RULES: Final = {
         globs=(*_APP_GLOBS, "**/settings.py", "**/config.py"),
         priority=44,
         name="FastAPI app wiring",
-        version=2,  # rewritten from the upstream skeleton (C-web-application-03)
         tags=("python", "fastapi"),
         section="app-structure",
     ),

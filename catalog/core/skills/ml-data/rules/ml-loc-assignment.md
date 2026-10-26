@@ -2,7 +2,6 @@
 id: ml-loc-assignment
 name: Assignment with .loc
 description: "Write into a pandas frame with one .loc or .iloc indexer, never chained indexing, and copy a subset explicitly when it is meant to be separate."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

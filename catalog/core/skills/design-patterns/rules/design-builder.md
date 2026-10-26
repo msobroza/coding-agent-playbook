@@ -2,7 +2,6 @@
 id: design-builder
 name: Builder
 description: "Reach for a builder only when an object has many optional parts assembled in steps and validated together; its build() validates, copies collections into tuples and returns a frozen product. Otherwise a dataclass with defaults and keyword-only fields is the builder."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

@@ -2,7 +2,6 @@
 id: arch-ubiquitous-language
 name: Ubiquitous language
 description: "Name domain records, fields, use cases and tests with the terms the business experts use, and rename the code when their terms change."
-version: 1
 scope: scoped
 globs:
   - "**/domain/**/*.py"

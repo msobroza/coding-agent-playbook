@@ -44,7 +44,6 @@ def _make_rule(
     priority: int = 10,
     tags: list[str] | None = None,
     applies_if: dict[str, object] | None = None,
-    version: int = 1,
     body: str = "# House style\n\nUse type hints.\n",
 ) -> Rule:
     return Rule(
@@ -57,7 +56,6 @@ def _make_rule(
             priority=priority,
             tags=tags or [],
             applies_if=applies_if or {},
-            version=version,
         ),
         body=body,
         template_body=body,

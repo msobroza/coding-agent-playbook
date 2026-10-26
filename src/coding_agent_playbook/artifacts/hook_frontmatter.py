@@ -52,7 +52,6 @@ class HookFrontmatter:
     supports: list[str]
     handler: HookHandler | None = None  # exactly one of handler / handlers (H6)
     handlers: dict[str, HookHandler] = field(default_factory=dict)
-    version: int = 1
     enabled: bool = True
     mandatory: bool = False
     priority: int = 50
@@ -112,7 +111,6 @@ class HookFrontmatter:
             handlers={
                 e: HookHandler.from_fields(f) for e, f in fields.per_event("handlers").items()
             },
-            version=fields.integer("version", 1),
             enabled=fields.flag("enabled", True),
             mandatory=fields.flag("mandatory", False),
             priority=fields.integer("priority", 50),

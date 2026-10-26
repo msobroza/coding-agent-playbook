@@ -23,6 +23,7 @@ from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL, L
 from coding_agent_playbook.hook_runtime.dispatch.event import RepoInfo
 from coding_agent_playbook.hook_runtime.state.store import StateStore
 from coding_agent_playbook.hooks.resolution.resolved import ResolvedHandler, ResolvedHook
+from tests.engine_version import ENGINE_VERSION
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -60,7 +61,7 @@ def guard_document(**overrides: Any) -> dict[str, Any]:
     """
     document: dict[str, Any] = {
         "schema_version": 1,
-        "engine_version": "0.1.0a0",
+        "engine_version": ENGINE_VERSION,
         "hooks": {"guard-generated-outputs": resolved_hook().to_json()},
         "deadlines_ms": {"pre_tool_use": 2000},
         "unattended_ask": "warn",
@@ -97,7 +98,7 @@ def lockfile_text(sha256: str | None, *, extra: str = "") -> str:
         else ""
     )
     return (
-        'schema_version = 2\nengine_version = "0.1.0a0"\nrendered_at = "2026-10-14T00:00:00Z"\n'
+        f'schema_version = 2\nengine_version = "{ENGINE_VERSION}"\nrendered_at = "2026-10-14T00:00:00Z"\n'
         f'{extra}\n[[entries]]\npath = "AGENTS.md"\nsha256 = "ab"\nbytes = 2\n{entry}'
     )
 

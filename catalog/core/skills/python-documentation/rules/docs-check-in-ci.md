@@ -2,7 +2,6 @@
 id: docs-check-in-ci
 name: Docs check
 description: "Run `playbook docs-check` after editing docs and fix every finding; it runs at commit time and in CI with only the docs tools the repo configures."
-version: 1
 scope: scoped
 globs:
   - "docs/**"

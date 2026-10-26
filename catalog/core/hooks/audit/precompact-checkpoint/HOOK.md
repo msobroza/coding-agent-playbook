@@ -2,7 +2,6 @@
 id: precompact-checkpoint
 name: Pre-compaction checkpoint
 description: Before compaction, remember where the user's own prompts are in the transcript (entry ids and offsets, never their text); after it, re-inject them as quoted, masked excerpts with the files edited so far.
-version: 1
 tier: opt-in
 priority: 92
 events: [pre_compact, session_start]

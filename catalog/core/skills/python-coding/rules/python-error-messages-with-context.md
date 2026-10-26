@@ -2,7 +2,6 @@
 id: python-error-messages-with-context
 name: Error messages with context
 description: "Raise errors whose message names the offending value with repr, the shape that was expected and the input or field it came from."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

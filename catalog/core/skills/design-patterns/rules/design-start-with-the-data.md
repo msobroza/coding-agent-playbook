@@ -2,7 +2,6 @@
 id: design-start-with-the-data
 name: Start with the data
 description: "Fix the record shapes first: a field prefix, parallel lists or a long parameter list is a missing type, and functions and classes follow from it."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

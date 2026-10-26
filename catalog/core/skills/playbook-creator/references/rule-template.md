@@ -21,7 +21,6 @@ Copy the block that matches the rule you are starting, replace every `<placehold
 id: <prefix>-<topic>          # equals the file stem; kebab case, at most 64 characters
 name: <Topic label>           # short; the index row is "<name>: <description>"
 description: "<One actionable sentence ending with a period.>"
-version: 1                    # bump on a breaking change
 scope: scoped                 # lowercase
 section: <section-id>         # declared in the skill's playbook: block
 priority: <band floor + rank> # inside the section's band (table below)
@@ -66,7 +65,6 @@ priority: <n>         # inside that section's band
 id: <prefix>-<topic>
 name: <Topic label>
 description: "<One sentence.>"
-version: 1
 scope: always
 priority: <n>
 ---

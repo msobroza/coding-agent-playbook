@@ -191,6 +191,12 @@ The `commit-convention` step of `playbook ci` checks the branch's commits after 
 cut-over. When `PLAYBOOK_PR_TITLE` is set, it also checks the pull-request title,
 because in a squash-merge repo the title becomes the commit subject.
 
+In the engine's own repository, a pull request that changes shipped rules, prompts,
+skills or hooks (`catalog/core/<kind>/` or `catalog/plugins/<plugin>/<kind>/`) must
+be titled `feat` or `fix`, or carry a breaking `!`. Any other type fails the step,
+with a message naming the changed artifacts, because commitizen would not bump the
+release for it.
+
 A missing `cz` fails the CI step and the pre-commit hook loudly. The lifecycle hook
 fails open instead, and shows a hint to install `cz` once per session.
 
@@ -223,7 +229,7 @@ The table lists each step, the command it runs and when it runs.
 | `coverage` | `playbook metrics --run-tests --select testing --baseline git:<merge base>` | `[metrics] run_tests = true`, or `--steps coverage` |
 | `gate-scan` | `playbook gate-scan`: new suppressions, skipped tests, loosened checker config, removed CI steps or jobs, loosened secret or SAST scanners | always |
 | `scan-secrets` | `playbook scan-secrets` over the branch | always |
-| `commit-convention` | `cz check` on the commits after `cutover_date`, plus `$PLAYBOOK_PR_TITLE` (a leading `[Draft]`, `Draft:` or `(Draft)` stripped) | `[tool.commitizen]` or `[hooks.commit_convention]` is set |
+| `commit-convention` | `cz check` on the commits after `cutover_date`, plus `$PLAYBOOK_PR_TITLE` (a leading `[Draft]`, `Draft:` or `(Draft)` stripped), which must be `feat`, `fix` or `!` when shipped catalog guidance changed | `[tool.commitizen]` or `[hooks.commit_convention]` is set |
 | `commit-trailers` | `playbook check-commit-trailers` over the branch | a commit-trailer row is configured |
 | `check-deps` | `playbook check-deps`: newly declared dependencies against your policy | a dependency policy is configured |
 | `scan-sinks` | `playbook scan-sinks` over the branch | only when `--steps` names it |
@@ -587,6 +593,9 @@ These commands run one sample with each runner and with the main options:
 playbook eval refactor-extract-helper --run --runner claude_code   # real: drive the Claude Code CLI
 playbook eval refactor-extract-helper --run --runner opencode       # real: drive the OpenCode CLI
 playbook eval refactor-extract-helper --run --runner fake          # hermetic demo / CI: no network, no CLI
+playbook eval refactor-extract-helper --run --target claude-opus    # a named eval target from [evals.targets]
+playbook eval refactor-extract-helper --run --target opencode:my-org/coder-32b  # harness:model, no config
+playbook eval --targets                                             # list the targets and whether each CLI is installed
 playbook eval refactor-extract-helper --run --judge llm --judge-samples 3 # also score [rubric] via an LLM judge
 playbook eval refactor-extract-helper --run --full-scoring          # run every check (no short-circuit)
 playbook eval refactor-extract-helper --run --prompt-set v2         # grade the v2 prompt set (default v1)
@@ -653,6 +662,128 @@ A runner drives the agent. Two real runners ship, and both are opt-in. `claude_c
 is the default and drives the `claude` CLI. `opencode` drives the `opencode` CLI.
 Each one is gated by `available()` on its binary, and CI never exercises them.
 `--runner fake` is the hermetic driver for demos and CI.
+
+### Eval targets
+
+An eval target is a harness and a model, named once in the `[evals]` table of the
+committed config. The model is sent to the harness exactly as written, as
+`--model <model>`, so any model a deployment serves works the day it ships:
+
+```toml
+[evals]
+default = "claude-opus"
+release = ["claude-opus"]          # the targets release metrics run on
+
+[evals.targets.claude-opus]
+harness = "claude_code"            # a runner name: claude_code, opencode or fake
+model = "claude-opus-5-5"
+runs = 3                           # optional
+label = "Claude Opus"              # optional, display only
+
+[evals.judge]                      # one judge for every target
+model = "claude-opus-5-5"          # the LLM judge's --model
+samples = 3                        # the default of --judge-samples
+```
+
+The machine-local `.coding-agent-playbook.local.toml` may add targets (under new
+names), change `default` and override `[evals.judge]` keys; `release` is committed
+only. A run picks its target from the first of these that names one:
+
+1. `--target <name>` or `--target <harness>:<model>` (split at the first colon);
+2. the `PLAYBOOK_EVAL_TARGET` environment variable;
+3. the local file's `default`;
+4. the committed file's `default`;
+5. otherwise Claude Code on its own default model, recorded as `default`.
+
+`--runner <name>` still works: it is the target with that harness and no model, and
+cannot be combined with `--target`. An unknown target name is a usage error that
+lists the configured names. Each result records the target's name, harness,
+requested model and the model the harness reported (`null` when it reports none):
+the JSON report's `target` object, and a `target:` line in the text report.
+`--compare` does not take `--target` yet.
+
+### Endpoints
+
+A target or the judge can reach a custom endpoint, such as an internally deployed
+model behind an Anthropic-compatible gateway. Declare the endpoint once and refer
+to it by name:
+
+```toml
+[evals.endpoints.internal]
+api = "anthropic"                  # anthropic | openai-chat | openai-responses
+base_url = "https://llm.internal.example"
+token_env = "INTERNAL_LLM_TOKEN"   # the variable's NAME; the token is never in a file
+auth_header = "bearer"             # or "x-api-key" (anthropic only; default bearer)
+headers_env = "INTERNAL_LLM_HEADERS"  # optional: extra "Name: Value" header lines
+context_tokens = 200000            # optional
+max_output_tokens = 8192           # optional
+
+[evals.targets.internal-claude]
+harness = "claude_code"
+endpoint = "internal"
+model = "internal-opus"            # required on an endpoint: the id it serves
+small_model = "internal-haiku"     # optional background model, defaults to model
+
+[evals.judge]
+endpoint = "internal"              # optional; the judge then needs a model
+model = "internal-opus"
+```
+
+Write an `anthropic` `base_url` without `/v1`, as `ANTHROPIC_BASE_URL` takes it:
+the same endpoint then serves Claude Code targets, the judge and OpenCode targets.
+An `openai-chat` or `openai-responses` `base_url` includes its version path (such
+as `/v1`) and is used as written.
+
+The token comes only from the variable `token_env` names, or, in the local file
+only, from `token_command` (a command whose output is the token). Inline secret
+keys such as `token`, `api_key` or `password` are refused in both files. An
+endpoint may be declared in either file; the local file may add only the token
+part (`token_env` or `token_command`) to an endpoint the committed file declares,
+and a committed target or judge may name only a committed endpoint. A missing or
+empty token variable is a usage error (exit `2`) that names the variable.
+
+Claude Code speaks only the Anthropic Messages API, so a Claude Code target or the
+judge on an `openai-chat` or `openai-responses` endpoint is refused with a hint to
+use an OpenCode target.
+
+A Claude Code run on an endpoint is isolated from your own settings: it gets an
+empty scratch `CLAUDE_CONFIG_DIR`; inherited `ANTHROPIC_*`, `CLAUDE_CODE_USE_*` and
+OAuth variables are removed; the token reaches it only through its environment
+(`ANTHROPIC_AUTH_TOKEN` for bearer, `ANTHROPIC_API_KEY` for x-api-key); the base
+URL and the background model go in per-run `--settings`; the model is `--model`;
+the context window and output limit are set when declared; telemetry and
+non-essential traffic are off. The token never appears in argv, in a file the
+engine writes or in a result, and is redacted from transcripts.
+
+An OpenCode target reaches an endpoint of any of the three API shapes, so an
+internal OpenAI-compatible server (vLLM, TGI, Ollama) can be evaluated directly.
+It needs OpenCode 1.1.64 or later. Each run gets an inline config in
+`OPENCODE_CONFIG_CONTENT`: one provider, `playbook-target`, is the only enabled
+provider, with the SDK package for the API shape (`@ai-sdk/openai-compatible` for
+`openai-chat`, `@ai-sdk/openai` for `openai-responses`, `@ai-sdk/anthropic` for
+`anthropic`), the base URL (for `anthropic`, with the `/v1` the SDK expects
+appended unless `base_url` already ends in it), the token as an `{env:PLAYBOOK_ENDPOINT_TOKEN}`
+reference, the model and small model as served model ids, the declared context
+and output limits, and a zero built-in cost. The model is sent as
+`--model playbook-target/<model>`. The run gets empty scratch `XDG_CONFIG_HOME`,
+`XDG_DATA_HOME` and `XDG_STATE_HOME` directories, so your global OpenCode config,
+stored keys and sessions stay out, and `OPENCODE_DISABLE_CLAUDE_CODE=1` keeps your
+Claude Code instructions out. Inherited `OPENCODE_*`, `OTEL_*`, `ANTHROPIC_*` and
+`OPENAI_*` variables and every `*_API_KEY` are removed. OpenCode inserts the token
+into its config text unescaped, so a token holding a double quote, a backslash or
+a control character is a usage error (exit `2`) naming the variable. OpenCode runs
+with `--format json`: the transcript is its text events, the token totals are
+summed over its steps, and stderr is read apart.
+
+A result records the endpoint's name and a 12-character fingerprint of its URL,
+never the URL or the token (`target.endpoint` in the JSON report), and
+`target.harness_settings` is `isolated`. A target without an endpoint keeps
+today's behaviour, and its result says `personal`: your own harness settings and
+login were used.
+
+`playbook eval --targets --check` runs one short prompt through each target's
+harness and prints `ok` or `FAIL` per target, exiting `1` if any fails. It is a
+paid call per target; the harness makes it, the engine makes no network call.
 
 `playbook eval` has no `--run-tests` flag. A sample runs the test suite if and only if
 its `[gate]` references an execution metric, `coverage` or `test_pass_rate`.

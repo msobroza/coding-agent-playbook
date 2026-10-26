@@ -32,6 +32,7 @@ from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, compute_ha
 from coding_agent_playbook.skills.naming import agent_skill_issues, has_declared_id, skill_id_of
 from coding_agent_playbook.sync import pipeline as _sync
 from coding_agent_playbook.sync._leftovers import LeftoverPolicy, OutputLocations
+from tests.engine_version import ENGINE_VERSION
 from tests.fakes import FakeGitClient
 
 if TYPE_CHECKING:
@@ -872,7 +873,7 @@ def test_check_mode_ownership_honours_the_real_lockfile_legacy_claim(tmp_path: P
 
 # --- bytecode caches never reach a skills root (review finding 8) ------------
 
-_CONFIG_EVERY_SKILL_ROOT = """\
+_CONFIG_EVERY_SKILL_ROOT = f"""\
 schema_version = 1
 adapters_enabled = ["claude_code", "opencode", "shared_skills", "agent_harness"]
 overlays_enabled = []
@@ -882,7 +883,7 @@ name = "synthetic"
 kind = "python-library"
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 
 [storage]
 artifact_source = "filesystem"

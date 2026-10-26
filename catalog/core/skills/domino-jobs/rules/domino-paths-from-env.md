@@ -2,7 +2,6 @@
 id: domino-paths-from-env
 name: Paths from the environment
 description: "Read Domino's injected paths and run identity once into a frozen record with local fallbacks, and pass that record down instead of hard-coding /mnt or /domino paths."
-version: 1
 scope: scoped
 globs:
   - "**/settings.py"

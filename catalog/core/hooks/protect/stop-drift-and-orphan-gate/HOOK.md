@@ -3,7 +3,6 @@ id: stop-drift-and-orphan-gate
 name: Stop on generated-output drift
 description: Block the end of a turn while generated outputs differ from the lockfile or orphans remain; run validate and sync first.
 summary: Before finishing a turn that changed playbook sources or generated files, run `playbook sync --check`.
-version: 1
 tier: default
 priority: 30
 events: [stop]

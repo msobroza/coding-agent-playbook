@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 _ALLOWED = (
-    "allowed keys: id, name, description, scope, version, globs, applies_if, "
+    "allowed keys: id, name, description, scope, globs, applies_if, "
     "priority, tags, lint_codes, skill, section"
 )
 _VALID_HEAD = "id: r\nname: R\ndescription: d\nscope: always\n"
@@ -84,7 +84,7 @@ def test_invalid_yaml_is_a_load_error(tmp_path: Path) -> None:
 def test_section_round_trips(tmp_path: Path) -> None:
     path = _write(
         tmp_path,
-        f"---\n{_VALID_HEAD}version: 1\npriority: 50\nsection: error-handling\n---\nBody\n",
+        f"---\n{_VALID_HEAD}priority: 50\nsection: error-handling\n---\nBody\n",
     )
 
     rule = Rule.from_markdown(path, "<repo-local>")
@@ -95,7 +95,7 @@ def test_section_round_trips(tmp_path: Path) -> None:
 
 
 def test_rule_without_section_renders_byte_identical_markdown(tmp_path: Path) -> None:
-    text = f"---\n{_VALID_HEAD}version: 1\npriority: 40\ntags:\n- python\n---\n# R\n\nBody.\n"
+    text = f"---\n{_VALID_HEAD}priority: 40\ntags:\n- python\n---\n# R\n\nBody.\n"
     path = _write(tmp_path, text)
 
     rule = Rule.from_markdown(path, "<repo-local>")

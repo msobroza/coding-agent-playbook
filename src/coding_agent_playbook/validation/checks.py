@@ -16,7 +16,7 @@ Validates:
   like ``AnswerMatchesCheck``; specs/prK-hook-pack.md §E.2).
 - Rule templates never call ``{{ rule(...) }}`` (rules cannot include rules,
   SPEC invariants).
-- Eval-sample back-references resolve both directions, via the canonical
+- Each eval sample's ``prompt_id`` resolves, via the canonical
   :func:`coding_agent_playbook.evals.validator.validate_samples` helper.
 - Each Jinja-templated artifact compiles cleanly.
 - Every markdown link in every artifact is self-contained (PR L): relative

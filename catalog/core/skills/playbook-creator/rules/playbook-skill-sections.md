@@ -2,7 +2,6 @@
 id: playbook-skill-sections
 name: Skill sections
 description: "Declare a skill's sections from CRITICAL to LOW and give each member a priority inside its section's impact band."
-version: 1
 scope: scoped
 globs:
   - "catalog/**/skills/*/SKILL.md"

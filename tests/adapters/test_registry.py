@@ -8,13 +8,14 @@ from __future__ import annotations
 
 from coding_agent_playbook.adapters.registry import discover_adapters
 from coding_agent_playbook.config.model import Config, ProjectMeta, StorageConfig
+from tests.engine_version import ENGINE_VERSION
 
 
 def _make_config(adapters: list[str], overlays: list[str] | None = None) -> Config:
     return Config(
         schema_version=1,
         project=ProjectMeta(name="x", kind="python-library"),
-        engine_version="0.1.0a0",
+        engine_version=ENGINE_VERSION,
         overlays_enabled=overlays or [],
         adapters_enabled=adapters,
         storage=StorageConfig(),

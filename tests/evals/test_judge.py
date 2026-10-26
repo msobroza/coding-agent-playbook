@@ -384,3 +384,11 @@ def test_real_claude_judge_smoke() -> None:  # pragma: no cover - opt-in only
         "Here is a recipe that uses a banana and some flour.",
     )
     assert 0.0 <= score <= 1.0
+
+
+def test_llm_judge_model_reaches_the_cli_unchanged() -> None:
+    """``[evals.judge] model`` is passed as ``--model <model>`` (spec #281 ticket 05)."""
+    grade_on_model = "import sys; print(1 if sys.argv[-2:] == ['--model', 'org/j:v2'] else 0)"
+    judge = LLMJudge(command=[sys.executable, "-c", grade_on_model, "{prompt}"], model="org/j:v2")
+    assert judge.score_criterion("criterion", "artifact") == 1.0
+    assert "--model" not in LLMJudge()._build_command("p")

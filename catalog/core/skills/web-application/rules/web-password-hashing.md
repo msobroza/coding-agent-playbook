@@ -2,7 +2,6 @@
 id: web-password-hashing
 name: Hash passwords with Argon2
 description: "Store passwords only as Argon2id hashes, verify and rehash through the library off the event loop, and answer unknown emails in the same time and with the same error."
-version: 1
 scope: scoped
 globs:
   - "**/auth.py"

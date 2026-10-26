@@ -2,7 +2,6 @@
 id: playbook-rule-templates
 name: Rule templates
 description: "Make a rule a .md.j2 template only when a detector fact changes part of its text, and branch through the helpers."
-version: 1
 scope: scoped
 globs:
   - "catalog/**/rules/**/*.md"

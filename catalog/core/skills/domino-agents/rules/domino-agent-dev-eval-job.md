@@ -2,7 +2,6 @@
 id: domino-agent-dev-eval-job
 name: Development evaluation Job
 description: "Run the development evaluation as a Domino Job inside one DominoRun, over versioned questions, failing when any case fails."
-version: 1
 scope: scoped
 globs:
   - "**/*_eval*.py"

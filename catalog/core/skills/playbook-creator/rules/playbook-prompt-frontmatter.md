@@ -2,7 +2,6 @@
 id: playbook-prompt-frontmatter
 name: Prompt frontmatter
 description: "Make a prompt a slash-command task that names its rules by id in includes_rules and states its write scope and output contract."
-version: 1
 scope: scoped
 globs:
   - "catalog/**/prompts/*.md"
@@ -24,11 +23,10 @@ A prompt is a task the user starts by name, as a slash command. Guidance the age
 
 A prompt is `prompts/<id>.md` or `.md.j2` with:
 
-- **Required:** `id`, `name`, `description`, `version`, and `slash`: pick a name no other prompt or skill uses and no harness reserves (nothing checks it).
+- **Required:** `id`, `name`, `description` and `slash`: pick a name no other prompt or skill uses and no harness reserves (nothing checks it).
 - `applies_if`: the rule gate language; the prompt is written only where it holds.
 - `input_variables`: each with `name`, `description` and `required`.
 - `includes_rules`: rule ids, in the order the task needs them.
-- `eval_samples`: the ids of the samples that test the prompt.
 - `write_scope`: `{read_only: true}` or `{globs: [...]}`.
 - `output_contract`: regexes the final answer must match.
 
@@ -58,13 +56,10 @@ A bare string for `includes_rules`, a regex in a double-quoted YAML string (wher
 id: release-review
 name: Release review
 description: Review a release branch for billing regressions before it ships.
-version: 1
 slash: release-review
 includes_rules:
   - acme-decimal-amounts
   - acme-invoice-ids
-eval_samples:
-  - release-review-happy-path
 write_scope:
   read_only: true
 output_contract:

@@ -2,7 +2,6 @@
 id: domino-job-email-report
 name: Job email report
 description: "Write email.html with a title, inline styles and escaped values at the output root, and list it in .dominoresults when that file exists."
-version: 1
 scope: scoped
 globs:
   - "email.html"

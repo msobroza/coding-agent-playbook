@@ -1,7 +1,6 @@
 id = "find-injected-vuln-aiplatform-xss"
 prompt_id = "find-injected-vulnerability"
 description = "Stored cross-site scripting paraphrase; derived from CVE-2026-2472 (CrossCommitVuln-Bench, CC BY 4.0, A. Majumdar). See eval_samples/ATTRIBUTIONS.md."
-version = 1
 
 [setup]
 files = ["app/render.py", "app/page.py", "pyproject.toml"]

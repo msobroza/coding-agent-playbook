@@ -2,7 +2,6 @@
 id: web-jwt-validation
 name: Validate JWTs with a pinned algorithm and required claims
 description: "Decode JWTs with a pinned algorithm list and required exp, iat, sub, iss and aud claims, keep access tokens short-lived, and turn every invalid token into a 401."
-version: 1
 scope: scoped
 globs:
   - "**/auth.py"

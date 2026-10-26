@@ -20,7 +20,13 @@ import pytest
 from coding_agent_playbook.adapters.base import Adapter
 from coding_agent_playbook.adapters.shared_skills import SharedSkillsAdapter
 from coding_agent_playbook.config.tables.hooks import HooksConfig
-from coding_agent_playbook.lockfile.model import LockEntry, Lockfile, Provenance, compute_hash
+from coding_agent_playbook.lockfile.model import (
+    ArtifactDigest,
+    LockEntry,
+    Lockfile,
+    Provenance,
+    compute_hash,
+)
 from coding_agent_playbook.sync._dispatch import (
     HookDispatch,
     _skill_write_provenance,
@@ -121,7 +127,7 @@ def test_dispatch_begins_with_the_input_root_and_routes_hooks_before_finalize(
 ) -> None:
     (tmp_path / "out").mkdir()
     adapter = FakeHookAdapter()
-    prior = Lockfile(2, "0.2.0", "2026-10-14T00:00:00Z", [])
+    prior = Lockfile(2, "9.9.9", "2026-10-14T00:00:00Z", [])
 
     written = _dispatch(tmp_path, adapter, prior)
 
@@ -243,7 +249,7 @@ def test_build_lockfile_skips_shared_outputs_without_scoped_entries(tmp_path: Pa
     lockfile = build_lockfile(
         [settings],
         tmp_path,
-        "0.2.0",
+        "9.9.9",
         provenance={settings.resolve(): Provenance(kind="composite", adapter="claude_code")},
         shared=frozenset({".claude/settings.json"}),
     )
@@ -335,7 +341,7 @@ def test_build_lockfile_gives_output_linked_out_of_the_repo_no_entry(tmp_path: P
     lockfile = build_lockfile(
         [linked, inside],
         repo,
-        "0.2.0",
+        "9.9.9",
         provenance={linked.resolve(): skill, inside.resolve(): Provenance(kind="composite")},
     )
 
@@ -357,7 +363,7 @@ def test_build_lockfile_records_the_exec_bit_of_copied_hook_scripts(tmp_path: Pa
     lockfile = build_lockfile(
         [script, data, skill_script],
         tmp_path,
-        "0.2.0",
+        "9.9.9",
         provenance={
             script.resolve(): hook,
             data.resolve(): hook,
@@ -383,7 +389,7 @@ def test_build_lockfile_gives_a_looping_written_path_no_entry(tmp_path: Path) ->
     lockfile = build_lockfile(
         [tmp_path / "AGENTS.md", tmp_path / "self.md", tmp_path / "self.md" / "x.md"],
         tmp_path,
-        "0.2.0",
+        "9.9.9",
         provenance={},
     )
 
@@ -434,7 +440,7 @@ def _alternating_provenance(written: Sequence[Path]) -> dict[Path, Provenance]:
 def _entries_now(
     written: Sequence[Path], root: Path, provenance: Mapping[Path, Provenance]
 ) -> list[LockEntry]:
-    return build_lockfile(written, root, "0.2.0", provenance=provenance).entries
+    return build_lockfile(written, root, "9.9.9", provenance=provenance).entries
 
 
 def _entries_or_error(
@@ -479,7 +485,7 @@ def test_build_lockfile_matches_the_per_path_implementation_over_every_link_shap
     _assert_entries_match_before_batch(written, [tmp_path / root for root in _ZOO_ROOTS])
 
     lockfile = build_lockfile(
-        written, tmp_path, "0.2.0", provenance=_alternating_provenance(written)
+        written, tmp_path, "9.9.9", provenance=_alternating_provenance(written)
     )
     assert [entry.path for entry in lockfile.entries if entry.executable] == ["d1/hook.sh"]
 
@@ -505,7 +511,7 @@ def test_build_lockfile_leaves_out_every_looping_link_shape(tmp_path: Path) -> N
     assert len(loop_free) < len(written)
     for root in (tmp_path / root for root in _ZOO_ROOTS):
         expected = _whole_file_entries_before_batch(loop_free, root, provenance)
-        assert build_lockfile(written, root, "0.2.0", provenance=provenance).entries == expected
+        assert build_lockfile(written, root, "9.9.9", provenance=provenance).entries == expected
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX symlinks")
@@ -520,7 +526,7 @@ def test_build_lockfile_resolves_a_looping_root_only_when_a_path_was_written(
     root.symlink_to("loop")
     (tmp_path / "AGENTS.md").write_text("x\n", encoding="utf-8")
 
-    lockfile = build_lockfile([], root, "0.2.0", provenance={}, managed=[_SCOPED])
+    lockfile = build_lockfile([], root, "9.9.9", provenance={}, managed=[_SCOPED])
 
     assert lockfile.entries == [_SCOPED]
     for written in ([], [tmp_path / "AGENTS.md"]):
@@ -559,3 +565,58 @@ def test_real_written_paths_leaves_a_loop_unresolved_instead_of_raising(tmp_path
     looping = [tmp_path / "self.md", tmp_path / "self.md" / "x.md"]
 
     assert real_written_paths(looping) == {Path(os.path.realpath(path)) for path in looping}
+
+
+# --- artifact digests (#281 ticket 03) -----------------------------------------
+
+
+class FakeGuardrailsAdapter(FakeRuntimeAdapter):
+    """Writes the guardrails skill when told to (``writes``), and nothing else of note."""
+
+    name = "fake_guardrails"
+
+    def __init__(self, *, writes: bool) -> None:
+        self.writes = writes
+
+    def writes_guardrails_skill(self, hooks: Sequence[ResolvedHook]) -> bool:
+        return self.writes
+
+
+@pytest.mark.parametrize("writes", [True, False])
+def test_dispatch_records_a_digest_per_artifact_and_hook(tmp_path: Path, writes: bool) -> None:
+    guardrails = sample_member_skill("playbook-guardrails")
+    recorder = dispatch_to_adapters(
+        {"fake_guardrails": FakeGuardrailsAdapter(writes=writes)},
+        [],
+        [],
+        [sample_member_skill("python-coding")],
+        tmp_path,
+        hooks=HookDispatch([resolved_hook("guard-a")], guardrails_skill=guardrails),
+    )
+
+    keys = [record.key for record in recorder.artifacts]
+    guardrails_keys = ["skill:playbook-guardrails"] if writes else []
+    assert keys == ["hook:guard-a", *guardrails_keys, "skill:python-coding"]
+    assert all(len(record.digest) == 64 for record in recorder.artifacts)
+
+
+def test_build_lockfile_stamps_each_entry_with_its_artifacts_digest(tmp_path: Path) -> None:
+    rule_file, composite = tmp_path / "rule.md", tmp_path / "AGENTS.md"
+    rule_file.write_bytes(b"r\n")
+    composite.write_bytes(b"c\n")
+    records = [ArtifactDigest("rule", "x", "d" * 64), ArtifactDigest("rule", "always", "e" * 64)]
+
+    lockfile = build_lockfile(
+        [rule_file, composite],
+        tmp_path,
+        "9.9.9",
+        provenance={
+            rule_file.resolve(): Provenance(kind="rule", artifact_id="x"),
+            composite.resolve(): Provenance(kind="composite"),
+        },
+        artifacts=records,
+    )
+
+    by_path = {entry.path: entry.digest for entry in lockfile.entries}
+    assert by_path == {"rule.md": "d" * 64, "AGENTS.md": ""}
+    assert lockfile.artifacts == records

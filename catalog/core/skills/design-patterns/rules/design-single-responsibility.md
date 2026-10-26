@@ -2,7 +2,6 @@
 id: design-single-responsibility
 name: Single responsibility
 description: "Give each module, class and function one job and one reason to change; split along the responsibilities a unit mixes."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

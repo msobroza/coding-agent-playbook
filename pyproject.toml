@@ -165,6 +165,9 @@ extend-exclude = [
     "catalog/plugins/mattpocock_skills/**/*.md",
     "catalog/core/eval_samples/*/setup",
     "catalog/plugins/*/eval_samples/*/setup",
+    # Release manifests and notes are written only by scripts/release.py and are
+    # part of the release commit: a formatter must never rewrite them (ADR 0012).
+    "catalog/releases",
 ]
 # Pre-commit and the hook/Stop stages pass file names explicitly, and ruff
 # ignores the excludes above for an explicitly passed path unless force-exclude
@@ -269,6 +272,7 @@ layers = [
     "sync",
     "validation",
     "agent_harness | evals | precommit",
+    "release",
     "adapters",
     "rendering",
     "hooks",
@@ -310,6 +314,7 @@ type = "forbidden"
 source_modules = [
     "coding_agent_playbook.artifacts.path_classes",
     "coding_agent_playbook.artifacts.path_globs",
+    "coding_agent_playbook.artifacts.retired_keys",
     "coding_agent_playbook.catalog.roots",
     "coding_agent_playbook.detector.bounded_read",
     "coding_agent_playbook.detector.pep503",
@@ -338,6 +343,7 @@ forbidden_modules = [
     "coding_agent_playbook.artifacts.rule",
     "coding_agent_playbook.artifacts.skill",
     "coding_agent_playbook.catalog._hook_walk",
+    "coding_agent_playbook.catalog.digest",
     "coding_agent_playbook.catalog.layers",
     "coding_agent_playbook.catalog.prompt_sets",
     "coding_agent_playbook.catalog.resolve",
@@ -365,6 +371,7 @@ forbidden_modules = [
     "coding_agent_playbook.hooks",
     "coding_agent_playbook.metrics_gate",
     "coding_agent_playbook.precommit",
+    "coding_agent_playbook.release",
     "coding_agent_playbook.rendering",
     "coding_agent_playbook.skills",
     "coding_agent_playbook.sync",
@@ -401,6 +408,7 @@ forbidden_modules = [
     "coding_agent_playbook.artifacts.rule",
     "coding_agent_playbook.artifacts.skill",
     "coding_agent_playbook.catalog._hook_walk",
+    "coding_agent_playbook.catalog.digest",
     "coding_agent_playbook.catalog.layers",
     "coding_agent_playbook.catalog.prompt_sets",
     "coding_agent_playbook.catalog.resolve",
@@ -427,6 +435,7 @@ forbidden_modules = [
     "coding_agent_playbook.hooks",
     "coding_agent_playbook.metrics_gate",
     "coding_agent_playbook.precommit",
+    "coding_agent_playbook.release",
     "coding_agent_playbook.rendering",
     "coding_agent_playbook.skills",
     "coding_agent_playbook.sync",
@@ -485,6 +494,7 @@ forbidden_modules = [
     "coding_agent_playbook.artifacts.rule",
     "coding_agent_playbook.artifacts.skill",
     "coding_agent_playbook.catalog._hook_walk",
+    "coding_agent_playbook.catalog.digest",
     "coding_agent_playbook.catalog.layers",
     "coding_agent_playbook.catalog.prompt_sets",
     "coding_agent_playbook.catalog.resolve",
@@ -511,6 +521,7 @@ forbidden_modules = [
     "coding_agent_playbook.hooks",
     "coding_agent_playbook.metrics_gate",
     "coding_agent_playbook.precommit",
+    "coding_agent_playbook.release",
     "coding_agent_playbook.rendering",
     "coding_agent_playbook.skills",
     "coding_agent_playbook.sync",
@@ -598,12 +609,34 @@ exclude_lines = [
     "^\\s*\\.\\.\\.\\s*$",
 ]
 
-# --- commitizen (the commit-message convention; dogfooded, prK §K OQ-6) ---
-# Read by `cz check` in the playbook-ci job, which runs the `commit-convention` step
-# of `playbook ci` (the history before .coding-agent-playbook.toml's cutover_date is
-# skipped). It sets no version or bump keys, because hatch's [project] version
-# stays the only version source. commitizen is not a dev extra: only that CI job
-# installs it, so the CI-parity gate is unchanged.
+# --- commitizen (the commit convention and the release version; prK §K OQ-6, ADR 0012) ---
+# Two consumers read this table, both with commitizen>=4.13,<5 (COMMITIZEN_REQUIREMENT
+# in scripts/release.py; the playbook-ci job installs the same range):
+# - `cz check`, in the playbook-ci job's `commit-convention` step of `playbook ci`
+#   (history before .coding-agent-playbook.toml's cutover_date is skipped), plus the
+#   PR title.
+# - scripts/release.py prepare, which asks `cz bump --get-next --yes [--increment
+#   MINOR]` for the next version and writes it with `cz bump <version>
+#   --version-files-only --yes`, then commits "chore(release): v<version>" itself.
+#   It never runs a bare `cz bump`: that tags the release-branch commit, which the
+#   squash merge discards. CI tags the merged release commit instead.
+# cz finds the previous release by the tag named after the CURRENT [project] version,
+# so release.py refuses to prepare while that tag is missing (merged but not tagged).
+# [project] version stays the only version source (pep621 reads and writes it in
+# place; hatch builds from it), so there is no `version` key and no version_files.
+# No changelog keys: the per-release notes under catalog/releases/ are the only
+# changelog (ADR 0012), so there is no CHANGELOG.md.
+# commitizen is not a dev extra: the test suite fakes it.
 
 [tool.commitizen]
+# The stock rules: cz_customize without a copied schema_pattern makes `cz check`
+# accept any message.
 name = "cz_conventional_commits"
+version_provider = "pep621"
+version_scheme = "pep440"
+tag_format = "v$version"
+# While 0.x, `!` and BREAKING CHANGE bump the minor, so the notes mark breaking pull
+# requests. cz keeps applying this key after 1.0: delete it in the release PR that
+# goes to 1.0.0.
+major_version_zero = true
+bump_message = "chore(release): v$new_version"

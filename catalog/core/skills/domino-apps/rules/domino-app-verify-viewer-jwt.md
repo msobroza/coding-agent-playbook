@@ -2,7 +2,6 @@
 id: domino-app-verify-viewer-jwt
 name: Verify the viewer token
 description: "Verify the Authorization bearer token against the identity provider's cached key set (RS256, audience apps) before trusting any claim."
-version: 1
 scope: scoped
 globs:
   - "**/app.py"

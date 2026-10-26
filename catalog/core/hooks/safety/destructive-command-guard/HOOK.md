@@ -3,7 +3,6 @@ id: destructive-command-guard
 name: Destructive command guard
 description: Deny catastrophic shell commands (rm -r of /, home or the repo, force-pushing a protected branch, a download piped into a shell, mkfs, dd onto a disk); ask before a command that would lose uncommitted work.
 summary: Never run destructive commands (`rm -rf`, force-push, `git reset --hard`, `curl … | sh`) on your own; ask first.
-version: 1
 tier: default
 priority: 18
 events: [pre_tool_use]

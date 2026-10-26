@@ -2,7 +2,6 @@
 id: domino-app-proxy-limits
 name: Proxy limits
 description: "Finish each request well inside the proxy's timeout and body-size limits; start a Job for long work and pass large inputs by reference."
-version: 1
 scope: scoped
 globs:
   - "**/app.py"

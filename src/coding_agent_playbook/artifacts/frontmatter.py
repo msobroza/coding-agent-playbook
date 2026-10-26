@@ -13,12 +13,17 @@ output while keeping ``template_body`` as the source.
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 from typing import TYPE_CHECKING, Any, Final
 
 import yaml
 
+from coding_agent_playbook.artifacts.retired_keys import retired_key_problem
+
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from _typeshed import DataclassInstance
 
 _FENCE = "---"
 #: ``yaml.CSafeLoader`` exists only when PyYAML is built with libyaml.
@@ -76,3 +81,44 @@ def _without_empty(data: dict[str, Any]) -> dict[str, Any]:
 def _read_markdown(path: Path) -> tuple[dict[str, Any], str, bool]:
     data, body = split_frontmatter(path.read_text(encoding="utf-8"))
     return data, body, path.name.endswith(".md.j2")
+
+
+def frontmatter_keys_problem(data: dict[Any, Any], model: type[DataclassInstance]) -> str | None:
+    """Why ``data``'s keys cannot build ``model``, or ``None`` when they can.
+
+    Checked before construction: the dataclass would raise a ``TypeError`` that
+    names neither the file nor the keys the artifact may set. A retired key
+    (``version``, ``eval_samples``) is reported with what replaced it.
+
+    Example::
+
+        >>> frontmatter_keys_problem({"impact": "HIGH"}, RuleFrontmatter)  # doctest: +SKIP
+        "unknown frontmatter key 'impact'; allowed keys: id, name, ..."
+    """
+    fields = dataclasses.fields(model)
+    allowed = "allowed keys: " + ", ".join(f.name for f in fields)
+    known = {f.name for f in fields}
+    unknown = [str(key) for key in data if key not in known]
+    retired = [problem for key in unknown if (problem := retired_key_problem(key)) is not None]
+    if retired:
+        return retired[0]
+    if unknown:
+        return _keys_message("unknown frontmatter", unknown, allowed)
+    required = [f.name for f in fields if _is_required(f)]
+    missing = [name for name in required if name not in data]
+    if missing:
+        return _keys_message("missing required frontmatter", missing, allowed)
+    return None
+
+
+def _keys_message(kind: str, names: list[str], allowed: str) -> str:
+    noun = "key" if len(names) == 1 else "keys"
+    return f"{kind} {noun} {_quoted(names)}; {allowed}"
+
+
+def _is_required(field_: dataclasses.Field[Any]) -> bool:
+    return field_.default is dataclasses.MISSING and field_.default_factory is dataclasses.MISSING
+
+
+def _quoted(names: list[str]) -> str:
+    return ", ".join(repr(name) for name in names)

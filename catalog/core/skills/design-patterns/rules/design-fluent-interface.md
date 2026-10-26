@@ -2,7 +2,6 @@
 id: design-fluent-interface
 name: Fluent interface
 description: "When a sequence of calls on one object reads as noise or keeps parallel lists in step, give it domain verbs that each return a new frozen instance, so the chain reads as the sequence and two chains from a shared base cannot interfere."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

@@ -20,6 +20,7 @@ from coding_agent_playbook.commands import validate as _validate
 from coding_agent_playbook.config.tables.links import LinksConfig
 from coding_agent_playbook.validation import _links as _validate_links
 from tests._catalog import PLUGINS_ROOT, bundled_plugin_dirs
+from tests.engine_version import ENGINE_VERSION
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -36,7 +37,7 @@ def _ns(repo: Path) -> argparse.Namespace:
     return argparse.Namespace(repo_root=str(repo))
 
 
-_ALLOWLIST_CONFIG = """\
+_ALLOWLIST_CONFIG = f"""\
 schema_version = 1
 adapters_enabled = ["continue", "claude_code", "opencode"]
 overlays_enabled = []
@@ -46,7 +47,7 @@ name = "synthetic"
 kind = "python-library"
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 
 [storage]
 artifact_source = "filesystem"

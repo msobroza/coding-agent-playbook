@@ -2,7 +2,6 @@
 id: design-low-coupling
 name: Low coupling
 description: "Minimize what one unit must know about another: pick the loosest form of coupling that stays readable, and replace shared globals with values passed in."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

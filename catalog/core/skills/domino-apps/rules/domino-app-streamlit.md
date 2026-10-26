@@ -2,7 +2,6 @@
 id: domino-app-streamlit
 name: Streamlit on Domino
 description: "Start a Streamlit App through streamlit run with an explicit 0.0.0.0:8888, headless and without telemetry, keeping CORS and XSRF protection on."
-version: 1
 scope: scoped
 globs:
   - "**/app.sh"

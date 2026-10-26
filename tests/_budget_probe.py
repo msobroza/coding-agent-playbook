@@ -52,7 +52,7 @@ DOMINO_LISTING_MAX_CHARS: Final = 7500
 REFERENCE_PROBE_PYPROJECT: Final = """\
 [project]
 name = "mlsvc"
-version = "0.1.0"
+version = "9.9.9"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115", "httpx>=0.27", "pydantic>=2.9", "torch>=2.4",

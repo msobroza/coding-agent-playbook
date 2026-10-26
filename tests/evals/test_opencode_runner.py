@@ -9,6 +9,7 @@ mirroring the ``ClaudeCodeRunner`` smoke-test pattern.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import sys
@@ -18,10 +19,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.evals.endpoints import Endpoint
 from coding_agent_playbook.evals.prompting import PromptResolutionError, render_prompt
 from coding_agent_playbook.evals.run.fake_runner import write_files
 from coding_agent_playbook.evals.run.harness_runner import AgentRun, materialize
-from coding_agent_playbook.evals.run.opencode_runner import OpenCodeRunner
+from coding_agent_playbook.evals.run.opencode_route import OpenCodeRoute, opencode_route
+from coding_agent_playbook.evals.run.opencode_runner import OpenCodeRun, OpenCodeRunner
 from coding_agent_playbook.evals.sample import EvalSample, SampleInvocation
 
 if TYPE_CHECKING:
@@ -252,3 +255,109 @@ def test_real_opencode_smoke(tmp_path: Path) -> None:  # pragma: no cover - opt-
     runner = OpenCodeRunner()
     run = runner._invoke_agent("create a file named DONE.txt", baseline.repo_root)
     assert isinstance(run.transcript, str)
+
+
+# --------------------------------------------------------------------------- #
+# Eval target model (spec #281 ticket 05)
+# --------------------------------------------------------------------------- #
+
+
+def test_target_model_reaches_the_cli_unchanged(tmp_path: Path) -> None:
+    """A target's model is passed as ``--model <model>``, exactly as written."""
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    echo_argv = "import sys; sys.stdout.write(repr(sys.argv[1:]))"
+    runner = OpenCodeRunner(command=[sys.executable, "-c", echo_argv, "{prompt}"], model="org/m:v1")
+
+    run = runner._invoke_agent("PROMPT", scratch)
+
+    assert run.transcript == repr(["PROMPT", "--model", "org/m:v1"])
+    assert runner.model == "org/m:v1"
+
+
+def test_default_command_with_a_model_adds_the_model_flag() -> None:
+    runner = OpenCodeRunner(model="claude-opus-5-5")
+    assert runner._build_command("p") == [
+        "opencode",
+        "run",
+        "--format",
+        "json",
+        "p",
+        "--model",
+        "claude-opus-5-5",
+    ]
+
+
+def test_no_model_leaves_the_cli_on_its_default_model() -> None:
+    assert "--model" not in OpenCodeRunner()._build_command("p")
+
+
+# --------------------------------------------------------------------------- #
+# JSON output and endpoints (spec #281 ticket 06b)
+# --------------------------------------------------------------------------- #
+
+_TOKEN = "fake-endpoint-token-0000"
+
+
+def _json_events_program(stderr: str = "") -> str:
+    """A fake ``opencode run --format json``: two events on stdout, ``stderr`` on stderr."""
+    events = [
+        {"type": "text", "part": {"text": "edited mod.py"}},
+        {"type": "step_finish", "part": {"cost": 0, "tokens": {"input": 12, "output": 3}}},
+    ]
+    lines = "\n".join(json.dumps(event) for event in events)
+    return f"import sys; sys.stdout.write({lines!r}); sys.stderr.write({stderr!r})"
+
+
+def test_default_command_prints_json_events() -> None:
+    assert OpenCodeRunner()._build_command("p")[:4] == ["opencode", "run", "--format", "json"]
+
+
+def test_json_events_give_the_transcript_and_the_step_totals(tmp_path: Path) -> None:
+    runner = OpenCodeRunner(command=[sys.executable, "-c", _json_events_program("a warning\n")])
+
+    run = runner._invoke_agent("p", tmp_path)
+
+    assert isinstance(run, OpenCodeRun)
+    assert run.transcript == "edited mod.pya warning\n"
+    assert run.output is not None
+    assert (run.output.input_tokens, run.output.output_tokens, run.output.steps) == (12, 3, 1)
+
+
+def test_plain_stdout_is_the_transcript_and_reports_no_totals(tmp_path: Path) -> None:
+    runner = OpenCodeRunner(command=[sys.executable, "-c", "print('plain')"])
+    run = runner._invoke_agent("p", tmp_path)
+    assert isinstance(run, OpenCodeRun)
+    assert (run.transcript, run.output) == ("plain\n", None)
+
+
+def _route() -> OpenCodeRoute:
+    endpoint = Endpoint("internal", "openai-chat", "https://llm.internal.example/v1", "T")
+    return opencode_route(endpoint, "coder-32b", env={"T": _TOKEN})
+
+
+def test_routed_run_sends_the_provider_qualified_model() -> None:
+    runner = OpenCodeRunner(model="coder-32b", route=_route())
+    assert runner._build_command("p")[-2:] == ["--model", "playbook-target/coder-32b"]
+    assert runner.model == "coder-32b"
+
+
+def test_routed_run_spawns_with_the_isolated_env_and_redacts_the_token(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "fake-personal-key")
+    program = (
+        "import json, os, sys; "
+        "cfg = json.loads(os.environ['OPENCODE_CONFIG_CONTENT']); "
+        "sys.stdout.write(cfg['enabled_providers'][0] + ' ' + str('OPENAI_API_KEY' in os.environ)); "
+        "sys.stderr.write(' 401 for ' + os.environ['PLAYBOOK_ENDPOINT_TOKEN'])"
+    )
+    runner = OpenCodeRunner(command=[sys.executable, "-c", program], route=_route())
+
+    run = runner._invoke_agent("p", tmp_path)
+
+    assert run.transcript == "playbook-target False 401 for [redacted]"
+
+
+def test_opencode_runner_accepts_an_endpoint() -> None:
+    assert OpenCodeRunner.accepts_endpoint is True

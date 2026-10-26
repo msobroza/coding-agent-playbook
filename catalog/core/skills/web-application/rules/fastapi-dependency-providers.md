@@ -2,7 +2,6 @@
 id: fastapi-dependency-providers
 name: FastAPI dependency providers
 description: "Build every per-request collaborator in a Depends provider declared once as an Annotated alias, and resolve the current user, tenant and paging in one provider each."
-version: 1
 scope: scoped
 globs:
   - "**/main.py"

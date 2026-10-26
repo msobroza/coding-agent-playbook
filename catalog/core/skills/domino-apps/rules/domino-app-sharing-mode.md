@@ -2,7 +2,6 @@
 id: domino-app-sharing-mode
 name: Sharing mode
 description: "Choose the App's sharing mode deliberately and document its audience, data, limits and support contact in the README."
-version: 1
 scope: scoped
 globs:
   - "**/README.md"

@@ -3,7 +3,6 @@ id: eval-sample-authoring-lint
 name: Eval sample authoring lint
 description: Parse and trial-compile an edited eval sample and show how the engine reads it; never runs it.
 summary: After editing an eval sample, run `playbook validate` and `playbook eval --show <id>`; never `playbook eval --run`.
-version: 1
 tier: default
 priority: 50
 events: [post_tool_use]

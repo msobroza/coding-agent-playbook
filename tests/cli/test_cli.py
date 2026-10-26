@@ -232,15 +232,7 @@ def test_eval_main_uses_repo_root_without_chdir(monkeypatch, tmp_path, make_synt
     prompts_dir = tmp_path / "playbook" / "prompts"
     prompts_dir.mkdir(parents=True, exist_ok=True)
     (prompts_dir / "demo.md").write_text(
-        "---\n"
-        "id: demo\n"
-        "name: Demo\n"
-        "description: demo\n"
-        "slash: demo\n"
-        "eval_samples:\n"
-        "  - demo-sample\n"
-        "---\n"
-        "Body.\n",
+        "---\nid: demo\nname: Demo\ndescription: demo\nslash: demo\n---\nBody.\n",
         encoding="utf-8",
     )
     sample_dir = tmp_path / "playbook" / "eval_samples" / "demo-sample"

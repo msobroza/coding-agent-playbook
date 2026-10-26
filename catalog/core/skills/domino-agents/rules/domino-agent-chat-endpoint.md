@@ -2,7 +2,6 @@
 id: domino-agent-chat-endpoint
 name: Domino agent chat endpoint
 description: "Serve chat from one thin POST route with a bounded message and map the agent's own failures to 502 and 504 with fixed bodies."
-version: 1
 scope: scoped
 globs:
   - "**/app.sh"

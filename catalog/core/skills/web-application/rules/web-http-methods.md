@@ -2,7 +2,6 @@
 id: web-http-methods
 name: HTTP methods and status codes
 description: "Use each HTTP method for its meaning and answer with its success code: safe GET, POST 201 with Location, idempotent PUT, partial PATCH, DELETE 204."
-version: 1
 scope: scoped
 globs:
   - "**/routers/**/*.py"

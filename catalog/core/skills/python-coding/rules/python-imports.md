@@ -2,7 +2,6 @@
 id: python-imports
 name: Imports
 description: "Group imports as standard library, third-party, first-party; import names explicitly, never with import *; relative imports only inside one package."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

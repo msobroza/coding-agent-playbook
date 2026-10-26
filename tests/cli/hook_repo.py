@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.security.trust import TrustStore
 from coding_agent_playbook.sync._machine_local import SyncHookDeps
+from tests.engine_version import ENGINE_VERSION
 from tests.fakes import FakePinWriter
 from tests.hook_samples import write_hook
 
@@ -25,7 +26,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-CONFIG = """\
+CONFIG = f"""\
 schema_version = 1
 adapters_enabled = ["continue", "claude_code", "opencode"]
 overlays_enabled = []
@@ -35,7 +36,7 @@ name = "synthetic"
 kind = "python-library"
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 
 [storage]
 artifact_source = "filesystem"

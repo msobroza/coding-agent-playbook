@@ -2,7 +2,6 @@
 id: design-composition-over-inheritance
 name: Composition over inheritance
 description: "Reuse behavior by holding a collaborator and delegating to it; inherit only where every subclass substitutes, and configure instances when subclasses differ only in values."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

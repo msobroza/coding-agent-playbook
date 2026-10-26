@@ -2,7 +2,6 @@
 id: domino-agent-sdk-names
 name: Domino agent SDK names
 description: "Import the 6.2 agent SDK names in one lazy adapter module, declare dominodatalab[agents] as an optional extra, and depend on the seam elsewhere."
-version: 1
 scope: scoped
 globs:
   - "**/*agent*.py"

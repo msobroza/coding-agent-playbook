@@ -2,7 +2,6 @@
 id: fastapi-error-boundaries
 name: FastAPI error boundaries
 description: "FastAPI errors: framework-free domain exceptions, one mapping to HTTP status codes, one error body shape."
-version: 2
 scope: scoped
 globs:
   - "**/*.py"

@@ -46,7 +46,7 @@ def request_for(
         hooks=hooks,
         hooks_config=HooksConfig(enabled=True),
         guardrails=GuardrailsConfig(),
-        engine_version="0.2.0",
+        engine_version="9.9.9",
         generated=(".claude/commands/", "AGENTS.md"),
         protected=protect,
     )

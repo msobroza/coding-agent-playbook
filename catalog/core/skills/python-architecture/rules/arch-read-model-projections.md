@@ -2,7 +2,6 @@
 id: arch-read-model-projections
 name: Read model projections
 description: "Build a read model with a pure projector run in the same transaction as the write, never store time-dependent values, and ship a command that rebuilds every row."
-version: 1
 scope: scoped
 globs:
   - "**/queries/**/*.py"

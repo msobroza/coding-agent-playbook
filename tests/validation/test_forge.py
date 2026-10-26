@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.cli import main
+from tests.engine_version import ENGINE_VERSION
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -12,18 +13,18 @@ if TYPE_CHECKING:
     import pytest
 
 
-_CONFIG = """\
+_CONFIG = f"""\
 schema_version = 1
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 
 [project]
 name = "demo"
 kind = "python-library"
 
 [forge]
-hosts = { "git.acme.com" = "svn" }
+hosts = {{ "git.acme.com" = "svn" }}
 color = "blue"
 """
 

@@ -18,6 +18,7 @@ from coding_agent_playbook.commands import sync as sync_cmd
 from coding_agent_playbook.sync import pipeline as _sync
 from coding_agent_playbook.validation.findings import ValidationError
 from tests._catalog import core_rule_skill_ids
+from tests.engine_version import ENGINE_VERSION
 from tests.fakes import FakeGitClient
 
 if TYPE_CHECKING:
@@ -35,7 +36,7 @@ _UNKNOWN_FACT_RULE = (
     "skill: python-coding\napplies_if:\n  orm_version: '>=2'\n---\nBody\n"
 )
 
-_CONFIG_WITH_MISSING_OVERLAY = """\
+_CONFIG_WITH_MISSING_OVERLAY = f"""\
 schema_version = 1
 adapters_enabled = ["claude_code"]
 overlays_enabled = ["no_such_overlay_pkg_p8"]
@@ -45,7 +46,7 @@ name = "synthetic"
 kind = "python-library"
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 """
 
 

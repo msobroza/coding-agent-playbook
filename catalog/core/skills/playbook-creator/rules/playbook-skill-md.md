@@ -2,7 +2,6 @@
 id: playbook-skill-md
 name: SKILL.md
 description: "Write a SKILL.md as a third-person capability sentence, a playbook block, and a short body the engine completes."
-version: 1
 scope: scoped
 globs:
   - "catalog/**/skills/*/SKILL.md"

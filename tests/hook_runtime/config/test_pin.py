@@ -27,6 +27,7 @@ from coding_agent_playbook.hook_runtime.config.pin import (
     write_machine_pins,
 )
 from coding_agent_playbook.hook_runtime.state.store import STATE_DIR_NAME
+from tests.engine_version import ENGINE_VERSION
 
 
 def _git_dir(tmp_path: Path) -> Path:
@@ -141,14 +142,14 @@ def test_machine_pins_record_size_mtime_ino_signature(tmp_path: Path) -> None:
         git_dir=str(git_dir),
         tools={"ruff": [str(ruff), "--quiet"], "cz": ["/no/such/cz"]},
         resource_roots={"pkg:coding_agent_playbook/resources": "/site/resources"},
-        engine_version="0.1.0a0",
+        engine_version=ENGINE_VERSION,
     )
 
     assert path == git_dir / STATE_DIR_NAME / MACHINE_PINS
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
     pins = read_machine_pins(git_dir=str(git_dir))
     assert pins is not None
-    assert pins.engine_version == "0.1.0a0"
+    assert pins.engine_version == ENGINE_VERSION
     assert pins.resource_roots == {"pkg:coding_agent_playbook/resources": "/site/resources"}
     pinned = pins.tool("ruff")
     assert pinned is not None

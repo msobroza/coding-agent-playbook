@@ -2,7 +2,6 @@
 id: pydantic-field-constraints
 name: Pydantic field constraints
 description: "Declare limits in the model with Field, Annotated aliases and Literal; use field validators only to normalize or for checks Field cannot express."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

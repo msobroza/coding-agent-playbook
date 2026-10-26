@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 _ALLOWED = (
-    "allowed keys: id, name, description, scope, version, globs, applies_if, "
+    "allowed keys: id, name, description, scope, globs, applies_if, "
     "priority, tags, lint_codes, skill, section"
 )
 

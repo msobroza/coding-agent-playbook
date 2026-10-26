@@ -2,7 +2,6 @@
 id: playbook-validate-and-sync
 name: Validate and sync
 description: "Run playbook validate after every source edit, fix each FAIL line, and change generated files only through sync."
-version: 1
 scope: scoped
 globs:
   - "catalog/**"

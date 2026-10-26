@@ -2,7 +2,6 @@
 id: playbook-rule-body
 name: Rule body
 description: "Write one topic per rule: an imperative title, then Description, Bad Example, Good Example and Notes, within 100 lines."
-version: 1
 scope: scoped
 globs:
   - "catalog/**/rules/**/*.md"

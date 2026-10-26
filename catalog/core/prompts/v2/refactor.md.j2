@@ -3,15 +3,11 @@ id: refactor
 name: Refactor
 description: Refactor the provided code — improve clarity without changing behavior.
 slash: refactor
-version: 1
 includes_rules:
   - python-typing
   - python-error-handling
   - python-dependency-injection
   - python-pure-core
-eval_samples:
-  - refactor-extract-helper
-  - refactor-rename-for-clarity
 ---
 
 # Refactor

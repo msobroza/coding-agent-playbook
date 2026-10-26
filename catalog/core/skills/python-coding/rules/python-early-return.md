@@ -2,7 +2,6 @@
 id: python-early-return
 name: Shallow nesting
 description: "Keep nesting to about two levels and one level of abstraction per function, with guard clauses, early returns and extracted helpers."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

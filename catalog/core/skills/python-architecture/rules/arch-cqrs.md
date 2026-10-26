@@ -2,7 +2,6 @@
 id: arch-cqrs
 name: CQRS
 description: "Split commands, which change state and return little, from queries, which select only the columns one screen shows, straight from SQL; add a read model only when that is still too slow."
-version: 1
 scope: scoped
 globs:
   - "**/queries/**/*.py"

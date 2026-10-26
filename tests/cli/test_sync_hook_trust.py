@@ -73,7 +73,7 @@ def test_stop_stage_tools_join_the_pin_list(repo: Path, tmp_path: Path) -> None:
     which = {"ruff": "/v/bin/ruff", "python3": "/usr/bin/python3"}.get
     deps = hook_deps(tmp_path / "state", pins=pins, which=which)
 
-    write_pins(repo, deps, engine_version="0.2.0", stage_tools=["project_python", "ruff"])
+    write_pins(repo, deps, engine_version="9.9.9", stage_tools=["project_python", "ruff"])
 
     assert pins.tools == {"ruff": ["/v/bin/ruff"], "project_python": ["/usr/bin/python3"]}
 
@@ -89,7 +89,7 @@ def test_machine_json_pins_cz_and_project_python_when_present(repo: Path, tmp_pa
     which = {"cz": "/usr/local/bin/cz", "python3": "/usr/bin/python3"}.get
     deps = hook_deps(tmp_path / "state", pins=pins, which=which)
 
-    write_pins(repo, deps, engine_version="0.2.0", stage_tools=["project_python"])
+    write_pins(repo, deps, engine_version="9.9.9", stage_tools=["project_python"])
 
     assert pins.tools == {"cz": [str(venv_cz)], "project_python": ["/usr/bin/python3"]}
 

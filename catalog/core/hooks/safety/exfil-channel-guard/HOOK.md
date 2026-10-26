@@ -3,7 +3,6 @@ id: exfil-channel-guard
 name: Exfiltration channel guard
 description: Ask before repository data leaves the machine through ordinary tools (a new git remote, a push to an unconfigured target, a gist or snippet, curl or wget uploads, scp, rsync or sftp to a remote host, mail through git send-email, git imap-send, sendmail or msmtp); deny when the file sent is a credential file, including a body, attachment or asset file sent through gh, glab or playbook forge.
 summary: Do not send repository data off the machine (new remotes, gists, uploads, `scp`, mail) unless the user asked for it.
-version: 1
 tier: default
 priority: 22
 events: [pre_tool_use, session_start]

@@ -2,7 +2,6 @@
 id: domino-agent-fake-domino-tests
 name: Agent tests on Domino fakes
 description: "Put Domino behind small seams and test them with named fakes of the SDK's shapes: a paging trace store, a recording tracer, a mock token endpoint and a fake clock."
-version: 1
 scope: scoped
 section: testing
 priority: 64

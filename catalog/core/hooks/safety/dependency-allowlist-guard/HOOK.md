@@ -3,7 +3,6 @@ id: dependency-allowlist-guard
 name: Dependency allowlist guard
 description: Deny the wrong package manager and hand edits of uv.lock or poetry.lock; ask before a new direct dependency (once per package per session) or a second package index.
 summary: Ask before adding a dependency; install through the package manager and never hand-edit a lock file.
-version: 1
 tier: default
 priority: 20
 events: [pre_tool_use]

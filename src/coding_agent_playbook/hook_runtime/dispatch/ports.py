@@ -148,6 +148,10 @@ class LazyGit:
         """See ``GitPort.commit_log``."""
         return self._port().commit_log(rev_range, limit=limit)
 
+    def range_paths(self, base: str, head: str) -> tuple[str, ...]:
+        """See ``GitPort.range_paths``."""
+        return self._port().range_paths(base, head)
+
 
 def open_trust_store(repo: RepoInfo, deps: RuntimeDeps) -> TrustPort | None:
     """``deps.trust``, else the user-local store of ``repo``; ``None`` when it cannot be used.

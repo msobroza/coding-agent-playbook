@@ -23,6 +23,7 @@ from coding_agent_playbook.hook_runtime.diagnostics.canary import DEFAULT_CANARI
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.event import Harness
 from coding_agent_playbook.lockfile.canonical_json import element_sha256
+from tests.engine_version import ENGINE_VERSION
 from tests.hook_runtime.fakes import FakeProc
 from tests.hook_runtime.handlers.pack_repo import PackRepo, rows_of, with_scope
 
@@ -52,7 +53,7 @@ _SETTINGS: dict[str, Any] = {
     "permissions": {"allow": ["Bash(ls:*)"]},
     "hooks": {"PreToolUse": [_MANAGED, _USER_HOOK]},
 }
-_CONFIG = """\
+_CONFIG = f"""\
 schema_version = 1
 adapters_enabled = ["claude_code", "opencode"]
 overlays_enabled = ["acme_rules"]
@@ -62,7 +63,7 @@ name = "demo"
 description = "A demo"
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 
 [links]
 allowed_domains = ["docs.python.org"]

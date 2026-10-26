@@ -18,6 +18,7 @@ import pytest
 
 from coding_agent_playbook.commands import sync as _sync
 from tests.core_skill_pins.python_tooling import UNGATED_MEMBERS
+from tests.engine_version import ENGINE_VERSION
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -25,7 +26,7 @@ if TYPE_CHECKING:
 
 pytestmark = pytest.mark.catalog
 
-_CONFIG: Final = """\
+_CONFIG: Final = f"""\
 schema_version = 1
 adapters_enabled = ["claude_code"]
 overlays_enabled = []
@@ -35,7 +36,7 @@ name = "synthetic"
 kind = "python-library"
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 
 [storage]
 artifact_source = "filesystem"

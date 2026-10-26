@@ -2,7 +2,6 @@
 id: domino-job-results
 name: Job results
 description: "Choose what a run shows with .dominoresults, keep .dominoignore for files that must never persist, and give result files the same names every run."
-version: 1
 scope: scoped
 globs:
   - ".dominoresults"

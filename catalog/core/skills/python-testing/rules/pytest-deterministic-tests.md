@@ -2,7 +2,6 @@
 id: pytest-deterministic-tests
 name: Deterministic tests
 description: "Give every test fresh state and fixed inputs: no shared module-level instance, no unseeded randomness, no wall-clock now() and no network, so each test passes in any order and on any machine."
-version: 1
 scope: scoped
 globs:
   - "tests/**/*.py"

@@ -2,7 +2,6 @@
 id: python-dependency-injection
 name: Dependency injection
 description: "Pass I/O collaborators in as parameters, typed by a role-named Callable alias or a small Protocol only at a real seam."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

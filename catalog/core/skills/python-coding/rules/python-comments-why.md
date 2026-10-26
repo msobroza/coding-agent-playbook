@@ -2,7 +2,6 @@
 id: python-comments-why
 name: Comments that say why
 description: "A comment explains what the code cannot say itself, such as a constraint, a workaround or a trade-off, and never restates the code."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

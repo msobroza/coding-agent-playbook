@@ -3,7 +3,6 @@ id: command-convention-guard
 name: Command convention guard
 description: Apply this repository's Bash convention rows (a deny row names the corrected command, a warn row adds a reminder once per session); the engine ships no rows.
 summary: Run commands the way this repository documents them; when one is refused, use the corrected form it names.
-version: 1
 tier: opt-in
 priority: 60
 events: [pre_tool_use]

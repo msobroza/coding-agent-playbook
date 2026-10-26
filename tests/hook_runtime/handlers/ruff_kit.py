@@ -17,6 +17,7 @@ from coding_agent_playbook.hooks.guard_config.ruff_probe import (
     ruff_candidate_codes,
     ruff_drop_codes,
 )
+from tests.engine_version import ENGINE_VERSION
 from tests.hook_runtime.fakes import FakeGit, FakeRuff
 
 if TYPE_CHECKING:
@@ -37,7 +38,7 @@ def pin_ruff(
     """Pin ``program`` as this worktree's ruff, as a write-mode sync would."""
     git_dir = str(repo.root / ".git")
     write_machine_pins(
-        tools={"ruff": [str(program)]}, engine_version="0.1.0a0", drops=drops, git_dir=git_dir
+        tools={"ruff": [str(program)]}, engine_version=ENGINE_VERSION, drops=drops, git_dir=git_dir
     )
 
 

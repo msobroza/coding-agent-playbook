@@ -58,7 +58,6 @@ def _make_always_rule() -> Rule:
             priority=10,
             tags=["python"],
             applies_if={},
-            version=1,
         ),
         body=body,
         template_body=body,
@@ -82,7 +81,6 @@ def _make_scoped_rule() -> Rule:
             priority=40,
             tags=[],
             applies_if={"orm": "sqlalchemy"},
-            version=2,
         ),
         body=body,
         template_body=body,
@@ -110,11 +108,9 @@ def _make_prompt() -> Prompt:
             name="Review",
             description="Review code",
             slash="review",
-            version=3,
             applies_if={},
             input_variables=[],
             includes_rules=["python-house-style"],
-            eval_samples=[],
         ),
         body=_PROMPT_BODY,
         template_body=_PROMPT_BODY,
@@ -237,7 +233,6 @@ def test_lossless_prompt_round_trips_including_includes_rules(tmp_path):
     assert _semantic(prompt) == _semantic(_make_prompt())
     # The non-native field is rebuilt from the sidecar, not from the body.
     assert prompt.frontmatter.includes_rules == ["python-house-style"]
-    assert prompt.frontmatter.version == 3
     assert prompt.frontmatter.slash == "review"
 
 

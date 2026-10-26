@@ -2,7 +2,6 @@
 id: domino-mlflow-tracking
 name: Domino MLflow tracking
 description: "Name MLflow experiments after the owner and project, tag each run with DOMINO_RUN_ID and close it in a with block; never set the tracking URI."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

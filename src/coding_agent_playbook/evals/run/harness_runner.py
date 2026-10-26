@@ -65,11 +65,13 @@ class AgentRun:
     """The raw outcome of one agent invocation inside the scratch repo.
 
     ``returncode`` is ``0`` when the agent loop completed; ``transcript`` is the
-    captured conversation/log (the judge's ``artifact`` in R2).
+    captured conversation/log (the judge's ``artifact`` in R2). ``reported_model``
+    is the model id the harness says it ran, when its output reports one.
     """
 
     transcript: str
     returncode: int
+    reported_model: str | None = None
 
 
 @dataclass
@@ -82,6 +84,7 @@ class _Trial:
 
     result: TrialResult
     transcript: str
+    reported_model: str | None = None
 
 
 @dataclass
@@ -102,6 +105,14 @@ class SampleResult:
     :class:`~coding_agent_playbook.grading.types.TrialResult` (one for ``N=1``);
     ``aggregate`` is the graded ``[aggregate]`` :class:`CheckResult` (``None`` when
     the sample has no ``[aggregate]`` block).
+
+    ``target`` is the Eval target's name (``playbook eval`` sets it; ``None`` when
+    a runner is driven directly), ``requested_model`` the model the runner sent
+    to its harness (``None``: the harness default) and ``reported_model`` the
+    model id the harness reported for the first trial, when it reports one.
+    ``endpoint`` and ``endpoint_fingerprint`` name the target's endpoint and a
+    digest of its URL (never the URL); ``None`` when the run used the harness's
+    personal settings.
     """
 
     sample_id: str
@@ -113,6 +124,11 @@ class SampleResult:
     transcript: str
     trials: list[TrialResult] = field(default_factory=list)
     aggregate: CheckResult | None = None
+    target: str | None = None
+    requested_model: str | None = None
+    reported_model: str | None = None
+    endpoint: str | None = None
+    endpoint_fingerprint: str | None = None
 
 
 @dataclass
@@ -358,6 +374,14 @@ class HarnessRunner(ABC):
     """
 
     name: str
+    #: Whether the constructor takes ``model=`` (an Eval target's model). The
+    #: CLI runners do; a runner that does not is refused for a target with a model.
+    accepts_model: bool = False
+    #: Whether the constructor takes ``route=`` (an Eval target's endpoint wiring).
+    #: A runner that does not is refused for a target with an endpoint.
+    accepts_endpoint: bool = False
+    #: The model sent to the harness; ``None`` leaves it on its own default.
+    model: str | None = None
     #: When True, ``run_sample`` resolves the prompt strictly (raises on an
     #: unresolvable ``prompt_id``). Real runners set this; the FakeRunner does not.
     requires_resolved_prompt: bool = False
@@ -418,7 +442,7 @@ class HarnessRunner(ABC):
         n = compiled.trials_needed
 
         trials: list[TrialResult] = []
-        first_transcript = ""
+        first: _Trial | None = None
         for i in range(n):
             # Each trial gets its own scratch subdir so a fresh setup/ is
             # materialized per trial (the N=1 case reuses ``scratch_dir`` exactly,
@@ -433,10 +457,11 @@ class HarnessRunner(ABC):
                 fail_fast=fail_fast,
             )
             trials.append(trial.result)
-            if i == 0:
-                first_transcript = trial.transcript
+            if first is None:
+                first = trial
 
-        return self._assemble(sample, compiled.aggregate, trials, first_transcript, started)
+        assert first is not None  # trials_needed is always >= 1
+        return self._assemble(sample, compiled.aggregate, trials, first, started)
 
     def _run_trial(
         self,
@@ -472,6 +497,7 @@ class HarnessRunner(ABC):
         return _Trial(
             result=TrialResult(report=report, verdict=report.passed),
             transcript=run.transcript,
+            reported_model=run.reported_model,
         )
 
     def _assemble(
@@ -479,7 +505,7 @@ class HarnessRunner(ABC):
         sample: EvalSample,
         aggregate: Check | None,
         trials: list[TrialResult],
-        transcript: str,
+        first: _Trial,
         started: float,
     ) -> SampleResult:
         """Fold the trials (+ optional aggregate) into one :class:`SampleResult`.
@@ -504,10 +530,22 @@ class HarnessRunner(ABC):
             passed=passed,
             aggregate_score=aggregate_score,
             duration_seconds=monotonic() - started,
-            transcript=transcript,
+            transcript=first.transcript,
             trials=trials,
             aggregate=agg_result,
+            requested_model=self.model,
+            reported_model=first.reported_model,
         )
+
+    def probe(self, prompt: str, scratch_dir: Path) -> AgentRun:
+        """One agent turn on ``prompt`` in ``scratch_dir``, ungraded (``eval --targets --check``).
+
+        Example::
+
+            >>> FakeRunner().probe("Reply OK.", Path("/tmp/x")).returncode  # doctest: +SKIP
+            0
+        """
+        return self._invoke_agent(prompt, scratch_dir)
 
     @abstractmethod
     def _invoke_agent(self, prompt: str, scratch_dir: Path) -> AgentRun:

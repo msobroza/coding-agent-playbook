@@ -2,7 +2,6 @@
 id: design-adapter
 name: Adapter
 description: "Wrap a third-party API whose shape does not fit your code in a function or a composing class that implements your interface; never subclass the vendor class."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

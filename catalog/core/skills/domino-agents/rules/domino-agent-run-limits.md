@@ -2,7 +2,6 @@
 id: domino-agent-run-limits
 name: Domino agent run limits
 description: "Bound every agent run with a wall-clock deadline below the App proxy's read timeout and a cap on model requests, both from the agent config."
-version: 1
 scope: scoped
 globs:
   - "**/app.sh"

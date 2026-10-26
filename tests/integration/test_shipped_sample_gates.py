@@ -343,7 +343,6 @@ _EDIT_TOML = (
 id = "synthetic-edit"
 prompt_id = "synthetic-prompt"
 description = "Add a loud greeting and a test for it."
-version = 1
 
 [setup]
 files = ["app/greet.py"]
@@ -364,7 +363,6 @@ _REVIEW_TOML = (
 id = "synthetic-review"
 prompt_id = "synthetic-prompt"
 description = "Name the injection class without editing anything."
-version = 1
 
 [setup]
 files = ["app/db.py"]
@@ -380,7 +378,7 @@ names_class = { check = "answer_matches", pattern = '(?i)sql\s*injection|cwe[-\s
     + _RUBRIC_AND_VERDICT
 )
 
-_PYPROJECT = '[project]\nname = "synthetic-fixture"\nversion = "0.1.0"\ndependencies = ["pytest"]\n'
+_PYPROJECT = '[project]\nname = "synthetic-fixture"\nversion = "9.9.9"\ndependencies = ["pytest"]\n'
 _GREET = 'def greet(name: str) -> str:\n    return f"hi {name}"\n'
 _LOUD = _GREET + "\n\ndef greet_loudly(name: str) -> str:\n    return greet(name).upper()\n"
 _DB = (
@@ -560,7 +558,6 @@ def test_loader_and_validator_ignore_solution(tmp_path: Path) -> None:
             name="Synthetic",
             description="Synthetic host prompt.",
             slash="synthetic",
-            eval_samples=["synthetic-edit", "synthetic-review"],
         ),
         body="",
         template_body="",

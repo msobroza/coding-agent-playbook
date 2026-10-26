@@ -29,6 +29,7 @@ import pytest
 from coding_agent_playbook.config.model import Config, OutputConfig, ProjectMeta, StorageConfig
 from coding_agent_playbook.lockfile.model import LockEntry, Lockfile
 from coding_agent_playbook.toml_writer import dump_toml as _dump_toml
+from tests.engine_version import ENGINE_VERSION
 from tests.toml_equality import assert_toml_identical, toml_mismatch
 
 if TYPE_CHECKING:
@@ -556,7 +557,7 @@ def test_dump_toml_quotes_non_bare_keys() -> None:
 
 # Captured from the pre-P6 writer: the engine's own shapes, the lockfile's
 # hook-era fields (``kind``/``adapter``/``scope``/``executable``) included, must not drift.
-_ENGINE_SHAPES_GOLDEN_CONFIG = """\
+_ENGINE_SHAPES_GOLDEN_CONFIG = f"""\
 schema_version = 1
 overlays_enabled = ["acme_overlay"]
 adapters_enabled = ["continue", "claude_code"]
@@ -567,7 +568,7 @@ kind = "python-application"
 description = "An \\"app\\""
 
 [engine]
-version = "0.1.0a0"
+version = "{ENGINE_VERSION}"
 
 [storage]
 artifact_source = "filesystem"
@@ -589,9 +590,9 @@ banking_mode = false
 docstring_style = "numpy"
 """
 
-_ENGINE_SHAPES_GOLDEN_LOCKFILE = """\
+_ENGINE_SHAPES_GOLDEN_LOCKFILE = f"""\
 schema_version = 2
-engine_version = "0.1.0a0"
+engine_version = "{ENGINE_VERSION}"
 rendered_at = "2026-05-28T12:00:00Z"
 
 [[entries]]
@@ -614,7 +615,7 @@ def test_dump_toml_without_extra_tables_is_byte_identical() -> None:
     config = Config(
         schema_version=1,
         project=ProjectMeta(name="my-app", kind="python-application", description='An "app"'),
-        engine_version="0.1.0a0",
+        engine_version=ENGINE_VERSION,
         overlays_enabled=["acme_overlay"],
         adapters_enabled=["continue", "claude_code"],
         detector_cache={
@@ -627,7 +628,7 @@ def test_dump_toml_without_extra_tables_is_byte_identical() -> None:
     )
     lockfile = Lockfile(
         schema_version=2,
-        engine_version="0.1.0a0",
+        engine_version=ENGINE_VERSION,
         rendered_at="2026-05-28T12:00:00Z",
         entries=[
             LockEntry("AGENTS.md", "abc", 4, kind="composite", adapter="agents_md"),

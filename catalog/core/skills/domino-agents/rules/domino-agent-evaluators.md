@@ -2,7 +2,6 @@
 id: domino-agent-evaluators
 name: Agent evaluators
 description: "Write evaluators as pure, deterministic functions returning a flat metric mapping, with metric names shared by both evaluation Jobs."
-version: 1
 scope: scoped
 globs:
   - "**/*_eval*.py"

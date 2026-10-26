@@ -23,6 +23,7 @@ from coding_agent_playbook.evals.prompting import _infer_prompts_dir, _resolve_p
 from coding_agent_playbook.validation.preflight import unusable_overlays
 from tests._catalog import CORE_ROOT, core_rule_paths, core_skill_root, plugin_root
 from tests.core_skill_pins import ALL_PINS, PLAIN_CORE_SKILL_IDS
+from tests.engine_version import ENGINE_VERSION
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -191,7 +192,7 @@ def _config_text(overlays: list[str]) -> str:
         'adapters_enabled = ["claude_code"]\n'
         f"overlays_enabled = [{listed}]\n\n"
         '[project]\nname = "synthetic"\nkind = "python-library"\n\n'
-        '[engine]\nversion = "0.1.0a0"\n\n'
+        f'[engine]\nversion = "{ENGINE_VERSION}"\n\n'
         '[storage]\nartifact_source = "filesystem"\nstate_source = "filesystem"\n'
     )
 
