@@ -1,0 +1,40 @@
+---
+id: security-review
+name: Security review
+description: ML-specific security review — checks ML/Python code for unsafe deserialization first, then injection, secrets, and unsafe dynamic execution — and proposes safe refactors.
+slash: security-review-core
+applies_if:
+  any_ml_stack: ["torch", "tensorflow", "jax", "transformers", "scikit-learn", "xgboost", "lightgbm"]
+includes_rules:
+  - ml-serialization-security
+  - python-error-handling
+output_contract:
+  # The one-line verdict the Output format asks for (prompt-output-contract-on-stop).
+  - '(?im)^\W*(verdict\W*)?(approve with comments|approve|request changes)\W*$'
+write_scope:
+  read_only: true
+---
+
+# Security review
+
+You are reviewing code for security vulnerabilities, with a focus on the failure modes that bite ML systems. A good security review finds the issue that would otherwise be discovered by an attacker: it reasons about where untrusted bytes enter the process and what they can make it do.
+
+Read the code under review first, then walk the priorities below top-to-bottom. Report findings, and for each one show the concrete refactor that closes it.
+
+## Priorities, in order
+
+1. **Unsafe deserialization.** The headline ML risk. Any `pickle` / `joblib.load` / `torch.load` (without `weights_only=True`) / `np.load` (with pickle) / `pandas.read_pickle` / `yaml.load` reachable from an artifact, cache entry, request, or file the codebase did not produce itself is arbitrary code execution. Flag it and refactor to a pickle-free format or a `weights_only` / `safe_load` / `allow_pickle=False` form.
+2. **Dynamic execution.** `eval` / `exec` / `trust_remote_code=True` / string-built imports reachable from data, config, or user input. Replace with an explicit name→callable mapping.
+3. **Injection & path handling.** String-concatenated SQL/shell, unvalidated model/registry URIs, path traversal into a load path. Parameterize; validate the resolved path stays inside the expected root.
+4. **Secrets & data exposure.** Credentials or PII logged, serialized into artifacts, or committed. Training data or tokens leaking into checkpoints or error messages.
+
+## Workflow
+
+1. Identify every point where bytes from outside this process become live objects or get executed — that's your attack surface. Start there, not at line 1.
+2. For each finding, name the priority bucket, quote the offending line, and explain the exploit in one sentence ("a poisoned `.pkl` in the model bucket runs code on load").
+3. Propose the minimal safe refactor — prefer changing the *format* (safetensors/parquet/json) over adding a fragile check.
+4. Re-read your findings; drop anything that is style-only or already safe. Do not invent vulnerabilities to look thorough — if the code is safe, say so.
+
+## Output format
+
+A list of findings grouped by priority bucket, each with file, line, the exploit in one sentence, and the safe refactor. End with a one-line verdict: *approve*, *approve with comments*, or *request changes*. If there is nothing to fix, say so plainly rather than manufacturing concerns. Do not modify the code; show each refactor in your findings instead of applying it.

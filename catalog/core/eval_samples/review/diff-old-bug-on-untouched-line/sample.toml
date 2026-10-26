@@ -1,5 +1,6 @@
 id = "review/diff-old-bug-on-untouched-line"
 description = "Review a diff: the new restock() and its tests are correct, but an untouched line of the same file holds an old off-by-one; the review must not block the change on it."
+edition = "v0.1.0"
 
 [setup]
 files = [

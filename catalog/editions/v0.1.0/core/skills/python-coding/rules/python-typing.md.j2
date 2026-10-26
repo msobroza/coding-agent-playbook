@@ -1,0 +1,138 @@
+---
+id: python-typing
+name: Typing
+description: "Annotate every signature precisely: a concrete type or a Protocol before Any, X | None, no mutable defaults, and a code on every ignore."
+scope: scoped
+globs:
+  - "**/*.py"
+section: types
+priority: 43
+tags: [python, typing]
+lint_codes:
+  warn: [ANN001, ANN201, ANN401, B006, PGH003, UP007, UP045]
+  when:
+    - applies_if: {python_version: ">=3.12"}
+      warn: [UP040, UP046, UP047]
+---
+
+# Typing
+
+## Description
+
+Annotate every function and method signature, public and private: each parameter and the return value. Type hints make the contract machine-checkable, so the type checker catches a wrong argument at the call site before the code runs, and anyone reading the signature, a person or an agent, learns what goes in and what comes out without opening the body.
+
+## Bad Example
+
+```python
+def find_user(user_id, include_disabled=False):
+    row = database.fetch_user(user_id, include_disabled)
+    if row is None:
+        return None
+    return User(row["id"], row["email"], row["enabled"])
+```
+
+## Good Example
+
+```python
+def find_user(user_id: UserId, *, include_disabled: bool = False) -> User | None:
+    row = database.fetch_user(user_id, include_disabled=include_disabled)
+    if row is None:
+        return None
+    return User(row["id"], row["email"], row["enabled"])
+```
+
+{% if python_at_least("3.12") %}
+Write generics in PEP 695 syntax: the type parameters sit on the function, class or `type` alias that uses them, with no `TypeVar` declarations.
+
+```python
+from collections.abc import Callable, Sequence
+
+
+def first[T](items: Sequence[T]) -> T | None:
+    return items[0] if items else None
+
+
+class Cache[K, V]:
+    def __init__(self) -> None:
+        self._store: dict[K, V] = {}
+
+
+type Transform[T] = Callable[[T], T]
+```
+{% else %}
+Declare each type variable once and reuse it across related signatures.
+
+```python
+from collections.abc import Sequence
+from typing import Generic, TypeVar
+
+T = TypeVar("T")
+K = TypeVar("K")
+V = TypeVar("V")
+
+
+def first(items: Sequence[T]) -> T | None:
+    return items[0] if items else None
+
+
+class Cache(Generic[K, V]):
+    def __init__(self) -> None:
+        self._store: dict[K, V] = {}
+```
+{% endif %}
+
+{% if python_at_least("3.11") %}
+A method that returns its own instance returns `Self`, so a subclass keeps its type:
+
+```python
+from typing import Self
+
+
+class QueryBuilder:
+    def where(self, clause: str) -> Self:
+        self._clauses.append(clause)
+        return self
+```
+{% else %}
+A method that returns its own instance returns a type variable bound to the class, so a subclass keeps its type:
+
+```python
+from typing import TypeVar
+
+TBuilder = TypeVar("TBuilder", bound="QueryBuilder")
+
+
+class QueryBuilder:
+    def where(self: TBuilder, clause: str) -> TBuilder:
+        self._clauses.append(clause)
+        return self
+```
+{% endif %}
+
+Never use a mutable default (`[]`, `{}`, `set()`): it is built once, at definition time, and shared by every call. Give a read-only input an immutable default; copy explicitly when the function needs its own list. A mutable class attribute is shared by every instance: set it in `__init__`, or mark deliberate sharing `ClassVar`.
+
+```python
+def total(items: Sequence[int] = ()) -> int:  # read-only input: immutable default
+    return sum(items)
+
+
+def push(item: int, items: list[int] | None = None) -> list[int]:
+    items = [] if items is None else list(items)  # never `items or []`
+    items.append(item)
+    return items
+
+
+class SensorBuffer:
+    unit: ClassVar[str] = "celsius"  # shared on purpose
+
+    def __init__(self) -> None:
+        self.readings: list[float] = []  # one list per instance
+```
+
+## Notes
+
+- `Any` is a fallback, not a default: reach for a concrete type first, a `Protocol` second, `object` third, and `Any` only when a precise type would make the types lie.
+- Write `X | None`, never `Optional[X]`, and annotate a function called only for its side effects `-> None`.
+- A deliberate `# type: ignore` always names its code (`# type: ignore[arg-type]`) and carries a comment saying why no precise type is available; a bare one silences every error.
+- Identifier types (`NewType`) and named `Callable` aliases are `python-type-aliases`; collection types for inputs are `python-abstract-inputs`.
+- For which form each idiom takes on the repo's lowest supported Python, see python-version-idioms.md.

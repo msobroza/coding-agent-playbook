@@ -1,0 +1,108 @@
+---
+id: pytest
+name: pytest conventions
+description: "Mirror the source layout, name each test after the behavior it checks, write plain typed functions, mark async tests with the plugin the repo has, and never skip or xfail to turn a red suite green."
+scope: scoped
+globs:
+  - "tests/**/*.py"
+applies_if:
+  has_framework: ["pytest"]
+section: structure
+priority: 40
+tags: [python, testing, pytest]
+lint_codes:
+  warn: [PT006, PT007, PT009, PT011, PT018, PT027]
+---
+
+# Name tests after the behavior they verify
+
+## Description
+
+A test name states the scenario and the expected outcome, not just the function it calls. When a test fails in CI the name is often all you see: `test_process` says nothing, `test_expired_token_is_rejected` says what broke. Well-named tests also document the module's behavior.
+
+Tests mirror the source layout, one test file per module (`src/shop/billing.py` is tested by `tests/shop/test_billing.py`), so a module's tests are found at a glance. Tests are plain functions annotated `-> None`; a plain class without a base class may group related scenarios.
+
+## Bad Example
+
+```python
+def test_validate() -> None: ...
+
+
+def test_validate_2() -> None: ...
+
+
+def test_it_works() -> None: ...
+```
+
+## Good Example
+
+```python
+def test_expired_token_is_rejected() -> None: ...
+
+
+def test_inactive_user_cannot_log_in() -> None: ...
+
+
+def test_empty_cart_total_is_zero() -> None: ...
+
+
+def test_duplicate_email_raises_conflict_error() -> None: ...
+```
+
+## Notes
+
+- A useful pattern is `test_<condition>_<expected result>`, such as `test_negative_amount_raises_value_error`. Long names are fine: they are read in failure reports far more often than typed.
+- A behavior that is hard to name usually means the test covers more than one (`pytest-one-behavior`).
+- Write plain functions, not `unittest.TestCase`: it loses `parametrize`, fixture injection and plain `assert`. Don't mix the two styles in a file.
+- Never add `skip` or `xfail` to turn a red suite green. Characterization tests assert today's output, quirks included. Use `xfail(strict=True, reason=...)` only for a test of the intended behavior whose fix is already agreed, and `skipif` only for environment conditions, always with a `reason`.
+- The PT lint codes and the pytest-conventions-feedback hook report under this rule; their topics live in split rules: `pytest-parametrize` for PT006, PT007 and loop asserts, `pytest-assertions` for PT011 and PT018. reviewing-tests.md maps every code and finding to its rule.
+
+### Async tests
+
+{# pytest-asyncio must stay the first branch (D27(4)): the FastAPI+pytest-asyncio probe renders it. #}
+{% set anyio_plugin = has_framework("fastapi") or has_framework("starlette") or has_framework("httpx") %}
+{% set async_mark = "asyncio" if has_framework("pytest-asyncio") else ("anyio" if anyio_plugin else "") %}
+{% if async_mark == "asyncio" %}
+This project has `pytest-asyncio` installed, so mark coroutine tests explicitly; explicit marks keep the boundary between sync and async tests visible in review, unlike `asyncio_mode = "auto"`.
+{% elif async_mark == "anyio" %}
+This project installs AnyIO through FastAPI, Starlette or httpx, and AnyIO's pytest plugin registers itself: mark coroutine tests `@pytest.mark.anyio`, with no new dependency, and add one session-scoped `anyio_backend` fixture to the root `conftest.py`.
+{% else %}
+This project has no async test plugin. Propose adding `pytest-asyncio` to the dev dependency group and wait for the user's agreement; until then, drive the coroutine with `asyncio.run(...)` inside a synchronous test.
+{% endif %}
+
+```python
+{% if async_mark %}
+import pytest
+{% if async_mark == "anyio" %}
+
+
+@pytest.fixture(scope="session")
+def anyio_backend() -> str:  # in tests/conftest.py
+    return "asyncio"
+{% endif %}
+{% else %}
+import asyncio
+{% endif %}
+
+
+class FakeRates:
+    def __init__(self, *, nightly_cents: int) -> None:
+        self._nightly_cents = nightly_cents
+
+    async def nightly_cents(self, room_id: str) -> int:
+        return self._nightly_cents
+
+
+{% if async_mark %}
+@pytest.mark.{{ async_mark }}
+async def test_quote_charges_every_night() -> None:
+    quote = await quote_stay(FakeRates(nightly_cents=10_000), room_id="r-1", nights=3)
+{% else %}
+def test_quote_charges_every_night() -> None:
+    quote = asyncio.run(quote_stay(FakeRates(nightly_cents=10_000), room_id="r-1", nights=3))
+{% endif %}
+
+    assert quote.total_cents == 30_000  # 3 x 10_000
+```
+
+- Every branch, and why this order: async-tests.md.

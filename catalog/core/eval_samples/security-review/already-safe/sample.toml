@@ -1,5 +1,6 @@
 id = "security-review/already-safe"
 description = "Regression target: the loaders read plain JSON (pickle-free, no code execution). The security review must NOT invent vulnerabilities or demand changes to safe code."
+edition = "v0.1.0"
 
 [setup]
 files = ["src/safe_model_loader.py"]
