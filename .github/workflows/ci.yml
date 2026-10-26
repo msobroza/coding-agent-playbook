@@ -105,7 +105,7 @@ jobs:
   # [tool.commitizen], plus the PR title. The test matrix above is the CI-parity
   # gate, and on a skill-only pull request it runs only its catalog checks (ADR
   # 0009). commitizen is installed only in this job, so the matrix's ".[dev]"
-  # install is unchanged.
+  # install is unchanged; its range is scripts/release.py's COMMITIZEN_REQUIREMENT.
   playbook-ci:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -120,7 +120,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install the engine and commitizen
-        run: python -m pip install -e . "commitizen>=3"
+        run: python -m pip install -e . "commitizen>=4.13,<5"
 
       # The PR title is attacker-controlled text: it reaches cz only through env:,
       # as one argv element, and is never interpolated into a run: line.
