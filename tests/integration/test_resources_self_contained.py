@@ -14,7 +14,10 @@ Scope: every file under ``catalog/core/`` (ids relative to it) and every file of
 every bundled plugin under ``catalog/plugins/`` (its kind directories plus root
 files such as ``README.md`` and ``ATTRIBUTIONS.md``; ids are prefixed
 ``plugins/<name>/``, its path relative to ``catalog/``), dot dirs and bytecode
-caches aside. The plugin set is the directory listing, never a list of names, so
+caches aside. ``catalog/editions/`` and ``catalog/releases/`` ship too (ADR 0012):
+an edition's frozen copy of a core file gets that file's core policy, and every
+other file there (digests files, manifests, notes) gets both checks
+(:func:`frozen_catalog_targets`). The plugin set is the directory listing, never a list of names, so
 a new plugin is scanned with no edit here (acceptance 5). The one exception is
 :data:`_VENDORED_PLUGIN_GATES`, the commented allowlist of vendored plugins whose
 upstream text has known, reviewed exceptions; each entry names the dedicated
@@ -63,6 +66,7 @@ from tests._attributions import (
     write_tree,
 )
 from tests._catalog import (
+    CATALOG_ROOT,
     CORE_ROOT,
     CORE_SKILLS_ROOT,
     MARKDOWN_SUFFIXES,
@@ -340,8 +344,50 @@ def scan_file(target: ScanTarget) -> list[Violation]:
     return scan_text(text, target.rel, target.policy)
 
 
+#: The release script's directories under ``catalog/`` (ADR 0012): editions and releases.
+_EDITIONS_DIRNAME = "editions"
+_RELEASES_DIRNAME = "releases"
+#: ``<tag>/core/<path>``: an edition's frozen copy of the core file at ``<path>``.
+_EDITION_CORE_DEPTH = 2
+
+
+def edition_policy_for(rel: Path) -> ScanPolicy:
+    """The checks for ``rel`` (a path relative to ``catalog/editions/``).
+
+    >>> edition_policy_for(Path("v9.9.9/core/ATTRIBUTIONS.md"))
+    ScanPolicy(urls=True, markers=False, reserved_hosts='never')
+    >>> edition_policy_for(Path("v9.9.9/digests.toml"))
+    ScanPolicy(urls=True, markers=True, reserved_hosts='never')
+    """
+    parts = rel.parts
+    if len(parts) > _EDITION_CORE_DEPTH and parts[1] == CORE_ROOT.name:
+        return policy_for(Path(*parts[_EDITION_CORE_DEPTH:]))
+    return ScanPolicy(urls=True, markers=True)
+
+
+def frozen_catalog_targets(catalog_dir: Path) -> list[ScanTarget]:
+    """Every file under ``<catalog>/editions/`` and ``<catalog>/releases/``; none while both are absent.
+
+    Example::
+
+        frozen_catalog_targets(CATALOG_ROOT)  # [] until a release or an edition exists
+    """
+    both = ScanPolicy(urls=True, markers=True)
+    policies: dict[str, Callable[[Path], ScanPolicy]] = {
+        _EDITIONS_DIRNAME: edition_policy_for,
+        _RELEASES_DIRNAME: lambda _: both,
+    }
+    targets: list[ScanTarget] = []
+    for dirname, policy in policies.items():
+        root = catalog_dir / dirname
+        if root.is_dir() and any(path.is_file() for path in root.rglob("*")):
+            targets += scan_targets(root, prefix=f"{dirname}/", policy=policy)
+    return targets
+
+
 _TARGETS = (
     scan_targets(CORE_ROOT)
+    + frozen_catalog_targets(CATALOG_ROOT)
     + [
         target
         for plugin_dir in _scanned_plugin_dirs()
@@ -436,6 +482,32 @@ def test_core_attributions_credit_each_vendored_source(
 # --------------------------------------------------------------------------- #
 # The scanner itself, on synthetic input (independent of shipped content).
 # --------------------------------------------------------------------------- #
+
+
+def test_editions_and_releases_are_scanned_with_their_policies(tmp_path: Path) -> None:
+    """#281 ticket 09: the release script's directories ship, so the scan covers them."""
+    catalog = tmp_path / "catalog"
+    frozen = catalog / "editions/v9.9.9/core/prompts/review.md"
+    frozen.parent.mkdir(parents=True)
+    frozen.write_text("see https://example.org/x\n", encoding="utf-8")
+    (catalog / "editions/v9.9.9/digests.toml").write_text("tag = 'v9.9.9'\n", encoding="utf-8")
+    notes = catalog / "releases/9.9.9/notes.md"
+    notes.parent.mkdir(parents=True)
+    notes.write_text("ok\n", encoding="utf-8")
+
+    targets = frozen_catalog_targets(catalog)
+
+    assert [t.rel for t in targets] == [
+        "editions/v9.9.9/core/prompts/review.md",
+        "editions/v9.9.9/digests.toml",
+        "releases/9.9.9/notes.md",
+    ]
+    assert [v.kind for t in targets for v in scan_file(t)] == ["url"]
+
+
+def test_a_catalog_without_editions_or_releases_adds_no_targets(tmp_path: Path) -> None:
+    assert frozen_catalog_targets(tmp_path / "catalog") == []
+
 
 _BOTH = ScanPolicy(urls=True, markers=True)
 

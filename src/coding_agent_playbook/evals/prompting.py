@@ -20,6 +20,10 @@ sample's authored mock facts (``[setup] project_kind`` + extra keys).
 The text comes from ``RenderSession.prompt_text`` (``rendering.session``), the
 render session sync and ``playbook render`` open too, so the three cannot diverge.
 
+A pinned sample graded on its edition (``release.edition``, #281 ticket 09)
+renders closed-world: the prompt and every rule come from the edition alone, so
+no engine rule, overlay or ``setup/playbook/rules/`` override reaches the text.
+
 Usage::
 
     prompt = render_prompt(sample, strict=runner.requires_resolved_prompt)
@@ -45,6 +49,7 @@ from coding_agent_playbook.catalog.resolve import OverlayResolver
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.detector.facts import detect
 from coding_agent_playbook.evals.task_registry import sample_layer_root
+from coding_agent_playbook.release.edition import EditionError
 from coding_agent_playbook.rendering.jinja import TemplateSecurityError
 from coding_agent_playbook.rendering.session import RenderSession, TemplateContext
 
@@ -54,6 +59,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.detector.facts import Facts
     from coding_agent_playbook.evals.sample import EvalSample
+    from coding_agent_playbook.release.edition import Edition
 
 #: The engine package: its rules are always in scope, like for a consumer.
 _ENGINE_PACKAGE = "coding_agent_playbook"
@@ -100,7 +106,11 @@ class PromptResolutionError(RuntimeError):
 
 
 def render_prompt(
-    sample: EvalSample, *, strict: bool = False, prompt_set: PromptSet = DEFAULT_PROMPT_SET
+    sample: EvalSample,
+    *,
+    strict: bool = False,
+    prompt_set: PromptSet = DEFAULT_PROMPT_SET,
+    edition: Edition | None = None,
 ) -> str:
     """Resolve ``sample.prompt_id`` to its :class:`Prompt` and render it like sync.
 
@@ -116,30 +126,52 @@ def render_prompt(
     :class:`PromptResolutionError`. A resolved prompt that fails to render always
     raises :class:`PromptResolutionError`, naming the sample and prompt.
 
+    ``edition`` renders the edition's frozen prompt and rules instead, closed-world
+    (``prompt_set`` is then unused); an id the edition lacks always raises
+    :class:`PromptResolutionError`, whatever ``strict`` says.
+
     Example::
 
         render_prompt(sample, strict=True)  # "You are reviewing…\\n\\nreview src/x.py"
     """
-    prompt = _resolve_prompt(sample, require_prompt_set(prompt_set))
+    if edition is not None:
+        prompt: Prompt | None = _edition_prompt(sample, edition)
+    else:
+        prompt = _resolve_prompt(sample, require_prompt_set(prompt_set))
     if prompt is None:
         return _placeholder(sample, strict=strict)
-    body = _render_with_references(sample, prompt)
+    rules = list(edition.rules) if edition is not None else None
+    body = _render_with_references(sample, prompt, rules)
     args = sample.invocation.prompt_args
     return f"{body}\n\n{args}".rstrip() if args else body
 
 
 def resolve_sample_prompt(
-    sample: EvalSample, prompt_set: PromptSet = DEFAULT_PROMPT_SET
+    sample: EvalSample, prompt_set: PromptSet = DEFAULT_PROMPT_SET, edition: Edition | None = None
 ) -> Prompt | None:
     """The :class:`Prompt` ``sample`` grades in ``prompt_set`` (as :func:`render_prompt` finds it).
 
-    ``None`` when the sample's layer has no prompt with its ``prompt_id``.
+    ``None`` when the sample's layer has no prompt with its ``prompt_id``. With
+    ``edition``, the edition's frozen prompt (:class:`PromptResolutionError` when
+    it has none).
 
     Example::
 
         resolve_sample_prompt(sample).frontmatter.id  # "review"
     """
+    if edition is not None:
+        return _edition_prompt(sample, edition)
     return _resolve_prompt(sample, require_prompt_set(prompt_set))
+
+
+def _edition_prompt(sample: EvalSample, edition: Edition) -> Prompt:
+    """``edition``'s prompt for ``sample``; an id it lacks is a :class:`PromptResolutionError`."""
+    try:
+        return edition.prompt(sample.prompt_id)
+    except EditionError as exc:
+        raise PromptResolutionError(
+            f"sample {sample.id!r} cannot grade its edition: {exc}"
+        ) from exc
 
 
 def _placeholder(sample: EvalSample, *, strict: bool) -> str:
@@ -154,11 +186,15 @@ def _placeholder(sample: EvalSample, *, strict: bool) -> str:
     return f"[prompt:{sample.prompt_id}] {sample.invocation.prompt_args}".strip()
 
 
-def _render_with_references(sample: EvalSample, prompt: Prompt) -> str:
+def _render_with_references(
+    sample: EvalSample, prompt: Prompt, rules: list[Rule] | None = None
+) -> str:
     """The rendered body plus the ``## Reference rules`` appendix Continue also gets (D15).
 
     Facts are computed only when the prompt is templated or lists
     ``includes_rules``, so a plain prompt without rules never runs the detector.
+    ``rules`` is the closed rule set of an edition; ``None`` resolves the sample's
+    layers (:func:`_resolved_rules`).
     Any render error, including a sandbox violation in an included rule or a
     leftover ``{{ rule() }}`` call, raises :class:`PromptResolutionError` naming
     the sample and the prompt.
@@ -170,14 +206,16 @@ def _render_with_references(sample: EvalSample, prompt: Prompt) -> str:
     if not (prompt.is_templated or prompt.frontmatter.includes_rules):
         return prompt.template_body
     try:
-        return _sample_session(sample, prompt).prompt_text(prompt)
+        return _sample_session(sample, prompt, rules).prompt_text(prompt)
     except _RENDER_ERRORS as exc:
         raise PromptResolutionError(
             f"prompt {sample.prompt_id!r} for sample {sample.id!r} failed to render: {exc}"
         ) from exc
 
 
-def _sample_session(sample: EvalSample, prompt: Prompt) -> RenderSession:
+def _sample_session(
+    sample: EvalSample, prompt: Prompt, rules: list[Rule] | None = None
+) -> RenderSession:
     """The sample's render session; it loads the rules only for a prompt that includes some.
 
     A prompt without ``includes_rules`` gets ``rules=()``, so it never parses a
@@ -190,7 +228,10 @@ def _sample_session(sample: EvalSample, prompt: Prompt) -> RenderSession:
     Example: ``_sample_session(sample, prompt).prompt_text(prompt)``.
     """
     facts = _sample_facts(sample)
-    rules = _resolved_rules(sample) if prompt.frontmatter.includes_rules else ()
+    if not prompt.frontmatter.includes_rules:
+        rules = []
+    elif rules is None:
+        rules = _resolved_rules(sample)
     context = _sample_template_context(sample, facts)
     return RenderSession.open(rules, context, repo_root=_setup_dir(sample))
 

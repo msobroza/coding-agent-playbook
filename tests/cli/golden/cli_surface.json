@@ -674,6 +674,23 @@
         {
           "action": "_StoreAction",
           "option_strings": [
+            "--edition"
+          ],
+          "dest": "edition",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": [
+            "head"
+          ],
+          "required": false,
+          "help": "head: grade the current text, even for a sample pinned to a frozen edition (default: a pinned sample grades its edition)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
             "--judge"
           ],
           "dest": "judge",

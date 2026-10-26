@@ -55,6 +55,9 @@ def sample_result_to_dict(result: SampleResult) -> dict[str, object]:
     # Across-trial aggregate: present only when the sample authored an
     # [aggregate] block. ``trials`` is the per-trial pass/fail sequence.
     out["uncalibrated_judge"] = _any_trial_judge_scored(result)
+    if result.graded is not None:
+        # #281 ticket 09: the graded source, both digests and the engine version.
+        out["graded"] = result.graded.as_dict()
     if result.aggregate is not None:
         out["trials"] = len(result.trials)
         out["aggregate"] = _check_to_dict(result.aggregate)
@@ -177,6 +180,9 @@ def format_sample_result_text(result: SampleResult) -> str:
         f"  sample: {result.sample_id} via {result.harness} — {verdict} "
         f"(score={result.aggregate_score:.3f}, {result.duration_seconds:.2f}s)"
     )
+    if result.graded is not None:
+        # #281 ticket 09: the result line says which text was graded.
+        footer += f"; {result.graded.note}"
     return "\n".join([*lines, footer])
 
 

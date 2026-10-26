@@ -47,6 +47,13 @@ one sample.
   from ``--help``, it still works, prints one stderr line naming
   ``--judge-samples``, and passing both flags is a usage error (exit ``2``).
 
+  A core sample pinned to an edition (``edition = "vX"`` in ``sample.toml``)
+  grades the frozen copy in ``catalog/editions/vX/``, ignores overlay and local
+  overrides, and its result line ends ``graded edition vX (frozen; overrides
+  ignored)``; ``--edition head`` grades the current text instead
+  (``evals.graded_source``, #281 ticket 09). The JSON report records the graded
+  source, the prompt and sample digests and the engine version.
+
   ``--prompt-set`` (D76) renders the sample's prompt from that prompt set
   (default ``v1``, the set every sample grades; a prompt with no twin in the set
   keeps its v1 text). The repo's ``prompts`` key is never read, so the opt-in
@@ -102,6 +109,7 @@ from coding_agent_playbook.commands._eval_regressions import (
     wants_regressions,
 )
 from coding_agent_playbook.commands._eval_targets import check_targets, print_targets
+from coding_agent_playbook.evals.graded_source import graded_record, graded_source
 from coding_agent_playbook.evals.judge import JudgeError
 from coding_agent_playbook.evals.model_pins import RecordRefusedError
 from coding_agent_playbook.evals.prompting import PromptResolutionError
@@ -112,6 +120,7 @@ from coding_agent_playbook.evals.report_format import (
 from coding_agent_playbook.evals.target_config import load_eval_settings
 from coding_agent_playbook.evals.targets import TargetError
 from coding_agent_playbook.evals.task_registry import TaskRegistry, TaskRegistryError
+from coding_agent_playbook.release.edition import EditionError
 from coding_agent_playbook.validation.context import SyncContext
 
 if TYPE_CHECKING:
@@ -126,6 +135,8 @@ NAME: Final = "eval"
 HELP: Final = "eval enumeration + `--run` a sample (SPEC §12.8, §15)"
 
 _VALID_FORMATS = ("text", "json")
+#: ``--edition``'s one value: grade the current text, even for a pinned sample.
+_EDITION_HEAD: Final = "head"
 
 
 def configure(parser: argparse.ArgumentParser) -> None:
@@ -189,6 +200,12 @@ def configure(parser: argparse.ArgumentParser) -> None:
         default=DEFAULT_PROMPT_SET,
         help="prompt set to render the sample's prompt from (default: v1; "
         "the repo's prompts key is not read)",
+    )
+    parser.add_argument(
+        "--edition",
+        choices=(_EDITION_HEAD,),
+        help="head: grade the current text, even for a sample pinned to a frozen "
+        "edition (default: a pinned sample grades its edition)",
     )
     _configure_scoring(parser)
     configure_compare(parser)
@@ -305,6 +322,7 @@ class _SampleRun:
     judge_samples: int
     fail_fast: bool
     prompt_set: PromptSet
+    head: bool = False
 
 
 def _run_sample_cli(args: argparse.Namespace, repo_root: Path) -> int:
@@ -350,7 +368,8 @@ def _run_sample_cli(args: argparse.Namespace, repo_root: Path) -> int:
     # Fail-fast is ON by default (a lost deterministic gate skips the costlier
     # judge tier); --full-scoring grades every check unconditionally.
     fail_fast = not bool(getattr(args, "full_scoring", False))
-    how = _SampleRun(runner, target, judge, judge_samples, fail_fast, args.prompt_set)
+    head = getattr(args, "edition", None) == _EDITION_HEAD
+    how = _SampleRun(runner, target, judge, judge_samples, fail_fast, args.prompt_set, head)
     outcomes = [_run_one(sample, how) for sample in samples]
     results = [result for _, result in outcomes if result is not None]
     _print_results(results, fmt, one_sample=len(samples) == 1)
@@ -360,6 +379,7 @@ def _run_sample_cli(args: argparse.Namespace, repo_root: Path) -> int:
 def _run_one(sample: EvalSample, how: _SampleRun) -> tuple[int, SampleResult | None]:
     """Run and grade ``sample``: ``(0 or 1, result)``, or ``(2, None)`` when unscorable."""
     try:
+        source = graded_source(sample, head=how.head)
         with tempfile.TemporaryDirectory(prefix="playbook-eval-") as tmp:
             result = how.runner.run_sample(
                 sample,
@@ -368,8 +388,10 @@ def _run_one(sample: EvalSample, how: _SampleRun) -> tuple[int, SampleResult | N
                 judge_samples=how.judge_samples,
                 fail_fast=how.fail_fast,
                 prompt_set=how.prompt_set,
+                edition=source.edition,
             )
-    except (PromptResolutionError, JudgeError) as exc:
+        graded = graded_record(sample, source, how.prompt_set)
+    except (PromptResolutionError, JudgeError, EditionError) as exc:
         # Neither a pass nor a fail: no verdict exists, so never exit 0/1 here.
         print(f"error: sample {sample.id!r} could not be scored: {exc}", file=sys.stderr)
         return 2, None
@@ -379,6 +401,7 @@ def _run_one(sample: EvalSample, how: _SampleRun) -> tuple[int, SampleResult | N
         target=how.target.name,
         endpoint=endpoint.name if endpoint is not None else None,
         endpoint_fingerprint=endpoint.fingerprint if endpoint is not None else None,
+        graded=graded,
     )
     # The sample verdict is ``result.passed`` — the single trial's verdict for a
     # non-aggregate sample (== report.passed), or the [aggregate] layer's pass/fail

@@ -287,6 +287,7 @@ def test_run_judge_available_is_passed_to_runner(
         judge_samples: int = 1,
         fail_fast: bool = True,
         prompt_set: PromptSet = "v1",
+        edition: Any = None,
     ) -> Any:
         captured["judge"] = judge
         captured["judge_samples"] = judge_samples

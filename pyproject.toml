@@ -168,6 +168,9 @@ extend-exclude = [
     # Release manifests and notes are written only by scripts/release.py and are
     # part of the release commit: a formatter must never rewrite them (ADR 0012).
     "catalog/releases",
+    # Editions are byte copies of the graded set as a release shipped it; CI checks
+    # them against their digests file, so a tool upgrade must never rewrite them.
+    "catalog/editions",
 ]
 # Pre-commit and the hook/Stop stages pass file names explicitly, and ruff
 # ignores the excludes above for an explicitly passed path unless force-exclude
