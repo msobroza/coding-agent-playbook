@@ -623,11 +623,17 @@ Each run copies the sample's `setup/` into a scratch git repo. When `setup/` has
 agent runs with the sample's environment on `PATH`: `<scratch>/.venv/bin` comes
 first and `VIRTUAL_ENV` names that venv, for Claude Code and OpenCode runs, with or
 without an endpoint. So `python` and `pytest` in the agent's shell are the
-sample's own. A setup whose code lives under `src/` declares
-`[tool.pytest.ini_options] pythonpath`, so plain `pytest` imports it and no agent
-has to edit the sample's config. The `tests_pass` check is different: it runs
-`python -m pytest --cov` with the playbook's own interpreter, which has
-`pytest-cov`, in the candidate tree.
+sample's own. The setups whose agent writes or runs tests against code under
+`src/` (generate-tests/*, refactor/*, characterize/legacy-pricing and the review
+samples that ship tests), and review-architecture/layer-leak, declare
+`[tool.pytest.ini_options] pythonpath = ["."]`, so plain `pytest` imports their
+code and no agent has to edit the sample's config. make-testable/inject-clock
+needs no such entry: its `tests/` is a package, so pytest puts `setup/` on the
+import path. Review-only setups without tests do not declare it. The `tests_pass`
+check is different: it runs `python -m pytest --cov` in the candidate tree with
+the interpreter that runs the playbook, not the scratch venv, which holds only the
+sample's declared dependencies. That interpreter must have `pytest` and
+`pytest-cov`, as the `dev` extra provides.
 
 A sample declares its success criteria as layers (SPEC §6.5.3):
 
