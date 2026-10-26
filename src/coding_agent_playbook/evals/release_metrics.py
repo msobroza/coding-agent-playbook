@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Final
 from coding_agent_playbook.evals.release_metrics_schema import (
     CONTROLS_KEY,
     INPUTS_DIGEST_KEY,
+    ISOLATED_KEY,
     SCHEMA_VERSION,
 )
 from coding_agent_playbook.grading.types import CheckResult
@@ -75,6 +76,9 @@ class SampleRuns:
 class RecordedTarget:
     """The target block's facts that do not come from the runs themselves.
 
+    ``isolated`` says the harness and the judge ran without the user's personal
+    settings (#329 ticket 02); ``None`` leaves the key out of the block.
+
     Example::
 
         >>> RecordedTarget(EvalTarget("t", "fake", "m"), None, None, runs=3).runs
@@ -85,6 +89,7 @@ class RecordedTarget:
     harness_version: str | None
     judge_model: str | None
     runs: int
+    isolated: bool | None = None
 
 
 def build_release_metrics(
@@ -123,7 +128,8 @@ def build_release_metrics(
 def _target_block(recorded: RecordedTarget, samples: Sequence[SampleRuns]) -> dict[str, object]:
     target = recorded.target
     price = target.price
-    return {
+    isolation = {} if recorded.isolated is None else {ISOLATED_KEY: recorded.isolated}
+    return isolation | {
         "name": target.name,
         "harness": target.harness,
         "harness_version": recorded.harness_version,

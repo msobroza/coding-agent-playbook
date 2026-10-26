@@ -276,3 +276,32 @@ def test_hand_written_files_with_and_without_inputs_digests_validate() -> None:
     validate_release_metrics(metrics_file("9.9.9", {"review/a": with_digest, "review/b": without}))
     assert with_digest["inputs_digest"] == "i" * 64
     assert "inputs_digest" not in without
+
+
+def test_an_isolated_record_says_so_in_the_target_block() -> None:
+    # #329 ticket 02: a record run's harness and judge ran without personal settings.
+    recorded = RecordedTarget(
+        _PRICED, harness_version="1.2.3", judge_model=None, runs=1, isolated=True
+    )
+    metrics = build_release_metrics(release="9.9.9", commit=None, recorded=recorded, samples=[])
+    validate_release_metrics(json.loads(json.dumps(metrics)))
+    target = metrics["target"]
+    assert isinstance(target, dict)
+    assert target["isolated"] is True
+
+
+def test_a_target_block_without_isolation_leaves_the_key_out_and_validates() -> None:
+    metrics = _build(_PRICED, _runs("review/a", _result(1.0, passed=True)))
+    target = metrics["target"]
+    assert isinstance(target, dict)
+    assert "isolated" not in target
+    validate_release_metrics(metrics)  # files recorded before #329 ticket 02
+
+
+def test_validation_rejects_an_isolated_key_that_is_not_a_bool() -> None:
+    metrics = metrics_file("9.9.9", {"review/a": sample_entry(0.9)})
+    metrics["target"]["isolated"] = "yes"
+    with pytest.raises(ReleaseMetricsError, match=r"target\.isolated: expected bool"):
+        validate_release_metrics(metrics)
+    metrics["target"]["isolated"] = False
+    validate_release_metrics(metrics)
