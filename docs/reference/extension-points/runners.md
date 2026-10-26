@@ -8,7 +8,9 @@ The engine ships `fake` (hermetic, no agent), `claude_code` and `opencode` in th
 group. A runner subclasses `HarnessRunner`, sets `name` to its entry-point key and
 implements `_invoke_agent`. A runner that can drive a chosen model sets
 `accepts_model = True` and takes `model=` in its constructor; a target with a model
-is refused for any other runner:
+is refused for any other runner. Likewise a runner that can reach a custom endpoint
+sets `accepts_endpoint = True` and takes `route=` (today only `claude_code` does);
+a target with an endpoint is refused for any other runner:
 
 ```toml
 [project.entry-points."coding_agent_playbook.runners"]

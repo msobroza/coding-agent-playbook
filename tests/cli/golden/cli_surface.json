@@ -581,6 +581,21 @@
           "metavar": null
         },
         {
+          "action": "_StoreTrueAction",
+          "option_strings": [
+            "--check"
+          ],
+          "dest": "check",
+          "nargs": 0,
+          "const": true,
+          "default": false,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "with --targets: run a one-turn prompt through each target's harness (paid; the harness makes the calls, the engine makes none)",
+          "metavar": null
+        },
+        {
           "action": "_StoreAction",
           "option_strings": [],
           "dest": "id",

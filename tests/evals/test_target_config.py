@@ -83,7 +83,7 @@ def test_no_config_files_are_the_zero_config_defaults(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("committed", "local", "message"),
     [
-        ({"endpoints": {}}, {}, r"\.coding-agent-playbook\.toml: \[evals\] has unknown key"),
+        ({"price": {}}, {}, r"\.coding-agent-playbook\.toml: \[evals\] has unknown key"),
         ({}, {"release": []}, r"local\.toml: \[evals\] has unknown key\(s\) \['release'\]"),
         ({"targets": {"t": {"model": "m"}}}, {}, r"\[evals\.targets\.t\] needs harness"),
         ({"targets": {"t": {"harness": "x", "price": 1}}}, {}, r"unknown key\(s\) \['price'\]"),

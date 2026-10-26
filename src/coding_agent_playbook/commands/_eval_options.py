@@ -14,6 +14,7 @@ import sys
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.evals import registry
+from coding_agent_playbook.evals.run.claude_code_route import claude_code_route
 from coding_agent_playbook.evals.targets import TargetError, resolve_target, runner_alias_target
 
 if TYPE_CHECKING:
@@ -92,6 +93,8 @@ def build_target_runner(target: EvalTarget) -> HarnessRunner | None:
     Unknown or unavailable harnesses fail like ``--runner`` does
     (:func:`load_usable_runner`); a model for a runner that takes none is refused
     rather than dropped. A target without a model builds the runner as before.
+    A target on an endpoint gets its route (token read from the environment now,
+    so a missing variable fails before any run: ``EndpointError``, exit 2).
 
     Example::
 
@@ -109,7 +112,16 @@ def build_target_runner(target: EvalTarget) -> HarnessRunner | None:
             f"got model {target.model!r}; drop the model or pick another harness"
         )
         return None
-    return runner_cls(model=target.model)  # type: ignore[call-arg]
+    if target.endpoint is None:
+        return runner_cls(model=target.model)  # type: ignore[call-arg]
+    if not runner_cls.accepts_endpoint:
+        _error(
+            f"target {target.name!r}: runner {target.harness!r} cannot reach endpoint "
+            f"{target.endpoint.name!r} yet; use a claude_code target on an anthropic endpoint"
+        )
+        return None
+    route = claude_code_route(target.endpoint, target.model, small_model=target.small_model)
+    return runner_cls(model=target.model, route=route)  # type: ignore[call-arg]
 
 
 def build_judge(name: str, settings: JudgeSettings) -> Judge | None:
@@ -130,7 +142,16 @@ def build_judge(name: str, settings: JudgeSettings) -> Judge | None:
             "remove that key or use --judge llm"
         )
         return None
-    return judge_cls(model=settings.model)  # type: ignore[call-arg]
+    if settings.endpoint is None:
+        return judge_cls(model=settings.model)  # type: ignore[call-arg]
+    if not judge_cls.accepts_endpoint:
+        _error(
+            f"judge {name!r} cannot reach endpoint {settings.endpoint.name!r}; "
+            "remove [evals.judge] endpoint or use --judge llm"
+        )
+        return None
+    route = claude_code_route(settings.endpoint, settings.model)
+    return judge_cls(model=settings.model, route=route)  # type: ignore[call-arg]
 
 
 def load_usable_judge(name: str) -> type[Judge] | None:

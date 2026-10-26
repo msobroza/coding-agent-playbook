@@ -702,6 +702,64 @@ requested model and the model the harness reported (`null` when it reports none)
 the JSON report's `target` object, and a `target:` line in the text report.
 `--compare` does not take `--target` yet.
 
+### Endpoints
+
+A target or the judge can reach a custom endpoint, such as an internally deployed
+model behind an Anthropic-compatible gateway. Declare the endpoint once and refer
+to it by name:
+
+```toml
+[evals.endpoints.internal]
+api = "anthropic"                  # anthropic | openai-chat | openai-responses
+base_url = "https://llm.internal.example"
+token_env = "INTERNAL_LLM_TOKEN"   # the variable's NAME; the token is never in a file
+auth_header = "bearer"             # or "x-api-key" (anthropic only; default bearer)
+headers_env = "INTERNAL_LLM_HEADERS"  # optional: extra "Name: Value" header lines
+context_tokens = 200000            # optional
+max_output_tokens = 8192           # optional
+
+[evals.targets.internal-claude]
+harness = "claude_code"
+endpoint = "internal"
+model = "internal-opus"            # required on an endpoint: the id it serves
+small_model = "internal-haiku"     # optional background model, defaults to model
+
+[evals.judge]
+endpoint = "internal"              # optional; the judge then needs a model
+model = "internal-opus"
+```
+
+The token comes only from the variable `token_env` names, or, in the local file
+only, from `token_command` (a command whose output is the token). Inline secret
+keys such as `token`, `api_key` or `password` are refused in both files. An
+endpoint may be declared in either file; the local file may add only the token
+part (`token_env` or `token_command`) to an endpoint the committed file declares,
+and a committed target or judge may name only a committed endpoint. A missing or
+empty token variable is a usage error (exit `2`) that names the variable.
+
+Claude Code speaks only the Anthropic Messages API, so a Claude Code target or the
+judge on an `openai-chat` or `openai-responses` endpoint is refused with a hint to
+use an OpenCode target. OpenCode endpoint targets are not wired yet.
+
+A Claude Code run on an endpoint is isolated from your own settings: it gets an
+empty scratch `CLAUDE_CONFIG_DIR`; inherited `ANTHROPIC_*`, `CLAUDE_CODE_USE_*` and
+OAuth variables are removed; the token reaches it only through its environment
+(`ANTHROPIC_AUTH_TOKEN` for bearer, `ANTHROPIC_API_KEY` for x-api-key); the base
+URL and the background model go in per-run `--settings`; the model is `--model`;
+the context window and output limit are set when declared; telemetry and
+non-essential traffic are off. The token never appears in argv, in a file the
+engine writes or in a result, and is redacted from transcripts.
+
+A result records the endpoint's name and a 12-character fingerprint of its URL,
+never the URL or the token (`target.endpoint` in the JSON report), and
+`target.harness_settings` is `isolated`. A target without an endpoint keeps
+today's behaviour, and its result says `personal`: your own harness settings and
+login were used.
+
+`playbook eval --targets --check` runs one short prompt through each target's
+harness and prints `ok` or `FAIL` per target, exiting `1` if any fails. It is a
+paid call per target; the harness makes it, the engine makes no network call.
+
 `playbook eval` has no `--run-tests` flag. A sample runs the test suite if and only if
 its `[gate]` references an execution metric, `coverage` or `test_pass_rate`.
 
