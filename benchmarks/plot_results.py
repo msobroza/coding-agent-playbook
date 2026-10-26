@@ -57,7 +57,6 @@ class RunRow:
     duration_seconds: float
     timed_out: bool
     judge_model: str
-    sample_version: int | None = None
     judge_error: str = ""
 
 
@@ -117,7 +116,6 @@ def _row(payload: dict, exprs: dict[str, str]) -> RunRow:
         duration_seconds=float(payload["agent"]["duration_seconds"]),
         timed_out=bool(payload["agent"]["timed_out"]),
         judge_model=payload["judge"]["model"],
-        sample_version=payload.get("sample_version"),
         judge_error=payload.get("judge_error") or "",
     )
 
@@ -231,15 +229,8 @@ def _sample_grid(rows: list[RunRow]) -> list[str]:
     by_key = {(r.experiment, r.sample_id): r for r in rows}
     for sample_id in sorted({r.sample_id for r in rows}):
         cells = [_cell(by_key.get((k, sample_id))) for k in keys]
-        out.append(f"| {_sample_label(rows, sample_id)} | " + " | ".join(cells) + " |")
+        out.append(f"| {_short(sample_id)} | " + " | ".join(cells) + " |")
     return out
-
-
-def _sample_label(rows: list[RunRow], sample_id: str) -> str:
-    """The sample's short id, plus ``(vN)`` when its runs recorded the sample version."""
-    versions = {r.sample_version for r in rows if r.sample_id == sample_id} - {None}
-    suffix = f" (v{', v'.join(str(v) for v in sorted(versions))})" if versions else ""
-    return f"{_short(sample_id)}{suffix}"
 
 
 def _cell(row: RunRow | None) -> str:

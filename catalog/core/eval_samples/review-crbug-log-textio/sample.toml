@@ -1,7 +1,6 @@
 id = "review-crbug-log-textio"
 prompt_id = "review"
 description = "Review a change meant to close the driver's log on stop that tests isinstance(..., typing.TextIO), which no real file object passes. Paraphrases the bug selenium pull request 12637 introduced and pull request 12871 fixed, from CRBugBench; see eval_samples/ATTRIBUTIONS.md."
-version = 1
 
 [setup]
 files = [

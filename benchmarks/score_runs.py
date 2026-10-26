@@ -208,7 +208,6 @@ def score_one(sample: EvalSample, out: Path, judge: Judge, args: argparse.Namesp
     payload = sample_result_to_dict(result)
     payload.update(
         experiment=meta["experiment"],
-        sample_version=sample.version,
         agent=meta,
         judge={"backend": args.judge_backend, "model": _judge_model(args.judge_backend),
                "effort": _bench.JUDGE_EFFORT, "judge_samples": args.judge_samples},

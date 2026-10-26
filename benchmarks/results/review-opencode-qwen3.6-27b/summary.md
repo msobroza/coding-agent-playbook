@@ -21,20 +21,20 @@ Agent: `qwen/qwen3.6-27b` through OpenRouter, in OpenCode and Claude Code. Judge
 
 | Sample | OpenCode /review | OpenCode + playbook v1 | OpenCode + playbook v2 | Claude Code /code-review | Claude Code + playbook v2 |
 |---|---|---|---|---|---|
-| change-drops-part-of-request (v1) | FAIL (0.81) | pass (0.95) | pass (0.81) | FAIL (0.64) | pass (0.90) |
-| clean-multi-file-change (v1) | FAIL (0.86) | pass (0.86) | pass (0.99) | FAIL (0.21) | pass (0.86) |
-| crbug-audio-input-args (v1) | FAIL (0.74) | FAIL (n/a) | FAIL (0.16) | FAIL (0.66) | pass (0.88) |
-| crbug-basic-auth-not (v1) | FAIL (0.84) | FAIL (0.15) | pass (0.85) | FAIL (0.74) | pass (0.67) |
-| crbug-form-method-none (v1) | FAIL (0.80) | FAIL (0.42) | pass (0.92) | FAIL (0.59) | pass (0.84) |
-| crbug-ftp-active-string (v1) | FAIL (0.86) | FAIL (0.47) | pass (0.98) | FAIL (0.74) | pass (1.00) |
-| crbug-log-textio (v1) | FAIL (0.31) | FAIL (0.26) | FAIL (0.48) | FAIL (0.72) | pass (0.53) |
-| crbug-netrc-env-path (v1) | FAIL (0.79) | FAIL (0.76) | pass (0.83) | FAIL (0.66) | pass (0.84) |
-| crbug-replace-same-object (v1) | FAIL (0.20) | FAIL (0.38) | pass (0.86) | FAIL (0.54) | FAIL (0.20) |
-| crbug-xtrim-maxlen-minid (v1) | FAIL (0.80) | FAIL (0.00) | pass (0.82) | FAIL (0.36) | pass (0.59) |
-| diff-old-bug-on-untouched-line (v1) | FAIL (0.97) | pass (0.73) | pass (0.97) | FAIL (0.69) | pass (0.99) |
-| rereview-earlier-findings (v1) | FAIL (0.76) | FAIL (0.51) | pass (0.95) | FAIL (0.23) | pass (0.97) |
-| spot-the-bug (v2) | pass (1.00) | pass (0.93) | pass (0.92) | pass (0.56) | pass (1.00) |
-| style-only-no-changes-needed (v1) | pass (0.96) | pass (1.00) | pass (1.00) | pass (0.94) | pass (1.00) |
+| change-drops-part-of-request | FAIL (0.81) | pass (0.95) | pass (0.81) | FAIL (0.64) | pass (0.90) |
+| clean-multi-file-change | FAIL (0.86) | pass (0.86) | pass (0.99) | FAIL (0.21) | pass (0.86) |
+| crbug-audio-input-args | FAIL (0.74) | FAIL (n/a) | FAIL (0.16) | FAIL (0.66) | pass (0.88) |
+| crbug-basic-auth-not | FAIL (0.84) | FAIL (0.15) | pass (0.85) | FAIL (0.74) | pass (0.67) |
+| crbug-form-method-none | FAIL (0.80) | FAIL (0.42) | pass (0.92) | FAIL (0.59) | pass (0.84) |
+| crbug-ftp-active-string | FAIL (0.86) | FAIL (0.47) | pass (0.98) | FAIL (0.74) | pass (1.00) |
+| crbug-log-textio | FAIL (0.31) | FAIL (0.26) | FAIL (0.48) | FAIL (0.72) | pass (0.53) |
+| crbug-netrc-env-path | FAIL (0.79) | FAIL (0.76) | pass (0.83) | FAIL (0.66) | pass (0.84) |
+| crbug-replace-same-object | FAIL (0.20) | FAIL (0.38) | pass (0.86) | FAIL (0.54) | FAIL (0.20) |
+| crbug-xtrim-maxlen-minid | FAIL (0.80) | FAIL (0.00) | pass (0.82) | FAIL (0.36) | pass (0.59) |
+| diff-old-bug-on-untouched-line | FAIL (0.97) | pass (0.73) | pass (0.97) | FAIL (0.69) | pass (0.99) |
+| rereview-earlier-findings | FAIL (0.76) | FAIL (0.51) | pass (0.95) | FAIL (0.23) | pass (0.97) |
+| spot-the-bug | pass (1.00) | pass (0.93) | pass (0.92) | pass (0.56) | pass (1.00) |
+| style-only-no-changes-needed | pass (0.96) | pass (1.00) | pass (1.00) | pass (0.94) | pass (1.00) |
 
 ## Why gates failed
 

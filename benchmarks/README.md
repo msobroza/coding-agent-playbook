@@ -79,7 +79,11 @@ runs it already finished; `--force` redoes them.
   `~/.claude` rules or skills) and `PYTHONDONTWRITEBYTECODE=1`, and the scratch
   repo's `.git/info/exclude` lists tool caches. The judge grades the diff when
   there is one, so a stray `__pycache__` would otherwise replace the review text.
-- Transcripts are saved with terminal escape codes stripped.
+- Transcripts are saved with terminal escape codes stripped, and the committed
+  results show the home directory as `~` (`score_runs.py` expands it back).
+- The judge is the engine's `LLMJudge` with an explicit command. The engine's
+  `[evals.judge]` config sets the judge's model and sample count, but not the
+  effort level or `--bare` isolation this benchmark needs.
 - Both phases drop a parent Claude Code session's variables (`ANTHROPIC_*`,
   `CLAUDE_*`, `CLAUDECODE`) before spawning anything. Run from inside a Claude
   Code session, the judge's `claude -p` otherwise inherits `ANTHROPIC_BASE_URL`

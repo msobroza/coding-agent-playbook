@@ -1,7 +1,6 @@
 id = "review-crbug-xtrim-maxlen-minid"
 prompt_id = "review"
 description = "Review a change adding MINID and LIMIT to xtrim that lets MAXLEN and MINID be sent together, or neither. Paraphrases the bug a reviewer caught in redis-py pull request 1508, from CRBugBench; see eval_samples/ATTRIBUTIONS.md."
-version = 1
 
 [setup]
 files = [
