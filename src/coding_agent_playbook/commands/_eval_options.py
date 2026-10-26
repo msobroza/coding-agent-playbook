@@ -15,13 +15,18 @@ from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.evals import registry
 from coding_agent_playbook.evals.run.claude_code_route import claude_code_route
+from coding_agent_playbook.evals.run.opencode_route import opencode_route
+from coding_agent_playbook.evals.run.opencode_runner import OpenCodeRunner
 from coding_agent_playbook.evals.targets import TargetError, resolve_target, runner_alias_target
 
 if TYPE_CHECKING:
     import argparse
 
+    from coding_agent_playbook.evals.endpoints import Endpoint
     from coding_agent_playbook.evals.judge import Judge
+    from coding_agent_playbook.evals.run.claude_code_route import ClaudeCodeRoute
     from coding_agent_playbook.evals.run.harness_runner import HarnessRunner
+    from coding_agent_playbook.evals.run.opencode_route import OpenCodeRoute
     from coding_agent_playbook.evals.targets import EvalSettings, EvalTarget, JudgeSettings
 
 # D80: the old --samples spelling stays one release as a hidden alias; it is
@@ -117,11 +122,20 @@ def build_target_runner(target: EvalTarget) -> HarnessRunner | None:
     if not runner_cls.accepts_endpoint:
         _error(
             f"target {target.name!r}: runner {target.harness!r} cannot reach endpoint "
-            f"{target.endpoint.name!r} yet; use a claude_code target on an anthropic endpoint"
+            f"{target.endpoint.name!r}; use a claude_code or opencode target"
         )
         return None
-    route = claude_code_route(target.endpoint, target.model, small_model=target.small_model)
+    route = _endpoint_route(runner_cls, target.endpoint, target.model, target.small_model)
     return runner_cls(model=target.model, route=route)  # type: ignore[call-arg]
+
+
+def _endpoint_route(
+    runner_cls: type[HarnessRunner], endpoint: Endpoint, model: str, small_model: str | None
+) -> ClaudeCodeRoute | OpenCodeRoute:
+    """The wiring ``runner_cls``'s harness reaches ``endpoint`` with (token read now)."""
+    if issubclass(runner_cls, OpenCodeRunner):
+        return opencode_route(endpoint, model, small_model=small_model)
+    return claude_code_route(endpoint, model, small_model=small_model)
 
 
 def build_judge(name: str, settings: JudgeSettings) -> Judge | None:

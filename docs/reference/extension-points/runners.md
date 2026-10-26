@@ -9,8 +9,9 @@ group. A runner subclasses `HarnessRunner`, sets `name` to its entry-point key a
 implements `_invoke_agent`. A runner that can drive a chosen model sets
 `accepts_model = True` and takes `model=` in its constructor; a target with a model
 is refused for any other runner. Likewise a runner that can reach a custom endpoint
-sets `accepts_endpoint = True` and takes `route=` (today only `claude_code` does);
-a target with an endpoint is refused for any other runner:
+sets `accepts_endpoint = True` and takes `route=` (`claude_code` and `opencode`
+do; an `OpenCodeRunner` subclass gets the OpenCode route, any other runner the
+Claude Code one); a target with an endpoint is refused for any other runner:
 
 ```toml
 [project.entry-points."coding_agent_playbook.runners"]
