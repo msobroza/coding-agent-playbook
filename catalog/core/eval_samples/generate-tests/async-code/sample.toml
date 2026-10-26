@@ -1,6 +1,5 @@
 id = "generate-tests/async-code"
 description = "Regression target: writing tests for an async function uses @pytest.mark.asyncio rather than asyncio.run inside the test body."
-edition = "v0.1.0"
 
 [setup]
 files = ["src/fetcher.py"]

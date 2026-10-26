@@ -1,6 +1,5 @@
 id = "review/crbug-basic-auth-not"
 description = "Review a change meant to compare admin credentials in constant time that negates with `!`, which is not Python, so the module no longer parses. Paraphrases the bug a reviewer caught in fastapi pull request 807, from CRBugBench; see eval_samples/ATTRIBUTIONS.md."
-edition = "v0.1.0"
 
 [setup]
 files = [

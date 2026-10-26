@@ -1,6 +1,5 @@
 id = "review/change-drops-part-of-request"
 description = "Review a diff against the user's two-part request: the --csv option is done well, but the requested --since date filter is missing from the change; the review must say so and request changes."
-edition = "v0.1.0"
 
 [setup]
 files = [
