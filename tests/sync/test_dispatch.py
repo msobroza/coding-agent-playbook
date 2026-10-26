@@ -609,7 +609,7 @@ def test_build_lockfile_stamps_each_entry_with_its_artifacts_digest(tmp_path: Pa
     lockfile = build_lockfile(
         [rule_file, composite],
         tmp_path,
-        "0.2.0",
+        "9.9.9",
         provenance={
             rule_file.resolve(): Provenance(kind="rule", artifact_id="x"),
             composite.resolve(): Provenance(kind="composite"),

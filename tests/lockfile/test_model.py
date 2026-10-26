@@ -460,7 +460,7 @@ def test_generated_paths_is_empty_before_the_first_sync() -> None:
 def test_artifact_digests_and_entry_digest_roundtrip_through_toml(tmp_path: Path) -> None:
     entry = LockEntry("a.md", "0" * 64, 1, kind="rule", artifact_id="x", digest="d" * 64)
     record = ArtifactDigest(kind="rule", artifact_id="x", digest="d" * 64)
-    lockfile = Lockfile(2, "0.1.0", "t", entries=[entry], artifacts=[record])
+    lockfile = Lockfile(2, "9.9.9", "t", entries=[entry], artifacts=[record])
     state = FileSystemStateSource(repo_root=tmp_path)
 
     state.save_lockfile(lockfile)
@@ -471,7 +471,7 @@ def test_artifact_digests_and_entry_digest_roundtrip_through_toml(tmp_path: Path
 
 def test_a_lockfile_without_digests_writes_neither_key(tmp_path: Path) -> None:
     state = FileSystemStateSource(repo_root=tmp_path)
-    state.save_lockfile(Lockfile(2, "0.1.0", "t", entries=[LockEntry("a.md", "0" * 64, 1)]))
+    state.save_lockfile(Lockfile(2, "9.9.9", "t", entries=[LockEntry("a.md", "0" * 64, 1)]))
 
     text = (tmp_path / ".coding-agent-playbook.lock").read_text(encoding="utf-8")
 
