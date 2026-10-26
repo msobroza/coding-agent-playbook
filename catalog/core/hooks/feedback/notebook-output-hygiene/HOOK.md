@@ -3,7 +3,6 @@ id: notebook-output-hygiene
 name: Notebook output hygiene
 description: Warn when an edited notebook keeps cell outputs, embedded images or base64 payloads, or oversized output, since outputs may embed data rows.
 summary: 'Before committing a notebook you edited, clear its outputs: they may embed data rows, images and credentials.'
-version: 1
 tier: opt-in
 priority: 70
 events: [post_tool_use, stop]

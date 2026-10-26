@@ -3,7 +3,6 @@ id: block-precommit-bypass
 name: Do not bypass the pre-commit hooks
 description: Deny skipping the repo's playbook pre-commit hooks (--no-verify, SKIP=, core.hooksPath, .git/hooks edits); ask on plumbing commits.
 summary: This repository's pre-commit hooks must run on every commit.
-version: 1
 tier: default
 priority: 20
 events: [pre_tool_use]

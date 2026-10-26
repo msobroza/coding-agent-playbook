@@ -2,7 +2,6 @@
 id: python-decorators
 name: Decorators
 description: "Write decorators only for cross-cutting concerns, wrap with functools.wraps, type them with ParamSpec and TypeVar, and log through logging instead of print."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

@@ -197,13 +197,11 @@ def test_rule_frontmatter_coerces_none_to_defaults():
         name="x",
         description="x",
         scope="scoped",
-        version=None,  # type: ignore[arg-type]
         globs=None,  # type: ignore[arg-type]
         applies_if=None,  # type: ignore[arg-type]
         priority=None,  # type: ignore[arg-type]
         tags=None,  # type: ignore[arg-type]
     )
-    assert fm.version == 1
     assert fm.globs == []
     assert fm.applies_if == {}
     assert fm.priority == 50
@@ -265,7 +263,6 @@ def test_prompt_dict_roundtrip():
             description="Generate pytest tests",
             slash="generate-tests",
             includes_rules=["python-typing", "pytest"],
-            eval_samples=["generate-tests-happy-path"],
         ),
         body="# Sample\n",
         template_body="# Sample\n",
@@ -294,22 +291,18 @@ def test_prompt_frontmatter_coerces_none_to_defaults():
         name="x",
         description="x",
         slash="x",
-        version=None,  # type: ignore[arg-type]
         applies_if=None,  # type: ignore[arg-type]
         input_variables=None,  # type: ignore[arg-type]
         includes_rules=None,  # type: ignore[arg-type]
-        eval_samples=None,  # type: ignore[arg-type]
     )
-    assert fm.version == 1
     assert fm.applies_if == {}
     assert fm.input_variables == []
     assert fm.includes_rules == []
-    assert fm.eval_samples == []
 
 
 def test_prompt_markdown_roundtrip_with_blank_optional_fields(tmp_path):
     """A prompt authored with blank 'applies_if:' / 'input_variables:' /
-    'includes_rules:' / 'eval_samples:' lines round-trips through markdown
+    'includes_rules:' lines round-trips through markdown
     (bug_001 — symmetric to test_rule_markdown_roundtrip_with_blank_optional_fields)."""
     text = (
         "---\n"
@@ -320,7 +313,6 @@ def test_prompt_markdown_roundtrip_with_blank_optional_fields(tmp_path):
         "applies_if:\n"
         "input_variables:\n"
         "includes_rules:\n"
-        "eval_samples:\n"
         "---\n"
         "body\n"
     )
@@ -330,7 +322,6 @@ def test_prompt_markdown_roundtrip_with_blank_optional_fields(tmp_path):
     assert prompt.frontmatter.applies_if == {}
     assert prompt.frontmatter.input_variables == []
     assert prompt.frontmatter.includes_rules == []
-    assert prompt.frontmatter.eval_samples == []
     path.write_text(prompt.to_markdown(), encoding="utf-8")
     assert Prompt.from_markdown(path, "pkg") == prompt
 
@@ -406,7 +397,7 @@ def test_prompt_without_write_scope_to_markdown_unchanged(tmp_path: Path) -> Non
 
     data, _ = split_frontmatter(rendered)
     assert "write_scope" not in rendered
-    assert list(data) == ["id", "name", "description", "slash", "version", "includes_rules"]
+    assert list(data) == ["id", "name", "description", "slash", "includes_rules"]
 
 
 # ---------------------------------------------------------------------------

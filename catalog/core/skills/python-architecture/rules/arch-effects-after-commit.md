@@ -2,7 +2,6 @@
 id: arch-effects-after-commit
 name: Effects after commit
 description: "Effects that leave the process (emails, broker messages, webhooks) run after the commit, or go into an outbox row written in the same transaction; never send first and commit second."
-version: 1
 scope: scoped
 globs:
   - "**/services/**/*.py"

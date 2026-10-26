@@ -2,7 +2,6 @@
 id: playbook-rule-gates
 name: Rule gates
 description: "Gate a rule with applies_if on true detector facts, list keys as YAML lists, and keep globs for nudges."
-version: 1
 scope: scoped
 globs:
   - "catalog/**/rules/**/*.md"

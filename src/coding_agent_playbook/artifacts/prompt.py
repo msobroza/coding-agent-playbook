@@ -14,7 +14,31 @@ from coding_agent_playbook.artifacts.frontmatter import (
     _read_markdown,
     _without_empty,
     format_frontmatter,
+    frontmatter_keys_problem,
 )
+from coding_agent_playbook.exit_two import ExitTwoError
+
+
+class PromptLoadError(ExitTwoError, ValueError):
+    """A prompt file whose frontmatter keys cannot become a :class:`Prompt`.
+
+    ``str`` is ``<path>: <problem>``. Raised for an unknown, retired
+    (``version``, ``eval_samples``; #281) or missing key, which would otherwise
+    surface as a bare dataclass ``TypeError`` naming no file. An
+    :class:`ExitTwoError`, so every command prints ``error: <path>: <problem>``
+    and exits 2; a ``ValueError``, so the eval prompt renderer's handler keeps
+    catching it.
+
+    Example::
+
+        >>> str(PromptLoadError(Path("prompts/x.md"), "unknown frontmatter key 'impact'"))
+        "prompts/x.md: unknown frontmatter key 'impact'"
+    """
+
+    def __init__(self, path: Path, problem: str) -> None:
+        self.path = path
+        self.problem = problem
+        super().__init__(f"{path}: {problem}")
 
 
 @dataclass
@@ -23,11 +47,9 @@ class PromptFrontmatter:
     name: str
     description: str
     slash: str
-    version: int = 1
     applies_if: dict[str, Any] = field(default_factory=dict)
     input_variables: list[dict[str, Any]] = field(default_factory=list)
     includes_rules: list[str] = field(default_factory=list)
-    eval_samples: list[str] = field(default_factory=list)
     # Regexes the agent's final message must match while this prompt is active
     # (specs/prK-hook-pack.md §E.2 prompt-output-contract-on-stop); compiled by
     # ``playbook validate``, dropped from markdown when empty.
@@ -44,16 +66,12 @@ class PromptFrontmatter:
         # types hold and markdown round-trip stays lossless (SPEC §6.6.3).
         # This also normalises None passed from Python code: callers should
         # pass {} or [] for "empty/always", never None.
-        if self.version is None:
-            self.version = 1
         if self.applies_if is None:
             self.applies_if = {}
         if self.input_variables is None:
             self.input_variables = []
         if self.includes_rules is None:
             self.includes_rules = []
-        if self.eval_samples is None:
-            self.eval_samples = []
         if self.output_contract is None:
             self.output_contract = []
         if self.write_scope is None:
@@ -71,7 +89,16 @@ class Prompt:
 
     @classmethod
     def from_markdown(cls, path: Path, source_package: str) -> Prompt:
+        """Load the prompt at ``path``, raising :class:`PromptLoadError` on a bad key set.
+
+        Example::
+
+            >>> Prompt.from_markdown(Path("playbook/prompts/x.md"), "<repo-local>")  # doctest: +SKIP
+        """
         data, body, is_templated = _read_markdown(path)
+        problem = frontmatter_keys_problem(data, PromptFrontmatter)
+        if problem is not None:
+            raise PromptLoadError(path, problem)
         return cls(PromptFrontmatter(**data), body, body, is_templated, path, source_package)
 
     def to_markdown(self) -> str:

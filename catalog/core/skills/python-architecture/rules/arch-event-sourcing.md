@@ -2,7 +2,6 @@
 id: arch-event-sourcing
 name: Event sourcing
 description: "Use event sourcing only when history is the product; model events as frozen past-tense records with ids, plain values, a caller-supplied UTC time and a schema version."
-version: 1
 scope: scoped
 globs:
   - "**/events/**/*.py"

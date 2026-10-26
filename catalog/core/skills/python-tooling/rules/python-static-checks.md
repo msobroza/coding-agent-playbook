@@ -2,7 +2,6 @@
 id: python-static-checks
 name: Static checks
 description: "Treat the repo's lint and type-check settings as the contract: run the checks the way CI runs them, fix every finding your change introduces, and never loosen or bypass a check."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

@@ -2,7 +2,6 @@
 id: pytest-factory-fixtures
 name: Factory fixtures
 description: "When tests need variations of one object, return a factory with keyword-only parameters and valid defaults from the fixture, and clean up what it created after yield."
-version: 1
 scope: scoped
 globs:
   - "**/test_*.py"

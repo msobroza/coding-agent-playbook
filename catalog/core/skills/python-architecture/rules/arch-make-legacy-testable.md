@@ -2,7 +2,6 @@
 id: arch-make-legacy-testable
 name: Make legacy code testable
 description: "Make untested code testable in steps: pin its behavior, list its hidden inputs, lift each to a parameter typed with the narrowest role, move the concrete choice to the composition root, then test with fakes."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

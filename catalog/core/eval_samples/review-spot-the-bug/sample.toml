@@ -1,7 +1,6 @@
 id = "review-spot-the-bug"
 prompt_id = "review"
 description = "Happy path: code has a real correctness bug (off-by-one); a good review catches it before style nits."
-version = 1
 
 [setup]
 files = ["src/pagination.py"]

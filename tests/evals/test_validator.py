@@ -18,14 +18,13 @@ from coding_agent_playbook.evals.validator import (
 )
 
 
-def _make_prompt(prompt_id: str, eval_samples: list[str] | None = None) -> Prompt:
+def _make_prompt(prompt_id: str) -> Prompt:
     return Prompt(
         frontmatter=PromptFrontmatter(
             id=prompt_id,
             name=prompt_id.title(),
             description="prompt",
             slash=prompt_id,
-            eval_samples=eval_samples or [],
         ),
         body="body\n",
         template_body="body\n",
@@ -69,7 +68,7 @@ def _make_sample(
 def test_validate_samples_passes_well_formed(tmp_path: Path) -> None:
     sample_dir = tmp_path / "ok-sample"
     sample_dir.mkdir()
-    prompt = _make_prompt("demo", eval_samples=["ok-sample"])
+    prompt = _make_prompt("demo")
     sample = _make_sample(sample_id="ok-sample", prompt_id="demo", sample_dir=sample_dir)
     assert validate_samples([sample], [prompt]) == []
 
@@ -78,7 +77,7 @@ def test_validate_samples_passes_well_formed(tmp_path: Path) -> None:
 def test_validate_samples_flags_unknown_check(tmp_path: Path) -> None:
     sample_dir = tmp_path / "bad-check"
     sample_dir.mkdir()
-    prompt = _make_prompt("demo", eval_samples=["bad-check"])
+    prompt = _make_prompt("demo")
     sample = _make_sample(
         sample_id="bad-check",
         prompt_id="demo",
@@ -93,7 +92,7 @@ def test_validate_samples_flags_unknown_check(tmp_path: Path) -> None:
 def test_validate_samples_flags_expr_ident_not_in_bind(tmp_path: Path) -> None:
     sample_dir = tmp_path / "bad-expr"
     sample_dir.mkdir()
-    prompt = _make_prompt("demo", eval_samples=["bad-expr"])
+    prompt = _make_prompt("demo")
     sample = _make_sample(
         sample_id="bad-expr",
         prompt_id="demo",
@@ -108,7 +107,7 @@ def test_validate_samples_flags_expr_ident_not_in_bind(tmp_path: Path) -> None:
 def test_validate_samples_flags_verdict_missing_layer(tmp_path: Path) -> None:
     sample_dir = tmp_path / "bad-verdict"
     sample_dir.mkdir()
-    prompt = _make_prompt("demo", eval_samples=["bad-verdict"])
+    prompt = _make_prompt("demo")
     # Default verdict mentions 'rubric' but there is no [rubric] block.
     sample = _make_sample(
         sample_id="bad-verdict",
@@ -124,7 +123,7 @@ def test_validate_samples_flags_verdict_missing_layer(tmp_path: Path) -> None:
 def test_validate_samples_flags_rubric_weight_sum(tmp_path: Path) -> None:
     sample_dir = tmp_path / "bad-weights"
     sample_dir.mkdir()
-    prompt = _make_prompt("demo", eval_samples=["bad-weights"])
+    prompt = _make_prompt("demo")
     sample = _make_sample(
         sample_id="bad-weights",
         prompt_id="demo",
@@ -147,7 +146,7 @@ def test_validate_samples_flags_rubric_weight_sum(tmp_path: Path) -> None:
 def test_validate_samples_flags_weighted_verdict_unknown_layer(tmp_path: Path) -> None:
     sample_dir = tmp_path / "bad-weighted"
     sample_dir.mkdir()
-    prompt = _make_prompt("demo", eval_samples=["bad-weighted"])
+    prompt = _make_prompt("demo")
     sample = EvalSample(
         id="bad-weighted",
         prompt_id="demo",
@@ -171,7 +170,7 @@ def test_validate_samples_flags_weighted_verdict_unknown_layer(tmp_path: Path) -
 def test_validate_samples_flags_no_layer(tmp_path: Path) -> None:
     sample_dir = tmp_path / "no-layer"
     sample_dir.mkdir()
-    prompt = _make_prompt("demo", eval_samples=["no-layer"])
+    prompt = _make_prompt("demo")
     sample = EvalSample(
         id="no-layer",
         prompt_id="demo",
@@ -191,7 +190,7 @@ def test_validate_samples_flags_no_layer(tmp_path: Path) -> None:
 def test_validate_samples_accepts_valid_aggregate(tmp_path: Path) -> None:
     sample_dir = tmp_path / "agg-ok"
     sample_dir.mkdir()
-    prompt = _make_prompt("demo", eval_samples=["agg-ok"])
+    prompt = _make_prompt("demo")
     sample = _make_sample(
         sample_id="agg-ok",
         prompt_id="demo",
@@ -206,7 +205,7 @@ def test_validate_samples_accepts_valid_aggregate(tmp_path: Path) -> None:
 def test_validate_samples_flags_bad_aggregate(tmp_path: Path) -> None:
     sample_dir = tmp_path / "agg-bad"
     sample_dir.mkdir()
-    prompt = _make_prompt("demo", eval_samples=["agg-bad"])
+    prompt = _make_prompt("demo")
     sample = _make_sample(
         sample_id="agg-bad",
         prompt_id="demo",
@@ -228,7 +227,7 @@ def test_validate_samples_passes_when_setup_files_present(tmp_path: Path) -> Non
     (setup_dir / "src").mkdir(parents=True)
     (setup_dir / "src" / "calculator.py").write_text("def add(a, b): return a + b\n")
 
-    prompt = _make_prompt("demo", eval_samples=["sample-1"])
+    prompt = _make_prompt("demo")
     sample = _make_sample(
         sample_id="sample-1",
         prompt_id="demo",
@@ -242,7 +241,7 @@ def test_validate_samples_passes_when_setup_files_present(tmp_path: Path) -> Non
 def test_validate_samples_flags_missing_setup_file(tmp_path: Path) -> None:
     sample_dir = tmp_path / "sample-2"
     sample_dir.mkdir()
-    prompt = _make_prompt("demo", eval_samples=["sample-2"])
+    prompt = _make_prompt("demo")
     sample = _make_sample(
         sample_id="sample-2",
         prompt_id="demo",
@@ -262,7 +261,7 @@ def test_validate_samples_flags_missing_setup_file(tmp_path: Path) -> None:
 def test_validate_samples_passes_when_prompt_id_exists(tmp_path: Path) -> None:
     sample_dir = tmp_path / "sample-3"
     sample_dir.mkdir()
-    prompt = _make_prompt("demo", eval_samples=["sample-3"])
+    prompt = _make_prompt("demo")
     sample = _make_sample(sample_id="sample-3", prompt_id="demo", sample_dir=sample_dir)
     assert validate_samples([sample], [prompt]) == []
 
@@ -276,42 +275,15 @@ def test_validate_samples_flags_unknown_prompt_id(tmp_path: Path) -> None:
     assert any("prompt_id" in e.message and "missing" in e.message for e in errors)
 
 
-# Rule 6 (positive): prompt's eval_samples lists the sample id → no error.
-def test_validate_samples_passes_when_prompt_back_references_sample(tmp_path: Path) -> None:
-    sample_dir = tmp_path / "sample-5"
-    sample_dir.mkdir()
-    prompt = _make_prompt("demo", eval_samples=["sample-5"])
-    sample = _make_sample(sample_id="sample-5", prompt_id="demo", sample_dir=sample_dir)
-    assert validate_samples([sample], [prompt]) == []
-
-
-# Rule 6 (negative): prompt's eval_samples omits the sample id → error.
-def test_validate_samples_flags_prompt_missing_back_reference(tmp_path: Path) -> None:
+# A prompt's samples are the ones naming it (#281): no list to cross-check.
+def test_validate_samples_passes_for_a_sample_naming_a_prompt_that_lists_none(
+    tmp_path: Path,
+) -> None:
     sample_dir = tmp_path / "sample-6"
     sample_dir.mkdir()
-    prompt = _make_prompt("foo", eval_samples=[])  # eval_samples is empty
+    prompt = _make_prompt("foo")
     sample = _make_sample(sample_id="foo-happy-path", prompt_id="foo", sample_dir=sample_dir)
-    errors = validate_samples([sample], [prompt])
-    assert any(
-        "foo" in e.message and "foo-happy-path" in e.message and "eval_samples" in e.message
-        for e in errors
-    )
-
-
-# Rule 7 (positive): prompt's eval_samples references all resolve.
-def test_validate_samples_passes_when_prompt_to_sample_refs_resolve(tmp_path: Path) -> None:
-    sample_dir = tmp_path / "sample-8"
-    sample_dir.mkdir()
-    prompt = _make_prompt("demo", eval_samples=["sample-8"])
-    sample = _make_sample(sample_id="sample-8", prompt_id="demo", sample_dir=sample_dir)
     assert validate_samples([sample], [prompt]) == []
-
-
-# Rule 7 (negative): prompt declares an eval_sample that doesn't exist on-disk.
-def test_validate_samples_flags_prompt_referencing_missing_sample(tmp_path: Path) -> None:
-    prompt = _make_prompt("demo", eval_samples=["missing-sample"])
-    errors = validate_samples([], [prompt])
-    assert any("missing-sample" in e.message and "not found" in e.message for e in errors)
 
 
 def test_validate_samples_aggregates_multiple_errors(tmp_path: Path) -> None:
@@ -325,6 +297,5 @@ def test_validate_samples_aggregates_multiple_errors(tmp_path: Path) -> None:
         setup_files=["src/ghost.py"],
     )
     errors = validate_samples([sample], [])
-    # Expect two: setup.files miss + prompt_id miss. (Rule 6 short-circuits
-    # since the prompt is missing entirely.)
+    # Expect two: setup.files miss + prompt_id miss.
     assert len(errors) >= 2

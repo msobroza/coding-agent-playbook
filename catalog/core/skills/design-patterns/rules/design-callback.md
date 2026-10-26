@@ -2,7 +2,6 @@
 id: design-callback
 name: Callback
 description: "When a class must tell its caller that something happened, take a role-named Callable with a named no-op default, or a list of handlers, instead of hard-coding the reaction."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

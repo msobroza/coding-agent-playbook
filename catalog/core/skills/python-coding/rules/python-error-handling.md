@@ -2,7 +2,6 @@
 id: python-error-handling
 name: Error handling
 description: "Catch only the narrowest exception you can handle, never swallow one, and chain with raise ... from when you translate it."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

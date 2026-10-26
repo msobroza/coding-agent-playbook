@@ -2,7 +2,6 @@
 id: pytest-edge-cases
 name: Edge cases
 description: "Test each operation beyond the happy path: empty and zero inputs, boundaries and the values around them, invalid input, duplicates, not-found and collaborator failures."
-version: 1
 scope: scoped
 globs:
   - "**/test_*.py"

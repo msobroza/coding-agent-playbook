@@ -2,7 +2,6 @@
 id: python-context-managers
 name: Context managers
 description: "Bind every releasable resource to a with or async with block, and commit a transaction only after its block succeeds."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

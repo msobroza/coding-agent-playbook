@@ -164,11 +164,9 @@ def _prompt_entry(prompt: Prompt, path: str) -> manifest.ManifestEntry:
         body=prompt.template_body,
         is_templated=prompt.is_templated,
         slash=fm.slash,
-        version=fm.version,
         applies_if=dict(fm.applies_if),
         input_variables=[dict(v) for v in fm.input_variables],
         includes_rules=list(fm.includes_rules),
-        eval_samples=list(fm.eval_samples),
         output_contract=list(fm.output_contract),
         write_scope=dict(fm.write_scope),
     )

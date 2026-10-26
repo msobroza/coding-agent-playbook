@@ -29,7 +29,6 @@ _SCOPED = ManifestEntry(
     scope="scoped",
     priority=50,
     globs=["**/*.py"],
-    version=1,
 )
 
 _SCOPED_TOML = (
@@ -46,7 +45,6 @@ _SCOPED_TOML = (
     "priority = 50\n"
     'globs = ["**/*.py"]\n'
     "tags = []\n"
-    "version = 1\n"
     "applies_if = {}\n"
 )
 

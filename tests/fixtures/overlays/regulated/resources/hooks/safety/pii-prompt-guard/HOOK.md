@@ -2,7 +2,6 @@
 id: pii-prompt-guard
 name: PII prompt guard
 description: Block a prompt carrying checksum-validated personal data before it reaches the model (regulated overlay activation).
-version: 1
 tier: default
 enabled: true
 priority: 10

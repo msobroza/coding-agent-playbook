@@ -2,7 +2,6 @@
 id: pydantic-model-validators
 name: Pydantic model validators
 description: "Check cross-field input invariants in an after model validator that returns the model; use before validators only to reshape raw input."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

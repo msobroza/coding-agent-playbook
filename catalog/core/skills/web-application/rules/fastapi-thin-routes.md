@@ -2,7 +2,6 @@
 id: fastapi-thin-routes
 name: FastAPI thin routes
 description: "Keep each route a thin HTTP adapter: it declares inputs and the response model, calls a service that knows nothing of HTTP, and converts the result."
-version: 1
 scope: scoped
 globs:
   - "**/routers/**/*.py"

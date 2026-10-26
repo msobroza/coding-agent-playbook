@@ -2,7 +2,6 @@
 id: pytest-parametrize
 name: Parametrized case tables
 description: "Collapse tests that differ only in inputs and expected values into one parametrized case table, never a loop, and parametrize the expectation when some cases raise."
-version: 1
 scope: scoped
 globs:
   - "**/test_*.py"

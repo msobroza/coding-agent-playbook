@@ -2,7 +2,6 @@
 id: design-function-wrapper
 name: Function wrapper
 description: "When an existing function has the right logic but the wrong parameters for a seam, write a small function that translates the arguments and delegates, instead of converting at every call site or widening the original."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.artifacts.hook import Hook
-from coding_agent_playbook.artifacts.prompt import Prompt
+from coding_agent_playbook.artifacts.prompt import Prompt, PromptLoadError
 from coding_agent_playbook.artifacts.rule import Rule
 from coding_agent_playbook.catalog.digest import artifact_digest, digest_kind
 from coding_agent_playbook.catalog.source import _iter_skills
@@ -40,10 +40,10 @@ priority: 40
 Use spaces.
 """
 
-# The same rule: keys reordered, flow-style YAML, a bookkeeping version, an empty list.
+# The same rule: keys reordered, flow-style YAML, an empty list.
 _RULE_REORDERED = """\
 ---
-{scope: always, priority: 40, description: How to write code., version: 7, tags: [],
+{scope: always, priority: 40, description: How to write code., tags: [],
  name: Style, id: style}
 ---
 Use spaces.
@@ -103,16 +103,30 @@ def test_the_digest_covers_the_source_body_not_the_rendered_one(tmp_path: Path) 
     assert artifact_digest(rendered) == artifact_digest(rule)
 
 
-def test_a_prompts_eval_samples_are_bookkeeping(tmp_path: Path) -> None:
-    text = "---\nid: tidy\nname: Tidy\ndescription: Tidy.\nslash: tidy\n{extra}---\nTidy it.\n"
-    path_a, path_b = tmp_path / "a.md", tmp_path / "b.md"
-    path_a.write_text(text.format(extra=""), encoding="utf-8")
-    path_b.write_text(text.format(extra="eval_samples: [tidy-one]\n"), encoding="utf-8")
+@pytest.mark.parametrize("retired", ["version: 3\n", "eval_samples: [tidy-one]\n"])
+def test_a_retired_key_never_reaches_a_prompt_digest(tmp_path: Path, retired: str) -> None:
+    # #281 ticket 04: the loader refuses the key, so no Prompt carrying it exists to digest.
+    path = tmp_path / "tidy.md"
+    path.write_text(
+        f"---\nid: tidy\nname: Tidy\ndescription: Tidy.\nslash: tidy\n{retired}---\nTidy it.\n",
+        encoding="utf-8",
+    )
 
-    plain = Prompt.from_markdown(path_a, "<repo-local>")
-    with_samples = Prompt.from_markdown(path_b, "<repo-local>")
+    with pytest.raises(PromptLoadError, match="retired key"):
+        Prompt.from_markdown(path, "<repo-local>")
 
-    assert artifact_digest(plain) == artifact_digest(with_samples)
+
+@pytest.mark.parametrize("bookkeeping", ["version: 3\n", "eval_samples: [demo-one]\n"])
+def test_a_skills_bookkeeping_keys_never_move_its_digest(tmp_path: Path, bookkeeping: str) -> None:
+    # A skill's frontmatter stays open (vendored SKILL.md files may carry ``version``),
+    # so the digest's own exclusion is what keeps these keys out.
+    plain = _skill(tmp_path / "a", {})
+    tagged = _skill(
+        tmp_path / "b",
+        {"SKILL.md": f"---\nname: demo\ndescription: A demo.\n{bookkeeping}---\nDo it.\n"},
+    )
+
+    assert artifact_digest(plain) == artifact_digest(tagged)
 
 
 @pytest.mark.parametrize(

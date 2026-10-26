@@ -2,7 +2,6 @@
 id: playbook-rule-ids
 name: Rule ids
 description: "Give each rule a stable kebab-case id that equals its file name and names its owner by prefix."
-version: 1
 scope: scoped
 globs:
   - "catalog/**/rules/**/*.md"

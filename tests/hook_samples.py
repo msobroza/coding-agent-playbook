@@ -43,7 +43,6 @@ GUARD_GENERATED_OUTPUTS_MD = """\
 id: guard-generated-outputs
 name: Guard generated outputs
 description: Deny hand-edits to files that playbook sync generates and point at the canonical source.
-version: 1
 tier: default
 priority: 10
 events: [pre_tool_use]

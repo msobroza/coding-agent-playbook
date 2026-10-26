@@ -2,7 +2,6 @@
 id: pytest-hypothesis-stateful
 name: Hypothesis stateful tests
 description: "Test stateful objects with a Hypothesis rule-based state machine that generates sequences of operations and checks invariants after every step."
-version: 1
 scope: scoped
 globs:
   - "**/test_*.py"

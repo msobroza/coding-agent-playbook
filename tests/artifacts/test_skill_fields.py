@@ -66,7 +66,6 @@ def test_rule_without_skill_markdown_is_byte_identical() -> None:
         "name: Typing\n"
         "description: Prefer a concrete type to Any.\n"
         "scope: scoped\n"
-        "version: 1\n"
         "globs:\n"
         "- '**/*.py'\n"
         "priority: 50\n"

@@ -2,7 +2,6 @@
 id: domino-materialize-external-data
 name: Domino materialized external data
 description: "Write the exact extract a job reads from a database, API or network drive to a dataset file with its query record, then read that file back."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

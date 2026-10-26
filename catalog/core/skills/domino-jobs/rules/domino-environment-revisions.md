@@ -2,7 +2,6 @@
 id: domino-environment-revisions
 name: Environment revisions
 description: "Run jobs whose results matter on an explicitly chosen environment revision and hardware tier, chosen by ID and recorded, instead of the moving latest revision and project defaults."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

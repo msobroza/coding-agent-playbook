@@ -3,7 +3,6 @@ id: document-layout-guard
 name: Document layout guard
 description: Deny writing a spec or plan outside the document layout and name the directory it belongs in.
 summary: Write specs to `docs/specs/` and plans to `docs/plans/`, never to a framework's own folder or `.scratch/`.
-version: 1
 tier: default
 priority: 25
 events: [pre_tool_use]

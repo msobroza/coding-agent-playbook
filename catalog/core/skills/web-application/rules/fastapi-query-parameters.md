@@ -2,7 +2,6 @@
 id: fastapi-query-parameters
 name: FastAPI query parameters
 description: "Give query parameters defaults for the common case and bound every one with Query() constraints or a closed set of values."
-version: 1
 scope: scoped
 globs:
   - "**/routers/**/*.py"

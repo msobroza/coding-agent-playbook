@@ -2,7 +2,6 @@
 id: playbook-third-party-content
 name: Third-party content
 description: "Vendor third-party text only under its license, with byte-identical license copies and a change list, or distill the ideas in your own words."
-version: 1
 scope: scoped
 globs:
   - "catalog/**/ATTRIBUTIONS.md"

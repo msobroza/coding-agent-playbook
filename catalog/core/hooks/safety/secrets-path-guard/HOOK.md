@@ -3,7 +3,6 @@ id: secrets-path-guard
 name: Secrets path guard
 description: Deny agent reads and writes of credential files (.env, keys, cloud and SSH credentials) and commands that print a forge token (gh auth token, glab config get token, echo $GH_TOKEN); ask before creating a new .env or opening a hard link to a credential file.
 summary: Never read, print or write credential files (`.env*`, keys, `~/.ssh`) or forge tokens; ask the user for the values.
-version: 1
 tier: default
 priority: 15
 events: [pre_tool_use]

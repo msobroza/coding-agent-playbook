@@ -2,7 +2,6 @@
 id: docs-citation-file
 name: Citation file
 description: "Keep CITATION.cff's version, release date, title, authors and license in step with pyproject.toml, and never invent a DOI, ORCID or author."
-version: 1
 scope: scoped
 globs:
   - "CITATION.cff"

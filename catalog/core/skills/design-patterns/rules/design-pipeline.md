@@ -2,7 +2,6 @@
 id: design-pipeline
 name: Pipeline
 description: "When a value passes through a configurable series of transformations, list named step functions of one typed alias and apply them in order, wrapping a failure with the step's name; keep three fixed steps inline."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

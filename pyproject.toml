@@ -310,6 +310,7 @@ type = "forbidden"
 source_modules = [
     "coding_agent_playbook.artifacts.path_classes",
     "coding_agent_playbook.artifacts.path_globs",
+    "coding_agent_playbook.artifacts.retired_keys",
     "coding_agent_playbook.catalog.roots",
     "coding_agent_playbook.detector.bounded_read",
     "coding_agent_playbook.detector.pep503",

@@ -2,7 +2,6 @@
 id: domino-api-proxy-auth
 name: API proxy auth
 description: "Inside a run, call the Domino API through DOMINO_API_PROXY with no credential in code; outside Domino, send a service-account token from an environment variable as a Bearer token."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

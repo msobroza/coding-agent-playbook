@@ -2,7 +2,6 @@
 id: python-parameterized-queries
 name: Parameterized queries
 description: "Never build SQL with string formatting: bind values with the driver's placeholders and take identifiers only from an allow-list."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

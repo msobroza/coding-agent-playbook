@@ -57,8 +57,6 @@ def _seed_eval_repo(repo: Path, make_synthetic_repo: Any) -> None:
         "name: Refactor\n"
         "description: Refactor an existing function\n"
         "slash: refactor\n"
-        "eval_samples:\n"
-        "  - refactor-extract-helper\n"
         "---\n"
         "Refactor body.\n",
         encoding="utf-8",
@@ -69,9 +67,6 @@ def _seed_eval_repo(repo: Path, make_synthetic_repo: Any) -> None:
         "name: Generate Tests\n"
         "description: Generate pytest tests for a function\n"
         "slash: generate-tests\n"
-        "eval_samples:\n"
-        "  - generate-tests-happy-path\n"
-        "  - generate-tests-edge-cases\n"
         "---\n"
         "Body.\n",
         encoding="utf-8",
@@ -205,7 +200,8 @@ def test_eval_list_groups_samples_under_prompts(tmp_path, make_synthetic_repo, c
     idx_header = out.index("generate-tests")
     idx_happy = out.index("generate-tests-happy-path")
     idx_edge = out.index("generate-tests-edge-cases")
-    assert idx_header < idx_happy < idx_edge
+    # #281: samples list alphabetically by id under their prompt, not in declared order
+    assert idx_header < idx_edge < idx_happy
 
 
 def test_plural_helper_uses_singular_for_n_equals_one():
@@ -299,8 +295,6 @@ def test_show_uses_prompt_slash_not_id_when_they_differ(tmp_path, make_synthetic
         "name: Generate Tests\n"
         "description: Generate pytest tests\n"
         "slash: gen-tests\n"
-        "eval_samples:\n"
-        "  - generate-tests-happy-path\n"
         "---\n"
         "Body.\n",
         encoding="utf-8",
@@ -459,8 +453,6 @@ def test_show_source_path_is_repo_relative_for_repo_local_samples(
         "name: Local Only\n"
         "description: A repo-local-only prompt for path-display assertions\n"
         "slash: local-only\n"
-        "eval_samples:\n"
-        "  - local-only-unique-zzz\n"
         "---\n"
         "Body.\n",
         encoding="utf-8",

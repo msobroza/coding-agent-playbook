@@ -2,7 +2,6 @@
 id: docs-architecture-overview
 name: Architecture overview
 description: "Keep docs/architecture.md a one-page map of components, entry points, data flow and constraints, updated when a top-level package or entry point changes."
-version: 1
 scope: scoped
 globs:
   - "docs/architecture.md"

@@ -2,7 +2,6 @@
 id: domino-agent-redact-traces
 name: Domino agent secrets out of traces
 description: "Pass credentials to the traced request function only through a closure or an injected collaborator, and return only the answer and tool names."
-version: 1
 scope: scoped
 globs:
   - "**/settings.py"

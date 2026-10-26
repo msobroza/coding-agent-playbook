@@ -2,7 +2,6 @@
 id: domino-job-schedules
 name: Job schedules
 description: "Document every scheduled job in the repo, write Quartz expressions with seconds and a plain-words meaning, and choose Run sequentially deliberately."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

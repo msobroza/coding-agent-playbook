@@ -2,7 +2,6 @@
 id: pytest-configuration
 name: pytest configuration
 description: "Keep pytest and coverage settings in the one place the repo already uses, register every marker, filter warnings narrowly, and never lower the coverage bar."
-version: 1
 scope: scoped
 globs:
   - "pyproject.toml"

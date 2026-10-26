@@ -31,7 +31,6 @@ def _full_dict() -> dict[str, Any]:
         "id": "generate-tests-happy-path",
         "prompt_id": "generate-tests",
         "description": "Generate tests for a simple pure function with no edge cases",
-        "version": 1,
         "setup": {
             "files": ["src/calculator.py"],
             "project_kind": "python-application",
@@ -86,7 +85,6 @@ def test_eval_sample_from_dict_parses_minimal_sample(tmp_path: Path) -> None:
     assert sample.id == "demo-happy-path"
     assert sample.prompt_id == "demo"
     assert sample.description == "A demo sample"
-    assert sample.version == 1
     assert sample.source_path == tmp_path / "sample.toml"
     assert sample.source_package == "coding_agent_playbook"
     assert isinstance(sample.setup, SampleSetup)
@@ -102,7 +100,6 @@ def test_eval_sample_from_dict_parses_full_sample(tmp_path: Path) -> None:
     sample = _make(_full_dict(), tmp_path)
     assert sample.id == "generate-tests-happy-path"
     assert sample.prompt_id == "generate-tests"
-    assert sample.version == 1
 
     assert sample.setup.files == [Path("src/calculator.py")]
     assert sample.setup.project_kind == "python-application"
@@ -144,6 +141,20 @@ def test_eval_sample_from_dict_rejects_missing_description(tmp_path: Path) -> No
     data = _minimal_dict()
     del data["description"]
     with pytest.raises(ValueError, match="description"):
+        _make(data, tmp_path)
+
+
+def test_eval_sample_from_dict_rejects_an_unknown_top_level_key_naming_it(tmp_path: Path) -> None:
+    data = _minimal_dict()
+    data["editon"] = "v0.1.0"
+    with pytest.raises(ValueError, match="unknown top-level key 'editon'; allowed keys: id,"):
+        _make(data, tmp_path)
+
+
+def test_eval_sample_from_dict_rejects_version_naming_the_digest(tmp_path: Path) -> None:
+    data = _minimal_dict()
+    data["version"] = 1
+    with pytest.raises(ValueError, match="retired key 'version': the engine now computes"):
         _make(data, tmp_path)
 
 

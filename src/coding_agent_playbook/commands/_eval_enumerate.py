@@ -40,7 +40,6 @@ def _print_list(prompts: list[Prompt], samples: list[EvalSample]) -> int:
 
         Total: P prompts, T eval samples, U prompts without samples
     """
-    samples_by_id: dict[str, EvalSample] = {s.id: s for s in samples}
     samples_by_prompt: dict[str, list[EvalSample]] = {}
     for sample in samples:
         samples_by_prompt.setdefault(sample.prompt_id, []).append(sample)
@@ -51,22 +50,9 @@ def _print_list(prompts: list[Prompt], samples: list[EvalSample]) -> int:
     for prompt in prompts:
         rendered_any_prompt = True
         prompt_id = prompt.frontmatter.id
-        # Order samples by the prompt's eval_samples: frontmatter (the
-        # authoring-order users expect). Samples present on-disk but missing
-        # from the frontmatter still get rendered, in alphabetical order,
-        # so authoring drift is visible.
-        declared_order = prompt.frontmatter.eval_samples or []
-        ordered: list[EvalSample] = []
-        seen: set[str] = set()
-        for declared_id in declared_order:
-            candidate = samples_by_id.get(declared_id)
-            if candidate is not None and candidate.prompt_id == prompt_id:
-                ordered.append(candidate)
-                seen.add(declared_id)
-        for leftover in sorted(samples_by_prompt.get(prompt_id, []), key=lambda s: s.id):
-            if leftover.id not in seen:
-                ordered.append(leftover)
-        prompt_samples = ordered
+        # A prompt's samples are the ones whose prompt_id names it (#281),
+        # listed alphabetically by id.
+        prompt_samples = sorted(samples_by_prompt.get(prompt_id, []), key=lambda s: s.id)
         source = _short_source(prompt.source_package)
         lines.append(f"{prompt_id} ({source})")
         if not prompt_samples:

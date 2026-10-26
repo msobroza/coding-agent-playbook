@@ -2,7 +2,6 @@
 id: domino-app-endpoint-auth
 name: Model endpoint auth
 description: "Call a restricted Domino model endpoint with its access token from settings: basic auth for sync, Bearer for async, through one client with a timeout."
-version: 1
 scope: scoped
 globs:
   - "**/app.py"

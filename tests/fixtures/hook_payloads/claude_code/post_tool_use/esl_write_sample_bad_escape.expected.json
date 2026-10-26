@@ -49,11 +49,11 @@
   "result": {
     "decision": "context",
     "context": [
-      "Eval sample \"demo-sample\" does not compile; resolve before finishing:\n\"sample.toml: malformed TOML: Unescaped '\\\\' in a string (at line 16, column 14)\"\nauthor regex patterns as TOML literal strings (single quotes); \\s is an invalid escape in a basic string"
+      "Eval sample \"demo-sample\" does not compile; resolve before finishing:\n\"sample.toml: malformed TOML: Unescaped '\\\\' in a string (at line 15, column 14)\"\nauthor regex patterns as TOML literal strings (single quotes); \\s is an invalid escape in a basic string"
     ]
   },
   "wire": {
-    "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"Eval sample \\\"demo-sample\\\" does not compile; resolve before finishing:\\n\\\"sample.toml: malformed TOML: Unescaped '\\\\\\\\' in a string (at line 16, column 14)\\\"\\nauthor regex patterns as TOML literal strings (single quotes); \\\\s is an invalid escape in a basic string\"}}\n",
+    "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"Eval sample \\\"demo-sample\\\" does not compile; resolve before finishing:\\n\\\"sample.toml: malformed TOML: Unescaped '\\\\\\\\' in a string (at line 15, column 14)\\\"\\nauthor regex patterns as TOML literal strings (single quotes); \\\\s is an invalid escape in a basic string\"}}\n",
     "stderr": "",
     "exit_code": 0
   }

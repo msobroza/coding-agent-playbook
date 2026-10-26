@@ -2,7 +2,6 @@
 id: pytest-arrange-act-assert
 name: Arrange-Act-Assert
 description: "Lay out every test as Arrange, Act, Assert: one Act per test, setup before it, checks after it, and pytest.raises wrapped around the Act alone."
-version: 1
 scope: scoped
 globs:
   - "tests/**/*.py"

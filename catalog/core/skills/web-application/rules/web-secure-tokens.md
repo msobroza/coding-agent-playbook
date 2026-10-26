@@ -2,7 +2,6 @@
 id: web-secure-tokens
 name: Generate tokens with secrets and compare in constant time
 description: "Generate reset tokens, API keys and invite codes with the secrets module, store only their hash with an expiry, consume them atomically, and compare secrets with hmac.compare_digest."
-version: 1
 scope: scoped
 globs:
   - "**/auth.py"

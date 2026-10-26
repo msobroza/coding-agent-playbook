@@ -2,7 +2,6 @@
 id: domino-agent-settings
 name: Domino agent settings
 description: "Decide once in typed settings whether the agent runs in Domino, and branch every Domino-dependent choice on that flag."
-version: 1
 scope: scoped
 globs:
   - "**/settings.py"

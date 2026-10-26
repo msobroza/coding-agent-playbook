@@ -2,7 +2,6 @@
 id: design-strategy
 name: Strategy
 description: "When an if/elif chooses among algorithms, pass the algorithm in as a function typed with a role-named Callable alias, or a callable frozen dataclass when it needs configuration."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

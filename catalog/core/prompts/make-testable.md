@@ -3,7 +3,6 @@ id: make-testable
 name: Make testable
 description: "Behavior-preserving workflow: pin the target with tests, extract its pure logic, and lift hard-wired clocks, clients, sessions, singletons and globals into injected parameters covered by named fakes."
 slash: make-testable
-version: 1
 input_variables:
   - name: target
     description: Module, class or function to make testable (e.g. "src/billing/invoices.py::charge_overdue")
@@ -11,8 +10,6 @@ input_variables:
 includes_rules:
   - python-dependency-injection
   - python-pure-core
-eval_samples:
-  - make-testable-inject-clock
 ---
 
 # Make testable

@@ -2,7 +2,6 @@
 id: domino-agent-llm-keys
 name: Domino agent LLM provider keys
 description: "Keep provider keys and model endpoint hosts out of the agent config file and hand the key to the provider explicitly from settings."
-version: 1
 scope: scoped
 globs:
   - "**/settings.py"

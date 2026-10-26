@@ -2,7 +2,6 @@
 id: domino-env-var-names
 name: Variable names
 description: "Give every custom environment variable one organization or application prefix, and never use a name or prefix Domino reserves."
-version: 1
 scope: scoped
 globs:
   - "**/settings.py"

@@ -2,7 +2,6 @@
 id: design-pattern-from-smell
 name: A pattern only for a present smell
 description: "Start from a smell visible in today's code, stop at the lightest form that removes it, and remove a pattern that no longer earns its keep."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

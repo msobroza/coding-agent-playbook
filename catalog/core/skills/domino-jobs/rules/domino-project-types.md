@@ -2,7 +2,6 @@
 id: domino-project-types
 name: Project types
 description: "Write every output a run must keep to the location its project type syncs back: the working directory in DFS projects, the artifacts directory in Git-based ones."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

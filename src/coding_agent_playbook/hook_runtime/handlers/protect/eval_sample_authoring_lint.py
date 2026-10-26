@@ -10,7 +10,7 @@ After an Edit or Write of ``**/eval_samples/<id>/sample.toml`` or its
 2. trial-compiles **that one sample** in-process: ``evals.loader`` then
    ``evals.validator.validate_samples`` (unknown refs, unbound ``expr``
    identifiers, rubric weights, verdicts, ``answer_matches`` regexes, setup
-   files, ``prompt_id`` and the prompt/sample back-reference), keeping only
+   files and ``prompt_id``), keeping only
    errors anchored at this sample. Prompts come from ``FileSystemArtifactSource``
    (engine, ``overlays_enabled`` from ``protected.resource_roots``, the sample's
    own layer — ``catalog/core/``, ``catalog/plugins/<name>/`` or an overlay

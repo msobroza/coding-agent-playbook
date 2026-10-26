@@ -13,7 +13,7 @@ layer present, unknown check ids / metric names / gate-refs / rubric-refs,
 malformed handle bindings, expression identifiers ⊄ bind keys, the rubric
 weight-sum, and verdict identifiers ⊄ present layers. The non-schema rules
 (setup.files exist, an authored ``setup/pyproject.toml`` parses, prompt_id
-resolves, prompt↔sample back-reference symmetry) and a light ``[aggregate]``
+resolves) and a light ``[aggregate]``
 shape check are kept here.
 """
 
@@ -21,10 +21,11 @@ from __future__ import annotations
 
 import tomllib
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from coding_agent_playbook.artifacts.prompt import Prompt
     from coding_agent_playbook.evals.sample import EvalSample
 
@@ -63,17 +64,14 @@ def validate_samples(
     4. Each sample's ``setup.files`` must exist under ``<sample_dir>/setup/``.
        When ``setup/pyproject.toml`` is present it must parse as TOML; dep
        installability is the runner's concern (``uv sync``), not the validator's.
-    5. Each sample's ``prompt_id`` resolves to a known prompt.
-    6. Each sample is listed in its referenced prompt's ``eval_samples:`` frontmatter
-       (sample → prompt direction of the symmetry check).
-    7. Each prompt's ``eval_samples:`` references an on-disk sample (prompt → sample
-       direction, per SPEC §6.5.5 rule 1).
+    5. Each sample's ``prompt_id`` resolves to a known prompt. A prompt's
+       samples are exactly the samples whose ``prompt_id`` names it; prompts
+       no longer list them (#281), so there is no back-reference to check.
 
     Aggregates every violation; never raises. Empty list means OK.
     """
     errors: list[EvalValidationError] = []
     prompts_by_id = {p.frontmatter.id: p for p in prompts}
-    samples_by_id = {s.id: s for s in samples}
 
     for sample in samples:
         # Rule 2: the gate/rubric/verdict schema must compile.
@@ -110,49 +108,13 @@ def validate_samples(
                 )
 
         # Rule 5: prompt_id must resolve to a known prompt.
-        prompt = prompts_by_id.get(sample.prompt_id)
-        if prompt is None:
+        if sample.prompt_id not in prompts_by_id:
             errors.append(
                 EvalValidationError(
                     path=sample.source_path,
                     message=f"prompt_id {sample.prompt_id!r} does not exist",
                 )
             )
-            # Rule 6 only meaningful when the prompt exists — skip the
-            # back-reference check to avoid a confusing follow-on error.
-            continue
-
-        # Rule 6: the prompt's eval_samples: frontmatter must list this sample.
-        prompt_eval_samples = prompt.frontmatter.eval_samples or []
-        if sample.id not in prompt_eval_samples:
-            errors.append(
-                EvalValidationError(
-                    path=sample.source_path,
-                    message=(
-                        f"prompt {sample.prompt_id!r} does not list eval_sample "
-                        f"{sample.id!r} in its eval_samples: frontmatter"
-                    ),
-                )
-            )
-
-    # Rule 7 (prompt → sample direction): every eval_samples: reference must
-    # resolve to an on-disk sample. Catches the case where a sample was renamed
-    # or deleted but its prompt still references it.
-    for prompt in prompts:
-        for declared_id in prompt.frontmatter.eval_samples or []:
-            if declared_id not in samples_by_id:
-                # Anchor the error at the prompt's source so users jump to
-                # the prompt frontmatter to fix the dangling reference.
-                anchor_path = prompt.source_path or Path(prompt.frontmatter.id)
-                errors.append(
-                    EvalValidationError(
-                        path=anchor_path,
-                        message=(
-                            f"declares eval_sample {declared_id!r} but "
-                            f"eval_samples/{declared_id}/ not found"
-                        ),
-                    )
-                )
 
     return errors
 

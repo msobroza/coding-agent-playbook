@@ -2,7 +2,6 @@
 id: docs-runnable-examples
 name: Runnable examples
 description: "Make every doc example self-contained with deterministic output, and run it (through the repo's doctest command where one exists) after editing it."
-version: 1
 scope: scoped
 globs:
   - "README*"

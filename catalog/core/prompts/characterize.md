@@ -3,7 +3,6 @@ id: characterize
 name: Characterize
 description: "Pin what legacy code does today, quirks included, with characterization tests driven through its public entry points, without editing the source."
 slash: characterize
-version: 1
 applies_if:
   any_framework: ["pytest"]
 input_variables:
@@ -12,8 +11,6 @@ input_variables:
     required: false
 includes_rules:
   - pytest
-eval_samples:
-  - characterize-legacy-pricing
 ---
 
 # Characterize

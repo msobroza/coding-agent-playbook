@@ -11,7 +11,6 @@ A prompt is a task the user starts by name, as a slash command; guidance the age
 id: release-review
 name: Release review
 description: Review a release branch for billing regressions before it ships.
-version: 1
 slash: release-review            # unique among prompts, skills and harness commands
 applies_if:                      # optional; the rule gate language
   any_dependency: [sqlalchemy]
@@ -22,8 +21,6 @@ input_variables:                 # optional
 includes_rules:                  # rule ids, in the order the task needs them
   - acme-decimal-amounts
   - acme-invoice-ids
-eval_samples:                    # each sample's prompt_id points back here
-  - release-review-happy-path
 write_scope:
   read_only: true
 output_contract:                 # regexes the final answer must match
@@ -74,6 +71,6 @@ Write each regex in single-quoted YAML, where a backslash stays literal; a doubl
 
 - The slash name is unique.
 - Rules are listed by id in `includes_rules`, as a YAML list, never pasted.
-- Every sample in `eval_samples` names this prompt in its `prompt_id`.
+- Each eval sample of this prompt names it in its `prompt_id`; the prompt does not list them.
 - Each output-contract regex compiles, and the body asks for what it matches.
 - In the engine's core layer, prompts' includes_rules stay frozen until the pilot ends.

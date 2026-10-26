@@ -2,7 +2,6 @@
 id: docs-contributing-guide
 name: Contributing guide
 description: "Keep CONTRIBUTING's setup, test, check, docs and convention commands identical to what CI runs, and update it when a dev command or convention changes."
-version: 1
 scope: scoped
 globs:
   - "CONTRIBUTING*"

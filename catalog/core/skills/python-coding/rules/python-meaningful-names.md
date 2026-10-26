@@ -2,7 +2,6 @@
 id: python-meaningful-names
 name: Meaningful names
 description: "Name modules, classes, functions and variables for exactly what they are, so a search for the name finds mostly that concept."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

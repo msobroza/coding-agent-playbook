@@ -2,7 +2,6 @@
 id: domino-run-manifest
 name: Domino run manifest
 description: "Write a manifest.json beside every reported result naming the run, commit, snapshots, environment, configuration, seed and library versions."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

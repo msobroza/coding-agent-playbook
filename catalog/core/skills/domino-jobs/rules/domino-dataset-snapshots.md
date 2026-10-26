@@ -2,7 +2,6 @@
 id: domino-dataset-snapshots
 name: Domino dataset snapshots
 description: "Read a numbered dataset snapshot, not the changing read-write root, when results must be reproducible, and record which snapshot the run used."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

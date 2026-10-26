@@ -2,7 +2,6 @@
 id: python-async-generators
 name: Async generators
 description: "Stream paged or chunked async results with an async generator typed AsyncIterator[T], consumed with async for, instead of collecting everything first."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

@@ -45,6 +45,9 @@ DigestKind = Literal["rule", "prompt", "skill", "hook"]
 
 #: Frontmatter keys that never change what the agent is told: the retired
 #: hand-bumped ``version`` and a prompt's ``eval_samples`` back-references.
+#: Rule, prompt and hook loaders now refuse both (#281 ticket 04), but a skill's
+#: frontmatter stays open (vendored SKILL.md files may carry ``version``) and
+#: frozen editions will be read by a lenient loader, so the digest still drops them.
 BOOKKEEPING_KEYS: Final[frozenset[str]] = frozenset({"version", "eval_samples"})
 
 #: Bytecode caches the skill writer never copies, so they never reach a digest either.

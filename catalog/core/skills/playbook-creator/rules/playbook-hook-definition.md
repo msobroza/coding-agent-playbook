@@ -2,7 +2,6 @@
 id: playbook-hook-definition
 name: Hook definition
 description: "Declare a hook's events, decisions, timeout and one registered or trusted handler in its own HOOK.md directory."
-version: 1
 scope: scoped
 globs:
   - "catalog/**/hooks/**/HOOK.md"
@@ -23,7 +22,7 @@ tags: [playbook, hooks]
 A hook is a directory `hooks/<category>/<id>/` holding `HOOK.md` (or `HOOK.md.j2`). The directory name is the id (`^[a-z0-9][a-z0-9-]{0,62}$`); the category folder means nothing, and no hook nests inside another.
 
 - **Required keys:** `id`, `name`, `description`, `tier` (`default` or `opt-in`; `overlay` is reserved for engine mechanisms an overlay activates), `events`, `decisions`, `timeout`, `on_error`, `supports`, and exactly one of `handler` or `handlers` (one per event).
-- **Optional keys:** `version`, `enabled`, `mandatory` (overlay hooks only), `priority` (fan-out order), `matcher`, `applies_if`, `linked_rule`, `tags`, `summary`.
+- **Optional keys:** `enabled`, `mandatory` (overlay hooks only), `priority` (fan-out order), `matcher`, `applies_if`, `linked_rule`, `tags`, `summary`.
 - **Events:** `session_start`, `user_prompt_submit`, `pre_tool_use`, `post_tool_use`, `post_tool_use_failure`, `stop`, `subagent_stop`, `pre_compact`, `session_end`. Deny is possible on `user_prompt_submit`, `pre_tool_use`, `stop` and `subagent_stop`; ask only on `pre_tool_use`; `pre_compact` and `session_end` decide nothing.
 - **Constraints:** `decisions` never include `allow`; `timeout` is at most 30 seconds on tool and prompt events (600 otherwise); `on_error: deny` only on an overlay hook. Matcher `tools` use the classes shell, edit, write, notebook_edit, read, search, web, subagent and mcp, plus path globs and command regexes.
 

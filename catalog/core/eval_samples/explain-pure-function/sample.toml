@@ -1,7 +1,6 @@
 id = "explain-pure-function"
 prompt_id = "explain"
 description = "Happy path: a small pure function with a non-obvious invariant — a clear explanation names the invariant."
-version = 1
 
 [setup]
 files = ["src/midpoint.py"]

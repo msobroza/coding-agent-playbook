@@ -2,7 +2,6 @@
 id: domino-app-external-persistence
 name: Domino App external persistence
 description: "Save what a Domino App must keep to a Dataset, a database or an object store, never to project files that vanish with the container."
-version: 1
 scope: scoped
 globs:
   - "**/app.py"

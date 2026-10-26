@@ -2,7 +2,6 @@
 id: domino-flow-task-io
 name: Flow task inputs and outputs
 description: "A Flow task reads its inputs from /workflow/inputs, writes every declared output under /workflow/outputs, and detects Flow mode by parsing DOMINO_IS_WORKFLOW_JOB."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

@@ -2,7 +2,6 @@
 id: docs-same-change
 name: Docs in the same change
 description: "Update every prose doc and example that states a changed behavior, flag, default, config key or setup step in the same change."
-version: 1
 scope: scoped
 globs:
   - "README*"

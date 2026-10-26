@@ -204,7 +204,6 @@ def _synthetic_sample(
             name: Synthetic
             description: A synthetic prompt for tests.
             slash: synthetic
-            version: 1
             """
         )
         + _includes_rules_yaml(includes_rules)
@@ -396,7 +395,7 @@ def _overlay_rule(resources: Path, rule_id: str, *, name: str, applies_if: str =
     rules = resources / "rules"
     rules.mkdir(exist_ok=True)
     (rules / f"{rule_id}.md").write_text(
-        f"---\nid: {rule_id}\nname: {name}\ndescription: d\nversion: 1\nscope: always\n"
+        f"---\nid: {rule_id}\nname: {name}\ndescription: d\nscope: always\n"
         f"{applies_if}---\nOverlay body for {rule_id}.\n",
         encoding="utf-8",
     )
@@ -405,7 +404,7 @@ def _overlay_rule(resources: Path, rule_id: str, *, name: str, applies_if: str =
 def _overlay_sample(resources: Path, prompt_body: str, *, includes_rule: str) -> EvalSample:
     (resources / "prompts").mkdir()
     (resources / "prompts" / "overlay-prompt.md.j2").write_text(
-        "---\nid: overlay-prompt\nname: O\ndescription: d\nslash: o\nversion: 1\n"
+        "---\nid: overlay-prompt\nname: O\ndescription: d\nslash: o\n"
         f"includes_rules:\n  - {includes_rule}\n---\n" + prompt_body,
         encoding="utf-8",
     )
@@ -498,7 +497,7 @@ def _sandbox_escaping_rule(sample: EvalSample) -> Path:
     rule = rules / "evil.md.j2"
     rule.write_text(
         "---\nid: evil\nname: Evil\ndescription: Escapes the sandbox.\n"
-        "scope: always\npriority: 50\nversion: 1\n---\n"
+        "scope: always\npriority: 50\n---\n"
         "{{ lipsum.__globals__['os'].__name__ }}\n",
         encoding="utf-8",
     )

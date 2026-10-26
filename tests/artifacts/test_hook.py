@@ -38,7 +38,6 @@ handlers:
 matcher:
   pre_tool_use:
     tools:
-version:
 enabled:
 mandatory:
 priority:
@@ -82,7 +81,7 @@ def test_from_mapping_builds_nested_handler_and_matcher() -> None:
     assert fm.matcher == {"pre_tool_use": HookMatcher(tools=["edit"], paths=["src/**"])}
     assert fm.applies_if == {"languages": ["python"]}
     assert fm.linked_rule == "python-error-handling"
-    assert (fm.version, fm.enabled, fm.mandatory, fm.priority, fm.tags) == (1, True, False, 50, [])
+    assert (fm.enabled, fm.mandatory, fm.priority, fm.tags) == (True, False, 50, [])
 
 
 def test_from_mapping_keeps_value_domains_for_classify_hook() -> None:
@@ -100,7 +99,7 @@ def test_from_mapping_keeps_value_domains_for_classify_hook() -> None:
             hook_mapping(colour="red"),
             "colour",
             "colour",
-            "id, name, description, summary, version, tier",
+            "id, name, description, summary, tier",
         ),
         (
             hook_mapping(handler={"builtin": "x", "retries": 3}),
@@ -152,7 +151,6 @@ def test_from_mapping_missing_required_key_names_field(key: str) -> None:
         ({"timeout": "2s"}, "timeout", "2s", "a number of seconds"),
         ({"timeout": True}, "timeout", True, "a number of seconds"),
         ({"priority": True}, "priority", True, "an integer"),
-        ({"version": 1.5}, "version", 1.5, "an integer"),
         ({"events": "pre_tool_use"}, "events", "pre_tool_use", "a list of strings"),
         ({"tags": [1]}, "tags", [1], "a list of strings"),
         ({"enabled": "yes"}, "enabled", "yes", "a boolean"),
@@ -262,7 +260,7 @@ def test_contract_keys_are_rejected_at_the_top_level_too(key: str) -> None:
 def test_blank_yaml_values_coerce_to_defaults(tmp_path: Path) -> None:
     fm = Hook.from_markdown(write_hook_md(tmp_path, BLANKS_MD), "<repo-local>").frontmatter
 
-    assert (fm.version, fm.enabled, fm.mandatory, fm.priority) == (1, True, False, 50)
+    assert (fm.enabled, fm.mandatory, fm.priority) == (True, False, 50)
     assert (fm.handlers, fm.applies_if, fm.tags, fm.linked_rule) == ({}, {}, [], None)
     assert fm.summary == ""
     assert fm.handler == HookHandler(builtin="guard_x")
@@ -287,7 +285,6 @@ def test_constructor_none_coercion() -> None:
         on_error="ask",
         supports=["claude_code"],
         handlers=None,  # type: ignore[arg-type]
-        version=None,  # type: ignore[arg-type]
         enabled=None,  # type: ignore[arg-type]
         mandatory=None,  # type: ignore[arg-type]
         priority=None,  # type: ignore[arg-type]
@@ -296,7 +293,7 @@ def test_constructor_none_coercion() -> None:
         tags=None,  # type: ignore[arg-type]
     )
 
-    assert (fm.version, fm.enabled, fm.mandatory, fm.priority) == (1, True, False, 50)
+    assert (fm.enabled, fm.mandatory, fm.priority) == (True, False, 50)
     assert (fm.handlers, fm.matcher, fm.applies_if, fm.tags) == ({}, {}, {}, [])
     assert HookHandler(args=None, config=None) == HookHandler()  # type: ignore[arg-type]
     assert HookMatcher(tools=None, paths=None) == HookMatcher()  # type: ignore[arg-type]

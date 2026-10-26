@@ -2,7 +2,6 @@
 id: domino-agent-config-file
 name: Agent config file
 description: "Keep the agent's model choices in one agent_config.yaml, loaded into a strict typed model, whose every key takes effect."
-version: 1
 scope: scoped
 globs:
   - "**/settings.py"

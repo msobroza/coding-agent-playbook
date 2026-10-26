@@ -2,7 +2,6 @@
 id: python-properties
 name: Properties
 description: "Expose plain attributes, not get_x()/set_x() methods; turn one into a cheap @property when it needs validation or computing; never functools.lru_cache on a method."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

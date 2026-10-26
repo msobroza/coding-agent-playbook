@@ -2,7 +2,6 @@
 id: design-singleton
 name: Singleton
 description: "When one shared instance is needed, build it once in the entry point and pass it down instead of a class that caches its own instance; for costly reusable resources, use a bounded pool whose connections return through a context manager."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

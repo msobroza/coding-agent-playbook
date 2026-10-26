@@ -2,7 +2,6 @@
 id: python-collection-choice
 name: Collection choice
 description: "Pick a collection by its dominant operation: a set or frozenset built once for membership, a dict index for lookups by key, a list for ordered iteration."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

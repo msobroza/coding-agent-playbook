@@ -2,7 +2,6 @@
 id: domino-launcher-arguments
 name: Domino Launcher arguments
 description: "Parse every Launcher value as quoted, unexpanded text and convert and check it in the script, failing with the offending value."
-version: 1
 scope: scoped
 globs:
   - "**/launcher*.py"

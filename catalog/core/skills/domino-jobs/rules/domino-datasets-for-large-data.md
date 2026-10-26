@@ -2,7 +2,6 @@
 id: domino-datasets-for-large-data
 name: Domino Datasets for large data
 description: "Keep big or numerous data files in Domino Datasets, which are mounted, never in project files, which every run copies in and out."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

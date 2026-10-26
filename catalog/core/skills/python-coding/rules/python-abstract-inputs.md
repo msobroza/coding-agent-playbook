@@ -2,7 +2,6 @@
 id: python-abstract-inputs
 name: Abstract inputs
 description: "Type read-only inputs with the broadest collections.abc type the body needs, such as Iterable, Sequence or Mapping, and return concrete types."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

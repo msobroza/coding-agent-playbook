@@ -2,7 +2,6 @@
 id: domino-app-bind-host-port
 name: Bind host and port
 description: "Serve the App on 0.0.0.0, port 8888, set explicitly, never on a framework's default host or port."
-version: 1
 scope: scoped
 globs:
   - "**/app.sh"

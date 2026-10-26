@@ -3,7 +3,6 @@ id: gate-weakening-guard
 name: Do not weaken the gates
 description: The gate-integrity Stop stage plus an edit companion; flag new suppressions, skipped or deleted tests and loosened checker config.
 summary: 'Fix the root cause instead of silencing a check: no bare `# noqa`, skipped tests or loosened tool configuration.'
-version: 1
 tier: default
 priority: 30
 events: [stop, pre_tool_use]

@@ -2,7 +2,6 @@
 id: docs-changelog
 name: Changelog
 description: "Write changelog input through the repo's own mechanism (hand-kept file, news fragments or conventional commits), for users, with breaking changes marked."
-version: 1
 scope: scoped
 globs:
   - "CHANGELOG*"

@@ -2,7 +2,6 @@
 id: pytest-branch-coverage
 name: Branch coverage
 description: "Read branch coverage to find the paths no test runs, then add cases that would fail on wrong output; never treat the coverage percentage as proof of quality."
-version: 1
 scope: scoped
 globs:
   - "**/test_*.py"

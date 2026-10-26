@@ -30,7 +30,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Final, Literal
+
+from coding_agent_playbook.artifacts.retired_keys import retired_key_problem
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evals.compile.compiler import CompiledSample
@@ -38,6 +40,21 @@ if TYPE_CHECKING:
 #: Tolerance for the weighted-verdict ``weights`` sum check (parity with the
 #: rubric-group sum rule in :mod:`coding_agent_playbook.evals.compile._handles`).
 _WEIGHT_SUM_TOLERANCE = 1e-3
+
+#: Every top-level key ``sample.toml`` may carry, in authoring order. Any other
+#: key is an error (#285): a misspelled key would otherwise be dropped silently
+#: and the sample would grade something its author did not ask for.
+SAMPLE_TOP_KEYS: Final = (
+    "id",
+    "prompt_id",
+    "description",
+    "setup",
+    "invocation",
+    "gate",
+    "rubric",
+    "verdict",
+    "aggregate",
+)
 
 
 @dataclass
@@ -134,7 +151,6 @@ class EvalSample:
     description: str
     source_path: Path
     source_package: str
-    version: int = 1
     setup: SampleSetup = field(default_factory=SampleSetup)
     invocation: SampleInvocation = field(default_factory=SampleInvocation)
     gate: Layer | None = None
@@ -155,7 +171,7 @@ class EvalSample:
         """Parse a TOML-shaped dict (from ``tomllib.load``) into an EvalSample.
 
         Required top-level fields: ``id``, ``prompt_id``, ``description``.
-        Optional top-level: ``version``.
+        Any other top-level key (:data:`SAMPLE_TOP_KEYS`) is an error naming it.
         Optional sections: ``[setup]``, ``[invocation]``, ``[gate]``, ``[rubric]``,
         ``[verdict]``, ``[aggregate]``.
 
@@ -169,12 +185,10 @@ class EvalSample:
         malformed required fields. The loader catches these and wraps them
         with the sample.toml path for jump-to-file ergonomics.
         """
+        _reject_unknown_top_keys(data)
         sample_id = _require_str(data, "id")
         prompt_id = _require_str(data, "prompt_id")
         description = _require_str(data, "description")
-        version = data.get("version", 1)
-        if not isinstance(version, int) or isinstance(version, bool):
-            raise ValueError(f"field 'version' must be int, got {type(version).__name__}")
 
         setup = _parse_setup(data.get("setup", {}))
         invocation = _parse_invocation(data.get("invocation", {}))
@@ -191,7 +205,6 @@ class EvalSample:
             description=description,
             source_path=source_path,
             source_package=source_package,
-            version=version,
             setup=setup,
             invocation=invocation,
             gate=gate,
@@ -244,6 +257,27 @@ def compile_eval_sample(sample: EvalSample) -> CompiledSample:
         aggregate_expr=sample.aggregate.expr if sample.aggregate is not None else None,
         name=sample.id,
     )
+
+
+def _reject_unknown_top_keys(data: dict[str, Any]) -> None:
+    """Raise ``ValueError`` naming the first top-level key outside :data:`SAMPLE_TOP_KEYS`.
+
+    A retired key (``version``) names its replacement instead of the list.
+
+    Example::
+
+        >>> _reject_unknown_top_keys({"id": "x", "editon": "v0.1.0"})
+        Traceback (most recent call last):
+        ValueError: unknown top-level key 'editon'; allowed keys: id, prompt_id, ...
+    """
+    for key in data:
+        if key in SAMPLE_TOP_KEYS:
+            continue
+        retired = retired_key_problem(key)
+        if retired is not None:
+            raise ValueError(retired)
+        allowed = ", ".join(SAMPLE_TOP_KEYS)
+        raise ValueError(f"unknown top-level key {key!r}; allowed keys: {allowed}")
 
 
 def _require_str(data: dict[str, Any], key: str) -> str:

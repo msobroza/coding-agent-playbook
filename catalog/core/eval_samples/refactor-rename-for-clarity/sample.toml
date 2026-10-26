@@ -1,7 +1,6 @@
 id = "refactor-rename-for-clarity"
 prompt_id = "refactor"
 description = "Edge case: ambiguous one-letter variable names hide intent; the refactor renames them without changing logic."
-version = 1
 
 [setup]
 files = ["src/billing.py"]

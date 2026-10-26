@@ -31,14 +31,14 @@ _SKILL_MD = (
     "playbook:\n  use_when: editing risk models\n  files: Risk model code\n---\n# Risk\n"
 )
 # Both rules are in the canonical form ``Rule.to_markdown`` writes (key order,
-# ``version`` spelled out), the form a byte-identical round trip can promise.
+# defaults left out), the form a byte-identical round trip can promise.
 _IN_SKILL_RULE = (
     "---\nid: risk-limits\nname: Limits\ndescription: Cap the exposure.\nscope: scoped\n"
-    "version: 1\nglobs:\n- risk/**/*.py\npriority: 40\nsection: limits\n---\n# Limits\n\nCap it.\n"
+    "globs:\n- risk/**/*.py\npriority: 40\nsection: limits\n---\n# Limits\n\nCap it.\n"
 )
 _JOINING_RULE = (
     "---\nid: risk-joined\nname: Joined\ndescription: Joins by skill.\nscope: scoped\n"
-    "version: 1\npriority: 50\nskill: risk\nsection: other\n---\n# Joined\n\nJoin it.\n"
+    "priority: 50\nskill: risk\nsection: other\n---\n# Joined\n\nJoin it.\n"
 )
 _IN_SKILL = "skills/risk/rules/risk-limits.md"
 _JOINING = "rules/risk-joined.md"

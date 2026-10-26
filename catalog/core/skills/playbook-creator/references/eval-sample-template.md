@@ -48,9 +48,8 @@ eval_samples/release-review-happy-path/
 ```toml
 # sample.toml
 id = "release-review-happy-path"
-prompt_id = "release-review"   # the prompt lists this id in eval_samples
+prompt_id = "release-review"   # the one prompt this sample grades
 description = "Happy path: a float sum in invoice.py must hold the release."
-version = 1
 
 [setup]
 files = ["billing/invoice.py"]  # must match the files in setup/

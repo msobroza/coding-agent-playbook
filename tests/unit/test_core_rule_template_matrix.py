@@ -59,7 +59,7 @@ def _template_rule(tmp_path: Path, body: str) -> Rule:
     """A scoped ``.md.j2`` rule named ``probe`` with ``body``, loaded as core rules are."""
     path = tmp_path / "probe.md.j2"
     path.write_text(
-        "---\nid: probe\nname: Probe\ndescription: A probe.\nversion: 1\n"
+        "---\nid: probe\nname: Probe\ndescription: A probe.\n"
         'scope: scoped\nglobs: ["**/*.py"]\npriority: 50\n---\n' + body,
         encoding="utf-8",
     )

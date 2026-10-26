@@ -2,7 +2,6 @@
 id: domino-app-external-resources
 name: External resources
 description: "Vendor fonts, scripts and styles into the App's static folder and call outside APIs from the server, so a content security policy cannot break the page."
-version: 1
 scope: scoped
 globs:
   - "**/templates/**/*.html"

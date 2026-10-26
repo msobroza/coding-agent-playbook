@@ -2,7 +2,6 @@
 id: domino-app-concurrent-writes
 name: Domino App concurrent writes
 description: "Write shared App data through a database transaction or one atomically replaced file per writer, never a read-modify-write of a shared file."
-version: 1
 scope: scoped
 globs:
   - "**/app.py"

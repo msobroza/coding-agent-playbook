@@ -2,7 +2,6 @@
 id: pytest-parametrize-ids
 name: Readable parametrize ids
 description: "Give parametrized cases with long strings or non-scalar values explicit ids with pytest.param, so a failure and -k name the scenario instead of an index."
-version: 1
 scope: scoped
 globs:
   - "**/test_*.py"

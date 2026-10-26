@@ -2,7 +2,6 @@
 id: fastapi-request-id-logging
 name: FastAPI request ID logging
 description: "Correlate logs with a request ID: middleware validates or generates it, a ContextVar carries it, a logging filter stamps every record, and the response returns it."
-version: 1
 scope: scoped
 globs:
   - "**/main.py"

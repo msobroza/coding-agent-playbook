@@ -16,14 +16,16 @@ from coding_agent_playbook.artifacts.frontmatter import (
     _read_markdown,
     _without_empty,
     format_frontmatter,
+    frontmatter_keys_problem,
 )
 
 
 class RuleLoadError(ValueError):
     """A rule file that cannot become a :class:`Rule`; ``str`` is ``<path>: <problem>``.
 
-    Raised for an unknown or missing frontmatter key, a missing ``---`` fence,
-    invalid YAML or a non-mapping frontmatter (prU D21). ``playbook validate``
+    Raised for an unknown, retired (``version``, #281) or missing frontmatter
+    key, a missing ``---`` fence, invalid YAML or a non-mapping frontmatter
+    (prU D21). ``playbook validate``
     reports each one as a finding; sync, check and render exit 2 on it. A
     ``ValueError``, like ``HookSchemaError``: the fence errors it replaces were
     one, and callers such as the eval prompt renderer catch ``ValueError``. So
@@ -52,7 +54,6 @@ class RuleFrontmatter:
     name: str
     description: str
     scope: RuleScope
-    version: int = 1
     globs: list[str] = field(default_factory=list)
     applies_if: dict[str, Any] = field(default_factory=dict)
     priority: int = 50
@@ -77,8 +78,6 @@ class RuleFrontmatter:
         # This also normalises None passed from Python code: callers should
         # pass {} or [] for "empty/always", never None. A blank ``skill:`` stays
         # None, which reads as absent.
-        if self.version is None:
-            self.version = 1
         if self.globs is None:
             self.globs = []
         if self.applies_if is None:
@@ -131,7 +130,7 @@ class Rule:
             raise RuleLoadError(path, f"invalid YAML frontmatter: {exc}") from exc
         except ValueError as exc:  # a missing fence or a non-mapping frontmatter
             raise RuleLoadError(path, str(exc)) from exc
-        problem = _frontmatter_keys_problem(data)
+        problem = frontmatter_keys_problem(data, RuleFrontmatter)
         if problem is not None:
             raise RuleLoadError(path, problem)
         injected = home_skill is not None and data.get("skill") is None
@@ -187,35 +186,3 @@ class Rule:
             data.get("home_skill"),
             data.get("skill_from_location", False),
         )
-
-
-def _frontmatter_keys_problem(data: dict[Any, Any]) -> str | None:
-    """Why ``data``'s keys cannot build a :class:`RuleFrontmatter`, or ``None`` when they can.
-
-    Checked before construction: the dataclass would raise a ``TypeError`` that
-    names neither the file nor the keys a rule may set.
-    """
-    fields = dataclasses.fields(RuleFrontmatter)
-    allowed = "allowed keys: " + ", ".join(f.name for f in fields)
-    known = {f.name for f in fields}
-    unknown = [str(key) for key in data if key not in known]
-    if unknown:
-        return _keys_message("unknown frontmatter", unknown, allowed)
-    required = [f.name for f in fields if _is_required(f)]
-    missing = [name for name in required if name not in data]
-    if missing:
-        return _keys_message("missing required frontmatter", missing, allowed)
-    return None
-
-
-def _keys_message(kind: str, names: list[str], allowed: str) -> str:
-    noun = "key" if len(names) == 1 else "keys"
-    return f"{kind} {noun} {_quoted(names)}; {allowed}"
-
-
-def _is_required(field_: dataclasses.Field[Any]) -> bool:
-    return field_.default is dataclasses.MISSING and field_.default_factory is dataclasses.MISSING
-
-
-def _quoted(names: list[str]) -> str:
-    return ", ".join(repr(name) for name in names)

@@ -2,7 +2,6 @@
 id: design-bridge
 name: Bridge
 description: "When two independent axes of variation produce a class for every combination, inject one axis into the other as a Callable alias or a small Protocol, so a new variant on either axis is one new function or class."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

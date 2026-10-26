@@ -34,7 +34,7 @@ PROBE_KINDS: Final[tuple[ProbeKind, ...]] = get_args(ProbeKind.__value__)
 class RulePin:
     """A member rule's pinned frontmatter (spec 9.4.1 / 9.6.1); the file path is not pinned.
 
-    ``version`` and ``lint_codes`` default to a distilled rule's values (D23: no ``lint_codes``).
+    ``lint_codes`` defaults to a distilled rule's value (D23: no ``lint_codes``).
     ``section`` is the rule's ``section:`` key (prU D17); ``None`` pins a rule that declares
     none. ``priority`` follows the skill's mapping (prU D17): the band floor of the section's
     impact plus the rule's rank among the skill's rules of that impact in the full mapping
@@ -48,7 +48,6 @@ class RulePin:
     priority: int
     name: str
     tags: tuple[str, ...]
-    version: int = 1
     lint_codes: Mapping[str, object] = field(default_factory=dict)
     section: str | None = None
 

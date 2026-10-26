@@ -2,7 +2,6 @@
 id: arch-predictable-project-tree
 name: Predictable project tree
 description: "Keep the project tree predictable: one root package, tests mirroring it, the framework's conventional directories, and no ad-hoc top-level folders or flat dumps."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

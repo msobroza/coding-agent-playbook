@@ -2,7 +2,6 @@
 id: design-complete-construction
 name: Complete construction
 description: "Hand callers a ready object: no setup call to remember after construction, and no __new__ that returns another type."
-version: 1
 scope: scoped
 globs:
   - "**/*.py"

@@ -2,7 +2,6 @@
 id: domino-app-shiny
 name: Shiny for Python on Domino
 description: "Run a Shiny for Python App with shiny run on 0.0.0.0:8888 without reload, and turn on session affinity because each session lives in one process."
-version: 1
 scope: scoped
 globs:
   - "**/app.sh"

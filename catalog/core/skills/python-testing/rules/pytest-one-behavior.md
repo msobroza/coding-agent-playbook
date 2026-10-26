@@ -2,7 +2,6 @@
 id: pytest-one-behavior
 name: One behavior per test
 description: "Check one behavior per test with one logical assertion, so the first failure never hides the others and the test name can say what broke."
-version: 1
 scope: scoped
 globs:
   - "tests/**/*.py"
