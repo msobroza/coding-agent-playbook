@@ -19,16 +19,15 @@ its pull request through the same path ``prepare`` uses.
 
 from __future__ import annotations
 
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Protocol
 
 from coding_agent_playbook.evals.edition_checks import edition_problems
 from coding_agent_playbook.evals.edition_pins import pin_graded_samples, unpin_samples
+from coding_agent_playbook.release.edition_build import git_blob_reader
 from coding_agent_playbook.release.edition_digests import edition_dir
 from coding_agent_playbook.release.edition_freeze import (
-    BlobReader,
     edition_tag_problems,
     graded_prompt_ids,
     remove_edition,
@@ -48,8 +47,6 @@ if TYPE_CHECKING:
 
 FREEZE: Final = "freeze"
 UNFREEZE: Final = "unfreeze"
-#: Bounds each ``git cat-file``; a blob read never waits on the network.
-BLOB_TIMEOUT_SECONDS: Final = 60
 _CATALOG: Final = "catalog"
 
 
@@ -165,28 +162,3 @@ def _manifest_at(tools: EditionTools, tag: str, commit: str) -> ReleaseManifest:
             "`scripts/release.py prepare` can be frozen"
         )
     return parse_manifest(done.stdout)
-
-
-def git_blob_reader(repo: Path) -> BlobReader:
-    """Read a blob's raw bytes (``git cat-file blob``: no text decoding, no filters).
-
-    Example::
-
-        >>> git_blob_reader(Path("."))("HEAD", "pyproject.toml")[:9]  # doctest: +SKIP
-        b'[project]'
-    """
-
-    def read(commit: str, path: str) -> bytes | None:
-        try:
-            done = subprocess.run(
-                ["git", "cat-file", "blob", f"{commit}:{path}"],
-                cwd=repo,
-                capture_output=True,
-                check=False,
-                timeout=BLOB_TIMEOUT_SECONDS,
-            )
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            raise EditionRefusal(f"`git cat-file blob {commit}:{path}` failed: {exc}") from exc
-        return done.stdout if done.returncode == 0 else None
-
-    return read
