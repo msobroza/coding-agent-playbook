@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.evals.sample import EvalSample
 
-_SAMPLE = "refactor-extract-helper"
+_SAMPLE = "refactor/extract-helper"
 
 _EVALS = """
 [evals.targets.fake-pinned]

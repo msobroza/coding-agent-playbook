@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 _RULE = "---\nid: {id}\nname: N\ndescription: d\nscope: always\n---\nBody\n"
 _PROMPT = "---\nid: {id}\nname: N\ndescription: d\nslash: {id}\n---\nBody\n"
 _SKILL = "---\nid: {id}\nname: {id}\ndescription: d\n---\nBody\n"
-_SAMPLE = 'id = "{id}"\nprompt_id = "{prompt}"\ndescription = "d"\n'
+_SAMPLE = 'id = "{id}"\ndescription = "d"\n'
 
 
 def _package_resources(name: str) -> Path:
@@ -39,7 +39,7 @@ def _checkout_root(repo: Path, package: str) -> Path:
         ("rules", "x-rule.md", _RULE.format(id="x-rule")),
         ("prompts", "x-prompt.md", _PROMPT.format(id="x-prompt")),
         ("skills", "x-skill/SKILL.md", _SKILL.format(id="x-skill")),
-        ("eval_samples", "x-sample/sample.toml", _SAMPLE.format(id="x-sample", prompt="x-prompt")),
+        ("eval_samples", "x-prompt/x-sample/sample.toml", _SAMPLE.format(id="x-prompt/x-sample")),
     ):
         target = root / kind / name
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -100,6 +100,6 @@ def test_extra_resource_roots_feed_rules_prompts_skills_and_eval_samples(tmp_pat
     assert from_checkout(rules) == ["x-rule"]
     assert from_checkout(prompts) == ["x-prompt"]
     assert from_checkout(skills) == ["x-skill"]
-    assert from_checkout(samples) == ["x-sample"]
+    assert from_checkout(samples) == ["x-prompt/x-sample"]
     # The engine layer still comes first: the checkout is an extra layer.
     assert rules[0][1] == ENGINE_PACKAGE

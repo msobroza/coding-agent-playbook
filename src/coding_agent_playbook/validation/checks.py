@@ -16,8 +16,9 @@ Validates:
   like ``AnswerMatchesCheck``; specs/prK-hook-pack.md §E.2).
 - Rule templates never call ``{{ rule(...) }}`` (rules cannot include rules,
   SPEC invariants).
-- Each eval sample's ``prompt_id`` resolves, via the canonical
-  :func:`coding_agent_playbook.evals.validator.validate_samples` helper.
+- Each eval sample sits in a task directory that names a prompt, and no sample
+  id is found twice (``evals.task_registry``); each sample's schema holds, via
+  the canonical :func:`coding_agent_playbook.evals.validator.validate_samples` helper.
 - Each Jinja-templated artifact compiles cleanly.
 - Every markdown link in every artifact is self-contained (PR L): relative
   targets resolve inside the artifact's source layer, external links only
@@ -70,13 +71,9 @@ import re
 import sys
 from typing import TYPE_CHECKING, Any
 
-from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.config.tables.links import LinksConfig
 from coding_agent_playbook.detector.predicate import evaluate_predicate
-from coding_agent_playbook.evals.loader import (
-    discover_eval_sample_dirs,
-    load_eval_sample_from_dir,
-)
+from coding_agent_playbook.evals.task_registry import TaskRegistry
 from coding_agent_playbook.evals.validator import validate_samples
 from coding_agent_playbook.generated_output.source_files import refused_skill_files
 from coding_agent_playbook.rendering.jinja import RULE_CALL_RE, jinja_syntax_error
@@ -118,7 +115,6 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.artifacts.skill import Skill
     from coding_agent_playbook.detector.facts import Facts
-    from coding_agent_playbook.evals.sample import EvalSample
     from coding_agent_playbook.validation.context import SyncContext
 
 
@@ -248,55 +244,27 @@ def _check_jinja_compiles(rules: list[Rule], prompts: list[Prompt]) -> list[Vali
     ]
 
 
-def _load_eval_samples_for_validation(
-    ctx: SyncContext,
-) -> tuple[list[EvalSample], list[ValidationError]]:
-    """Walk every eval-sample directory and load each ``sample.toml`` independently,
-    aggregating per-sample loader errors instead of fail-fasting.
-
-    Mirrors :meth:`FileSystemArtifactSource.list_eval_samples` but catches the
-    per-sample :exc:`FileNotFoundError` / :exc:`ValueError` raised by the loader
-    and converts them to :class:`ValidationError` entries. Malformed TOML or
-    schema violations don't abort the rest of validation — the caller still
-    runs ``validate_samples`` against the samples that did load.
-
-    Non-filesystem :class:`ArtifactSource` implementations have no per-package
-    layout to walk, so we fall back to :meth:`ArtifactSource.list_eval_samples`
-    and accept that those sources cannot surface per-file loader errors here —
-    that's their responsibility, not ours.
-    """
-    artifact_source = ctx.artifact_source
-    if not isinstance(artifact_source, FileSystemArtifactSource):
-        return list(artifact_source.list_eval_samples()), []
-    loaded = [
-        _load_eval_sample(sample_dir, label)
-        for label, root in artifact_source.layer_roots("eval_samples")
-        for sample_dir in discover_eval_sample_dirs(root)
-    ]
-    samples = [item for item in loaded if not isinstance(item, ValidationError)]
-    return samples, [item for item in loaded if isinstance(item, ValidationError)]
-
-
-def _load_eval_sample(sample_dir: Path, source_package: str) -> EvalSample | ValidationError:
-    """Load one ``sample.toml``, or return its loader failure as a finding."""
-    try:
-        return load_eval_sample_from_dir(sample_dir, source_package=source_package)
-    except (FileNotFoundError, ValueError) as exc:
-        return ValidationError(path=str(sample_dir / "sample.toml"), message=str(exc))
-
-
 def _check_eval_samples(ctx: SyncContext) -> list[ValidationError]:
     """Run the canonical eval-sample validator (SPEC §15.2 + §6.5.5).
 
-    Combines per-sample loader failures (malformed TOML / missing required
-    fields) with the cross-reference rules from
-    :func:`coding_agent_playbook.evals.validator.validate_samples`.
+    Combines the per-sample load failures (malformed TOML, missing or unknown
+    keys, a sample outside ``eval_samples/<prompt>/<name>/``), the task
+    registry's refusals (a sample id found twice, a task directory naming no
+    prompt) and the schema rules of
+    :func:`coding_agent_playbook.evals.validator.validate_samples`. A sample the
+    registry refuses is not schema-checked.
     """
-    samples, load_errors = _load_eval_samples_for_validation(ctx)
-    cross_errors = validate_samples(samples, ctx.prompts_resolved)
+    samples, load_errors = ctx.artifact_source.collect_eval_samples()
+    prompt_ids = [prompt.frontmatter.id for prompt in ctx.prompts_resolved]
+    registry, task_errors = TaskRegistry.collect(samples, prompt_ids)
+    registered = [sample for task in registry.tasks() for sample in task.samples]
+    schema_errors = validate_samples(registered)
     return [
-        *load_errors,
-        *[ValidationError(path=str(e.path), message=e.message) for e in cross_errors],
+        *[
+            ValidationError(path=str(e.path or "eval_samples"), message=str(e))
+            for e in [*load_errors, *task_errors]
+        ],
+        *[ValidationError(path=str(e.path), message=e.message) for e in schema_errors],
     ]
 
 

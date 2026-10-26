@@ -247,7 +247,7 @@ def test_applicability_rows_cover_rules_prompts_and_skipped_hooks(repo: Path) ->
 def test_eval_fixture_globs_default(repo: Path) -> None:
     document = compiled_document(request_for(repo))
 
-    assert document["eval"] == {"fixture_globs": ["**/eval_samples/*/setup/**"]}
+    assert document["eval"] == {"fixture_globs": ["**/eval_samples/*/*/setup/**"]}
     assert document["path_classes"]["eval_fixture"] == document["eval"]["fixture_globs"]
 
 

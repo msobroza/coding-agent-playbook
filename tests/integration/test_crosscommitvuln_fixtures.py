@@ -1,4 +1,4 @@
-"""Group-C invariants over the find-injected-vuln-* fixtures (spec §9.2).
+"""Group-C invariants over the find-injected-vulnerability/* fixtures (spec §9.2).
 
 - needle-leak: each fixture's prompt_args contains none of its CVE's banned
   tokens -- the shared v2 framing vocabulary plus, per fixture, its CVE id,
@@ -22,9 +22,9 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from coding_agent_playbook.evals.judge import StubJudge
-from coding_agent_playbook.evals.loader import load_eval_sample_from_dir
 from coding_agent_playbook.evals.run.harness_runner import capture, materialize
 from coding_agent_playbook.evals.run.scoring import score
+from coding_agent_playbook.evals.task_registry import load_task_sample
 from tests._catalog import CORE_ROOT
 from tests.integration.ccv_answers import CORRECT_ANSWER, WRONG_CLASS_ANSWER
 
@@ -54,7 +54,7 @@ _FRAMING_BANS = (
     "individually",
 )
 _PER_FIXTURE_BANS: dict[str, tuple[str, ...]] = {
-    "find-injected-vuln-modoboa-cmdi": (
+    "find-injected-vulnerability/modoboa-cmdi": (
         "cve-2026-27602",
         "cwe-78",
         "78",
@@ -66,7 +66,7 @@ _PER_FIXTURE_BANS: dict[str, tuple[str, ...]] = {
         "sysutils.py",
         "mailbox",
     ),
-    "find-injected-vuln-ormar-sqli": (
+    "find-injected-vulnerability/ormar-sqli": (
         "cve-2026-26198",
         "cwe-89",
         "89",
@@ -75,7 +75,7 @@ _PER_FIXTURE_BANS: dict[str, tuple[str, ...]] = {
         "queries.py",
         "db.py",
     ),
-    "find-injected-vuln-changedetection-ssrf": (
+    "find-injected-vulnerability/changedetection-ssrf": (
         "cve-2026-27696",
         "cwe-918",
         "918",
@@ -84,7 +84,7 @@ _PER_FIXTURE_BANS: dict[str, tuple[str, ...]] = {
         "fetch.py",
         "watch.py",
     ),
-    "find-injected-vuln-langroid-codeinj": (
+    "find-injected-vulnerability/langroid-codeinj": (
         "cve-2025-46724",
         "cwe-94",
         "94",
@@ -94,7 +94,7 @@ _PER_FIXTURE_BANS: dict[str, tuple[str, ...]] = {
         "tools.py",
         "runner.py",
     ),
-    "find-injected-vuln-pytorch-deserial": (
+    "find-injected-vulnerability/pytorch-deserial": (
         "cve-2025-32434",
         "cwe-502",
         "502",
@@ -104,7 +104,7 @@ _PER_FIXTURE_BANS: dict[str, tuple[str, ...]] = {
         "loader.py",
         "registry.py",
     ),
-    "find-injected-vuln-changedetection-pathtraversal": (
+    "find-injected-vulnerability/changedetection-pathtraversal": (
         "cve-2026-29065",
         "cwe-22",
         "22",
@@ -113,7 +113,7 @@ _PER_FIXTURE_BANS: dict[str, tuple[str, ...]] = {
         "storage.py",
         "views.py",
     ),
-    "find-injected-vuln-authlib-sigbypass": (
+    "find-injected-vulnerability/authlib-sigbypass": (
         "cve-2026-27962",
         "cwe-347",
         "347",
@@ -122,7 +122,7 @@ _PER_FIXTURE_BANS: dict[str, tuple[str, ...]] = {
         "jwt_verify.py",
         "auth.py",
     ),
-    "find-injected-vuln-graphiti-queryinj": (
+    "find-injected-vulnerability/graphiti-queryinj": (
         "cve-2026-32247",
         "cwe-943",
         "943",
@@ -131,7 +131,7 @@ _PER_FIXTURE_BANS: dict[str, tuple[str, ...]] = {
         "graph.py",
         "search.py",
     ),
-    "find-injected-vuln-pydash-massassign": (
+    "find-injected-vulnerability/pydash-massassign": (
         "cve-2025-58367",
         "cwe-915",
         "915",
@@ -140,7 +140,7 @@ _PER_FIXTURE_BANS: dict[str, tuple[str, ...]] = {
         "merge.py",
         "model.py",
     ),
-    "find-injected-vuln-aiplatform-xss": (
+    "find-injected-vulnerability/aiplatform-xss": (
         "cve-2026-2472",
         "cwe-79",
         "79",
@@ -170,9 +170,7 @@ def stub_uv_sync(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _sample(fixture_id: str) -> Any:
-    return load_eval_sample_from_dir(
-        _SAMPLES_ROOT / fixture_id, source_package="coding_agent_playbook"
-    )
+    return load_task_sample(_SAMPLES_ROOT / fixture_id, source_package="coding_agent_playbook")
 
 
 def _class_gate_pattern(fixture_id: str) -> str:

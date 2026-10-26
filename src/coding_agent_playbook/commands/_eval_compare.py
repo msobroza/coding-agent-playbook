@@ -2,8 +2,8 @@
 
 Off by default, never run by CI or the final gate: each run drives a real agent,
 so it needs the owner's credentials and costs money. With ``--compare``, every
-eval sample of the seven prompts whose included rule bodies change (or the one
-eval sample ``<id>`` names) runs ``--compare-runs`` times (default 3) on a detached
+eval sample of the seven prompts whose included rule bodies change (or the
+samples a task name or a sample id selects) runs ``--compare-runs`` times (default 3) on a detached
 checkout of the base ref, graded with ``--base-prompt-set``, and on one of HEAD,
 graded with ``--prompt-set`` (both default v1, so v1 and v2 can be compared on one
 ref with ``--compare HEAD``). ``--runner``, ``--judge``, ``--judge-samples`` and
@@ -44,6 +44,7 @@ from coding_agent_playbook.evals.run.comparison_runner import (
     git_worktree_checkout,
     run_comparison,
 )
+from coding_agent_playbook.evals.task_registry import TaskRegistry, TaskRegistryError
 from coding_agent_playbook.validation.context import SyncContext
 
 if TYPE_CHECKING:
@@ -150,20 +151,27 @@ def _runs_valid(runs: int) -> bool:
     return runs >= 1
 
 
-def _selected_samples(sample_id: str | None, repo_root: Path) -> list[str] | None:
-    """The compared eval samples, or only ``sample_id``; ``None`` (after an error) if not one."""
-    eval_samples = SyncContext.from_repo(repo_root).artifact_source.list_eval_samples()
-    compared = compared_sample_ids(eval_samples)
-    if sample_id is None:
-        return compared
-    if sample_id not in compared:
+def _selected_samples(name: str | None, repo_root: Path) -> list[str] | None:
+    """The compared eval samples, or those ``name`` (a task or a sample id) selects.
+
+    ``None`` (after an error line) when ``name`` selects no compared sample.
+    """
+    ctx = SyncContext.from_repo(repo_root)
+    try:
+        registry = TaskRegistry.from_catalog(ctx.artifact_source, ctx.prompts_resolved)
+        compared = compared_sample_ids(registry)
+        selected = [s.id for s in registry.select(name)] if name is not None else compared
+    except TaskRegistryError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return None
+    if not set(selected) <= set(compared):
         print(
-            f"error: {sample_id!r} is not an eval sample of a compared prompt; "
+            f"error: {name!r} is not a task or an eval sample of a compared prompt; "
             f"compared eval samples: {', '.join(compared)}",
             file=sys.stderr,
         )
         return None
-    return [sample_id]
+    return selected
 
 
 def _agent_options(args: argparse.Namespace) -> _AgentOptions | None:

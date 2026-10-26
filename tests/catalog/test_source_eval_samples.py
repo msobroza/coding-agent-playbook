@@ -24,7 +24,6 @@ if TYPE_CHECKING:
 
 SAMPLE_TOML_TEMPLATE = """\
 id = "{sample_id}"
-prompt_id = "{prompt_id}"
 description = "{description}"
 """
 
@@ -34,7 +33,6 @@ def _make_overlay_with_eval_sample(
     package_name: str,
     sample_id: str,
     *,
-    prompt_id: str = "demo",
     description: str = "An overlay sample",
 ) -> None:
     """Create a tiny third-party overlay package with one eval sample under resources/eval_samples/."""
@@ -44,9 +42,7 @@ def _make_overlay_with_eval_sample(
     sample_dir = pkg_dir / "resources" / "eval_samples" / sample_id
     sample_dir.mkdir(parents=True, exist_ok=True)
     (sample_dir / "sample.toml").write_text(
-        SAMPLE_TOML_TEMPLATE.format(
-            sample_id=sample_id, prompt_id=prompt_id, description=description
-        ),
+        SAMPLE_TOML_TEMPLATE.format(sample_id=sample_id, description=description),
         encoding="utf-8",
     )
     if str(tmp_path) not in sys.path:
@@ -78,7 +74,7 @@ def test_list_eval_samples_walks_engine_resources(tmp_path: Path) -> None:
 
 
 def test_list_eval_samples_walks_overlay_packages(tmp_path: Path, overlay_cleanup: None) -> None:
-    _make_overlay_with_eval_sample(tmp_path, "temp_eval_overlay", "overlay-sample-foo")
+    _make_overlay_with_eval_sample(tmp_path, "temp_eval_overlay", "demo/overlay-sample-foo")
     source = FileSystemArtifactSource(
         repo_root=tmp_path,
         overlay_packages=["temp_eval_overlay"],
@@ -88,15 +84,15 @@ def test_list_eval_samples_walks_overlay_packages(tmp_path: Path, overlay_cleanu
     assert len(overlay_samples) == 1
     sample = overlay_samples[0]
     assert isinstance(sample, EvalSample)
-    assert sample.id == "overlay-sample-foo"
+    assert sample.id == "demo/overlay-sample-foo"
 
 
 def test_list_eval_samples_walks_repo_local(tmp_path: Path) -> None:
-    sample_dir = tmp_path / "playbook" / "eval_samples" / "local-sample"
+    sample_dir = tmp_path / "playbook" / "eval_samples" / "local-prompt" / "local-sample"
     sample_dir.mkdir(parents=True)
     (sample_dir / "sample.toml").write_text(
         SAMPLE_TOML_TEMPLATE.format(
-            sample_id="local-sample", prompt_id="local-prompt", description="repo-local"
+            sample_id="local-prompt/local-sample", description="repo-local"
         ),
         encoding="utf-8",
     )
@@ -104,19 +100,17 @@ def test_list_eval_samples_walks_repo_local(tmp_path: Path) -> None:
     samples = source.list_eval_samples()
     repo_local_samples = [t for t in samples if t.source_package == "<repo-local>"]
     assert len(repo_local_samples) == 1
-    assert repo_local_samples[0].id == "local-sample"
+    assert repo_local_samples[0].id == "local-prompt/local-sample"
 
 
 def test_list_eval_samples_aggregates_overlay_and_repo_local(
     tmp_path: Path, overlay_cleanup: None
 ) -> None:
-    _make_overlay_with_eval_sample(tmp_path, "temp_eval_overlay2", "overlay-sample-bar")
-    repo_local = tmp_path / "playbook" / "eval_samples" / "repo-sample"
+    _make_overlay_with_eval_sample(tmp_path, "temp_eval_overlay2", "demo/overlay-sample-bar")
+    repo_local = tmp_path / "playbook" / "eval_samples" / "p" / "repo-sample"
     repo_local.mkdir(parents=True)
     (repo_local / "sample.toml").write_text(
-        SAMPLE_TOML_TEMPLATE.format(
-            sample_id="repo-sample", prompt_id="p", description="repo sample"
-        ),
+        SAMPLE_TOML_TEMPLATE.format(sample_id="p/repo-sample", description="repo sample"),
         encoding="utf-8",
     )
     source = FileSystemArtifactSource(
@@ -126,7 +120,7 @@ def test_list_eval_samples_aggregates_overlay_and_repo_local(
     samples = source.list_eval_samples()
     non_engine = [t for t in samples if t.source_package != "coding_agent_playbook"]
     ids = {t.id for t in non_engine}
-    assert ids == {"overlay-sample-bar", "repo-sample"}
+    assert ids == {"demo/overlay-sample-bar", "p/repo-sample"}
     by_id = {t.id: t for t in non_engine}
-    assert by_id["overlay-sample-bar"].source_package == "temp_eval_overlay2"
-    assert by_id["repo-sample"].source_package == "<repo-local>"
+    assert by_id["demo/overlay-sample-bar"].source_package == "temp_eval_overlay2"
+    assert by_id["p/repo-sample"].source_package == "<repo-local>"

@@ -7,19 +7,24 @@ via the unified PR-M :class:`EvaluationReport`.
 
 Sub-modes:
 
+Samples are found by task (``evals.task_registry``): ``<task>`` names every
+sample of a prompt, ``<task>/<name>`` (a sample id, e.g. ``review/spot-the-bug``)
+one sample.
+
 - ``playbook eval --list`` (also the default when no arg is given): tree-shape
-  coverage report across every prompt, with per-sample summary lines.
+  coverage report grouped by task, one block per prompt, with per-sample summary lines.
 - ``playbook eval --show <id>``: detailed dump for one sample — sections from
   SPEC §12.8 (Sample / Source / Prompt under test / Description / Setup /
   Invocation / Expected / Rubric).
-- ``playbook eval <id>`` (no ``--run``): prints how to run the sample. Exits 0 if
-  the sample is known, exits 1 if it isn't (so typos still surface).
+- ``playbook eval <task>`` or ``<id>`` (no ``--run``): prints how to run the
+  selected samples. Exits 0 if the name is known, exits 1 if it isn't (so typos
+  still surface).
 - ``playbook eval --targets``: list the Eval targets of the ``[evals]`` config,
   where each comes from and whether its harness CLI is installed
   (``commands/_eval_targets.py``); ``--targets --check`` also runs a one-turn
   prompt through each target's harness and exits ``1`` if any fails.
-- ``playbook eval <id> --run [--target NAME|HARNESS:MODEL] [--runner NAME] [--judge NAME]
-  [--judge-samples N] [--prompt-set v1|v2] [--format text|json]``: load the sample,
+- ``playbook eval <task>|<id> --run [--target NAME|HARNESS:MODEL] [--runner NAME] [--judge NAME]
+  [--judge-samples N] [--prompt-set v1|v2] [--format text|json]``: load the selected samples,
   pick its Eval target (``--target``, then ``PLAYBOOK_EVAL_TARGET``, then the local
   and the committed ``[evals] default``, else ``claude_code`` on its default model,
   recorded as ``default``; ``--runner NAME`` is the target with that harness and no
@@ -73,7 +78,7 @@ import argparse
 import json
 import sys
 import tempfile
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
@@ -106,11 +111,15 @@ from coding_agent_playbook.evals.report_format import (
 )
 from coding_agent_playbook.evals.target_config import load_eval_settings
 from coding_agent_playbook.evals.targets import TargetError
+from coding_agent_playbook.evals.task_registry import TaskRegistry, TaskRegistryError
 from coding_agent_playbook.validation.context import SyncContext
 
 if TYPE_CHECKING:
+    from coding_agent_playbook.catalog.prompt_sets import PromptSet
     from coding_agent_playbook.evals.judge import Judge
+    from coding_agent_playbook.evals.run.harness_runner import HarnessRunner, SampleResult
     from coding_agent_playbook.evals.sample import EvalSample
+    from coding_agent_playbook.evals.targets import EvalTarget
 
 
 NAME: Final = "eval"
@@ -147,14 +156,20 @@ def configure(parser: argparse.ArgumentParser) -> None:
         help="with --targets: run a one-turn prompt through each target's harness "
         "(paid; the harness makes the calls, the engine makes none)",
     )
-    parser.add_argument("id", nargs="?", help="sample id (enumerate, or run with --run)")
+    parser.add_argument(
+        "id",
+        nargs="?",
+        help="a task (every sample of one prompt) or a sample id <task>/<name> "
+        "(enumerate, or run with --run)",
+    )
     # PR R1d — execute one sample end-to-end and grade it through the unified
     # EvaluationReport. Whether execution evaluators run is the sample's own
     # [metrics] decision, so there is intentionally no --run-tests flag here.
     parser.add_argument(
         "--run",
         action="store_true",
-        help="execute the sample <id> through a runner and grade it (SPEC §15)",
+        help="execute the samples <task> or <task>/<name> selects through a runner "
+        "and grade them (SPEC §15)",
     )
     parser.add_argument(
         "--runner",
@@ -244,25 +259,35 @@ def run(args: argparse.Namespace) -> int:
             raise RecordRefusedError("--record, --all and --runs need --run")
         return run_record(args, repo_root, load_eval_settings(repo_root))
 
-    # ``--run`` is the only path that *executes* a sample; it has its own loading
-    # (one sample by id) so it never pays for the full list+resolve unless the sample
-    # is missing (then it falls through to the SyncContext for a helpful error).
+    # ``--run`` is the only path that *executes* samples: a task name runs every
+    # sample of the task, ``<task>/<name>`` one sample.
     if getattr(args, "run", False):
         return _run_sample_cli(args, repo_root)
 
     ctx = SyncContext.from_repo(repo_root)
-    samples = ctx.artifact_source.list_eval_samples()
+    registry = _task_registry(ctx)
+    if registry is None:
+        return 2
 
     if getattr(args, "list", False):
-        return _print_list(ctx.prompts_resolved, samples)
+        return _print_list(ctx.prompts_resolved, registry)
     show_id = getattr(args, "show", None)
     if show_id:
-        return _print_show(show_id, samples, ctx.prompts_resolved)
+        return _print_show(show_id, registry, ctx.prompts_resolved)
     bare_id = getattr(args, "id", None)
     if bare_id:
-        return _print_run_hint(bare_id, samples, ctx.prompts_resolved)
+        return _print_run_hint(bare_id, registry, ctx.prompts_resolved)
     # No flag — default to --list (matches the "helpful empty invocation" rule).
-    return _print_list(ctx.prompts_resolved, samples)
+    return _print_list(ctx.prompts_resolved, registry)
+
+
+def _task_registry(ctx: SyncContext) -> TaskRegistry | None:
+    """The run's task registry, or ``None`` after an ``error:`` line naming what is wrong."""
+    try:
+        return TaskRegistry.from_catalog(ctx.artifact_source, ctx.prompts_resolved)
+    except TaskRegistryError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return None
 
 
 # --------------------------------------------------------------------------- #
@@ -270,12 +295,24 @@ def run(args: argparse.Namespace) -> int:
 # --------------------------------------------------------------------------- #
 
 
-def _run_sample_cli(args: argparse.Namespace, repo_root: Path) -> int:
-    """Load + run one sample, render its report, map ``passed`` to the exit code.
+@dataclass(frozen=True)
+class _SampleRun:
+    """How every selected sample of one ``--run`` is run and graded."""
 
-    Exit codes: ``0`` pass, ``1`` failing report, ``2`` usage errors (no sample id,
-    unknown sample, unknown/unavailable runner, bad ``--format``) or an unscorable
-    sample (prompt render failure, judge error).
+    runner: HarnessRunner
+    target: EvalTarget
+    judge: Judge | None
+    judge_samples: int
+    fail_fast: bool
+    prompt_set: PromptSet
+
+
+def _run_sample_cli(args: argparse.Namespace, repo_root: Path) -> int:
+    """Run the samples ``<task>`` or ``<task>/<name>`` selects, print the reports, map the exit code.
+
+    Exit codes: ``0`` every sample passed, ``1`` a failing report, ``2`` usage
+    errors (no name, unknown task or sample, unknown/unavailable runner, bad
+    ``--format``) or an unscorable sample (prompt render failure, judge error).
     """
     fmt = getattr(args, "format", None) or "text"
     if fmt not in _VALID_FORMATS:
@@ -287,14 +324,13 @@ def _run_sample_cli(args: argparse.Namespace, repo_root: Path) -> int:
     if judge_samples is None:
         return 2
 
-    sample_id = getattr(args, "id", None)
-    if not sample_id:
-        print("error: `playbook eval --run` requires a sample id", file=sys.stderr)
+    name = getattr(args, "id", None)
+    if not name:
+        print("error: `playbook eval --run` requires a task or a sample id", file=sys.stderr)
         return 2
 
-    sample = _load_sample(sample_id, repo_root)
-    if sample is None:
-        print(f"error: no eval sample with id {sample_id!r}", file=sys.stderr)
+    samples = _select_samples(name, repo_root)
+    if samples is None:
         return 2
 
     target = select_target(args, settings)
@@ -314,51 +350,65 @@ def _run_sample_cli(args: argparse.Namespace, repo_root: Path) -> int:
     # Fail-fast is ON by default (a lost deterministic gate skips the costlier
     # judge tier); --full-scoring grades every check unconditionally.
     fail_fast = not bool(getattr(args, "full_scoring", False))
+    how = _SampleRun(runner, target, judge, judge_samples, fail_fast, args.prompt_set)
+    outcomes = [_run_one(sample, how) for sample in samples]
+    results = [result for _, result in outcomes if result is not None]
+    _print_results(results, fmt, one_sample=len(samples) == 1)
+    return max(code for code, _ in outcomes)
 
+
+def _run_one(sample: EvalSample, how: _SampleRun) -> tuple[int, SampleResult | None]:
+    """Run and grade ``sample``: ``(0 or 1, result)``, or ``(2, None)`` when unscorable."""
     try:
         with tempfile.TemporaryDirectory(prefix="playbook-eval-") as tmp:
-            result = runner.run_sample(
+            result = how.runner.run_sample(
                 sample,
                 Path(tmp) / "scratch",
-                judge=judge,
-                judge_samples=judge_samples,
-                fail_fast=fail_fast,
-                prompt_set=args.prompt_set,
+                judge=how.judge,
+                judge_samples=how.judge_samples,
+                fail_fast=how.fail_fast,
+                prompt_set=how.prompt_set,
             )
     except (PromptResolutionError, JudgeError) as exc:
         # Neither a pass nor a fail: no verdict exists, so never exit 0/1 here.
-        print(f"error: sample {sample_id!r} could not be scored: {exc}", file=sys.stderr)
-        return 2
-    endpoint = target.endpoint
+        print(f"error: sample {sample.id!r} could not be scored: {exc}", file=sys.stderr)
+        return 2, None
+    endpoint = how.target.endpoint
     result = replace(
         result,
-        target=target.name,
+        target=how.target.name,
         endpoint=endpoint.name if endpoint is not None else None,
         endpoint_fingerprint=endpoint.fingerprint if endpoint is not None else None,
     )
-
-    if fmt == "json":
-        print(json.dumps(sample_result_to_dict(result), indent=2, sort_keys=True))
-    else:
-        print(format_sample_result_text(result))
-
     # The sample verdict is ``result.passed`` — the single trial's verdict for a
     # non-aggregate sample (== report.passed), or the [aggregate] layer's pass/fail
     # when the sample aggregates across trials (every trial's verdict if that layer
     # was skipped). ``report.passed`` alone would be only the *first* trial's
     # verdict, so map the exit code off ``result.passed``.
-    return 0 if result.passed else 1
+    return (0 if result.passed else 1), result
 
 
-def _load_sample(sample_id: str, repo_root: Path) -> EvalSample | None:
-    """Resolve ``sample_id`` to its :class:`EvalSample`, or ``None`` if absent.
+def _print_results(results: list[SampleResult], fmt: str, *, one_sample: bool) -> None:
+    """Print each report; ``--format json`` prints one object for one sample, else a list."""
+    if fmt != "json":
+        print("\n\n".join(format_sample_result_text(result) for result in results))
+        return
+    documents = [sample_result_to_dict(result) for result in results]
+    payload = documents[0] if one_sample and documents else documents
+    print(json.dumps(payload, indent=2, sort_keys=True))
 
-    Loads via the same :class:`SyncContext` enumeration the read-only modes use
-    (engine + overlay + repo-local samples), so ``--run`` sees exactly the sample set
-    ``--list`` does.
+
+def _select_samples(name: str, repo_root: Path) -> tuple[EvalSample, ...] | None:
+    """The samples ``name`` selects, or ``None`` after an ``error:`` line.
+
+    Uses the same task registry the read-only modes use (engine, plugin, overlay
+    and repo-local samples), so ``--run`` sees exactly the sample set ``--list`` does.
     """
-    ctx = SyncContext.from_repo(repo_root)
-    for sample in ctx.artifact_source.list_eval_samples():
-        if sample.id == sample_id:
-            return sample
-    return None
+    registry = _task_registry(SyncContext.from_repo(repo_root))
+    if registry is None:
+        return None
+    try:
+        return registry.select(name)
+    except TaskRegistryError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return None

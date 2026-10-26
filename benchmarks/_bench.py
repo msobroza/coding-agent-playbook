@@ -197,7 +197,7 @@ def review_samples(only: list[str] | None = None) -> list[EvalSample]:
 
     Example::
 
-        [s.id for s in review_samples(["review-spot-the-bug"])]
+        [s.id for s in review_samples(["review/spot-the-bug"])]
     """
     from coding_agent_playbook.validation.context import SyncContext
 

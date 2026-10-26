@@ -34,7 +34,7 @@ Inside any root, the path says the kind:
 | Skill | `skills/<id>/`: `SKILL.md`, `rules/`, the references directory, `scripts/`, `examples/` |
 | Prompt | `prompts/<id>.md` or `.md.j2` |
 | Hook | `hooks/<category>/<id>/HOOK.md` (the category folder means nothing) |
-| Eval sample | `eval_samples/<id>/`, beside the layer's `prompts/` |
+| Eval sample | `eval_samples/<prompt>/<name>/`, beside the layer's `prompts/` |
 
 ## Bad Example
 

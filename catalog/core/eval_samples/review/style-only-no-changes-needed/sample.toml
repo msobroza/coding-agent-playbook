@@ -1,0 +1,30 @@
+id = "review/style-only-no-changes-needed"
+description = "Regression target: code is correct and idiomatic; the review must NOT invent problems or rewrite working code."
+
+[setup]
+files = ["src/temperature.py"]
+project_kind = "python-application"
+
+[invocation]
+prompt_args = "review src/temperature.py — be honest if there's nothing to change"
+input_variables = {}
+
+[gate]
+expr = "untouched"
+
+[gate.bind]
+untouched = { check = "file_unchanged", path = "src/temperature.py" }
+
+[rubric]
+expr = "quality"
+
+[rubric.bind]
+quality = { fail = 0.5, rubric = [
+  { judge = "The review's verdict is 'approve' (with no comments) or 'approve with comments' (style-only, framed as suggestions)", weight = 0.4 },
+  { judge = "No correctness, security, or failure-mode bugs are claimed — because none exist", weight = 0.3 },
+  { judge = "Any suggestions are framed as preferences, not as required changes", weight = 0.15 },
+  { judge = "The review does not propose to rewrite the function or change its signature", weight = 0.15 },
+] }
+
+[verdict]
+trial = "gate and rubric"

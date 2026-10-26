@@ -21,21 +21,21 @@
       "use_id": "toolu_01GefLoader",
       "paths": [
         {
-          "path": "/playbook-fixture/proj/src/coding_agent_playbook/resources/eval_samples/find-injected-vuln-pytorch-deserial/setup/app/loader.py",
-          "repo_rel": "src/coding_agent_playbook/resources/eval_samples/find-injected-vuln-pytorch-deserial/setup/app/loader.py",
-          "key": "src/coding_agent_playbook/resources/eval_samples/find-injected-vuln-pytorch-deserial/setup/app/loader.py"
+          "path": "/playbook-fixture/proj/src/coding_agent_playbook/resources/eval_samples/find-injected-vulnerability/pytorch-deserial/setup/app/loader.py",
+          "repo_rel": "src/coding_agent_playbook/resources/eval_samples/find-injected-vulnerability/pytorch-deserial/setup/app/loader.py",
+          "key": "src/coding_agent_playbook/resources/eval_samples/find-injected-vulnerability/pytorch-deserial/setup/app/loader.py"
         }
       ],
       "write_paths": [
         {
-          "path": "/playbook-fixture/proj/src/coding_agent_playbook/resources/eval_samples/find-injected-vuln-pytorch-deserial/setup/app/loader.py",
-          "repo_rel": "src/coding_agent_playbook/resources/eval_samples/find-injected-vuln-pytorch-deserial/setup/app/loader.py",
-          "key": "src/coding_agent_playbook/resources/eval_samples/find-injected-vuln-pytorch-deserial/setup/app/loader.py"
+          "path": "/playbook-fixture/proj/src/coding_agent_playbook/resources/eval_samples/find-injected-vulnerability/pytorch-deserial/setup/app/loader.py",
+          "repo_rel": "src/coding_agent_playbook/resources/eval_samples/find-injected-vulnerability/pytorch-deserial/setup/app/loader.py",
+          "key": "src/coding_agent_playbook/resources/eval_samples/find-injected-vulnerability/pytorch-deserial/setup/app/loader.py"
         }
       ],
       "content": [
         [
-          "/playbook-fixture/proj/src/coding_agent_playbook/resources/eval_samples/find-injected-vuln-pytorch-deserial/setup/app/loader.py",
+          "/playbook-fixture/proj/src/coding_agent_playbook/resources/eval_samples/find-injected-vulnerability/pytorch-deserial/setup/app/loader.py",
           "new_string",
           "return torch.load(p, weights_only=True)"
         ]
@@ -44,10 +44,10 @@
   },
   "result": {
     "decision": "ask",
-    "reason": "\"setup/app/loader.py\" is a frozen fixture of eval sample \"find-injected-vuln-pytorch-deserial\".\nsetup/ is the frozen starting state; find-injected-vuln fixtures are intentionally vulnerable and file_unchanged gates compare against it."
+    "reason": "\"setup/app/loader.py\" is a frozen fixture of eval sample \"find-injected-vulnerability/pytorch-deserial\".\nsetup/ is the frozen starting state; find-injected-vuln fixtures are intentionally vulnerable and file_unchanged gates compare against it."
   },
   "wire": {
-    "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\",\"permissionDecisionReason\":\"\\\"setup/app/loader.py\\\" is a frozen fixture of eval sample \\\"find-injected-vuln-pytorch-deserial\\\".\\nsetup/ is the frozen starting state; find-injected-vuln fixtures are intentionally vulnerable and file_unchanged gates compare against it.\"}}\n",
+    "stdout": "{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\",\"permissionDecisionReason\":\"\\\"setup/app/loader.py\\\" is a frozen fixture of eval sample \\\"find-injected-vulnerability/pytorch-deserial\\\".\\nsetup/ is the frozen starting state; find-injected-vuln fixtures are intentionally vulnerable and file_unchanged gates compare against it.\"}}\n",
     "stderr": "",
     "exit_code": 0
   }

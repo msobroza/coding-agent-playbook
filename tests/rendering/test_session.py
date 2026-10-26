@@ -332,10 +332,10 @@ def _via_eval_runner(tmp_path: Path, _: SyntheticRepoFactory, __: CaptureFixture
     layer = tmp_path / "layer"
     (layer / "prompts").mkdir(parents=True)
     (layer / "prompts" / "tidy.md").write_text(_TIDY_MD, encoding="utf-8")
-    sample_dir = layer / "eval_samples" / "tidy-sample"
+    sample_dir = layer / "eval_samples" / "tidy" / "tidy-sample"
     _write_layer(sample_dir / "setup")
     sample = EvalSample(
-        id="tidy-sample",
+        id="tidy/tidy-sample",
         prompt_id="tidy",
         description="d",
         source_path=sample_dir / "sample.toml",

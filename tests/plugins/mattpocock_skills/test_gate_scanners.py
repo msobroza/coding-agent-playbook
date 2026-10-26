@@ -75,7 +75,7 @@ def test_glob_matches_a_glob_that_prunes_an_ancestor_directory(pattern: str) -> 
     [
         "catalog/plugins/mattpocock_skills/**/*.md",
         "catalog/plugins/superpowers",
-        "catalog/plugins/*/eval_samples/*/setup",
+        "catalog/plugins/*/eval_samples/*/*/setup",
         "plugins/mattpocock_skills",
     ],
 )

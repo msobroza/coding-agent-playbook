@@ -1,6 +1,6 @@
 """ruff must never lint or reformat eval-fixture ``setup/`` trees (specs/prK-lifecycle-hooks.md §P9).
 
-The fixtures under ``catalog/core/eval_samples/*/setup`` are deliberately unclean
+The fixtures under ``catalog/core/eval_samples/*/*/setup`` are deliberately unclean
 needle material (the ``find-injected-vuln-*`` samples hide a bug in them), so a
 pre-commit ``ruff check --fix`` or a hook's post-edit ``ruff format`` must not
 rewrite them. ``extend-exclude`` alone does not stop ruff from touching a path
@@ -8,7 +8,7 @@ passed explicitly on the command line, which is exactly what pre-commit and the
 hooks do; ``force-exclude = true`` closes that hole.
 
 Eval samples are per layer, so a bundled plugin's fixtures
-(``catalog/plugins/*/eval_samples/*/setup``) need the same exclude. No shipped
+(``catalog/plugins/*/eval_samples/*/*/setup``) need the same exclude. No shipped
 plugin has eval samples yet, so that glob is proved in a scratch project that
 carries the engine's ruff excludes. mypy needs no exclude for either home:
 ``catalog/`` is outside its ``files``.
@@ -38,9 +38,9 @@ import pytest
 pytestmark = pytest.mark.catalog
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_FIXTURE_GLOB = "catalog/core/eval_samples/*/setup"
+_FIXTURE_GLOB = "catalog/core/eval_samples/*/*/setup"
 #: A bundled plugin's eval samples live in its own layer, fixtures included.
-_PLUGIN_FIXTURE_GLOB = "catalog/plugins/*/eval_samples/*/setup"
+_PLUGIN_FIXTURE_GLOB = "catalog/plugins/*/eval_samples/*/*/setup"
 #: The vendored superpowers plugin stays byte-faithful as a whole; mattpocock_skills
 #: only keeps ruff off its markdown, because its Python script rewrites are our own
 #: code (SPEC §11.5.3).
@@ -49,7 +49,7 @@ _SPLIT_PACK_MD_GLOB = "catalog/plugins/mattpocock_skills/**/*.md"
 _SPLIT_PACK_SCRIPT = "catalog/plugins/mattpocock_skills/skills/wizard/scripts/wizard_template.py"
 _ENGINE_MODULE = "src/coding_agent_playbook/__init__.py"
 #: Scratch-project paths: a plugin's eval fixture, and a plugin script beside it.
-_SCRATCH_PLUGIN_FIXTURE = "catalog/plugins/demo/eval_samples/demo-sample/setup/needle.py"
+_SCRATCH_PLUGIN_FIXTURE = "catalog/plugins/demo/eval_samples/demo/demo-sample/setup/needle.py"
 _SCRATCH_PLUGIN_SCRIPT = "catalog/plugins/demo/skills/demo/scripts/tool.py"
 #: An unused import (F401) that ``ruff format`` would also rewrite (``x=1``).
 _UNCLEAN_SOURCE = "import os\nx=1\n"

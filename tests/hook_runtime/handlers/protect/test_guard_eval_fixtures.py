@@ -34,16 +34,20 @@ pytestmark = pytest.mark.catalog
 
 HOOK_ID: Final = "guard-eval-fixtures"
 SAMPLE: Final = (
-    "src/coding_agent_playbook/resources/eval_samples/find-injected-vuln-pytorch-deserial"
+    "src/coding_agent_playbook/resources/eval_samples/find-injected-vulnerability/pytorch-deserial"
 )
 LOADER: Final = f"{SAMPLE}/setup/app/loader.py"
 FROZEN: Final = "setup/ is the frozen starting state"
-_COMMITTED: Final = {f"{SAMPLE}/sample.toml": b'id = "find-injected-vuln-pytorch-deserial"\n'}
+_COMMITTED: Final = {
+    f"{SAMPLE}/sample.toml": b'id = "find-injected-vulnerability/pytorch-deserial"\n'
+}
 
 
 @pytest.fixture
 def repo(pack_repo: PackRepo) -> PackRepo:
-    pack_repo.write(f"{SAMPLE}/sample.toml", 'id = "find-injected-vuln-pytorch-deserial"\n')
+    pack_repo.write(
+        f"{SAMPLE}/sample.toml", 'id = "find-injected-vulnerability/pytorch-deserial"\n'
+    )
     pack_repo.write(LOADER, "import torch\n\ndef load(p):\n    return torch.load(p)\n")
     pack_repo.write(f"{SAMPLE}/setup/app/registry.py", "MODELS = {}\n")
     pack_repo.install_pack([HOOK_ID])

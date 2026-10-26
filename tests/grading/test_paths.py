@@ -40,13 +40,13 @@ def test_test_path_globs_table(path: str, expected: bool) -> None:
 
 
 def test_eval_fixture_glob_matches_engine_and_consumer_setup_trees() -> None:
-    engine = "src/coding_agent_playbook/resources/eval_samples/fix-bug/setup/app.py"
-    consumer = "eval_samples/t1/setup/pkg/mod.py"
+    engine = "src/coding_agent_playbook/resources/eval_samples/refactor/fix-bug/setup/app.py"
+    consumer = "eval_samples/review/t1/setup/pkg/mod.py"
 
     assert matches_any_glob(engine, EVAL_FIXTURE_GLOBS)
     assert matches_any_glob(consumer, EVAL_FIXTURE_GLOBS)
-    assert not matches_any_glob("eval_samples/t1/sample.toml", EVAL_FIXTURE_GLOBS)
-    assert not matches_any_glob("eval_samples/t1/solution/app.py", EVAL_FIXTURE_GLOBS)
+    assert not matches_any_glob("eval_samples/review/t1/sample.toml", EVAL_FIXTURE_GLOBS)
+    assert not matches_any_glob("eval_samples/review/t1/solution/app.py", EVAL_FIXTURE_GLOBS)
 
 
 def test_constants_are_the_hooks_single_source() -> None:

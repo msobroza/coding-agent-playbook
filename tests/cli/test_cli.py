@@ -235,10 +235,10 @@ def test_eval_main_uses_repo_root_without_chdir(monkeypatch, tmp_path, make_synt
         "---\nid: demo\nname: Demo\ndescription: demo\nslash: demo\n---\nBody.\n",
         encoding="utf-8",
     )
-    sample_dir = tmp_path / "playbook" / "eval_samples" / "demo-sample"
+    sample_dir = tmp_path / "playbook" / "eval_samples" / "demo" / "demo-sample"
     sample_dir.mkdir(parents=True, exist_ok=True)
     (sample_dir / "sample.toml").write_text(
-        'id = "demo-sample"\nprompt_id = "demo"\ndescription = "Demo sample"\n',
+        'id = "demo/demo-sample"\ndescription = "Demo sample"\n',
         encoding="utf-8",
     )
 

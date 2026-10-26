@@ -17,7 +17,7 @@ on_error: open
 supports: [claude_code, opencode]
 tags: [protect, evals]
 ---
-Files under an eval sample's `setup/` directory (`eval_samples/<id>/setup/`) are the frozen
+Files under an eval sample's `setup/` directory (`eval_samples/<prompt>/<name>/setup/`) are the frozen
 starting state of that sample: find-injected-vuln fixtures are intentionally vulnerable and
 `file_unchanged` gates compare against them. Do not edit, reformat or lint-fix them
 (`ruff format`, `ruff --fix`, `black`, `isort`, `sed -i`) unless you are authoring that sample.

@@ -64,7 +64,7 @@ def _ns(
 
 
 # A shipped engine sample with a [metrics] block and [expected] checks.
-_SHIPPED_SAMPLE = "refactor-extract-helper"
+_SHIPPED_SAMPLE = "refactor/extract-helper"
 
 
 def _seed(repo: Path, make_synthetic_repo: Any) -> Path:
@@ -155,6 +155,33 @@ def test_run_claude_code_unavailable_exits_2(
     assert rc == 2
     assert "--runner fake" in err
     assert "claude_code" in err
+
+
+def test_run_a_task_runs_every_sample_of_the_task(
+    tmp_path: Path, make_synthetic_repo: Any, capsys: Any
+) -> None:
+    """``eval <task> --run`` runs each sample of the task; ``--format json`` prints a list."""
+    _seed(tmp_path, make_synthetic_repo)
+    args = _ns(tmp_path, id_="refactor", run=True, runner="fake", fmt="json")
+    rc = _eval.run(args)
+    payload = json.loads(capsys.readouterr().out)
+
+    assert rc in (0, 1)
+    assert [run["sample_id"] for run in payload] == [
+        "refactor/extract-helper",
+        "refactor/rename-for-clarity",
+    ]
+
+
+def test_run_an_unknown_task_lists_the_known_tasks(
+    tmp_path: Path, make_synthetic_repo: Any, capsys: Any
+) -> None:
+    _seed(tmp_path, make_synthetic_repo)
+    rc = _eval.run(_ns(tmp_path, id_="refactr", run=True, runner="fake"))
+    err = capsys.readouterr().err
+    assert rc == 2
+    assert "no task 'refactr'; known tasks:" in err
+    assert "refactor" in err
 
 
 def test_run_unknown_runner_exits_2(tmp_path: Path, make_synthetic_repo: Any, capsys: Any) -> None:
@@ -327,7 +354,7 @@ def test_run_failing_gate_exits_1(
 
     # Build a synthetic sample on disk with a [metrics] CC gate + an [expected]
     # file-unchanged check that the worsening edit violates.
-    sample_dir = tmp_path / "eval_samples" / "synthetic"
+    sample_dir = tmp_path / "eval_samples" / "refactor" / "synthetic"
     setup = sample_dir / "setup"
     setup.mkdir(parents=True, exist_ok=True)
     (setup / "mod.py").write_text(
@@ -337,8 +364,7 @@ def test_run_failing_gate_exits_1(
     (sample_dir / "sample.toml").write_text(
         textwrap.dedent(
             """\
-            id = "synthetic"
-            prompt_id = "refactor"
+            id = "refactor/synthetic"
             description = "synthetic worsening sample"
 
             [setup]
@@ -367,10 +393,10 @@ def test_run_failing_gate_exits_1(
     monkeypatch.setattr(_registry, "load_runner_class", lambda name: _WorseRunner)
 
     # Point loading at the synthetic sample dir.
-    args = _ns(tmp_path, id_="synthetic", run=True, runner="fake")
+    args = _ns(tmp_path, id_="refactor/synthetic", run=True, runner="fake")
     # Make the sample discoverable: the synthetic sample lives under tmp_path.
     monkeypatch.setattr(
-        _eval, "_load_sample", lambda sample_id, repo_root: _load_synthetic(sample_dir, sample_id)
+        _eval, "_select_samples", lambda name, repo_root: (_load_synthetic(sample_dir),)
     )
 
     rc = _eval.run(args)
@@ -379,10 +405,10 @@ def test_run_failing_gate_exits_1(
     assert "FAIL" in out or "fail" in out
 
 
-def _load_synthetic(sample_dir: Path, sample_id: str) -> Any:
-    from coding_agent_playbook.evals.loader import load_eval_sample_from_dir
+def _load_synthetic(sample_dir: Path) -> Any:
+    from coding_agent_playbook.evals.task_registry import load_task_sample
 
-    return load_eval_sample_from_dir(sample_dir, source_package="<test>")
+    return load_task_sample(sample_dir, source_package="<test>")
 
 
 # --------------------------------------------------------------------------- #
@@ -434,7 +460,7 @@ def test_run_requires_an_id(tmp_path: Path, capsys: Any) -> None:
 # --------------------------------------------------------------------------- #
 
 #: A shipped review sample: its gate is ``file_unchanged``, so a no-op agent passes it.
-_REVIEW_SAMPLE = "review-spot-the-bug"
+_REVIEW_SAMPLE = "review/spot-the-bug"
 
 
 def _available_judge(score: float | None) -> type:

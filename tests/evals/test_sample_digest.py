@@ -22,12 +22,12 @@ Tidy the module.
 
 
 def _sample(layer: Path) -> EvalSample:
-    sample_dir = layer / "eval_samples" / "tidy-one"
+    sample_dir = layer / "eval_samples" / "tidy" / "tidy-one"
     (sample_dir / "setup").mkdir(parents=True)
-    (sample_dir / "sample.toml").write_text('id = "tidy-one"\n', encoding="utf-8")
+    (sample_dir / "sample.toml").write_text('id = "tidy/tidy-one"\n', encoding="utf-8")
     (sample_dir / "setup" / "mod.py").write_text("x = 1\n", encoding="utf-8")
     return EvalSample(
-        id="tidy-one",
+        id="tidy/tidy-one",
         prompt_id="tidy",
         description="d",
         source_path=sample_dir / "sample.toml",

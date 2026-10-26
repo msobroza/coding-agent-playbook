@@ -2,7 +2,7 @@
 
 ``version`` was an integer nothing read, bumped in a handful of content edits;
 the engine now computes a content digest of each artifact instead. A prompt's
-``eval_samples`` list duplicated the samples' own ``prompt_id``. Rules,
+``eval_samples`` list duplicated what the samples' task directory says. Rules,
 prompts, hooks and ``sample.toml`` refuse both with the message below rather
 than a bare "unknown key", so an author learns what replaced the key.
 
@@ -20,8 +20,8 @@ RETIRED_KEYS: Final[dict[str, str]] = {
         "the engine now computes a content digest of each artifact; delete the 'version' line"
     ),
     "eval_samples": (
-        "a prompt's eval samples are the samples whose prompt_id names it; "
-        "delete the 'eval_samples' list"
+        "a prompt's eval samples are the samples in its task directory, "
+        "eval_samples/<prompt>/; delete the 'eval_samples' list"
     ),
 }
 

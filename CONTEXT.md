@@ -70,6 +70,10 @@ _Avoid_: reminder, hint
 A reproducible test case for a prompt: a starting repo state, an invocation and a definition of success.
 _Avoid_: eval task
 
+**Task**:
+The eval samples of one prompt, grouped under that prompt's id.
+_Avoid_: eval task, the retired name of an eval sample
+
 **Graded set**:
 The prompts that eval samples grade, plus the rules those prompts include: everything an eval run puts in front of the agent.
 

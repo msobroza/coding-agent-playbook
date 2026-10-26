@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 __all__ = ["EVAL_FIXTURE_GLOBS", "TEST_PATH_GLOBS", "is_test_path", "matches_any_glob"]
 
-#: The frozen eval-sample fixtures (``**/eval_samples/*/setup/**``): ``[metrics] exclude``'s default.
+#: The frozen eval-sample fixtures (``**/eval_samples/*/*/setup/**``): ``[metrics] exclude``'s default.
 EVAL_FIXTURE_GLOBS: Final = FIXTURE_GLOBS
 
 #: Repo-relative paths are exact (git and the gate report them as written), so

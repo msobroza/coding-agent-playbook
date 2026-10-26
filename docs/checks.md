@@ -584,22 +584,27 @@ done
 An eval sample is a reproducible test case for a prompt: a starting repo state, an
 invocation and a definition of success. `playbook eval` works with these samples.
 With `--list` or `--show`, it prints the prompt-to-sample graph, which links each
-prompt to its eval samples. With `--run`, it executes a single sample end to end
-against an agent and grades the result.
+prompt to its eval samples. With `--run`, it executes samples end to end against
+an agent and grades the results.
+
+Samples are grouped by task: a task is the eval samples of one prompt, kept in
+`eval_samples/<prompt>/<name>/` in every layer. A sample's id is `<prompt>/<name>`,
+so `playbook eval review --run` runs every sample of the `review` prompt and
+`playbook eval review/spot-the-bug --run` runs one.
 
 These commands run one sample with each runner and with the main options:
 
 ```bash
-playbook eval refactor-extract-helper --run --runner claude_code   # real: drive the Claude Code CLI
-playbook eval refactor-extract-helper --run --runner opencode       # real: drive the OpenCode CLI
-playbook eval refactor-extract-helper --run --runner fake          # hermetic demo / CI: no network, no CLI
-playbook eval refactor-extract-helper --run --target claude-opus    # a named eval target from [evals.targets]
-playbook eval refactor-extract-helper --run --target opencode:my-org/coder-32b  # harness:model, no config
+playbook eval refactor/extract-helper --run --runner claude_code   # real: drive the Claude Code CLI
+playbook eval refactor/extract-helper --run --runner opencode       # real: drive the OpenCode CLI
+playbook eval refactor/extract-helper --run --runner fake          # hermetic demo / CI: no network, no CLI
+playbook eval refactor/extract-helper --run --target claude-opus    # a named eval target from [evals.targets]
+playbook eval refactor/extract-helper --run --target opencode:my-org/coder-32b  # harness:model, no config
 playbook eval --targets                                             # list the targets and whether each CLI is installed
-playbook eval refactor-extract-helper --run --judge llm --judge-samples 3 # also score [rubric] via an LLM judge
-playbook eval refactor-extract-helper --run --full-scoring          # run every check (no short-circuit)
-playbook eval refactor-extract-helper --run --prompt-set v2         # grade the v2 prompt set (default v1)
-playbook eval refactor-extract-helper --run --format json          # machine-readable report
+playbook eval refactor/extract-helper --run --judge llm --judge-samples 3 # also score [rubric] via an LLM judge
+playbook eval refactor/extract-helper --run --full-scoring          # run every check (no short-circuit)
+playbook eval refactor/extract-helper --run --prompt-set v2         # grade the v2 prompt set (default v1)
+playbook eval refactor/extract-helper --run --format json          # machine-readable report
 ```
 
 The diagram shows how a run scores a sample:
@@ -900,7 +905,7 @@ and narrow a comparison to one eval sample:
 ```bash
 playbook eval --compare origin/main --judge llm                                  # base origin/main (v1) vs HEAD (v1)
 playbook eval --compare HEAD --base-prompt-set v1 --prompt-set v2 --judge llm     # v1 vs v2 on one ref
-playbook eval refactor-extract-helper --compare origin/main --judge llm --compare-runs 5 --format json
+playbook eval refactor/extract-helper --compare origin/main --judge llm --compare-runs 5 --format json
 ```
 
 Each side is a detached `git worktree` of its ref. Every eval sample runs there

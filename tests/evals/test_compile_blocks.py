@@ -28,9 +28,11 @@ from coding_agent_playbook.grading.types import EvalContext
 
 
 def _sample(data: dict[str, Any]) -> EvalSample:
-    base: dict[str, Any] = {"id": "t", "prompt_id": "p", "description": "d"}
+    base: dict[str, Any] = {"id": "t", "description": "d"}
     base.update(data)
-    return EvalSample.from_dict(base, source_path=Path("/tmp/sample.toml"), source_package="<test>")
+    return EvalSample.from_dict(
+        base, prompt_id="p", source_path=Path("/tmp/sample.toml"), source_package="<test>"
+    )
 
 
 def _empty_ctx() -> EvalContext:

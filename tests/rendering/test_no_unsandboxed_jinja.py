@@ -31,8 +31,8 @@ import jinja2.exceptions
 import pytest
 from jinja2.sandbox import SandboxedEnvironment
 
-from coding_agent_playbook.evals.loader import load_eval_sample_from_dir
 from coding_agent_playbook.evals.prompting import render_prompt
+from coding_agent_playbook.evals.task_registry import load_task_sample
 from coding_agent_playbook.sync import pipeline as _sync
 from tests._catalog import CORE_ROOT
 from tests.fakes import FakeGitClient
@@ -225,8 +225,8 @@ def test_sync_and_eval_prompts_build_only_sandboxed_environments(
     repo = make_synthetic_repo(tmp_path, rules=[("x", "Body of x\n")])
     assert _sync.execute(repo, git=FakeGitClient()) == 0
     assert _sync.execute(repo, check=True, git=FakeGitClient()) == 0
-    sample_dir = CORE_ROOT / "eval_samples" / "review-spot-the-bug"
-    sample = load_eval_sample_from_dir(sample_dir, source_package="coding_agent_playbook")
+    sample_dir = CORE_ROOT / "eval_samples" / "review" / "spot-the-bug"
+    sample = load_task_sample(sample_dir, source_package="coding_agent_playbook")
     assert "### " in render_prompt(sample, strict=True)  # a rule() inclusion rendered
 
     assert built_environments, "expected the engine to build Jinja environments"

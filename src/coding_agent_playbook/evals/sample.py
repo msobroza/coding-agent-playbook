@@ -1,6 +1,6 @@
 """Eval-sample data types (SPEC §15.2) — the ``[gate]``/``[rubric]``/``[verdict]``/``[aggregate]`` schema.
 
-These are the canonical Python representations of ``eval_samples/<id>/sample.toml``.
+These are the canonical Python representations of ``eval_samples/<prompt>/<name>/sample.toml``.
 The loader (:mod:`coding_agent_playbook.evals.loader`) parses the TOML; the
 validator (:mod:`coding_agent_playbook.evals.validator`) enforces structural
 correctness by trial-compiling the blocks; the runner
@@ -46,7 +46,6 @@ _WEIGHT_SUM_TOLERANCE = 1e-3
 #: and the sample would grade something its author did not ask for.
 SAMPLE_TOP_KEYS: Final = (
     "id",
-    "prompt_id",
     "description",
     "setup",
     "invocation",
@@ -55,6 +54,15 @@ SAMPLE_TOP_KEYS: Final = (
     "verdict",
     "aggregate",
 )
+
+#: Keys ``sample.toml`` no longer carries, with what replaced them (#302): the
+#: task directory a sample lives in names the prompt it grades.
+_MOVED_SAMPLE_KEYS: Final[dict[str, str]] = {
+    "prompt_id": (
+        "the task directory names the prompt a sample grades: keep the sample at "
+        "eval_samples/<prompt>/<name>/sample.toml and delete the 'prompt_id' line"
+    ),
+}
 
 
 @dataclass
@@ -131,7 +139,11 @@ class Verdict:
 
 @dataclass
 class EvalSample:
-    """A single eval sample. Mirrors the on-disk ``eval_samples/<id>/sample.toml``.
+    """A single eval sample. Mirrors the on-disk ``eval_samples/<prompt>/<name>/sample.toml``.
+
+    ``prompt_id`` is the prompt the sample grades, named by the task directory
+    the sample lives in (``sample.toml`` does not carry it); ``id`` is
+    ``<prompt>/<name>``.
 
     ``source_path`` is the ``sample.toml`` path (the parent directory holds
     ``setup/`` etc.). ``source_package`` is the importable package name
@@ -165,12 +177,14 @@ class EvalSample:
         cls,
         data: dict[str, Any],
         *,
+        prompt_id: str,
         source_path: Path,
         source_package: str,
     ) -> EvalSample:
         """Parse a TOML-shaped dict (from ``tomllib.load``) into an EvalSample.
 
-        Required top-level fields: ``id``, ``prompt_id``, ``description``.
+        ``prompt_id`` comes from the sample's task directory, never from the TOML.
+        Required top-level fields: ``id``, ``description``.
         Any other top-level key (:data:`SAMPLE_TOP_KEYS`) is an error naming it.
         Optional sections: ``[setup]``, ``[invocation]``, ``[gate]``, ``[rubric]``,
         ``[verdict]``, ``[aggregate]``.
@@ -187,7 +201,6 @@ class EvalSample:
         """
         _reject_unknown_top_keys(data)
         sample_id = _require_str(data, "id")
-        prompt_id = _require_str(data, "prompt_id")
         description = _require_str(data, "description")
 
         setup = _parse_setup(data.get("setup", {}))
@@ -262,13 +275,14 @@ def compile_eval_sample(sample: EvalSample) -> CompiledSample:
 def _reject_unknown_top_keys(data: dict[str, Any]) -> None:
     """Raise ``ValueError`` naming the first top-level key outside :data:`SAMPLE_TOP_KEYS`.
 
-    A retired key (``version``) names its replacement instead of the list.
+    A retired key (``version``) or a moved one (``prompt_id``) names its
+    replacement instead of the list.
 
     Example::
 
         >>> _reject_unknown_top_keys({"id": "x", "editon": "v0.1.0"})
         Traceback (most recent call last):
-        ValueError: unknown top-level key 'editon'; allowed keys: id, prompt_id, ...
+        ValueError: unknown top-level key 'editon'; allowed keys: id, description, ...
     """
     for key in data:
         if key in SAMPLE_TOP_KEYS:
@@ -276,6 +290,9 @@ def _reject_unknown_top_keys(data: dict[str, Any]) -> None:
         retired = retired_key_problem(key)
         if retired is not None:
             raise ValueError(retired)
+        moved = _MOVED_SAMPLE_KEYS.get(str(key))
+        if moved is not None:
+            raise ValueError(f"unknown top-level key {key!r}: {moved}")
         allowed = ", ".join(SAMPLE_TOP_KEYS)
         raise ValueError(f"unknown top-level key {key!r}; allowed keys: {allowed}")
 

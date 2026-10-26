@@ -210,7 +210,6 @@ def _make_sample(
     """
     data: dict[str, Any] = {
         "id": "t-fixture",
-        "prompt_id": prompt_id,
         "description": "fixture sample",
     }
     if gate is not None:
@@ -230,7 +229,7 @@ def _make_sample(
                 verdict = "rubric"
         data["verdict"] = {"trial": verdict}
     sample = EvalSample.from_dict(
-        data, source_path=sample_dir / "sample.toml", source_package="<test>"
+        data, prompt_id=prompt_id, source_path=sample_dir / "sample.toml", source_package="<test>"
     )
     if invocation is not None:
         sample.invocation = invocation
@@ -324,7 +323,7 @@ def test_render_prompt_falls_back_for_unresolvable_prompt(tmp_path: Path) -> Non
 @pytest.mark.catalog
 def test_render_prompt_resolves_a_real_shipped_prompt() -> None:
     """A sample pointing at a shipped (non-templated) prompt renders its real body."""
-    sample_dir = CORE_ROOT / "eval_samples" / "refactor-extract-helper"
+    sample_dir = CORE_ROOT / "eval_samples" / "refactor" / "extract-helper"
     assert (sample_dir / "sample.toml").is_file()
 
     sample = EvalSample(
@@ -849,7 +848,7 @@ def test_materialize_with_no_setup_dir_yields_empty_baseline(tmp_path: Path) -> 
 @pytest.mark.catalog
 def test_render_prompt_skips_non_matching_prompts() -> None:
     """Resolution scans every prompt md and returns only the id-matching one."""
-    sample_dir = CORE_ROOT / "eval_samples" / "explain-pure-function"
+    sample_dir = CORE_ROOT / "eval_samples" / "explain" / "pure-function"
 
     sample = EvalSample(
         id="explain-pure-function",

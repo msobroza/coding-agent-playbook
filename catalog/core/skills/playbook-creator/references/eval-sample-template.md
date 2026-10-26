@@ -5,7 +5,7 @@ An eval sample tests the prompt, not the model: write three per prompt, a happy 
 ## Contents
 
 - Directory trees
-- Task file skeleton
+- Sample file skeleton
 - Gate check vocabulary
 - Rubric criteria and negatives
 - Commands
@@ -13,12 +13,12 @@ An eval sample tests the prompt, not the model: write three per prompt, a happy 
 
 ## Directory trees
 
-`eval_samples/<prompt-id>-<scenario>/`, beside the layer's `prompts/`.
+`eval_samples/<prompt-id>/<scenario>/`, beside the layer's `prompts/`. The `<prompt-id>` directory is the prompt's task: it holds every sample of that prompt and names the prompt they grade.
 
 An edit sample: `solution/` mirrors the `setup/` paths with what a correct agent writes.
 
 ```text
-eval_samples/characterize-pricing-boundary/
+eval_samples/characterize/pricing-boundary/
 ├── sample.toml
 ├── setup/
 │   ├── pyproject.toml
@@ -33,7 +33,7 @@ eval_samples/characterize-pricing-boundary/
 A review-only sample: the solution is an answer, and each negative is a wrong answer in Markdown.
 
 ```text
-eval_samples/release-review-happy-path/
+eval_samples/release-review/happy-path/
 ├── sample.toml
 ├── setup/
 │   └── billing/invoice.py
@@ -43,12 +43,11 @@ eval_samples/release-review-happy-path/
         └── ships-anyway.md
 ```
 
-## Task file skeleton
+## Sample file skeleton
 
 ```toml
-# sample.toml
-id = "release-review-happy-path"
-prompt_id = "release-review"   # the one prompt this sample grades
+# sample.toml in eval_samples/release-review/happy-path/
+id = "release-review/happy-path"   # <prompt-id>/<scenario>: its directory
 description = "Happy path: a float sum in invoice.py must hold the release."
 
 [setup]
@@ -104,16 +103,16 @@ Write one negative per plausible wrong answer: a fixed source where the prompt s
 ## Commands
 
 ```bash
-playbook validate            # schema, back-references, setup files
-playbook eval --show <id>    # the compiled layers of one sample
-playbook eval --list         # every sample and its prompt
+playbook validate                           # schema, task directories, setup files
+playbook eval --show <prompt-id>/<scenario>  # the compiled layers of one sample
+playbook eval --list                        # every task and its samples
 ```
 
 Never run `playbook eval --run` to check a sample: it runs an agent, costs money and needs the owner's credentials.
 
 ## Checklist
 
-- The id is `<prompt-id>-<scenario>`, and the prompt lists it.
+- The id is `<prompt-id>/<scenario>`, its directory under the prompt's task; the prompt does not list it.
 - `setup.files` matches `setup/`; never reformat or lint-fix `setup/`.
 - The gate fails on `setup/` and on every negative, and passes on the solution; a review-only sample has at least one negative.
 - Third-party fixture code is credited in the layer's eval_samples/ATTRIBUTIONS.md.

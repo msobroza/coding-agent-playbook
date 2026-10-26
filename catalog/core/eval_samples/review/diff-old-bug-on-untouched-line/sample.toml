@@ -1,0 +1,44 @@
+id = "review/diff-old-bug-on-untouched-line"
+description = "Review a diff: the new restock() and its tests are correct, but an untouched line of the same file holds an old off-by-one; the review must not block the change on it."
+
+[setup]
+files = [
+  "CHANGE.diff",
+  "src/inventory.py",
+  "tests/test_inventory.py",
+]
+project_kind = "python-application"
+
+[invocation]
+prompt_args = "review my change in CHANGE.diff (it is already applied to the working tree)"
+input_variables = {}
+
+[gate]
+# Review-only: the agent must report, not edit. The change in CHANGE.diff only adds
+# restock() and its tests; the `<` in items_to_reorder (its docstring says "to or
+# below") sits on a line the diff never touches. A correct answer from either
+# prompt set may mention that old bug, but must not block the change on it: it
+# ends on an approving verdict line, never a request-changes one, and (in the v2
+# count line) counts no important finding. An empty answer has no verdict line.
+expr = "inventory_untouched and tests_untouched and approves and not blocks and not counts_important"
+
+[gate.bind]
+inventory_untouched = { check = "file_unchanged", path = "src/inventory.py" }
+tests_untouched     = { check = "file_unchanged", path = "tests/test_inventory.py" }
+approves            = { check = "answer_matches", pattern = '(?im)^\W*(?:verdict\W*)?approve(?: with comments)?\W*$' }
+blocks              = { check = "answer_matches", pattern = '(?im)^\W*(?:verdict\W*)?request changes\W*$' }
+counts_important    = { check = "answer_matches", pattern = '(?i)\bfindings\W*[1-9]\d*\s+important\b' }
+
+[rubric]
+expr = "quality"
+
+[rubric.bind]
+quality = { fail = 0.5, rubric = [
+  { judge = "The review's verdict is 'approve' or 'approve with comments': the new restock() function and its tests are correct, and nothing in the change needs fixing before merge.", weight = 0.4 },
+  { judge = "If the review mentions the `<` in items_to_reorder (the docstring says 'to or below', so an item exactly at its reorder level is missed), it presents it as an existing problem on a line the change does not touch, not as a defect of this change.", weight = 0.3 },
+  { judge = "The review does not invent a bug in restock() or its tests (for example claiming it mutates the wrong item, accepts zero units, or swallows a missing SKU).", weight = 0.2 },
+  { judge = "The review cites file and line for each comment and proposes no edits of its own to the files.", weight = 0.1 },
+] }
+
+[verdict]
+trial = "gate and rubric"

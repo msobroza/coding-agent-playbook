@@ -1,6 +1,6 @@
 """eval-sample-authoring-lint: parse and trial-compile an edited eval sample (specs/prK-hook-pack.md §E.1).
 
-Each case writes a repo-local eval sample (``playbook/eval_samples/<id>/``) and its
+Each case writes a repo-local eval sample (``playbook/eval_samples/<prompt>/<name>/``) and its
 prompt, then dispatches ``post_tool_use`` through ``playbook-hook simulate``.
 The parse and compile run in-process (``evals.loader`` / ``evals.validator``,
 jinja2-free); the one ``playbook eval --show`` echo is a child process that
@@ -33,15 +33,14 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.catalog
 
 HOOK_ID: Final = "eval-sample-authoring-lint"
-SAMPLE_DIR: Final = "playbook/eval_samples/demo-sample"
+SAMPLE_DIR: Final = "playbook/eval_samples/demo/demo-sample"
 SAMPLE: Final = f"{SAMPLE_DIR}/sample.toml"
 HINT: Final = "author regex patterns as TOML literal strings (single quotes)"
 _PROMPT: Final = (
     "---\nid: demo\nname: Demo\ndescription: Demo prompt.\nslash: demo\n---\nReview the code.\n"
 )
 VALID: Final = """\
-id = "demo-sample"
-prompt_id = "demo"
+id = "demo/demo-sample"
 description = "Demo."
 
 [setup]
@@ -121,7 +120,7 @@ def test_unbound_expr_identifier_reported(repo: PackRepo, deps: Callable[..., Ru
     report = _write(repo, deps(), SAMPLE, UNBOUND)  # FakeProc(): no --show for a broken sample
 
     [item] = report.trace.combined.context
-    assert item.startswith('Eval sample "demo-sample" does not compile')
+    assert item.startswith('Eval sample "demo/demo-sample" does not compile')
     assert "reviewed" in item
 
 
@@ -136,12 +135,12 @@ def test_valid_sample_show_excerpt_once_at_most_25_lines(
     second = _write(repo, shared, SAMPLE, VALID + "\n", state)
 
     [item] = first.trace.combined.context
-    assert item.startswith('How the engine reads eval sample "demo-sample"')
+    assert item.startswith('How the engine reads eval sample "demo/demo-sample"')
     assert 1 < len(item.splitlines()) <= 26  # the header plus at most 25 lines
     assert '"line 0: gate untouched"' in item and "line 25" not in item
     assert second.trace.combined.decision is Decision.NONE
     assert playbook_calls(proc) == [
-        ("eval", "--show", "demo-sample", "--repo-root", str(repo.root))
+        ("eval", "--show", "demo/demo-sample", "--repo-root", str(repo.root))
     ]
 
 
@@ -181,7 +180,7 @@ def test_inert_without_eval_samples_dir(repo: PackRepo, deps: Callable[..., Runt
 def test_schema_error_names_sample_toml_not_the_absolute_path(
     repo: PackRepo, deps: Callable[..., RuntimeDeps]
 ) -> None:
-    report = _write(repo, deps(), SAMPLE, VALID.replace('prompt_id = "demo"\n', ""))
+    report = _write(repo, deps(), SAMPLE, 'prompt_id = "demo"\n' + VALID)
 
     [item] = report.trace.combined.context
     assert '"sample.toml: ' in item and "prompt_id" in item
@@ -196,3 +195,17 @@ def test_show_child_failure_is_silent(repo: PackRepo, deps: Callable[..., Runtim
 
     assert report.trace.combined.decision is Decision.NONE
     assert len(proc.calls) == 1
+
+
+def test_a_task_naming_no_prompt_is_reported(
+    repo: PackRepo, deps: Callable[..., RuntimeDeps]
+) -> None:
+    orphan_dir = "playbook/eval_samples/no-such-prompt/case"
+    repo.write(f"{orphan_dir}/setup/src/app.py", "x = 1\n")
+    text = VALID.replace('id = "demo/demo-sample"', 'id = "no-such-prompt/case"')
+
+    report = _write(repo, deps(), f"{orphan_dir}/sample.toml", text)
+
+    [item] = report.trace.combined.context
+    assert item.startswith('Eval sample "no-such-prompt/case" does not compile')
+    assert "task directory names no prompt" in item

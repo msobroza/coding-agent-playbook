@@ -72,7 +72,7 @@ Where each kind lives, inside any layer root:
 | Skill | `skills/<id>/SKILL.md`, with `references/`, `scripts/`, `examples/` |
 | Prompt | `prompts/<id>.md` or `.md.j2` |
 | Hook | `hooks/<category>/<id>/HOOK.md` |
-| Eval sample | `eval_samples/<id>/` beside the layer's `prompts/` |
+| Eval sample | `eval_samples/<prompt>/<name>/` beside the layer's `prompts/` |
 
 The loop after every edit:
 

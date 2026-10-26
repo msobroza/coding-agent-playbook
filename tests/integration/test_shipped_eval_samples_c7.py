@@ -1,6 +1,6 @@
 """Integration test: the shipped eval samples under the C7 schema.
 
-Loads every ``catalog/core/eval_samples/<id>/sample.toml`` the engine ships, asserts the
+Loads every ``catalog/core/eval_samples/<prompt>/<name>/sample.toml`` the engine ships, asserts the
 whole set validates clean (compile-based rules), and runs each sample end-to-end
 through :func:`~coding_agent_playbook.evals.run.scoring.score` — once deterministic-only
 (no judge ⇒ the judged rubric layer skips, so the verdict reduces to the gate) and
@@ -35,14 +35,15 @@ import pytest
 
 from coding_agent_playbook.artifacts.prompt import Prompt
 from coding_agent_playbook.evals.judge import StubJudge
-from coding_agent_playbook.evals.loader import (
-    discover_eval_sample_dirs,
-    load_eval_sample_from_dir,
-)
 from coding_agent_playbook.evals.run.fake_runner import write_files
 from coding_agent_playbook.evals.run.harness_runner import capture, materialize
 from coding_agent_playbook.evals.run.scoring import score
 from coding_agent_playbook.evals.sample import Verdict
+from coding_agent_playbook.evals.task_registry import (
+    TaskRegistry,
+    load_layer_samples,
+    load_task_sample,
+)
 from coding_agent_playbook.evals.validator import validate_samples
 from tests._catalog import CORE_ROOT
 from tests.integration.ccv_answers import ALL_CLASSES_ANSWER
@@ -83,10 +84,7 @@ _PROMPTS_ROOT = CORE_ROOT / "prompts"
 
 
 def _shipped_samples() -> list[EvalSample]:
-    return [
-        load_eval_sample_from_dir(d, source_package="coding_agent_playbook")
-        for d in discover_eval_sample_dirs(_SAMPLES_ROOT)
-    ]
+    return load_layer_samples(_SAMPLES_ROOT, "coding_agent_playbook")
 
 
 def _shipped_prompts() -> list[Prompt]:
@@ -99,10 +97,10 @@ def _shipped_prompts() -> list[Prompt]:
 
 def test_ships_thirty_five_samples() -> None:
     samples = _shipped_samples()
-    # 10 original fixtures + 10 find-injected-vuln-* crosscommitvuln fixtures (C1-C3)
+    # 10 original fixtures + 10 find-injected-vulnerability/* crosscommitvuln fixtures (C1-C3)
     # + 3 for the review-architecture / make-testable / characterize prompts
     # + 4 review samples that can show the v2 review's gains (#275)
-    # + 8 review-crbug-* samples paraphrased from CRBugBench bugs.
+    # + 8 review/crbug-* samples paraphrased from CRBugBench bugs.
     assert len(samples) == 35
 
 
@@ -117,9 +115,21 @@ def test_every_shipped_sample_compiles_to_gate_and_rubric_layers() -> None:
 
 def test_shipped_samples_validate_clean() -> None:
     samples = _shipped_samples()
-    prompts = _shipped_prompts()
-    errors = validate_samples(samples, prompts)
+    errors = validate_samples(samples)
     assert errors == [], "\n".join(f"{e.path}: {e.message}" for e in errors)
+
+
+def test_every_shipped_sample_lives_in_the_task_of_an_existing_prompt() -> None:
+    """Core samples sit at ``eval_samples/<prompt>/<name>/``, with no ``prompt_id`` (#302)."""
+    samples = _shipped_samples()
+    prompt_ids = [prompt.frontmatter.id for prompt in _shipped_prompts()]
+    registry, errors = TaskRegistry.collect(samples, prompt_ids)
+    assert errors == []
+    assert all(s.id == f"{s.prompt_id}/{s.source_path.parent.name}" for s in samples)
+    assert not [
+        toml for toml in _SAMPLES_ROOT.rglob("sample.toml") if "prompt_id" in toml.read_text()
+    ]
+    assert len(registry.tasks()) == 9
 
 
 @pytest.mark.parametrize("sample", _shipped_samples(), ids=lambda t: t.id)
@@ -162,8 +172,8 @@ def test_judge_verdict_can_diverge_from_gate(tmp_path: Path, stub_uv_sync: None)
     file-unchanged review sample), then shows a low judge sinks the verdict via the
     rubric layer — proving the judged layer actually folds into the verdict.
     """
-    sample_dir = _SAMPLES_ROOT / "review-spot-the-bug"
-    sample = load_eval_sample_from_dir(sample_dir, source_package="coding_agent_playbook")
+    sample_dir = _SAMPLES_ROOT / "review" / "spot-the-bug"
+    sample = load_task_sample(sample_dir, source_package="coding_agent_playbook")
 
     scratch = tmp_path / "scratch"
     baseline = materialize(sample, scratch)

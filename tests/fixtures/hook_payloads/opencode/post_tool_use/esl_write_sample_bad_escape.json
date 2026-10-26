@@ -9,12 +9,12 @@
   "tool_use_id": "call_esl_01",
   "tool_name": "Write",
   "tool_input": {
-    "filePath": "/playbook-fixture/proj/playbook/eval_samples/demo-sample/sample.toml",
+    "filePath": "/playbook-fixture/proj/playbook/eval_samples/demo/demo-sample/sample.toml",
     "content": "id = \"demo-sample\"\npattern = \"\\s+\"\n",
-    "file_path": "/playbook-fixture/proj/playbook/eval_samples/demo-sample/sample.toml"
+    "file_path": "/playbook-fixture/proj/playbook/eval_samples/demo/demo-sample/sample.toml"
   },
   "tool_response": {
     "output": "Wrote file successfully.",
-    "title": "playbook/eval_samples/demo-sample/sample.toml"
+    "title": "playbook/eval_samples/demo/demo-sample/sample.toml"
   }
 }

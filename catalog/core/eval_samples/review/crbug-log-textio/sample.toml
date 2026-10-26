@@ -1,0 +1,41 @@
+id = "review/crbug-log-textio"
+description = "Review a change meant to close the driver's log on stop that tests isinstance(..., typing.TextIO), which no real file object passes. Paraphrases the bug selenium pull request 12637 introduced and pull request 12871 fixed, from CRBugBench; see eval_samples/ATTRIBUTIONS.md."
+
+[setup]
+files = [
+  "CHANGE.diff",
+  "src/service.py",
+  "tests/test_service.py",
+]
+project_kind = "library"
+
+[invocation]
+prompt_args = "review my change in CHANGE.diff (it is already applied to the working tree). It makes Service.stop() close the driver's log output on quit, whether log_output is an open file or a file descriptor, so no log file is left open once the driver stops."
+input_variables = {}
+
+[gate]
+# Review-only: the agent must report, not edit. The change carries one real bug
+# (see the rubric), so a correct answer from either prompt set ends on request
+# changes, never an approving verdict line. Whether the answer names the right bug
+# is the judge's call: no bug-specific pattern here, so wording cannot sink a
+# correct review. An empty answer has no verdict line.
+expr = "service_untouched and tests_untouched and blocks and not approves"
+
+[gate.bind]
+service_untouched = { check = "file_unchanged", path = "src/service.py" }
+tests_untouched   = { check = "file_unchanged", path = "tests/test_service.py" }
+blocks            = { check = "answer_matches", pattern = '(?im)^\W*(?:verdict\W*)?request changes\W*$' }
+approves          = { check = "answer_matches", pattern = '(?im)^\W*(?:verdict\W*)?approve(?: with comments)?\W*$' }
+
+[rubric]
+expr = "quality"
+
+[rubric.bind]
+quality = { fail = 0.5, rubric = [
+  { judge = "The review reports that isinstance(self.log_output, TextIO) never matches a real file: typing.TextIO is not a base class of what open() returns (io.TextIOWrapper, or the io.BufferedWriter of the default os.devnull log), so stop() still leaves every file log open, as before; it should test io.IOBase (or for a close method).", weight = 0.6 },
+  { judge = "The review treats that bug as blocking (important, not a nit or an open question), cites its file and line in src/service.py (stop), and its verdict is 'request changes'.", weight = 0.2 },
+  { judge = "The review does not invent bugs: anything else it raises is a real problem in the code shown, and it does not ask to rewrite code that works.", weight = 0.2 },
+] }
+
+[verdict]
+trial = "gate and rubric"

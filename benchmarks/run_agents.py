@@ -10,7 +10,7 @@ without paying for the agent runs again. A finished run is skipped unless
 Usage::
 
     python benchmarks/run_agents.py --workers 3
-    python benchmarks/run_agents.py --experiments playbook-v2 --samples review-spot-the-bug
+    python benchmarks/run_agents.py --experiments playbook-v2 --samples review/spot-the-bug
 """
 
 from __future__ import annotations

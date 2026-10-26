@@ -1,0 +1,49 @@
+id = "review/clean-multi-file-change"
+description = "Review a correct four-file diff (a new src/units.py, its use in src/shipping.py, and tests for both) that lets shipping quotes take pounds; the review must not invent a blocking finding."
+
+[setup]
+files = [
+  "CHANGE.diff",
+  "src/shipping.py",
+  "src/units.py",
+  "tests/test_shipping.py",
+  "tests/test_units.py",
+]
+project_kind = "python-application"
+
+[invocation]
+prompt_args = "review my change in CHANGE.diff (it is already applied to the working tree). It lets quote_cents take the parcel weight in pounds as well as kilograms."
+input_variables = {}
+
+[gate]
+# Review-only: the agent must report, not edit. The change spans four files and is
+# correct: to_kilograms() uses the exact pound factor and names an unknown unit,
+# quote_cents() keeps its old signature working through the "kg" default, and the
+# tests cover pounds, kilograms and an unknown unit. A correct answer from either
+# prompt set ends on an approving verdict line, never a request-changes one, and
+# (in the v2 count line) counts no important finding. An empty answer has no
+# verdict line.
+expr = "shipping_untouched and units_untouched and shipping_tests_untouched and units_tests_untouched and approves and not blocks and not counts_important"
+
+[gate.bind]
+shipping_untouched       = { check = "file_unchanged", path = "src/shipping.py" }
+units_untouched          = { check = "file_unchanged", path = "src/units.py" }
+shipping_tests_untouched = { check = "file_unchanged", path = "tests/test_shipping.py" }
+units_tests_untouched    = { check = "file_unchanged", path = "tests/test_units.py" }
+approves                 = { check = "answer_matches", pattern = '(?im)^\W*(?:verdict\W*)?approve(?: with comments)?\W*$' }
+blocks                   = { check = "answer_matches", pattern = '(?im)^\W*(?:verdict\W*)?request changes\W*$' }
+counts_important         = { check = "answer_matches", pattern = '(?i)\bfindings\W*[1-9]\d*\s+important\b' }
+
+[rubric]
+expr = "quality"
+
+[rubric.bind]
+quality = { fail = 0.5, rubric = [
+  { judge = "The review's verdict is 'approve' or 'approve with comments': the new to_kilograms() helper, its use in quote_cents() and the tests are correct, and nothing in the change needs fixing before merge.", weight = 0.4 },
+  { judge = "The review does not invent a defect in the change (for example a wrong pound factor, a broken existing call to quote_cents(weight), an inverted conversion, or untested unknown units).", weight = 0.3 },
+  { judge = "The review reads every file the change touches (src/units.py, src/shipping.py and both test files), not only the first one.", weight = 0.2 },
+  { judge = "The review cites file and line for each comment and proposes no edits of its own to the files.", weight = 0.1 },
+] }
+
+[verdict]
+trial = "gate and rubric"

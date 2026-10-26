@@ -1,0 +1,30 @@
+id = "review/spot-the-bug"
+description = "Happy path: code has a real correctness bug (off-by-one); a good review catches it before style nits."
+
+[setup]
+files = ["src/pagination.py"]
+project_kind = "python-application"
+
+[invocation]
+prompt_args = "review src/pagination.py"
+input_variables = {}
+
+[gate]
+expr = "untouched"
+
+[gate.bind]
+untouched = { check = "file_unchanged", path = "src/pagination.py" }
+
+[rubric]
+expr = "quality"
+
+[rubric.bind]
+quality = { fail = 0.5, rubric = [
+  { judge = "The review identifies the off-by-one bug in `paginate` (the last item on the final page is dropped when total_items is not a multiple of page_size)", weight = 0.5 },
+  { judge = "The correctness comment appears BEFORE any style or naming comments — priority order is respected", weight = 0.2 },
+  { judge = "The review quotes the offending line or expression rather than describing it abstractly", weight = 0.15 },
+  { judge = "The review does not propose unrelated changes (no rewriting of working code)", weight = 0.15 },
+] }
+
+[verdict]
+trial = "gate and rubric"

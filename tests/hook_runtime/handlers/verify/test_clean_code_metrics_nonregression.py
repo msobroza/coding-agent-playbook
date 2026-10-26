@@ -162,7 +162,7 @@ def test_pathological_nesting_context_line_no_crash(
 def test_eval_fixture_files_excluded(
     repo: PackRepo, deps: Callable[..., RuntimeDeps], tmp_path: Path
 ) -> None:
-    fixture = "pkg/eval_samples/t1/setup/app.py"
+    fixture = "pkg/eval_samples/review/t1/setup/app.py"
     repo.write(fixture, GROWN)
     _install(repo, precommit=True)
 

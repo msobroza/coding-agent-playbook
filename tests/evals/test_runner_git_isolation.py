@@ -67,13 +67,12 @@ def _sample(sample_dir: Path) -> EvalSample:
     (sample_dir / "setup" / "app.py").write_text("x = 1\n", encoding="utf-8")
     data = {
         "id": "t-git-isolation",
-        "prompt_id": "refactor",
         "description": "scratch repo isolation",
         "gate": {"expr": "app", "bind": {"app": {"check": "file_exists", "path": "app.py"}}},
         "verdict": {"trial": "gate"},
     }
     return EvalSample.from_dict(
-        data, source_path=sample_dir / "sample.toml", source_package="<test>"
+        data, source_path=sample_dir / "sample.toml", prompt_id="refactor", source_package="<test>"
     )
 
 

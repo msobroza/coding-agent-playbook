@@ -19,8 +19,7 @@ from coding_agent_playbook.evals.sample import (
 
 def _minimal_dict() -> dict[str, Any]:
     return {
-        "id": "demo-happy-path",
-        "prompt_id": "demo",
+        "id": "demo/happy-path",
         "description": "A demo sample",
     }
 
@@ -28,8 +27,7 @@ def _minimal_dict() -> dict[str, Any]:
 def _full_dict() -> dict[str, Any]:
     """A representative sample in the C7 ``[gate]``/``[rubric]``/``[verdict]`` shape."""
     return {
-        "id": "generate-tests-happy-path",
-        "prompt_id": "generate-tests",
+        "id": "generate-tests/happy-path",
         "description": "Generate tests for a simple pure function with no edge cases",
         "setup": {
             "files": ["src/calculator.py"],
@@ -69,9 +67,10 @@ def _full_dict() -> dict[str, Any]:
     }
 
 
-def _make(data: dict[str, Any], tmp_path: Path) -> EvalSample:
+def _make(data: dict[str, Any], tmp_path: Path, *, prompt_id: str = "demo") -> EvalSample:
     return EvalSample.from_dict(
         data,
+        prompt_id=prompt_id,
         source_path=tmp_path / "sample.toml",
         source_package="coding_agent_playbook",
     )
@@ -82,7 +81,7 @@ def _make(data: dict[str, Any], tmp_path: Path) -> EvalSample:
 
 def test_eval_sample_from_dict_parses_minimal_sample(tmp_path: Path) -> None:
     sample = _make(_minimal_dict(), tmp_path)
-    assert sample.id == "demo-happy-path"
+    assert sample.id == "demo/happy-path"
     assert sample.prompt_id == "demo"
     assert sample.description == "A demo sample"
     assert sample.source_path == tmp_path / "sample.toml"
@@ -97,8 +96,8 @@ def test_eval_sample_from_dict_parses_minimal_sample(tmp_path: Path) -> None:
 
 
 def test_eval_sample_from_dict_parses_full_sample(tmp_path: Path) -> None:
-    sample = _make(_full_dict(), tmp_path)
-    assert sample.id == "generate-tests-happy-path"
+    sample = _make(_full_dict(), tmp_path, prompt_id="generate-tests")
+    assert sample.id == "generate-tests/happy-path"
     assert sample.prompt_id == "generate-tests"
 
     assert sample.setup.files == [Path("src/calculator.py")]
@@ -130,11 +129,13 @@ def test_eval_sample_from_dict_rejects_missing_id(tmp_path: Path) -> None:
         _make(data, tmp_path)
 
 
-def test_eval_sample_from_dict_rejects_missing_prompt_id(tmp_path: Path) -> None:
-    data = _minimal_dict()
-    del data["prompt_id"]
-    with pytest.raises(ValueError, match="prompt_id"):
+def test_eval_sample_from_dict_rejects_prompt_id_pointing_to_the_task_layout(
+    tmp_path: Path,
+) -> None:
+    data = {**_minimal_dict(), "prompt_id": "demo"}
+    with pytest.raises(ValueError, match="unknown top-level key 'prompt_id'") as excinfo:
         _make(data, tmp_path)
+    assert "eval_samples/<prompt>/<name>/sample.toml" in str(excinfo.value)
 
 
 def test_eval_sample_from_dict_rejects_missing_description(tmp_path: Path) -> None:
@@ -300,14 +301,14 @@ def test_verdict_trial_must_be_string(tmp_path: Path) -> None:
 
 
 def test_compiled_builds_layer_checks(tmp_path: Path) -> None:
-    sample = _make(_full_dict(), tmp_path)
+    sample = _make(_full_dict(), tmp_path, prompt_id="generate-tests")
     compiled = compile_eval_sample(sample)
     assert [c.id for c in compiled.per_trial.checks] == ["gate", "rubric"]
     assert compiled.layers == frozenset({"gate", "rubric"})
 
 
 def test_compiled_method_matches_free_function(tmp_path: Path) -> None:
-    sample = _make(_full_dict(), tmp_path)
+    sample = _make(_full_dict(), tmp_path, prompt_id="generate-tests")
     via_method = sample.compiled()
     assert via_method.layers == frozenset({"gate", "rubric"})
     assert [c.id for c in via_method.per_trial.checks] == ["gate", "rubric"]

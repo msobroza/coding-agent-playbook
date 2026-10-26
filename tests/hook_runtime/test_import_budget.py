@@ -17,7 +17,7 @@ loads its JSON/TOML/text verdict modules only on their branch, and ``tomllib``
 only for an edit of a ``.toml`` policy file (§D.1's branch-local row). On the
 source-changed branch, ``detector.facts`` and ``detector.predicate`` (and
 ``packaging``) load only after the dependency comparison found a change, and
-``evals.*`` / ``catalog.source`` (yaml) only on an ``eval_samples/*/sample.toml``
+``evals.*`` / ``catalog.source`` (yaml) only on an ``eval_samples/*/*/sample.toml``
 edit; jinja2 never loads. The session-start briefing and the ``drift`` Stop stage
 read the lockfile with ``tomllib`` through ``lockfile`` (the new §D.1 rows): the briefing on every
 start, the stage only once the ledger shows a write it cares about. The
@@ -361,10 +361,9 @@ def test_tomllib_loads_only_for_a_toml_policy_edit(
 
 # --- K5 step 3: the source-changed branch (§D.1 branch-local rows) --------------------
 
-_SAMPLE_DIR: Final = "playbook/eval_samples/demo-sample"
+_SAMPLE_DIR: Final = "playbook/eval_samples/demo/demo-sample"
 _UNBOUND_SAMPLE: Final = """\
-id = "demo-sample"
-prompt_id = "demo"
+id = "demo/demo-sample"
 description = "Demo."
 
 [setup]
@@ -407,7 +406,7 @@ def source_changed(tmp_path: Path, real_proc: SubprocessProc) -> GuardRepo:
         matcher={
             "post_tool_use": {
                 "tools": ["edit", "write"],
-                "paths": ["**/eval_samples/*/sample.toml"],
+                "paths": ["**/eval_samples/*/*/sample.toml"],
             }
         },
     )

@@ -176,7 +176,7 @@ def test_every_other_pack_table_reads_what_sync_renders(
     assert not {"review", "security-review"} & contracted
     assert "explain" not in tables.prompts_with_output_contract()  # its contract is empty
     assert tables.notebook_max_bytes(1) == 5 * 1024 * 1024
-    assert tables.eval_fixture_globs(()) == ("**/eval_samples/*/setup/**",)
+    assert tables.eval_fixture_globs(()) == ("**/eval_samples/*/*/setup/**",)
     assert tables.protected() == ProtectedTable(
         hook_artifacts=(
             ".coding-agent-playbook/hooks/",

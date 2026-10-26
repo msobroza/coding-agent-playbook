@@ -18,13 +18,13 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.artifacts.impact import Impact
-from coding_agent_playbook.evals.loader import load_eval_sample_from_dir
 from coding_agent_playbook.evals.prompting import (
     PromptResolutionError,
     _infer_prompts_dir,
     render_prompt,
 )
 from coding_agent_playbook.evals.sample import EvalSample, SampleInvocation, SampleSetup
+from coding_agent_playbook.evals.task_registry import load_layer_samples, load_task_sample
 from tests._catalog import CORE_ROOT
 
 if TYPE_CHECKING:
@@ -36,15 +36,15 @@ pytestmark = pytest.mark.catalog
 _ENGINE = "coding_agent_playbook"
 _SHIPPED_SAMPLES = CORE_ROOT / "eval_samples"
 #: A shipped sample of the plain-`.md` `refactor` prompt (no Jinja, four included rules).
-_REFACTOR_SAMPLE = "refactor-extract-helper"
+_REFACTOR_SAMPLE = "refactor/extract-helper"
 
 
 def _shipped_sample_dirs() -> list[Path]:
-    return sorted(p for p in _SHIPPED_SAMPLES.iterdir() if (p / "sample.toml").is_file())
+    return [sample.source_path.parent for sample in load_layer_samples(_SHIPPED_SAMPLES, _ENGINE)]
 
 
 def _shipped(sample_id: str) -> EvalSample:
-    return load_eval_sample_from_dir(_SHIPPED_SAMPLES / sample_id, source_package=_ENGINE)
+    return load_task_sample(_SHIPPED_SAMPLES / sample_id, source_package=_ENGINE)
 
 
 # --------------------------------------------------------------------------- #
@@ -52,10 +52,12 @@ def _shipped(sample_id: str) -> EvalSample:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.parametrize("sample_dir", _shipped_sample_dirs(), ids=lambda p: p.name)
+@pytest.mark.parametrize(
+    "sample_dir", _shipped_sample_dirs(), ids=lambda p: f"{p.parent.name}/{p.name}"
+)
 def test_every_shipped_sample_prompt_renders_strictly(sample_dir: Path) -> None:
     """A real runner renders with ``strict=True``; no shipped sample may crash."""
-    sample = load_eval_sample_from_dir(sample_dir, source_package=_ENGINE)
+    sample = load_task_sample(sample_dir, source_package=_ENGINE)
     prompt = render_prompt(sample, strict=True)
     assert prompt.strip()
     assert not prompt.startswith(f"[prompt:{sample.prompt_id}]")  # not the placeholder
@@ -63,17 +65,19 @@ def test_every_shipped_sample_prompt_renders_strictly(sample_dir: Path) -> None:
         assert prompt.rstrip().endswith(sample.invocation.prompt_args)
 
 
-@pytest.mark.parametrize("sample_dir", _shipped_sample_dirs(), ids=lambda p: p.name)
+@pytest.mark.parametrize(
+    "sample_dir", _shipped_sample_dirs(), ids=lambda p: f"{p.parent.name}/{p.name}"
+)
 def test_shipped_sample_appendices_carry_no_impact_tag(sample_dir: Path) -> None:
     """D46(8): a member rule's ``[IMPACT]`` title tag never reaches an eval appendix."""
-    sample = load_eval_sample_from_dir(sample_dir, source_package=_ENGINE)
+    sample = load_task_sample(sample_dir, source_package=_ENGINE)
     prompt = render_prompt(sample, strict=True)
     assert not any(f" [{impact.value}]" in prompt for impact in Impact)
 
 
 def test_reference_appendix_inlines_the_included_rule() -> None:
     """``includes_rules: [.., python-error-handling]`` appends that rule's header + body once."""
-    prompt = render_prompt(_shipped("review-spot-the-bug"), strict=True)
+    prompt = render_prompt(_shipped("review/spot-the-bug"), strict=True)
     assert prompt.count("### Error handling") == 1
     assert prompt.index("## Output format") < prompt.index("## Reference rules")
 
@@ -92,19 +96,19 @@ def test_mocked_ml_stack_list_satisfies_any_ml_stack() -> None:
     ``{name: version}`` dict; ``any_ml_stack`` reads ``.keys()``, so the list must
     be normalized or the predicate crashes.
     """
-    prompt = render_prompt(_shipped("security-review-pickle-load"), strict=True)
+    prompt = render_prompt(_shipped("security-review/pickle-load"), strict=True)
     assert "### ML serialization & deserialization security" in prompt
 
 
 def test_project_name_comes_from_the_setup_pyproject() -> None:
     """``{{ project_name }}`` resolves to the fixture's ``[project].name``."""
-    prompt = render_prompt(_shipped("generate-tests-happy-path"), strict=True)
+    prompt = render_prompt(_shipped("generate-tests/happy-path"), strict=True)
     assert "generate-tests-happy-path-fixture" in prompt
 
 
 def test_authored_project_kind_is_the_mock_detector_fact() -> None:
     """``[setup].project_kind`` overrides what the detector infers from setup/."""
-    prompt = render_prompt(_shipped("generate-tests-happy-path"), strict=True)
+    prompt = render_prompt(_shipped("generate-tests/happy-path"), strict=True)
     assert "`python-application` project" in prompt
 
 
@@ -119,31 +123,31 @@ def test_authored_project_kind_is_the_mock_detector_fact() -> None:
     ids=["catalog", "overlay-resources", "repo-local"],
 )
 def test_infer_prompts_dir_layers(tmp_path: Path, layer_parts: tuple[str, ...]) -> None:
-    """``<layer>/eval_samples/<dir>/sample.toml`` finds ``<layer>/prompts`` in every layer.
+    """``<layer>/eval_samples/<task>/<dir>/sample.toml`` finds ``<layer>/prompts`` in every layer.
 
     The bundled layer (``catalog/core``) has no ``resources`` segment, and a
     repo-local sample never found its prompts before.
     """
     layer = tmp_path.joinpath(*layer_parts)
-    sample_toml = layer / "eval_samples" / "t" / "sample.toml"
+    sample_toml = layer / "eval_samples" / "task" / "t" / "sample.toml"
     assert _infer_prompts_dir(sample_toml) == layer / "prompts"
 
 
 def test_infer_prompts_dir_non_sample_path(tmp_path: Path) -> None:
-    """A sample dir whose parent is not ``eval_samples`` has no prompts layer."""
+    """A sample dir outside an ``eval_samples/<task>/`` has no prompts layer."""
     assert _infer_prompts_dir(tmp_path / "t" / "sample.toml") is None
 
 
 def test_infer_prompts_dir_does_not_resolve_symlinks(tmp_path: Path) -> None:
     """A symlinked sample dir maps to the layer it is reached through, not its target's."""
-    target = tmp_path / "target_layer" / "eval_samples" / "t"
+    target = tmp_path / "target_layer" / "eval_samples" / "task" / "t"
     target.mkdir(parents=True)
     (target / "sample.toml").write_text("", encoding="utf-8")
     link_layer = tmp_path / "link_layer"
-    (link_layer / "eval_samples").mkdir(parents=True)
-    (link_layer / "eval_samples" / "t").symlink_to(target, target_is_directory=True)
+    (link_layer / "eval_samples" / "task").mkdir(parents=True)
+    (link_layer / "eval_samples" / "task" / "t").symlink_to(target, target_is_directory=True)
 
-    sample_toml = link_layer / "eval_samples" / "t" / "sample.toml"
+    sample_toml = link_layer / "eval_samples" / "task" / "t" / "sample.toml"
     assert _infer_prompts_dir(sample_toml) == link_layer / "prompts"
 
 
@@ -154,7 +158,7 @@ def test_strict_unresolved_prompt_hint_points_at_the_layers_prompts_dir(tmp_path
     engine's own content has no ``resources/`` since v0.19, and every layer's
     prompts are found next to its ``eval_samples/`` (:func:`_infer_prompts_dir`).
     """
-    sample_dir = tmp_path / "catalog" / "core" / "eval_samples" / "orphan-sample"
+    sample_dir = tmp_path / "catalog" / "core" / "eval_samples" / "no-such-prompt" / "orphan-sample"
     (sample_dir / "setup").mkdir(parents=True)
     sample = EvalSample(
         id="orphan-sample",
@@ -211,7 +215,7 @@ def _synthetic_sample(
         + prompt_body,
         encoding="utf-8",
     )
-    sample_dir = resources / "eval_samples" / "synthetic-sample"
+    sample_dir = resources / "eval_samples" / "synthetic" / "synthetic-sample"
     (sample_dir / "setup").mkdir(parents=True)
     if pyproject is not None:
         (sample_dir / "setup" / "pyproject.toml").write_text(pyproject, encoding="utf-8")
@@ -364,7 +368,7 @@ def test_async_prompt_sees_pytest_asyncio_from_main_dependencies() -> None:
     ``dev_dependencies``, so this sample's prompt told the agent the plugin was
     missing ("stop and ask first") — working against the sample itself.
     """
-    prompt = render_prompt(_shipped("generate-tests-async-code"), strict=True)
+    prompt = render_prompt(_shipped("generate-tests/async-code"), strict=True)
     assert "with `pytest-asyncio` available" in prompt
     assert "This project has `pytest-asyncio` installed" in prompt
     assert "does not currently depend on `pytest-asyncio`" not in prompt
@@ -408,7 +412,7 @@ def _overlay_sample(resources: Path, prompt_body: str, *, includes_rule: str) ->
         f"includes_rules:\n  - {includes_rule}\n---\n" + prompt_body,
         encoding="utf-8",
     )
-    sample_dir = resources / "eval_samples" / "overlay-sample"
+    sample_dir = resources / "eval_samples" / "overlay-prompt" / "overlay-sample"
     (sample_dir / "setup").mkdir(parents=True)
     return EvalSample(
         id="overlay-sample",

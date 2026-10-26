@@ -7,10 +7,12 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook.catalog.roots import is_bundled_layer
 from coding_agent_playbook.evals.targets import BUILTIN_TARGET
+from coding_agent_playbook.evals.task_registry import TaskRegistryError
 
 if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.prompt import Prompt
     from coding_agent_playbook.evals.sample import EvalSample
+    from coding_agent_playbook.evals.task_registry import TaskRegistry
 
 #: Default runner when neither ``--runner`` nor an Eval target picks one: the
 #: built-in target's harness, so the two cannot drift apart.
@@ -18,31 +20,31 @@ _DEFAULT_RUNNER = BUILTIN_TARGET.harness
 
 
 _RUN_HINT_TEMPLATE = (
-    "Add --run to execute this sample against an agent and grade it:\n"
+    "Add --run to execute the selection against an agent and grade it:\n"
     "  playbook eval {sample_id} --run --runner fake    # hermetic no-op agent, no CLI\n"
     "  playbook eval {sample_id} --run                  # default runner: {default_runner}\n"
     "  playbook eval {sample_id} --run --judge llm      # also score the [rubric] layer\n"
-    "Inspect it with `playbook eval --show {sample_id}`; coverage: `playbook eval --list`.\n"
+    "Inspect a sample with `playbook eval --show <task>/<name>`; "
+    "coverage: `playbook eval --list`.\n"
     "To run it by hand, copy setup/ to a scratch repo and invoke /{slash}."
 )
 
 
-def _print_list(prompts: list[Prompt], samples: list[EvalSample]) -> int:
-    """Tree-shape coverage report per SPEC §12.8.
+def _print_list(prompts: list[Prompt], registry: TaskRegistry) -> int:
+    """Tree-shape coverage report per SPEC §12.8, grouped by task.
 
-    Layout (one prompt per block):
+    Layout (one prompt per block; its samples are its task's):
 
         === Eval samples ===
         <prompt-id> (<source>)
-          ├── <sample-id>        ✓ sample defined
+          ├── <prompt-id>/<name>        ✓ sample defined
           │   └── N rubric criteria, M programmatic checks
           └── ...
 
         Total: P prompts, T eval samples, U prompts without samples
     """
-    samples_by_prompt: dict[str, list[EvalSample]] = {}
-    for sample in samples:
-        samples_by_prompt.setdefault(sample.prompt_id, []).append(sample)
+    samples_by_task = {task.prompt_id: task.samples for task in registry.tasks()}
+    samples = [sample for task_samples in samples_by_task.values() for sample in task_samples]
 
     lines: list[str] = ["=== Eval samples ==="]
     rendered_any_prompt = False
@@ -50,9 +52,8 @@ def _print_list(prompts: list[Prompt], samples: list[EvalSample]) -> int:
     for prompt in prompts:
         rendered_any_prompt = True
         prompt_id = prompt.frontmatter.id
-        # A prompt's samples are the ones whose prompt_id names it (#281),
-        # listed alphabetically by id.
-        prompt_samples = sorted(samples_by_prompt.get(prompt_id, []), key=lambda s: s.id)
+        # A prompt's samples are its task's, listed alphabetically by id.
+        prompt_samples = samples_by_task.get(prompt_id, ())
         source = _short_source(prompt.source_package)
         lines.append(f"{prompt_id} ({source})")
         if not prompt_samples:
@@ -107,11 +108,12 @@ def _plural(n: int, word: str) -> str:
     return f"{n} {word}" if n == 1 else f"{n} {word}s"
 
 
-def _print_show(sample_id: str, samples: list[EvalSample], prompts: list[Prompt]) -> int:
+def _print_show(sample_id: str, registry: TaskRegistry, prompts: list[Prompt]) -> int:
     """Detailed sample dump per SPEC §12.8."""
-    sample = next((s for s in samples if s.id == sample_id), None)
-    if sample is None:
-        print(f"error: no eval sample with id {sample_id!r}", file=sys.stderr)
+    try:
+        sample = registry.sample(sample_id)
+    except TaskRegistryError as exc:
+        print(f"error: {exc}", file=sys.stderr)
         return 1
 
     lines: list[str] = []
@@ -167,26 +169,25 @@ def _print_show(sample_id: str, samples: list[EvalSample], prompts: list[Prompt]
     return 0
 
 
-def _print_run_hint(sample_id: str, samples: list[EvalSample], prompts: list[Prompt]) -> int:
-    """Bare ``playbook eval <id>`` — verify the sample exists, then print how to run it.
+def _print_run_hint(name: str, registry: TaskRegistry, prompts: list[Prompt]) -> int:
+    """Bare ``playbook eval <task>`` or ``<task>/<name>`` — list the selection, then how to run it.
 
-    Exit 0. Unknown sample ids exit 1 so typos surface.
+    Exit 0. Unknown names exit 1 so typos surface.
     """
-    sample = next((s for s in samples if s.id == sample_id), None)
-    if sample is None:
-        print(f"error: no eval sample with id {sample_id!r}", file=sys.stderr)
+    try:
+        selected = registry.select(name)
+    except TaskRegistryError as exc:
+        print(f"error: {exc}", file=sys.stderr)
         return 1
-    # If the prompt is loadable, use its slash; otherwise fall back to the
-    # prompt id so the message is still useful in mid-authoring states.
-    slash = sample.prompt_id
-    for prompt in prompts:
-        if prompt.frontmatter.id == sample.prompt_id:
-            slash = prompt.frontmatter.slash
-            break
-    print(f"playbook eval {sample_id}:")
-    print(
-        _RUN_HINT_TEMPLATE.format(sample_id=sample_id, slash=slash, default_runner=_DEFAULT_RUNNER)
-    )
+    # Every selected sample grades the same prompt. If it is loadable, use its
+    # slash; otherwise fall back to the prompt id (mid-authoring states).
+    prompt_id = selected[0].prompt_id
+    slash = next((p.frontmatter.slash for p in prompts if p.frontmatter.id == prompt_id), prompt_id)
+    print(f"playbook eval {name}:")
+    if len(selected) > 1:
+        print(f"Task {prompt_id} has {_plural(len(selected), 'eval sample')}:")
+        print("\n".join(f"  {sample.id}" for sample in selected))
+    print(_RUN_HINT_TEMPLATE.format(sample_id=name, slash=slash, default_runner=_DEFAULT_RUNNER))
     return 0
 
 
@@ -208,10 +209,11 @@ def _display_source_path(sample: EvalSample) -> str:
 
     SPEC §12.8 shows a layer-relative path, never the absolute filesystem path,
     which would leak the local workspace layout into the output. The label is
-    built from the layer kind and ``<dir>``, the sample directory's name
-    (``sample.source_path.parent.name``, never ``sample.id``, which nothing ties to
-    the directory). No path segment is searched for, so an unusual layout can
-    neither crash ``playbook eval --show`` nor change the label:
+    built from the layer kind and ``<dir>``, the task and sample directory names
+    (``<prompt>/<name>``, read from ``sample.source_path``, never ``sample.id``,
+    which a third-party artifact source may set freely). No path segment is
+    searched for, so an unusual layout can neither crash ``playbook eval --show``
+    nor change the label:
 
     - bundled layers (engine, bundled plugins): ``<source_package>/eval_samples/<dir>/``;
     - third-party overlays: ``<source_package>/resources/eval_samples/<dir>/``,
@@ -220,7 +222,7 @@ def _display_source_path(sample: EvalSample) -> str:
 
     The trailing ``/`` makes the label read as a directory (the SPEC example).
     """
-    sample_dir = sample.source_path.parent.name
+    sample_dir = f"{sample.source_path.parent.parent.name}/{sample.source_path.parent.name}"
     if sample.source_package == "<repo-local>":
         return f"playbook/eval_samples/{sample_dir}/"
     if is_bundled_layer(sample.source_package):

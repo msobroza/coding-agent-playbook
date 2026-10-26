@@ -14,10 +14,12 @@ from __future__ import annotations
 import json
 import statistics
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Final, Protocol
+from typing import TYPE_CHECKING, Final
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Sequence
+
+    from coding_agent_playbook.evals.task_registry import TaskRegistry
 
 #: A mean score drop above this (base mean minus HEAD mean) is a regression (D37).
 MAX_SCORE_DROP: Final = 0.05
@@ -40,26 +42,20 @@ COMPARED_PROMPTS: Final = frozenset(
 )
 
 
-class _EvalSampleIds(Protocol):
-    """What eval sample selection reads from an ``EvalSample``."""
-
-    @property
-    def id(self) -> str: ...
-
-    @property
-    def prompt_id(self) -> str: ...
-
-
-def compared_sample_ids(eval_samples: Iterable[_EvalSampleIds]) -> list[str]:
-    """The sorted ids of the eval samples graded against one of :data:`COMPARED_PROMPTS`.
+def compared_sample_ids(registry: TaskRegistry) -> list[str]:
+    """The sorted ids of the samples of the tasks named in :data:`COMPARED_PROMPTS`.
 
     Example::
 
-        >>> from types import SimpleNamespace as S
-        >>> compared_sample_ids([S(id="b", prompt_id="review"), S(id="a", prompt_id="explain")])
-        ['b']
+        >>> compared_sample_ids(TaskRegistry.build(samples, prompt_ids))  # doctest: +SKIP
+        ['review/spot-the-bug', ...]
     """
-    return sorted(s.id for s in eval_samples if s.prompt_id in COMPARED_PROMPTS)
+    return sorted(
+        sample.id
+        for task in registry.tasks()
+        if task.prompt_id in COMPARED_PROMPTS
+        for sample in task.samples
+    )
 
 
 @dataclass(frozen=True)
