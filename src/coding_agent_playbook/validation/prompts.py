@@ -11,6 +11,11 @@ A typo there would silently drop guidance, so three checks guard it (P3-7):
   iterated character by character);
 - every id names a rule of the merged set, with a did-you-mean.
 
+A fourth check refuses a leftover ``prompts/v2/`` in any layer: prompt sets were
+removed (ADR 0012), so every file under ``prompts/`` is read as a prompt and a
+``v2/`` twin would clash with the prompt of the same id, its file name deciding
+which text renders.
+
 ``check_prompt_rule_calls`` is the first check alone, for ``playbook sync
 --check-staged``, which is not validate-gated; sync imports it from outside the
 package, so it is public, unlike the other check modules beside ``checks``.
@@ -20,20 +25,26 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final, TypeGuard
 
+from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.hooks.contract.findings import did_you_mean
 from coding_agent_playbook.rendering.jinja import RULE_CALL_RE
 from coding_agent_playbook.validation.findings import ValidationError
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Sequence
+    from pathlib import Path
 
     from coding_agent_playbook.artifacts.prompt import Prompt
+    from coding_agent_playbook.catalog.source import ArtifactSource
 
 #: How a well-formed ``includes_rules`` looks, quoted in the shape error.
 _INCLUDES_RULES_SHAPE: Final = "expected a list of rule ids, e.g. ['python-typing', 'pytest']"
 
 #: Where a valid id comes from: the merged rule set of every layer.
 _RULE_LAYERS: Final = "which is no rule in core, an enabled overlay or playbook/rules/"
+
+#: The directory of the retired v2 prompt set (ADR 0008, removed by ADR 0012).
+_RETIRED_PROMPT_SET_DIR: Final = "v2"
 
 
 def check_prompt_rule_references(
@@ -73,6 +84,34 @@ def check_prompt_rule_calls(prompts: Sequence[Prompt]) -> list[ValidationError]:
         for prompt in prompts
         for message in _rule_call_messages(prompt)
     ]
+
+
+def check_retired_prompt_set_dirs(source: ArtifactSource) -> list[ValidationError]:
+    """ADR 0012: no layer keeps ``prompts/v2/``, the directory of the removed prompt set.
+
+    A source that does not read layers from disk has none to check.
+
+    Example::
+
+        check_retired_prompt_set_dirs(ctx.artifact_source)  # [] without a prompts/v2/
+    """
+    if not isinstance(source, FileSystemArtifactSource):
+        return []
+    return [
+        ValidationError(path=str(retired), message=_retired_prompt_set_message(prompts_root))
+        for _, prompts_root in source.layer_roots("prompts")
+        if (retired := prompts_root / _RETIRED_PROMPT_SET_DIR).is_dir()
+    ]
+
+
+def _retired_prompt_set_message(prompts_root: Path) -> str:
+    retired = prompts_root / _RETIRED_PROMPT_SET_DIR
+    return (
+        f"{retired}/ held a prompt set, and prompt sets were removed (ADR 0012): every "
+        f"file under {prompts_root}/ is now read as a prompt, so these clash with the "
+        f"prompts of the same id. Move each {retired}/<name> over {prompts_root}/<name> "
+        f"(keeping its id), then delete {retired}/"
+    )
 
 
 def _where(prompt: Prompt) -> str:

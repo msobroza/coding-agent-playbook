@@ -15,10 +15,10 @@ same model:
 | Key | Harness | Reviewer | What the agent receives |
 |---|---|---|---|
 | `opencode-review` | OpenCode | built-in `/review` | the sample's request only, as `opencode run --command review "<request>"` |
-| `playbook-v1` | OpenCode | playbook review, prompt set v1 | the rendered v1 `review` prompt + the request, as `playbook eval --run` builds it (v1 is now edition `v0.1.0`) |
-| `playbook-v2` | OpenCode | playbook review, prompt set v2 | the same, from prompt set v2 (now the current text) |
+| `playbook-v1` | OpenCode | playbook review, edition `v0.1.0` (the former prompt set v1) | the `review` prompt of edition `v0.1.0`, rendered as `playbook eval --run` builds it for a sample graded on that edition, + the request |
+| `playbook-v2` | OpenCode | playbook review, current text (the former prompt set v2) | the rendered current `review` prompt + the request, as `playbook eval --run --edition head` builds it |
 | `claude-code-review` | Claude Code | built-in `/code-review` | the request as the command's arguments: `claude -p "/code-review <request>"` |
-| `claude-playbook-v2` | Claude Code | playbook review, prompt set v2 | the rendered v2 prompt + the request, as for `playbook-v2` |
+| `claude-playbook-v2` | Claude Code | playbook review, current text | the rendered current prompt + the request, as for `playbook-v2` |
 
 - **Harnesses:** OpenCode 1.19.4 (`opencode run --pure --dir <scratch>`) and
   Claude Code 2.1.292 (`claude -p --bare --permission-mode acceptEdits`, with

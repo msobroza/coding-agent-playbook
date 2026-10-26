@@ -97,7 +97,10 @@ from coding_agent_playbook.validation.findings import (
     report_validation_warnings,
     skill_label,
 )
-from coding_agent_playbook.validation.prompts import check_prompt_rule_references
+from coding_agent_playbook.validation.prompts import (
+    check_prompt_rule_references,
+    check_retired_prompt_set_dirs,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -369,6 +372,7 @@ def _artifact_errors(ctx: SyncContext, *, config_less: bool) -> list[ValidationE
     errors.extend(check_rule_layout(ctx.rule_definitions, ctx.artifact_source))
     errors.extend(_check_applies_if(rules, prompts, ctx.facts, ctx.repo_root))
     errors.extend(check_prompt_rule_references(prompts, {r.frontmatter.id for r in rules}))
+    errors.extend(check_retired_prompt_set_dirs(ctx.artifact_source))
     errors.extend(_check_output_contracts(prompts))
     errors.extend(check_write_scope(prompts))
     errors.extend(
