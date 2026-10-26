@@ -133,6 +133,41 @@ def test_without_an_edition_every_sample_is_compared(
     assert {"explain/pure-function", _SAMPLE} <= set(selected)
 
 
+def test_a_second_side_naming_a_sample_hints_to_put_it_before_compare(
+    tmp_path: Path, make_synthetic_repo: Any, capsys: pytest.CaptureFixture[str]
+) -> None:
+    make_synthetic_repo(tmp_path)
+    registry = _eval_compare._registry(tmp_path)
+    assert registry is not None
+    for names in (["origin/main", _SAMPLE], ["origin/main", "refactor"]):
+        _eval_compare._hint_id_as_side(names, registry)
+        err = capsys.readouterr().err
+        assert f"put it before --compare: playbook eval {names[1]} --compare origin/main" in err
+
+
+def test_a_second_side_naming_a_ref_gets_no_hint(
+    tmp_path: Path, make_synthetic_repo: Any, capsys: pytest.CaptureFixture[str]
+) -> None:
+    make_synthetic_repo(tmp_path)
+    registry = _eval_compare._registry(tmp_path)
+    assert registry is not None
+    for names in (["origin/main", "HEAD"], ["origin/main", "head"], ["origin/main"]):
+        _eval_compare._hint_id_as_side(names, registry)
+    assert capsys.readouterr().err == ""
+
+
+def test_a_prompt_set_for_an_edition_side_is_ignored_with_a_warning(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    argv = ["eval", "--compare", "edition:v9.9.9", "edition:v9.9.8", "--base-prompt-set", "v2"]
+    assert _eval_compare._sides(build_parser().parse_args([*argv, "--prompt-set", "v2"]))
+    err = capsys.readouterr().err
+    assert "--base-prompt-set v2 is ignored for edition:v9.9.9" in err
+    assert "--prompt-set v2 is ignored for edition:v9.9.8" in err
+    assert _eval_compare._sides(_compare_args("head", "--prompt-set", "v2"))
+    assert capsys.readouterr().err == ""  # head and a git ref take a prompt set
+
+
 def _compare_args(*flags: str) -> argparse.Namespace:
     return build_parser().parse_args(["eval", "--compare", "HEAD", *flags])
 

@@ -32,6 +32,7 @@ from coding_agent_playbook.evals.run.comparison_sides import (
     PreparedSide,
     SideSources,
     git_worktree_checkout,
+    takes_edition_head,
 )
 from coding_agent_playbook.evals.task_registry import load_task_sample
 from coding_agent_playbook.exit_two import ExitTwoError
@@ -39,6 +40,7 @@ from coding_agent_playbook.release.edition import load_edition
 from coding_agent_playbook.release.edition_digests import edition_dir
 from tests.edition_fixtures import (
     ENGINE,
+    SAMPLE_ID,
     TAG,
     write_digests,
     write_edition_files,
@@ -47,20 +49,22 @@ from tests.edition_fixtures import (
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+    from contextlib import AbstractContextManager
     from pathlib import Path
 
     from coding_agent_playbook.evals.comparison import SampleComparison
 
 _SAMPLES = ("sample-a", "sample-b")
+_EDITION_HEAD = ("--edition", "head")
 
 
 def _side_key(checkout: Path, flags: tuple[str, ...]) -> str:
     """``edition`` or ``head`` for a side in place, else the ref its checkout holds."""
     if EDITION_DIR_FLAG in flags:
         return "edition"
-    if "--edition" in flags:
-        return "head"
-    return (checkout / "REF").read_text(encoding="utf-8")
+    if (checkout / "REF").is_file():
+        return (checkout / "REF").read_text(encoding="utf-8")
+    return "head"
 
 
 @dataclass
@@ -134,15 +138,66 @@ def test_each_sample_runs_the_run_count_on_each_side(tmp_path: Path) -> None:
     runner = FakeSampleRunner({"main": 0.9, "HEAD": 0.9})
     _compare(tmp_path, runner, ComparisonSide("main"), ComparisonSide("HEAD"))
     assert sorted(runner.calls) == sorted(
-        [(ref, s, ()) for ref in ("main", "HEAD") for s in _SAMPLES] * 3
+        [(ref, s, _EDITION_HEAD) for ref in ("main", "HEAD") for s in _SAMPLES] * 3
     )
 
 
 def test_each_side_runs_its_own_prompt_set(tmp_path: Path) -> None:
     runner = FakeSampleRunner({"HEAD": 0.9})
     _compare(tmp_path, runner, ComparisonSide("HEAD", "v1"), ComparisonSide("HEAD", "v2"))
-    assert sorted({call[2] for call in runner.calls}) == [(), ("--prompt-set", "v2")]
+    assert sorted({call[2] for call in runner.calls}) == [
+        _EDITION_HEAD,
+        (*_EDITION_HEAD, "--prompt-set", "v2"),
+    ]
     assert len(runner.calls) == 12
+
+
+@contextmanager
+def pinned_checkout(ref: str, dest: Path, *, engine_takes_edition_head: bool) -> Iterator[Path]:
+    """A ref holding the pinned fixture sample and an engine with or without ``--edition head``."""
+    with fake_checkout(ref, dest) as checkout:
+        write_fixture_catalog(checkout, edition=TAG)
+        evals = checkout / "src" / "coding_agent_playbook" / "evals"
+        evals.mkdir(parents=True)
+        if engine_takes_edition_head:
+            (evals / "graded_source.py").write_text("", encoding="utf-8")
+        yield checkout
+
+
+def _pinned_ref_plan(
+    tmp_path: Path, runner: FakeSampleRunner, *, takes_flag: bool
+) -> ComparisonPlan:
+    def checkout(ref: str, dest: Path) -> AbstractContextManager[Path]:
+        return pinned_checkout(ref, dest, engine_takes_edition_head=takes_flag)
+
+    plan = _plan(tmp_path, runner)
+    return replace(
+        plan, sample_ids=(SAMPLE_ID,), sources=replace(plan.sources, checkout_ref=checkout)
+    )
+
+
+def test_a_pinned_sample_on_a_git_ref_grades_the_refs_text(tmp_path: Path) -> None:
+    # #320 review: without --edition head the ref's engine graded the frozen edition.
+    runner = FakeSampleRunner({"origin/main": 0.9, "head": 0.9})
+    plan = _pinned_ref_plan(tmp_path, runner, takes_flag=True)
+    run_comparison(plan, ComparisonSide("origin/main"), ComparisonSide("head"))
+    assert {call[2] for call in runner.calls if call[0] == "origin/main"} == {_EDITION_HEAD}
+
+
+def test_a_ref_whose_engine_predates_editions_runs_without_edition_head(tmp_path: Path) -> None:
+    runner = FakeSampleRunner({"v0": 0.9, "head": 0.9})
+    plan = _pinned_ref_plan(tmp_path, runner, takes_flag=False)
+    run_comparison(plan, ComparisonSide("v0", "v2"), ComparisonSide("head"))
+    assert {call[2] for call in runner.calls if call[0] == "v0"} == {("--prompt-set", "v2")}
+
+
+def test_an_engine_takes_edition_head_when_it_ships_graded_source(tmp_path: Path) -> None:
+    assert takes_edition_head(tmp_path)  # no engine in the checkout: this engine grades it
+    for takes_flag in (True, False):
+        with pinned_checkout(
+            "r", tmp_path / str(takes_flag), engine_takes_edition_head=takes_flag
+        ) as c:
+            assert takes_edition_head(c) is takes_flag
 
 
 def test_an_edition_side_is_built_in_the_work_dir_and_graded_in_place(tmp_path: Path) -> None:
