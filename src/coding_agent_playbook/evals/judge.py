@@ -39,7 +39,7 @@ import subprocess
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
 
-from coding_agent_playbook.evals.run.claude_code_route import routed_env
+from coding_agent_playbook.evals.run.claude_code_route import routed_argv, routed_env
 from coding_agent_playbook.evals.run.cli_argv import PROMPT_TOKEN, build_cli_argv
 
 if TYPE_CHECKING:
@@ -237,8 +237,7 @@ class LLMJudge(Judge):
 
     def _build_command(self, prompt: str) -> list[str]:
         """The argv for one grading: the template with ``prompt`` and the model (``cli_argv``)."""
-        argv = build_cli_argv(self._command, prompt, self.model)
-        return argv if self.route is None else [*argv, *self.route.settings_argv()]
+        return routed_argv(build_cli_argv(self._command, prompt, self.model), self.route)
 
     def _grade_once(self, criterion: str, artifact: Any) -> float:
         """One graded sample: up to ``1 + retries`` attempts, else :class:`JudgeError`."""

@@ -37,7 +37,7 @@ import subprocess
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.evals.run.agent_env import unattended_agent_env
-from coding_agent_playbook.evals.run.claude_code_route import routed_env
+from coding_agent_playbook.evals.run.claude_code_route import routed_argv, routed_env
 from coding_agent_playbook.evals.run.cli_argv import PROMPT_TOKEN, build_cli_argv
 from coding_agent_playbook.evals.run.harness_runner import AgentRun, HarnessRunner
 
@@ -100,8 +100,7 @@ class ClaudeCodeRunner(HarnessRunner):
 
     def _build_command(self, prompt: str) -> list[str]:
         """The argv for one run: the template with ``prompt`` and the model (``cli_argv``)."""
-        argv = build_cli_argv(self._command, prompt, self.model)
-        return argv if self.route is None else [*argv, *self.route.settings_argv()]
+        return routed_argv(build_cli_argv(self._command, prompt, self.model), self.route)
 
     def _invoke_agent(self, prompt: str, scratch_dir: Path) -> AgentRun:
         """Run the configured command with ``cwd=scratch_dir`` and capture output.

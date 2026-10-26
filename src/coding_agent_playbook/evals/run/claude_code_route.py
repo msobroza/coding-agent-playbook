@@ -189,6 +189,17 @@ def claude_code_route(
     )
 
 
+def routed_argv(argv: list[str], route: ClaudeCodeRoute | None) -> list[str]:
+    """``argv``, followed by the route's ``--settings`` when there is a route.
+
+    Example::
+
+        >>> routed_argv(["claude", "-p", "hi"], None)
+        ['claude', '-p', 'hi']
+    """
+    return argv if route is None else [*argv, *route.settings_argv()]
+
+
 @contextmanager
 def routed_env(
     route: ClaudeCodeRoute | None, base: Mapping[str, str] | None
