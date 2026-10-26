@@ -75,6 +75,9 @@ class Judge(ABC):
     accepts_model: bool = False
     #: Whether the constructor takes ``route=`` (``[evals.judge] endpoint``).
     accepts_endpoint: bool = False
+    #: The executable the judge shells out to, whose ``--version`` a record
+    #: probes for the setup digest (#329 ticket 04); ``None``: no CLI.
+    cli: str | None = None
 
     @classmethod
     def available(cls) -> bool:
@@ -235,6 +238,7 @@ class LLMJudge(Judge):
     name = "llm"
     accepts_model = True
     accepts_endpoint = True
+    cli = _CLI
 
     def __init__(
         self,

@@ -9,7 +9,7 @@ from __future__ import annotations
 import dataclasses
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -66,7 +66,8 @@ def test_every_part_has_a_change_case() -> None:
 
 @pytest.mark.parametrize(("part", "value"), sorted(_CHANGES.items()))
 def test_changing_one_part_changes_the_digest_and_is_named(part: str, value: object) -> None:
-    changed = dataclasses.replace(_BASE, **{part: value})
+    changes: dict[str, Any] = {part: value}
+    changed = dataclasses.replace(_BASE, **changes)
     assert changed.digest != _BASE.digest
     assert differing_setup_parts(_BASE.as_dict(), changed.as_dict()) == (part,)
 

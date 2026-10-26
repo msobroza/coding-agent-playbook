@@ -30,6 +30,11 @@ from coding_agent_playbook.evals.run.claude_code_runner import (
 from coding_agent_playbook.evals.run.fake_runner import FakeRunner
 from coding_agent_playbook.evals.run.harness_runner import SampleResult
 from coding_agent_playbook.evals.sample_digest import inputs_digest
+from coding_agent_playbook.evals.setup_digest import (
+    SetupParts,
+    differing_setup_parts,
+    scoring_digest,
+)
 from coding_agent_playbook.evals.targets import TARGET_ENV_VAR
 from coding_agent_playbook.evals.task_registry import load_task_sample
 from coding_agent_playbook.grading.types import EvaluationReport
@@ -673,3 +678,97 @@ def test_a_plain_run_keeps_the_judge_in_the_callers_directory(
 
     assert cli.cwds
     assert cli.cwds == [None] * len(cli.cwds)
+
+
+def test_a_record_writes_its_setup_parts_and_digest(repo: Path) -> None:
+    # #329 ticket 04: everything outside the samples that decides scores, by name.
+    rc, out = _record(repo, _SAMPLE, "--target", "fake-pinned", "--runs", "2")
+    assert rc == 0
+    data = _load(out)
+    assert data["setup"] == {
+        "harness": "fake",
+        "harness_version": None,
+        "model": "fake-model-1",
+        "endpoint_fingerprint": None,
+        "small_model": None,
+        "runs": 2,
+        "judge_model": None,
+        "judge_samples": None,
+        "judge_version": None,
+        "fail_fast": True,
+        "isolated": True,
+        "scoring_digest": scoring_digest(),
+    }
+    assert data["setup_digest"] == SetupParts(**data["setup"]).digest
+
+
+def test_full_scoring_is_a_setup_part(repo: Path) -> None:
+    _rc, fast = _record(repo, _SAMPLE, "--target", "fake-pinned")
+    fast_setup = _load(fast)["setup"]
+    _rc, full = _record(repo, _SAMPLE, "--target", "fake-pinned", "--full-scoring")
+    assert differing_setup_parts(fast_setup, _load(full)["setup"]) == ("fail_fast",)
+
+
+def test_an_endpoint_target_records_its_fingerprint_and_small_model(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    committed = repo / CONFIG_FILENAME
+    text = _ENDPOINT_EVALS + 'small_model = "internal-haiku"\n'
+    committed.write_text(committed.read_text(encoding="utf-8") + text, encoding="utf-8")
+    monkeypatch.setenv("INTERNAL_LLM_TOKEN", _ENDPOINT_TOKEN)
+    FakeClaudeCli(monkeypatch)
+    rc, out = _record(repo, _SAMPLE, "--target", "internal-claude", "--runs", "1")
+    assert rc == 0
+    setup = _load(out)["setup"]
+    assert setup["endpoint_fingerprint"] == endpoint_fingerprint(_ENDPOINT_URL)
+    assert setup["small_model"] == "internal-haiku"
+    assert setup["harness_version"] == "2.1.300"
+
+
+class _VersionProbes(FakeClaudeCli):
+    """:class:`FakeClaudeCli` that records each ``--version`` call's kwargs and can fail it."""
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch, *, version_rc: int = 0) -> None:
+        super().__init__(monkeypatch)
+        self.version_kwargs: list[dict[str, Any]] = []
+        self._version_rc = version_rc
+
+    def _run(self, args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if args[:1] == ["claude"] and args[1:] == ["--version"]:
+            self.argvs.append(list(args))
+            self.version_kwargs.append(kwargs)
+            return subprocess.CompletedProcess(args, self._version_rc, "2.1.300\n", "")
+        if args[:1] == ["claude"]:
+            self.argvs.append(list(args))
+            return subprocess.CompletedProcess(args, 0, "1", "")
+        return super()._run(args, **kwargs)
+
+
+def _with_pinned_judge(repo: Path) -> None:
+    committed = repo / CONFIG_FILENAME
+    committed.write_text(committed.read_text(encoding="utf-8") + _PINNED_JUDGE, encoding="utf-8")
+
+
+def test_the_judge_cli_version_is_probed_once_with_a_time_bound(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _with_pinned_judge(repo)
+    cli = _VersionProbes(monkeypatch)
+    flags = ("--target", "fake-pinned", "--runs", "2", "--judge", "llm", "--judge-samples", "2")
+    rc, out = _record(repo, _SAMPLE, *flags)
+    assert rc == 0
+    assert cli.argvs.count(["claude", "--version"]) == 1
+    assert cli.version_kwargs[0]["timeout"] > 0
+    setup = _load(out)["setup"]
+    assert (setup["judge_model"], setup["judge_samples"]) == ("claude-opus-5-5", 2)
+    assert setup["judge_version"] == "2.1.300"
+
+
+def test_a_failed_judge_version_probe_records_null(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _with_pinned_judge(repo)
+    _VersionProbes(monkeypatch, version_rc=1)
+    rc, out = _record(repo, _SAMPLE, "--target", "fake-pinned", "--judge", "llm")
+    assert rc == 0
+    assert _load(out)["setup"]["judge_version"] is None
