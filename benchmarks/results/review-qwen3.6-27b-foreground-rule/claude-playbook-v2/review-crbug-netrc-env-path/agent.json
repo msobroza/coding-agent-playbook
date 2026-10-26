@@ -1,0 +1,52 @@
+{
+  "experiment": "claude-playbook-v2",
+  "sample_id": "review/crbug-netrc-env-path",
+  "harness": "claude",
+  "model": "qwen/qwen3.6-27b",
+  "command": [
+    "claude",
+    "-p",
+    "--setting-sources",
+    "",
+    "--strict-mcp-config",
+    "--settings",
+    "{\"autoMemoryEnabled\": false}",
+    "--model",
+    "qwen/qwen3.6-27b",
+    "--no-session-persistence",
+    "--permission-mode",
+    "acceptEdits",
+    "--allowedTools",
+    "Read,Grep,Glob,Task,Skill,Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--",
+    "{prompt}"
+  ],
+  "returncode": 0,
+  "timed_out": false,
+  "duration_seconds": 157.8,
+  "baseline_commit": "3c8eee73d2c01f7e20cfc365515ae29cc33cbea1",
+  "scratch": "~/.cache/playbook-bench/review-qwen3.6-27b-foreground-rule/claude-playbook-v2/review-crbug-netrc-env-path/scratch",
+  "setup_snapshot": "~/.cache/playbook-bench/review-qwen3.6-27b-foreground-rule/claude-playbook-v2/review-crbug-netrc-env-path/scratch__setup_baseline",
+  "main_loop_tools": [
+    "Read",
+    "Read",
+    "Read",
+    "Agent:Plan",
+    "Agent:Plan",
+    "ListAgents",
+    "ScheduleWakeup",
+    "ListAgents",
+    "Bash",
+    "ListAgents",
+    "Read",
+    "Read",
+    "Read"
+  ],
+  "second_pass_ran": true,
+  "subagent_starts": {
+    "background": 2
+  }
+}

@@ -1,0 +1,128 @@
+{
+  "sample_id": "review/crbug-form-method-none",
+  "harness": "claude:claude-playbook-v2",
+  "target": {
+    "name": null,
+    "harness": "claude:claude-playbook-v2",
+    "model": null,
+    "reported_model": null,
+    "endpoint": null,
+    "harness_settings": "personal"
+  },
+  "passed": true,
+  "aggregate_score": 1.0,
+  "duration_seconds": 295.0,
+  "report": {
+    "passed": true,
+    "warn_count": 0,
+    "fail_count": 0,
+    "composite": null,
+    "checks": [
+      {
+        "check_id": "gate",
+        "passed": true,
+        "score": 1.0,
+        "weight": 0.0,
+        "required": true,
+        "status": "run",
+        "subresults": []
+      },
+      {
+        "check_id": "rubric",
+        "passed": true,
+        "score": 1.0,
+        "weight": 0.0,
+        "required": true,
+        "status": "run",
+        "subresults": []
+      }
+    ],
+    "findings": []
+  },
+  "uncalibrated_judge": true,
+  "experiment": "claude-playbook-v2",
+  "agent": {
+    "experiment": "claude-playbook-v2",
+    "sample_id": "review/crbug-form-method-none",
+    "harness": "claude",
+    "model": "qwen/qwen3.6-27b",
+    "command": [
+      "claude",
+      "-p",
+      "--setting-sources",
+      "",
+      "--strict-mcp-config",
+      "--settings",
+      "{\"autoMemoryEnabled\": false}",
+      "--model",
+      "qwen/qwen3.6-27b",
+      "--no-session-persistence",
+      "--permission-mode",
+      "acceptEdits",
+      "--allowedTools",
+      "Read,Grep,Glob,Task,Skill,Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--",
+      "{prompt}"
+    ],
+    "returncode": 0,
+    "timed_out": false,
+    "duration_seconds": 295.0,
+    "baseline_commit": "535d775b5c97adc4854fe590a31879811e0deb79",
+    "scratch": "~/.cache/playbook-bench/review-qwen3.6-27b-foreground-rule/claude-playbook-v2/review-crbug-form-method-none/scratch",
+    "setup_snapshot": "~/.cache/playbook-bench/review-qwen3.6-27b-foreground-rule/claude-playbook-v2/review-crbug-form-method-none/scratch__setup_baseline",
+    "main_loop_tools": [
+      "Read",
+      "Glob",
+      "Read",
+      "Agent:Plan",
+      "Skill:code-review",
+      "Read",
+      "Read"
+    ],
+    "second_pass_ran": true,
+    "subagent_starts": {
+      "background": 1,
+      "foreground": 1
+    }
+  },
+  "judge": {
+    "backend": "anthropic",
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "judge_samples": 1
+  },
+  "judge_calls": [
+    {
+      "criterion": "The review reports the backward-incompatible crash: kwargs.pop('method', form.method).upper() raises AttributeError when a caller passes method=None explicitly, which used to work (Request turns a None method into GET); the change should treat None like a missing method.",
+      "score": 0.85,
+      "n": 1,
+      "weight": 0.6
+    },
+    {
+      "criterion": "The review treats that bug as blocking (important, not a nit or an open question), cites its file and line in src/forms.py (from_form), and its verdict is 'request changes'.",
+      "score": 1.0,
+      "n": 1,
+      "weight": 0.2
+    },
+    {
+      "criterion": "The review does not invent bugs: anything else it raises is a real problem in the code shown, and it does not ask to rewrite code that works.",
+      "score": 0.6,
+      "n": 1,
+      "weight": 0.2
+    }
+  ],
+  "rubric_weighted_score": 0.8300000000000001,
+  "gate_detail": {
+    "forms_untouched": true,
+    "tests_untouched": true,
+    "blocks": true,
+    "approves": false
+  },
+  "gate_detail_matches_engine": true,
+  "changed_files": [],
+  "graded_artifact": "transcript",
+  "judge_error": null
+}

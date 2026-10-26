@@ -1,0 +1,21 @@
+Both passes are running. I'll wait for their results before drafting the review.
+
+The first pass found a critical syntax error. Waiting for the second (bug-hunting) pass to complete.
+
+Now I can draft the review. Both passes agree on the two findings, and I've confirmed them against the cited lines.
+
+---
+
+## Review
+
+### Correctness
+
+- **src/auth.py:16-17** — **important** — `!` is not a valid Python operator. Lines 16-17 use `!hmac.compare_digest(...)` which is C-family syntax. Python requires the `not` keyword. The module fails to parse with a `SyntaxError` on every import, so the function is unreachable. Input: any import of `src.auth`.
+
+- **src/auth.py:16-17** — **important** — Even with `not` instead of `!`, the `or` short-circuit defeats the constant-time guarantee. When the username mismatches, `hmac.compare_digest(given.username, expected.username)` returns `False`, making `not False` → `True`, and the `or` short-circuits — the password comparison is never called. An attacker can distinguish "username wrong" from "username right, password wrong" by timing, which is exactly what this change claims to prevent. Input: `Credentials("wronguser", "anything")` against `Credentials("admin", "secret")` — the password comparison is skipped entirely. The fix is to compare both fields unconditionally, store each result, and combine them with a non-short-circuiting operation (e.g., `result = compare(a) & compare(b)` using bitwise `&`, or simply compare the concatenated strings in a single call).
+
+---
+
+Findings: 2 important, 0 nit, 0 pre-existing
+
+request changes

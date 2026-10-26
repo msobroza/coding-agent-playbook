@@ -1,0 +1,39 @@
+{
+  "sample_id": "review-crbug-netrc-env-path",
+  "experiment": "claude-playbook-v2",
+  "defect": {
+    "description": "A NETRC path is still expanded under the home directory: os.path.expanduser(f\"~/{name}\") turns NETRC=/etc/ci/netrc into a path like /home/user//etc/ci/netrc, so a NETRC file outside the home directory (an absolute path, or one starting with ~) is never found and no credentials are returned; only the default NETRC_FILES names should get the ~/ prefix.",
+    "location": "src/netrc_auth.py (the expanduser call in get_netrc_auth)"
+  },
+  "judge": {
+    "backend": "anthropic",
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "yes",
+  "strict": 1.0,
+  "lenient": 1.0,
+  "top5": 1.0,
+  "first_match": 1,
+  "n_items": 4,
+  "votes": [
+    {
+      "detected": "yes",
+      "review_items": [
+        "Line 17: expanduser(f\"~/{name}\") prepends ~/ to NETRC value, so absolute paths resolve under $HOME (wrong file)",
+        "Line 12: NETRC=\"\" yields (\"\",), resolves to home dir, netrc() fails; should fall back to NETRC_FILES",
+        "Test only covers relative NETRC name; no absolute-path test",
+        "Pre-existing: no test for raise_errors=True re-raise path"
+      ],
+      "item_matches": [
+        1,
+        0,
+        0,
+        0
+      ],
+      "evidence_quote": "`os.path.expanduser(f\"~/{name}\")` always prepends `~/` to the value of the `NETRC` variable, so an absolute path like `NETRC=\"/etc/custom.netrc\"` becomes `~/etc/custom.netrc`, which `expanduser` resolves to `$HOME/etc/custom.netrc` \u2014 the wrong file entirely.",
+      "justification": "The review's first finding names the expanduser call in get_netrc_auth. It says an absolute NETRC path is wrongly resolved under the home directory, and that `~/` should only be prepended for bare filenames. That matches the known defect."
+    }
+  ]
+}

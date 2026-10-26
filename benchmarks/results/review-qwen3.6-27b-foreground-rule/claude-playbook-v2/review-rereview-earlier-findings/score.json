@@ -1,0 +1,137 @@
+{
+  "sample_id": "review/rereview-earlier-findings",
+  "harness": "claude:claude-playbook-v2",
+  "target": {
+    "name": null,
+    "harness": "claude:claude-playbook-v2",
+    "model": null,
+    "reported_model": null,
+    "endpoint": null,
+    "harness_settings": "personal"
+  },
+  "passed": true,
+  "aggregate_score": 1.0,
+  "duration_seconds": 172.5,
+  "report": {
+    "passed": true,
+    "warn_count": 0,
+    "fail_count": 0,
+    "composite": null,
+    "checks": [
+      {
+        "check_id": "gate",
+        "passed": true,
+        "score": 1.0,
+        "weight": 0.0,
+        "required": true,
+        "status": "run",
+        "subresults": []
+      },
+      {
+        "check_id": "rubric",
+        "passed": true,
+        "score": 1.0,
+        "weight": 0.0,
+        "required": true,
+        "status": "run",
+        "subresults": []
+      }
+    ],
+    "findings": []
+  },
+  "uncalibrated_judge": true,
+  "experiment": "claude-playbook-v2",
+  "agent": {
+    "experiment": "claude-playbook-v2",
+    "sample_id": "review/rereview-earlier-findings",
+    "harness": "claude",
+    "model": "qwen/qwen3.6-27b",
+    "command": [
+      "claude",
+      "-p",
+      "--setting-sources",
+      "",
+      "--strict-mcp-config",
+      "--settings",
+      "{\"autoMemoryEnabled\": false}",
+      "--model",
+      "qwen/qwen3.6-27b",
+      "--no-session-persistence",
+      "--permission-mode",
+      "acceptEdits",
+      "--allowedTools",
+      "Read,Grep,Glob,Task,Skill,Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--",
+      "{prompt}"
+    ],
+    "returncode": 0,
+    "timed_out": false,
+    "duration_seconds": 172.5,
+    "baseline_commit": "bcf1e818e3056f535a3d48d1e57e6ec6f1640e27",
+    "scratch": "~/.cache/playbook-bench/review-qwen3.6-27b-foreground-rule/claude-playbook-v2/review-rereview-earlier-findings/scratch",
+    "setup_snapshot": "~/.cache/playbook-bench/review-qwen3.6-27b-foreground-rule/claude-playbook-v2/review-rereview-earlier-findings/scratch__setup_baseline",
+    "main_loop_tools": [
+      "Read",
+      "Read",
+      "Glob",
+      "Glob",
+      "Glob",
+      "Agent:Plan",
+      "Agent:Plan",
+      "ScheduleWakeup",
+      "Read"
+    ],
+    "second_pass_ran": true,
+    "subagent_starts": {
+      "background": 2
+    }
+  },
+  "judge": {
+    "backend": "anthropic",
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "judge_samples": 1
+  },
+  "judge_calls": [
+    {
+      "criterion": "The review gives each of the three earlier findings one status: remove() going negative is fixed, add() accepting a non-positive quantity is fixed, and total_cents() accepting any discount_percent is still open.",
+      "score": 1.0,
+      "n": 1,
+      "weight": 0.4
+    },
+    {
+      "criterion": "The review keeps the still-open discount finding important (blocking) and its verdict is 'request changes'.",
+      "score": 1.0,
+      "n": 1,
+      "weight": 0.3
+    },
+    {
+      "criterion": "The review does not raise the fixed remove() or add() findings again as new findings, and does not invent new bugs in the fix commit.",
+      "score": 0.9,
+      "n": 1,
+      "weight": 0.2
+    },
+    {
+      "criterion": "The review cites file and line for the still-open finding (total_cents in src/cart.py) and proposes no edits of its own to the files.",
+      "score": 0.9,
+      "n": 1,
+      "weight": 0.1
+    }
+  ],
+  "rubric_weighted_score": 0.9700000000000001,
+  "gate_detail": {
+    "cart_untouched": true,
+    "tests_untouched": true,
+    "remove_fixed": true,
+    "discount_open": true,
+    "blocks": true,
+    "approves": false
+  },
+  "gate_detail_matches_engine": true,
+  "changed_files": [],
+  "graded_artifact": "transcript",
+  "judge_error": null
+}

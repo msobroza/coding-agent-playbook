@@ -1,0 +1,37 @@
+Good — the file is unchanged from my earlier read. I've verified all findings against the code. Let me now write the review.
+
+---
+
+## Review: MINID and LIMIT support for xtrim
+
+### Correctness
+
+- **`src/streams.py:34-47` — `important, new` — No strategy produces a malformed command.** When neither `maxlen` nor `minid` is provided (the new defaults), lines 35-38 append no strategy keyword. Line 39 still appends `b"~"` because `approximate=True` by default. The result is `execute_command("XTRIM", "events", b"~")` — a nonsense command that Redis will reject. Input: `xtrim("events")`.
+
+- **`src/streams.py:35-44` — `important, new` — `maxlen` and `minid` are not mutually exclusive.** Passing both produces `[b"MAXLEN", b"MINID", b"~", 100, "1-0"]`, which sends `XTRIM events MAXLEN MINID ~ 100 1-0`. Redis expects one of `<MAXLEN | MINID>`, not both. The command will be rejected. Input: `xtrim("events", 100, minid="1-0")`.
+
+- **`src/streams.py:45-47` — `important, new` — `limit` without a strategy produces a malformed command.** `limit` is appended independently of whether any strategy exists. With no strategy and `approximate=True`, the result is `XTRIM events ~ LIMIT 10`. Input: `xtrim("events", limit=10)`.
+
+- **`src/streams.py:39-44` — `important, new` — Missing `=` for exact trimming breaks Redis 7.0.** The stated intent is to follow Redis 6.2's syntax `XTRIM key <MAXLEN | MINID> [= | ~] threshold`. When `approximate=False`, the code emits no marker at all — `XTRIM events MAXLEN 100` — which is the pre-6.2 syntax. Redis 6.2 tolerates it, but Redis 7.0 requires either `=` or `~` and rejects the bare form. Line 39 appends `b"~"` for approximate but has no `else` branch emitting `b"="`. Input: `xtrim("events", 100, approximate=False)` on Redis 7.0+.
+
+### Failure Modes
+
+- **`src/streams.py:22` — `nit, new` — `maxlen` accepts zero and negative values.** `maxlen=0` or `maxlen=-1` is sent directly to Redis with no validation. Redis will return an error, but the error arrives at the server round-trip rather than being caught locally.
+
+- **`src/streams.py:25` — `nit, new` — `limit` accepts zero and negative values.** Same concern: `limit=-1` produces `XTRIM events MAXLEN ~ 100 LIMIT -1`, which Redis rejects. These could be validated at the call site with a simple `if limit < 1: raise ValueError(...)`.
+
+### Design
+
+- **`src/streams.py:27-32` — `nit, new` — Docstring does not document the mutual-exclusivity constraint.** The docstring lists `maxlen` and `minid` as independent options. It should state that exactly one of `maxlen` or `minid` must be provided, and that `limit` requires one of them. As written, callers have no way of knowing the valid argument combinations without reading the implementation.
+
+### Test Coverage
+
+- **`tests/test_streams.py:29-32` — `nit, new` — No test for `minid` with `approximate=False`.** The new `minid` test only exercises the default `approximate=True` path. The exact-trim code path (`approximate=False`) for `minid` is untested.
+
+- **`tests/test_streams.py:29-38` — `nit, new` — No test for invalid combinations.** There is no test asserting that `xtrim("events")` (no strategy) or `xtrim("events", 100, minid="1-0")` (both strategies) raises an error or produces a sensible result.
+
+- **`tests/test_streams.py:35-38` — `nit, new` — No test for `limit` combined with `minid`.** The combination `xtrim("events", minid="1-0", limit=5)` is not covered.
+
+Findings: 4 important, 5 nit, 0 pre-existing
+
+request changes
