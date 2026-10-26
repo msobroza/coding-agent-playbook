@@ -55,6 +55,10 @@ runs = 2
 harness = "claude_code"
 model = "claude-opus-5-5"
 price = { input = 2.0, output = 10.0 }
+
+[evals.targets.opencode-opus]
+harness = "opencode"
+model = "anthropic/claude-opus-5-5"
 """
 
 _CLAUDE_RESULT = json.dumps(
@@ -87,10 +91,15 @@ class FakeClaudeCli:
         return subprocess.CompletedProcess(args, 0, answer, "")
 
 
+#: The API key an isolated record run reads (#329 ticket 02); never a real key.
+_RECORD_KEY = "fake-record-key-0000"
+
+
 @pytest.fixture
 def repo(tmp_path: Path, make_synthetic_repo: Any, monkeypatch: pytest.MonkeyPatch) -> Path:
     """A consumer repo whose committed config names pinned and priced targets."""
     monkeypatch.delenv(TARGET_ENV_VAR, raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", _RECORD_KEY)
     make_synthetic_repo(tmp_path)
     committed = tmp_path / CONFIG_FILENAME
     committed.write_text(committed.read_text(encoding="utf-8") + _EVALS, encoding="utf-8")
@@ -203,6 +212,126 @@ def test_endpoint_target_records_its_name_and_fingerprint_but_never_its_secrets(
         "fingerprint": endpoint_fingerprint(_ENDPOINT_URL),
     }
     assert data["target"]["reported_model"] == "internal-opus"
+
+
+_PINNED_JUDGE = '\n[evals.judge]\nmodel = "claude-opus-5-5"\n'
+
+
+def _personal_setup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A personal Claude Code config dir with instructions in it, and a personal login."""
+    personal = tmp_path / "personal-claude"
+    personal.mkdir()
+    (personal / "CLAUDE.md").write_text("personal instructions\n", encoding="utf-8")
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(personal))
+    monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "fake-personal-login")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "personal-xdg"))
+    return personal
+
+
+def test_record_runs_the_agent_and_the_judge_isolated_on_the_api_key(
+    repo: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # #329 ticket 02: no personal instructions, plugins, hooks or login reach a record run.
+    personal = _personal_setup(tmp_path, monkeypatch)
+    committed = repo / CONFIG_FILENAME
+    committed.write_text(committed.read_text(encoding="utf-8") + _PINNED_JUDGE, encoding="utf-8")
+    cli = claude_cli_fakes.FakeClaudeCli(monkeypatch, answer="1")
+
+    flags = ("--target", "opus", "--runs", "1", "--judge", "llm", "--full-scoring")
+    rc, out = _record(repo, _SAMPLE, *flags)
+
+    assert rc == 0
+    judge_calls = [argv for argv, _env in cli.calls if "--output-format" not in argv]
+    assert judge_calls, cli.calls
+    assert len(judge_calls) < len(cli.calls)  # the agent ran too
+    for argv, env in cli.calls:
+        assert env is not None
+        assert env["CLAUDE_CONFIG_DIR"] != str(personal)
+        assert env["ANTHROPIC_API_KEY"] == _RECORD_KEY
+        assert "ANTHROPIC_AUTH_TOKEN" not in env
+        assert all(_RECORD_KEY not in part for part in argv)
+    assert cli.config_dir_entries == [[]] * len(cli.calls)
+    assert _load(out)["target"]["isolated"] is True
+    captured = capsys.readouterr()
+    assert _RECORD_KEY not in captured.out + captured.err
+
+
+def test_record_keeps_the_api_key_out_of_the_file_and_the_logs(
+    repo: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    claude_cli_fakes.FakeClaudeCli(monkeypatch, answer=f"done, saw {_RECORD_KEY}")
+    rc, out = _record(repo, _SAMPLE, "--target", "opus", "--runs", "1")
+    assert rc == 0
+    assert _RECORD_KEY not in out.read_text(encoding="utf-8")
+    captured = capsys.readouterr()
+    assert _RECORD_KEY not in captured.out + captured.err
+
+
+def test_record_runs_opencode_isolated_on_the_api_key(
+    repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _personal_setup(tmp_path, monkeypatch)
+    monkeypatch.setenv("OPENAI_API_KEY", "fake-personal-openai")
+    cli = claude_cli_fakes.FakeClaudeCli(monkeypatch, answer="done")
+
+    rc, out = _record(repo, _SAMPLE, "--target", "opencode-opus", "--runs", "1")
+
+    assert rc == 0
+    argv, env = cli.calls[0]
+    assert argv[0] == "opencode"
+    assert argv[argv.index("--model") + 1] == "anthropic/claude-opus-5-5"
+    assert env is not None
+    assert env["XDG_CONFIG_HOME"] != str(tmp_path / "personal-xdg")
+    assert env["ANTHROPIC_API_KEY"] == _RECORD_KEY
+    assert "OPENAI_API_KEY" not in env
+    assert env["OPENCODE_DISABLE_CLAUDE_CODE"] == "1"
+    assert _load(out)["target"]["isolated"] is True
+
+
+@pytest.mark.parametrize(
+    ("flags", "extra_config", "who"),
+    [
+        (("--target", "opus"), "", "the harness runs on Anthropic's API"),
+        (
+            ("--target", "internal-claude"),
+            _ENDPOINT_EVALS,
+            "whose token_env INTERNAL_LLM_TOKEN is unset",
+        ),
+        (("--target", "fake-pinned", "--judge", "llm"), _PINNED_JUDGE, "the judge runs on"),
+    ],
+)
+def test_missing_credentials_are_refused_before_any_call(
+    repo: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    flags: tuple[str, ...],
+    extra_config: str,
+    who: str,
+) -> None:
+    committed = repo / CONFIG_FILENAME
+    committed.write_text(committed.read_text(encoding="utf-8") + extra_config, encoding="utf-8")
+    monkeypatch.delenv("ANTHROPIC_API_KEY")
+    monkeypatch.delenv("INTERNAL_LLM_TOKEN", raising=False)
+    cli = claude_cli_fakes.FakeClaudeCli(monkeypatch)
+
+    rc, out = _record(repo, _SAMPLE, *flags)
+
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert who in err
+    assert "ANTHROPIC_API_KEY" in err
+    assert "token_env" in err
+    assert cli.calls == []
+    assert not out.exists()
+
+
+def test_a_fake_runner_records_without_any_credential(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("ANTHROPIC_API_KEY")
+    rc, out = _record(repo, _SAMPLE, "--target", "fake-pinned")
+    assert rc == 0
+    assert _load(out)["target"]["isolated"] is True
 
 
 @pytest.mark.parametrize(
