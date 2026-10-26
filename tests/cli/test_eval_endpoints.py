@@ -1,7 +1,7 @@
-"""``playbook eval`` on a custom endpoint: the Claude Code wiring, the judge and ``--targets --check``.
+"""``playbook eval`` on a custom endpoint: the harness wiring, the judge and ``--targets --check``.
 
-Driven through ``cli.main`` (spec #281 ticket 06). No harness CLI is run:
-:class:`FakeClaudeCli` answers the ``claude`` ``subprocess.run`` calls and records
+Driven through ``cli.main`` (spec #281 tickets 06 and 06b). No harness CLI is run:
+:class:`FakeClaudeCli` answers the ``claude`` and ``opencode`` ``subprocess.run`` calls and records
 each argv and child environment, so the tests assert what the engine would spawn.
 """
 
@@ -159,12 +159,50 @@ def test_missing_token_variable_exits_2_naming_it(
     assert cli.calls == []
 
 
-def test_opencode_endpoint_target_is_refused_until_its_wiring_lands(
+def test_opencode_endpoint_target_spawns_opencode_isolated_with_an_inline_config(
     repo: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    FakeClaudeCli(monkeypatch)
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "https://otel.example")
+    cli = FakeClaudeCli(monkeypatch, answer="done")
+    assert _run(repo, "--target", "internal-coder") in (0, 1)
+    out = capsys.readouterr().out
+
+    argv, env = cli.calls[0]
+    assert argv[:4] == ["opencode", "run", "--format", "json"]
+    assert argv[argv.index("--model") + 1] == "playbook-target/my-org/coder-32b"
+    assert all(_TOKEN not in part for part in argv)
+
+    assert env is not None
+    config = json.loads(env["OPENCODE_CONFIG_CONTENT"])
+    assert config["enabled_providers"] == ["playbook-target"]
+    provider = config["provider"]["playbook-target"]
+    assert provider["npm"] == "@ai-sdk/openai-compatible"
+    assert provider["options"]["baseURL"] == f"{_URL}/v1"
+    assert provider["options"]["apiKey"] == "{env:PLAYBOOK_ENDPOINT_TOKEN}"
+    assert _TOKEN not in env["OPENCODE_CONFIG_CONTENT"]
+    assert env["PLAYBOOK_ENDPOINT_TOKEN"] == _TOKEN
+    for dropped in ("ANTHROPIC_API_KEY", "INTERNAL_LLM_TOKEN", "OTEL_EXPORTER_OTLP_ENDPOINT"):
+        assert dropped not in env, dropped
+    assert env["OPENCODE_DISABLE_CLAUDE_CODE"] == "1"
+    assert env["PLAYBOOK_HOOK_UNATTENDED"] == "1"
+
+    payload = json.loads(out)
+    assert payload["target"]["endpoint"]["name"] == "oai"
+    assert payload["target"]["harness_settings"] == "isolated"
+    assert _TOKEN not in out
+    assert _files_containing(repo, _TOKEN) == []
+
+
+def test_opencode_token_that_would_corrupt_the_config_exits_2_naming_the_variable(
+    repo: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cli = FakeClaudeCli(monkeypatch)
+    monkeypatch.setenv("INTERNAL_LLM_TOKEN", 'fake"token')
     assert _run(repo, "--target", "internal-coder") == 2
-    assert "runner 'opencode' cannot reach endpoint 'oai' yet" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "INTERNAL_LLM_TOKEN" in err
+    assert 'fake"token' not in err
+    assert cli.calls == []
 
 
 def test_judge_on_an_endpoint_grades_isolated_with_its_model(
@@ -203,14 +241,14 @@ def test_targets_check_runs_one_turn_per_target_and_reports_each(
     repo: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     cli = FakeClaudeCli(monkeypatch, answer="OK")
-    assert main(["eval", "--targets", "--check", "--repo-root", str(repo)]) == 1
+    assert main(["eval", "--targets", "--check", "--repo-root", str(repo)]) == 0
     out = capsys.readouterr().out
     assert "ok    internal-claude" in out
     assert "ok    personal" in out
-    assert "FAIL  internal-coder: its runner could not be built" in out
-    prompts = {argv[2] for argv, _env in cli.calls}
+    assert "ok    internal-coder" in out
+    prompts = {argv[2] if argv[0] == "claude" else argv[4] for argv, _env in cli.calls}
     assert prompts == {"Reply with the single word OK."}
-    assert len(cli.calls) == 2
+    assert len(cli.calls) == 3
 
 
 def test_targets_check_fails_a_target_whose_harness_errors(

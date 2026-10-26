@@ -729,6 +729,11 @@ endpoint = "internal"              # optional; the judge then needs a model
 model = "internal-opus"
 ```
 
+Write an `anthropic` `base_url` without `/v1`, as `ANTHROPIC_BASE_URL` takes it:
+the same endpoint then serves Claude Code targets, the judge and OpenCode targets.
+An `openai-chat` or `openai-responses` `base_url` includes its version path (such
+as `/v1`) and is used as written.
+
 The token comes only from the variable `token_env` names, or, in the local file
 only, from `token_command` (a command whose output is the token). Inline secret
 keys such as `token`, `api_key` or `password` are refused in both files. An
@@ -739,7 +744,7 @@ empty token variable is a usage error (exit `2`) that names the variable.
 
 Claude Code speaks only the Anthropic Messages API, so a Claude Code target or the
 judge on an `openai-chat` or `openai-responses` endpoint is refused with a hint to
-use an OpenCode target. OpenCode endpoint targets are not wired yet.
+use an OpenCode target.
 
 A Claude Code run on an endpoint is isolated from your own settings: it gets an
 empty scratch `CLAUDE_CONFIG_DIR`; inherited `ANTHROPIC_*`, `CLAUDE_CODE_USE_*` and
@@ -749,6 +754,26 @@ URL and the background model go in per-run `--settings`; the model is `--model`;
 the context window and output limit are set when declared; telemetry and
 non-essential traffic are off. The token never appears in argv, in a file the
 engine writes or in a result, and is redacted from transcripts.
+
+An OpenCode target reaches an endpoint of any of the three API shapes, so an
+internal OpenAI-compatible server (vLLM, TGI, Ollama) can be evaluated directly.
+It needs OpenCode 1.1.64 or later. Each run gets an inline config in
+`OPENCODE_CONFIG_CONTENT`: one provider, `playbook-target`, is the only enabled
+provider, with the SDK package for the API shape (`@ai-sdk/openai-compatible` for
+`openai-chat`, `@ai-sdk/openai` for `openai-responses`, `@ai-sdk/anthropic` for
+`anthropic`), the base URL (for `anthropic`, with the `/v1` the SDK expects
+appended unless `base_url` already ends in it), the token as an `{env:PLAYBOOK_ENDPOINT_TOKEN}`
+reference, the model and small model as served model ids, the declared context
+and output limits, and a zero built-in cost. The model is sent as
+`--model playbook-target/<model>`. The run gets empty scratch `XDG_CONFIG_HOME`,
+`XDG_DATA_HOME` and `XDG_STATE_HOME` directories, so your global OpenCode config,
+stored keys and sessions stay out, and `OPENCODE_DISABLE_CLAUDE_CODE=1` keeps your
+Claude Code instructions out. Inherited `OPENCODE_*`, `OTEL_*`, `ANTHROPIC_*` and
+`OPENAI_*` variables and every `*_API_KEY` are removed. OpenCode inserts the token
+into its config text unescaped, so a token holding a double quote, a backslash or
+a control character is a usage error (exit `2`) naming the variable. OpenCode runs
+with `--format json`: the transcript is its text events, the token totals are
+summed over its steps, and stderr is read apart.
 
 A result records the endpoint's name and a 12-character fingerprint of its URL,
 never the URL or the token (`target.endpoint` in the JSON report), and
