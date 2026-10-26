@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.evals.run.agent_env import unattended_agent_env
 from coding_agent_playbook.evals.run.claude_code_output import (
@@ -63,6 +63,13 @@ _DEFAULT_COMMAND: tuple[str, ...] = (_CLI, "-p", PROMPT_TOKEN, *JSON_OUTPUT_ARGS
 
 #: Default wall-clock bound (seconds) for one agent invocation.
 _DEFAULT_TIMEOUT = 600.0
+
+#: The permission mode of every routed (isolated) agent run. Why: the scratch repo
+#: is a throwaway sandbox, an isolated run has an empty ``CLAUDE_CONFIG_DIR`` (so no
+#: personal default mode or allow list), and ``-p`` auto-denies every permission
+#: prompt, so a sample that must write files would otherwise fail. Kept here, not in
+#: ``routed_argv``, because the judge calls that too and needs no tools.
+_ISOLATED_PERMISSION_ARGS: Final = ("--permission-mode", "bypassPermissions")
 
 
 class ClaudeCodeRunner(HarnessRunner):
@@ -109,8 +116,12 @@ class ClaudeCodeRunner(HarnessRunner):
         return shutil.which(_CLI) is not None
 
     def _build_command(self, prompt: str) -> list[str]:
-        """The argv for one run: the template with ``prompt`` and the model (``cli_argv``)."""
-        return routed_argv(build_cli_argv(self._command, prompt, self.model), self.route)
+        """The argv for one run: the template with ``prompt`` and the model (``cli_argv``).
+
+        A routed run also gets :data:`_ISOLATED_PERMISSION_ARGS`.
+        """
+        argv = routed_argv(build_cli_argv(self._command, prompt, self.model), self.route)
+        return argv if self.route is None else [*argv, *_ISOLATED_PERMISSION_ARGS]
 
     def _invoke_agent(self, prompt: str, scratch_dir: Path) -> AgentRun:
         """Run the configured command with ``cwd=scratch_dir`` and capture output.
