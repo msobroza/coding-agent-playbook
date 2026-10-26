@@ -13,11 +13,11 @@ import json
 import subprocess
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Final, Protocol
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
-    from pathlib import Path
 
 #: The commitizen this script runs, and the range the playbook-ci job installs.
 COMMITIZEN_REQUIREMENT: Final = "commitizen>=4.13,<5"
@@ -128,3 +128,24 @@ def commit_push_open(
         "pr", "create", "--base", MAIN_BRANCH, "--title", title, "--body-file", str(body_file)
     )
     return created.strip()
+
+
+def refuse_foreign_engine(checkout: Path, inner: str) -> None:
+    """Refuse unless the imported engine is ``checkout``'s own (``<checkout>/src``).
+
+    The scratch checkout's step runs with that ``src`` first on ``PYTHONPATH``,
+    but an engine installed elsewhere (a ``.pth`` file, an editable install) can
+    still win the import, and then the manifest or the pin digests would come
+    from that other engine.
+
+    Example::
+
+        >>> refuse_foreign_engine(Path("/tmp/elsewhere"), "freeze-checkout")  # doctest: +SKIP
+        Traceback (most recent call last):
+        ReleaseError: freeze-checkout imported the engine from ..., not /tmp/elsewhere
+    """
+    import coding_agent_playbook
+
+    engine = Path(coding_agent_playbook.__file__).resolve()
+    if not engine.is_relative_to((checkout / "src").resolve()):
+        raise ReleaseError(f"{inner} imported the engine from {engine}, not {checkout}")

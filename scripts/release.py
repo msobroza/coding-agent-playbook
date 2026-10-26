@@ -88,7 +88,15 @@ from release_edition import (
 )
 from release_tag import superseded, tag_release
 from release_tools import COMMITIZEN_REQUIREMENT as COMMITIZEN_REQUIREMENT
-from release_tools import MAIN_BRANCH, REMOTE, Runner, Tools, commit_push_open, on_branch
+from release_tools import (
+    MAIN_BRANCH,
+    REMOTE,
+    Runner,
+    Tools,
+    commit_push_open,
+    on_branch,
+    refuse_foreign_engine,
+)
 from release_tools import Completed as Completed
 from release_tools import ReleaseError as ReleaseError
 from release_tools import run_process as run_process
@@ -422,13 +430,10 @@ def _commits(tools: Tools, plan: Plan) -> list[CommitMessage]:
 
 def _default_snapshot(checkout: Path) -> Callable[[str], ReleaseManifest]:
     """The manifest builder of the checkout's own engine; refuses any other engine."""
-    import coding_agent_playbook
     from coding_agent_playbook.catalog.roots import catalog_root
     from coding_agent_playbook.release.snapshot import build_manifest, shipped_source
 
-    engine = Path(coding_agent_playbook.__file__).resolve()
-    if not engine.is_relative_to((checkout / "src").resolve()):
-        raise ReleaseError(f"prepare-checkout imported the engine from {engine}, not {checkout}")
+    refuse_foreign_engine(checkout, "prepare-checkout")
     catalog = catalog_root()
 
     def snapshot(base: str) -> ReleaseManifest:
@@ -467,12 +472,18 @@ def main(
     cwd: Path | None = None,
     runner: Runner = run_process,
     snapshot: Callable[[str], ReleaseManifest] | None = None,
+    engine_guard: Callable[[Path, str], None] = refuse_foreign_engine,
 ) -> int:
-    """Run ``release.py``; returns the exit code (argparse exits 2 on a usage error)."""
+    """Run ``release.py``; returns the exit code (argparse exits 2 on a usage error).
+
+    ``engine_guard(checkout, command)`` runs before ``freeze-checkout`` and
+    ``unfreeze-checkout`` write anything (``prepare-checkout``'s default
+    snapshot runs the same guard).
+    """
     args = _parser().parse_args(argv)
     here = Path.cwd() if cwd is None else cwd
     try:
-        return _dispatch(args, Tools(runner, here), snapshot)
+        return _dispatch(args, Tools(runner, here), snapshot, engine_guard)
     # ValueError: a bad manifest, digests file, sample or graded set, each naming its file.
     except (ReleaseError, EditionRefusal, TagRefusal, PromptResolutionError, ValueError) as exc:
         print(f"release: {exc}", file=sys.stderr)
@@ -480,7 +491,10 @@ def main(
 
 
 def _dispatch(
-    args: argparse.Namespace, tools: Tools, snapshot: Callable[[str], ReleaseManifest] | None
+    args: argparse.Namespace,
+    tools: Tools,
+    snapshot: Callable[[str], ReleaseManifest] | None,
+    engine_guard: Callable[[Path, str], None],
 ) -> int:
     command: str = args.command
     if command == "prepare":
@@ -496,6 +510,7 @@ def _dispatch(
         build = _default_snapshot(tools.cwd) if snapshot is None else snapshot
         url = prepare_checkout(tools, base=args.base, version=args.version, snapshot=build)
     else:
+        engine_guard(tools.cwd, command)
         name = command.removesuffix("-checkout")
         url = edition_checkout(tools, base=args.base, command=name, tag=args.tag)
     print(f"release: opened {url}")

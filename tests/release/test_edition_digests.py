@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from coding_agent_playbook.release.edition_digests import (
+    NOTICE_KIND,
     EditionArtifact,
     EditionDigests,
     EditionDigestsError,
@@ -30,6 +31,17 @@ def test_render_then_parse_gives_the_same_digests_with_entries_sorted() -> None:
     parsed = parse_edition_digests(render_edition_digests(_digests()))
 
     assert parsed == EditionDigests("v9.9.9", "f00d", (_PROMPT, _RULE), (_PIN,))
+
+
+def test_a_notice_round_trips_and_an_unknown_kind_is_refused() -> None:
+    path = "core/skills/python-coding/references/LICENSE.python-best-practices"
+    notice = EditionArtifact(NOTICE_KIND, path, path, "ee")
+    digests = EditionDigests("v9.9.9", "f00d", (_PROMPT, notice), ())
+
+    assert parse_edition_digests(render_edition_digests(digests)).artifacts == (notice, _PROMPT)
+    text = render_edition_digests(digests).replace(f'"{NOTICE_KIND}"', '"skill"')
+    with pytest.raises(EditionDigestsError, match="'skill'"):
+        parse_edition_digests(text)
 
 
 def test_rendered_digests_file_says_it_is_never_edited_by_hand() -> None:

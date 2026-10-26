@@ -55,6 +55,7 @@ from coding_agent_playbook.evals.task_registry import (
 from coding_agent_playbook.evals.validator import validate_samples
 from coding_agent_playbook.grading.types import CheckResult
 from tests._catalog import CORE_ROOT, bundled_eval_sample_roots
+from tests.edition_fixtures import write_sample
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -232,20 +233,26 @@ def describe(result: CheckResult) -> str:
 
 def _shipped_sample_dirs() -> list[Path]:
     """Core's eval samples, then every bundled plugin's (eval samples are per layer)."""
+    return _layer_sample_dirs(bundled_eval_sample_roots())
+
+
+def _layer_sample_dirs(roots: list[Path]) -> list[Path]:
+    """The sample directories under each ``<layer>/eval_samples`` root, loaded as their layer."""
     return [
         sample.source_path.parent
-        for root in bundled_eval_sample_roots()
+        for root in roots
         for sample in load_layer_samples(root, _layer_package(root))
     ]
 
 
 def _layer_package(samples_root: Path) -> str:
-    """Core's samples load as the engine's, as the artifact source loads them.
+    """Core's samples (``.../core/eval_samples``) load as the engine's, as the artifact source does.
 
     Only the engine's samples may pin an edition (``evals.sample``), so loading
     core as ``"core"`` would refuse the first pinned sample (#281 ticket 13).
     """
-    return ENGINE_PACKAGE if samples_root == _SAMPLES_ROOT else samples_root.parent.name
+    layer = samples_root.parent.name
+    return ENGINE_PACKAGE if layer == CORE_ROOT.name else layer
 
 
 def _sample_id(sample_dir: Path) -> str:
@@ -270,7 +277,12 @@ def _load(sample_dir: Path, package: str = ENGINE_PACKAGE) -> EvalSample:
     return load_task_sample(sample_dir, source_package=package)
 
 
-def test_core_samples_are_collected_as_the_engines_so_a_pinned_one_loads() -> None:
+def test_core_samples_are_collected_as_the_engines_so_a_pinned_one_loads(tmp_path: Path) -> None:
+    """Regression (#319 review): a pinned core sample goes through the shipped-sample collection."""
+    core = tmp_path / "catalog" / CORE_ROOT.name
+    pinned = write_sample(core, edition="v9.9.9")
+
+    assert _layer_sample_dirs([core / _SAMPLES_ROOT.name]) == [pinned]
     assert _layer_package(_SAMPLES_ROOT) == ENGINE_PACKAGE
 
 

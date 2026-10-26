@@ -1,7 +1,8 @@
 """``build_edition`` copies a fake tag's graded set into a scratch catalog (#281 ticket 14).
 
 Real git, isolated by the ``real_git`` fixture, on a scratch repo: tag ``v9.9.9``
-records a manifest grading the prompt ``review``; ``v9.9.7`` has no manifest.
+records a manifest grading the prompt ``review`` and carries core's
+``ATTRIBUTIONS.md``; ``v9.9.7`` has no manifest.
 """
 
 from __future__ import annotations
@@ -28,6 +29,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 PROMPT = "catalog/core/prompts/review.md"
+ATTRIBUTIONS = "catalog/core/ATTRIBUTIONS.md"
+CREDITS = b"# Attributions\r\n\r\nUpstream text, MIT.\r\n"
 FROZEN = (
     b"---\r\nid: review\r\nname: Review\r\ndescription: R.\r\nslash: review\r\n---\r\nFrozen.\r\n"
 )
@@ -37,6 +40,7 @@ def _tagged_repo(real_git: Callable[..., str], tmp_path: Path) -> Path:
     repo = tmp_path / "repo"
     (repo / PROMPT).parent.mkdir(parents=True)
     (repo / PROMPT).write_bytes(FROZEN)
+    (repo / ATTRIBUTIONS).write_bytes(CREDITS)
     real_git("init", "-q", cwd=repo)
     real_git("add", "-A", cwd=repo)
     real_git("commit", "-q", "-m", "feat: the graded set", cwd=repo)
@@ -63,6 +67,17 @@ def test_an_edition_is_built_byte_for_byte_from_its_tag(
     assert (root / "core/prompts/review.md").read_bytes() == FROZEN
     assert load_edition(root).prompt("review").frontmatter.id == "review"
     assert not (repo / "catalog" / "editions").exists()
+
+
+def test_a_built_edition_carries_the_notices_freeze_copies(
+    real_git: Callable[..., str], tmp_path: Path
+) -> None:
+    # eval --compare edition:<tag> must grade the same files freeze commits.
+    repo = _tagged_repo(real_git, tmp_path)
+
+    root = build_edition(repo, "v9.9.9", tmp_path / "scratch")
+
+    assert (root / "core/ATTRIBUTIONS.md").read_bytes() == CREDITS
 
 
 def test_a_missing_tag_has_no_commit(real_git: Callable[..., str], tmp_path: Path) -> None:

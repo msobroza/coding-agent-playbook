@@ -11,7 +11,7 @@ small file that says what the copy is and what the pins froze::
     commit = "<sha>"               # the commit that tag names
 
     [[artifacts]]                  # the id-to-path map, one entry per frozen file
-    kind = "prompt"                # "prompt" or "rule"
+    kind = "prompt"                # "prompt", "rule" or "notice"
     id = "review"
     path = "core/prompts/review.md.j2"   # relative to the edition directory
     sha256 = "<sha256 of the file's bytes>"
@@ -20,6 +20,11 @@ small file that says what the copy is and what the pins froze::
     sample = "review/spot-the-bug"
     rendered_prompt_digest = "<sha256 of the prompt text the sample renders>"
     sample_digest = "<evals.sample_digest.sample_digest of the sample>"
+
+A ``notice`` is a license or attribution file the frozen rule text needs (the
+vendored sources' ``references/LICENSE.<source>`` and ``core/ATTRIBUTIONS.md``,
+``release.edition_notices``); its id is its path. It is copied and checked like
+any frozen file, but the edition loader reads no notice.
 
 The sample digest covers ``sample.toml`` as pinned: it is taken after
 ``edition = "<tag>"`` is written into it. The edition directory holds only the
@@ -46,6 +51,7 @@ __all__ = [
     "DIGESTS_FILENAME",
     "EDITIONS_DIRNAME",
     "EDITION_KINDS",
+    "NOTICE_KIND",
     "EditionArtifact",
     "EditionDigests",
     "EditionDigestsError",
@@ -61,6 +67,9 @@ EDITIONS_DIRNAME: Final = "editions"
 DIGESTS_FILENAME: Final = "digests.toml"
 #: Editions copy the graded set only: prompts and the rules they include.
 EDITION_KINDS: Final = ("prompt", "rule")
+#: A license or attribution file the frozen text needs; its id is its edition path.
+NOTICE_KIND: Final = "notice"
+_ARTIFACT_KINDS: Final = (*EDITION_KINDS, NOTICE_KIND)
 #: Every frozen file lives under the edition's copy of the engine layer.
 _CORE_PREFIX: Final = "core"
 _SCHEMA_VERSION: Final = 1
@@ -212,9 +221,9 @@ def _tables(data: dict[str, Any], key: str, keys: tuple[str, ...]) -> list[dict[
 
 def _artifact(table: dict[str, str]) -> EditionArtifact:
     artifact = EditionArtifact(*(table[key] for key in _ARTIFACT_KEYS))
-    if artifact.kind not in EDITION_KINDS:
+    if artifact.kind not in _ARTIFACT_KINDS:
         raise EditionDigestsError(
-            f"artifact kind {artifact.kind!r}; expected one of {EDITION_KINDS}"
+            f"artifact kind {artifact.kind!r}; expected one of {_ARTIFACT_KINDS}"
         )
     path = PurePosixPath(artifact.path)
     if path.is_absolute() or ".." in path.parts or path.parts[:1] != (_CORE_PREFIX,):
