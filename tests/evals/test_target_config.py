@@ -9,6 +9,7 @@ import pytest
 from coding_agent_playbook.config.schema import ConfigError
 from coding_agent_playbook.evals.target_config import load_eval_settings, parse_eval_settings
 from coding_agent_playbook.evals.targets import JudgeSettings
+from coding_agent_playbook.evals.token_usage import TokenPrice
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -86,7 +87,7 @@ def test_no_config_files_are_the_zero_config_defaults(tmp_path: Path) -> None:
         ({"price": {}}, {}, r"\.coding-agent-playbook\.toml: \[evals\] has unknown key"),
         ({}, {"release": []}, r"local\.toml: \[evals\] has unknown key\(s\) \['release'\]"),
         ({"targets": {"t": {"model": "m"}}}, {}, r"\[evals\.targets\.t\] needs harness"),
-        ({"targets": {"t": {"harness": "x", "price": 1}}}, {}, r"unknown key\(s\) \['price'\]"),
+        ({"targets": {"t": {"harness": "x", "seed": 1}}}, {}, r"unknown key\(s\) \['seed'\]"),
         ({"targets": {"t": {"harness": "x", "runs": 0}}}, {}, r"runs must be an integer >= 1"),
         ({"targets": {"t": {"harness": "x", "runs": True}}}, {}, r"runs must be an integer"),
         ({"targets": {"t": {"harness": "x", "model": ""}}}, {}, r"model must be a non-empty"),
@@ -123,3 +124,25 @@ def test_committed_default_cannot_name_a_local_target() -> None:
 def test_defaults_may_be_a_shorthand() -> None:
     settings = parse_eval_settings({"default": "opencode:my-org/coder"}, {})
     assert settings.committed_default == "opencode:my-org/coder"
+
+
+def test_a_target_price_is_usd_per_million_tokens() -> None:
+    spec = {"harness": "opencode", "model": "m", "price": {"input": 0.5, "output": 2}}
+    target = parse_eval_settings({"targets": {"t": spec}}, {}).targets["t"]
+    assert target.price == TokenPrice(input_per_million=0.5, output_per_million=2.0)
+    assert parse_eval_settings({"targets": {"u": {"harness": "x"}}}, {}).targets["u"].price is None
+
+
+@pytest.mark.parametrize(
+    ("price", "message"),
+    [
+        ({"input": 1.0}, r"price must have exactly the keys \['input', 'output'\]"),
+        ({"input": 1.0, "output": -1}, r"price\.output must be a number >= 0"),
+        ({"input": True, "output": 1}, r"price\.input must be a number >= 0"),
+        ("cheap", r"price must be a table"),
+    ],
+)
+def test_a_misread_price_is_refused(price: object, message: str) -> None:
+    spec = {"harness": "opencode", "price": price}
+    with pytest.raises(ConfigError, match=message):
+        parse_eval_settings({"targets": {"t": spec}}, {})

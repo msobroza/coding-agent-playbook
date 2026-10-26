@@ -15,6 +15,7 @@ list; the local file may add targets, change the default and override
     model = "claude-opus-5-5"   # sent unchanged
     runs = 3                    # optional
     label = "Claude Opus"       # optional, display only
+    price = { input = 3.0, output = 15.0 }  # optional, USD per million tokens
 
     [evals.targets.internal-claude]
     harness = "claude_code"
@@ -59,6 +60,7 @@ from coding_agent_playbook.evals.targets import (
     TargetError,
     lookup_target,
 )
+from coding_agent_playbook.evals.token_usage import TokenPrice
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -67,7 +69,11 @@ if TYPE_CHECKING:
     from coding_agent_playbook.evals.endpoints import Endpoint
 
 #: The keys of one ``[evals.targets.<name>]`` table.
-_TARGET_KEYS: Final = frozenset({"harness", "model", "runs", "label", "endpoint", "small_model"})
+_TARGET_KEYS: Final = frozenset(
+    {"harness", "model", "runs", "label", "price", "endpoint", "small_model"}
+)
+#: The keys of a target's ``price`` table: USD per million tokens, both required.
+_PRICE_KEYS: Final = frozenset({"input", "output"})
 #: The keys of ``[evals]`` in the committed file.
 _COMMITTED_KEYS: Final = frozenset({"default", "release", "targets", "judge", "endpoints"})
 #: The keys of ``[evals]`` in the local file: no ``release`` (release metrics are the team's).
@@ -164,9 +170,36 @@ def _target(name: str, value: object, source: str, endpoints: Mapping[str, Endpo
         source=source,
         endpoint=_endpoint_ref(spec, source, label, endpoints),
         small_model=optional_text(spec, "small_model", source, label),
+        price=_price(spec, source, label),
     )
     _check_target_endpoint(target, source, label)
     return target
+
+
+def _price(spec: Mapping[str, object], source: str, label: str) -> TokenPrice | None:
+    """A target's optional ``price = { input = <usd>, output = <usd> }`` per million tokens."""
+    if "price" not in spec:
+        return None
+    price = table(spec["price"], source, f"{label} price")
+    if set(price) != _PRICE_KEYS:
+        raise ConfigError(
+            f"{source}: {label} price must have exactly the keys {sorted(_PRICE_KEYS)} "
+            f"(USD per million tokens), got {sorted(price)}"
+        )
+    return TokenPrice(
+        input_per_million=_usd(price, "input", source, label),
+        output_per_million=_usd(price, "output", source, label),
+    )
+
+
+def _usd(price: Mapping[str, object], key: str, source: str, label: str) -> float:
+    value = price[key]
+    if isinstance(value, bool) or not isinstance(value, int | float) or value < 0:
+        raise ConfigError(
+            f"{source}: {label} price.{key} must be a number >= 0 (USD per million tokens), "
+            f"got {value!r}"
+        )
+    return float(value)
 
 
 def _endpoint_ref(

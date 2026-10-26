@@ -127,6 +127,20 @@ def render_prompt(
     return f"{body}\n\n{args}".rstrip() if args else body
 
 
+def resolve_sample_prompt(
+    sample: EvalSample, prompt_set: PromptSet = DEFAULT_PROMPT_SET
+) -> Prompt | None:
+    """The :class:`Prompt` ``sample`` grades in ``prompt_set`` (as :func:`render_prompt` finds it).
+
+    ``None`` when the sample's layer has no prompt with its ``prompt_id``.
+
+    Example::
+
+        resolve_sample_prompt(sample).frontmatter.id  # "review"
+    """
+    return _resolve_prompt(sample, require_prompt_set(prompt_set))
+
+
 def _placeholder(sample: EvalSample, *, strict: bool) -> str:
     """The unresolvable-prompt fallback: a placeholder, or a strict-mode error."""
     if strict:
@@ -321,4 +335,4 @@ def _infer_prompts_dir(sample_toml: Path) -> Path | None:
     return sample_toml.parents[2] / "prompts"
 
 
-__all__ = ["PromptResolutionError", "render_prompt"]
+__all__ = ["PromptResolutionError", "render_prompt", "resolve_sample_prompt"]

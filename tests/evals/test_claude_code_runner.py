@@ -18,7 +18,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from coding_agent_playbook.evals.endpoints import Endpoint
 from coding_agent_playbook.evals.prompting import PromptResolutionError, render_prompt
+from coding_agent_playbook.evals.run.claude_code_route import ClaudeCodeRoute
 from coding_agent_playbook.evals.run.claude_code_runner import ClaudeCodeRunner
 from coding_agent_playbook.evals.run.fake_runner import write_files
 from coding_agent_playbook.evals.run.harness_runner import AgentRun, materialize
@@ -268,8 +270,69 @@ def test_target_model_reaches_the_cli_unchanged(tmp_path: Path) -> None:
 
 def test_default_command_with_a_model_adds_the_model_flag() -> None:
     runner = ClaudeCodeRunner(model="claude-opus-5-5")
-    assert runner._build_command("p") == ["claude", "-p", "p", "--model", "claude-opus-5-5"]
+    assert runner._build_command("p") == [
+        "claude",
+        "-p",
+        "p",
+        "--output-format",
+        "json",
+        "--model",
+        "claude-opus-5-5",
+    ]
 
 
 def test_no_model_leaves_the_cli_on_its_default_model() -> None:
     assert "--model" not in ClaudeCodeRunner()._build_command("p")
+
+
+# --------------------------------------------------------------------------- #
+# JSON output: answer, token usage and reported model (spec #281 ticket 07)
+# --------------------------------------------------------------------------- #
+
+_RESULT_JSON = (
+    '{"type": "result", "subtype": "success", "is_error": %s, "result": "the answer", '
+    '"total_cost_usd": 99.0, "modelUsage": {"claude-opus-5-5": {"inputTokens": 100, '
+    '"cacheReadInputTokens": 20, "cacheCreationInputTokens": 5, "outputTokens": 40}}}'
+)
+
+
+def _printing(stdout: str, exit_code: int = 0) -> list[str]:
+    """A command that prints ``stdout`` and exits with ``exit_code``, standing in for ``claude``."""
+    program = f"import sys; sys.stdout.write({stdout!r}); sys.exit({exit_code})"
+    return [sys.executable, "-c", program]
+
+
+def test_json_result_gives_the_answer_tokens_and_model(tmp_path: Path) -> None:
+    runner = ClaudeCodeRunner(command=_printing(_RESULT_JSON % "false"), model="claude-opus-5-5")
+
+    run = runner._invoke_agent("p", tmp_path)
+
+    assert run.transcript == "the answer"
+    assert run.returncode == 0
+    assert run.reported_model == "claude-opus-5-5"
+    assert run.usage is not None
+    assert (run.usage.input_tokens, run.usage.output_tokens) == (125, 40)
+
+
+def test_json_error_with_exit_zero_counts_as_a_failed_run(tmp_path: Path) -> None:
+    run = ClaudeCodeRunner(command=_printing(_RESULT_JSON % "true"))._invoke_agent("p", tmp_path)
+    assert run.returncode == 1
+
+
+def test_non_json_output_is_kept_as_the_transcript_without_usage(tmp_path: Path) -> None:
+    run = ClaudeCodeRunner(command=_printing("plain text"))._invoke_agent("p", tmp_path)
+    assert (run.transcript, run.usage, run.reported_model) == ("plain text", None, None)
+
+
+def test_routed_json_run_parses_usage_and_redacts_the_token(tmp_path: Path) -> None:
+    # Ticket 06 x 07: an endpoint run still reads the JSON result, and a token the
+    # agent echoed never reaches the transcript the judge grades.
+    route = ClaudeCodeRoute(Endpoint("e", "anthropic", "https://x"), "internal-opus", token="t0k3n")
+    stdout = (_RESULT_JSON % "false").replace("the answer", "leaked t0k3n")
+    runner = ClaudeCodeRunner(command=_printing(stdout), model="internal-opus", route=route)
+
+    run = runner._invoke_agent("p", tmp_path)
+
+    assert run.transcript == "leaked [redacted]"
+    assert run.usage is not None
+    assert run.usage.output_tokens == 40

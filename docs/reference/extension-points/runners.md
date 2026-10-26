@@ -11,7 +11,9 @@ implements `_invoke_agent`. A runner that can drive a chosen model sets
 is refused for any other runner. Likewise a runner that can reach a custom endpoint
 sets `accepts_endpoint = True` and takes `route=` (`claude_code` and `opencode`
 do; an `OpenCodeRunner` subclass gets the OpenCode route, any other runner the
-Claude Code one); a target with an endpoint is refused for any other runner:
+Claude Code one); a target with an endpoint is refused for any other runner. A
+runner that drives a CLI sets `cli` to its executable, whose `--version` release
+metrics record, and may fill `AgentRun.usage` with the run's token counts:
 
 ```toml
 [project.entry-points."coding_agent_playbook.runners"]

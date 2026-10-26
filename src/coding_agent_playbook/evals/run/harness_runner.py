@@ -43,6 +43,7 @@ from coding_agent_playbook.catalog.prompt_sets import DEFAULT_PROMPT_SET, Prompt
 from coding_agent_playbook.evals.prompting import render_prompt
 from coding_agent_playbook.evals.run.git_env import without_repo_location
 from coding_agent_playbook.evals.run.scoring import score
+from coding_agent_playbook.evals.token_usage import TokenUsage, sum_usage
 
 if TYPE_CHECKING:
     from coding_agent_playbook.evals.sample import EvalSample
@@ -66,12 +67,14 @@ class AgentRun:
 
     ``returncode`` is ``0`` when the agent loop completed; ``transcript`` is the
     captured conversation/log (the judge's ``artifact`` in R2). ``reported_model``
-    is the model id the harness says it ran, when its output reports one.
+    is the model id the harness says it ran, when its output reports one, and
+    ``usage`` its token counts (``None`` when the harness reports none).
     """
 
     transcript: str
     returncode: int
     reported_model: str | None = None
+    usage: TokenUsage | None = None
 
 
 @dataclass
@@ -85,6 +88,7 @@ class _Trial:
     result: TrialResult
     transcript: str
     reported_model: str | None = None
+    usage: TokenUsage | None = None
 
 
 @dataclass
@@ -113,6 +117,8 @@ class SampleResult:
     ``endpoint`` and ``endpoint_fingerprint`` name the target's endpoint and a
     digest of its URL (never the URL); ``None`` when the run used the harness's
     personal settings.
+    ``usage`` is the token usage summed over every trial (``None`` when any
+    trial's harness reported none).
     """
 
     sample_id: str
@@ -129,6 +135,7 @@ class SampleResult:
     reported_model: str | None = None
     endpoint: str | None = None
     endpoint_fingerprint: str | None = None
+    usage: TokenUsage | None = None
 
 
 @dataclass
@@ -374,6 +381,9 @@ class HarnessRunner(ABC):
     """
 
     name: str
+    #: The executable a real runner drives (its ``--version`` names the harness
+    #: version in release metrics); ``None`` for a runner with no CLI.
+    cli: str | None = None
     #: Whether the constructor takes ``model=`` (an Eval target's model). The
     #: CLI runners do; a runner that does not is refused for a target with a model.
     accepts_model: bool = False
@@ -442,6 +452,7 @@ class HarnessRunner(ABC):
         n = compiled.trials_needed
 
         trials: list[TrialResult] = []
+        usages: list[TokenUsage | None] = []
         first: _Trial | None = None
         for i in range(n):
             # Each trial gets its own scratch subdir so a fresh setup/ is
@@ -457,11 +468,14 @@ class HarnessRunner(ABC):
                 fail_fast=fail_fast,
             )
             trials.append(trial.result)
+            usages.append(trial.usage)
             if first is None:
                 first = trial
 
         assert first is not None  # trials_needed is always >= 1
-        return self._assemble(sample, compiled.aggregate, trials, first, started)
+        result = self._assemble(sample, compiled.aggregate, trials, first, started)
+        result.usage = sum_usage(usages)
+        return result
 
     def _run_trial(
         self,
@@ -498,6 +512,7 @@ class HarnessRunner(ABC):
             result=TrialResult(report=report, verdict=report.passed),
             transcript=run.transcript,
             reported_model=run.reported_model,
+            usage=run.usage,
         )
 
     def _assemble(

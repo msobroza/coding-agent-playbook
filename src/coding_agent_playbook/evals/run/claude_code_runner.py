@@ -23,7 +23,9 @@ driving the agent with the FakeRunner's placeholder.
 The exact CLI contract is **configurable**, not hard-locked: ``command`` is an
 arg-list template (with an optional ``{prompt}`` token interpolated per call) and
 ``timeout`` bounds the run. The default targets the ``claude`` CLI in
-non-interactive *print* mode (``claude -p <prompt>``) run with ``cwd=scratch_dir``.
+non-interactive *print* mode with JSON output (``claude -p <prompt> --output-format
+json``) run with ``cwd=scratch_dir``: the result object carries the answer, the
+token usage and the model that ran (``claude_code_output``).
 
 Registered under the ``coding_agent_playbook.runners`` entry-point group as
 ``claude_code`` (see ``pyproject.toml``); discover it via that group rather than
@@ -37,6 +39,10 @@ import subprocess
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.evals.run.agent_env import unattended_agent_env
+from coding_agent_playbook.evals.run.claude_code_output import (
+    JSON_OUTPUT_ARGS,
+    parse_claude_code_output,
+)
 from coding_agent_playbook.evals.run.claude_code_route import routed_argv, routed_env
 from coding_agent_playbook.evals.run.cli_argv import PROMPT_TOKEN, build_cli_argv
 from coding_agent_playbook.evals.run.harness_runner import AgentRun, HarnessRunner
@@ -50,9 +56,10 @@ if TYPE_CHECKING:
 #: Name of the Claude Code executable looked up on ``PATH``.
 _CLI = "claude"
 
-#: Default command: the ``claude`` CLI in non-interactive print mode. The bare
-#: ``{prompt}`` token is interpolated with the rendered prompt per invocation.
-_DEFAULT_COMMAND: tuple[str, ...] = (_CLI, "-p", PROMPT_TOKEN)
+#: Default command: the ``claude`` CLI in non-interactive print mode, printing one
+#: JSON result object (token usage and model, ticket 07). The bare ``{prompt}``
+#: token is interpolated with the rendered prompt per invocation.
+_DEFAULT_COMMAND: tuple[str, ...] = (_CLI, "-p", PROMPT_TOKEN, *JSON_OUTPUT_ARGS)
 
 #: Default wall-clock bound (seconds) for one agent invocation.
 _DEFAULT_TIMEOUT = 600.0
@@ -72,6 +79,7 @@ class ClaudeCodeRunner(HarnessRunner):
     """
 
     name = "claude_code"
+    cli = _CLI
     requires_resolved_prompt = True
     accepts_model = True
     accepts_endpoint = True
@@ -105,8 +113,10 @@ class ClaudeCodeRunner(HarnessRunner):
     def _invoke_agent(self, prompt: str, scratch_dir: Path) -> AgentRun:
         """Run the configured command with ``cwd=scratch_dir`` and capture output.
 
-        stdout and stderr are merged into the transcript; the process return code
-        is recorded (``0`` = the agent loop completed). No shell is used — the
+        When stdout is the JSON result object its answer is the transcript and its
+        token usage and model are recorded; otherwise stdout is kept as is. stderr
+        is appended either way. The return code is the process's, or ``1`` when it
+        exits ``0`` but reports ``is_error``. No shell is used — the
         command is an explicit arg-list — and the working directory is the agent's
         scratch repo so any edits land in the tree the scoring layers read. The
         child env is marked unattended, so lifecycle-hook asks degrade to deny; on
@@ -122,9 +132,26 @@ class ClaudeCodeRunner(HarnessRunner):
                 timeout=self._timeout,
                 check=False,
             )
-        transcript = completed.stdout
-        if completed.stderr:
-            transcript = f"{transcript}{completed.stderr}" if transcript else completed.stderr
-        if self.route is not None:
-            transcript = self.route.redact(transcript)
-        return AgentRun(transcript=transcript, returncode=completed.returncode)
+        stdout, stderr = self._redact(completed.stdout), self._redact(completed.stderr)
+        parsed = parse_claude_code_output(stdout, self.model)
+        if parsed is None:
+            return AgentRun(_with_stderr(stdout, stderr), completed.returncode)
+        # A failed run says so in is_error; never count it as completed.
+        returncode = completed.returncode or (1 if parsed.is_error else 0)
+        return AgentRun(
+            transcript=_with_stderr(parsed.transcript, stderr),
+            returncode=returncode,
+            reported_model=parsed.reported_model,
+            usage=parsed.usage,
+        )
+
+    def _redact(self, text: str) -> str:
+        """``text`` with the endpoint token removed; unchanged without a route."""
+        return text if self.route is None else self.route.redact(text)
+
+
+def _with_stderr(transcript: str, stderr: str) -> str:
+    """``transcript`` followed by ``stderr`` (the CLI's warnings), when there is any."""
+    if not stderr:
+        return transcript
+    return f"{transcript}{stderr}" if transcript else stderr

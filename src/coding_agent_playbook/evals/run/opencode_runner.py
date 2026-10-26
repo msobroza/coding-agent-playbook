@@ -90,6 +90,7 @@ class OpenCodeRunner(HarnessRunner):
     """
 
     name = "opencode"
+    cli = _CLI
     requires_resolved_prompt = True
     accepts_model = True
     accepts_endpoint = True
