@@ -45,7 +45,7 @@ from coding_agent_playbook.evals.run.cli_argv import PROMPT_TOKEN, build_cli_arg
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from coding_agent_playbook.evals.run.claude_code_route import ClaudeCodeRoute
+    from coding_agent_playbook.evals.run.claude_code_route import ClaudeCodeIsolation
 
 
 class JudgeError(RuntimeError):
@@ -200,7 +200,8 @@ class LLMJudge(Judge):
     :class:`JudgeError`. ``model`` (``[evals.judge] model``) is passed as
     ``--model <model>``, exactly as written; ``None`` keeps the CLI's default.
     ``route`` (``[evals.judge] endpoint``) isolates each grading and points it at
-    that endpoint; ``None`` keeps the CLI's own settings and login.
+    that endpoint; under ``--record`` without an endpoint, a ``ClaudeCodeKeyRoute``
+    isolates it on an API key. ``None`` keeps the CLI's own settings and login.
 
     Opt-in and **never run in CI**: no top-level import needs the CLI, the
     executable is discovered at call time, and :meth:`available` is ``False`` when
@@ -218,7 +219,7 @@ class LLMJudge(Judge):
         timeout: float = _DEFAULT_TIMEOUT,
         retries: int = _DEFAULT_RETRIES,
         model: str | None = None,
-        route: ClaudeCodeRoute | None = None,
+        route: ClaudeCodeIsolation | None = None,
     ) -> None:
         if retries < 0:
             raise ValueError(f"LLMJudge retries must be >= 0, got {retries}")

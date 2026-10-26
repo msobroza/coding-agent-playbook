@@ -9,8 +9,10 @@ import pytest
 
 from coding_agent_playbook.evals.endpoints import Endpoint, EndpointError
 from coding_agent_playbook.evals.run.claude_code_route import (
+    ClaudeCodeKeyRoute,
     ClaudeCodeRoute,
     claude_code_route,
+    routed_argv,
     routed_env,
 )
 
@@ -150,3 +152,40 @@ def test_routed_env_without_a_route_keeps_the_base() -> None:
         assert env == {"PATH": "/bin"}
     with routed_env(None, None) as inherited:
         assert inherited is None
+
+
+_KEY = "fake-record-key"
+
+
+def test_key_route_env_is_isolated_and_carries_only_the_key() -> None:
+    # #329 ticket 02: a record run without an endpoint, on Anthropic's API.
+    parent = {**_PARENT_ENV, "CLAUDE_CONFIG_DIR": "/home/dev/.claude"}
+    env = ClaudeCodeKeyRoute(_KEY).child_env(parent, Path("/scratch/claude-config"))
+    assert env["ANTHROPIC_API_KEY"] == _KEY
+    assert env["CLAUDE_CONFIG_DIR"] == "/scratch/claude-config"
+    for dropped in (
+        "ANTHROPIC_BASE_URL",
+        "ANTHROPIC_MODEL",
+        "CLAUDE_CODE_USE_BEDROCK",
+        "CLAUDE_CODE_OAUTH_TOKEN",
+        "CLOUD_ML_REGION",
+        "ANTHROPIC_AUTH_TOKEN",
+    ):
+        assert dropped not in env, dropped
+    assert env["PATH"] == "/usr/bin"
+    assert env["DISABLE_TELEMETRY"] == "1"
+
+
+def test_key_route_adds_no_settings_and_keeps_the_key_out_of_argv_and_repr() -> None:
+    route = ClaudeCodeKeyRoute(_KEY)
+    assert routed_argv(["claude", "-p", "hi"], route) == ["claude", "-p", "hi"]
+    assert _KEY not in repr(route)
+    assert route.redact(f"401 for {_KEY}") == "401 for [redacted]"
+
+
+def test_routed_env_on_a_key_route_gives_a_fresh_empty_config_dir() -> None:
+    with routed_env(ClaudeCodeKeyRoute(_KEY), _PARENT_ENV) as env:
+        assert env is not None
+        config_dir = Path(env["CLAUDE_CONFIG_DIR"])
+        assert list(config_dir.iterdir()) == []
+    assert not config_dir.exists()
