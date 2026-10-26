@@ -25,6 +25,7 @@ was recorded on the same base commit).
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 import shutil
@@ -51,7 +52,7 @@ from coding_agent_playbook.release.manifest import release_dir
 from release_tools import ReleaseError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Callable, Iterator, Mapping, Sequence
 
     from release_tools import Tools
 
@@ -130,7 +131,7 @@ def record_release_metrics(
     On a refusal the recorded files are copied to a kept directory, named in the error.
     """
     out_dir = release_dir(tools.cwd / _CATALOG, version) / METRICS_DIRNAME
-    try:
+    with metrics_kept_on_refusal(tools.cwd, version, request):
         recorded: dict[str, dict[str, object]] = {}
         for name in targets.names:
             metrics = _recorded(tools, name, out_dir, targets.judged, request.reuse, base)
@@ -140,9 +141,26 @@ def record_release_metrics(
         for outcome in checked:
             _write(out_dir / f"{outcome.name}.json", outcome.metrics)
         _refuse_blocked(checked)
+    return checked
+
+
+@contextlib.contextmanager
+def metrics_kept_on_refusal(checkout: Path, version: str, request: EvalRequest) -> Iterator[None]:
+    """On a ``ReleaseError`` inside, copy ``version``'s recorded metrics out and name them.
+
+    The release branch is discarded on any refusal, so a refusal after recording
+    (cz bump, commit, push, ``pr create``) would otherwise lose paid runs.
+
+    Example::
+
+        >>> with metrics_kept_on_refusal(checkout, "9.9.9", request):  # doctest: +SKIP
+        ...     publish()
+    """
+    out_dir = release_dir(checkout / _CATALOG, version) / METRICS_DIRNAME
+    try:
+        yield
     except ReleaseError as exc:
         raise ReleaseError(f"{exc}\n{_kept_note(out_dir, request.make_kept_dir)}") from exc
-    return checked
 
 
 def metrics_body(outcomes: Sequence[TargetMetrics]) -> str:

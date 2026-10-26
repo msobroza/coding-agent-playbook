@@ -93,9 +93,11 @@ def _previous(target: str, mean: float = 0.9) -> dict[str, Any]:
     return metrics_file(_OLD, samples, target=target)
 
 
-def _host(**recordings: dict[str, Any]) -> FakeReleaseHost:
+def _host(fail_on: str | None = None, **recordings: dict[str, Any]) -> FakeReleaseHost:
     named = {name.replace("_", "-"): data for name, data in recordings.items()}
-    return FakeReleaseHost(tags=[f"v{_OLD}"], cz_next={(): (0, f"{_NEW}\n")}, recordings=named)
+    return FakeReleaseHost(
+        tags=[f"v{_OLD}"], cz_next={(): (0, f"{_NEW}\n")}, recordings=named, fail_on=fail_on
+    )
 
 
 def _run(checkout: Path, host: FakeReleaseHost, *flags: str) -> int:
@@ -231,6 +233,22 @@ def test_an_unaccepted_regression_refuses_the_pull_request_and_keeps_the_files(
     assert not host.ran("push")
     assert not host.ran("pr", "create")
     assert not host.ran("--version-files-only")
+    kept = _kept(_temp_in_tmp_path)
+    assert sorted(path.name for path in kept) == sorted([f"{_OPUS}.json", f"{_CODER}.json"])
+    assert f"--reuse-metrics {kept[0].parent}" in captured.err
+
+
+@pytest.mark.parametrize("step", ["push", "pr create", "--version-files-only"])
+def test_a_refusal_while_publishing_keeps_the_recorded_files(
+    step: str, tmp_path: Path, _temp_in_tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Regression (PR #323 review): the branch is discarded, the paid recordings are not."""
+    host = _host(step, claude_opus=_recorded(_OPUS, 0.9), coder=_recorded(_CODER, 0.9))
+
+    assert _run(_checkout(tmp_path), host) == 1
+
+    captured = capsys.readouterr()
+    assert f"{step} failed" in captured.err
     kept = _kept(_temp_in_tmp_path)
     assert sorted(path.name for path in kept) == sorted([f"{_OPUS}.json", f"{_CODER}.json"])
     assert f"--reuse-metrics {kept[0].parent}" in captured.err

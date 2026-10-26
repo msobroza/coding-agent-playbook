@@ -98,6 +98,7 @@ from release_eval import (
     EvalRequest,
     ReleaseTargets,
     metrics_body,
+    metrics_kept_on_refusal,
     record_release_metrics,
     release_targets,
 )
@@ -110,6 +111,8 @@ from release_tools import run_process as run_process
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
+
+    from release_eval import TargetMetrics
 
 RELEASE_BRANCH_PREFIX: Final = "release/"
 FAILED_EXIT: Final = 1
@@ -406,16 +409,23 @@ def _publish(tools: Tools, plan: Plan, evaluation: EvalRequest | None = None) ->
 
     The metrics come first, so they grade the base's catalog before anything changes.
     """
-    metrics = None
-    if plan.targets is not None and evaluation is not None:
-        metrics = record_release_metrics(
-            tools,
-            version=plan.version,
-            previous=plan.previous,
-            base=plan.manifest.base,
-            targets=plan.targets,
-            request=evaluation,
-        )
+    if plan.targets is None or evaluation is None:
+        return _bump_and_open(tools, plan, None)
+    metrics = record_release_metrics(
+        tools,
+        version=plan.version,
+        previous=plan.previous,
+        base=plan.manifest.base,
+        targets=plan.targets,
+        request=evaluation,
+    )
+    # on_branch discards the branch on a refusal: keep the paid recordings out of it.
+    with metrics_kept_on_refusal(tools.cwd, plan.version, evaluation):
+        return _bump_and_open(tools, plan, metrics)
+
+
+def _bump_and_open(tools: Tools, plan: Plan, metrics: Sequence[TargetMetrics] | None) -> str:
+    """Write the release files, bump the version, commit, push and open the PR."""
     notes = _write_release_files(tools, plan)
     bumped = tools.cz("bump", plan.version, "--version-files-only", "--yes")
     if bumped.returncode != 0:
