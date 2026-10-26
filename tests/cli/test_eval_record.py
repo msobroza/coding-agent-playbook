@@ -16,6 +16,7 @@ import pytest
 import coding_agent_playbook
 from coding_agent_playbook.cli import main
 from coding_agent_playbook.config.files import CONFIG_FILENAME
+from coding_agent_playbook.evals.endpoints import endpoint_fingerprint
 from coding_agent_playbook.evals.judge import LLMJudge
 from coding_agent_playbook.evals.release_metrics_schema import validate_release_metrics
 from coding_agent_playbook.evals.run.claude_code_runner import ClaudeCodeRunner
@@ -24,6 +25,7 @@ from coding_agent_playbook.evals.run.harness_runner import SampleResult
 from coding_agent_playbook.evals.targets import TARGET_ENV_VAR
 from coding_agent_playbook.grading.types import EvaluationReport
 from coding_agent_playbook.validation.context import SyncContext
+from tests.cli import claude_cli_fakes
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -153,6 +155,47 @@ def test_cost_comes_from_the_target_price(repo: Path, monkeypatch: pytest.Monkey
     assert rc == 0
     # 1000 input x 2.0 + 100 output x 10.0 per million tokens.
     assert _load(out)["samples"][_SAMPLE]["cost_usd_mean"] == pytest.approx(0.003)
+
+
+_ENDPOINT_TOKEN = "fake-endpoint-token-0000"
+_ENDPOINT_URL = "https://llm.internal.example"
+_ENDPOINT_EVALS = f"""
+[evals.endpoints.internal]
+api = "anthropic"
+base_url = "{_ENDPOINT_URL}"
+token_env = "INTERNAL_LLM_TOKEN"
+
+[evals.targets.internal-claude]
+harness = "claude_code"
+endpoint = "internal"
+model = "internal-opus"
+"""
+
+
+def test_endpoint_target_records_its_name_and_fingerprint_but_never_its_secrets(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Ticket 06 x 07: a recorded endpoint run names the endpoint by fingerprint;
+    # neither the token nor the URL reaches argv or the metrics file.
+    committed = repo / CONFIG_FILENAME
+    committed.write_text(committed.read_text(encoding="utf-8") + _ENDPOINT_EVALS, encoding="utf-8")
+    monkeypatch.setenv("INTERNAL_LLM_TOKEN", _ENDPOINT_TOKEN)
+    cli = claude_cli_fakes.FakeClaudeCli(monkeypatch, answer=f"done, saw {_ENDPOINT_TOKEN}")
+
+    rc, out = _record(repo, _SAMPLE, "--target", "internal-claude")
+
+    assert rc == 0
+    assert cli.calls
+    assert all(_ENDPOINT_TOKEN not in part for argv, _env in cli.calls for part in argv)
+    text = out.read_text(encoding="utf-8")
+    assert _ENDPOINT_TOKEN not in text
+    assert "llm.internal.example" not in text
+    data = _load(out)
+    assert data["target"]["endpoint"] == {
+        "name": "internal",
+        "fingerprint": endpoint_fingerprint(_ENDPOINT_URL),
+    }
+    assert data["target"]["reported_model"] == "internal-opus"
 
 
 @pytest.mark.parametrize(

@@ -120,7 +120,11 @@ class ClaudeCodeRoute:
         return env
 
     def redact(self, text: str) -> str:
-        """``text`` with the token (and the header lines) replaced, for transcripts and errors.
+        """``text`` with the token, the headers value and each of its lines replaced.
+
+        Each header line is redacted on its own too: an agent may echo one header,
+        or the lines may come back separated differently. Longest secrets go first
+        so a whole headers value is replaced before its lines are.
 
         Example::
 
@@ -128,10 +132,22 @@ class ClaudeCodeRoute:
             >>> ClaudeCodeRoute(Endpoint("e", "anthropic", "https://x"), "m", token="t0").redact("a t0")
             'a [redacted]'
         """
-        for secret in (self.token, self.headers):
-            if secret:
-                text = text.replace(secret, _REDACTED)
+        for secret in sorted(self._secrets(), key=len, reverse=True):
+            text = text.replace(secret, _REDACTED)
         return text
+
+    def _secrets(self) -> set[str]:
+        """The non-empty secrets: the token, the headers value, its lines, and their JSON-escaped forms.
+
+        The escaped forms cover raw JSON output kept as is (a result object
+        without a string answer, or a judge's error excerpt).
+        """
+        plain = {self.token}
+        if self.headers:
+            plain.add(self.headers)
+            plain.update(line.strip() for line in self.headers.splitlines())
+        escaped = {json.dumps(secret)[1:-1] for secret in plain}
+        return {secret for secret in plain | escaped if secret}
 
     def _token_variable(self) -> str:
         """``ANTHROPIC_API_KEY`` for an x-api-key endpoint, else ``ANTHROPIC_AUTH_TOKEN`` (bearer)."""

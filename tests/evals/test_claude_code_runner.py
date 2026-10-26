@@ -9,6 +9,7 @@ mirroring the ``importorskip``/skip pattern used for the radon/execution tests.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import sys
@@ -336,3 +337,28 @@ def test_routed_json_run_parses_usage_and_redacts_the_token(tmp_path: Path) -> N
     assert run.transcript == "leaked [redacted]"
     assert run.usage is not None
     assert run.usage.output_tokens == 40
+
+
+def test_routed_json_run_redacts_secrets_that_json_escapes(tmp_path: Path) -> None:
+    # Regression (PR #310 review): JSON escapes a multi-line headers value (\n) and a
+    # token holding a quote, so redacting the raw stdout before the decode missed
+    # them and the decoded transcript the judge grades carried both secrets.
+    headers, token = "X-Org: a\nX-Key: hdr-secret-123", 'tok"en'
+    route = ClaudeCodeRoute(
+        Endpoint("e", "anthropic", "https://x"), "m", token=token, headers=headers
+    )
+    stdout = json.dumps({"type": "result", "result": f"env: {headers} tok={token}"})
+    runner = ClaudeCodeRunner(command=_printing(stdout), model="m", route=route)
+
+    run = runner._invoke_agent("p", tmp_path)
+
+    assert "hdr-secret-123" not in run.transcript
+    assert token not in run.transcript
+    assert run.transcript == "env: [redacted] tok=[redacted]"
+
+
+def test_route_redacts_each_header_line_on_its_own() -> None:
+    route = ClaudeCodeRoute(
+        Endpoint("e", "anthropic", "https://x"), "m", headers="X-Org: a\nX-Key: k1"
+    )
+    assert route.redact("saw X-Key: k1 only") == "saw [redacted] only"

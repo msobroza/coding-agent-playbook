@@ -41,4 +41,4 @@ def test_a_missing_binary_gives_none() -> None:
 
 
 def test_a_runner_without_a_cli_has_no_version() -> None:
-    assert harness_cli_version(None, run=FakeVersionCli("1.0.0")) is None
+    assert harness_cli_version(None, run=FakeVersionCli("9.9.9")) is None

@@ -120,7 +120,8 @@ class ClaudeCodeRunner(HarnessRunner):
         command is an explicit arg-list — and the working directory is the agent's
         scratch repo so any edits land in the tree the scoring layers read. The
         child env is marked unattended, so lifecycle-hook asks degrade to deny; on
-        an endpoint it is isolated too, and the token is redacted from the transcript.
+        an endpoint it is isolated too, and its token and headers are redacted from
+        the decoded transcript (and the raw output when it is not JSON).
         """
         with routed_env(self.route, unattended_agent_env()) as env:
             completed = subprocess.run(
@@ -132,16 +133,22 @@ class ClaudeCodeRunner(HarnessRunner):
                 timeout=self._timeout,
                 check=False,
             )
-        stdout, stderr = self._redact(completed.stdout), self._redact(completed.stderr)
-        parsed = parse_claude_code_output(stdout, self.model)
+        stderr = self._redact(completed.stderr)
+        # Parse the raw stdout, then redact what came out of it: JSON escapes a
+        # secret (a newline as \n, a quote as \"), so redacting before the
+        # decode would miss it and the decoded transcript would carry it.
+        parsed = parse_claude_code_output(completed.stdout, self.model)
         if parsed is None:
-            return AgentRun(_with_stderr(stdout, stderr), completed.returncode)
+            return AgentRun(
+                _with_stderr(self._redact(completed.stdout), stderr), completed.returncode
+            )
         # A failed run says so in is_error; never count it as completed.
         returncode = completed.returncode or (1 if parsed.is_error else 0)
+        reported_model = parsed.reported_model
         return AgentRun(
-            transcript=_with_stderr(parsed.transcript, stderr),
+            transcript=_with_stderr(self._redact(parsed.transcript), stderr),
             returncode=returncode,
-            reported_model=parsed.reported_model,
+            reported_model=None if reported_model is None else self._redact(reported_model),
             usage=parsed.usage,
         )
 
