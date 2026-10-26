@@ -41,6 +41,7 @@ from coding_agent_playbook.evals.endpoints import (
     resolve_endpoint_headers,
     resolve_endpoint_token,
 )
+from coding_agent_playbook.evals.run.secret_redaction import redact_secrets, with_escaped_forms
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
@@ -76,8 +77,6 @@ _QUIET_ENV: Final = {
 }
 #: The scratch subdirectory each XDG base variable points at.
 _XDG_DIRS: Final = {"XDG_CONFIG_HOME": "config", "XDG_DATA_HOME": "data", "XDG_STATE_HOME": "state"}
-#: What a redacted token reads as in a transcript or an error excerpt.
-_REDACTED: Final = "[redacted]"
 #: Characters an unescaped ``{env:}`` value may not hold inside a JSON string.
 _JSON_BREAKERS: Final = frozenset('"\\')
 #: JSON strings may not hold a raw control character (below U+0020) either.
@@ -165,16 +164,15 @@ class OpenCodeRoute:
     def redact(self, text: str) -> str:
         """``text`` with the token and the header values replaced, for transcripts and errors.
 
+        Their JSON-escaped forms are replaced too, longest first (``secret_redaction``).
+
         Example::
 
             >>> from coding_agent_playbook.evals.endpoints import Endpoint
             >>> OpenCodeRoute(Endpoint("e", "openai-chat", "https://x"), "m", token="t0").redact("a t0")
             'a [redacted]'
         """
-        for secret in (self.token, *self.headers.values()):
-            if secret:
-                text = text.replace(secret, _REDACTED)
-        return text
+        return redact_secrets(text, with_escaped_forms((self.token, *self.headers.values())))
 
     def _options(self) -> dict[str, object]:
         """The provider options: base URL, the token reference and any extra headers."""

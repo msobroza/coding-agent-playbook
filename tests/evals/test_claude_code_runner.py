@@ -24,7 +24,7 @@ from coding_agent_playbook.evals.prompting import PromptResolutionError, render_
 from coding_agent_playbook.evals.run.claude_code_route import ClaudeCodeRoute
 from coding_agent_playbook.evals.run.claude_code_runner import ClaudeCodeRunner
 from coding_agent_playbook.evals.run.fake_runner import write_files
-from coding_agent_playbook.evals.run.harness_runner import AgentRun, materialize
+from coding_agent_playbook.evals.run.harness_runner import AgentRun, Candidate, materialize
 from coding_agent_playbook.evals.sample import EvalSample, SampleInvocation
 
 if TYPE_CHECKING:
@@ -343,7 +343,7 @@ def test_routed_json_run_redacts_secrets_that_json_escapes(tmp_path: Path) -> No
     # Regression (PR #310 review): JSON escapes a multi-line headers value (\n) and a
     # token holding a quote, so redacting the raw stdout before the decode missed
     # them and the decoded transcript the judge grades carried both secrets.
-    headers, token = "X-Org: a\nX-Key: hdr-secret-123", 'tok"en'
+    headers, token = "X-Org: org-1\nX-Key: hdr-secret-123", 'tok"en'
     route = ClaudeCodeRoute(
         Endpoint("e", "anthropic", "https://x"), "m", token=token, headers=headers
     )
@@ -359,6 +359,69 @@ def test_routed_json_run_redacts_secrets_that_json_escapes(tmp_path: Path) -> No
 
 def test_route_redacts_each_header_line_on_its_own() -> None:
     route = ClaudeCodeRoute(
-        Endpoint("e", "anthropic", "https://x"), "m", headers="X-Org: a\nX-Key: k1"
+        Endpoint("e", "anthropic", "https://x"), "m", headers="X-Org: org-1\nX-Key: k1"
     )
     assert route.redact("saw X-Key: k1 only") == "saw [redacted] only"
+
+
+def test_route_redacts_a_header_value_printed_on_its_own() -> None:
+    # PR #310 review: an agent may print just a header's value, without its name.
+    route = ClaudeCodeRoute(
+        Endpoint("e", "anthropic", "https://x"), "m", headers="X-Org: org-1\nX-Key: k1-secret"
+    )
+    assert route.redact("value k1-secret") == "value [redacted]"
+
+
+def test_route_redacts_a_non_ascii_secret_in_its_unescaped_json_form() -> None:
+    # json.dumps(..., ensure_ascii=False) keeps the non-ASCII letter but escapes the quote.
+    route = ClaudeCodeRoute(Endpoint("e", "anthropic", "https://x"), "m", token='tök"en')
+    assert route.redact('{"t": "tök\\"en"}') == '{"t": "[redacted]"}'
+
+
+class _PassedReport:
+    """The one field ``_run_trial`` reads from a report."""
+
+    passed = True
+
+
+class _RecordingScore:
+    """Stands in for ``harness_runner.score``: records the diff each judge would be handed."""
+
+    def __init__(self) -> None:
+        self.diffs: list[str] = []
+
+    def __call__(
+        self, _sample: object, _baseline: object, candidate: Candidate, **_kw: object
+    ) -> _PassedReport:
+        self.diffs.append(candidate.diff)
+        return _PassedReport()
+
+
+def test_a_token_written_into_a_file_is_redacted_from_the_graded_diff(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Regression (PR #310 review): the judge grades the diff, so a token the agent
+    # wrote into a file reached the judge's argv unredacted.
+    from coding_agent_playbook.evals.run import harness_runner
+
+    recorder = _RecordingScore()
+    monkeypatch.setattr(harness_runner, "score", recorder)
+    sample_dir = tmp_path / "sample"
+    _make_setup(sample_dir)
+    route = ClaudeCodeRoute(Endpoint("e", "anthropic", "https://x"), "m", token="t0k3n-in-file")
+    program = 'import pathlib; pathlib.Path("leak.txt").write_text("t0k3n-in-file\\n")'
+    runner = ClaudeCodeRunner(command=[sys.executable, "-c", program], model="m", route=route)
+
+    runner._run_trial(
+        _make_sample(sample_dir),
+        "p",
+        tmp_path / "scratch",
+        judge=None,
+        judge_samples=1,
+        fail_fast=True,
+    )
+
+    assert len(recorder.diffs) == 1
+    assert "leak.txt" in recorder.diffs[0]
+    assert "t0k3n-in-file" not in recorder.diffs[0]
+    assert "+[redacted]" in recorder.diffs[0]

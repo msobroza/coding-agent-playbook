@@ -67,3 +67,15 @@ def test_pinned_models_pass_and_no_judge_needs_no_judge_model() -> None:
     target = EvalTarget("t", "claude_code", "claude-opus-5-5")
     check_recordable(target, judge_model=None, uses_judge=False)
     check_recordable(target, judge_model="claude-opus-5-5", uses_judge=True)
+
+
+def test_a_moving_alias_small_model_is_refused() -> None:
+    # PR #310 review: the background model must stay fixed between releases too.
+    target = EvalTarget("t", "claude_code", "claude-opus-5-5", small_model="haiku")
+    with pytest.raises(RecordRefusedError, match="small_model 'haiku' is a moving alias"):
+        check_recordable(target, judge_model=None, uses_judge=False)
+
+
+def test_a_pinned_small_model_passes() -> None:
+    target = EvalTarget("t", "claude_code", "claude-opus-5-5", small_model="claude-haiku-4-5")
+    check_recordable(target, judge_model=None, uses_judge=False)

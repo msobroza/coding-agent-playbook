@@ -241,6 +241,14 @@ def test_redact_replaces_the_token() -> None:
     assert _route().redact(f"401 for {_TOKEN}") == "401 for [redacted]"
 
 
+def test_redact_replaces_a_header_value_in_its_json_escaped_form() -> None:
+    # PR #310 review: raw JSON output escapes a backslash, so the plain value misses it.
+    route = OpenCodeRoute(
+        Endpoint("e", "openai-chat", "https://x"), "m", token="t0", headers={"X-Key": "k\\ey-9"}
+    )
+    assert route.redact('{"h": "k\\\\ey-9"}') == '{"h": "[redacted]"}'
+
+
 def test_route_repr_holds_no_secret() -> None:
     assert _TOKEN not in repr(_route())
 

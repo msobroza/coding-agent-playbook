@@ -46,6 +46,8 @@ from coding_agent_playbook.evals.run.scoring import score
 from coding_agent_playbook.evals.token_usage import TokenUsage, sum_usage
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from coding_agent_playbook.evals.sample import EvalSample
     from coding_agent_playbook.grading.check import Check
     from coding_agent_playbook.grading.types import (
@@ -313,13 +315,21 @@ def _uv_sync_scratch(scratch_dir: Path) -> None:
         raise RuntimeError(f"uv sync failed in {scratch_dir}: {result.stderr}")
 
 
-def capture(scratch_dir: Path, baseline: Baseline, transcript: str) -> Candidate:
+def capture(
+    scratch_dir: Path,
+    baseline: Baseline,
+    transcript: str,
+    *,
+    redact: Callable[[str], str] | None = None,
+) -> Candidate:
     """Capture the post-agent tree + ``git diff`` vs baseline + the transcript.
 
     ``git diff <baseline.commit>`` is taken over the scratch repo (after staging
     untracked files so newly-created files appear in the diff and in
     ``changed_files``). The diff string + transcript are retained for R2's judge;
-    R1 scoring reads the tree (and ``changed_files``) directly.
+    R1 scoring reads the tree (and ``changed_files``) directly. ``redact`` (the
+    runner's endpoint redaction) is applied to the diff, so a token an agent wrote
+    into a file never reaches the judge's argv.
     """
     scratch_dir = Path(scratch_dir)
     # Stage everything so new/untracked files participate in the diff.
@@ -329,7 +339,7 @@ def capture(scratch_dir: Path, baseline: Baseline, transcript: str) -> Candidate
     changed = [line for line in name_only.splitlines() if line.strip()]
     return Candidate(
         tree=scratch_dir,
-        diff=diff,
+        diff=diff if redact is None else redact(diff),
         transcript=transcript,
         changed_files=changed,
     )
@@ -499,7 +509,7 @@ class HarnessRunner(ABC):
 
         baseline = materialize(sample, trial_dir)
         run = self._invoke_agent(prompt, trial_dir)
-        candidate = capture(trial_dir, baseline, run.transcript)
+        candidate = capture(trial_dir, baseline, run.transcript, redact=self._redact)
         report = score(
             sample,
             baseline,
@@ -561,6 +571,13 @@ class HarnessRunner(ABC):
             0
         """
         return self._invoke_agent(prompt, scratch_dir)
+
+    def _redact(self, text: str) -> str:
+        """``text`` with the endpoint's secrets replaced; unchanged here (no endpoint).
+
+        A runner with an endpoint route overrides it; the graded diff goes through it.
+        """
+        return text
 
     @abstractmethod
     def _invoke_agent(self, prompt: str, scratch_dir: Path) -> AgentRun:

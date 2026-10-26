@@ -56,8 +56,8 @@ def is_moving_alias(model: str) -> bool:
 def check_recordable(target: EvalTarget, *, judge_model: str | None, uses_judge: bool) -> None:
     """Raise :class:`RecordRefusedError` unless every model of the run is pinned.
 
-    The target needs an explicit model that is not a moving alias; when the run
-    uses a judge, ``[evals.judge] model`` must be set and pinned too.
+    The target needs an explicit model that is not a moving alias, and so does
+    its ``small_model`` when set; when the run uses a judge, ``[evals.judge] model`` must be set and pinned too.
 
     Example::
 
@@ -74,6 +74,12 @@ def check_recordable(target: EvalTarget, *, judge_model: str | None, uses_judge:
             f"--record refuses target {target.name!r}: model {target.model!r} is a moving "
             "alias, so the next release could grade another model; name a pinned model id, "
             "for example claude-opus-5-5"
+        )
+    if target.small_model is not None and is_moving_alias(target.small_model):
+        raise RecordRefusedError(
+            f"--record refuses target {target.name!r}: small_model {target.small_model!r} is "
+            "a moving alias, so the next release could run another background model; name a "
+            "pinned model id, for example claude-haiku-4-5"
         )
     if uses_judge:
         _check_judge_model(judge_model)

@@ -263,3 +263,50 @@ def test_misused_record_flags_are_usage_errors(
 ) -> None:
     assert main([*argv, "--repo-root", str(repo)]) == 2
     assert message in capsys.readouterr().err
+
+
+def test_format_with_record_is_refused(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    rc, out = _record(repo, _SAMPLE, "--target", "fake-pinned", "--format", "json")
+    assert rc == 2
+    assert "--format json does not apply to --record" in capsys.readouterr().err
+    assert not out.exists()
+
+
+@pytest.mark.parametrize(("flags", "fail_fast"), [((), True), (("--full-scoring",), False)])
+def test_full_scoring_reaches_every_recorded_run(
+    repo: Path, monkeypatch: pytest.MonkeyPatch, flags: tuple[str, ...], fail_fast: bool
+) -> None:
+    seen: list[object] = []
+
+    def recording_run(runner: FakeRunner, sample: EvalSample, *a: Any, **kw: Any) -> SampleResult:
+        seen.append(kw.get("fail_fast"))
+        return _canned_run(runner, sample)
+
+    monkeypatch.setattr(FakeRunner, "run_sample", recording_run)
+    rc, _ = _record(repo, _SAMPLE, "--target", "fake-pinned", "--runs", "2", *flags)
+    assert rc == 0
+    assert seen == [fail_fast, fail_fast]
+
+
+def test_a_bad_prompt_on_any_sample_fails_before_the_first_paid_run(
+    repo: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # PR #310 review: a bad prompt on the last sample used to surface only after
+    # every earlier sample had been paid for.
+    from coding_agent_playbook.commands import _eval_record
+    from coding_agent_playbook.evals.prompting import PromptResolutionError, render_prompt
+
+    last = max(s.id for s in SyncContext.from_repo(repo).artifact_source.list_eval_samples())
+
+    def failing_last(sample: EvalSample, **kwargs: Any) -> str:
+        if sample.id == last:
+            raise PromptResolutionError(f"no prompt for {sample.id}")
+        return render_prompt(sample, **kwargs)
+
+    monkeypatch.setattr(_eval_record, "render_prompt", failing_last)
+    cli = FakeClaudeCli(monkeypatch)
+    rc, out = _record(repo, "--all", "--target", "opus")
+    assert rc == 2
+    assert f"sample {last!r} has no prompt to run" in capsys.readouterr().err
+    assert cli.argvs == []
+    assert not out.exists()

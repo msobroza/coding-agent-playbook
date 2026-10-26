@@ -5,7 +5,9 @@ target (``--runs``, else the target's ``runs``, else 1), and the results are
 written as a release metrics file, schema version 1
 (``evals.release_metrics_schema``). Before any paid run, ``--record`` refuses a
 target without an explicit model, a moving model alias and, with ``--judge``,
-an unpinned ``[evals.judge] model`` (``evals.model_pins``). A sample that cannot
+an unpinned ``[evals.judge] model`` (``evals.model_pins``), ``--format``, and
+a sample whose prompt cannot be resolved. ``--full-scoring`` grades every check,
+as for ``--run``. A sample that cannot
 be scored stops the recording, so a file never silently lacks a sample. The
 file is written whatever the scores are: exit ``0`` once it is written, ``2`` on
 a refusal or an unscorable sample.
@@ -31,7 +33,7 @@ from coding_agent_playbook.commands._eval_options import (
 )
 from coding_agent_playbook.evals.judge import JudgeError
 from coding_agent_playbook.evals.model_pins import RecordRefusedError, check_recordable
-from coding_agent_playbook.evals.prompting import PromptResolutionError
+from coding_agent_playbook.evals.prompting import PromptResolutionError, render_prompt
 from coding_agent_playbook.evals.release_metrics import (
     GRADED_HEAD,
     RecordedTarget,
@@ -98,6 +100,7 @@ def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings
         0
     """
     out_path = _record_path(args)
+    _refuse_format(args)
     target = select_target(args, settings)
     runs = _run_count(getattr(args, "runs", None), target.runs)
     uses_judge = getattr(args, "judge", None) is not None
@@ -106,6 +109,7 @@ def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings
     plan = _build_plan(args, settings, target, runs)
     if plan is None:
         return 2
+    plan.check_prompts(samples)
     recorded = RecordedTarget(
         target=target,
         harness_version=harness_cli_version(plan.runner.cli),
@@ -134,18 +138,35 @@ def _build_plan(
     judge_samples = judge_sample_count(args, default=settings.judge.samples or 1)
     if runner is None or (judge_name is not None and judge is None) or judge_samples is None:
         return None
-    return _RecordPlan(runner, judge, judge_samples, runs, args.prompt_set)
+    fail_fast = not getattr(args, "full_scoring", False)
+    return _RecordPlan(runner, judge, judge_samples, runs, args.prompt_set, fail_fast)
 
 
 @dataclass(frozen=True)
 class _RecordPlan:
-    """How each sample runs: the runner, the judge, the run count and the prompt set."""
+    """How each sample runs: the runner, the judge, the run count, the prompt set and fail-fast.
+
+    ``fail_fast`` is ``False`` under ``--full-scoring``, as for ``eval --run``.
+    """
 
     runner: HarnessRunner
     judge: Judge | None
     judge_samples: int
     runs: int
     prompt_set: PromptSet
+    fail_fast: bool = True
+
+    def check_prompts(self, samples: list[EvalSample]) -> None:
+        """Resolve every sample's prompt before the first paid run; refuse on the first bad one."""
+        for sample in samples:
+            try:
+                render_prompt(
+                    sample, strict=self.runner.requires_resolved_prompt, prompt_set=self.prompt_set
+                )
+            except PromptResolutionError as exc:
+                raise RecordRefusedError(
+                    f"sample {sample.id!r} has no prompt to run, so nothing was run: {exc}"
+                ) from exc
 
     def run(self, sample: EvalSample, index: int, total: int) -> SampleRuns:
         """``sample``'s runs and digests, each run reported on stderr as it ends."""
@@ -176,6 +197,7 @@ class _RecordPlan:
                     Path(tmp) / "scratch",
                     judge=self.judge,
                     judge_samples=self.judge_samples,
+                    fail_fast=self.fail_fast,
                     prompt_set=self.prompt_set,
                 )
         except (PromptResolutionError, JudgeError) as exc:
@@ -189,6 +211,16 @@ def _record_path(args: argparse.Namespace) -> Path:
     if record is None:
         raise RecordRefusedError("--all and --runs belong to --record <path>; pass --record too")
     return Path(record)
+
+
+def _refuse_format(args: argparse.Namespace) -> None:
+    """``--format`` shapes the one-sample ``--run`` report; ``--record`` writes JSON only."""
+    fmt = getattr(args, "format", None)
+    if fmt is not None:
+        raise RecordRefusedError(
+            f"--format {fmt} does not apply to --record, which always writes the release "
+            "metrics JSON file; drop --format"
+        )
 
 
 def _run_count(flag: int | None, target_runs: int | None) -> int:

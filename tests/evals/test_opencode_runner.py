@@ -26,6 +26,7 @@ from coding_agent_playbook.evals.run.harness_runner import AgentRun, materialize
 from coding_agent_playbook.evals.run.opencode_route import OpenCodeRoute, opencode_route
 from coding_agent_playbook.evals.run.opencode_runner import OpenCodeRun, OpenCodeRunner
 from coding_agent_playbook.evals.sample import EvalSample, SampleInvocation
+from coding_agent_playbook.evals.token_usage import TokenUsage
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -322,6 +323,26 @@ def test_json_events_give_the_transcript_and_the_step_totals(tmp_path: Path) -> 
     assert run.transcript == "edited mod.pya warning\n"
     assert run.output is not None
     assert (run.output.input_tokens, run.output.output_tokens, run.output.steps) == (12, 3, 1)
+
+
+def test_json_event_totals_fill_the_usage_release_metrics_read(tmp_path: Path) -> None:
+    # Ticket 07 x 06b: OpenCode runs report usage in the metrics file like Claude Code runs.
+    runner = OpenCodeRunner(command=[sys.executable, "-c", _json_events_program()])
+
+    run = runner._invoke_agent("p", tmp_path)
+
+    assert run.usage == TokenUsage(input_tokens=12, output_tokens=3)
+
+
+def test_plain_stdout_reports_no_usage(tmp_path: Path) -> None:
+    run = OpenCodeRunner(command=[sys.executable, "-c", "print('plain')"])._invoke_agent(
+        "p", tmp_path
+    )
+    assert run.usage is None
+
+
+def test_routed_runner_redacts_what_the_judge_grades() -> None:
+    assert OpenCodeRunner(route=_route())._redact(f"+{_TOKEN}") == "+[redacted]"
 
 
 def test_plain_stdout_is_the_transcript_and_reports_no_totals(tmp_path: Path) -> None:

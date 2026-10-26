@@ -791,20 +791,23 @@ paid call per target; the harness makes it, the engine makes no network call.
 `playbook eval --run --all --runs N --record <path>` runs every eval sample `N`
 times on one eval target and writes a release metrics file to `<path>`. A sample id
 in place of `--all` records only that sample. `--runs` defaults to the target's
-`runs`, else 1, and `--judge` adds the judge's scores as in `--run`:
+`runs`, else 1, and `--judge` adds the judge's scores and `--full-scoring` grades
+every check, as in `--run`. `--format` does not apply, since the file is always JSON:
 
 ```bash
 playbook eval --run --all --runs 3 --target claude-opus --judge llm \
   --record catalog/releases/0.3.0/metrics/claude-opus.json
 ```
 
-Before any run, `--record` refuses three things, with exit 2:
+Before any run, `--record` refuses these, with exit 2:
 
 - a target without an explicit model (`--runner`, or the built-in default);
-- a moving model alias: `opus`, `sonnet`, `haiku`, `opusplan`, `best`, `default`
-  (also with a `[1m]` suffix or a `provider/` prefix) and any name ending in
-  `latest`, because the next release could grade another model;
-- with `--judge`, an `[evals.judge] model` that is missing or a moving alias.
+- a moving model alias as the target's `model` or `small_model`: `opus`,
+  `sonnet`, `haiku`, `opusplan`, `best`, `default` (also with a `[1m]` suffix or
+  a `provider/` prefix) and any name ending in `latest`, because the next release
+  could grade another model;
+- with `--judge`, an `[evals.judge] model` that is missing or a moving alias;
+- a selected sample whose prompt cannot be resolved.
 
 A sample that cannot be scored stops the recording, so a file never lacks a sample
 silently. Once written, the command exits 0 whatever the scores are.
@@ -823,7 +826,9 @@ Cost comes only from the target's `price`. Without one it is `null`, and so are
 tokens and cost when a run's harness reported no tokens. The harness's own cost
 estimate is never used: for a custom endpoint, Claude Code prices an unknown model
 from a bundled table. The Claude Code runner reads tokens and the model from
-`claude -p --output-format json`; the OpenCode runner reports none yet.
+`claude -p --output-format json`; the OpenCode runner sums the tokens of the
+`step_finish` events of `opencode run --format json` (subagent steps are not
+emitted, so it undercounts them) and reports no model.
 
 A reader ignores keys it does not know, so comparison keys can be added under
 version 1. Removing or retyping a key needs version 2.
