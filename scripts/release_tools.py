@@ -41,17 +41,31 @@ class Completed:
 
 
 class Runner(Protocol):
-    """Runs one command; the tests pass a named fake."""
+    """Runs one command; the tests pass a named fake.
+
+    ``timeout`` (seconds) replaces :data:`COMMAND_TIMEOUT_SECONDS` for a command
+    known to run longer: the eval recordings of ``prepare --eval``.
+    """
 
     def __call__(
-        self, argv: Sequence[str], *, cwd: Path, env: Mapping[str, str] | None = None
+        self,
+        argv: Sequence[str],
+        *,
+        cwd: Path,
+        env: Mapping[str, str] | None = None,
+        timeout: float | None = None,
     ) -> Completed: ...
 
 
 def run_process(
-    argv: Sequence[str], *, cwd: Path, env: Mapping[str, str] | None = None
+    argv: Sequence[str],
+    *,
+    cwd: Path,
+    env: Mapping[str, str] | None = None,
+    timeout: float | None = None,
 ) -> Completed:
-    """Run ``argv`` in ``cwd`` with a timeout; a missing program exits 127."""
+    """Run ``argv`` in ``cwd`` with a timeout (default 600 s); a missing program exits 127."""
+    limit = COMMAND_TIMEOUT_SECONDS if timeout is None else timeout
     try:
         done = subprocess.run(
             list(argv),
@@ -60,12 +74,12 @@ def run_process(
             capture_output=True,
             text=True,
             check=False,
-            timeout=COMMAND_TIMEOUT_SECONDS,
+            timeout=limit,
         )
     except FileNotFoundError:
         return Completed(127, "", f"{argv[0]}: command not found")
     except subprocess.TimeoutExpired:
-        return Completed(124, "", f"{argv[0]}: timed out after {COMMAND_TIMEOUT_SECONDS}s")
+        return Completed(124, "", f"{argv[0]}: timed out after {limit:g}s")
     return Completed(done.returncode, done.stdout, done.stderr)
 
 

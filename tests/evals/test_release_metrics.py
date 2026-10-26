@@ -198,3 +198,38 @@ def test_validation_names_every_problem() -> None:
 def test_validation_rejects_a_non_object() -> None:
     with pytest.raises(ReleaseMetricsError, match="expected a JSON object"):
         validate_release_metrics([])
+
+
+def test_controls_hold_the_pinned_runs_and_stay_out_of_the_summary() -> None:
+    # Ticket 15: a pinned sample runs on the current text and, as a control, on its edition.
+    recorded = RecordedTarget(_PRICED, harness_version="1.2.3", judge_model=None, runs=1)
+    head = _runs("review/a", _result(1.0, passed=True))
+    control = SampleRuns(
+        "review/a", "review", "v9.9.8", "e" * 64, "s" * 64, results=[_result(0.0, passed=False)]
+    )
+    metrics = build_release_metrics(
+        release="9.9.9", commit=None, recorded=recorded, samples=[head], controls=[control]
+    )
+    validate_release_metrics(json.loads(json.dumps(metrics)))
+    controls = metrics["controls"]
+    assert isinstance(controls, dict)
+    assert (controls["review/a"]["graded"], controls["review/a"]["passes"]) == ("v9.9.8", 0)
+    summary = metrics["summary"]
+    assert isinstance(summary, dict)
+    assert (summary["samples"], summary["runs"], summary["pass_rate"]) == (1, 1, 1.0)
+
+
+def test_a_file_without_controls_still_validates() -> None:
+    metrics = _build(_PRICED, _runs("review/a", _result(1.0, passed=True)))
+    del metrics["controls"]  # files recorded before ticket 15
+    validate_release_metrics(metrics)
+
+
+def test_validation_checks_each_control_entry() -> None:
+    metrics = _build(_PRICED, _runs("review/a", _result(1.0, passed=True)))
+    metrics["controls"] = {"review/a": {"graded": "v9.9.8"}}
+    with pytest.raises(ReleaseMetricsError, match=r"controls\.review/a\.passes: missing"):
+        validate_release_metrics(metrics)
+    metrics["controls"] = []
+    with pytest.raises(ReleaseMetricsError, match="controls: expected dict"):
+        validate_release_metrics(metrics)

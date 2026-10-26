@@ -13,23 +13,19 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from coding_agent_playbook.catalog import roots as catalog_roots
 from coding_agent_playbook.catalog.digest import artifact_digest
 from coding_agent_playbook.cli.parser import build_parser
 from coding_agent_playbook.commands import eval as _eval
 from coding_agent_playbook.evals.prompting import render_prompt
 from coding_agent_playbook.evals.run import harness_runner
 from coding_agent_playbook.release.edition import load_edition
-from tests._catalog import REPO_ROOT
 from tests.edition_fixtures import (
     FROZEN_PROMPT_BODY,
     FROZEN_RULE_BODY,
     OVERRIDE_RULE_BODY,
     SAMPLE_ID,
     TAG,
-    freeze_fixture_edition,
     write_local_rule_override,
-    write_sample,
 )
 
 if TYPE_CHECKING:
@@ -37,19 +33,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 _PINNED_NOTE = f"graded edition {TAG} (frozen; overrides ignored)"
-
-
-@pytest.fixture
-def engine_catalog(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """A copy of the engine catalog with ``review/pinned`` pinned to a frozen fixture edition."""
-    catalog = tmp_path / "engine" / "catalog"
-    shutil.copytree(REPO_ROOT / "catalog", catalog)
-    monkeypatch.setattr(
-        catalog_roots, "_PACKAGE_DIR", tmp_path / "engine" / "src" / "coding_agent_playbook"
-    )
-    write_sample(catalog / "core", edition=TAG)
-    freeze_fixture_edition(catalog)
-    return catalog
 
 
 @pytest.fixture

@@ -12,13 +12,13 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from release import Completed, run_process
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
-    from pathlib import Path
 
 BASE = "ba5e" * 10
 PR_URL = "https://forge.example/pulls/77"
@@ -35,6 +35,10 @@ class FakeReleaseHost:
     command word (``"push"``, ``"commit"``, ``"pr create"``) that exits 1;
     ``staged`` is what ``git diff --cached --name-only`` prints. Any
     ``<command>-checkout`` re-run is the inner step: it prints ``inner out``.
+    ``playbook eval --record PATH --target NAME`` stands for the engine's fake
+    runner: it writes ``recordings[NAME]`` to ``PATH`` (exit 2 for a target it
+    has no recording for). ``timeouts`` holds each command's ``timeout``, and
+    ``bodies`` the text of each ``pr create --body-file``.
     """
 
     tags: list[str] = field(default_factory=list)
@@ -48,18 +52,29 @@ class FakeReleaseHost:
     inner_exit: int = 0
     commands: list[list[str]] = field(default_factory=list)
     envs: list[Mapping[str, str] | None] = field(default_factory=list)
+    recordings: dict[str, dict[str, object]] = field(default_factory=dict)
+    timeouts: list[float | None] = field(default_factory=list)
+    bodies: list[str] = field(default_factory=list)
 
     def __call__(
-        self, argv: Sequence[str], *, cwd: Path, env: Mapping[str, str] | None = None
+        self,
+        argv: Sequence[str],
+        *,
+        cwd: Path,
+        env: Mapping[str, str] | None = None,
+        timeout: float | None = None,
     ) -> Completed:
         command = list(argv)
         self.commands.append(command)
         self.envs.append(env)
+        self.timeouts.append(timeout)
         words = " ".join(command)
         if self.fail_on is not None and f" {self.fail_on}" in f" {words}":
             return Completed(1, "", f"{self.fail_on} failed")
         if any(word.endswith("-checkout") for word in command):
             return Completed(self.inner_exit, "inner out\n", "")
+        if "--record" in command:
+            return self._record(command)
         if "cz" in command:
             return self._cz(command[command.index("cz") + 1 :], cwd)
         if "forge" in command:
@@ -74,6 +89,20 @@ class FakeReleaseHost:
             for command in self.commands
             for i in range(len(command))
         )
+
+    def recorded_targets(self) -> list[str]:
+        """The ``--target`` of every ``eval --record`` run, in order."""
+        return [c[c.index("--target") + 1] for c in self.commands if "--record" in c]
+
+    def _record(self, command: list[str]) -> Completed:
+        target = command[command.index("--target") + 1]
+        metrics = self.recordings.get(target)
+        if metrics is None:
+            return Completed(2, "", f"error: unknown eval target {target!r}")
+        path = Path(command[command.index("--record") + 1])
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(metrics), encoding="utf-8")
+        return Completed(0, f"recorded target {target!r} to {path}\n")
 
     def _git(self, args: list[str]) -> Completed:
         handlers: dict[str, Callable[[list[str]], Completed]] = {
@@ -110,6 +139,8 @@ class FakeReleaseHost:
     def _forge(self, args: list[str]) -> Completed:
         if args[:2] == ["pr", "list"]:
             return Completed(0, json.dumps(self.open_pulls))
+        if "--body-file" in args:
+            self.bodies.append(Path(args[args.index("--body-file") + 1]).read_text("utf-8"))
         return Completed(0, f"{PR_URL}\n")
 
 
@@ -143,7 +174,12 @@ class FakeTagHost:
     commands: list[list[str]] = field(default_factory=list)
 
     def __call__(
-        self, argv: Sequence[str], *, cwd: Path, env: Mapping[str, str] | None = None
+        self,
+        argv: Sequence[str],
+        *,
+        cwd: Path,
+        env: Mapping[str, str] | None = None,
+        timeout: float | None = None,
     ) -> Completed:
         command = list(argv)
         self.commands.append(command)
@@ -244,14 +280,19 @@ class FakeForgeOverRealGit:
     commands: list[list[str]] = field(default_factory=list)
 
     def __call__(
-        self, argv: Sequence[str], *, cwd: Path, env: Mapping[str, str] | None = None
+        self,
+        argv: Sequence[str],
+        *,
+        cwd: Path,
+        env: Mapping[str, str] | None = None,
+        timeout: float | None = None,
     ) -> Completed:
         command = list(argv)
         self.commands.append(command)
         if "forge" in command:
             listing = "list" in command
             return Completed(0, json.dumps(self.open_pulls) if listing else f"{PR_URL}\n")
-        return run_process(command, cwd=cwd, env=env)
+        return run_process(command, cwd=cwd, env=env, timeout=timeout)
 
     def created(self) -> list[list[str]]:
         """Every ``forge pr create`` command run."""

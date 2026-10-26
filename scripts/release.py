@@ -6,6 +6,7 @@ engine installed::
 
     uv run scripts/release.py prepare                  # next version from the commits
     uv run scripts/release.py prepare --version 0.1.0  # the first release, or an override
+    uv run scripts/release.py prepare --eval           # plus release metrics (paid runs)
     uv run scripts/release.py tag                      # by hand, when CI could not tag
     uv run scripts/release.py freeze v0.1.0            # an edition and its pins, as a PR
     uv run scripts/release.py unfreeze v0.1.0          # the reverse, as a PR
@@ -27,6 +28,12 @@ re-runs itself (``prepare-checkout``) on that checkout's own engine, which:
    ``cz bump <version> --version-files-only`` (never a tag), commits
    ``chore(release): v<version>`` on ``release/v<version>``, pushes it and opens
    the pull request through ``playbook forge`` (ADR 0003).
+
+With ``--eval`` (``release_eval``), step 3 first records the release metrics of
+every ``[evals] release`` target into ``catalog/releases/<version>/metrics/``,
+compares each with the previous release's file for the same target and refuses
+the pull request on a regression no ``--accept SAMPLE=REASON`` accepted;
+``--reuse-metrics DIR`` reuses the files a refused run kept.
 
 Merging that pull request is the release; the ``tag-release`` CI job then tags
 it, and ``tag`` does the same checks by hand (``release_tag``: the release
@@ -58,6 +65,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.evals.prompting import PromptResolutionError
+from coding_agent_playbook.evals.release_regression import RegressionCheckError, parse_acceptances
 from coding_agent_playbook.release.changes import diff_entries, graded_set_changed
 from coding_agent_playbook.release.manifest import (
     MANIFEST_FILENAME,
@@ -86,6 +94,14 @@ from release_edition import (
     freeze_change,
     unfreeze_change,
 )
+from release_eval import (
+    EvalRequest,
+    ReleaseTargets,
+    metrics_body,
+    metrics_kept_on_refusal,
+    record_release_metrics,
+    release_targets,
+)
 from release_tag import superseded, tag_release
 from release_tools import COMMITIZEN_REQUIREMENT as COMMITIZEN_REQUIREMENT
 from release_tools import (
@@ -104,8 +120,12 @@ from release_tools import run_process as run_process
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
+    from release_eval import TargetMetrics
+
 RELEASE_BRANCH_PREFIX: Final = "release/"
 FAILED_EXIT: Final = 1
+#: Bounds ``prepare-checkout --eval``: every release target's recording, then the PR.
+PREPARE_EVAL_TIMEOUT_SECONDS: Final = 24 * 60 * 60
 #: commitizen's exit codes for "no bump-worthy commit" and "no commit at all".
 CZ_NO_INCREMENT: Final = 21
 CZ_NO_COMMITS: Final = 3
@@ -128,16 +148,19 @@ def prepare(
     repo: Path,
     *,
     version: str | None,
+    eval_flags: Sequence[str] = (),
     runner: Runner = run_process,
     make_scratch: Callable[[], Path] = _make_scratch,
 ) -> int:
     """Fetch, check ``origin/main`` out in a scratch worktree and run ``prepare-checkout`` there.
 
-    The worktree is removed whatever happens, so the caller's repository keeps
-    no trace of a failed run.
+    ``eval_flags`` (``--eval`` and its options) pass through unchanged. The
+    worktree is removed whatever happens, so the caller's repository keeps no
+    trace of a failed run.
     """
-    extra = ["--version", version] if version else []
-    return _in_scratch_checkout(repo, "prepare-checkout", extra, runner, make_scratch)
+    extra = [*(["--version", version] if version else []), *eval_flags]
+    timeout = PREPARE_EVAL_TIMEOUT_SECONDS if eval_flags else None
+    return _in_scratch_checkout(repo, "prepare-checkout", extra, runner, make_scratch, timeout)
 
 
 def edition_command(
@@ -158,6 +181,7 @@ def _in_scratch_checkout(
     extra: list[str],
     runner: Runner,
     make_scratch: Callable[[], Path],
+    timeout: float | None = None,
 ) -> int:
     """Run ``release.py <inner> --base <origin/main> <extra>`` in a throwaway worktree."""
     tools = Tools(runner, repo)
@@ -168,7 +192,7 @@ def _in_scratch_checkout(
     try:
         tools.git("worktree", "add", "--detach", str(checkout), base)
         argv = _checkout_argv(checkout, inner, base, extra)
-        done = runner(argv, cwd=checkout, env=_env(checkout))
+        done = runner(argv, cwd=checkout, env=_env(checkout), timeout=timeout)
     finally:
         tools.run(["git", "worktree", "remove", "--force", str(checkout)])
         tools.run(["git", "worktree", "prune"])
@@ -202,6 +226,8 @@ class Plan:
     version: str
     manifest: ReleaseManifest
     previous_manifest: ReleaseManifest | None
+    #: The release targets ``--eval`` records (``None``: no release metrics).
+    targets: ReleaseTargets | None = None
 
     @property
     def branch(self) -> str:
@@ -213,15 +239,23 @@ class Plan:
 
 
 def prepare_checkout(
-    tools: Tools, *, base: str, version: str | None, snapshot: Callable[[str], ReleaseManifest]
+    tools: Tools,
+    *,
+    base: str,
+    version: str | None,
+    snapshot: Callable[[str], ReleaseManifest],
+    evaluation: EvalRequest | None = None,
 ) -> str:
     """Plan the release in the checkout at ``tools.cwd``, then commit, push and open its PR.
 
-    ``snapshot(base)`` builds the manifest of the checkout's catalog. Returns the
-    pull request's URL as ``playbook forge`` prints it.
+    ``snapshot(base)`` builds the manifest of the checkout's catalog;
+    ``evaluation`` (``--eval``) adds the release metrics first. Returns the pull
+    request's URL as ``playbook forge`` prints it.
     """
     plan = plan_release(tools, base=base, version=version, snapshot=snapshot)
-    return on_branch(tools, base, plan.branch, lambda: _publish(tools, plan))
+    if evaluation is not None:
+        plan = dataclasses.replace(plan, targets=release_targets(tools.cwd))
+    return on_branch(tools, base, plan.branch, lambda: _publish(tools, plan, evaluation))
 
 
 def edition_checkout(tools: Tools, *, base: str, command: str, tag: str) -> str:
@@ -378,8 +412,28 @@ def _cz_next(tools: Tools, *extra: str) -> str | None:
     return lines[-1]
 
 
-def _publish(tools: Tools, plan: Plan) -> str:
-    """Write the release files, bump, commit, push and open the pull request."""
+def _publish(tools: Tools, plan: Plan, evaluation: EvalRequest | None = None) -> str:
+    """Record the release metrics, write the release files, bump, commit, push and open the PR.
+
+    The metrics come first, so they grade the base's catalog before anything changes.
+    """
+    if plan.targets is None or evaluation is None:
+        return _bump_and_open(tools, plan, None)
+    metrics = record_release_metrics(
+        tools,
+        version=plan.version,
+        previous=plan.previous,
+        base=plan.manifest.base,
+        targets=plan.targets,
+        request=evaluation,
+    )
+    # on_branch discards the branch on a refusal: keep the paid recordings out of it.
+    with metrics_kept_on_refusal(tools.cwd, plan.version, evaluation):
+        return _bump_and_open(tools, plan, metrics)
+
+
+def _bump_and_open(tools: Tools, plan: Plan, metrics: Sequence[TargetMetrics] | None) -> str:
+    """Write the release files, bump the version, commit, push and open the PR."""
     notes = _write_release_files(tools, plan)
     bumped = tools.cz("bump", plan.version, "--version-files-only", "--yes")
     if bumped.returncode != 0:
@@ -387,7 +441,14 @@ def _publish(tools: Tools, plan: Plan) -> str:
             f"`cz bump {plan.version}` exited {bumped.returncode}: {bumped.stderr.strip()}"
         )
     release_path = notes.parent.relative_to(tools.cwd).as_posix()
-    return commit_push_open(tools, plan.branch, plan.title, (_PYPROJECT, release_path), notes)
+    paths = (_PYPROJECT, release_path)
+    if metrics is None:
+        return commit_push_open(tools, plan.branch, plan.title, paths, notes)
+    with tempfile.TemporaryDirectory(prefix="playbook-release-body-") as scratch:
+        body = Path(scratch) / "body.md"
+        notes_text = notes.read_text(encoding="utf-8")
+        body.write_text(f"{notes_text}\n{metrics_body(metrics)}", encoding="utf-8")
+        return commit_push_open(tools, plan.branch, plan.title, paths, body)
 
 
 def _write_release_files(tools: Tools, plan: Plan) -> Path:
@@ -448,9 +509,11 @@ def _parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
     prep = commands.add_parser("prepare", help="open the next release pull request")
     prep.add_argument("--version", help="the version to release (required for the first)")
+    _add_eval_flags(prep)
     inner = commands.add_parser("prepare-checkout", help=argparse.SUPPRESS)
     inner.add_argument("--base", required=True)
     inner.add_argument("--version")
+    _add_eval_flags(inner)
     tag = commands.add_parser("tag", help="tag the merged release commit (CI does it on push)")
     tag.add_argument(
         "--tested-commit",
@@ -464,6 +527,53 @@ def _parser() -> argparse.ArgumentParser:
         hidden.add_argument("--tag", required=True)
     commands.add_parser("check-editions", help="CI: every edition file equals its tag's blob")
     return parser
+
+
+def _add_eval_flags(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--eval",
+        action="store_true",
+        dest="record_metrics",
+        help="record the release metrics of every [evals] release target (paid runs) and "
+        "refuse the PR on an unaccepted regression",
+    )
+    parser.add_argument(
+        "--accept",
+        metavar="SAMPLE=REASON",
+        action="append",
+        default=[],
+        help="--eval: accept SAMPLE's regression, storing REASON in the metrics (repeatable)",
+    )
+    parser.add_argument(
+        "--reuse-metrics",
+        metavar="DIR",
+        type=Path,
+        help="--eval: reuse the metrics files a refused run kept in DIR, recorded on the same base",
+    )
+
+
+def _eval_request(args: argparse.Namespace) -> EvalRequest | None:
+    """The ``--eval`` request ``args`` carry; refuses its options without ``--eval``."""
+    if not args.record_metrics:
+        if args.accept or args.reuse_metrics is not None:
+            raise ReleaseError("--accept and --reuse-metrics belong to --eval; pass --eval too")
+        return None
+    try:
+        accepted = parse_acceptances(args.accept)
+    except RegressionCheckError as exc:
+        raise ReleaseError(str(exc)) from exc
+    reuse = None if args.reuse_metrics is None else args.reuse_metrics.resolve()
+    return EvalRequest(accepted=accepted, reuse=reuse)
+
+
+def _eval_flags(request: EvalRequest | None) -> list[str]:
+    """``request`` as the flags ``prepare`` passes on to ``prepare-checkout``."""
+    if request is None:
+        return []
+    flags = ["--eval"]
+    for sample_id, reason in request.accepted.items():
+        flags += ["--accept", f"{sample_id}={reason}"]
+    return flags if request.reuse is None else [*flags, "--reuse-metrics", str(request.reuse)]
 
 
 def main(
@@ -498,7 +608,8 @@ def _dispatch(
 ) -> int:
     command: str = args.command
     if command == "prepare":
-        return prepare(tools.cwd, version=args.version, runner=tools.runner)
+        flags = _eval_flags(_eval_request(args))
+        return prepare(tools.cwd, version=args.version, eval_flags=flags, runner=tools.runner)
     if command in (FREEZE, UNFREEZE):
         return edition_command(tools.cwd, command, args.tag, runner=tools.runner)
     if command == "tag":
@@ -508,7 +619,13 @@ def _dispatch(
         return _report_editions(check_editions(tools))
     if command == "prepare-checkout":
         build = _default_snapshot(tools.cwd) if snapshot is None else snapshot
-        url = prepare_checkout(tools, base=args.base, version=args.version, snapshot=build)
+        url = prepare_checkout(
+            tools,
+            base=args.base,
+            version=args.version,
+            snapshot=build,
+            evaluation=_eval_request(args),
+        )
     else:
         engine_guard(tools.cwd, command)
         name = command.removesuffix("-checkout")

@@ -8,7 +8,10 @@ target without an explicit model, a moving model alias and, with ``--judge``,
 an unpinned ``[evals.judge] model`` (``evals.model_pins``), ``--format``, and
 a sample whose prompt cannot be resolved. ``--full-scoring`` grades every check,
 as for ``--run``. A sample that cannot
-be scored stops the recording, so a file never silently lacks a sample. The
+be scored stops the recording, so a file never silently lacks a sample. Every
+sample grades the current text (``samples``); a pinned sample also runs on its
+edition as a control (``controls``, #281 ticket 15), whose edition is loaded and
+rendered before any paid run too. The
 file is written whatever the scores are: exit ``0`` once it is written, ``2`` on
 a refusal or an unscorable sample.
 """
@@ -31,6 +34,7 @@ from coding_agent_playbook.commands._eval_options import (
     judge_sample_count,
     select_target,
 )
+from coding_agent_playbook.evals.graded_source import graded_source
 from coding_agent_playbook.evals.judge import JudgeError
 from coding_agent_playbook.evals.model_pins import RecordRefusedError, check_recordable
 from coding_agent_playbook.evals.prompting import PromptResolutionError, render_prompt
@@ -45,6 +49,7 @@ from coding_agent_playbook.evals.run.git_env import without_repo_location
 from coding_agent_playbook.evals.run.harness_version import harness_cli_version
 from coding_agent_playbook.evals.sample_digest import prompt_digest, sample_digest
 from coding_agent_playbook.evals.task_registry import TaskRegistry, TaskRegistryError
+from coding_agent_playbook.release.edition import EditionError
 from coding_agent_playbook.validation.context import SyncContext
 
 if TYPE_CHECKING:
@@ -55,6 +60,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.evals.run.harness_runner import HarnessRunner, SampleResult
     from coding_agent_playbook.evals.sample import EvalSample
     from coding_agent_playbook.evals.targets import EvalSettings, EvalTarget
+    from coding_agent_playbook.release.edition import Edition
 
 #: Wall-clock bound (seconds) of the ``git rev-parse HEAD`` that names the commit.
 _GIT_TIMEOUT: Final = 30.0
@@ -111,6 +117,7 @@ def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings
     if plan is None:
         return 2
     plan.check_prompts(samples)
+    editions = plan.control_editions(samples)
     recorded = RecordedTarget(
         target=target,
         harness_version=harness_cli_version(plan.runner.cli),
@@ -122,10 +129,19 @@ def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings
         commit=_head_commit(repo_root),
         recorded=recorded,
         samples=[plan.run(sample, index, len(samples)) for index, sample in enumerate(samples)],
+        controls=[
+            plan.run(sample, index, len(samples), edition=editions[sample.id])
+            for index, sample in enumerate(samples)
+            if sample.id in editions
+        ],
     )
     validate_release_metrics(metrics)
     _write(out_path, metrics)
-    print(f"recorded {len(samples)} samples x {runs} runs on target {target.name!r} to {out_path}")
+    controls = f" (+{len(editions)} edition controls)" if editions else ""
+    print(
+        f"recorded {len(samples)} samples{controls} x {runs} runs on target "
+        f"{target.name!r} to {out_path}"
+    )
     return 0
 
 
@@ -169,14 +185,38 @@ class _RecordPlan:
                     f"sample {sample.id!r} has no prompt to run, so nothing was run: {exc}"
                 ) from exc
 
-    def run(self, sample: EvalSample, index: int, total: int) -> SampleRuns:
-        """``sample``'s runs and digests, each run reported on stderr as it ends."""
+    def control_editions(self, samples: list[EvalSample]) -> dict[str, Edition]:
+        """The edition of each pinned sample, loaded and rendered before the first paid run."""
+        editions: dict[str, Edition] = {}
+        for sample in samples:
+            if sample.edition is None:
+                continue
+            try:
+                edition = graded_source(sample).edition
+                assert edition is not None  # a pinned sample without head grades its edition
+                render_prompt(sample, strict=self.runner.requires_resolved_prompt, edition=edition)
+            except (EditionError, PromptResolutionError) as exc:
+                raise RecordRefusedError(
+                    f"pinned sample {sample.id!r} cannot run on edition {sample.edition} as a "
+                    f"control, so nothing was run: {exc}"
+                ) from exc
+            editions[sample.id] = edition
+        return editions
+
+    def run(
+        self, sample: EvalSample, index: int, total: int, *, edition: Edition | None = None
+    ) -> SampleRuns:
+        """``sample``'s runs and digests on the current text, or on ``edition`` as a control.
+
+        Each run is reported on stderr as it ends.
+        """
+        label = sample.id if edition is None else f"{sample.id} (control, edition {edition.tag})"
         results = []
         for run_index in range(self.runs):
-            result = self._run_once(sample)
+            result = self._run_once(sample, edition)
             verdict = "PASS" if result.passed else "FAIL"
             print(
-                f"[{index + 1}/{total}] {sample.id} run {run_index + 1}/{self.runs}: "
+                f"[{index + 1}/{total}] {label} run {run_index + 1}/{self.runs}: "
                 f"{verdict} (score={result.aggregate_score:.3f})",
                 file=sys.stderr,
             )
@@ -184,13 +224,13 @@ class _RecordPlan:
         return SampleRuns(
             sample_id=sample.id,
             prompt_id=sample.prompt_id,
-            graded=GRADED_HEAD,
-            prompt_digest=prompt_digest(sample, self.prompt_set),
+            graded=GRADED_HEAD if edition is None else edition.tag,
+            prompt_digest=prompt_digest(sample, self.prompt_set, edition=edition),
             sample_digest=sample_digest(sample),
             results=results,
         )
 
-    def _run_once(self, sample: EvalSample) -> SampleResult:
+    def _run_once(self, sample: EvalSample, edition: Edition | None) -> SampleResult:
         try:
             with tempfile.TemporaryDirectory(prefix="playbook-record-") as tmp:
                 return self.runner.run_sample(
@@ -200,6 +240,7 @@ class _RecordPlan:
                     judge_samples=self.judge_samples,
                     fail_fast=self.fail_fast,
                     prompt_set=self.prompt_set,
+                    edition=edition,
                 )
         except (PromptResolutionError, JudgeError) as exc:
             raise RecordRefusedError(

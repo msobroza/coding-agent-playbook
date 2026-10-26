@@ -12,8 +12,15 @@ One file holds one release's scores on one Eval target
       "summary": {"samples", "runs", "pass_rate", "mean_score", "tokens", "cost_usd"},
       "samples": {"<sample id>": {"prompt_id", "graded", "prompt_digest", "sample_digest",
                   "passes", "runs", "mean_score", "stdev", "checks": {"<check id>": score},
-                  "duration_seconds_mean", "tokens_mean", "cost_usd_mean"}}
+                  "duration_seconds_mean", "tokens_mean", "cost_usd_mean"}},
+      "controls": {"<sample id>": {the same keys, "graded": "<edition tag>"}}
     }
+
+``controls`` (#281 ticket 15) holds the pinned samples' runs on their frozen
+editions; each pinned sample is in ``samples`` too, graded on the current text.
+A control that moves between releases while its edition stayed fixed points at a
+model or harness drift, not at the guidance. It is optional, so a file written
+before it still validates, and the summary counts ``samples`` only.
 
 ``previous`` is ``null`` until the regression check compares the file with the
 previous release; that check may add comparison keys (``vs_previous`` per
@@ -33,6 +40,8 @@ if TYPE_CHECKING:
 
 #: The version of the file shape this module writes and validates.
 SCHEMA_VERSION: Final = 1
+#: The optional key of the pinned samples' runs on their editions.
+CONTROLS_KEY: Final = "controls"
 
 _STR: Final = (str,)
 _OPT_STR: Final = (str, type(None))
@@ -128,15 +137,17 @@ def _problems(data: object) -> list[str]:
     if isinstance(target, dict):
         problems += _nested(target, "endpoint", _ENDPOINT, prefix="target.")
         problems += _nested(target, "price", _PRICE, prefix="target.")
-    samples = data.get("samples")
-    if isinstance(samples, dict):
-        for sample_id, entry in samples.items():
-            problems += _sample_problems(str(sample_id), entry)
+    controls = data.get(CONTROLS_KEY, {})
+    if not isinstance(controls, dict):
+        problems.append(f"{CONTROLS_KEY}: expected dict, got {controls!r}")
+    for key, entries in (("samples", data.get("samples")), (CONTROLS_KEY, controls)):
+        if isinstance(entries, dict):
+            for sample_id, entry in entries.items():
+                problems += _sample_problems(f"{key}.{sample_id}", entry)
     return problems
 
 
-def _sample_problems(sample_id: str, entry: object) -> list[str]:
-    label = f"samples.{sample_id}"
+def _sample_problems(label: str, entry: object) -> list[str]:
     if not isinstance(entry, dict):
         return [f"{label}: expected an object, got {type(entry).__name__}"]
     problems = _check_fields(entry, _SAMPLE, f"{label}.")
