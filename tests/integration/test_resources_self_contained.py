@@ -349,19 +349,30 @@ _EDITIONS_DIRNAME = "editions"
 _RELEASES_DIRNAME = "releases"
 #: ``<tag>/core/<path>``: an edition's frozen copy of the core file at ``<path>``.
 _EDITION_CORE_DEPTH = 2
+#: ``<tag>/digests.toml``: the generated index of an edition's files (release.edition_digests).
+_EDITION_DIGESTS_NAME = "digests.toml"
 
 
 def edition_policy_for(rel: Path) -> ScanPolicy:
     """The checks for ``rel`` (a path relative to ``catalog/editions/``).
 
+    An edition's ``digests.toml`` is URL-free but marker-exempt: it is a generated
+    index of paths and sha256s, and the notices freeze copies (the vendored
+    ``references/LICENSE.<source>`` files) carry their source's name in their file
+    name, so listing them names the source exactly as the files on disk do.
+
     >>> edition_policy_for(Path("v9.9.9/core/ATTRIBUTIONS.md"))
     ScanPolicy(urls=True, markers=False, reserved_hosts='never')
     >>> edition_policy_for(Path("v9.9.9/digests.toml"))
+    ScanPolicy(urls=True, markers=False, reserved_hosts='never')
+    >>> edition_policy_for(Path("README.md"))
     ScanPolicy(urls=True, markers=True, reserved_hosts='never')
     """
     parts = rel.parts
     if len(parts) > _EDITION_CORE_DEPTH and parts[1] == CORE_ROOT.name:
         return policy_for(Path(*parts[_EDITION_CORE_DEPTH:]))
+    if len(parts) == _EDITION_CORE_DEPTH and parts[1] == _EDITION_DIGESTS_NAME:
+        return ScanPolicy(urls=True, markers=False)
     return ScanPolicy(urls=True, markers=True)
 
 
