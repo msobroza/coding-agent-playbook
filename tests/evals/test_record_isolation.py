@@ -8,6 +8,7 @@ from coding_agent_playbook.evals.endpoints import Endpoint
 from coding_agent_playbook.evals.model_pins import RecordRefusedError
 from coding_agent_playbook.evals.record_isolation import (
     API_KEY_VARIABLE,
+    check_opencode_key_model,
     check_record_credentials,
     record_api_key,
 )
@@ -81,3 +82,17 @@ def test_record_api_key_reads_the_variable_or_refuses_naming_it() -> None:
     assert record_api_key({API_KEY_VARIABLE: _KEY}) == _KEY
     with pytest.raises(RecordRefusedError, match="ANTHROPIC_API_KEY"):
         record_api_key({})
+
+
+def test_an_anthropic_opencode_model_runs_on_the_api_key() -> None:
+    check_opencode_key_model("anthropic/claude-opus-5-5")
+
+
+@pytest.mark.parametrize("model", ["openai/gpt-x", "gpt-x", "Anthropic/claude"])
+def test_any_other_opencode_model_is_refused_with_the_model_named(model: str) -> None:
+    with pytest.raises(RecordRefusedError) as caught:
+        check_opencode_key_model(model)
+    message = str(caught.value)
+    assert repr(model) in message
+    assert "anthropic/" in message
+    assert "token_env" in message

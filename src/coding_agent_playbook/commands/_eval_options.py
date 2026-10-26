@@ -14,7 +14,7 @@ import sys
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.evals import registry
-from coding_agent_playbook.evals.record_isolation import record_api_key
+from coding_agent_playbook.evals.record_isolation import check_opencode_key_model, record_api_key
 from coding_agent_playbook.evals.run.claude_code_route import ClaudeCodeKeyRoute, claude_code_route
 from coding_agent_playbook.evals.run.opencode_route import OpenCodeKeyRoute, opencode_route
 from coding_agent_playbook.evals.run.opencode_runner import OpenCodeRunner
@@ -147,9 +147,13 @@ def _endpoint_route(
 def _key_route(
     runner_cls: type[HarnessRunner], model: str
 ) -> ClaudeCodeKeyRoute | OpenCodeKeyRoute:
-    """The isolation ``runner_cls``'s harness gets without an endpoint (API key read now)."""
+    """The isolation ``runner_cls``'s harness gets without an endpoint (API key read now).
+
+    An OpenCode model must be an Anthropic one, the only provider the key reaches.
+    """
     key = record_api_key(os.environ)
     if issubclass(runner_cls, OpenCodeRunner):
+        check_opencode_key_model(model)
         return OpenCodeKeyRoute(model, key)
     return ClaudeCodeKeyRoute(key)
 

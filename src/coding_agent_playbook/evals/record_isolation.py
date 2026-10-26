@@ -27,6 +27,29 @@ if TYPE_CHECKING:
 #: The variable an isolated run without an endpoint reads its Anthropic API key from.
 API_KEY_VARIABLE: Final = "ANTHROPIC_API_KEY"
 
+#: The provider prefix an OpenCode model needs to run on :data:`API_KEY_VARIABLE`.
+_ANTHROPIC_PROVIDER: Final = "anthropic/"
+
+
+def check_opencode_key_model(model: str) -> None:
+    """Refuse an OpenCode model without an endpoint that the Anthropic API key cannot run.
+
+    An isolated OpenCode run without an endpoint gets :data:`API_KEY_VARIABLE`
+    only, so any provider but Anthropic would run with no usable key.
+    :class:`RecordRefusedError` (exit 2) names the model, before any paid call.
+
+    Example::
+
+        >>> check_opencode_key_model("anthropic/claude-opus-5-5")
+    """
+    if model.startswith(_ANTHROPIC_PROVIDER):
+        return
+    raise RecordRefusedError(
+        f"--record runs an OpenCode target without an endpoint on {API_KEY_VARIABLE} only, "
+        f"so its model must be '{_ANTHROPIC_PROVIDER}<model id>', got {model!r}; "
+        "or declare an endpoint with token_env; nothing was run"
+    )
+
 
 def record_api_key(env: Mapping[str, str]) -> str:
     """The API key in ``env``; :class:`RecordRefusedError` naming the variable when unset or empty.
