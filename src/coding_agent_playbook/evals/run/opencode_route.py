@@ -58,6 +58,8 @@ _SDK_PACKAGES: Final = {
     API_OPENAI_RESPONSES: "@ai-sdk/openai",
     API_ANTHROPIC: "@ai-sdk/anthropic",
 }
+#: The API version path ``@ai-sdk/anthropic`` expects at the end of its base URL.
+_ANTHROPIC_VERSION_SUFFIX: Final = "/v1"
 #: A zero price: results take cost from a declared target price, never from OpenCode.
 _ZERO_COST: Final = {"input": 0, "output": 0, "cache_read": 0, "cache_write": 0}
 #: Inherited variables whose name starts with one of these are dropped.
@@ -176,11 +178,24 @@ class OpenCodeRoute:
 
     def _options(self) -> dict[str, object]:
         """The provider options: base URL, the token reference and any extra headers."""
-        options: dict[str, object] = {"baseURL": self.endpoint.base_url}
+        options: dict[str, object] = {"baseURL": self._base_url()}
         options[self._token_option()] = "{env:" + TOKEN_VARIABLE + "}"
         if self.headers:
             options["headers"] = dict(self.headers)
         return options
+
+    def _base_url(self) -> str:
+        """The SDK base URL; an ``anthropic`` endpoint's gets the ``/v1`` it omits.
+
+        Why: an ``anthropic`` ``base_url`` is the API root without ``/v1`` (Claude
+        Code and the judge get it as ``ANTHROPIC_BASE_URL`` and add ``/v1/messages``),
+        but ``@ai-sdk/anthropic`` requests ``${baseURL}/messages`` as given.
+        """
+        url = self.endpoint.base_url
+        if self.endpoint.api != API_ANTHROPIC:
+            return url
+        trimmed = url.rstrip("/")
+        return trimmed if trimmed.endswith(_ANTHROPIC_VERSION_SUFFIX) else trimmed + "/v1"
 
     def _token_option(self) -> str:
         """``authToken`` (bearer) for a bearer ``anthropic`` endpoint, else ``apiKey``."""

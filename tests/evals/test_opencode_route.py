@@ -112,6 +112,25 @@ def test_token_is_an_env_reference_never_the_value() -> None:
     assert env[TOKEN_VARIABLE] == _TOKEN
 
 
+@pytest.mark.parametrize(
+    "base_url",
+    ["https://llm.internal.example", "https://llm.internal.example/", _URL, _URL + "/"],
+)
+def test_anthropic_endpoint_base_url_gets_v1_once(base_url: str) -> None:
+    # Regression (PR #312): the documented anthropic base_url has no /v1, shared with
+    # Claude Code and the judge; @ai-sdk/anthropic would call <base_url>/messages.
+    options = _provider(_route(api="anthropic", base_url=base_url))["options"]
+    assert options == {"baseURL": _URL, "authToken": "{env:" + TOKEN_VARIABLE + "}"}
+
+
+def test_openai_endpoint_base_url_is_sent_unchanged() -> None:
+    options = _provider(_route(base_url="https://llm.internal.example"))["options"]
+    assert options == {
+        "baseURL": "https://llm.internal.example",
+        "apiKey": "{env:" + TOKEN_VARIABLE + "}",
+    }
+
+
 def test_bearer_anthropic_endpoint_sends_the_token_as_auth_token() -> None:
     options = _provider(_route(api="anthropic"))["options"]
     assert options == {"baseURL": _URL, "authToken": "{env:" + TOKEN_VARIABLE + "}"}

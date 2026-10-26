@@ -729,6 +729,11 @@ endpoint = "internal"              # optional; the judge then needs a model
 model = "internal-opus"
 ```
 
+Write an `anthropic` `base_url` without `/v1`, as `ANTHROPIC_BASE_URL` takes it:
+the same endpoint then serves Claude Code targets, the judge and OpenCode targets.
+An `openai-chat` or `openai-responses` `base_url` includes its version path (such
+as `/v1`) and is used as written.
+
 The token comes only from the variable `token_env` names, or, in the local file
 only, from `token_command` (a command whose output is the token). Inline secret
 keys such as `token`, `api_key` or `password` are refused in both files. An
@@ -756,7 +761,8 @@ It needs OpenCode 1.1.64 or later. Each run gets an inline config in
 `OPENCODE_CONFIG_CONTENT`: one provider, `playbook-target`, is the only enabled
 provider, with the SDK package for the API shape (`@ai-sdk/openai-compatible` for
 `openai-chat`, `@ai-sdk/openai` for `openai-responses`, `@ai-sdk/anthropic` for
-`anthropic`), the base URL, the token as an `{env:PLAYBOOK_ENDPOINT_TOKEN}`
+`anthropic`), the base URL (for `anthropic`, with the `/v1` the SDK expects
+appended unless `base_url` already ends in it), the token as an `{env:PLAYBOOK_ENDPOINT_TOKEN}`
 reference, the model and small model as served model ids, the declared context
 and output limits, and a zero built-in cost. The model is sent as
 `--model playbook-target/<model>`. The run gets empty scratch `XDG_CONFIG_HOME`,
