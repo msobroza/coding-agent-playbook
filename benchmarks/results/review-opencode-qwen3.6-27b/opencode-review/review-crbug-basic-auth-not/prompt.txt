@@ -1,0 +1,1 @@
+review my change in CHANGE.diff (it is already applied to the working tree). It switches the admin credential check to a constant-time comparison, so the check no longer leaks through its timing how much of a username or password matched.

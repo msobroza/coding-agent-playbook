@@ -1,0 +1,14 @@
+Here is my analysis of the change.
+
+---
+
+- **src/audio.py:17** — correctness — important — `TypeError` when `ffmpeg_input.input_args` is a plain string (not a preset name) — `or ffmpeg_input.input_args` returns a bare `str`, then `list[str] + str` fails. Example input: `CameraInput("/stream", ["audio"], input_args="-rtsp_transport udp")`. The `or` chain on line 15–20 needs `get_ffmpeg_arg_list()` around each fallback that can be a plain string, not the raw value. Same applies to `or ffmpeg.input_args` on line 19.
+
+- **src/audio.py:14** — correctness — pre-existing — `IndexError` when no input has the `"audio"` role — `[i for i in ffmpeg.inputs if "audio" in i.roles][0]` raises with a generic `list index out of range` message. The old code at the call site had the same `[0]` on the audio-path list comprehension.
+
+- **src/audio.py:16,18** — nit — pre-existing — `parse_preset_input` is called with `detect_fps=1`. For `preset-http-reolink` this injects `-r 1` into the command, which is meaningless for an audio-only stream. The old code also passed `1`.
+
+Findings: 1 important, 1 nit, 1 pre-existing
+
+request changes
+[claude-code:unrecognized_model] {"model":"qwen/qwen3.6-27b","query_source":"sdk"}

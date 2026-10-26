@@ -1,0 +1,25 @@
+**Design and boundaries:**
+
+- `src/shipping.py:11`, `src/units.py:7`: `unit: str` — a typo like `"lbs"` or `"LB"` compiles fine and only fails at runtime. `Literal["kg", "lb"]` catches the typo at the call site. Principle: make invalid states unrepresentable. Python idiom: `typing.Literal`.
+
+The choice to validate `weight <= 0` in `quote_cents` before delegating to `to_kilograms` is good — it keeps the conversion function a pure calculator and puts the business rule at the boundary. The `from None` on the re-raised `ValueError` is also correct: the `KeyError` traceback from a dict lookup adds no debug value when the message already names the bad unit and the valid options.
+
+*approve with comments*
+
+> build · qwen/qwen3.6-27b
+
+→ Read CHANGE.diff
+✗ unknown Unknown failed
+Error: Tool execution aborted
+→ Read src/shipping.py
+→ Read src/units.py
+→ Read tests/test_shipping.py
+✗ unknown Unknown failed
+Error: Tool execution aborted
+✗ unknown Unknown failed
+Error: Tool execution aborted
+✗ unknown Unknown failed
+Error: Tool execution aborted
+→ Read tests/test_units.py
+✗ unknown Unknown failed
+Error: Tool execution aborted

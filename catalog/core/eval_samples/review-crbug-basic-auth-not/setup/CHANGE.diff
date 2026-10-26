@@ -1,0 +1,22 @@
+fix(auth): compare admin credentials in constant time
+
+diff --git a/src/auth.py b/src/auth.py
+--- a/src/auth.py
++++ b/src/auth.py
+@@ -1,5 +1,6 @@
+ """HTTP Basic credential check that guards the admin endpoints."""
+ 
++import hmac
+ from dataclasses import dataclass
+ 
+ 
+@@ -11,6 +12,8 @@ class Credentials:
+ 
+ def is_authorized(given: Credentials, expected: Credentials) -> bool:
+     """True when the ``given`` credentials match the configured admin ``expected`` ones."""
+-    if given.username != expected.username or given.password != expected.password:
++    # Be careful to use constant time comparison to prevent timing attacks
++    if (!hmac.compare_digest(given.username, expected.username) or
++        !hmac.compare_digest(given.password, expected.password)):
+         return False
+     return True

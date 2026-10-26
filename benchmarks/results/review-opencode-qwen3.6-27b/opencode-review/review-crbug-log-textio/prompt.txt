@@ -1,0 +1,1 @@
+review my change in CHANGE.diff (it is already applied to the working tree). It makes Service.stop() close the driver's log output on quit, whether log_output is an open file or a file descriptor, so no log file is left open once the driver stops.

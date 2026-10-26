@@ -1,0 +1,61 @@
+feat(streams): MINID and LIMIT support for xtrim
+
+diff --git a/src/streams.py b/src/streams.py
+--- a/src/streams.py
++++ b/src/streams.py
+@@ -16,14 +16,33 @@ class StreamCommands:
+         """Return the number of entries in the stream ``name``."""
+         return self.execute_command("XLEN", name)
+ 
+-    def xtrim(self, name: str, maxlen: int, approximate: bool = True) -> Any:
++    def xtrim(
++        self,
++        name: str,
++        maxlen: int | None = None,
++        approximate: bool = True,
++        minid: str | None = None,
++        limit: int | None = None,
++    ) -> Any:
+         """Trim old entries from the stream ``name``.
+ 
+         maxlen: keep at most this many entries.
+         approximate: let the server keep slightly more than maxlen, which is faster.
++        minid: evict the entries whose id is lower than this one.
++        limit: evict at most this many entries in one call.
+         """
+-        pieces: list[Any] = [b"MAXLEN"]
++        pieces: list[Any] = []
++        if maxlen is not None:
++            pieces.append(b"MAXLEN")
++        if minid is not None:
++            pieces.append(b"MINID")
+         if approximate:
+             pieces.append(b"~")
+-        pieces.append(maxlen)
++        if maxlen is not None:
++            pieces.append(maxlen)
++        if minid is not None:
++            pieces.append(minid)
++        if limit is not None:
++            pieces.append(b"LIMIT")
++            pieces.append(limit)
+         return self.execute_command("XTRIM", name, *pieces)
+diff --git a/tests/test_streams.py b/tests/test_streams.py
+--- a/tests/test_streams.py
++++ b/tests/test_streams.py
+@@ -24,3 +24,15 @@ def test_xtrim_can_trim_exactly() -> None:
+     redis = FakeRedis()
+     StreamCommands(redis.execute_command).xtrim("events", 100, approximate=False)
+     assert redis.calls == [("XTRIM", "events", b"MAXLEN", 100)]
++
++
++def test_xtrim_by_minid() -> None:
++    redis = FakeRedis()
++    StreamCommands(redis.execute_command).xtrim("events", minid="1700000000000-0")
++    assert redis.calls == [("XTRIM", "events", b"MINID", b"~", "1700000000000-0")]
++
++
++def test_xtrim_with_a_limit() -> None:
++    redis = FakeRedis()
++    StreamCommands(redis.execute_command).xtrim("events", 100, limit=10)
++    assert redis.calls == [("XTRIM", "events", b"MAXLEN", b"~", 100, b"LIMIT", 10)]

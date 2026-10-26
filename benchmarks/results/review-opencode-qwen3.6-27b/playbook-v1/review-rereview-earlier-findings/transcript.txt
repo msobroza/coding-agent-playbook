@@ -1,0 +1,31 @@
+**Correctness**
+
+- `src/cart.py:16` — `self.lines[sku]` raises bare `KeyError` when the SKU isn't in the cart. `add()` guards with `.get()`, but `remove()` doesn't. Either catch it (`except KeyError as exc: raise ValueError(...) from exc`) or document that callers must check first.
+- `src/cart.py:24-26` — **Unaddressed from earlier review.** `total_cents()` still accepts any `discount_percent`: `150` yields a negative total, `-10` inflates the charge. Clamp to `0..100` or raise.
+
+**Failure modes**
+
+- (none new)
+
+**Security**
+
+- (none)
+
+**Design and boundaries**
+
+- (none)
+
+**Readability**
+
+- (none)
+
+**Style**
+
+- (none)
+
+*Request changes* — the `discount_percent` issue from the prior review is untouched, and `remove()` on a missing SKU produces an unhelpful `KeyError`.
+
+> build · qwen/qwen3.6-27b
+
+→ Read CHANGE.diff
+→ Read src/cart.py

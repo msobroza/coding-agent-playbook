@@ -1,0 +1,127 @@
+The subagent found two issues in the `CHANGE.diff` changes. Let me verify them against the actual code.
+Now let me read the full `service.py` to verify the subagent's findings:
+The subagent identified two issues. Verified them against the full file:
+
+**1. Bug: default `log_output` (devnull) never closed**
+
+When `log_output=None`, the constructor opens `os.devnull` as `"wb"` — a `BinaryIO`. `stop()` only checks `isinstance(self.log_output, TextIO)`, so the devnull handle leaks every time a `Service` uses the default.
+
+**2. Behavioral change: `stop()` can now raise, leaving the child process running**
+
+The old code wrapped the close in `try/except Exception: pass`. The new code calls `.close()` / `os.close()` bare. If either raises (e.g., double-close, bad fd), the exception propagates and the `process.terminate()`/`wait()` below is skipped, orphaning the child.
+
+Both are legitimate concerns. The first is a definite bug. The second depends on intent — if failing silently was deliberate, re-add a `try/except`.
+
+> build · qwen/qwen3.6-27b
+
+• review changes [commit|branch|pr], defaults to uncommitted Build Agent
+✓ review changes [commit|branch|pr], defaults to uncommitted Build Agent
+
+$ cat ~/.cache/playbook-bench/review-opencode-qwen3.6-27b/opencode-review/review-crbug-log-textio/scratch/CHANGE.diff
+fix(service): close the driver log output on quit
+
+diff --git a/src/service.py b/src/service.py
+--- a/src/service.py
++++ b/src/service.py
+@@ -4,8 +4,8 @@ from __future__ import annotations
+ 
+ import os
+ import subprocess
+-from subprocess import DEVNULL, PIPE
+-from typing import IO, Any
++from subprocess import PIPE
++from typing import IO, Any, TextIO
+ 
+ 
+ class Service:
+@@ -33,13 +33,11 @@ class Service:
+ 
+     def stop(self) -> None:
+         """Stop the driver and close the log it was writing to."""
+-        if self.log_output != PIPE and not (self.log_output == DEVNULL):
+-            try:
+-                # Todo: be explicit in what we are catching here.
+-                if hasattr(self.log_output, "close"):
+-                    self.log_file.close()  # type: ignore[attr-defined]
+-            except Exception:
+-                pass
++        if self.log_output != PIPE:
++            if isinstance(self.log_output, TextIO):
++                self.log_output.close()
++            elif isinstance(self.log_output, int):
++                os.close(self.log_output)
+ 
+         if self.process is not None:
+             self.process.terminate()
+diff --git a/tests/test_service.py b/tests/test_service.py
+--- a/tests/test_service.py
++++ b/tests/test_service.py
+@@ -1,6 +1,8 @@
+ import os
+ from subprocess import PIPE
+ 
++import pytest
++
+ from src.service import Service
+ 
+ 
+@@ -15,3 +17,11 @@ def test_a_file_descriptor_is_kept_as_the_log() -> None:
+     finally:
+         os.close(read_end)
+         os.close(write_end)
++
++
++def test_stop_closes_a_file_descriptor_log() -> None:
++    read_end, write_end = os.pipe()
++    Service("chromedriver", log_output=write_end).stop()
++    os.close(read_end)
++    with pytest.raises(OSError):
++        os.close(write_end)
+
+$ cat ~/.cache/playbook-bench/review-opencode-qwen3.6-27b/opencode-review/review-crbug-log-textio/scratch/src/service.py
+"""Start and stop a browser-driver child process, with its log sent where the caller asks."""
+
+from __future__ import annotations
+
+import os
+import subprocess
+from subprocess import PIPE
+from typing import IO, Any, TextIO
+
+
+class Service:
+    """Runs the driver ``executable``.
+
+    ``log_output`` is a path (opened for appending), an open file, a file
+    descriptor, or ``subprocess.PIPE``; by default the log goes to os.devnull.
+    """
+
+    def __init__(self, executable: str, log_output: str | int | IO[Any] | None = None) -> None:
+        self.executable = executable
+        if isinstance(log_output, str):
+            self.log_output: int | IO[Any] = open(log_output, "a+", encoding="utf-8")
+        elif log_output is None:
+            self.log_output = open(os.devnull, "wb")
+        else:
+            self.log_output = log_output
+        self.process: subprocess.Popen[bytes] | None = None
+
+    def start(self) -> None:
+        """Launch the driver, its stdout and stderr going to ``log_output``."""
+        self.process = subprocess.Popen(
+            [self.executable], stdout=self.log_output, stderr=self.log_output
+        )
+
+    def stop(self) -> None:
+        """Stop the driver and close the log it was writing to."""
+        if self.log_output != PIPE:
+            if isinstance(self.log_output, TextIO):
+                self.log_output.close()
+            elif isinstance(self.log_output, int):
+                os.close(self.log_output)
+
+        if self.process is not None:
+            self.process.terminate()
+            self.process.wait(timeout=10)
+            self.process = None
+

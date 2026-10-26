@@ -1,0 +1,40 @@
+fix(scene): no duplicate references after replace onto an object already on screen
+
+diff --git a/src/scene.py b/src/scene.py
+--- a/src/scene.py
++++ b/src/scene.py
+@@ -33,6 +33,10 @@ class Scene:
+         """
+ 
+         def replace_in_list(mobj_list: list[Mobject], old_m: Mobject, new_m: Mobject) -> bool:
++            # Avoid duplicate references to the same object in the scene
++            if new_m in mobj_list:
++                mobj_list.remove(new_m)
++
+             # Breadth-first: top-level objects are the most common targets, and
+             # some groups nest deeply.
+             for i in range(len(mobj_list)):
+diff --git a/tests/test_scene.py b/tests/test_scene.py
+--- a/tests/test_scene.py
++++ b/tests/test_scene.py
+@@ -24,3 +24,20 @@ def test_replace_rejects_an_object_not_in_the_scene() -> None:
+     scene = Scene()
+     with pytest.raises(ValueError, match="Could not find"):
+         scene.replace(Mobject("circle"), Mobject("square"))
++
++
++def test_no_duplicate_reference_when_the_target_is_already_on_screen() -> None:
++    scene = Scene()
++    circle, square = Mobject("circle"), Mobject("square")
++    scene.add(circle, square)
++    scene.replace(circle, square)
++    assert scene.mobjects == [square]
++
++
++def test_no_duplicate_reference_inside_a_group() -> None:
++    scene = Scene()
++    circle, square = Mobject("circle"), Mobject("square")
++    group = Mobject("group", circle, square)
++    scene.add(group)
++    scene.replace(circle, square)
++    assert group.submobjects == [square]

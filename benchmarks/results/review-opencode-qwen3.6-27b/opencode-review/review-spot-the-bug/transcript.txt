@@ -1,0 +1,26 @@
+**Bug confirmed.**
+
+**Off-by-one on the last page — final item excluded**
+
+`src/pagination.py:22`
+
+```python
+end = len(items) - 1
+```
+
+When the computed `end` exceeds the list length, subtracting 1 causes the last element to be silently dropped, because Python slices are exclusive on the right.
+
+**Example:** `items = ["a", "b", "c"]`, `page=0`, `page_size=10`
+- `start = 0`, `end = 10`
+- `end > 3`, so `end = 2`
+- `items[0:2]` → `["a", "b"]` — `"c"` is missing
+
+`has_more` is unaffected (still returns `False`), so the caller won't know items were lost.
+
+**Fix:** `end = len(items)` — or remove the guard entirely since Python slicing already handles `end > len(items)` gracefully.
+
+> build · qwen/qwen3.6-27b
+
+• review changes [commit|branch|pr], defaults to uncommitted Build Agent
+✓ review changes [commit|branch|pr], defaults to uncommitted Build Agent
+→ Read src/pagination.py

@@ -1,0 +1,61 @@
+feat(feeds): FEED_STORAGE_FTP_ACTIVE setting for FTP active mode
+
+diff --git a/src/feedstorage.py b/src/feedstorage.py
+--- a/src/feedstorage.py
++++ b/src/feedstorage.py
+@@ -13,23 +13,26 @@ class FTPFeedStorage:
+     """Uploads a finished feed file to a path on an FTP server."""
+ 
+     def __init__(
+-        self, host: str, path: str, *, port: int = 21, username: str = "", password: str = ""
++        self, host: str, path: str, *, port: int = 21, username: str = "", password: str = "", active: bool = False
+     ) -> None:
+         self.host = host
+         self.path = path
+         self.port = port
+         self.username = username
+         self.password = password
++        self.active = active
+ 
+     @classmethod
+     def from_settings(cls, settings: Settings, host: str, path: str) -> FTPFeedStorage:
+-        return cls(host, path)
++        return cls(host, path, active=settings["FEED_STORAGE_FTP_ACTIVE"] or False)
+ 
+     def store(self, file: BinaryIO) -> None:
+         file.seek(0)
+         ftp = FTP()
+         ftp.connect(self.host, self.port)
+         ftp.login(self.username, self.password)
++        if self.active:
++            ftp.set_pasv(False)
+         dirname, filename = posixpath.split(self.path)
+         ftp.cwd(dirname)
+         ftp.storbinary(f"STOR {filename}", file)
+diff --git a/src/settings.py b/src/settings.py
+--- a/src/settings.py
++++ b/src/settings.py
+@@ -7,6 +7,7 @@ from typing import Any
+ DEFAULTS: dict[str, Any] = {
+     "FEED_URI": None,
+     "FEED_EXPORT_INDENT": 0,
++    "FEED_STORAGE_FTP_ACTIVE": False,
+     "FEED_STORAGE_S3_ACL": "",
+ }
+ 
+diff --git a/tests/test_feedstorage.py b/tests/test_feedstorage.py
+--- a/tests/test_feedstorage.py
++++ b/tests/test_feedstorage.py
+@@ -7,3 +7,12 @@ HOST, PATH = "ftp.example.com", "/feeds/items.json"
+ def test_the_storage_targets_the_host_and_path_on_port_21() -> None:
+     storage = FTPFeedStorage.from_settings(Settings(), HOST, PATH)
+     assert (storage.host, storage.port, storage.path) == (HOST, 21, PATH)
++
++
++def test_passive_mode_is_the_default() -> None:
++    assert FTPFeedStorage.from_settings(Settings(), HOST, PATH).active is False
++
++
++def test_the_setting_turns_active_mode_on() -> None:
++    settings = Settings({"FEED_STORAGE_FTP_ACTIVE": True})
++    assert FTPFeedStorage.from_settings(settings, HOST, PATH).active is True

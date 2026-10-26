@@ -1,0 +1,7 @@
+
+> build · qwen/qwen3.6-27b
+
+! permission requested: external_directory (~/.cache/playbook-bench/review-opencode-qwen3.6-27b/playbook-v1/review-crbug-xtrim-minid/scratch/*); auto-rejecting
+✗ Read ~/.cache/playbook-bench/review-opencode-qwen3.6-27b/playbook-v1/review-crbug-xtrim-minid/scratch/CHANGE.diff failed
+Error: The user rejected permission to use this specific tool call.
+✱ Glob "**/*.py" 2 matches

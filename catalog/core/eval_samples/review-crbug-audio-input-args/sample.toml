@@ -1,0 +1,46 @@
+id = "review-crbug-audio-input-args"
+prompt_id = "review"
+description = "Review a change that builds the audio ffmpeg command from the camera's input args but concatenates a plain argument string onto a list. Paraphrases the bug frigate pull request 8156 introduced and pull request 8924 fixed, from CRBugBench; see eval_samples/ATTRIBUTIONS.md."
+
+[setup]
+files = [
+  "CHANGE.diff",
+  "src/audio.py",
+  "src/config.py",
+  "src/ffmpeg_presets.py",
+  "tests/test_audio.py",
+]
+project_kind = "python-application"
+
+[invocation]
+prompt_args = "review my change in CHANGE.diff (it is already applied to the working tree). Audio detection used to force the RTSP audio-only preset; now it uses the camera's own ffmpeg input arguments: the audio input's input_args if set, else the camera-wide ffmpeg input_args. As everywhere in the config, each can be a preset name or ordinary ffmpeg arguments."
+input_variables = {}
+
+[gate]
+# Review-only: the agent must report, not edit. The change carries one real bug
+# (see the rubric), so a correct answer from either prompt set ends on request
+# changes, never an approving verdict line. Whether the answer names the right bug
+# is the judge's call: no bug-specific pattern here, so wording cannot sink a
+# correct review. An empty answer has no verdict line.
+expr = "audio_untouched and config_untouched and presets_untouched and tests_untouched and blocks and not approves"
+
+[gate.bind]
+audio_untouched   = { check = "file_unchanged", path = "src/audio.py" }
+config_untouched  = { check = "file_unchanged", path = "src/config.py" }
+presets_untouched = { check = "file_unchanged", path = "src/ffmpeg_presets.py" }
+tests_untouched   = { check = "file_unchanged", path = "tests/test_audio.py" }
+blocks            = { check = "answer_matches", pattern = '(?im)^\W*(?:verdict\W*)?request changes\W*$' }
+approves          = { check = "answer_matches", pattern = '(?im)^\W*(?:verdict\W*)?approve(?: with comments)?\W*$' }
+
+[rubric]
+expr = "quality"
+
+[rubric.bind]
+quality = { fail = 0.5, rubric = [
+  { judge = "The review reports that input_args given as ordinary ffmpeg arguments in a string rather than a preset name (for example '-rtsp_transport tcp') are concatenated as a str onto the argument list: get_ffmpeg_arg_list(...) + '-rtsp_transport tcp' raises TypeError (can only concatenate list to list), so audio detection fails to start; the fallbacks need get_ffmpeg_arg_list(...) like the global args.", weight = 0.6 },
+  { judge = "The review treats that bug as blocking (important, not a nit or an open question), cites its file and line in src/audio.py (get_ffmpeg_command), and its verdict is 'request changes'.", weight = 0.2 },
+  { judge = "The review does not invent bugs: anything else it raises is a real problem in the code shown, and it does not ask to rewrite code that works.", weight = 0.2 },
+] }
+
+[verdict]
+trial = "gate and rubric"

@@ -1,0 +1,20 @@
+- **Correctness**
+  - `src/netrc_auth.py:17` - **important, new** - `os.path.expanduser(f"~/{name}")` blindly prepends `~/` even when `name` is an absolute path. With `NETRC="/etc/custom_netrc"`, the formatted string becomes `"~//etc/custom_netrc"`, which expands to `/home/user//etc/custom_netrc` — a non-existent path, so the function silently returns `None` instead of reading the file the user specified.
+  - `src/netrc_auth.py:11-12` - **important, new** - `os.environ.get("NETRC")` returns `""` (empty string) when the variable is set but empty, which is not `None`, so `netrc_locations` becomes `("",)`. The loop then resolves `f"~/"` to the home directory, treats it as the netrc file, and after parse failure returns `None` instead of falling back to the default `.netrc`/`_netrc` locations. The check should treat empty string the same as unset: `if netrc_file` instead of `if netrc_file is not None`.
+
+- **Readability**
+  - `tests/test_netrc_auth.py:29-35` - **nit, new** - The test only exercises a relative NETRC path (`.netrc-ci`). Add a test with an absolute path (`NETRC="/tmp/..."`) to cover the primary use case of pointing at a file outside the home directory. Also worth covering `NETRC=""` (fallback to defaults) and `NETRC` pointing to a non-existent file (returns `None`).
+
+Findings: 2 important, 1 nit, 0 pre-existing
+
+request changes
+
+> build · qwen/qwen3.6-27b
+
+→ Read CHANGE.diff
+✱ Glob "**/{CLAUDE.md,AGENTS.md,REVIEW.md,.claude/rules/**,.opencode/**}" in . · 0 matches
+✱ Glob "**/*.py" in . · 2 matches
+• First-pass diff review Explore Agent
+✓ First-pass diff review Explore Agent
+→ Read src/netrc_auth.py
+→ Read tests/test_netrc_auth.py

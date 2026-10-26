@@ -1,0 +1,36 @@
+I don't have a subagent tool available, so I'll perform steps 3–4 myself. I've read the diff and both files in full. Let me now draft the review.
+
+---
+
+**Correctness**
+
+- **pre-existing** — `src/inventory.py:15` — The docstring of `items_to_reorder` says "Items whose stock has fallen **to or below** their reorder level" but the filter uses `item.quantity < item.reorder_level` (strict less-than). An item whose quantity exactly equals its reorder level — e.g. `Item("pen", 1, 1)` — is excluded despite the stated contract. The fix is `<=`.
+
+---
+
+**Failure modes**
+
+No issues found. `restock` raises explicitly named exceptions for its two failure paths; the tests cover both. The `list[Item]` parameter is used as a mutable in/out, which the signature and docstring make clear enough.
+
+**Security**
+
+No issues found.
+
+**Design and boundaries**
+
+No issues found. The new function is a simple operation fitting the existing module scope.
+
+**Readability**
+
+No issues found. Names are clear; the function is short; the docstring documents the exceptions.
+
+**Style**
+
+No issues found.
+
+---
+
+Findings: 0 important, 0 nit, 1 pre-existing
+
+approve
+[claude-code:unrecognized_model] {"model":"qwen/qwen3.6-27b","query_source":"sdk"}

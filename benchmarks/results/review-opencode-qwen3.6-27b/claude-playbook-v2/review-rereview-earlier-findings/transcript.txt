@@ -1,0 +1,16 @@
+**Earlier finding statuses:**
+
+1. src/cart.py:15 (remove() lets quantity go negative) — **fixed**. Line 17-18 now guards `0 < quantity <= held` and raises.
+2. src/cart.py:19 (total_cents() accepts any discount_percent) — **still open**. The diff does not touch `total_cents()` at all; `discount_percent=150` still returns a negative total, and `discount_percent=-10` inflates the charge.
+3. src/cart.py:9 (add() accepts zero or negative quantity) — **fixed**. Lines 10-11 now reject `quantity <= 0`.
+
+---
+
+### Correctness
+
+- **src/cart.py:24** — important — pre-existing — `total_cents()` has no guard on `discount_percent`. `discount_percent=150` → `subtotal * (100 - 150) // 100` = negative cents; `discount_percent=-10` → charges more than the subtotal. The fix commit left this function untouched.
+
+Findings: 1 important, 0 nit, 0 pre-existing
+
+request changes
+[claude-code:unrecognized_model] {"model":"qwen/qwen3.6-27b","query_source":"sdk"}

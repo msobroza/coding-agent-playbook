@@ -1,0 +1,42 @@
+id = "review-crbug-netrc-env-path"
+prompt_id = "review"
+description = "Review a change that makes get_netrc_auth honour a NETRC variable holding the netrc file's path, but still expands that path under the home directory. Paraphrases the bug a reviewer caught in requests pull request 5643, from CRBugBench; see eval_samples/ATTRIBUTIONS.md."
+
+[setup]
+files = [
+  "CHANGE.diff",
+  "src/netrc_auth.py",
+  "tests/test_netrc_auth.py",
+]
+project_kind = "library"
+
+[invocation]
+prompt_args = "review my change in CHANGE.diff (it is already applied to the working tree). It lets users point get_netrc_auth at their netrc file with the NETRC environment variable, which holds the path to that file, instead of always looking for ~/.netrc or ~/_netrc."
+input_variables = {}
+
+[gate]
+# Review-only: the agent must report, not edit. The change carries one real bug
+# (see the rubric), so a correct answer from either prompt set ends on request
+# changes, never an approving verdict line. Whether the answer names the right bug
+# is the judge's call: no bug-specific pattern here, so wording cannot sink a
+# correct review. An empty answer has no verdict line.
+expr = "auth_untouched and tests_untouched and blocks and not approves"
+
+[gate.bind]
+auth_untouched  = { check = "file_unchanged", path = "src/netrc_auth.py" }
+tests_untouched = { check = "file_unchanged", path = "tests/test_netrc_auth.py" }
+blocks          = { check = "answer_matches", pattern = '(?im)^\W*(?:verdict\W*)?request changes\W*$' }
+approves        = { check = "answer_matches", pattern = '(?im)^\W*(?:verdict\W*)?approve(?: with comments)?\W*$' }
+
+[rubric]
+expr = "quality"
+
+[rubric.bind]
+quality = { fail = 0.5, rubric = [
+  { judge = "The review reports that a NETRC path is still expanded under the home directory: os.path.expanduser(f\"~/{name}\") turns NETRC=/etc/ci/netrc into a path like /home/user//etc/ci/netrc, so a NETRC file outside the home directory (an absolute path, or one starting with ~) is never found and no credentials are returned; only the default NETRC_FILES names should get the ~/ prefix.", weight = 0.6 },
+  { judge = "The review treats that bug as blocking (important, not a nit or an open question), cites its file and line in src/netrc_auth.py (the expanduser call in get_netrc_auth), and its verdict is 'request changes'.", weight = 0.2 },
+  { judge = "The review does not invent bugs: anything else it raises is a real problem in the code shown, and it does not ask to rewrite code that works.", weight = 0.2 },
+] }
+
+[verdict]
+trial = "gate and rubric"

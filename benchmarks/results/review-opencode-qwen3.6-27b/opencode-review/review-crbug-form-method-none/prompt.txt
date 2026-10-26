@@ -1,0 +1,1 @@
+review my change in CHANGE.diff (it is already applied to the working tree). It makes FormRequest.from_form send only methods a browser would submit for a form: GET or POST, uppercased, and GET for anything else such as a misspelled method attribute.

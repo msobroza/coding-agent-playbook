@@ -1,0 +1,59 @@
+fix(service): close the driver log output on quit
+
+diff --git a/src/service.py b/src/service.py
+--- a/src/service.py
++++ b/src/service.py
+@@ -4,8 +4,8 @@ from __future__ import annotations
+ 
+ import os
+ import subprocess
+-from subprocess import DEVNULL, PIPE
+-from typing import IO, Any
++from subprocess import PIPE
++from typing import IO, Any, TextIO
+ 
+ 
+ class Service:
+@@ -33,13 +33,11 @@ class Service:
+ 
+     def stop(self) -> None:
+         """Stop the driver and close the log it was writing to."""
+-        if self.log_output != PIPE and not (self.log_output == DEVNULL):
+-            try:
+-                # Todo: be explicit in what we are catching here.
+-                if hasattr(self.log_output, "close"):
+-                    self.log_file.close()  # type: ignore[attr-defined]
+-            except Exception:
+-                pass
++        if self.log_output != PIPE:
++            if isinstance(self.log_output, TextIO):
++                self.log_output.close()
++            elif isinstance(self.log_output, int):
++                os.close(self.log_output)
+ 
+         if self.process is not None:
+             self.process.terminate()
+diff --git a/tests/test_service.py b/tests/test_service.py
+--- a/tests/test_service.py
++++ b/tests/test_service.py
+@@ -1,6 +1,8 @@
+ import os
+ from subprocess import PIPE
+ 
++import pytest
++
+ from src.service import Service
+ 
+ 
+@@ -15,3 +17,11 @@ def test_a_file_descriptor_is_kept_as_the_log() -> None:
+     finally:
+         os.close(read_end)
+         os.close(write_end)
++
++
++def test_stop_closes_a_file_descriptor_log() -> None:
++    read_end, write_end = os.pipe()
++    Service("chromedriver", log_output=write_end).stop()
++    os.close(read_end)
++    with pytest.raises(OSError):
++        os.close(write_end)

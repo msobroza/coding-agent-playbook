@@ -1,0 +1,72 @@
+Now let me verify my understanding of the bug by running the tests:
+## Review
+
+### 1. Correctness
+
+- **`src/audio.py:17,19`** — When `ffmpeg_input.input_args` or `ffmpeg.input_args` is a non-preset **string** (e.g., `"-rtsp_transport tcp"`), `parse_preset_input` returns `None`, so the `or` chain falls through to the raw string. Then `list[str] + str` on line 15 raises `TypeError`. The `get_ffmpeg_arg_list` function already handles string→list conversion but is never invoked on the fallback path. For example, `CameraInput(path, ["audio"], input_args="-rtsp_transport tcp")` would crash at runtime. No test covers this case — `test_a_list_of_arguments_is_used_as_is` only exercises the list branch.
+
+- **`src/audio.py:14`** — `[0]` on the comprehension raises `IndexError` if no input has `"audio"` in its roles. This is not a regression (the old code had the same pattern in the caller), but the error message would be unhelpful.
+
+### 2. Failure modes
+
+- **`src/audio.py:15-20`** — `global_args` is parsed by `get_ffmpeg_arg_list` (which calls `shlex.split` on strings). The fallback `ffmpeg_input.input_args` / `ffmpeg.input_args` on the `or` chain bypasses this parsing entirely when they're strings. If a string contains shell-like quoting (`'-user_agent "FFmpeg Frigate"'`), the old code would have had the same issue in string-concat mode, but the new list-based approach should be consistent. Either way, the fallback should run through `get_ffmpeg_arg_list` to be safe.
+
+### Verdict
+
+*Request changes* — the string-input-args crash on line 17/19 is a correctness bug that would surface immediately for any camera using a non-preset string for `input_args`.
+
+> build · qwen/qwen3.6-27b
+
+→ Read CHANGE.diff
+→ Read src/audio.py
+→ Read src/ffmpeg_presets.py
+→ Read src/config.py
+→ Read tests/test_audio.py
+→ Read tests/test_audio.py
+
+$ python -m pytest tests/test_audio.py -v 2>&1
+============================= test session starts ==============================
+platform darwin -- Python 3.8.8, pytest-8.3.5, pluggy-1.5.0 -- ~/opt/anaconda3/bin/python
+cachedir: .pytest_cache
+rootdir: ~/.cache/playbook-bench/review-opencode-qwen3.6-27b/playbook-v1/review-crbug-audio-input-args/scratch
+configfile: pyproject.toml
+plugins: asyncio-0.24.0, cov-5.0.0, anyio-4.5.2
+asyncio: mode=strict, default_loop_scope=None
+collecting ... collected 0 items / 1 error
+
+==================================== ERRORS ====================================
+_____________________ ERROR collecting tests/test_audio.py _____________________
+tests/test_audio.py:1: in <module>
+    from src.audio import AudioEventMaintainer, get_ffmpeg_command
+src/audio.py:5: in <module>
+    from src.config import CameraConfig, CameraInput, FfmpegConfig
+src/config.py:11: in <module>
+    FfmpegArgs = str | list[str]
+E   TypeError: 'type' object is not subscriptable
+=========================== short test summary info ============================
+ERROR tests/test_audio.py - TypeError: 'type' object is not subscriptable
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+=============================== 1 error in 0.28s ===============================
+~/opt/anaconda3/lib/python3.8/site-packages/pytest_asyncio/plugin.py:208: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+
+$ python3 -c "
+from src.ffmpeg_presets import parse_preset_input, get_ffmpeg_arg_list
+
+# Case: input_args is a plain string (not a preset)
+input_args = '-rtsp_transport tcp'
+result = parse_preset_input(input_args, 1)
+print(f'parse_preset_input result: {result!r}')
+print(f'or fallback gives: {result or input_args!r}')
+print(f'type: {type(result or input_args)}')
+" 2>&1 || true
+Traceback (most recent call last):
+  File "<string>", line 2, in <module>
+  File "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/playbook-v1/review-crbug-audio-input-args/scratch/src/ffmpeg_presets.py", line 7, in <module>
+    from src.config import FfmpegArgs
+  File "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/playbook-v1/review-crbug-audio-input-args/scratch/src/config.py", line 11, in <module>
+    FfmpegArgs = str | list[str]
+TypeError: 'type' object is not subscriptable
+

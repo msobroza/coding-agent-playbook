@@ -1,0 +1,28 @@
+{
+  "experiment": "claude-playbook-v2",
+  "sample_id": "review-crbug-form-method-none",
+  "harness": "claude",
+  "model": "qwen/qwen3.6-27b",
+  "command": [
+    "claude",
+    "-p",
+    "--bare",
+    "--model",
+    "qwen/qwen3.6-27b",
+    "--no-session-persistence",
+    "--permission-mode",
+    "acceptEdits",
+    "--allowedTools",
+    "Read,Grep,Glob,Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)",
+    "--output-format",
+    "text",
+    "--",
+    "{prompt}"
+  ],
+  "returncode": 0,
+  "timed_out": false,
+  "duration_seconds": 84.8,
+  "baseline_commit": "c75ad3071a635c480cd4a19d62dd270df41e2a57",
+  "scratch": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-playbook-v2/review-crbug-form-method-none/scratch",
+  "setup_snapshot": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-playbook-v2/review-crbug-form-method-none/scratch__setup_baseline"
+}

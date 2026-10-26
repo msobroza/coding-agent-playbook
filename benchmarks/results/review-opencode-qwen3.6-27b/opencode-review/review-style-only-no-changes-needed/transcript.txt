@@ -1,0 +1,6 @@
+The review of `src/temperature.py` is complete. No issues found - the conversion functions are correct, properly typed, well-documented, and handle edge cases appropriately. Nothing to change.
+
+> build · qwen/qwen3.6-27b
+
+• review changes [commit|branch|pr], defaults to uncommitted Build Agent
+✓ review changes [commit|branch|pr], defaults to uncommitted Build Agent

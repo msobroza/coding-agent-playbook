@@ -1,0 +1,1 @@
+review my change in CHANGE.diff (it is already applied to the working tree). It lets quote_cents take the parcel weight in pounds as well as kilograms.

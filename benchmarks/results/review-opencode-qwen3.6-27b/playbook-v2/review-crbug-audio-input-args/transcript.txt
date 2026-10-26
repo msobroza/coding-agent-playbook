@@ -1,0 +1,7 @@
+
+> build · qwen/qwen3.6-27b
+
+→ Read CHANGE.diff
+✱ Glob "{AGENTS.md,CLAUDE.md,.claude/rules/**/*.md,.opencode/**/*.md,REVIEW.md}" 0 matches
+• First-pass diff review Explore Agent
+✓ First-pass diff review Explore Agent

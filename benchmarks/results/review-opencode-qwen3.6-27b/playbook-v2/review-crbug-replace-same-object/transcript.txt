@@ -1,0 +1,33 @@
+Now let me verify the subagent's findings against the actual code. The key finding is that `replace(m, m)` now breaks. Let me trace through:
+
+- Line 37: `new_m in mobj_list` → `True` (since `new_m is old_m` and `old_m` is in the list)
+- Line 38: `mobj_list.remove(new_m)` → removes it
+- Line 43: searches for `old_m` → not found (just removed it)
+- Line 51: raises `ValueError`
+
+This is a correctness regression. Here's the review:
+
+---
+
+- `src/scene.py:37` - correctness - new - `replace(m, m)` raises `ValueError` instead of being a no-op — `mobj_list.remove(new_m)` removes the object before the search loop at line 43 can find it, so line 51 raises — call `scene.replace(m, m)` where `m` is on screen. A guard `if new_m is old_m: return True` before the dedup check would preserve the old behavior.
+
+- `src/scene.py:38` - nit - new — `mobj_list.remove(new_m)` drops only the first occurrence — if `new_m` appears more than once in the same list (possible in hand-constructed groups via `Mobject("g", a, a)`), the second copy remains, defeating the dedup intent — any list with duplicate references to the same `new_m`
+
+- `tests/test_scene.py:34` - nit - new — `scene.mobjects == [square]` with a single-element result cannot verify that `square` retained its original index position rather than `circle`'s — a test with three elements (e.g. `[a, circle, square]`) would distinguish whether order is preserved
+
+- `tests/test_scene.py:43` - nit - new — same concern as above — `group.submobjects == [square]` is a single-element assertion that can't verify positional semantics — a three-element group would test whether `square` lands at `circle`'s index
+
+---
+
+Findings: 1 important, 3 nit, 0 pre-existing
+
+request changes
+
+> build · qwen/qwen3.6-27b
+
+→ Read CHANGE.diff
+✱ Glob "**/{CLAUDE.md,AGENTS.md,REVIEW.md,.claude/rules/**,.opencode/**}" in . · 0 matches
+• First-pass diff review Explore Agent
+✓ First-pass diff review Explore Agent
+→ Read src/scene.py
+→ Read tests/test_scene.py

@@ -1,0 +1,37 @@
+No CLAUDE.md files present. Here are the 5 findings, ranked by severity:
+
+```json
+[
+  {
+    "file": "src/scene.py",
+    "line": 37,
+    "summary": "replace(obj, obj) now raises ValueError instead of succeeding as a no-op, because the dedup guard removes obj before the search can find it.",
+    "failure_scenario": "scene.add(circle); scene.replace(circle, circle) -- the guard at line 37 removes circle from mobj_list (since circle == new_m and circle is in the list), then the loop at line 42 searches the now-empty list for old_m (which is circle), does not find it, returns False, and the caller raises ValueError. Previously this was a harmless no-op."
+  },
+  {
+    "file": "src/scene.py",
+    "line": 37,
+    "summary": "When new_m is nested inside a group at a deeper level and old_m is at a higher level, the dedup check misses new_m and it ends up duplicated in both places.",
+    "failure_scenario": "scene.mobjects = [old, group]; group.submobjects = [new]. scene.replace(old, new) -- line 37 checks 'new in [old, group]' which is False (new is not directly in the top-level list), so no dedup occurs. The loop replaces old with new at index 0. Result: scene.mobjects = [new, group] AND group.submobjects = [new], leaving new referenced in two places in the scene graph."
+  },
+  {
+    "file": "src/scene.py",
+    "line": 37,
+    "summary": "When old_m and new_m are in separate sibling groups, the dedup only runs at each individual group's submobjects list and does not remove new_m from its original group.",
+    "failure_scenario": "g1.submobjects = [old]; g2.submobjects = [new]; scene.add(g1, g2). scene.replace(old, new) -- top-level dedup finds new is not directly in [g1, g2]. Recurse into g1: dedup finds new not in [old]. Replace old with new in g1. Function returns True early, never recursing into g2. Result: g1.submobjects = [new], g2.submobjects = [new] -- duplicate persists."
+  },
+  {
+    "file": "src/scene.py",
+    "line": 37,
+    "summary": "Replacing a child mobject with its ancestor group removes the ancestor from the list before searching inside it, making the child unfoundable and raising a misleading 'Could not find' error.",
+    "failure_scenario": "scene.mobjects = [parent]; parent.submobjects = [child]. scene.replace(child, parent) -- line 37 checks 'parent in [parent]' which is True, removes parent. mobjects is now []. The search loop runs over an empty list and cannot descend into parent to find child. Raises ValueError('Could not find child'). The error message blames the missing child, not the dedup guard removing the parent."
+  },
+  {
+    "file": "src/scene.py",
+    "line": 38,
+    "summary": "list.remove() only removes the first matching element, so if new_m appears multiple times in the same list (e.g., manually constructed), only one copy is removed and duplicates remain.",
+    "failure_scenario": "group.submobjects = [old, new, new] (manually set). scene.replace(old, new) -- line 37 finds new in the list, line 38 calls remove(new) which removes only the first occurrence. Line 44 replaces old with new. Result: submobjects = [new, new] -- two copies of new remain. The dedup guard did not fully eliminate duplicates."
+  }
+]
+```
+[claude-code:unrecognized_model] {"model":"qwen/qwen3.6-27b","query_source":"agent:custom"}

@@ -1,0 +1,40 @@
+## Review
+
+### 1. Correctness
+
+- **`src/netrc_auth.py:17`** — The loop always prepends `~/` to every entry in `netrc_locations`: `os.path.expanduser(f"~/{name}")`. When `NETRC` holds an absolute path like `/etc/custom.netrc`, this produces `~//etc/custom.netrc`, which expands to `$HOME/etc/custom.netrc`. The absolute path is corrupted. The fix is to use the `NETRC` value directly (it is already a complete path), not a bare filename to be joined under `~`. For example, build `netrc_locations` as `(os.environ["NETRC"],)` when the variable is set, and handle the `expanduser` + `exists` loop separately for the two fallback cases.
+
+- **`tests/test_netrc_auth.py:33-34`** — The test writes the file to `tmp_path / ".netrc-ci"` and sets `NETRC=".netrc-ci"` (a relative name). Because `HOME` is also set to `tmp_path`, the prepended `~/` accidentally resolves to the right location. This masks the bug above. Add a test that sets `NETRC` to an **absolute** path (e.g., `str(tmp_path / ".netrc-ci")`) — it will fail with the current implementation.
+
+*Approve with comments.* — The core idea is sound, but the absolute-path case is broken and should be fixed before landing.
+## Review
+
+### 1. Correctness
+
+- **`src/netrc_auth.py:11-17`** — When `NETRC` is an absolute path (the convention followed by curl, wget, git, etc.), `os.path.expanduser(f"~/{name}")` on line 17 produces `~//absolute/path`, which expands to `$HOME/absolute/path`. The absolute path is silently corrupted. The `NETRC` value should be used as-is, not treated as a filename to join under `~`.
+
+- **`src/netrc_auth.py:11-12`** — If `NETRC` is set to the empty string, `netrc_file is not None` evaluates to `True`, so the loop iterates over `("")`. `f"~//"` expands to `$HOME/`, which is a directory that exists — `netrc()` will then try to parse it and raise `NetrcParseError`. Use `if netrc_file:` instead of `if netrc_file is not None:` to reject the empty string, or explicitly skip it.
+
+- **`tests/test_netrc_auth.py:34`** — The test sets `NETRC` to `".netrc-ci"` (a bare filename), not a path. Combined with `HOME=tmp_path`, the `~/` prefix accidentally resolves correctly, masking the absolute-path bug above. Add a test with `NETRC` set to an absolute path like `str(tmp_path / ".netrc-ci")` — it will fail with current code.
+
+### 2. Failure modes
+
+- **`src/netrc_auth.py:17`** — `os.path.expanduser(f"~/{name}")` could raise `KeyError` when `$HOME` is unset and no passwd entry exists (already caught), but if `NETRC` is an absolute path the `~/` prefix is unnecessary and makes the `KeyError` catch a false shield — the expanduser of an absolute path wouldn't raise. Not a runtime bug by itself, but it indicates the loop body doesn't match the `NETRC` semantics.
+
+### 3. Security
+
+- No concerns. The `NETRC` path is user-controlled anyway; no injection vectors introduced.
+
+---
+
+**Request changes.** — The absolute-path case is the most common real-world usage of `NETRC` (CI environments, Docker, etc.) and is silently broken. The test coverage follows the same mistaken assumption, so it doesn't catch it. Fix the path resolution and add the absolute-path test.
+
+> build · qwen/qwen3.6-27b
+
+→ Read CHANGE.diff
+→ Read src/netrc_auth.py
+→ Read tests/test_netrc_auth.py
+
+$ ls ~/.cache/playbook-bench/review-opencode-qwen3.6-27b/playbook-v1/review-crbug-netrc-env-path/scratch/src/
+netrc_auth.py
+

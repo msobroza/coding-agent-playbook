@@ -1,0 +1,34 @@
+feat(netrc): respect the NETRC environment variable
+
+diff --git a/src/netrc_auth.py b/src/netrc_auth.py
+--- a/src/netrc_auth.py
++++ b/src/netrc_auth.py
+@@ -8,8 +8,11 @@ NETRC_FILES = (".netrc", "_netrc")
+ 
+ def get_netrc_auth(host: str, raise_errors: bool = False) -> tuple[str, str] | None:
+     """Return the ``(login, password)`` netrc holds for ``host``, or None."""
++    netrc_file = os.environ.get("NETRC")
++    netrc_locations = (netrc_file,) if netrc_file is not None else NETRC_FILES
++
+     netrc_path = None
+-    for name in NETRC_FILES:
++    for name in netrc_locations:
+         try:
+             loc = os.path.expanduser(f"~/{name}")
+         except KeyError:
+diff --git a/tests/test_netrc_auth.py b/tests/test_netrc_auth.py
+--- a/tests/test_netrc_auth.py
++++ b/tests/test_netrc_auth.py
+@@ -24,3 +24,12 @@ def test_no_netrc_file_means_no_credentials(
+     monkeypatch.setenv("HOME", str(tmp_path))
+     monkeypatch.delenv("NETRC", raising=False)
+     assert get_netrc_auth("example.com") is None
++
++
++def test_the_netrc_variable_selects_the_file(
++    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++) -> None:
++    monkeypatch.setenv("HOME", str(tmp_path))
++    _write_netrc(tmp_path / ".netrc-ci")
++    monkeypatch.setenv("NETRC", ".netrc-ci")
++    assert get_netrc_auth("example.com") == ("alice", "s3cret")

@@ -1,0 +1,85 @@
+feat(audio): use the camera's own ffmpeg input args for audio
+
+diff --git a/src/audio.py b/src/audio.py
+--- a/src/audio.py
++++ b/src/audio.py
+@@ -2,19 +2,27 @@
+ 
+ from __future__ import annotations
+ 
+-from src.config import CameraConfig
++from src.config import CameraConfig, CameraInput, FfmpegConfig
+ from src.ffmpeg_presets import get_ffmpeg_arg_list, parse_preset_input
+ 
+ AUDIO_FORMAT = "s16le"
+ AUDIO_SAMPLE_RATE = 16000
+ 
+ 
+-def get_ffmpeg_command(input_args: list[str], input_path: str) -> list[str]:
+-    """ffmpeg reading ``input_path`` and writing mono 16 kHz samples to stdout."""
+-    return get_ffmpeg_arg_list(
+-        "ffmpeg {} -i {} -f {} -ar {} -ac 1 -y {}".format(
+-            " ".join(input_args), input_path, AUDIO_FORMAT, AUDIO_SAMPLE_RATE, "pipe:"
+-        )
++def get_ffmpeg_command(ffmpeg: FfmpegConfig) -> list[str]:
++    """ffmpeg reading the camera's audio input and writing mono 16 kHz samples to stdout."""
++    ffmpeg_input: CameraInput = [i for i in ffmpeg.inputs if "audio" in i.roles][0]
++    input_args = get_ffmpeg_arg_list(ffmpeg.global_args) + (
++        parse_preset_input(ffmpeg_input.input_args, 1)
++        or ffmpeg_input.input_args
++        or parse_preset_input(ffmpeg.input_args, 1)
++        or ffmpeg.input_args
++    )
++    return (
++        ["ffmpeg", "-vn"]
++        + input_args
++        + ["-i", ffmpeg_input.path]
++        + ["-f", AUDIO_FORMAT, "-ar", str(AUDIO_SAMPLE_RATE), "-ac", "1", "-y", "pipe:"]
+     )
+ 
+ 
+@@ -23,8 +31,4 @@ class AudioEventMaintainer:
+ 
+     def __init__(self, camera: CameraConfig) -> None:
+         self.camera = camera
+-        self.ffmpeg_cmd = get_ffmpeg_command(
+-            get_ffmpeg_arg_list(camera.ffmpeg.global_args)
+-            + (parse_preset_input("preset-rtsp-audio-only", 1) or []),
+-            [i.path for i in camera.ffmpeg.inputs if "audio" in i.roles][0],
+-        )
++        self.ffmpeg_cmd = get_ffmpeg_command(camera.ffmpeg)
+diff --git a/tests/test_audio.py b/tests/test_audio.py
+--- a/tests/test_audio.py
++++ b/tests/test_audio.py
+@@ -1,4 +1,4 @@
+-from src.audio import AudioEventMaintainer
++from src.audio import AudioEventMaintainer, get_ffmpeg_command
+ from src.config import CameraConfig, CameraInput, FfmpegConfig
+ 
+ 
+@@ -15,3 +15,25 @@ def test_the_command_reads_the_audio_input_and_writes_raw_samples() -> None:
+     assert cmd[0] == "ffmpeg"
+     assert cmd[cmd.index("-i") + 1] == "/streams/porch-sub.mp4"
+     assert cmd[-8:] == ["-f", "s16le", "-ar", "16000", "-ac", "1", "-y", "pipe:"]
++
++
++def test_the_camera_wide_preset_is_used_by_default() -> None:
++    cmd = AudioEventMaintainer(_camera()).ffmpeg_cmd
++    assert "-use_wallclock_as_timestamps" in cmd
++
++
++def test_the_audio_input_preset_wins_over_the_camera_wide_one() -> None:
++    ffmpeg = FfmpegConfig(
++        inputs=[CameraInput("/streams/porch.flv", ["audio"], input_args="preset-http-reolink")],
++    )
++    cmd = get_ffmpeg_command(ffmpeg)
++    assert "-user_agent" in cmd
++    assert "-use_wallclock_as_timestamps" not in cmd
++
++
++def test_a_list_of_arguments_is_used_as_is() -> None:
++    ffmpeg = FfmpegConfig(
++        inputs=[CameraInput("/streams/porch-sub.mp4", ["audio"], input_args=["-rtsp_transport", "udp"])],
++    )
++    cmd = get_ffmpeg_command(ffmpeg)
++    assert cmd[cmd.index("-rtsp_transport") + 1] == "udp"

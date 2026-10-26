@@ -1,0 +1,42 @@
+id = "review-crbug-form-method-none"
+prompt_id = "review"
+description = "Review a change that restricts form submissions to GET and POST but calls .upper() on a method=None keyword that used to mean GET. Paraphrases the bug a reviewer caught in scrapy pull request 3794, from CRBugBench; see eval_samples/ATTRIBUTIONS.md."
+
+[setup]
+files = [
+  "CHANGE.diff",
+  "src/forms.py",
+  "tests/test_forms.py",
+]
+project_kind = "library"
+
+[invocation]
+prompt_args = "review my change in CHANGE.diff (it is already applied to the working tree). It makes FormRequest.from_form send only methods a browser would submit for a form: GET or POST, uppercased, and GET for anything else such as a misspelled method attribute."
+input_variables = {}
+
+[gate]
+# Review-only: the agent must report, not edit. The change carries one real bug
+# (see the rubric), so a correct answer from either prompt set ends on request
+# changes, never an approving verdict line. Whether the answer names the right bug
+# is the judge's call: no bug-specific pattern here, so wording cannot sink a
+# correct review. An empty answer has no verdict line.
+expr = "forms_untouched and tests_untouched and blocks and not approves"
+
+[gate.bind]
+forms_untouched = { check = "file_unchanged", path = "src/forms.py" }
+tests_untouched = { check = "file_unchanged", path = "tests/test_forms.py" }
+blocks          = { check = "answer_matches", pattern = '(?im)^\W*(?:verdict\W*)?request changes\W*$' }
+approves        = { check = "answer_matches", pattern = '(?im)^\W*(?:verdict\W*)?approve(?: with comments)?\W*$' }
+
+[rubric]
+expr = "quality"
+
+[rubric.bind]
+quality = { fail = 0.5, rubric = [
+  { judge = "The review reports the backward-incompatible crash: kwargs.pop('method', form.method).upper() raises AttributeError when a caller passes method=None explicitly, which used to work (Request turns a None method into GET); the change should treat None like a missing method.", weight = 0.6 },
+  { judge = "The review treats that bug as blocking (important, not a nit or an open question), cites its file and line in src/forms.py (from_form), and its verdict is 'request changes'.", weight = 0.2 },
+  { judge = "The review does not invent bugs: anything else it raises is a real problem in the code shown, and it does not ask to rewrite code that works.", weight = 0.2 },
+] }
+
+[verdict]
+trial = "gate and rubric"

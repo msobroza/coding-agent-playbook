@@ -1,0 +1,36 @@
+Let me read the diff first to understand the scope of the change.
+I'll start the first-pass subagent now.
+Now let me verify the findings by reading the cited lines.
+Review complete. Here are the findings:
+
+**Correctness**
+
+- `src/report.py:46` — new — **important** — The user requested two features: `--csv` and `--since YYYY-MM-DD`. Only `--csv` is present. There is no `--since` argument registered, no date filtering in `read_ledger` or `monthly_totals`, and no test coverage for it. The second half of the stated intent is entirely unimplemented.
+
+- `src/report.py:49-50` — new — **nit** — `sys.stdout.write(format_csv(totals))` on the CSV path omits a trailing newline if `format_csv` returns an empty string (e.g., empty ledger). `print(format_table(totals))` on the else-branch always appends one via `print`'s default `end="\n"`. The paths behave differently on empty input. In practice `format_csv` always emits at least the header `"month,total\n"`, so this is unlikely to surface, but the asymmetry is worth noting.
+
+**Failure modes**
+
+- `src/report.py:39` — new — **nit** — `f"{cents / 100:.2f}"` in `format_csv` repeats the float-division-for-money pattern already present in `format_table` at line 30. The new code follows the existing convention, so it's not a regression, but both could lose precision on values above ~9e14 cents. If the amounts ever grow that large, `Decimal` or integer-division-with-manual-decimal-placement (`f"{cents // 100}.{cents % 100:02d}"`) would be the fix.
+
+**pre-existing**
+
+- `src/report.py:16` — pre-existing — `line.strip().split(",")` unpacks into exactly two; a blank trailing line or a row with a second comma raises `ValueError` with no file or line-number context.
+
+- `src/report.py:17` — pre-existing — `date.fromisoformat(day)` and `int(cents)` on malformed input crash with no indication of which line or file caused the failure.
+
+- `src/report.py:30` — pre-existing — `cents / 100` in `format_table` uses float for money formatting; same precision risk as noted above.
+
+- `tests/test_report.py` — pre-existing — `read_ledger` is imported by the module but has no dedicated test; empty files, trailing newlines, and malformed rows go untested.
+
+Findings: 1 important, 3 nit, 4 pre-existing
+
+request changes
+
+> build · qwen/qwen3.6-27b
+
+→ Read CHANGE.diff
+• First-pass code review Explore Agent
+✓ First-pass code review Explore Agent
+→ Read src/report.py
+→ Read tests/test_report.py

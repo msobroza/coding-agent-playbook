@@ -1,0 +1,36 @@
+Let me verify the key findings by reading the source files.
+Now let me verify the findings against the cited lines.
+
+The critical bug at `src/feedstorage.py:27` checks out: `Settings.from_command_line()` stores CLI values as strings (line 27 of settings.py). So `-s FEED_STORAGE_FTP_ACTIVE=False` yields the string `"False"`, which is truthy, so `"False" or False` → `"False"` → `active` becomes truthy. The `getbool()` method at `src/settings.py:36` exists and handles this correctly.
+
+The `set_pasv` ordering concern from the subagent is incorrect: `ftp.cwd()` is a control-channel command, not a data transfer. `set_pasv(False)` before `storbinary()` is sufficient. Dropping that finding.
+
+Here is the review:
+
+---
+
+**Correctness**
+
+- **`src/feedstorage.py:27`** — `important` — `settings["FEED_STORAGE_FTP_ACTIVE"] or False` treats CLI string `"False"` as truthy. `Settings.from_command_line()` (src/settings.py:27) stores every `-s NAME=VALUE` override as a raw string. So `-s FEED_STORAGE_FTP_ACTIVE=False` produces the string `"False"`, and `"False" or False` evaluates to `"False"` (a non-empty string), enabling active mode when the user explicitly disabled it. Use `settings.getbool("FEED_STORAGE_FTP_ACTIVE", False)` instead — it already handles string-to-bool conversion (src/settings.py:36).
+
+- **`tests/test_feedstorage.py:17`** — `important` — The test only exercises a native `True` passed through `Settings({"FEED_STORAGE_FTP_ACTIVE": True})`. It does not cover the CLI code path where the value arrives as the string `"True"` or `"False"`. The bug above would pass these tests. Add a test that constructs settings via `Settings.from_command_line(["FEED_STORAGE_FTP_ACTIVE=False"], ...)` and verifies `active` is `False`.
+
+**Failure modes (pre-existing)**
+
+- **`src/feedstorage.py:31-39`** — `pre-existing` — `store()` has no `try/finally` around the FTP session. If `ftp.cwd()` or `ftp.storbinary()` raises, `ftp.quit()` is never called and the connection leaks.
+
+- **`src/feedstorage.py:32`** — `pre-existing` — `ftp.connect(self.host, self.port)` passes no `timeout` argument; will block indefinitely against an unresponsive server.
+
+Findings: 2 important, 0 nit, 2 pre-existing
+
+request changes
+
+> build · qwen/qwen3.6-27b
+
+→ Read CHANGE.diff
+✱ Glob "**/{CLAUDE.md,AGENTS.md,REVIEW.md,.opencode/**/*.md,.claude/rules/*.md}" 0 matches
+• First-pass code review Explore Agent
+✓ First-pass code review Explore Agent
+→ Read src/settings.py
+→ Read src/feedstorage.py
+→ Read tests/test_feedstorage.py

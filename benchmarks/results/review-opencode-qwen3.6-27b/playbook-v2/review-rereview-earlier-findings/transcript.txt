@@ -1,0 +1,30 @@
+Earlier findings status:
+- src/cart.py:15 — remove() lets quantity go negative: **fixed**
+- src/cart.py:19 — total_cents() accepts any discount_percent: **still open**
+- src/cart.py:9 — add() accepts zero or negative quantity: **fixed**
+
+**Failure modes**
+
+- **src/cart.py:26** — *important, still open* — `total_cents()` accepts any `discount_percent`: `subtotal * (100 - discount_percent) // 100` with `discount_percent=150` yields a negative total; `discount_percent=-10` inflates the charge. No guard added.
+
+**Correctness**
+
+- **src/cart.py:16** — *pre-existing* — `self.lines[sku]` raises bare `KeyError` when the SKU is absent from the cart, before the validation on line 18 can surface a clear message. Input: `cart.remove("nonexistent")`.
+
+**Readability**
+
+- **tests/test_cart.py:39** — *nit* — `assert cart.lines == {}` reaches into a private implementation detail. Prefer asserting through public behavior, e.g., `cart.total_cents() == 0` after confirming the line is gone.
+
+Findings: 1 important, 1 nit, 1 pre-existing
+
+request changes
+
+> build · qwen/qwen3.6-27b
+
+→ Read CHANGE.diff
+✱ Glob "**/{.claude/commands/review-core,.opencode/command/review-core,SKILL.md}" 0 matches
+✱ Glob "**/{CLAUDE.md,AGENTS.md,REVIEW.md,.claude/rules/*}" 0 matches
+→ Read src/cart.py
+• First-pass diff review Explore Agent
+✓ First-pass diff review Explore Agent
+→ Read tests/test_cart.py
