@@ -1,0 +1,51 @@
+
+
+Both passes have completed. Let me verify the merged findings against the cited lines, then write the review.
+
+**Verification of cited lines:**
+
+1. **`total_cents()` line 26** — `subtotal * (100 - discount_percent) // 100`: `discount_percent=150` → `100-150 = -50` → negative total. **Confirmed.**
+
+2. **`remove()` line 16** — `self.lines[sku]`: direct dict access with no `.get()` or key check. `remove("nonexistent")` → `KeyError`. **Confirmed.**
+
+3. **`add()` line 9** — no guard on `unit_cents`; `add("pen", -100)` stores a negative price. **Confirmed.**
+
+4. **`add()` line 12** — `self.lines.get(sku, (unit_cents, 0))`: when `sku` exists, the tuple from the dict is returned and `unit_cents` is ignored. This is the price-caching behavior. **Confirmed**, but this is by-design (same SKU, same price), not a bug.
+
+5. **`total_cents()` line 26** — rounding: `149 * 50 // 100 = 74`, not 75. Floor division truncates down. **Confirmed** as a nit-level behavior worth questioning.
+
+6. **`remove()` line 18** — error message for `quantity=0`: `"cannot remove 0 of 'pen': 2 held"` is confusing but the item is correctly rejected. **Confirmed** as nit.
+
+Findings 4 (price caching) is intentional design; dropping it. The rest survive verification.
+
+---
+
+**Earlier Findings Status:**
+
+- **Finding 1** (`src/cart.py:15` — `remove()` lets quantity go negative): **fixed** — `remove()` now guards `0 < quantity <= held` (line 17) and deletes the key when fully removed (lines 19–20).
+- **Finding 2** (`src/cart.py:19` — `total_cents()` accepts any `discount_percent`): **still open** — the diff does not touch `total_cents()`; `discount_percent=150` still yields a negative total.
+- **Finding 3** (`src/cart.py:9` — `add()` accepts zero/negative quantity): **fixed** — `add()` now raises `ValueError` when `quantity <= 0` (lines 10–11).
+
+---
+
+### Correctness
+
+- **src/cart.py:26** — `total_cents()` accepts any `discount_percent`: `150` makes `(100 - discount_percent)` equal `-50`, so `subtotal * -50 // 100` returns a negative integer. And `-10` makes the multiplier `110`, charging the customer above subtotal. This is the still-open Finding 2. — **important**
+
+### Failure Modes
+
+- **src/cart.py:16** — `self.lines[sku]` raises a bare `KeyError` for an unknown sku: `cart.remove("nonexistent")` crashes before the `ValueError` guard on line 17 can run. A caller expecting a `ValueError` from `remove()` gets an unhandled traceback. — **pre-existing**
+
+- **src/cart.py:9** — `unit_cents` has no validation: `cart.add("pen", -100)` stores a negative price that corrupts `total_cents()` to return a negative or deflated total. — **pre-existing**
+
+### Readability
+
+- **src/cart.py:26** — `// 100` uses floor division which truncates toward negative infinity rather than rounding to the nearest cent. `149 * 50 // 100 = 74` instead of `75`. Is this intentional (always rounding in the customer's favor), or should it use `(subtotal * (100 - discount_percent) + 50) // 100` for nearest-cent rounding? — **nit**
+
+- **src/cart.py:18** — The `ValueError` message for `quantity=0` reads `"cannot remove 0 of 'pen': 2 held"`, which misleads the reader into thinking the held count is the problem. A more specific message for the zero case would help. — **nit**
+
+---
+
+Findings: 1 important, 2 nit, 2 pre-existing
+
+request changes

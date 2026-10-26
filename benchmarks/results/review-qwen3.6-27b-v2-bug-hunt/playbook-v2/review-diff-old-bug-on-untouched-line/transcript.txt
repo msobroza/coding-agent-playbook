@@ -1,0 +1,17 @@
+Merged findings from both passes. One confirmed finding to verify. Already confirmed line 15 above.
+
+---
+
+**Pre-existing:**
+
+- `src/inventory.py:15` — **Correctness** — `pre-existing` — `items_to_reorder` uses `item.quantity < item.reorder_level` but the docstring says "to or below". An item with `quantity == reorder_level` (e.g. `Item("w", 5, 5)`) is silently omitted from the returned list.
+
+**New:**
+
+- `tests/test_inventory.py:13` — **Correctness** — `nit` — `assert restock(items, "ink", 5) == Item("ink", 9, 2)` passes because `Item` is a dataclass with value equality, but `restock` mutates `items[1]` in place. Does the test intend to verify the mutation to `items[1]` as well? Consider `assert items[1].quantity == 9` to make the side-effect explicit.
+
+- `src/inventory.py:30-32` — **Correctness** — `nit` — When the list contains duplicate SKUs, only the first match is restocked. Is that the intended behavior, or should `Item` enforce unique SKUs?
+
+Findings: 0 important, 2 nit, 1 pre-existing
+
+approve with comments

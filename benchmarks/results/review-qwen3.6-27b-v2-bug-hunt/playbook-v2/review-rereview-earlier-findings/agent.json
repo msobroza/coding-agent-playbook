@@ -1,0 +1,29 @@
+{
+  "experiment": "playbook-v2",
+  "sample_id": "review/rereview-earlier-findings",
+  "harness": "opencode",
+  "model": "openrouter/qwen/qwen3.6-27b",
+  "command": [
+    "opencode",
+    "run",
+    "--pure",
+    "--dir",
+    "~/.cache/playbook-bench/review-qwen3.6-27b-v2-bug-hunt/playbook-v2/review-rereview-earlier-findings/scratch",
+    "--model",
+    "openrouter/qwen/qwen3.6-27b",
+    "--format",
+    "json",
+    "{prompt}"
+  ],
+  "returncode": 0,
+  "timed_out": false,
+  "duration_seconds": 31.0,
+  "baseline_commit": "e5dbf428b35586db8a97592ad8c509c3a99a53f9",
+  "scratch": "~/.cache/playbook-bench/review-qwen3.6-27b-v2-bug-hunt/playbook-v2/review-rereview-earlier-findings/scratch",
+  "setup_snapshot": "~/.cache/playbook-bench/review-qwen3.6-27b-v2-bug-hunt/playbook-v2/review-rereview-earlier-findings/scratch__setup_baseline",
+  "main_loop_tools": [
+    "read",
+    "read"
+  ],
+  "second_pass_ran": false
+}

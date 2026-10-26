@@ -1,0 +1,29 @@
+
+
+Interesting — even `TextIOWrapper` fails the `isinstance` check. Let me verify further:
+
+
+
+
+Confirmed — the file is NOT closed. Let me verify the default case too:
+
+
+
+
+All findings verified. Here is the review:
+
+---
+
+## Correctness
+
+- **`src/service.py:37`** — `isinstance(self.log_output, TextIO)` is `False` for every file object. `typing.TextIO` is not runtime-checkable; `isinstance(io.TextIOWrapper(...), TextIO)` returns `False` on Python 3.12+. As a result, no file opened by `open()` is ever closed: a path-string `log_output` (line 21), the default devnull `BufferedWriter` (line 23), and any `IO` object passed by a caller all leak. The stated intent — "close the driver's log output on quit" — is not achieved for file-based log outputs. Verified: `Service("chromedriver", log_output="/tmp/test.log").stop()` leaves the file open; `Service("chromedriver").stop()` leaves the devnull handle open. Use `hasattr(self.log_output, "close")` or `isinstance(self.log_output, io.IOBase)` instead.
+
+## Failure modes
+
+- **`src/service.py:40`** — `os.close(self.log_output)` raises `OSError: [Errno 9] Bad file descriptor` when `stop()` is called a second time. `os.close()` is not idempotent. State: `svc = Service("chromedriver", log_output=write_end); svc.stop(); svc.stop()` — the second call crashes. Guard against double-close, e.g. set `self.log_output = None` after closing or check if the fd is still valid first.
+
+---
+
+Findings: 2 important, 0 nit, 0 pre-existing
+
+request changes

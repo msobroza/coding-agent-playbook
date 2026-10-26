@@ -1,0 +1,31 @@
+
+
+Now let me launch the two first-pass subagents in parallel as required by the workflow.
+
+
+
+
+
+Both passes converged on the same core bug. Let me verify against the cited lines, then write the review.
+
+Verified: `src/settings.py:27` — `from_command_line` stores `values[name] = value` as a raw string. `src/feedstorage.py:27` — `settings["FEED_STORAGE_FTP_ACTIVE"] or False` — when the value is the string `"False"`, the expression evaluates to `"False"` (truthy), so `active` becomes a truthy string and `if self.active:` on line 34 incorrectly enables active mode.
+
+---
+
+**Correctness**
+
+- **src/feedstorage.py:27** — `important`, *new* — `settings["FEED_STORAGE_FTP_ACTIVE"] or False` does not coerce command-line string values to `bool`. `Settings.from_command_line(["FEED_STORAGE_FTP_ACTIVE=False"])` stores the string `"False"`; `"False" or False` is the truthy string `"False"`, so `self.active` is truthy and `ftp.set_pasv(False)` fires when the user explicitly requested passive mode. The `Settings` class already provides `getbool()` for exactly this purpose; use `settings.getbool("FEED_STORAGE_FTP_ACTIVE")` instead.
+
+**Failure modes**
+
+- **src/feedstorage.py:31–38** — *pre-existing* — `ftp = FTP()` has no `try/finally` or `with` block. If `ftp.login()`, `ftp.cwd()`, or `ftp.storbinary()` raises, the socket is never closed and the connection leaks. (`ftp.quit()` on line 39 is unreachable on error.)
+
+**Readability**
+
+- **tests/test_feedstorage.py:16–18** — *nit*, *new* — Only tests a native Python `True` passed through `Settings(dict)`. The stated intent is that the setting can be overridden on the command line, which stores values as strings. Add a test with `Settings.from_command_line(["FEED_STORAGE_FTP_ACTIVE=true"])` and one with `["FEED_STORAGE_FTP_ACTIVE=false"]` to cover the coercion path where the bug lives.
+
+---
+
+Findings: 1 important, 1 nit, 1 pre-existing
+
+request changes

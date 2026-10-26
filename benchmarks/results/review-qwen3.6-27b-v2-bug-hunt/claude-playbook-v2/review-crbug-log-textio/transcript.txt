@@ -1,0 +1,17 @@
+I've verified the findings against the source. Here is the review:
+
+---
+
+- **src/service.py:37** - *Correctness* - `important` - Binary file handle leaked: `isinstance(self.log_output, TextIO)` is `False` for the binary file object created at line 23 (`open(os.devnull, "wb")`). The default `log_output=None` path creates a `BufferedWriter` that `stop()` never closes. Input: `Service("any").stop()`.
+
+- **src/service.py:37** - *Correctness* - `important` - User-passed binary `IO` leaked: if the caller passes a binary file like `open("log.bin", "wb")` as `log_output` (allowed by the type hint `IO[Any]`), neither the `TextIO` nor `int` branch matches, so the handle is never closed. Input: `Service("x", log_output=open("f", "wb")).stop()`.
+
+- **src/service.py:36** - *Failure modes* - `important` - Close exception skips process termination: the old code wrapped the close logic in `try/except Exception: pass`, guaranteeing `self.process.terminate()` at line 42 is always reached. The new code has no `try/except` around the close calls. If `self.log_output.close()` raises (e.g., EBADF on an already-closed file) or `os.close()` raises, the exception propagates and the child process is never terminated. Input: `Service("x", log_output=already_closed_fd).stop()`.
+
+- **src/service.py:8** - *Style* - `nit` - `IO` is imported but unused in the new code. The type annotation at line 18 still references `IO[Any]`, but the import at line 8 (`from typing import IO, Any, TextIO`) is kept only if line 18 uses it — which it does in the signature, so this is fine. However, it's not used in the body of `stop()` where the old code relied on it implicitly. Minor: the unused import `IO` from `typing` is still referenced by the `__init__` signature, so no actual problem. Skipping.
+
+- **src/service.py:44** - *Failure modes* - `pre-existing` - `self.process.wait(timeout=10)` raises `subprocess.TimeoutExpired` if the child doesn't exit within 10 seconds, and the orphaned process is never killed (no second `process.kill()`). Additionally, `self.process = None` is never executed, so subsequent `stop()` calls re-enter an inconsistent state.
+
+**Findings: 3 important, 0 nit, 1 pre-existing.**
+
+request changes

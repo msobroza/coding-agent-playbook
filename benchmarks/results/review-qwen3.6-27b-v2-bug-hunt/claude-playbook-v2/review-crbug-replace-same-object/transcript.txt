@@ -1,0 +1,39 @@
+
+
+Now I have all the evidence I need. Let me write the review.
+
+---
+
+## Review: `fix(scene): no duplicate references after replace onto an object already on screen`
+
+### 1. Correctness — `important`
+
+**src/scene.py:37-38** — The guard `mobj_list.remove(new_m)` fires unconditionally at *every* recursion level, before the code has established that `old_m` exists in the current list. This produces two distinct failure modes:
+
+- **Self-replace is broken.** `scene.replace(A, A)` where `A` is in the scene: line 38 removes `A` from the list, then the search on lines 42–45 finds nothing (it was just removed), returns `False`, and line 52 raises `ValueError("Could not find ...")`. Before this change, `replace(A, A)` was a harmless no-op (find `A` at its index, set it to `A`).
+
+- **Destructive mutation on failure.** `scene.mobjects = [X, A]`; call `scene.replace(Mobject("nonexistent"), A)`. Line 38 removes `A` from `self.mobjects` before the search proves it can succeed. When `old_m` is not found, line 52 raises `ValueError`, but `A` is already gone — the scene is left corrupted with no way to recover `A`.
+
+**src/scene.py:37-38** — The same unconditional removal corrupts ancestor lists when `old_m` lives in a *descendant* list. Example: `scene.mobjects = [group, A]` where `group.submobjects = [B]`; call `scene.replace(B, A)`. The top-level call removes `A` from `scene.mobjects` (line 38), then recurses into `group`, finds `B`, and replaces it with `A`. Result: `scene.mobjects = [group]` — `A` was silently dropped from the top level and inserted into the group. The intent is to replace `B` with `A` *in the group* while leaving `A` at the top level unchanged.
+
+**src/scene.py:38** — `list.remove()` drops only the first occurrence. If `new_m` appears multiple times in the same list (e.g., `group.submobjects = [A, circle, A]`), only one `A` is removed. After replacing `circle` with `A`, the list contains `[A, A]` — a duplicate the fix was meant to prevent.
+
+### 2. Test coverage — `nit`
+
+**tests/test_scene.py:29-34** — `test_no_duplicate_reference_when_the_target_is_already_on_screen` exercises the same-level case (both objects in `scene.mobjects`). It does not cover the cross-level case (`new_m` in a parent list, `old_m` in a child list) where the bug above manifests.
+
+**tests/test_scene.py** — No test for `replace(A, A)` (self-replace). A test asserting it is a no-op would catch the regression introduced by this change.
+
+### 3. Design — `nit`
+
+**src/scene.py:37-38** — The removal should be scoped to the branch where `old_m` is actually found, not hoisted to the top of `replace_in_list`. Moving the dedup logic inside the `if mobj_list[i] == old_m:` block (line 43) ensures `new_m` is removed only from the list that is about to receive it, and only after the replacement is confirmed to succeed.
+
+### 4–5. Pre-existing
+
+**src/scene.py:42-45** — The breadth-first loop returns `True` on the first match of `old_m`, so if `old_m` appears in multiple places in the scene graph, only the first occurrence is replaced. This is the existing behavior and the change does not alter it.
+
+---
+
+Findings: 3 important, 3 nit, 1 pre-existing
+
+request changes

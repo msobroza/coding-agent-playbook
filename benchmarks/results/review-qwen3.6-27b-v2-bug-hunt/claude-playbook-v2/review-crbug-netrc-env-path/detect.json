@@ -1,0 +1,39 @@
+{
+  "sample_id": "review-crbug-netrc-env-path",
+  "experiment": "claude-playbook-v2",
+  "defect": {
+    "description": "A NETRC path is still expanded under the home directory: os.path.expanduser(f\"~/{name}\") turns NETRC=/etc/ci/netrc into a path like /home/user//etc/ci/netrc, so a NETRC file outside the home directory (an absolute path, or one starting with ~) is never found and no credentials are returned; only the default NETRC_FILES names should get the ~/ prefix.",
+    "location": "src/netrc_auth.py (the expanduser call in get_netrc_auth)"
+  },
+  "judge": {
+    "backend": "anthropic",
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "yes",
+  "strict": 1.0,
+  "lenient": 1.0,
+  "top5": 1.0,
+  "first_match": 1,
+  "n_items": 4,
+  "votes": [
+    {
+      "detected": "yes",
+      "review_items": [
+        "Absolute NETRC paths broken by unconditional ~/ prefix in expanduser (line 17)",
+        "Empty-string NETRC resolves to home directory and causes IsADirectoryError",
+        "Test only covers bare filename, not absolute-path case",
+        "Path traversal via NETRC like ../.secret resolves outside home"
+      ],
+      "item_matches": [
+        1,
+        0,
+        0,
+        0
+      ],
+      "evidence_quote": "`f\"~/{name}\"` unconditionally prepends `~/` to the value. When `NETRC=\"/etc/secrets/netrc\"`, this becomes `\"~//etc/secrets/netrc\"`, which `expanduser` resolves to `$HOME/etc/secrets/netrc` \u2014 a non-existent path in the user's home directory. The function returns `None` instead of reading the intended file.",
+      "justification": "The first finding names the same cause at the same code: the unconditional ~/ prefix in the expanduser call. It also gives the same effect: an absolute NETRC is resolved under home, the file isn't found, and the function returns None."
+    }
+  ]
+}

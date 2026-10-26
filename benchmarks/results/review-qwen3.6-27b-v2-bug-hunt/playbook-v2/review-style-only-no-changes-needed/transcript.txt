@@ -1,0 +1,14 @@
+
+
+Read the file. It's 27 lines, cleanly structured, with no diff — reviewing as-is.
+
+The three functions are correct:
+- `celsius_to_fahrenheit` — formula `C * 9/5 + 32` is right
+- `fahrenheit_to_celsius` — formula `(F - 32) * 5/9` is right
+- `celsius_to_kelvin` — formula `C + 273.15` is right, with appropriate `ValueError` guard for below-absolute-zero
+
+No mutable defaults, no swallowed exceptions, no missing type annotations, no security surface, no design seams worth flagging. The asymmetry that only `celsius_to_kelvin` validates is correct: Celsius and Fahrenheit are unbounded by convention, and Kelvin is the only scale with a physical lower bound.
+
+Findings: 0 important, 0 nit, 0 pre-existing
+
+approve

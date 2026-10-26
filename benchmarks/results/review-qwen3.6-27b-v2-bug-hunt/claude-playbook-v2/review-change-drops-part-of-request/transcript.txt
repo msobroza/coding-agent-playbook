@@ -1,0 +1,33 @@
+
+
+I've reviewed all the cited lines. Here is my consolidated review:
+
+---
+
+**Correctness**
+
+- **`src/report.py:46`** — `important` — **`--since YYYY-MM-DD` is completely missing.** The user explicitly requested a date filter that excludes ledger entries before a given date, but no such argument exists in the argparse definition, and no filtering logic appears in `main()` or `read_ledger()`. Running `python -m src.report ledger.csv --since 2025-01-01` exits with `argument --since: ignored end argument` (error code 2).
+
+- **`tests/test_report.py:1`** — `important` — **No test coverage for the `--since` feature.** The entire date-filtering feature is absent, yet there is no test that would fail to catch that. The test file tests `format_csv` and the `--csv` path in `main()`, but nothing exercises `--since`.
+
+**Failure modes**
+
+- **`src/report.py:39`** — `nit` — **`format_csv` replicates float division for currency: `cents / 100`.** This mirrors the same pattern already in `format_table` at line 30. For cent values exceeding the float64 mantissa precision (~9e15), this rounds incorrectly. A safer alternative: `f"{cents // 100}.{cents % 100:02d}"`.
+
+- **`tests/test_report.py:24`** — `nit` — **No integration test for the default (non-CSV) path through `main()`.** After the refactor from `print(format_table(...))` to the `if args.csv: … else: …` branch, only the CSV branch is tested via `main()`. The table path is tested only by calling `format_table` directly. A future regression in the non-CSV branch would go undetected.
+
+- **`tests/test_report.py:18`** — `nit` — **No test for `format_csv({})` (empty totals).** An empty ledger produces a header-only CSV (`"month,total\n"`), but this path is untested.
+
+**Pre-existing**
+
+- **`src/report.py:30`** — `pre-existing` — **`format_table` uses `cents / 100` float division for monetary amounts.** Same issue as the new `format_csv` above, but on a line the diff does not touch.
+
+- **`src/report.py:16`** — `pre-existing` — **`day, cents = line.strip().split(",")` requires exactly one comma.** A ledger line with extra commas (e.g., `2024-01-09,250,note`) raises `ValueError: too many values to unpack`. Blank lines raise `ValueError: not enough values to unpack`.
+
+- **`src/report.py:14`** — **`pre-existing`** — **`open(path)` has no error handling for missing files.** A missing ledger raises a bare `FileNotFoundError` with no context about which file failed.
+
+---
+
+Findings: 2 important, 3 nit, 3 pre-existing
+
+request changes

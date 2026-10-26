@@ -1,0 +1,12 @@
+Both passes found the same two defects. Let me verify against the cited lines.
+
+
+**Correctness**
+
+- **`src/auth.py:16`** — `!` is not a valid Python operator. Python uses `not` for boolean negation. The module raises `SyntaxError` on import and the service cannot start. Change `!hmac.compare_digest(...)` to `not hmac.compare_digest(...)`.
+
+- **`src/auth.py:16-17`** — The `or` short-circuits, defeating the constant-time guarantee. When `given.username != expected.username`, the first clause evaluates true and the password comparison on line 17 is never reached. An attacker can measure the timing difference to determine whether the username is correct. Even after fixing the syntax, both comparisons must run regardless of the first result. One approach: compute both digests, then combine with `or` on the precomputed booleans.
+
+Findings: 2 important, 0 nit, 0 pre-existing
+
+request changes

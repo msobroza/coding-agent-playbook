@@ -1,0 +1,29 @@
+Now I have all findings from both passes and the source files. Let me verify each cited line and produce the review.
+
+---
+
+## Review
+
+### Correctness
+
+- **`src/shipping.py:13`** — `weight <= 0` passes `float('nan')` and `float('inf')` because all NaN comparisons are `False` and `inf > 0`. On line 15, `math.ceil(float('nan'))` raises `ValueError: cannot convert float NaN to integer` and `math.ceil(float('inf'))` raises `OverflowError` — both misleading, hiding the real input problem. This exists in the old code unchanged. — **pre-existing**
+
+- **`src/shipping.py:15`** — Floating-point conversion can land infinitesimally above an integer kilogram boundary, causing `math.ceil` to overcharge by 1 kg. A parcel weighing exactly 2 kg is `2 / 0.45359237 ≈ 4.409245243697551 lb`; passing that pound value and multiplying back by `0.45359237` may yield `2.0000000000000004` instead of `2.0`, so `math.ceil` returns 3. Requires 15+ significant digits to trigger, so unlikely in practice. — **nit**
+
+### Failure modes
+
+- **`src/units.py:15`** — `to_kilograms` does not validate `weight` is non-negative, so `to_kilograms(-10, "lb")` returns `-4.5359237` silently. `quote_cents` guards against this before calling, but `to_kilograms` is a public utility importable and callable on its own. — **nit**
+
+- **`src/units.py:4`** — `KILOGRAMS_PER_UNIT` is a mutable `dict` at module level. Any code that does `from src.units import KILOGRAMS_PER_UNIT; KILOGRAMS_PER_UNIT["oz"] = 0.028` silently changes conversion behavior for all callers. Consider a `frozen` mapping or wrapping in `types.MappingProxyType` at assignment. — **nit**
+
+### Design and boundaries
+
+- **`src/shipping.py:11`** — `unit` is not keyword-only (`def quote_cents(weight: float, unit: str = "kg")`). If the signature later gains another positional parameter, callers writing `quote_cents(5, "lb")` silently pass the wrong value. Making it keyword-only (`*, unit: str = "kg"`) prevents that class of mistake. Principle: defense against future signature drift. — **nit**
+
+- **`src/shipping.py:11`** — The type hint for `unit` is bare `str`, which accepts any string at type-check time. `Literal["kg", "lb"]` would catch a typo like `quote_cents(5, "lbs")` statically. — **nit**
+
+- **`src/shipping.py:14`** — The error message `f"weight must be positive, got {weight}"` omits the `unit` parameter. `quote_cents(-5, "lb")` says `"got -5"` without indicating the value was in pounds, leaving the caller unsure whether to fix the value or the unit. — **nit**
+
+Findings: 0 important, 6 nit, 1 pre-existing.
+
+approve with comments

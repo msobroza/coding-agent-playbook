@@ -1,0 +1,43 @@
+{
+  "sample_id": "review-crbug-audio-input-args",
+  "experiment": "claude-playbook-v2",
+  "defect": {
+    "description": "Input_args given as ordinary ffmpeg arguments in a string rather than a preset name (for example '-rtsp_transport tcp') are concatenated as a str onto the argument list: get_ffmpeg_arg_list(...) + '-rtsp_transport tcp' raises TypeError (can only concatenate list to list), so audio detection fails to start; the fallbacks need get_ffmpeg_arg_list(...) like the global args.",
+    "location": "src/audio.py (get_ffmpeg_command)"
+  },
+  "judge": {
+    "backend": "anthropic",
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "yes",
+  "strict": 1.0,
+  "lenient": 1.0,
+  "top5": 1.0,
+  "first_match": 1,
+  "n_items": 6,
+  "votes": [
+    {
+      "detected": "yes",
+      "review_items": [
+        "audio.py:15-20 TypeError when per-input input_args is a plain string concatenated to list",
+        "audio.py:19 same TypeError on camera-wide ffmpeg.input_args fallback",
+        "tests:34 no test covers plain-string input_args",
+        "audio.py:14 IndexError with no context when no audio-role input (pre-existing)",
+        "audio.py:16 detect_fps=1 adds video -r flag to audio command",
+        "audio.py:25 str(AUDIO_SAMPLE_RATE) minor inconsistency"
+      ],
+      "item_matches": [
+        1,
+        1,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence_quote": "**src/audio.py:15-20** \u2014 `TypeError: can only concatenate list to str` when `input_args` is a plain ffmpeg-args string. Line 16's `parse_preset_input` returns `None` for non-preset strings, so `or ffmpeg_input.input_args` (line 17) yields the raw string. Then `get_ffmpeg_arg_list(ffmpeg.global_args) + <str>` crashes.",
+      "justification": "The review identifies the TypeError in get_ffmpeg_command that occurs when a non-preset ffmpeg-args string falls through the `or` chain and is concatenated onto a list. It also covers the camera-wide fallback. This matches the known defect."
+    }
+  ]
+}

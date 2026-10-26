@@ -1,0 +1,27 @@
+Let me verify the findings against the actual code in the working tree.
+
+
+
+Now I have all the information needed. Let me write the review.
+
+---
+
+## Correctness
+
+- **`src/streams.py:35-44`** — **MAXLEN and MINID are not mutually exclusive; both get appended when supplied.** `"xtrim('s', maxlen=100, minid='1-0')"` produces `XTRIM s MAXLEN MINID ~ 100 1-0`, which Redis rejects. Lines 35-36 append `b"MAXLEN"` and then 37-38 append `b"MINID"` independently; neither checks the other.
+
+- **`src/streams.py:34,48`** — **No guard that at least one trimming strategy is provided; `execute_command` fires with an empty `pieces` list.** `"xtrim('events')"` produces `XTRIM events ~` (with `approximate=True` default) or `XTRIM events` (with `approximate=False`). Redis requires one of `MAXLEN` or `MINID`.
+
+- **`src/streams.py:39-47`** — **`approximate` and `limit` emitted even when no strategy is set, compounding the above.** `"xtrim('events', limit=10)"` produces `XTRIM events ~ LIMIT 10` — no threshold, just modifiers. The `~` on line 39 and `LIMIT` on lines 45-47 should only append when a strategy is present.
+
+## Design and boundaries
+
+- **`src/streams.py:27-33`** — **Docstring doesn't state the exactly-one constraint on maxlen/minid.** Callers have no programmatic or documented contract to prevent the broken combinations above. Could be a `ValueError` at the call site with a docstring that lists the valid patterns. *(Information expert: the function knows the Redis wire protocol constraints but doesn't enforce them.)*
+
+- **`tests/test_streams.py:29-38`** — **No test for invalid input combinations.** Missing tests for: both maxlen and minid together, neither provided, and limit without a strategy. The three new tests each exercise one valid path but none of the failure modes.
+
+---
+
+Findings: 3 important, 2 nit, 0 pre-existing
+
+request changes

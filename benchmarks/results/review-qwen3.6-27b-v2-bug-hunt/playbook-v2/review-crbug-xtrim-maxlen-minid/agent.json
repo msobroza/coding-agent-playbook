@@ -1,0 +1,32 @@
+{
+  "experiment": "playbook-v2",
+  "sample_id": "review/crbug-xtrim-maxlen-minid",
+  "harness": "opencode",
+  "model": "openrouter/qwen/qwen3.6-27b",
+  "command": [
+    "opencode",
+    "run",
+    "--pure",
+    "--dir",
+    "~/.cache/playbook-bench/review-qwen3.6-27b-v2-bug-hunt/playbook-v2/review-crbug-xtrim-maxlen-minid/scratch",
+    "--model",
+    "openrouter/qwen/qwen3.6-27b",
+    "--format",
+    "json",
+    "{prompt}"
+  ],
+  "returncode": 0,
+  "timed_out": false,
+  "duration_seconds": 295.4,
+  "baseline_commit": "4f7b39f548042e339c0363f0673788358134fda8",
+  "scratch": "~/.cache/playbook-bench/review-qwen3.6-27b-v2-bug-hunt/playbook-v2/review-crbug-xtrim-maxlen-minid/scratch",
+  "setup_snapshot": "~/.cache/playbook-bench/review-qwen3.6-27b-v2-bug-hunt/playbook-v2/review-crbug-xtrim-maxlen-minid/scratch__setup_baseline",
+  "main_loop_tools": [
+    "read",
+    "task:explore",
+    "task:explore",
+    "read",
+    "read"
+  ],
+  "second_pass_ran": true
+}

@@ -1,0 +1,21 @@
+
+
+**Correctness**
+
+- **src/forms.py:43** — `important, new` — `kwargs.pop("method", form.method).upper()` raises `AttributeError` when `method=None` is explicitly passed as a kwarg, because `dict.pop` returns the present `None` value rather than the default `form.method`, and `None.upper()` fails. Input: `FormRequest.from_form(form, method=None)`. This is a regression: the old code passed `None` through to `Request.__post_init__`, which handled it via `(self.method or "GET").upper()` at line 27.
+
+- **src/forms.py:43** — `important, new` — `.upper()` also crashes when `form.method` is `None` at runtime and no `method` kwarg is supplied. Dataclass annotations are not enforced, so `Form(action="/x", method=None)` constructs successfully. Input: `FormRequest.from_form(Form(action="/x", method=None))`.
+
+**Failure modes**
+
+- **src/forms.py:33** — `nit, new` — `valid_form_methods = ["GET", "POST"]` is a mutable list as a class attribute shared by every instance. A caller or subclass that mutates it (`FormRequest.valid_form_methods.append("PUT")`) changes behavior globally. Use a `tuple` instead.
+
+**Design and boundaries**
+
+- **src/forms.py:43–47** — `nit, new` — The method is uppercased twice: here via `.upper()` and again inside `Request.__post_init__` (line 27). Redundant but harmless.
+
+- **tests/test_forms.py:23** — `nit, new` — `@pytest.mark.parametrize("method", FormRequest.valid_form_methods)` tests against the internal implementation list rather than a behavior-level specification. If `valid_form_methods` is later extended, the test silently absorbs the new value without the reviewer realizing the boundary shifted.
+
+**Findings: 2 important, 3 nit, 0 pre-existing**
+
+request changes

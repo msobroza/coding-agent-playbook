@@ -1,0 +1,33 @@
+{
+  "experiment": "playbook-v2",
+  "sample_id": "review/crbug-form-method-none",
+  "harness": "opencode",
+  "model": "openrouter/qwen/qwen3.6-27b",
+  "command": [
+    "opencode",
+    "run",
+    "--pure",
+    "--dir",
+    "~/.cache/playbook-bench/review-qwen3.6-27b-v2-bug-hunt/playbook-v2/review-crbug-form-method-none/scratch",
+    "--model",
+    "openrouter/qwen/qwen3.6-27b",
+    "--format",
+    "json",
+    "{prompt}"
+  ],
+  "returncode": 0,
+  "timed_out": false,
+  "duration_seconds": 119.1,
+  "baseline_commit": "529fce0b0f0bb9296d2ed3278d31459b159b51ab",
+  "scratch": "~/.cache/playbook-bench/review-qwen3.6-27b-v2-bug-hunt/playbook-v2/review-crbug-form-method-none/scratch",
+  "setup_snapshot": "~/.cache/playbook-bench/review-qwen3.6-27b-v2-bug-hunt/playbook-v2/review-crbug-form-method-none/scratch__setup_baseline",
+  "main_loop_tools": [
+    "read",
+    "read",
+    "read",
+    "task:explore",
+    "task:explore",
+    "read"
+  ],
+  "second_pass_ran": true
+}

@@ -1,0 +1,47 @@
+Now I have all the context. Let me verify the findings against the cited lines.
+
+**Key verification: lines 14-20 with `input_args` as a plain ffmpeg-args string.**
+
+`FfmpegArgs = str | list[str]` (config.py:11). When `input_args` is a non-preset string like `"-rtsp_transport udp"`:
+
+1. `parse_preset_input(ffmpeg_input.input_args, 1)` → `None` (line 18: `arg not in PRESETS_INPUT`)
+2. `or ffmpeg_input.input_args` → `"-rtsp_transport udp"` (a `str`)
+3. `get_ffmpeg_arg_list(ffmpeg.global_args)` returns `list[str]`
+4. `list[str] + str` → `TypeError`
+
+For `list[str]` input_args (e.g., `["-rtsp_transport", "udp"]`):
+1. `parse_preset_input(...)` → `None` (line 18: `not isinstance(arg, str)`)
+2. `or ffmpeg_input.input_args` → `["-rtsp_transport", "udp"]` (a `list`, truthy — short-circuits)
+3. `list[str] + list[str]` → works fine ✓
+
+The test at line 34 uses a list, so it passes. No test uses a plain string → **confirmed bug**.
+
+The fallback on line 19 (`or ffmpeg.input_args`) has the same issue when `ffmpeg.input_args` is a plain string like `"-re"`.
+
+Now the review:
+
+---
+
+## Correctness
+
+- **src/audio.py:15-20** — `TypeError: can only concatenate list to str` when `input_args` is a plain ffmpeg-args string. Line 16's `parse_preset_input` returns `None` for non-preset strings, so `or ffmpeg_input.input_args` (line 17) yields the raw string. Then `get_ffmpeg_arg_list(ffmpeg.global_args) + <str>` crashes. **Input:** `CameraInput("/stream", ["audio"], input_args="-rtsp_transport udp")`.
+
+- **src/audio.py:19** — Same `TypeError` on the camera-wide fallback. When `ffmpeg_input.input_args` is empty (default `""`), the `or` chain falls through to `parse_preset_input(ffmpeg.input_args, 1)` (line 18), which returns `None` for a non-preset string, so `or ffmpeg.input_args` (line 19) yields the raw string. **Input:** `FfmpegConfig(inputs=[CameraInput("/s", ["audio"])], input_args="-re")`.
+
+- **tests/test_audio.py:34** — No test covers `input_args` as a plain ffmpeg-args string (the `FfmpegArgs` shape that triggers the crash). The test at line 34 uses a `list[str]` which short-circuits the `or` chain at line 17 and never reaches the `list + str` concatenation. **Input:** any camera with `input_args="-rtsp_transport udp"` would crash at runtime but passes no test.
+
+## Failure Modes
+
+- **src/audio.py:14** — `IndexError: list index out of range` with no context when no input has `"audio"` in its roles. The message doesn't name the camera or which inputs were checked. **State:** a camera with `inputs=[CameraInput("/stream", ["detect", "record"])]`. (Pre-existing: the old code on deleted line 48 had the same issue.)
+
+## Readability
+
+- **src/audio.py:16** — `parse_preset_input(ffmpeg_input.input_args, 1)` passes `detect_fps=1` for an audio-only command. When the preset is `preset-http-reolink`, this appends `"-r", "1"` (a video frame-rate flag) to the command. It's harmless noise for audio but misleading when debugging. Consider whether a sentinel or separate audio-preset path is clearer.
+
+- **src/audio.py:25** — `str(AUDIO_SAMPLE_RATE)` is unnecessary: `AUDIO_SAMPLE_RATE` is `16000` (an `int`), and the surrounding list uses string literals. The `str()` call is correct (the list is conceptually `list[str]`) but the mix of `str` and `int` in an otherwise all-string list is slightly inconsistent. Minor.
+
+---
+
+Findings: 3 important, 0 nit, 1 pre-existing
+
+request changes

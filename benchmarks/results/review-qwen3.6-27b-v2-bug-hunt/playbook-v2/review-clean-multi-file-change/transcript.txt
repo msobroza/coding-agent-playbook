@@ -1,0 +1,31 @@
+
+
+Now let me verify each finding by reading the actual files at the cited lines.
+
+
+
+
+
+
+Now let me verify the float imprecision concern with a concrete check:
+
+
+
+
+Float imprecision doesn't materialize for practical inputs - dropped. Now let me compile the review.
+
+---
+
+- **src/shipping.py:11** - design / nit - `unit: str` accepts any string; a typo like `"lbs"` or `"KG"` passes type checking and only fails at runtime. Use `Literal["kg", "lb"]` to catch misuses statically.
+
+- **src/units.py:4** - failure modes / nit - `KILOGRAMS_PER_UNIT` is a mutable `dict` exposed as a public module-level name. Any caller can do `KILOGRAMS_PER_UNIT["oz"] = 0.028` and corrupt every subsequent conversion. Freeze it (`types.MappingProxyType`) or prefix with `_` if exposure is accidental.
+
+- **src/shipping.py:14** - correctness / nit - The error message `f"weight must be positive, got {weight}"` omits the unit. When called as `quote_cents(-5, "lb")`, the message says `got -5` without indicating the input was pounds, which is confusing to debug.
+
+- **tests/test_shipping.py:26** - readability / nit - `quote_cents(1, "oz")` passes `unit` positionally; a reader must look up the signature to know `"oz"` is the unit parameter. Use `quote_cents(1, unit="oz")`.
+
+- **tests/test_shipping.py:21** - readability / nit - `quote_cents(5, "lb")` same positional-unit issue. Use `quote_cents(5, unit="lb")`.
+
+Findings: 0 important, 5 nit, 0 pre-existing
+
+approve with comments
