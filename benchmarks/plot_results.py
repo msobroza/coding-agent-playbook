@@ -317,7 +317,7 @@ def _second_pass_calls(rows: list[RunRow]) -> list[str]:
     keys = [
         k
         for k in dict.fromkeys(r.experiment for r in rows)
-        if _bench.experiment_by_key(k).prompt_set == "v2"
+        if _bench.experiment_by_key(k).playbook_text == "head"
     ]
     if not keys:
         return []

@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE, REPO_LOCAL_SOURCE
-from coding_agent_playbook.catalog.prompt_sets import DEFAULT_PROMPT_SET, PROMPT_SETS
 from coding_agent_playbook.catalog.roots import bundled_plugins, catalog_layer_root, catalog_root
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.skills.membership import member_rules_of
@@ -27,7 +26,6 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.prompt import Prompt
     from coding_agent_playbook.artifacts.rule import Rule
     from coding_agent_playbook.artifacts.skill import Skill
-    from coding_agent_playbook.catalog.prompt_sets import PromptSet
 
 #: The title of the section that collects member rules naming no declared section (D42).
 OTHER_SECTION_TITLE = "Other"
@@ -91,13 +89,12 @@ class PluginEntry:
 
 @dataclass(frozen=True)
 class PromptEntry:
-    """One prompt id, with the prompt sets that ship it (twins share the id)."""
+    """One prompt id: its name, slash command and description."""
 
     id: str
     name: str
     slash: str
     description: str
-    prompt_sets: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -239,24 +236,16 @@ def _first_paragraph(markdown: str) -> str:
 
 
 def _prompt_entries(repo_root: Path, plugins: Sequence[str]) -> tuple[PromptEntry, ...]:
-    """One entry per prompt id; name and description come from the default set when it has one."""
-    per_set = {ps: _prompts_by_id(repo_root, plugins, ps) for ps in PROMPT_SETS}
-    ids = sorted({prompt_id for prompts in per_set.values() for prompt_id in prompts})
-    entries = []
-    for prompt_id in ids:
-        sets = tuple(ps for ps in PROMPT_SETS if prompt_id in per_set[ps])
-        base = per_set[DEFAULT_PROMPT_SET].get(prompt_id) or per_set[sets[0]][prompt_id]
-        fm = base.frontmatter
-        entries.append(PromptEntry(fm.id, fm.name, fm.slash, fm.description, sets))
-    return tuple(entries)
-
-
-def _prompts_by_id(
-    repo_root: Path, plugins: Sequence[str], prompt_set: PromptSet
-) -> dict[str, Prompt]:
-    source = FileSystemArtifactSource(
-        repo_root=repo_root, overlay_packages=list(plugins), prompt_set=prompt_set
+    """One entry per prompt id, sorted by id."""
+    by_id = _prompts_by_id(repo_root, plugins)
+    return tuple(
+        PromptEntry(fm.id, fm.name, fm.slash, fm.description)
+        for fm in (by_id[prompt_id].frontmatter for prompt_id in sorted(by_id))
     )
+
+
+def _prompts_by_id(repo_root: Path, plugins: Sequence[str]) -> dict[str, Prompt]:
+    source = FileSystemArtifactSource(repo_root=repo_root, overlay_packages=list(plugins))
     return {
         prompt.frontmatter.id: prompt
         for prompt in source.list_prompts()

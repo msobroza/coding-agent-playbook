@@ -9,9 +9,6 @@ Validates:
   at a time, as hooks do, and treats each ``ValueError`` as an error).
 - Prompts never call ``{{ rule() }}``; every ``includes_rules`` id names a rule
   (``validation.prompts``, specs/prS-skills-context.md §7.5).
-- Each layer's later prompt sets (``prompts/v2/``) are complete twins of its v1
-  prompts, keeping their names, slash commands and ``includes_rules`` (D76).
-  The prompts of the set a sync does not render get the per-prompt checks too.
 - Every prompt ``output_contract`` entry compiles as a Python regex (fail-closed,
   like ``AnswerMatchesCheck``; specs/prK-hook-pack.md §E.2).
 - Rule templates never call ``{{ rule(...) }}`` (rules cannot include rules,
@@ -101,10 +98,8 @@ from coding_agent_playbook.validation.findings import (
     skill_label,
 )
 from coding_agent_playbook.validation.prompts import (
-    check_prompt_rule_calls,
     check_prompt_rule_references,
-    check_prompt_set_twins,
-    unrendered_prompts,
+    check_retired_prompt_set_dirs,
 )
 
 if TYPE_CHECKING:
@@ -377,13 +372,9 @@ def _artifact_errors(ctx: SyncContext, *, config_less: bool) -> list[ValidationE
     errors.extend(check_rule_layout(ctx.rule_definitions, ctx.artifact_source))
     errors.extend(_check_applies_if(rules, prompts, ctx.facts, ctx.repo_root))
     errors.extend(check_prompt_rule_references(prompts, {r.frontmatter.id for r in rules}))
-    errors.extend(check_prompt_set_twins(ctx.artifact_source))
-    # The sets this sync does not render get the same per-prompt checks (D76); a
-    # twin keeps its includes_rules, so the reference check above covers them.
-    unrendered = unrendered_prompts(ctx.artifact_source)
-    errors.extend(check_prompt_rule_calls(unrendered))
-    errors.extend(_check_output_contracts([*prompts, *unrendered]))
-    errors.extend(check_write_scope([*prompts, *unrendered]))
+    errors.extend(check_retired_prompt_set_dirs(ctx.artifact_source))
+    errors.extend(_check_output_contracts(prompts))
+    errors.extend(check_write_scope(prompts))
     errors.extend(
         check_lint_codes(
             rules,
@@ -391,7 +382,7 @@ def _artifact_errors(ctx: SyncContext, *, config_less: bool) -> list[ValidationE
         )
     )
     errors.extend(_check_rule_bodies_do_not_include_rules(rules))
-    errors.extend(_check_jinja_compiles(rules, [*prompts, *unrendered]))
+    errors.extend(_check_jinja_compiles(rules, prompts))
     errors.extend(_check_eval_samples(ctx))
     links_config, links_errors = (
         (LinksConfig(), []) if config_less else load_links_config(ctx.repo_root)

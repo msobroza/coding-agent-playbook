@@ -30,12 +30,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import _bench
 
+from coding_agent_playbook.catalog.roots import catalog_root
 from coding_agent_playbook.evals.prompting import render_prompt
 from coding_agent_playbook.evals.run.agent_env import unattended_agent_env
 from coding_agent_playbook.evals.run.claude_code_runner import ClaudeCodeRunner
 from coding_agent_playbook.evals.run.harness_runner import AgentRun, materialize
 from coding_agent_playbook.evals.run.opencode_output import parse_opencode_output
 from coding_agent_playbook.evals.run.opencode_runner import OpenCodeRunner
+from coding_agent_playbook.release.edition import load_edition
+from coding_agent_playbook.release.edition_digests import edition_dir
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -67,7 +70,7 @@ def opencode_command(experiment: _bench.Experiment, scratch: Path) -> list[str]:
         "--model", _bench.AGENT_MODEL,
         "--format", "json",
     ]  # fmt: skip
-    if experiment.prompt_set is None:
+    if experiment.playbook_text is None:
         return [*base, "--command", "review", "{prompt}"]
     return [*base, "{prompt}"]
 
@@ -137,7 +140,7 @@ class ToolLoggingOpenCodeRunner(OpenCodeRunner):
     """The engine's ``OpenCodeRunner``, keeping the main session's tool calls as well.
 
     The engine reads only the text and the token totals from OpenCode's JSON
-    events; the benchmark also needs the tool calls, to tell whether a v2 review
+    events; the benchmark also needs the tool calls, to tell whether a review
     started both of its first passes.
     """
 
@@ -226,15 +229,15 @@ _SUBAGENT_TOOLS = ("Agent", "Task", "task")
 def second_pass_ran(experiment: _bench.Experiment, tool_calls: Sequence[str]) -> bool | None:
     """Whether the run started the bug-only pass its prompt asks for; None when none is asked.
 
-    v2 asks for two first passes: the ``code-review`` skill (Claude Code) or a
-    second subagent beside the first. The ``code-review`` prototype asks for the
+    The current review text asks for two first passes: the ``code-review`` skill
+    (Claude Code) or a second subagent beside the first. The ``code-review`` prototype asks for the
     skill alone.
 
     Example::
 
         second_pass_ran(_bench.experiment_by_key("playbook-v2"), ["task:explore"] * 2)  # True
     """
-    if experiment.prompt_set != "v2":
+    if experiment.playbook_text != "head":
         return None
     if "Skill:code-review" in tool_calls:
         return True
@@ -290,10 +293,13 @@ def agent_prompt(experiment: _bench.Experiment, sample: EvalSample) -> str:
     Claude Code's ``/code-review`` takes it as the slash command's arguments.
     """
     if not experiment.runnable:
-        raise ValueError(f"{experiment.key} is a recorded prototype; v2 now ships its first pass")
-    if experiment.prompt_set is not None:
-        rendered = render_prompt(sample, strict=True, prompt_set=experiment.prompt_set)
+        raise ValueError(f"{experiment.key} is a recorded prototype; the review now ships its pass")
+    if experiment.playbook_text == "head":
+        rendered = render_prompt(sample, strict=True)
         return native_first_pass(rendered) if experiment.first_pass == "code-review" else rendered
+    if experiment.playbook_text is not None:
+        edition = load_edition(edition_dir(catalog_root(), experiment.playbook_text))
+        return render_prompt(sample, strict=True, edition=edition)
     if experiment.harness == "claude":
         return f"/code-review {sample.invocation.prompt_args}"
     return sample.invocation.prompt_args

@@ -603,7 +603,6 @@ playbook eval refactor/extract-helper --run --target opencode:my-org/coder-32b  
 playbook eval --targets                                             # list the targets and whether each CLI is installed
 playbook eval refactor/extract-helper --run --judge llm --judge-samples 3 # also score [rubric] via an LLM judge
 playbook eval refactor/extract-helper --run --full-scoring          # run every check (no short-circuit)
-playbook eval refactor/extract-helper --run --prompt-set v2         # grade the v2 prompt set (default v1)
 playbook eval refactor/extract-helper --run --format json          # machine-readable report
 ```
 
@@ -938,27 +937,23 @@ agent credentials, with the `claude` or `opencode` CLI logged in. It also **cost
 money**: each eval sample makes 2 sides x 3 runs = 6 agent runs by default.
 
 These commands measure a text change against a release in place, compare HEAD with
-`origin/main`, compare two prompt sets on one ref, and narrow a comparison to one
-eval sample:
+`origin/main`, and narrow a comparison to one eval sample:
 
 ```bash
 playbook eval --compare edition:v0.1.0 head --judge llm                          # release v0.1.0's text vs the current text
-playbook eval --compare origin/main --judge llm                                  # base origin/main (v1) vs HEAD (v1)
-playbook eval --compare HEAD --base-prompt-set v1 --prompt-set v2 --judge llm     # v1 vs v2 on one ref
+playbook eval --compare origin/main --judge llm                                  # base origin/main vs HEAD
 playbook eval refactor/extract-helper --compare origin/main --judge llm --compare-runs 5 --format json
 ```
 
 Every eval sample runs as `playbook eval <id> --run --format json`. A git-ref side
-runs it in its checkout, through that checkout's own engine, with `--edition head`
-and with `--prompt-set` when the side's set is not v1: the base side therefore
-grades the base ref's prompts and rule bodies, pinned eval samples included. An
-engine older than pinned eval samples does not take `--edition head`; the side
-then runs without it, and grades the ref's text anyway, since no eval sample is
-pinned there. `head` runs it in the repository with `--edition head`, so a pinned
-sample grades the current text too. An edition side runs it in the repository
-with `--edition-dir <dir>`, so every sample grades the built edition. An edition
-holds one text: `--base-prompt-set` or `--prompt-set` on an edition side is
-ignored, with a warning.
+runs it in its checkout, through that checkout's own engine, with `--edition head`:
+the base side therefore grades the base ref's prompts and rule bodies, pinned eval
+samples included. An engine older than pinned eval samples does not take
+`--edition head`; the side then runs without it, and grades the ref's text anyway,
+since no eval sample is pinned there. `head` runs it in the repository with
+`--edition head`, so a pinned sample grades the current text too. An edition side
+runs it in the repository with `--edition-dir <dir>`, so every sample grades the
+built edition.
 
 `--compare` takes one or two sides, so a task or eval sample id goes before it:
 `playbook eval <id> --compare <base>`. When the second side names a task or an
@@ -974,8 +969,6 @@ These options shape the comparison:
 
 | Option | Default | Effect |
 | --- | --- | --- |
-| `--base-prompt-set` | `v1` | the prompt set of the base side |
-| `--prompt-set` | `v1` | the prompt set of HEAD |
 | `--compare-runs N` | 3 | the runs per eval sample on each side |
 | `--compare-out` | a new temporary directory, printed on stderr | the directory `<dir>` that keeps the checkouts, built editions and reports |
 

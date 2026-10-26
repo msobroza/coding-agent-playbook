@@ -66,8 +66,7 @@ def build_manifest(
     """
     rules = source.list_rules()
     prompts = source.list_prompts()
-    twins = [twin for layer in source.prompt_set_layers() for twin in layer.twins]
-    shipped: list[_Shipped] = [*rules, *prompts, *twins, *source.list_skills()]
+    shipped: list[_Shipped] = [*rules, *prompts, *source.list_skills()]
     shipped.extend(source.list_hooks())
     core_prompts = [p for p in prompts if p.source_package == source.engine_package]
     core_rules = [r for r in rules if r.source_package == source.engine_package]

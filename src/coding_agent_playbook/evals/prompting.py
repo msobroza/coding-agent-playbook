@@ -39,12 +39,6 @@ from jinja2 import TemplateError
 
 from coding_agent_playbook import __version__ as _engine_version
 from coding_agent_playbook.artifacts.prompt import Prompt
-from coding_agent_playbook.catalog.prompt_sets import (
-    DEFAULT_PROMPT_SET,
-    PromptSet,
-    prompt_set_dir,
-    require_prompt_set,
-)
 from coding_agent_playbook.catalog.resolve import OverlayResolver
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.detector.facts import detect
@@ -109,16 +103,12 @@ def render_prompt(
     sample: EvalSample,
     *,
     strict: bool = False,
-    prompt_set: PromptSet = DEFAULT_PROMPT_SET,
     edition: Edition | None = None,
 ) -> str:
     """Resolve ``sample.prompt_id`` to its :class:`Prompt` and render it like sync.
 
-    ``prompt_set`` picks the prompt set (D76): samples grade v1, and the opt-in
-    eval comparison (D37) can render another set. As in sync, a prompt with no
-    twin in that set keeps its v1 text; the repo's ``prompts`` key is never read.
-    An unknown ``prompt_set`` raises :class:`ValueError` rather than rendering v1.
-    The rendered body and its ``## Reference rules`` appendix are followed by
+    Without ``edition`` the sample grades the current text of its layer's prompt
+    (ADR 0012). The rendered body and its ``## Reference rules`` appendix are followed by
     ``sample.invocation.prompt_args``. When the prompt cannot be resolved at all
     (e.g. an out-of-tree test sample) ``strict`` decides: ``False`` (the
     ``FakeRunner``, which never reads the text) returns a stable
@@ -126,9 +116,9 @@ def render_prompt(
     :class:`PromptResolutionError`. A resolved prompt that fails to render always
     raises :class:`PromptResolutionError`, naming the sample and prompt.
 
-    ``edition`` renders the edition's frozen prompt and rules instead, closed-world
-    (``prompt_set`` is then unused); an id the edition lacks always raises
-    :class:`PromptResolutionError`, whatever ``strict`` says.
+    ``edition`` renders the edition's frozen prompt and rules instead, closed-world;
+    an id the edition lacks always raises :class:`PromptResolutionError`, whatever
+    ``strict`` says.
 
     Example::
 
@@ -137,7 +127,7 @@ def render_prompt(
     if edition is not None:
         prompt: Prompt | None = _edition_prompt(sample, edition)
     else:
-        prompt = _resolve_prompt(sample, require_prompt_set(prompt_set))
+        prompt = _resolve_prompt(sample)
     if prompt is None:
         return _placeholder(sample, strict=strict)
     rules = list(edition.rules) if edition is not None else None
@@ -146,10 +136,8 @@ def render_prompt(
     return f"{body}\n\n{args}".rstrip() if args else body
 
 
-def resolve_sample_prompt(
-    sample: EvalSample, prompt_set: PromptSet = DEFAULT_PROMPT_SET, edition: Edition | None = None
-) -> Prompt | None:
-    """The :class:`Prompt` ``sample`` grades in ``prompt_set`` (as :func:`render_prompt` finds it).
+def resolve_sample_prompt(sample: EvalSample, edition: Edition | None = None) -> Prompt | None:
+    """The :class:`Prompt` ``sample`` grades (as :func:`render_prompt` finds it).
 
     ``None`` when the sample's layer has no prompt with its ``prompt_id``. With
     ``edition``, the edition's frozen prompt (:class:`PromptResolutionError` when
@@ -161,7 +149,7 @@ def resolve_sample_prompt(
     """
     if edition is not None:
         return _edition_prompt(sample, edition)
-    return _resolve_prompt(sample, require_prompt_set(prompt_set))
+    return _resolve_prompt(sample)
 
 
 def _edition_prompt(sample: EvalSample, edition: Edition) -> Prompt:
@@ -317,14 +305,11 @@ def _resolved_rules(sample: EvalSample) -> list[Rule]:
 # --------------------------------------------------------------------------- #
 
 
-def _resolve_prompt(
-    sample: EvalSample, prompt_set: PromptSet = DEFAULT_PROMPT_SET
-) -> Prompt | None:
-    """Best-effort lookup of the :class:`Prompt` for ``sample.prompt_id`` in ``prompt_set``.
+def _resolve_prompt(sample: EvalSample) -> Prompt | None:
+    """Best-effort lookup of the :class:`Prompt` for ``sample.prompt_id``.
 
     Scans the ``prompts/`` directory of the layer the sample belongs to (engine,
-    bundled plugin, overlay or repo-local; see :func:`_infer_prompts_dir`): the
-    ``prompt_set`` directory first (``prompts/v2/``), then the v1 prompts. This
+    bundled plugin, overlay or repo-local; see :func:`_infer_prompts_dir`). This
     deliberately reads the prompt markdown directly rather than through
     ``SyncContext``: resolution must work for the engine's own content, which
     carries no ``.coding-agent-playbook.toml``. Returns ``None`` when the
@@ -333,10 +318,6 @@ def _resolve_prompt(
     prompts_dir = _infer_prompts_dir(sample.source_path)
     if prompts_dir is None:
         return None
-    if prompt_set != DEFAULT_PROMPT_SET:
-        twin = _prompt_in_dir(prompt_set_dir(prompts_dir, prompt_set), sample)
-        if twin is not None:
-            return twin
     return _prompt_in_dir(prompts_dir, sample)
 
 

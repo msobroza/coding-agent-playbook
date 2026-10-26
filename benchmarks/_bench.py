@@ -83,22 +83,24 @@ _ENV_LINE_RE: Final = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*
 class Experiment:
     """One reviewer configuration of one harness.
 
-    ``prompt_set`` ``None`` means the harness's built-in review command gets the
-    sample's request alone (OpenCode's ``/review``, Claude Code's
-    ``/code-review``); ``"v1"``/``"v2"`` send the playbook's rendered review
-    prompt from that prompt set, exactly as ``playbook eval --run`` would.
-    ``harness`` is ``"opencode"`` or ``"claude"``. ``first_pass`` rewrites the v2
-    review's first pass (prototypes of wrapping the harness's native reviewer):
-    ``"code-review"`` replaces both first passes with Claude Code's
-    ``/code-review``; ``"dual"`` ran v2's subagent and the harness's own reviewer
-    side by side, which v2's step 1 now ships in general form. A recorded
-    prototype (``runnable=False``) keeps its results and label but is not re-run:
-    its prompt edits fit only the v2 text it was run on.
+    ``playbook_text`` ``None`` means the harness's built-in review command gets
+    the sample's request alone (OpenCode's ``/review``, Claude Code's
+    ``/code-review``); otherwise the playbook's rendered review prompt is sent,
+    exactly as ``playbook eval --run`` builds it: ``"head"`` renders the current
+    text (the former prompt set v2, ADR 0012) and a release tag renders that
+    edition (the former v1 is edition ``v0.1.0``, under ``catalog/editions/``).
+    ``harness`` is ``"opencode"`` or ``"claude"``. ``first_pass`` rewrites the
+    current review's first pass (prototypes of wrapping the harness's native
+    reviewer): ``"code-review"`` replaces both first passes with Claude Code's
+    ``/code-review``; ``"dual"`` ran the one-subagent text's subagent and the
+    harness's own reviewer side by side, which the review's step 1 now ships in
+    general form. A recorded prototype (``runnable=False``) keeps its results and
+    label but is not re-run: its prompt edits fit only the text it was run on.
     """
 
     key: str
     label: str
-    prompt_set: str | None
+    playbook_text: str | None
     harness: str = "opencode"
     first_pass: str | None = None
     runnable: bool = True
@@ -106,28 +108,28 @@ class Experiment:
 
 EXPERIMENTS: Final = (
     Experiment("opencode-review", "OpenCode /review", None),
-    Experiment("playbook-v1", "OpenCode + playbook v1", "v1"),
-    Experiment("playbook-v2", "OpenCode + playbook v2", "v2"),
+    Experiment("playbook-v1", "OpenCode + playbook v1", "v0.1.0"),
+    Experiment("playbook-v2", "OpenCode + playbook v2", "head"),
     Experiment("claude-code-review", "Claude Code /code-review", None, harness="claude"),
-    Experiment("claude-playbook-v2", "Claude Code + playbook v2", "v2", harness="claude"),
+    Experiment("claude-playbook-v2", "Claude Code + playbook v2", "head", harness="claude"),
     Experiment(
         "claude-v2-over-code-review",
         "Claude Code + v2 over /code-review",
-        "v2",
+        "head",
         harness="claude",
         first_pass="code-review",
     ),
     Experiment(
         "opencode-v2-dual",
         "OpenCode + v2 with /review alongside",
-        "v2",
+        "head",
         first_pass="dual",
         runnable=False,
     ),
     Experiment(
         "claude-v2-dual",
         "Claude Code + v2 with /code-review alongside",
-        "v2",
+        "head",
         harness="claude",
         first_pass="dual",
         runnable=False,
@@ -140,7 +142,7 @@ def experiment_by_key(key: str) -> Experiment:
 
     Example::
 
-        experiment_by_key("playbook-v1").prompt_set  # "v1"
+        experiment_by_key("playbook-v1").playbook_text  # "v0.1.0"
     """
     for experiment in EXPERIMENTS:
         if experiment.key == key:

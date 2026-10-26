@@ -142,13 +142,11 @@ def test_each_sample_runs_the_run_count_on_each_side(tmp_path: Path) -> None:
     )
 
 
-def test_each_side_runs_its_own_prompt_set(tmp_path: Path) -> None:
+def test_a_git_ref_side_never_passes_a_prompt_set(tmp_path: Path) -> None:
+    """Regression (#300): a ref side once passed ``--prompt-set``, which the engine now refuses."""
     runner = FakeSampleRunner({"HEAD": 0.9})
-    _compare(tmp_path, runner, ComparisonSide("HEAD", "v1"), ComparisonSide("HEAD", "v2"))
-    assert sorted({call[2] for call in runner.calls}) == [
-        _EDITION_HEAD,
-        (*_EDITION_HEAD, "--prompt-set", "v2"),
-    ]
+    _compare(tmp_path, runner, ComparisonSide("HEAD"), ComparisonSide("HEAD"))
+    assert {call[2] for call in runner.calls} == {_EDITION_HEAD}
     assert len(runner.calls) == 12
 
 
@@ -187,8 +185,8 @@ def test_a_pinned_sample_on_a_git_ref_grades_the_refs_text(tmp_path: Path) -> No
 def test_a_ref_whose_engine_predates_editions_runs_without_edition_head(tmp_path: Path) -> None:
     runner = FakeSampleRunner({"v0": 0.9, "head": 0.9})
     plan = _pinned_ref_plan(tmp_path, runner, takes_flag=False)
-    run_comparison(plan, ComparisonSide("v0", "v2"), ComparisonSide("head"))
-    assert {call[2] for call in runner.calls if call[0] == "v0"} == {("--prompt-set", "v2")}
+    run_comparison(plan, ComparisonSide("v0"), ComparisonSide("head"))
+    assert {call[2] for call in runner.calls if call[0] == "v0"} == {()}
 
 
 def test_an_engine_takes_edition_head_when_it_ships_graded_source(tmp_path: Path) -> None:
@@ -249,9 +247,9 @@ def test_every_run_report_is_kept_per_side(tmp_path: Path) -> None:
     assert kept["aggregate_score"] == 0.9
 
 
-def test_a_side_label_names_its_ref_and_prompt_set_or_its_edition() -> None:
-    assert ComparisonSide("origin/main", "v2").label == "origin/main (v2)"
-    assert ComparisonSide("head").label == "head (v1)"
+def test_a_side_label_names_its_ref_or_its_edition() -> None:
+    assert ComparisonSide("origin/main").label == "origin/main"
+    assert ComparisonSide("head").label == "head"
     assert ComparisonSide.parse("edition:v0.1.0").label == "edition v0.1.0"
 
 
@@ -370,7 +368,7 @@ def test_a_sample_whose_prompt_the_edition_lacks_does_not_render(tmp_path: Path)
 def test_a_git_ref_side_renders_through_a_fake_run_of_its_own_engine(tmp_path: Path) -> None:
     child = FakeChildRun(2)
     check = SideRenderCheck({}, child)
-    side = PreparedSide("base", ComparisonSide("origin/main"), tmp_path, ("--prompt-set", "v2"))
+    side = PreparedSide("base", ComparisonSide("origin/main"), tmp_path, ("--flag", "x"))
     assert check(side, "review/pinned") == "error: no eval sample 'review/pinned'"
-    assert child.calls == [("review/pinned", ("--prompt-set", "v2"))]
+    assert child.calls == [("review/pinned", ("--flag", "x"))]
     assert SideRenderCheck({}, FakeChildRun(1))(side, "review/pinned") is None  # a verdict renders

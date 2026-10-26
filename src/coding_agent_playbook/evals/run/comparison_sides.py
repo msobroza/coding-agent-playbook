@@ -23,7 +23,6 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Literal, Protocol
 
-from coding_agent_playbook.catalog.prompt_sets import DEFAULT_PROMPT_SET, PromptSet
 from coding_agent_playbook.evals.run.git_env import without_repo_location
 from coding_agent_playbook.exit_two import ExitTwoError
 from coding_agent_playbook.release.edition import EditionError, load_edition
@@ -57,23 +56,20 @@ class ComparisonError(ExitTwoError):
 
 @dataclass(frozen=True)
 class ComparisonSide:
-    """One side of a comparison: ``ref`` (a git ref, ``head`` or ``edition:<tag>``) and its prompt set.
-
-    The prompt set applies to a git ref and to ``head``; an edition holds one text.
+    """One side of a comparison: ``ref``, a git ref, ``head`` or ``edition:<tag>``.
 
     Example::
 
         >>> ComparisonSide("origin/main").label
-        'origin/main (v1)'
+        'origin/main'
         >>> ComparisonSide("edition:v0.1.0").label
         'edition v0.1.0'
     """
 
     ref: str
-    prompt_set: PromptSet = DEFAULT_PROMPT_SET
 
     @classmethod
-    def parse(cls, text: str, prompt_set: PromptSet = DEFAULT_PROMPT_SET) -> ComparisonSide:
+    def parse(cls, text: str) -> ComparisonSide:
         """The side ``text`` names; :class:`ComparisonError` for an ``edition:`` without a release tag.
 
         Example::
@@ -83,7 +79,7 @@ class ComparisonSide:
             ...
             coding_agent_playbook.evals.run.comparison_sides.ComparisonError: ...
         """
-        side = cls(text, prompt_set)
+        side = cls(text)
         if side.kind == "edition" and not is_release_tag(side.tag):
             raise ComparisonError(
                 f"--compare {text!r}: an edition side is edition:<release tag>, "
@@ -105,10 +101,10 @@ class ComparisonSide:
 
     @property
     def label(self) -> str:
-        """The side's name in the table: ``<ref> (<prompt set>)`` or ``edition <tag>``."""
+        """The side's name in the table: ``<ref>`` or ``edition <tag>``."""
         if self.kind == "edition":
             return f"edition {self.tag}"
-        return f"{self.ref} ({self.prompt_set})"
+        return self.ref
 
 
 @dataclass(frozen=True)
@@ -160,11 +156,10 @@ def prepare_side(
     """
     if side.kind == "ref":
         with sources.checkout_ref(side.ref, work_dir / "checkouts" / name) as checkout:
-            yield PreparedSide(name, side, checkout, _ref_flags(side, checkout))
+            yield PreparedSide(name, side, checkout, _ref_flags(checkout))
         return
     if side.kind == "head":
-        flags = ("--edition", HEAD_SIDE, *_prompt_set_flags(side))
-        yield PreparedSide(name, side, sources.repo_root, flags)
+        yield PreparedSide(name, side, sources.repo_root, ("--edition", HEAD_SIDE))
         return
     root = sources.build_edition(side.tag, work_dir / f"edition-{name}")
     try:
@@ -174,10 +169,9 @@ def prepare_side(
     yield PreparedSide(name, side, sources.repo_root, (EDITION_DIR_FLAG, str(root)), edition)
 
 
-def _ref_flags(side: ComparisonSide, checkout: Path) -> tuple[str, ...]:
-    """A git-ref side's flags: ``--edition head`` when its engine takes it, then its prompt set."""
-    edition = ("--edition", HEAD_SIDE) if takes_edition_head(checkout) else ()
-    return (*edition, *_prompt_set_flags(side))
+def _ref_flags(checkout: Path) -> tuple[str, ...]:
+    """A git-ref side's flags: ``--edition head`` when its engine takes it, else none."""
+    return ("--edition", HEAD_SIDE) if takes_edition_head(checkout) else ()
 
 
 def takes_edition_head(checkout: Path) -> bool:
@@ -195,11 +189,6 @@ def takes_edition_head(checkout: Path) -> bool:
     """
     engine = checkout.joinpath(*_EDITION_HEAD_MODULE[:2])
     return not engine.is_dir() or checkout.joinpath(*_EDITION_HEAD_MODULE).is_file()
-
-
-def _prompt_set_flags(side: ComparisonSide) -> tuple[str, ...]:
-    # Only a set other than v1 is passed, so a base ref older than prompt sets still runs.
-    return () if side.prompt_set == DEFAULT_PROMPT_SET else ("--prompt-set", side.prompt_set)
 
 
 def git_edition_builder(repo_root: Path) -> EditionBuilder:

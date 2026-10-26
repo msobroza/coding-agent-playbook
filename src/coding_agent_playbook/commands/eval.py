@@ -24,7 +24,7 @@ one sample.
   (``commands/_eval_targets.py``); ``--targets --check`` also runs a one-turn
   prompt through each target's harness and exits ``1`` if any fails.
 - ``playbook eval <task>|<id> --run [--target NAME|HARNESS:MODEL] [--runner NAME] [--judge NAME]
-  [--judge-samples N] [--prompt-set v1|v2] [--format text|json]``: load the selected samples,
+  [--judge-samples N] [--format text|json]``: load the selected samples,
   pick its Eval target (``--target``, then ``PLAYBOOK_EVAL_TARGET``, then the local
   and the committed ``[evals] default``, else ``claude_code`` on its default model,
   recorded as ``default``; ``--runner NAME`` is the target with that harness and no
@@ -56,10 +56,9 @@ one sample.
   ticket 14). The JSON report records the graded
   source, the prompt and sample digests and the engine version.
 
-  ``--prompt-set`` (D76) renders the sample's prompt from that prompt set
-  (default ``v1``, the set every sample grades; a prompt with no twin in the set
-  keeps its v1 text). The repo's ``prompts`` key is never read, so the opt-in
-  eval comparison (D37) names each side's set explicitly.
+  ``--prompt-set`` and ``--base-prompt-set`` were removed with the prompt sets
+  (ADR 0012): hidden from ``--help``, either one is a usage error (exit ``2``)
+  saying so.
 
   ``--run --all --runs N --record PATH`` (spec #281 ticket 07; ``commands/_eval_record.py``)
   runs every sample (or the sample ``<id>``) N times on one Eval target and writes
@@ -92,7 +91,6 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.catalog.prompt_sets import DEFAULT_PROMPT_SET, PROMPT_SETS
 from coding_agent_playbook.commands._eval_compare import configure_compare, run_compare
 from coding_agent_playbook.commands._eval_enumerate import (
     _print_list,
@@ -103,6 +101,7 @@ from coding_agent_playbook.commands._eval_options import (
     build_judge,
     build_target_runner,
     judge_sample_count,
+    removed_flag_error,
     select_target,
 )
 from coding_agent_playbook.commands._eval_record import configure_record, run_record, wants_record
@@ -128,7 +127,6 @@ from coding_agent_playbook.release.edition import EditionError
 from coding_agent_playbook.validation.context import SyncContext
 
 if TYPE_CHECKING:
-    from coding_agent_playbook.catalog.prompt_sets import PromptSet
     from coding_agent_playbook.evals.judge import Judge
     from coding_agent_playbook.evals.run.harness_runner import HarnessRunner, SampleResult
     from coding_agent_playbook.evals.sample import EvalSample
@@ -197,14 +195,8 @@ def configure(parser: argparse.ArgumentParser) -> None:
         help="eval target to run: a name from [evals.targets] or HARNESS:MODEL "
         "(default: $PLAYBOOK_EVAL_TARGET, then [evals] default, then claude_code)",
     )
-    parser.add_argument(
-        "--prompt-set",
-        choices=PROMPT_SETS,
-        dest="prompt_set",
-        default=DEFAULT_PROMPT_SET,
-        help="prompt set to render the sample's prompt from (default: v1; "
-        "the repo's prompts key is not read)",
-    )
+    # ADR 0012: removed with the prompt sets, hidden; removed_flag_error() refuses it.
+    parser.add_argument("--prompt-set", dest="removed_prompt_set", help=argparse.SUPPRESS)
     parser.add_argument(
         "--edition",
         choices=(_EDITION_HEAD,),
@@ -259,6 +251,11 @@ def _configure_scoring(parser: argparse.ArgumentParser) -> None:
 
 def run(args: argparse.Namespace) -> int:
     repo_root = Path(getattr(args, "repo_root", None) or Path.cwd())
+
+    removed = removed_flag_error(args)
+    if removed is not None:
+        print(removed, file=sys.stderr)
+        return 2
 
     # ``--check-regressions`` (spec #281 ticket 08) only reads two metrics files.
     if wants_regressions(args):
@@ -332,7 +329,6 @@ class _SampleRun:
     judge: Judge | None
     judge_samples: int
     fail_fast: bool
-    prompt_set: PromptSet
     head: bool = False
     edition_root: Path | None = None
 
@@ -386,9 +382,7 @@ def _run_sample_cli(args: argparse.Namespace, repo_root: Path) -> int:
         print(f"error: --edition head and {EDITION_DIR_FLAG} exclude each other", file=sys.stderr)
         return 2
     edition_root = Path(edition_dir) if edition_dir is not None else None
-    how = _SampleRun(
-        runner, target, judge, judge_samples, fail_fast, args.prompt_set, head, edition_root
-    )
+    how = _SampleRun(runner, target, judge, judge_samples, fail_fast, head, edition_root)
     outcomes = [_run_one(sample, how) for sample in samples]
     results = [result for _, result in outcomes if result is not None]
     _print_results(results, fmt, one_sample=len(samples) == 1)
@@ -406,10 +400,9 @@ def _run_one(sample: EvalSample, how: _SampleRun) -> tuple[int, SampleResult | N
                 judge=how.judge,
                 judge_samples=how.judge_samples,
                 fail_fast=how.fail_fast,
-                prompt_set=how.prompt_set,
                 edition=source.edition,
             )
-        graded = graded_record(sample, source, how.prompt_set)
+        graded = graded_record(sample, source)
     except (PromptResolutionError, JudgeError, EditionError) as exc:
         # Neither a pass nor a fail: no verdict exists, so never exit 0/1 here.
         print(f"error: sample {sample.id!r} could not be scored: {exc}", file=sys.stderr)

@@ -15,7 +15,6 @@ import difflib
 from typing import TYPE_CHECKING, Any, TypeGuard
 
 from coding_agent_playbook import toml_writer as _toml
-from coding_agent_playbook.catalog.prompt_sets import DEFAULT_PROMPT_SET, PROMPT_SETS, is_prompt_set
 from coding_agent_playbook.catalog.roots import canonical_overlay_name
 from coding_agent_playbook.config.framework import BUNDLED_FRAMEWORK_NAMES
 from coding_agent_playbook.config.layout import layout_table_problems
@@ -445,27 +444,29 @@ def _platforms_value(value: object) -> str:
 
 _PROMPTS_KEY = "prompts"
 
+#: Why a config that still sets ``prompts`` fails to load (ADR 0012, #300).
+PROMPTS_KEY_REMOVED = (
+    "retired key 'prompts': it was removed because consumer repos always get the "
+    "current text of the release they install; delete the 'prompts' line"
+)
+
 
 def check_prompts_key(data: Mapping[str, object], *, source: str) -> None:
-    """Refuse a top-level ``prompts`` that names no prompt set (D76).
+    """Refuse a top-level ``prompts``, the removed prompt-set key (ADR 0012), naming ``source``.
 
-    The value is one of :data:`~coding_agent_playbook.catalog.prompt_sets.PROMPT_SETS`
-    (``"v1"``, the default, or ``"v2"``), compared exactly.
+    A repo once picked ``"v1"`` or ``"v2"`` prompts with it; a sync now always
+    renders the current text, so a config that still sets it fails to load rather
+    than silently rendering other text than its author expects.
 
     Example::
 
-        >>> check_prompts_key({"prompts": "v3"}, source="c.toml")  # doctest: +ELLIPSIS
+        >>> check_prompts_key({"prompts": "v2"}, source="c.toml")  # doctest: +ELLIPSIS
         Traceback (most recent call last):
         ...
-        coding_agent_playbook.config.schema.ConfigError: c.toml: prompts must be ...
+        coding_agent_playbook.config.schema.ConfigError: c.toml: retired key 'prompts': ...
     """
-    if _PROMPTS_KEY not in data or is_prompt_set(data[_PROMPTS_KEY]):
-        return
-    sets = " or ".join(f'"{name}"' for name in PROMPT_SETS)
-    raise ConfigError(
-        f"{source}: prompts must be the prompt set {sets} "
-        f"(default {DEFAULT_PROMPT_SET!r}), got {data[_PROMPTS_KEY]!r}"
-    )
+    if _PROMPTS_KEY in data:
+        raise ConfigError(f"{source}: {PROMPTS_KEY_REMOVED}")
 
 
 def _is_name(value: object) -> TypeGuard[str]:

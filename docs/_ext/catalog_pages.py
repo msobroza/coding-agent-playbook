@@ -93,8 +93,7 @@ def _index_page(snapshot: CatalogSnapshot) -> str:
         "below is a framework, and a consumer repo turns on at most one framework.",
         _table(("Plugin", "What it adds"), plugins),
         "## Prompts and hooks",
-        "[Prompts](prompts.md) lists the slash commands and the prompt sets that ship "
-        "them. [Hooks](hooks.md) lists the assistant lifecycle hooks, by hook family.",
+        "[Prompts](prompts.md) lists the slash commands. [Hooks](hooks.md) lists the assistant lifecycle hooks, by hook family.",
         _toctree(children),
     )
 
@@ -162,12 +161,12 @@ def _capability_blocks(skills: Sequence[SkillEntry]) -> list[str]:
 
 
 def _prompts_page(prompts: Sequence[PromptEntry]) -> str:
-    rows = [(p.name, f"`/{p.slash}`", p.description, ", ".join(p.prompt_sets)) for p in prompts]
+    rows = [(p.name, f"`/{p.slash}`", p.description) for p in prompts]
     return _page(
         "# Prompts",
         "A prompt is a named task you invoke as a slash command. A consumer repo "
-        "chooses one prompt set, and every set renders the same prompt names.",
-        _table(("Prompt", "Slash command", "What it does", "Prompt sets"), rows),
+        "renders the current text of every prompt of the release it installed.",
+        _table(("Prompt", "Slash command", "What it does"), rows),
     )
 
 

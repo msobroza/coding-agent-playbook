@@ -15,19 +15,20 @@ the same model:
 | Key | Harness | Reviewer | What the agent receives |
 |---|---|---|---|
 | `opencode-review` | OpenCode | built-in `/review` | the sample's request only, as `opencode run --command review "<request>"` |
-| `playbook-v1` | OpenCode | playbook review, prompt set v1 | the rendered v1 `review` prompt + the request, as `playbook eval --run --prompt-set v1` builds it |
-| `playbook-v2` | OpenCode | playbook review, prompt set v2 | the same, from prompt set v2 |
+| `playbook-v1` | OpenCode | playbook review, edition `v0.1.0` (the former prompt set v1) | the `review` prompt of edition `v0.1.0`, rendered as `playbook eval --run` builds it for a sample graded on that edition, + the request |
+| `playbook-v2` | OpenCode | playbook review, current text (the former prompt set v2) | the rendered current `review` prompt + the request, as `playbook eval --run --edition head` builds it |
 | `claude-code-review` | Claude Code | built-in `/code-review` | the request as the command's arguments: `claude -p "/code-review <request>"` |
-| `claude-playbook-v2` | Claude Code | playbook review, prompt set v2 | the rendered v2 prompt + the request, as for `playbook-v2` |
-| `claude-v2-over-code-review` | Claude Code | prototype: v2 with `/code-review` as its first pass | the v2 prompt with steps 1-2 rewritten: the Skill tool runs `/code-review` on the request, and v2's later steps verify, rate and decide (`run_agents.native_first_pass`) |
-| `opencode-v2-dual`, `claude-v2-dual` | both | recorded prototype: v2's subagent with the harness's own reviewer alongside | each run's `prompt.txt`; v2's step 1 now ships this in general form, so `run_agents.py` no longer re-runs them |
+| `claude-playbook-v2` | Claude Code | playbook review, current text | the rendered current prompt + the request, as for `playbook-v2` |
+| `claude-v2-over-code-review` | Claude Code | prototype: v2 with `/code-review` as its first pass | the current prompt with steps 1-2 rewritten: the Skill tool runs `/code-review` on the request, and the later steps verify, rate and decide (`run_agents.native_first_pass`) |
+| `opencode-v2-dual`, `claude-v2-dual` | both | recorded prototype: v2's subagent with the harness's own reviewer alongside | each run's `prompt.txt`; the review's step 1 now ships this in general form, so `run_agents.py` no longer re-runs them |
 
 Two result sets are committed. `review-opencode-qwen3.6-27b/` holds every setup
-above, run against the v2 text whose first pass was one subagent.
+above, run when prompt sets still existed: `playbook-v2` there is the former
+prompt set v2, whose first pass was one subagent.
 `review-qwen3.6-27b-v2-bug-hunt/` holds `playbook-v2` and `claude-playbook-v2`
-run against the current v2 text, whose step 1 starts two first passes together:
-the first-pass subagent, and a pass that only hunts bugs. That second pass is
-the harness's own reviewer where it runs as a tool (the Skill tool with
+run against the review text whose step 1 starts two first passes together: the
+first-pass subagent, and a pass that only hunts bugs. That second pass is the
+harness's own reviewer where it runs as a tool (the Skill tool with
 `code-review` on Claude Code), else a second read-only subagent with a bug-hunt
 brief (OpenCode, whose `/review` no tool can start).
 

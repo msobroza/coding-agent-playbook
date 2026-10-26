@@ -55,7 +55,6 @@ from coding_agent_playbook.validation.context import SyncContext
 if TYPE_CHECKING:
     import argparse
 
-    from coding_agent_playbook.catalog.prompt_sets import PromptSet
     from coding_agent_playbook.evals.judge import Judge
     from coding_agent_playbook.evals.run.harness_runner import HarnessRunner, SampleResult
     from coding_agent_playbook.evals.sample import EvalSample
@@ -156,12 +155,12 @@ def _build_plan(
     if runner is None or (judge_name is not None and judge is None) or judge_samples is None:
         return None
     fail_fast = not getattr(args, "full_scoring", False)
-    return _RecordPlan(runner, judge, judge_samples, runs, args.prompt_set, fail_fast)
+    return _RecordPlan(runner, judge, judge_samples, runs, fail_fast)
 
 
 @dataclass(frozen=True)
 class _RecordPlan:
-    """How each sample runs: the runner, the judge, the run count, the prompt set and fail-fast.
+    """How each sample runs: the runner, the judge, the run count and fail-fast.
 
     ``fail_fast`` is ``False`` under ``--full-scoring``, as for ``eval --run``.
     """
@@ -170,16 +169,13 @@ class _RecordPlan:
     judge: Judge | None
     judge_samples: int
     runs: int
-    prompt_set: PromptSet
     fail_fast: bool = True
 
     def check_prompts(self, samples: list[EvalSample]) -> None:
         """Resolve every sample's prompt before the first paid run; refuse on the first bad one."""
         for sample in samples:
             try:
-                render_prompt(
-                    sample, strict=self.runner.requires_resolved_prompt, prompt_set=self.prompt_set
-                )
+                render_prompt(sample, strict=self.runner.requires_resolved_prompt)
             except PromptResolutionError as exc:
                 raise RecordRefusedError(
                     f"sample {sample.id!r} has no prompt to run, so nothing was run: {exc}"
@@ -225,7 +221,7 @@ class _RecordPlan:
             sample_id=sample.id,
             prompt_id=sample.prompt_id,
             graded=GRADED_HEAD if edition is None else edition.tag,
-            prompt_digest=prompt_digest(sample, self.prompt_set, edition=edition),
+            prompt_digest=prompt_digest(sample, edition=edition),
             sample_digest=sample_digest(sample),
             results=results,
         )
@@ -239,7 +235,6 @@ class _RecordPlan:
                     judge=self.judge,
                     judge_samples=self.judge_samples,
                     fail_fast=self.fail_fast,
-                    prompt_set=self.prompt_set,
                     edition=edition,
                 )
         except (PromptResolutionError, JudgeError) as exc:

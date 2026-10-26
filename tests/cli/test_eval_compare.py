@@ -65,12 +65,12 @@ def test_a_comparison_reports_each_side_and_keeps_every_run(
     repo = _committed_repo(tmp_path, make_synthetic_repo)
     out = tmp_path / "out"
 
-    code = _compare(repo, out, "--base-prompt-set", "v1", "--prompt-set", "v2")
+    code = _compare(repo, out)
 
     captured = capsys.readouterr()
     view = json.loads(captured.out)
     assert code == 0
-    assert (view["base"], view["head"]) == ("HEAD (v1)", "HEAD (v2)")
+    assert (view["base"], view["head"]) == ("HEAD", "HEAD")
     assert (view["runner"], view["judge"], view["score"]) == ("fake", None, "gate score")
     assert "gate score only" in captured.err
     assert [row["sample_id"] for row in view["samples"]] == [_SAMPLE]
@@ -154,18 +154,6 @@ def test_a_second_side_naming_a_ref_gets_no_hint(
     for names in (["origin/main", "HEAD"], ["origin/main", "head"], ["origin/main"]):
         _eval_compare._hint_id_as_side(names, registry)
     assert capsys.readouterr().err == ""
-
-
-def test_a_prompt_set_for_an_edition_side_is_ignored_with_a_warning(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    argv = ["eval", "--compare", "edition:v9.9.9", "edition:v9.9.8", "--base-prompt-set", "v2"]
-    assert _eval_compare._sides(build_parser().parse_args([*argv, "--prompt-set", "v2"]))
-    err = capsys.readouterr().err
-    assert "--base-prompt-set v2 is ignored for edition:v9.9.9" in err
-    assert "--prompt-set v2 is ignored for edition:v9.9.8" in err
-    assert _eval_compare._sides(_compare_args("head", "--prompt-set", "v2"))
-    assert capsys.readouterr().err == ""  # head and a git ref take a prompt set
 
 
 def _compare_args(*flags: str) -> argparse.Namespace:
@@ -296,7 +284,7 @@ def test_an_edition_is_compared_with_head_in_place(
 
     view = json.loads(capsys.readouterr().out)
     assert code == 0
-    assert (view["base"], view["head"]) == (f"edition {_TAG}", "head (v1)")
+    assert (view["base"], view["head"]) == (f"edition {_TAG}", "head")
     assert [row["sample_id"] for row in view["samples"]] == [_GRADED_SAMPLE]
     assert (_graded_source(out, "base"), _graded_source(out, "head")) == (_TAG, "head")
     built = out / "edition-base" / "editions" / _TAG / "core/prompts/review.md"

@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING, Final
 import pytest
 
 from coding_agent_playbook.artifacts.rule import Rule
-from coding_agent_playbook.catalog.prompt_sets import PROMPT_SETS
 from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE
 from coding_agent_playbook.catalog.source import _iter_skills, layer_prompts
 from coding_agent_playbook.skills.naming import skill_id_of
@@ -77,15 +76,11 @@ def _relative(path: Path | None) -> str:
 
 
 def _prompt_slashes(prompts_root: Path) -> list[ShippedName]:
-    """The slash of every prompt under ``prompts_root``, in every prompt set (v1 and its twins)."""
-    found: dict[tuple[str, str], ShippedName] = {}
-    for prompt_set in PROMPT_SETS:
-        for prompt in layer_prompts(prompts_root, ENGINE_PACKAGE, prompt_set):
-            where = _relative(prompt.source_path)
-            found[(prompt.frontmatter.slash, where)] = ShippedName(
-                "prompt slash", prompt.frontmatter.slash, where
-            )
-    return list(found.values())
+    """The slash of every prompt under ``prompts_root``."""
+    return [
+        ShippedName("prompt slash", prompt.frontmatter.slash, _relative(prompt.source_path))
+        for prompt in layer_prompts(prompts_root, ENGINE_PACKAGE)
+    ]
 
 
 def _skill_ids(skills_root: Path) -> list[ShippedName]:
@@ -139,14 +134,14 @@ def test_reserved_collisions_names_the_item_and_every_harness_reserving_it() -> 
     ]
 
 
-def test_shipped_names_cover_every_prompt_set_and_every_bundled_layer() -> None:
+def test_shipped_names_cover_the_core_prompts_and_every_bundled_layer() -> None:
     # Guards the gate against passing on an empty walk: each source it reads shows up.
     by_name = {(item.kind, item.name) for item in shipped_names()}
     wheres = {item.where for item in shipped_names()}
 
     assert ("prompt slash", "review-core") in by_name
     assert ("prompt slash", "security-review-core") in by_name
-    assert any(where.startswith("core/prompts/v2/") for where in wheres)
+    assert any(where.startswith("core/prompts/") for where in wheres)
     assert ("skill id", "playbook-creator") in by_name
     for plugin_dir in bundled_plugin_dirs():
         assert any(where.startswith(f"plugins/{plugin_dir.name}/skills/") for where in wheres), (
