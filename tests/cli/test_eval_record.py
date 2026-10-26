@@ -16,9 +16,11 @@ import pytest
 
 import coding_agent_playbook
 from coding_agent_playbook.cli import main
+from coding_agent_playbook.commands._eval_record import _ran_isolated
 from coding_agent_playbook.config.files import CONFIG_FILENAME
+from coding_agent_playbook.evals import registry
 from coding_agent_playbook.evals.endpoints import endpoint_fingerprint
-from coding_agent_playbook.evals.judge import LLMJudge
+from coding_agent_playbook.evals.judge import LLMJudge, StubJudge
 from coding_agent_playbook.evals.prompting import render_prompt
 from coding_agent_playbook.evals.release_metrics_schema import validate_release_metrics
 from coding_agent_playbook.evals.run.claude_code_runner import ClaudeCodeRunner
@@ -37,6 +39,8 @@ from tests.edition_fixtures import ENGINE, SAMPLE_ID, TAG, write_sample
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from coding_agent_playbook.evals.judge import Judge
+    from coding_agent_playbook.evals.run.harness_runner import HarnessRunner
     from coding_agent_playbook.evals.sample import EvalSample
 
 _SAMPLE = "refactor/extract-helper"
@@ -244,6 +248,9 @@ def test_record_runs_the_agent_and_the_judge_isolated_on_the_api_key(
     judge_calls = [argv for argv, _env in cli.calls if "--output-format" not in argv]
     assert judge_calls, cli.calls
     assert len(judge_calls) < len(cli.calls)  # the agent ran too
+    agent_calls = [argv for argv, _env in cli.calls if "--output-format" in argv]
+    assert all(_has_adjacent(argv, _BYPASS) for argv in agent_calls), agent_calls
+    assert not any("--permission-mode" in argv for argv in judge_calls), judge_calls
     for argv, env in cli.calls:
         assert env is not None
         assert env["CLAUDE_CONFIG_DIR"] != str(personal)
@@ -254,6 +261,16 @@ def test_record_runs_the_agent_and_the_judge_isolated_on_the_api_key(
     assert _load(out)["target"]["isolated"] is True
     captured = capsys.readouterr()
     assert _RECORD_KEY not in captured.out + captured.err
+
+
+#: The permission mode an isolated agent run gets (and the judge never does).
+_BYPASS = ("--permission-mode", "bypassPermissions")
+
+
+def _has_adjacent(argv: list[str], words: tuple[str, ...]) -> bool:
+    """``True`` when ``argv`` holds ``words`` as adjacent items."""
+    width = len(words)
+    return any(tuple(argv[i : i + width]) == words for i in range(len(argv)))
 
 
 def test_record_keeps_the_api_key_out_of_the_file_and_the_logs(
@@ -286,6 +303,40 @@ def test_record_runs_opencode_isolated_on_the_api_key(
     assert "OPENAI_API_KEY" not in env
     assert env["OPENCODE_DISABLE_CLAUDE_CODE"] == "1"
     assert _load(out)["target"]["isolated"] is True
+
+
+_OPENCODE_OTHER_PROVIDERS = """
+[evals.targets.opencode-openai]
+harness = "opencode"
+model = "openai/gpt-x"
+
+[evals.targets.opencode-bare]
+harness = "opencode"
+model = "gpt-x"
+"""
+
+
+@pytest.mark.parametrize("target", ["opencode-openai", "opencode-bare"])
+def test_opencode_without_an_endpoint_off_anthropic_is_refused_before_any_call(
+    repo: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    target: str,
+) -> None:
+    # The API key reaches Anthropic only: any other provider would run with no usable key.
+    committed = repo / CONFIG_FILENAME
+    text = committed.read_text(encoding="utf-8") + _OPENCODE_OTHER_PROVIDERS + _PINNED_JUDGE
+    committed.write_text(text, encoding="utf-8")
+    cli = claude_cli_fakes.FakeClaudeCli(monkeypatch)
+
+    rc, out = _record(repo, _SAMPLE, "--target", target, "--judge", "llm")
+
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "anthropic/" in err
+    assert "token_env" in err
+    assert cli.calls == []
+    assert not out.exists()
 
 
 @pytest.mark.parametrize(
@@ -543,3 +594,78 @@ def test_the_inputs_digest_comes_from_the_render_checked_before_the_runs(
     sample = _pinned_sample(engine_catalog)
     assert data["samples"][SAMPLE_ID]["inputs_digest"] == inputs_digest(sample, "head text")
     assert data["controls"][SAMPLE_ID]["inputs_digest"] == inputs_digest(sample, "control text")
+
+
+class _UnroutableCliRunner(FakeRunner):
+    """A fake runner that claims a CLI but cannot take a route, so it cannot run isolated."""
+
+    cli = "playbook-test-no-such-cli"
+
+
+def test_a_cli_runner_that_takes_no_route_is_recorded_as_not_isolated(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(registry, "load_runner_class", lambda _name: _UnroutableCliRunner)
+    rc, out = _record(repo, _SAMPLE, "--target", "fake-pinned", "--runs", "1")
+    assert rc == 0
+    assert _load(out)["target"]["isolated"] is False
+
+
+class _UnroutableJudge(StubJudge):
+    """A judge that cannot take a route (``accepts_endpoint`` stays ``False``)."""
+
+
+@pytest.mark.parametrize(
+    ("runner_cls", "judge_cls", "expected"),
+    [
+        (None, None, True),
+        (FakeRunner, None, True),
+        (ClaudeCodeRunner, LLMJudge, True),
+        (_UnroutableCliRunner, None, False),
+        (FakeRunner, _UnroutableJudge, False),
+        (ClaudeCodeRunner, _UnroutableJudge, False),
+    ],
+)
+def test_ran_isolated_needs_every_cli_process_to_take_a_route(
+    runner_cls: type[HarnessRunner] | None, judge_cls: type[Judge] | None, expected: bool
+) -> None:
+    assert _ran_isolated(runner_cls, judge_cls) is expected
+
+
+def test_the_isolated_judge_starts_outside_the_callers_project(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Project and local Claude Code settings in the caller's cwd must not reach the judge.
+    (repo / "CLAUDE.md").write_text("project instructions\n", encoding="utf-8")
+    (repo / ".claude").mkdir(exist_ok=True)
+    (repo / ".claude" / "settings.local.json").write_text("{}\n", encoding="utf-8")
+    committed = repo / CONFIG_FILENAME
+    committed.write_text(committed.read_text(encoding="utf-8") + _PINNED_JUDGE, encoding="utf-8")
+    monkeypatch.chdir(repo)
+    cli = claude_cli_fakes.FakeClaudeCli(monkeypatch, answer="1")
+
+    flags = ("--target", "fake-pinned", "--runs", "1", "--judge", "llm", "--full-scoring")
+    rc, _out = _record(repo, _SAMPLE, *flags)
+
+    assert rc == 0
+    assert cli.cwds, cli.calls
+    root = repo.resolve()
+    for cwd, had_claude_md in zip(cli.cwds, cli.cwd_had_claude_md, strict=True):
+        assert cwd is not None
+        assert cwd.resolve() != root
+        assert root not in cwd.resolve().parents
+        assert not had_claude_md
+
+
+def test_a_plain_run_keeps_the_judge_in_the_callers_directory(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    committed = repo / CONFIG_FILENAME
+    committed.write_text(committed.read_text(encoding="utf-8") + _PINNED_JUDGE, encoding="utf-8")
+    cli = claude_cli_fakes.FakeClaudeCli(monkeypatch, answer="1")
+
+    flags = ("--target", "fake-pinned", "--judge", "llm", "--full-scoring")
+    main(["eval", "--run", "--repo-root", str(repo), _SAMPLE, *flags])
+
+    assert cli.cwds
+    assert cli.cwds == [None] * len(cli.cwds)
