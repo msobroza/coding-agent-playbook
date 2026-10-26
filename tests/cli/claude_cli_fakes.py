@@ -2,7 +2,7 @@
 
 :class:`FakeClaudeCli` replaces ``subprocess.run`` for those two executables
 only: it records each argv and child environment (and what the isolated config
-dir held), then answers like the real CLI would. ``--version`` prints a version
+dir held, and the working directory with whether it held a ``CLAUDE.md``), then answers like the real CLI would. ``--version`` prints a version
 line; a call that asks for ``--output-format json`` gets one
 ``{"type": "result", ...}`` object carrying the answer, so the runner's JSON
 parse and redaction run; anything else gets the answer as plain text.
@@ -35,11 +35,15 @@ FAKE_CLAUDE_VERSION = "2.1.300"
 
 
 class FakeClaudeCli:
-    """Stands in for the ``claude`` CLI: records argv, env and the config dir; answers."""
+    """Stands in for the ``claude`` CLI: records argv, env, the config dir and cwd; answers."""
 
     def __init__(self, monkeypatch: pytest.MonkeyPatch, answer: str = "1", rc: int = 0) -> None:
         self.calls: list[tuple[list[str], dict[str, str] | None]] = []
         self.config_dir_entries: list[list[str]] = []
+        #: Each call's ``cwd`` (``None`` when the caller passed none), in call order.
+        self.cwds: list[Path | None] = []
+        #: Whether each call's ``cwd`` held a ``CLAUDE.md`` at call time.
+        self.cwd_had_claude_md: list[bool] = []
         self._answer = answer
         self._rc = rc
         self._real_run = subprocess.run
@@ -56,11 +60,18 @@ class FakeClaudeCli:
             )
         env = kwargs.get("env")
         self.calls.append((list(args), dict(env) if env is not None else None))
+        self._record_cwd(kwargs.get("cwd"))
         if env is not None and "CLAUDE_CONFIG_DIR" in env:
             self.config_dir_entries.append(
                 sorted(p.name for p in Path(env["CLAUDE_CONFIG_DIR"]).iterdir())
             )
         return subprocess.CompletedProcess(args, self._rc, self._stdout(args), "")
+
+    def _record_cwd(self, cwd: str | Path | None) -> None:
+        """Keep ``cwd`` and whether it held a ``CLAUDE.md`` when the CLI started."""
+        path = None if cwd is None else Path(cwd)
+        self.cwds.append(path)
+        self.cwd_had_claude_md.append(path is not None and (path / "CLAUDE.md").exists())
 
     def _stdout(self, args: list[str]) -> str:
         """The answer as a JSON result object when the call asks for JSON, else as is."""

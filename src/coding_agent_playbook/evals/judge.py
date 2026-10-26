@@ -36,14 +36,16 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+import tempfile
 from abc import ABC, abstractmethod
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.evals.run.claude_code_route import routed_argv, routed_env
 from coding_agent_playbook.evals.run.cli_argv import PROMPT_TOKEN, build_cli_argv
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterator, Sequence
 
     from coding_agent_playbook.evals.run.claude_code_route import ClaudeCodeIsolation
 
@@ -187,6 +189,28 @@ def _excerpt(text: str) -> str:
     return " ".join(text.split())[-_OUTPUT_EXCERPT_CHARS:]
 
 
+@contextmanager
+def _judge_cwd(route: ClaudeCodeIsolation | None) -> Iterator[str | None]:
+    """Where one grading runs: the caller's directory unrouted, else a fresh empty one.
+
+    Why: an isolated judge has an empty config dir, but Claude Code still reads
+    project and local settings (``CLAUDE.md``, ``CLAUDE.local.md``,
+    ``.claude/settings*.json``) from its working directory and the parents; an
+    empty directory under the system temp dir, outside any repository, has none.
+
+    Example::
+
+        >>> with _judge_cwd(None) as cwd:
+        ...     cwd is None
+        True
+    """
+    if route is None:
+        yield None
+        return
+    with tempfile.TemporaryDirectory(prefix="playbook-judge-cwd-") as empty:
+        yield empty
+
+
 class LLMJudge(Judge):
     """A :class:`Judge` that grades by shelling out to the ``claude`` CLI.
 
@@ -261,10 +285,11 @@ class LLMJudge(Judge):
     def _attempt(self, prompt: str) -> float:
         """Run the CLI once; its score, or :class:`JudgeError` saying why not."""
         try:
-            with routed_env(self.route, None) as env:
+            with routed_env(self.route, None) as env, _judge_cwd(self.route) as cwd:
                 completed = subprocess.run(
                     self._build_command(prompt),
                     env=env,
+                    cwd=cwd,
                     capture_output=True,
                     text=True,
                     # Undecodable bytes become U+FFFD and then fail the parse as

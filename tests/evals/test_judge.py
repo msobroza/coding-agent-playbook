@@ -14,7 +14,7 @@ import os
 import shutil
 import sys
 from importlib import metadata
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import pytest
 
@@ -23,11 +23,10 @@ from coding_agent_playbook.evals.judge import (
     JudgeError,
     LLMJudge,
     StubJudge,
+    _judge_cwd,
     parse_score,
 )
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from coding_agent_playbook.evals.run.claude_code_route import ClaudeCodeKeyRoute
 
 # --------------------------------------------------------------------------- #
 # Judge ABC — batch wrapper + n-sample averaging
@@ -392,3 +391,19 @@ def test_llm_judge_model_reaches_the_cli_unchanged() -> None:
     judge = LLMJudge(command=[sys.executable, "-c", grade_on_model, "{prompt}"], model="org/j:v2")
     assert judge.score_criterion("criterion", "artifact") == 1.0
     assert "--model" not in LLMJudge()._build_command("p")
+
+
+def test_judge_cwd_is_the_callers_when_unrouted() -> None:
+    with _judge_cwd(None) as cwd:
+        assert cwd is None
+
+
+def test_judge_cwd_is_a_fresh_empty_directory_outside_the_caller_when_routed() -> None:
+    # An isolated judge must not find the caller's CLAUDE.md or .claude/ settings.
+    with _judge_cwd(ClaudeCodeKeyRoute("k0")) as cwd:
+        assert cwd is not None
+        path = Path(cwd)
+        assert path.is_dir()
+        assert list(path.iterdir()) == []
+        assert Path.cwd().resolve() not in path.resolve().parents
+    assert not path.exists()
