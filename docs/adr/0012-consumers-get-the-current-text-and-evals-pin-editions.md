@@ -8,6 +8,8 @@ The playbook had no version anyone could rely on: an integer `version:` on every
 
 Releases are prepared by a maintainer script as a pull request (version, manifest of the graded set with digests, per-release notes, optional release metrics under `catalog/releases/<version>/`); merging it is the release, and CI tags that exact commit. commitizen computes the version from Conventional Commit titles: a change in what the agent is told to do is a `feat`, a typo-level text fix or engine fix is a `fix`, and a removed id or format break carries `!`. **Release metrics** score every eval sample per harness and model target and compare them with the previous release, so a guidance regression blocks the release unless it is accepted with a stored reason.
 
+Amended by ADR 0013: release metrics rerun only the samples whose inputs digest changed, plus every edition control, and rerun everything when the setup digest differs; every other sample is a carried entry copied from the previous release's metrics.
+
 ## Considered Options
 
 - **Keep per-artifact `version:` fields and bump them by hand.** Six of 175 content edits bumped one, parallel worktree lanes collide on them, and nothing reads them; a computed content digest per artifact replaces the field.
