@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Prepare a release pull request from any worktree (#281 ticket 10, ADR 0012).
+"""Prepare a release pull request from any worktree, and tag it once merged (#281, ADR 0012).
 
 Run it from any checkout of the engine repository, in an environment with the
 engine installed::
 
     uv run scripts/release.py prepare                  # next version from the commits
     uv run scripts/release.py prepare --version 0.1.0  # the first release, or an override
+    uv run scripts/release.py tag                      # by hand, when CI could not tag
 
 ``prepare`` fetches ``origin`` with its tags and works in a throwaway detached
 worktree at ``origin/main``, so the caller's tree is never touched. There it
@@ -22,7 +23,9 @@ re-runs itself (``prepare-checkout``) on that checkout's own engine, which:
    ``chore(release): v<version>`` on ``release/v<version>``, pushes it and opens
    the pull request through ``playbook forge`` (ADR 0003).
 
-Merging that pull request is the release; tagging is a separate step. A failed
+Merging that pull request is the release; the ``tag-release`` CI job then tags
+it, and ``tag`` does the same checks by hand (``release_tag``: the release
+commit, never HEAD; its recorded base; green tests; tags never moved). A failed
 run leaves no worktree, no local release branch and no change in the caller's
 tree, and a re-run starts over from ``origin/main`` (it overwrites a release
 branch a failed run pushed, with a lease). Exit codes: 0 done, 1 refused or
@@ -56,6 +59,7 @@ from coding_agent_playbook.release.manifest import (
     render_manifest,
 )
 from coding_agent_playbook.release.notes import CommitMessage, pull_requests, render_notes
+from coding_agent_playbook.release.tagging import TagRefusal
 from coding_agent_playbook.release.versions import (
     VersionError,
     check_next_version,
@@ -63,6 +67,7 @@ from coding_agent_playbook.release.versions import (
     raises_minor,
     release_tag,
 )
+from release_tag import tag_release
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -434,6 +439,12 @@ def _parser() -> argparse.ArgumentParser:
     inner = commands.add_parser("prepare-checkout", help=argparse.SUPPRESS)
     inner.add_argument("--base", required=True)
     inner.add_argument("--version")
+    tag = commands.add_parser("tag", help="tag the merged release commit (CI does it on push)")
+    tag.add_argument(
+        "--tested-commit",
+        metavar="SHA",
+        help="the CI tag job's commit, whose tests passed: tag only it, skip the CI lookup",
+    )
     return parser
 
 
@@ -450,11 +461,14 @@ def main(
     try:
         if args.command == "prepare":
             return prepare(here, version=args.version, runner=runner)
+        if args.command == "tag":
+            print(f"release: {tag_release(Tools(runner, here), tested_commit=args.tested_commit)}")
+            return 0
         build = _default_snapshot(here) if snapshot is None else snapshot
         url = prepare_checkout(
             Tools(runner, here), base=args.base, version=args.version, snapshot=build
         )
-    except (ReleaseError, ManifestError, GradedSetError) as exc:
+    except (ReleaseError, ManifestError, GradedSetError, TagRefusal) as exc:
         print(f"release: {exc}", file=sys.stderr)
         return FAILED_EXIT
     print(f"release: opened {url}")

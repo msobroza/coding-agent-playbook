@@ -1,5 +1,6 @@
 """Named fakes for ``scripts/release.py``: git, commitizen and ``playbook forge`` in one host.
 
+:class:`FakeTagHost` is the same idea for ``release.py tag`` (git and ``gh``).
 :class:`FakeReleaseHost` answers the commands the script runs from a small state
 (tags, open pull requests, commitizen's answers, the log) and records each one,
 so the tests assert on what the script ran and wrote, and never start a process.
@@ -105,3 +106,118 @@ class FakeReleaseHost:
         if args[:2] == ["pr", "list"]:
             return Completed(0, json.dumps(self.open_pulls))
         return Completed(0, f"{PR_URL}\n")
+
+
+@dataclass(frozen=True)
+class FakeCommit:
+    """One first-parent commit of ``main`` in :class:`FakeTagHost`: its sha, version and manifest."""
+
+    sha: str
+    version: str
+    manifest: str | None = None
+
+
+@dataclass
+class FakeTagHost:
+    """git and ``gh`` for ``release.py tag``: a first-parent history, tags and CI jobs.
+
+    ``history`` is newest first and every commit touches ``pyproject.toml``;
+    ``parents`` overrides a commit's first parent (else the next commit in
+    ``history``). ``remote_tags`` and ``local_tags`` map a tag to its commit;
+    ``lightweight`` names local tags that are not annotated. ``jobs`` is the
+    ``gh run view --json jobs`` text of the release commit's CI run.
+    """
+
+    history: list[FakeCommit]
+    parents: dict[str, str] = field(default_factory=dict)
+    remote_tags: dict[str, str] = field(default_factory=dict)
+    local_tags: dict[str, str] = field(default_factory=dict)
+    lightweight: set[str] = field(default_factory=set)
+    jobs: str = '{"jobs": []}'
+    fail_on: str | None = None
+    commands: list[list[str]] = field(default_factory=list)
+
+    def __call__(
+        self, argv: Sequence[str], *, cwd: Path, env: Mapping[str, str] | None = None
+    ) -> Completed:
+        command = list(argv)
+        self.commands.append(command)
+        if self.fail_on is not None and f" {self.fail_on}" in f" {' '.join(command)}":
+            return Completed(1, "", f"{self.fail_on} failed")
+        if command[0] == "gh":
+            return self._gh(command[1:])
+        handlers: dict[str, Callable[[list[str]], Completed]] = {
+            "rev-parse": self._rev_parse,
+            "show": self._show,
+            "log": lambda _: Completed(0, "".join(f"{c.sha}\n" for c in self.history)),
+            "ls-remote": self._ls_remote,
+            "cat-file": self._cat_file,
+            "tag": self._tag,
+            "push": self._push,
+        }
+        handler = handlers.get(command[1])
+        return handler(command[2:]) if handler else Completed(0)
+
+    def ran(self, *words: str) -> bool:
+        """Whether some command held ``words`` in this order, contiguously."""
+        needle = list(words)
+        return any(
+            command[i : i + len(needle)] == needle
+            for command in self.commands
+            for i in range(len(command))
+        )
+
+    def _commit(self, sha: str) -> FakeCommit | None:
+        return next((c for c in self.history if c.sha == sha), None)
+
+    def _rev_parse(self, args: list[str]) -> Completed:
+        ref = args[-1].removesuffix("^{commit}")
+        if ref.startswith("refs/tags/"):
+            target = self.local_tags.get(ref.removeprefix("refs/tags/"))
+            return Completed(0, f"{target}\n") if target else Completed(1)
+        if ref.endswith("^1"):
+            return self._parent(ref.removesuffix("^1"))
+        return Completed(0, f"{self.history[0].sha}\n")
+
+    def _parent(self, sha: str) -> Completed:
+        if sha in self.parents:
+            return Completed(0, f"{self.parents[sha]}\n")
+        shas = [c.sha for c in self.history]
+        index = shas.index(sha) + 1
+        return Completed(0, f"{shas[index]}\n") if index < len(shas) else Completed(128)
+
+    def _show(self, args: list[str]) -> Completed:
+        sha, _, path = args[-1].partition(":")
+        commit = self._commit(sha)
+        if commit is None:
+            return Completed(128, "", f"bad revision {sha}")
+        if path == "pyproject.toml":
+            return Completed(0, f'[project]\nname = "x"\nversion = "{commit.version}"\n')
+        if commit.manifest is not None and path.endswith("/manifest.toml"):
+            return Completed(0, commit.manifest)
+        return Completed(128, "", f"path {path} does not exist in {sha}")
+
+    def _ls_remote(self, args: list[str]) -> Completed:
+        tag = args[-1].removeprefix("refs/tags/")
+        target = self.remote_tags.get(tag)
+        if target is None:
+            return Completed(0)
+        return Completed(0, f"{'7a9' * 13}\trefs/tags/{tag}\n{target}\trefs/tags/{tag}^{{}}\n")
+
+    def _cat_file(self, args: list[str]) -> Completed:
+        tag = args[-1].removeprefix("refs/tags/")
+        return Completed(0, "commit\n" if tag in self.lightweight else "tag\n")
+
+    def _tag(self, args: list[str]) -> Completed:
+        self.local_tags[args[-2]] = args[-1]
+        return Completed(0)
+
+    def _push(self, args: list[str]) -> Completed:
+        tag = args[-1].partition(":")[0].removeprefix("refs/tags/")
+        self.remote_tags[tag] = self.local_tags[tag]
+        return Completed(0)
+
+    def _gh(self, args: list[str]) -> Completed:
+        if args[:2] == ["run", "list"]:
+            return Completed(0, "4242\n")  # `--jq .[].databaseId`
+        return Completed(0, self.jobs)
