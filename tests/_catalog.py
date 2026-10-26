@@ -147,7 +147,7 @@ def core_markdown_sources(kind: str, core_root: Path = CORE_ROOT) -> list[Path]:
     so a gate never iterates an empty listing by mistake. ``core_root`` is for
     synthetic trees; gates leave it at the shipped core.
 
-    Example: ``core_markdown_sources("prompts")[0].name`` -> ``"characterize.md"``.
+    Example: ``core_markdown_sources("prompts")[0].name`` -> ``"characterize.md.j2"``.
     """
     root = core_root / kind
     if not root.is_dir():

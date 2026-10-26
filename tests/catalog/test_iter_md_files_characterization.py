@@ -4,7 +4,7 @@ The walk used to find a file's names below ``root`` with ``path.relative_to(root
 which walks the parents of both paths on every call; it now slices the parts
 ``rglob`` already built. ``tests._link_scan_reference.reference_iter_md_files``
 is the old code, verbatim: these tests compare the two, in order, on every
-directory of the catalog, with and without ``skip``, on roots spelled
+directory of the catalog, on roots spelled
 relative, with ``..`` or below a dot directory, and on generated trees.
 """
 
@@ -16,15 +16,14 @@ from pathlib import Path
 
 import pytest
 
-from coding_agent_playbook.catalog.prompt_sets import prompt_set_dirs
 from coding_agent_playbook.catalog.skill_rules import iter_md_files
 from tests._catalog import CATALOG_ROOT, CORE_ROOT
 from tests._link_scan_reference import reference_iter_md_files
 
 
-def _assert_unchanged(root: Path, skip: tuple[Path, ...] = ()) -> list[Path]:
-    found = list(iter_md_files(root, skip=skip))
-    assert found == list(reference_iter_md_files(root, skip=skip)), root
+def _assert_unchanged(root: Path) -> list[Path]:
+    found = list(iter_md_files(root))
+    assert found == list(reference_iter_md_files(root)), root
     return found
 
 
@@ -51,10 +50,8 @@ def test_catalog_directories_list_exactly_as_before() -> None:
 
 
 @pytest.mark.catalog
-def test_the_core_prompts_root_with_its_skipped_sets_lists_exactly_as_before() -> None:
-    prompts = CORE_ROOT / "prompts"
-
-    assert _assert_unchanged(prompts, prompt_set_dirs(prompts))
+def test_the_core_prompts_root_lists_exactly_as_before() -> None:
+    assert _assert_unchanged(CORE_ROOT / "prompts")
 
 
 @pytest.mark.catalog
@@ -76,7 +73,6 @@ def test_roots_with_dot_dot_or_inside_a_dot_directory_list_as_before(tmp_path: P
 
     assert [path.name for path in _assert_unchanged(layer)] == ["a.md", "b.md.j2"]
     assert _assert_unchanged(layer / "sub" / "..")
-    assert _assert_unchanged(layer, skip=(layer / "sub",)) == [layer / "a.md"]
 
 
 _DIRS = ("a", "b", ".git", ".x", "skills", "_y")
@@ -91,7 +87,5 @@ def test_generated_trees_list_exactly_as_before(tmp_path: Path, seed: int) -> No
     for _ in range(rng.randint(0, 25)):
         dirs = [rng.choice(_DIRS) for _ in range(rng.randint(0, 3))]
         _write(root.joinpath(*dirs, rng.choice(_FILES)))
-    skip = tuple(root / rng.choice(_DIRS) for _ in range(rng.randint(0, 2)))
 
     _assert_unchanged(root)
-    _assert_unchanged(root, skip)

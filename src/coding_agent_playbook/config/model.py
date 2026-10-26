@@ -17,7 +17,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from coding_agent_playbook.catalog.prompt_sets import DEFAULT_PROMPT_SET, PromptSet
 from coding_agent_playbook.catalog.roots import canonical_overlay_list
 from coding_agent_playbook.config.entries import (
     copy_toml_value,
@@ -120,10 +119,6 @@ class Config:
     # The ``[layout]`` keys the file sets (D71), sparse: a key left out keeps its D60
     # default (``config.layout.resolve_layout``); empty = no table, none written.
     layout: dict[str, str] = field(default_factory=dict)
-    # The committed ``prompts`` key (D76) as written, named after the TOML key like
-    # ``framework``. ``None`` = no key, so ``to_dict`` stays sparse. Consumers read
-    # ``prompt_set``, the resolved set (the default when the key is absent).
-    prompts: PromptSet | None = None
     storage: StorageConfig = field(default_factory=StorageConfig)
     detector_cache: dict[str, Any] = field(default_factory=dict)
     user_choices: dict[str, Any] = field(default_factory=dict)
@@ -198,19 +193,6 @@ class Config:
         """
         return LayoutRewriter.for_layout(self.layout, aliases=layout_aliases(self.layers_enabled))
 
-    @property
-    def prompt_set(self) -> PromptSet:
-        """The prompt set a sync renders: the ``prompts`` key, else ``"v1"`` (D76).
-
-        What consumers read; :attr:`prompts` is the raw key, kept for ``to_dict``.
-
-        Example::
-
-            >>> Config(1, ProjectMeta("x", "python-library"), "0.1").prompt_set
-            'v1'
-        """
-        return self.prompts if self.prompts is not None else DEFAULT_PROMPT_SET
-
     @classmethod
     def from_dict(cls, data: dict[str, Any], *, source: str = "config") -> Config:
         """Build a :class:`Config` from decoded TOML, refusing misread shapes.
@@ -242,7 +224,6 @@ class Config:
             adapters_enabled=list(data.get("adapters_enabled", [])),
             framework=data["framework"].strip() if "framework" in data else None,
             layout=dict(data.get("layout", {})),
-            prompts=data.get("prompts"),
             storage=StorageConfig(
                 artifact_source=storage.get("artifact_source", "filesystem"),
                 state_source=storage.get("state_source", "filesystem"),
@@ -286,8 +267,6 @@ class Config:
             result["framework"] = self.framework
         if self.layout:
             result["layout"] = dict(self.layout)
-        if self.prompts is not None:
-            result["prompts"] = self.prompts
         result["storage"] = {
             "artifact_source": self.storage.artifact_source,
             "state_source": self.storage.state_source,

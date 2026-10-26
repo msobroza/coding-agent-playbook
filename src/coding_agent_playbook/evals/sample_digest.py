@@ -16,14 +16,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.catalog.digest import artifact_digest
-from coding_agent_playbook.catalog.prompt_sets import DEFAULT_PROMPT_SET
 from coding_agent_playbook.evals.prompting import render_prompt, resolve_sample_prompt
 from coding_agent_playbook.lockfile.canonical_json import canonical_json
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from coding_agent_playbook.catalog.prompt_sets import PromptSet
     from coding_agent_playbook.evals.sample import EvalSample
     from coding_agent_playbook.release.edition import Edition
 
@@ -50,12 +48,7 @@ def sample_digest(sample: EvalSample) -> str:
     return _sha256(canonical_json(payload))
 
 
-def prompt_digest(
-    sample: EvalSample,
-    prompt_set: PromptSet = DEFAULT_PROMPT_SET,
-    *,
-    edition: Edition | None = None,
-) -> str | None:
+def prompt_digest(sample: EvalSample, *, edition: Edition | None = None) -> str | None:
     """The ``artifact_digest`` of the prompt ``sample`` grades, ``None`` when it resolves to none.
 
     With ``edition``, the digest of the edition's frozen prompt.
@@ -65,7 +58,7 @@ def prompt_digest(
         >>> prompt_digest(sample)  # doctest: +SKIP
         '5f3c...'
     """
-    prompt = resolve_sample_prompt(sample, prompt_set, edition)
+    prompt = resolve_sample_prompt(sample, edition)
     return artifact_digest(prompt) if prompt is not None else None
 
 

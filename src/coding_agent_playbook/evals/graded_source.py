@@ -15,7 +15,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import coding_agent_playbook
-from coding_agent_playbook.catalog.prompt_sets import DEFAULT_PROMPT_SET
 from coding_agent_playbook.evals.release_metrics import GRADED_HEAD
 from coding_agent_playbook.evals.sample_digest import prompt_digest, sample_digest
 from coding_agent_playbook.evals.task_registry import sample_layer_root
@@ -25,7 +24,6 @@ from coding_agent_playbook.release.edition_digests import edition_dir
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from coding_agent_playbook.catalog.prompt_sets import PromptSet
     from coding_agent_playbook.evals.sample import EvalSample
     from coding_agent_playbook.release.edition import Edition
 
@@ -136,10 +134,8 @@ def graded_source(
     return GradedSource(load_edition(sample_edition_dir(sample, sample.edition)))
 
 
-def graded_record(
-    sample: EvalSample, source: GradedSource, prompt_set: PromptSet = DEFAULT_PROMPT_SET
-) -> GradedRecord:
-    """The record of ``sample`` graded on ``source`` (``prompt_set`` applies to head only).
+def graded_record(sample: EvalSample, source: GradedSource) -> GradedRecord:
+    """The record of ``sample`` graded on ``source``.
 
     Example::
 
@@ -148,7 +144,7 @@ def graded_record(
     """
     return GradedRecord(
         source=source.label,
-        prompt_digest=prompt_digest(sample, prompt_set, edition=source.edition),
+        prompt_digest=prompt_digest(sample, edition=source.edition),
         sample_digest=sample_digest(sample),
         engine_version=coding_agent_playbook.__version__,
         note=source.note,

@@ -11,13 +11,10 @@ A typo there would silently drop guidance, so three checks guard it (P3-7):
   iterated character by character);
 - every id names a rule of the merged set, with a did-you-mean.
 
-``check_prompt_set_twins`` checks the prompt sets of every layer (D76): each
-prompt in ``prompts/v2/`` has a v1 twin of the same id, keeping its name, slash
-command and ``includes_rules``, and once a layer has a v2 set every v1 prompt of
-the layer has a twin there.
-
-``unrendered_prompts`` lists the prompts of those sets that the sync leaves
-out, so ``checks`` can run its per-prompt checks on every set.
+A fourth check refuses a leftover ``prompts/v2/`` in any layer: prompt sets were
+removed (ADR 0012), so every file under ``prompts/`` is read as a prompt and a
+``v2/`` twin would clash with the prompt of the same id, its file name deciding
+which text renders.
 
 ``check_prompt_rule_calls`` is the first check alone, for ``playbook sync
 --check-staged``, which is not validate-gated; sync imports it from outside the
@@ -28,25 +25,26 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final, TypeGuard
 
+from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.hooks.contract.findings import did_you_mean
 from coding_agent_playbook.rendering.jinja import RULE_CALL_RE
 from coding_agent_playbook.validation.findings import ValidationError
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Sequence
+    from pathlib import Path
 
     from coding_agent_playbook.artifacts.prompt import Prompt
-    from coding_agent_playbook.catalog.source import ArtifactSource, PromptSetLayer
+    from coding_agent_playbook.catalog.source import ArtifactSource
 
 #: How a well-formed ``includes_rules`` looks, quoted in the shape error.
 _INCLUDES_RULES_SHAPE: Final = "expected a list of rule ids, e.g. ['python-typing', 'pytest']"
 
-#: The frontmatter a twin keeps from its v1 prompt: what the listing and the eval
-#: comparison read (D76).
-_TWIN_KEPT_KEYS: Final = ("name", "slash", "includes_rules")
-
 #: Where a valid id comes from: the merged rule set of every layer.
 _RULE_LAYERS: Final = "which is no rule in core, an enabled overlay or playbook/rules/"
+
+#: The directory of the retired v2 prompt set (ADR 0008, removed by ADR 0012).
+_RETIRED_PROMPT_SET_DIR: Final = "v2"
 
 
 def check_prompt_rule_references(
@@ -88,76 +86,32 @@ def check_prompt_rule_calls(prompts: Sequence[Prompt]) -> list[ValidationError]:
     ]
 
 
-def check_prompt_set_twins(artifact_source: ArtifactSource) -> list[ValidationError]:
-    """D76: every layer's later prompt sets are complete twins of its v1 prompts.
+def check_retired_prompt_set_dirs(source: ArtifactSource) -> list[ValidationError]:
+    """ADR 0012: no layer keeps ``prompts/v2/``, the directory of the removed prompt set.
 
-    A source without prompt sets (:meth:`ArtifactSource.prompt_set_layers` is
-    empty) passes.
-
-    Example::
-
-        check_prompt_set_twins(ctx.artifact_source)
-    """
-    return [error for layer in artifact_source.prompt_set_layers() for error in _twin_errors(layer)]
-
-
-def unrendered_prompts(artifact_source: ArtifactSource) -> list[Prompt]:
-    """The prompts of every layer's prompt sets that this sync does not render (D76).
-
-    Under the default v1 they are the v2 twins; under v2, the v1 prompts the twins
-    replace. ``playbook validate`` runs its per-prompt checks on them too, so a
-    broken prompt fails before a repo switches sets, not after.
+    A source that does not read layers from disk has none to check.
 
     Example::
 
-        unrendered_prompts(ctx.artifact_source)  # [] without a prompts/v2/ anywhere
+        check_retired_prompt_set_dirs(ctx.artifact_source)  # [] without a prompts/v2/
     """
-    return [prompt for layer in artifact_source.prompt_set_layers() for prompt in layer.unrendered]
-
-
-def _twin_errors(layer: PromptSetLayer) -> list[ValidationError]:
-    """One layer's twin findings for its prompt set."""
-    v1, twins, prompt_set, set_dir = layer.v1, layer.twins, layer.prompt_set, layer.set_dir
-    by_id = {prompt.frontmatter.id: prompt for prompt in v1}
-    twin_ids = {twin.frontmatter.id for twin in twins}
-    errors = [
-        ValidationError(
-            path=_where(prompt),
-            message=f"prompt {prompt.frontmatter.id!r} has no {prompt_set} twin in {set_dir}; "
-            f"add one with the same id, or remove the {prompt_set} set",
-        )
-        for prompt in v1
-        if prompt.frontmatter.id not in twin_ids
+    if not isinstance(source, FileSystemArtifactSource):
+        return []
+    return [
+        ValidationError(path=str(retired), message=_retired_prompt_set_message(prompts_root))
+        for _, prompts_root in source.layer_roots("prompts")
+        if (retired := prompts_root / _RETIRED_PROMPT_SET_DIR).is_dir()
     ]
-    for twin in twins:
-        original = by_id.get(twin.frontmatter.id)
-        if original is None:
-            errors.append(
-                ValidationError(
-                    path=_where(twin),
-                    message=f"{prompt_set} prompt {twin.frontmatter.id!r} has no v1 twin; "
-                    "a prompt set only replaces the text of prompts with the same id",
-                )
-            )
-            continue
-        errors.extend(
-            ValidationError(path=_where(twin), message=message)
-            for message in _kept_key_messages(original, twin, prompt_set)
-        )
-    return errors
 
 
-def _kept_key_messages(original: Prompt, twin: Prompt, prompt_set: str) -> list[str]:
-    """One message per :data:`_TWIN_KEPT_KEYS` entry ``twin`` changes."""
-    messages = []
-    for key in _TWIN_KEPT_KEYS:
-        before, after = getattr(original.frontmatter, key), getattr(twin.frontmatter, key)
-        if before != after:
-            messages.append(
-                f"{prompt_set} prompt {twin.frontmatter.id!r} changes {key} from "
-                f"{before!r} to {after!r}; a twin keeps its v1 prompt's {key}"
-            )
-    return messages
+def _retired_prompt_set_message(prompts_root: Path) -> str:
+    retired = prompts_root / _RETIRED_PROMPT_SET_DIR
+    return (
+        f"{retired}/ held a prompt set, and prompt sets were removed (ADR 0012): every "
+        f"file under {prompts_root}/ is now read as a prompt, so these clash with the "
+        f"prompts of the same id. Move each {retired}/<name> over {prompts_root}/<name> "
+        f"(keeping its id), then delete {retired}/"
+    )
 
 
 def _where(prompt: Prompt) -> str:

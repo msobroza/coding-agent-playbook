@@ -239,5 +239,34 @@ def judge_sample_count(args: argparse.Namespace, default: int = 1) -> int | None
     return count if count is not None else default
 
 
+#: The flags removed with the prompt sets (ADR 0012), by their ``dest``.
+_REMOVED_PROMPT_SET_FLAGS: Final = {
+    "removed_prompt_set": "--prompt-set",
+    "removed_base_prompt_set": "--base-prompt-set",
+}
+
+
+def removed_flag_error(args: argparse.Namespace) -> str | None:
+    """The ``error:`` line for a removed prompt-set flag ``args`` carries, else ``None``.
+
+    Prompt sets are gone (ADR 0012): every sample grades the current text, or the
+    edition it is pinned to, so the flag cannot pick anything; the caller exits 2.
+
+    Example::
+
+        >>> import argparse
+        >>> removed_flag_error(argparse.Namespace(removed_prompt_set="v2")).split(":")[1]
+        ' --prompt-set was removed with the prompt sets'
+    """
+    for dest, flag in _REMOVED_PROMPT_SET_FLAGS.items():
+        if getattr(args, dest, None) is not None:
+            return (
+                f"error: {flag} was removed with the prompt sets: every sample grades "
+                "the current text, or the edition it is pinned to; compare with an "
+                "earlier text through --compare edition:<tag> head"
+            )
+    return None
+
+
 def _error(message: str) -> None:
     print(f"error: {message}", file=sys.stderr)

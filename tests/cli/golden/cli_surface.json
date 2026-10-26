@@ -658,17 +658,14 @@
           "option_strings": [
             "--prompt-set"
           ],
-          "dest": "prompt_set",
+          "dest": "removed_prompt_set",
           "nargs": null,
           "const": null,
-          "default": "v1",
+          "default": null,
           "type": null,
-          "choices": [
-            "v1",
-            "v2"
-          ],
+          "choices": null,
           "required": false,
-          "help": "prompt set to render the sample's prompt from (default: v1; the repo's prompts key is not read)",
+          "help": "==SUPPRESS==",
           "metavar": null
         },
         {
@@ -804,17 +801,14 @@
           "option_strings": [
             "--base-prompt-set"
           ],
-          "dest": "base_prompt_set",
+          "dest": "removed_base_prompt_set",
           "nargs": null,
           "const": null,
-          "default": "v1",
+          "default": null,
           "type": null,
-          "choices": [
-            "v1",
-            "v2"
-          ],
+          "choices": null,
           "required": false,
-          "help": "--compare: prompt set the base side grades (default: v1; --prompt-set picks HEAD's)",
+          "help": "==SUPPRESS==",
           "metavar": null
         },
         {

@@ -168,12 +168,7 @@ class SideRenderCheck:
                 return None
             return done.stderr.strip() or "the sample does not render"
         try:
-            render_prompt(
-                self.samples[sample_id],
-                strict=True,
-                prompt_set=side.side.prompt_set,
-                edition=side.edition,
-            )
+            render_prompt(self.samples[sample_id], strict=True, edition=side.edition)
         except (PromptResolutionError, ValueError) as exc:
             return str(exc)
         return None

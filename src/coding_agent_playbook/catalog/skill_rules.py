@@ -21,18 +21,15 @@ from coding_agent_playbook.artifacts.identity import artifact_id_of
 from coding_agent_playbook.artifacts.skill import Skill
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence
+    from collections.abc import Iterator
     from pathlib import Path
 
 #: ``SKILL.md`` names a skill directory may hold, in lookup order.
 SKILL_MD_NAMES = ("SKILL.md", "SKILL.md.j2")
 
 
-def iter_md_files(root: Path, *, skip: Sequence[Path] = ()) -> Iterator[Path]:
+def iter_md_files(root: Path) -> Iterator[Path]:
     """Yield ``*.md`` and ``*.md.j2`` files under ``root`` in deterministic order.
-
-    Files under a directory of ``skip`` are left out (a prompts root skips its
-    later prompt sets, ``catalog.prompt_sets.prompt_set_dirs``).
 
     Example: ``list(iter_md_files(Path("playbook/rules")))`` -> ``[PosixPath('playbook/rules/x.md')]``.
     """
@@ -42,8 +39,6 @@ def iter_md_files(root: Path, *, skip: Sequence[Path] = ()) -> Iterator[Path]:
     # sync's link gate lists, CPython 3.12.
     depth = len(root.parts)
     for path in sorted(root.rglob("*.md*")):
-        if any(path.is_relative_to(skipped) for skipped in skip):
-            continue
         # Skip dotted directories (.git, .venv, node_modules-of-vendored-skills,
         # etc.) for hygiene — these never legitimately contain canonical
         # artifacts, and walking them silently inflates source listings.

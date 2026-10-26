@@ -278,7 +278,6 @@ _FULL: dict[str, Any] = {
     "adapters_enabled": ["continue"],
     "framework": "superpowers",
     "layout": {"specs": "specs"},
-    "prompts": "v2",
     # Not the defaults, so dropping the table changes the Config.
     "storage": {"artifact_source": "custom", "state_source": "custom"},
     "output": {"commit": True},
