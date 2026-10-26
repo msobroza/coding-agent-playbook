@@ -14,8 +14,9 @@ import sys
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.evals import registry
-from coding_agent_playbook.evals.run.claude_code_route import claude_code_route
-from coding_agent_playbook.evals.run.opencode_route import opencode_route
+from coding_agent_playbook.evals.record_isolation import check_opencode_key_model, record_api_key
+from coding_agent_playbook.evals.run.claude_code_route import ClaudeCodeKeyRoute, claude_code_route
+from coding_agent_playbook.evals.run.opencode_route import OpenCodeKeyRoute, opencode_route
 from coding_agent_playbook.evals.run.opencode_runner import OpenCodeRunner
 from coding_agent_playbook.evals.targets import TargetError, resolve_target, runner_alias_target
 
@@ -92,7 +93,7 @@ def select_target(args: argparse.Namespace, settings: EvalSettings) -> EvalTarge
     return resolve_target(settings, cli_value=target, env=os.environ)
 
 
-def build_target_runner(target: EvalTarget) -> HarnessRunner | None:
+def build_target_runner(target: EvalTarget, *, isolated: bool = False) -> HarnessRunner | None:
     """A runner for ``target``'s harness, sent its model; ``None`` after an error line.
 
     Unknown or unavailable harnesses fail like ``--runner`` does
@@ -100,6 +101,8 @@ def build_target_runner(target: EvalTarget) -> HarnessRunner | None:
     rather than dropped. A target without a model builds the runner as before.
     A target on an endpoint gets its route (token read from the environment now,
     so a missing variable fails before any run: ``EndpointError``, exit 2).
+    ``isolated`` (``--record``, #329 ticket 02) isolates a CLI runner without an
+    endpoint too, on the API key in ``ANTHROPIC_API_KEY`` (``record_isolation``).
 
     Example::
 
@@ -118,6 +121,9 @@ def build_target_runner(target: EvalTarget) -> HarnessRunner | None:
         )
         return None
     if target.endpoint is None:
+        if isolated and runner_cls.accepts_endpoint:
+            key_route = _key_route(runner_cls, target.model)
+            return runner_cls(model=target.model, route=key_route)  # type: ignore[call-arg]
         return runner_cls(model=target.model)  # type: ignore[call-arg]
     if not runner_cls.accepts_endpoint:
         _error(
@@ -138,8 +144,25 @@ def _endpoint_route(
     return claude_code_route(endpoint, model, small_model=small_model)
 
 
-def build_judge(name: str, settings: JudgeSettings) -> Judge | None:
+def _key_route(
+    runner_cls: type[HarnessRunner], model: str
+) -> ClaudeCodeKeyRoute | OpenCodeKeyRoute:
+    """The isolation ``runner_cls``'s harness gets without an endpoint (API key read now).
+
+    An OpenCode model must be an Anthropic one, the only provider the key reaches.
+    """
+    key = record_api_key(os.environ)
+    if issubclass(runner_cls, OpenCodeRunner):
+        check_opencode_key_model(model)
+        return OpenCodeKeyRoute(model, key)
+    return ClaudeCodeKeyRoute(key)
+
+
+def build_judge(name: str, settings: JudgeSettings, *, isolated: bool = False) -> Judge | None:
     """The judge ``name`` names, sent ``[evals.judge] model``; ``None`` after an error line.
+
+    ``isolated`` (``--record``) isolates a judge without an endpoint too, on the
+    API key in ``ANTHROPIC_API_KEY``; one on an endpoint is isolated already.
 
     Example::
 
@@ -157,6 +180,9 @@ def build_judge(name: str, settings: JudgeSettings) -> Judge | None:
         )
         return None
     if settings.endpoint is None:
+        if isolated and judge_cls.accepts_endpoint:
+            key_route = ClaudeCodeKeyRoute(record_api_key(os.environ))
+            return judge_cls(model=settings.model, route=key_route)  # type: ignore[call-arg]
         return judge_cls(model=settings.model)  # type: ignore[call-arg]
     if not judge_cls.accepts_endpoint:
         _error(

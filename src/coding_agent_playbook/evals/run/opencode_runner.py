@@ -41,7 +41,7 @@ import subprocess
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.evals.run.agent_env import unattended_agent_env
+from coding_agent_playbook.evals.run.agent_env import agent_env
 from coding_agent_playbook.evals.run.cli_argv import PROMPT_TOKEN, build_cli_argv
 from coding_agent_playbook.evals.run.harness_runner import AgentRun, HarnessRunner
 from coding_agent_playbook.evals.run.opencode_output import OpenCodeOutput, parse_opencode_output
@@ -52,7 +52,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
-    from coding_agent_playbook.evals.run.opencode_route import OpenCodeRoute
+    from coding_agent_playbook.evals.run.opencode_route import OpenCodeIsolation
 
 #: Name of the OpenCode executable looked up on ``PATH``.
 _CLI = "opencode"
@@ -87,8 +87,9 @@ class OpenCodeRunner(HarnessRunner):
     ``model`` (an Eval target's model) is passed as ``--model <model>``, exactly
     as written; ``None`` leaves the CLI on its own default model. ``route`` (an
     Eval target's endpoint) isolates the run and points it at that endpoint, the
-    model then sent as ``playbook-target/<model>``; ``None`` keeps the user's
-    own OpenCode setup.
+    model then sent as ``playbook-target/<model>``; under ``--record`` without
+    an endpoint, an ``OpenCodeKeyRoute`` isolates it on an API key. ``None``
+    keeps the user's own OpenCode setup.
     """
 
     name = "opencode"
@@ -103,7 +104,7 @@ class OpenCodeRunner(HarnessRunner):
         command: Sequence[str] | None = None,
         timeout: float = _DEFAULT_TIMEOUT,
         model: str | None = None,
-        route: OpenCodeRoute | None = None,
+        route: OpenCodeIsolation | None = None,
     ) -> None:
         self.model = model
         self.route = route
@@ -132,10 +133,11 @@ class OpenCodeRunner(HarnessRunner):
         lines. The process return code is recorded (``0`` = the agent loop
         completed). No shell is used and the working directory is the agent's
         scratch repo, so any edits land in the tree the scoring layers read. The
-        child env is marked unattended, so lifecycle-hook asks degrade to deny; on
+        child env is marked unattended, so lifecycle-hook asks degrade to deny, and
+        runs on the scratch ``.venv`` (``agent_env``) when the sample has one; on
         an endpoint it is isolated too, and the token is redacted from the transcript.
         """
-        with routed_opencode_env(self.route, unattended_agent_env()) as env:
+        with routed_opencode_env(self.route, agent_env(scratch_dir)) as env:
             completed = subprocess.run(
                 self._build_command(prompt),
                 cwd=scratch_dir,

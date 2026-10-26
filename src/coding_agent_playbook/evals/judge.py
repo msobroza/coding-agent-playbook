@@ -36,16 +36,18 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+import tempfile
 from abc import ABC, abstractmethod
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.evals.run.claude_code_route import routed_argv, routed_env
 from coding_agent_playbook.evals.run.cli_argv import PROMPT_TOKEN, build_cli_argv
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterator, Sequence
 
-    from coding_agent_playbook.evals.run.claude_code_route import ClaudeCodeRoute
+    from coding_agent_playbook.evals.run.claude_code_route import ClaudeCodeIsolation
 
 
 class JudgeError(RuntimeError):
@@ -187,6 +189,28 @@ def _excerpt(text: str) -> str:
     return " ".join(text.split())[-_OUTPUT_EXCERPT_CHARS:]
 
 
+@contextmanager
+def _judge_cwd(route: ClaudeCodeIsolation | None) -> Iterator[str | None]:
+    """Where one grading runs: the caller's directory unrouted, else a fresh empty one.
+
+    Why: an isolated judge has an empty config dir, but Claude Code still reads
+    project and local settings (``CLAUDE.md``, ``CLAUDE.local.md``,
+    ``.claude/settings*.json``) from its working directory and the parents; an
+    empty directory under the system temp dir, outside any repository, has none.
+
+    Example::
+
+        >>> with _judge_cwd(None) as cwd:
+        ...     cwd is None
+        True
+    """
+    if route is None:
+        yield None
+        return
+    with tempfile.TemporaryDirectory(prefix="playbook-judge-cwd-") as empty:
+        yield empty
+
+
 class LLMJudge(Judge):
     """A :class:`Judge` that grades by shelling out to the ``claude`` CLI.
 
@@ -200,7 +224,8 @@ class LLMJudge(Judge):
     :class:`JudgeError`. ``model`` (``[evals.judge] model``) is passed as
     ``--model <model>``, exactly as written; ``None`` keeps the CLI's default.
     ``route`` (``[evals.judge] endpoint``) isolates each grading and points it at
-    that endpoint; ``None`` keeps the CLI's own settings and login.
+    that endpoint; under ``--record`` without an endpoint, a ``ClaudeCodeKeyRoute``
+    isolates it on an API key. ``None`` keeps the CLI's own settings and login.
 
     Opt-in and **never run in CI**: no top-level import needs the CLI, the
     executable is discovered at call time, and :meth:`available` is ``False`` when
@@ -218,7 +243,7 @@ class LLMJudge(Judge):
         timeout: float = _DEFAULT_TIMEOUT,
         retries: int = _DEFAULT_RETRIES,
         model: str | None = None,
-        route: ClaudeCodeRoute | None = None,
+        route: ClaudeCodeIsolation | None = None,
     ) -> None:
         if retries < 0:
             raise ValueError(f"LLMJudge retries must be >= 0, got {retries}")
@@ -260,10 +285,11 @@ class LLMJudge(Judge):
     def _attempt(self, prompt: str) -> float:
         """Run the CLI once; its score, or :class:`JudgeError` saying why not."""
         try:
-            with routed_env(self.route, None) as env:
+            with routed_env(self.route, None) as env, _judge_cwd(self.route) as cwd:
                 completed = subprocess.run(
                     self._build_command(prompt),
                     env=env,
+                    cwd=cwd,
                     capture_output=True,
                     text=True,
                     # Undecodable bytes become U+FFFD and then fail the parse as

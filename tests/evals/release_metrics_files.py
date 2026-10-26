@@ -21,9 +21,15 @@ def sample_entry(
     cost: float | None = None,
     tokens: float | None = None,
     graded: str = "head",
+    inputs: str | None = None,
 ) -> dict[str, Any]:
-    """One ``samples.<id>`` (or ``controls.<id>``) entry with ``passes`` of ``runs``."""
-    return {
+    """One ``samples.<id>`` (or ``controls.<id>``) entry with ``passes`` of ``runs``.
+
+    ``inputs`` adds the ``inputs_digest`` key (#329 ticket 03); ``None`` leaves it
+    out, as files written before it did.
+    """
+    extra = {} if inputs is None else {"inputs_digest": inputs}
+    return extra | {
         "prompt_id": "review",
         "graded": graded,
         "prompt_digest": "prompt-digest-1",

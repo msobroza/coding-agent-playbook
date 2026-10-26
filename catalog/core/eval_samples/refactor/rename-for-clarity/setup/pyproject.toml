@@ -3,3 +3,8 @@ name = "refactor-rename-for-clarity-fixture"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = ["pytest"]
+
+[tool.pytest.ini_options]
+# Lets `tests/` import the code as `src.<module>` or `<module>` under plain `pytest`
+# as well as `python -m pytest`, so no agent has to edit this config to run tests.
+pythonpath = [".", "src"]

@@ -11,7 +11,11 @@ as for ``--run``. A sample that cannot
 be scored stops the recording, so a file never silently lacks a sample. Every
 sample grades the current text (``samples``); a pinned sample also runs on its
 edition as a control (``controls``, #281 ticket 15), whose edition is loaded and
-rendered before any paid run too. The
+rendered before any paid run too. Each entry records the inputs digest of that
+pre-run render (#329 ticket 03). The
+harness and the judge run isolated from the user's personal settings, so a
+missing credential is refused before any paid run too, and the target block
+records ``isolated`` (#329 ticket 02, ``evals.record_isolation``). The
 file is written whatever the scores are: exit ``0`` once it is written, ``2`` on
 a refusal or an unscorable sample.
 """
@@ -34,10 +38,12 @@ from coding_agent_playbook.commands._eval_options import (
     judge_sample_count,
     select_target,
 )
+from coding_agent_playbook.evals import registry
 from coding_agent_playbook.evals.graded_source import graded_source
 from coding_agent_playbook.evals.judge import JudgeError
 from coding_agent_playbook.evals.model_pins import RecordRefusedError, check_recordable
 from coding_agent_playbook.evals.prompting import PromptResolutionError, render_prompt
+from coding_agent_playbook.evals.record_isolation import check_record_credentials
 from coding_agent_playbook.evals.release_metrics import (
     GRADED_HEAD,
     RecordedTarget,
@@ -47,7 +53,7 @@ from coding_agent_playbook.evals.release_metrics import (
 from coding_agent_playbook.evals.release_metrics_schema import validate_release_metrics
 from coding_agent_playbook.evals.run.git_env import without_repo_location
 from coding_agent_playbook.evals.run.harness_version import harness_cli_version
-from coding_agent_playbook.evals.sample_digest import prompt_digest, sample_digest
+from coding_agent_playbook.evals.sample_digest import inputs_digest, prompt_digest, sample_digest
 from coding_agent_playbook.evals.task_registry import TaskRegistry, TaskRegistryError
 from coding_agent_playbook.release.edition import EditionError
 from coding_agent_playbook.validation.context import SyncContext
@@ -111,34 +117,39 @@ def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings
     runs = _run_count(getattr(args, "runs", None), target.runs)
     uses_judge = getattr(args, "judge", None) is not None
     check_recordable(target, judge_model=settings.judge.model, uses_judge=uses_judge)
+    isolated = _check_credentials(target, settings, getattr(args, "judge", None))
     samples = _selected_samples(args, repo_root)
     plan = _build_plan(args, settings, target, runs)
     if plan is None:
         return 2
-    plan.check_prompts(samples)
-    editions = plan.control_editions(samples)
+    inputs = plan.check_prompts(samples)
+    controls = plan.control_editions(samples)
     recorded = RecordedTarget(
         target=target,
         harness_version=harness_cli_version(plan.runner.cli),
         judge_model=settings.judge.model if uses_judge else None,
         runs=runs,
+        isolated=isolated,
     )
     metrics = build_release_metrics(
         release=coding_agent_playbook.__version__,
         commit=_head_commit(repo_root),
         recorded=recorded,
-        samples=[plan.run(sample, index, len(samples)) for index, sample in enumerate(samples)],
-        controls=[
-            plan.run(sample, index, len(samples), edition=editions[sample.id])
+        samples=[
+            plan.run(sample, index, len(samples), inputs[sample.id])
             for index, sample in enumerate(samples)
-            if sample.id in editions
+        ],
+        controls=[
+            plan.run(sample, index, len(samples), control.inputs_digest, edition=control.edition)
+            for index, sample in enumerate(samples)
+            if (control := controls.get(sample.id)) is not None
         ],
     )
     validate_release_metrics(metrics)
     _write(out_path, metrics)
-    controls = f" (+{len(editions)} edition controls)" if editions else ""
+    extra = f" (+{len(controls)} edition controls)" if controls else ""
     print(
-        f"recorded {len(samples)} samples{controls} x {runs} runs on target "
+        f"recorded {len(samples)} samples{extra} x {runs} runs on target "
         f"{target.name!r} to {out_path}"
     )
     return 0
@@ -147,15 +158,63 @@ def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings
 def _build_plan(
     args: argparse.Namespace, settings: EvalSettings, target: EvalTarget, runs: int
 ) -> _RecordPlan | None:
-    """The runner, judge and judge sample count of the run; ``None`` after an error line."""
-    runner = build_target_runner(target)
+    """The runner, judge and judge sample count of the run; ``None`` after an error line.
+
+    Both are built isolated from the user's personal settings (#329 ticket 02).
+    """
+    runner = build_target_runner(target, isolated=True)
     judge_name = getattr(args, "judge", None)
-    judge = build_judge(judge_name, settings.judge) if judge_name is not None else None
+    judge = (
+        build_judge(judge_name, settings.judge, isolated=True) if judge_name is not None else None
+    )
     judge_samples = judge_sample_count(args, default=settings.judge.samples or 1)
     if runner is None or (judge_name is not None and judge is None) or judge_samples is None:
         return None
     fail_fast = not getattr(args, "full_scoring", False)
     return _RecordPlan(runner, judge, judge_samples, runs, fail_fast)
+
+
+def _check_credentials(target: EvalTarget, settings: EvalSettings, judge_name: str | None) -> bool:
+    """Refuse before any paid call when an isolated harness or judge has no credential.
+
+    A runner or judge that takes an endpoint route is a CLI that runs isolated
+    under ``--record``; the fake runner, or no judge, needs no credential.
+    Returns whether the whole run is isolated (:func:`_ran_isolated`), from the
+    same classes, so the recorded flag and the check stay in step.
+    """
+    runner_cls = registry.load_runner_class(target.harness)
+    judge_cls = registry.load_judge_class(judge_name) if judge_name is not None else None
+    check_record_credentials(
+        target_endpoint=target.endpoint,
+        judge_endpoint=settings.judge.endpoint,
+        harness_isolated=runner_cls is not None and runner_cls.accepts_endpoint,
+        judge_isolated=judge_cls is not None and judge_cls.accepts_endpoint,
+        env=os.environ,
+    )
+    return _ran_isolated(runner_cls, judge_cls)
+
+
+def _ran_isolated(runner_cls: type[HarnessRunner] | None, judge_cls: type[Judge] | None) -> bool:
+    """Whether a record run with these classes ran isolated from personal settings.
+
+    A runner without a CLI (the fake) has nothing to isolate; a CLI runner or a
+    judge is isolated only when it takes a route (``accepts_endpoint``).
+
+    Example::
+
+        >>> _ran_isolated(None, None)
+        True
+    """
+    runner_ok = runner_cls is None or runner_cls.cli is None or runner_cls.accepts_endpoint
+    return runner_ok and (judge_cls is None or judge_cls.accepts_endpoint)
+
+
+@dataclass(frozen=True)
+class _Control:
+    """A pinned sample's control: its edition and the inputs digest of the edition's render."""
+
+    edition: Edition
+    inputs_digest: str
 
 
 @dataclass(frozen=True)
@@ -171,38 +230,53 @@ class _RecordPlan:
     runs: int
     fail_fast: bool = True
 
-    def check_prompts(self, samples: list[EvalSample]) -> None:
-        """Resolve every sample's prompt before the first paid run; refuse on the first bad one."""
+    def check_prompts(self, samples: list[EvalSample]) -> dict[str, str]:
+        """Render every sample's prompt before the first paid run; refuse on the first bad one.
+
+        Returns each sample's inputs digest, by id, hashed from that one render (#329).
+        """
+        digests: dict[str, str] = {}
         for sample in samples:
             try:
-                render_prompt(sample, strict=self.runner.requires_resolved_prompt)
+                text = render_prompt(sample, strict=self.runner.requires_resolved_prompt)
             except PromptResolutionError as exc:
                 raise RecordRefusedError(
                     f"sample {sample.id!r} has no prompt to run, so nothing was run: {exc}"
                 ) from exc
+            digests[sample.id] = inputs_digest(sample, text)
+        return digests
 
-    def control_editions(self, samples: list[EvalSample]) -> dict[str, Edition]:
-        """The edition of each pinned sample, loaded and rendered before the first paid run."""
-        editions: dict[str, Edition] = {}
+    def control_editions(self, samples: list[EvalSample]) -> dict[str, _Control]:
+        """Each pinned sample's control, its edition loaded and rendered before the first paid run."""
+        controls: dict[str, _Control] = {}
         for sample in samples:
             if sample.edition is None:
                 continue
             try:
                 edition = graded_source(sample).edition
                 assert edition is not None  # a pinned sample without head grades its edition
-                render_prompt(sample, strict=self.runner.requires_resolved_prompt, edition=edition)
+                strict = self.runner.requires_resolved_prompt
+                text = render_prompt(sample, strict=strict, edition=edition)
             except (EditionError, PromptResolutionError) as exc:
                 raise RecordRefusedError(
                     f"pinned sample {sample.id!r} cannot run on edition {sample.edition} as a "
                     f"control, so nothing was run: {exc}"
                 ) from exc
-            editions[sample.id] = edition
-        return editions
+            controls[sample.id] = _Control(edition, inputs_digest(sample, text))
+        return controls
 
     def run(
-        self, sample: EvalSample, index: int, total: int, *, edition: Edition | None = None
+        self,
+        sample: EvalSample,
+        index: int,
+        total: int,
+        inputs: str,
+        *,
+        edition: Edition | None = None,
     ) -> SampleRuns:
         """``sample``'s runs and digests on the current text, or on ``edition`` as a control.
+
+        ``inputs`` is the inputs digest of the render checked before the first run.
 
         Each run is reported on stderr as it ends.
         """
@@ -224,6 +298,7 @@ class _RecordPlan:
             prompt_digest=prompt_digest(sample, edition=edition),
             sample_digest=sample_digest(sample),
             results=results,
+            inputs_digest=inputs,
         )
 
     def _run_once(self, sample: EvalSample, edition: Edition | None) -> SampleResult:

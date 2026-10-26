@@ -21,8 +21,11 @@ import pytest
 
 from coding_agent_playbook.evals.endpoints import Endpoint
 from coding_agent_playbook.evals.prompting import PromptResolutionError, render_prompt
-from coding_agent_playbook.evals.run.claude_code_route import ClaudeCodeRoute
-from coding_agent_playbook.evals.run.claude_code_runner import ClaudeCodeRunner
+from coding_agent_playbook.evals.run.claude_code_route import ClaudeCodeKeyRoute, ClaudeCodeRoute
+from coding_agent_playbook.evals.run.claude_code_runner import (
+    ISOLATED_ALLOWED_TOOLS,
+    ClaudeCodeRunner,
+)
 from coding_agent_playbook.evals.run.fake_runner import write_files
 from coding_agent_playbook.evals.run.harness_runner import AgentRun, Candidate, materialize
 from coding_agent_playbook.evals.sample import EvalSample, SampleInvocation
@@ -178,6 +181,47 @@ def test_invoke_agent_child_env_keeps_parent_path(
     assert run.transcript == f"{os.environ['PATH']}|kept"
 
 
+_PRINT_VENV = (
+    "import os, sys; "
+    "sys.stdout.write(os.environ['PATH'].split(os.pathsep)[0] + '|' "
+    "+ os.environ.get('VIRTUAL_ENV', '<unset>'))"
+)
+
+
+@pytest.mark.parametrize(
+    "route",
+    [
+        None,
+        ClaudeCodeKeyRoute("k0"),
+        ClaudeCodeRoute(Endpoint("e", "anthropic", "https://x"), "m", token="t0k3n"),
+    ],
+    ids=["plain", "key-isolated", "routed"],
+)
+def test_invoke_agent_runs_on_the_scratch_venv(
+    tmp_path: Path, route: ClaudeCodeKeyRoute | ClaudeCodeRoute | None
+) -> None:
+    """The agent's ``python``/``pytest`` are the sample's, synced by ``materialize``."""
+    scratch = tmp_path / "scratch"
+    (scratch / ".venv" / "bin").mkdir(parents=True)
+    runner = ClaudeCodeRunner(command=[sys.executable, "-c", _PRINT_VENV], route=route)
+
+    run = runner._invoke_agent("p", scratch)
+
+    venv = scratch.absolute() / ".venv"
+    assert run.transcript == f"{venv / 'bin'}|{venv}"
+
+
+def test_invoke_agent_without_a_scratch_venv_keeps_the_parent_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("VIRTUAL_ENV", raising=False)
+    runner = ClaudeCodeRunner(command=[sys.executable, "-c", _PRINT_VENV])
+
+    run = runner._invoke_agent("p", tmp_path)
+
+    assert run.transcript == f"{os.environ['PATH'].split(os.pathsep)[0]}|<unset>"
+
+
 # --------------------------------------------------------------------------- #
 # Prompt-strictness: a real runner must not be fed a placeholder
 # --------------------------------------------------------------------------- #
@@ -284,6 +328,45 @@ def test_default_command_with_a_model_adds_the_model_flag() -> None:
 
 def test_no_model_leaves_the_cli_on_its_default_model() -> None:
     assert "--model" not in ClaudeCodeRunner()._build_command("p")
+
+
+_ISOLATED = ["--permission-mode", "acceptEdits", "--allowedTools", ISOLATED_ALLOWED_TOOLS]
+
+
+@pytest.mark.parametrize(
+    "route",
+    [
+        ClaudeCodeKeyRoute("k0"),
+        ClaudeCodeRoute(Endpoint("e", "anthropic", "https://x"), "m", token="t0k3n"),
+    ],
+)
+def test_a_routed_run_accepts_edits_and_allows_only_the_listed_tools(
+    route: ClaudeCodeKeyRoute | ClaudeCodeRoute,
+) -> None:
+    # An isolated run has no personal default mode, and -p auto-denies prompts.
+    argv = ClaudeCodeRunner(model="m", route=route)._build_command("p")
+    assert argv[-4:] == _ISOLATED
+    assert "bypassPermissions" not in argv
+
+
+def test_the_isolated_allow_list_is_read_search_git_python_pytest_uv_and_ls() -> None:
+    # No catch-all Bash and no network or file-deleting commands: anything else is denied.
+    tools = ISOLATED_ALLOWED_TOOLS.split(",")
+    assert tools == [
+        "Read",
+        "Grep",
+        "Glob",
+        "Bash(git:*)",
+        "Bash(python:*)",
+        "Bash(python3:*)",
+        "Bash(pytest:*)",
+        "Bash(uv:*)",
+        "Bash(ls:*)",
+    ]
+
+
+def test_an_unrouted_run_keeps_the_user_permission_mode() -> None:
+    assert "--permission-mode" not in ClaudeCodeRunner(model="m")._build_command("p")
 
 
 # --------------------------------------------------------------------------- #

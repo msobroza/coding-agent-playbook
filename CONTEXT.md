@@ -220,8 +220,19 @@ The engine's shared machinery for scoring work (metrics, checks, rubrics and how
 _Avoid_: evaluators
 
 **Release metrics**:
-The scores of every eval sample for one release under one harness and model, compared with the previous release's to flag regressions.
+The scores of the eval samples for one release under one harness and model, compared with the previous release's to flag regressions. Samples that are new or whose inputs digest changed, and every edition control (a pinned sample's runs on its frozen edition), are rerun; when the setup digest changed, all are; the rest are carried entries, so the file still holds one entry per sample.
 _Avoid_: benchmark, scorecard
+
+**Inputs digest**:
+A sha256, per eval sample, of the strict render of the prompt the sample sends (prompt body, included rules' text, templating, prompt arguments) together with the sample's own digest; when it differs from the previous release's entry, or that entry is missing, the sample reruns.
+_Avoid_: prompt digest (it hashes only the prompt's source)
+
+**Setup digest**:
+A sha256, per release metrics file, of everything outside the samples that decides scores: the eval target and its harness version, the run and judge settings, isolation and the engine's scoring code; when any part differs from the previous release's file, every sample reruns.
+
+**Carried entry**:
+A release metrics entry copied from the previous release's file, because it is not an edition control and neither its inputs digest nor the setup digest changed; it records the release and commit that measured it and never blocks a release.
+_Avoid_: cached result, skipped sample
 
 ### Third-party content
 

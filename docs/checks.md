@@ -618,6 +618,24 @@ flowchart TD
     rubric --> verdict
 ```
 
+Each run copies the sample's `setup/` into a scratch git repo. When `setup/` has a
+`pyproject.toml`, `uv sync` installs its dependencies into `<scratch>/.venv`. The
+agent runs with the sample's environment on `PATH`: `<scratch>/.venv/bin` comes
+first and `VIRTUAL_ENV` names that venv, for Claude Code and OpenCode runs, with or
+without an endpoint. So `python` and `pytest` in the agent's shell are the
+sample's own. The setups whose agent writes or runs tests declare a pytest
+`pythonpath`, so plain `pytest` imports their code and no agent has to edit the
+sample's config. generate-tests/* and refactor/* declare
+`[tool.pytest.ini_options] pythonpath = [".", "src"]`, so both `src.<module>` and
+bare `<module>` imports work. characterize/legacy-pricing, the review samples that
+ship tests and review-architecture/layer-leak declare `pythonpath = ["."]`. make-testable/inject-clock
+needs no such entry: its `tests/` is a package, so pytest puts `setup/` on the
+import path. Review-only setups without tests do not declare it. The `tests_pass`
+check is different: it runs `python -m pytest --cov` in the candidate tree with
+the interpreter that runs the playbook, not the scratch venv, which holds only the
+sample's declared dependencies. That interpreter must have `pytest` and
+`pytest-cov`, as the `dev` extra provides.
+
 A sample declares its success criteria as layers (SPEC §6.5.3):
 
 | Layer | What it declares |
@@ -811,7 +829,32 @@ Before any run, `--record` refuses these, with exit 2:
   a `provider/` prefix) and any name ending in `latest`, because the next release
   could grade another model;
 - with `--judge`, an `[evals.judge] model` that is missing or a moving alias;
+- a missing credential for the isolated harness or judge (see below);
 - a selected sample whose prompt cannot be resolved.
+
+`--record` runs the harness and the LLM judge isolated from your personal
+settings, as a target on an endpoint always is. Claude Code starts with an empty
+temporary `CLAUDE_CONFIG_DIR`, and OpenCode with empty temporary XDG config, data
+and state directories and without Claude Code instructions. Your own instructions,
+plugins, hooks, MCP servers and login do not reach a measured run, so a recording
+can be reproduced on another machine, and the judge starts in seconds. The
+isolated judge also starts in an empty temporary directory, so no project
+`CLAUDE.md` or `.claude/` settings reach it. Isolated Claude Code agent runs use
+`--permission-mode acceptEdits` with an allow list of read and search tools and of
+`git`, `python`, `pytest`, `uv` and `ls` in the shell, because nobody can answer a
+prompt in print mode: the agent edits files in its scratch repo, any other command
+is denied, and recorded scores no longer depend on a personal default mode. Inherited
+`ANTHROPIC_*`, `CLAUDE_CODE_USE_*` and OAuth variables are dropped (for OpenCode,
+also other provider keys and `OPENCODE_*` and `OTEL_*` variables). Each process
+therefore needs a credential in the environment: a target or judge on an endpoint
+uses the token named by that endpoint's `token_env` (or its `token_command`), and
+one without an endpoint uses `ANTHROPIC_API_KEY`. An OpenCode target without an
+endpoint sends its `model` exactly as written, so name it `anthropic/<model id>`:
+any other model is refused with exit 2 before the first paid call.
+When a credential is missing, `--record` exits 2 before the first paid call, and
+the message names `ANTHROPIC_API_KEY` and `token_env`. The key goes only into the
+child environment: never into argv, the logs or the file. The `fake` runner needs
+no credential. A plain `--run` without `--record` keeps your own settings.
 
 A sample that cannot be scored stops the recording, so a file never lacks a sample
 silently. Once written, the command exits 0 whatever the scores are.
@@ -822,10 +865,10 @@ The file is JSON with `"schema_version": 1`. It holds:
 | --- | --- |
 | `release`, `commit` | the engine version, and the checked-out commit (`null` outside git) |
 | `previous` | `null`; the regression check sets the baseline release it compared with |
-| `target` | `name`, `harness`, `harness_version` (the CLI's `--version`), `model`, `reported_model` (the model the harness reported most often), `label`, `endpoint`, `price`, `judge_model` and `runs` |
+| `target` | `name`, `harness`, `harness_version` (the CLI's `--version`), `model`, `reported_model` (the model the harness reported most often), `label`, `endpoint`, `price`, `judge_model`, `runs` and `isolated` (`true`: the harness and the judge ran without your personal settings; absent in older files) |
 | `summary` | `samples`, `runs`, `pass_rate` over every run, `mean_score` over the samples, total `tokens` and `cost_usd` |
-| `samples.<id>` | `prompt_id`, `graded` (`head`, the current text), `prompt_digest` (the prompt's artifact digest), `sample_digest` (`sample.toml` and `setup/`), `passes` out of `runs`, `mean_score`, `stdev`, `checks` (the mean score of each check that ran), `duration_seconds_mean`, `tokens_mean` and `cost_usd_mean` |
-| `controls.<id>` | a pinned sample's runs on its frozen edition, in the same shape, with `graded` the edition tag; left out of `summary` |
+| `samples.<id>` | `prompt_id`, `graded` (`head`, the current text), `prompt_digest` (the prompt's artifact digest), `sample_digest` (`sample.toml` and `setup/`), `inputs_digest` (the strict render of what the agent received, rules included, with `sample_digest`; absent in older files), `passes` out of `runs`, `mean_score`, `stdev`, `checks` (the mean score of each check that ran), `duration_seconds_mean`, `tokens_mean` and `cost_usd_mean` |
+| `controls.<id>` | a pinned sample's runs on its frozen edition, in the same shape, with `graded` the edition tag and `inputs_digest` hashing the edition's render; left out of `summary` |
 
 Every sample grades the current text. A sample pinned to an edition also runs on
 that edition as a control, `N` times too, so `--record` costs one more set of runs
@@ -885,8 +928,9 @@ pull request. In its scratch checkout of `origin/main`, before any release file 
 written, it runs `playbook eval --run --all --target <name> --record
 catalog/releases/<version>/metrics/<name>.json` on that checkout's engine for every
 target in the `[evals] release` list of the committed `.coding-agent-playbook.toml`,
-with `--judge llm` when `[evals.judge] model` is set. It sets each file's `release`
-to the version being prepared and compares it with the previous release's file for
+with `--judge llm` when `[evals.judge] model` is set. Those runs are isolated, so
+set `ANTHROPIC_API_KEY` (or each endpoint's `token_env`) before you start. It
+sets each file's `release` to the version being prepared and compares it with the previous release's file for
 the same target, as `--check-regressions` does, storing the comparison in the file.
 A target without a previous file is recorded without a comparison.
 
