@@ -1,4 +1,4 @@
-"""The task registry: the only place that knows the eval tasks (#302, ADR 0012).
+"""The task registry: the only place that knows the tasks of the eval samples (#302, ADR 0012).
 
 A **task** is the eval samples of one prompt, grouped under that prompt's id. In
 every layer they live at ``eval_samples/<prompt>/<name>/sample.toml``, and a
