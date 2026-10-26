@@ -69,10 +69,11 @@ def test_plugin_page_has_credit_how_to_enable_capabilities_and_skills() -> None:
     assert page.index("## Skills") < page.index("### grill")
 
 
-def test_prompts_page_gives_each_prompt_its_slash_command_and_sets() -> None:
+def test_prompts_page_gives_each_prompt_its_slash_command() -> None:
     page = _pages()["prompts.md"]
 
-    assert "| Review | `/review` | Review the change. | v1, v2 |" in page
+    assert "| Review | `/review` | Review the change. |\n" in page
+    assert "Prompt sets" not in page
 
 
 def test_hooks_page_orders_families_like_the_hooks_guide_then_new_ones() -> None:

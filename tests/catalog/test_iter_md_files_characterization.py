@@ -16,7 +16,6 @@ from pathlib import Path
 
 import pytest
 
-from coding_agent_playbook.catalog.prompt_sets import prompt_set_dirs
 from coding_agent_playbook.catalog.skill_rules import iter_md_files
 from tests._catalog import CATALOG_ROOT, CORE_ROOT
 from tests._link_scan_reference import reference_iter_md_files
@@ -51,10 +50,8 @@ def test_catalog_directories_list_exactly_as_before() -> None:
 
 
 @pytest.mark.catalog
-def test_the_core_prompts_root_with_its_skipped_sets_lists_exactly_as_before() -> None:
-    prompts = CORE_ROOT / "prompts"
-
-    assert _assert_unchanged(prompts, prompt_set_dirs(prompts))
+def test_the_core_prompts_root_lists_exactly_as_before() -> None:
+    assert _assert_unchanged(CORE_ROOT / "prompts")
 
 
 @pytest.mark.catalog

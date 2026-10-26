@@ -38,7 +38,7 @@ _SUPERPOWERS_PLUGIN_NAME = "coding_agent_playbook.plugins.superpowers"
 _DEMO_PLUGIN_NAME = "coding_agent_playbook.plugins.demo"
 #: The shipped sample copied into the synthetic plugin, and the prompt it names.
 _SHIPPED_SAMPLE_ID = "explain/pure-function"
-_SHIPPED_PROMPT_FILE = "explain.md"
+_SHIPPED_PROMPT_FILE = "explain.md.j2"
 #: The id the shipped prompt declares, and the plugin sample's id (distinctive, for output scans).
 _SHIPPED_PROMPT_ID = "explain"
 _DEMO_SAMPLE_ID = "explain/demo-plugin-eval-sample"

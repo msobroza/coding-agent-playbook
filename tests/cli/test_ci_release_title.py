@@ -162,7 +162,7 @@ def test_the_rule_lists_the_paths_of_the_merge_base_range(
     ("path", "shipped"),
     [
         ("catalog/core/rules/always/a.md", True),
-        ("catalog/core/prompts/v2/review.md.j2", True),
+        ("catalog/core/prompts/review.md.j2", True),
         ("catalog/core/skills/forge/SKILL.md", True),
         ("catalog/core/hooks/safety/secret-content-guard/HOOK.md", True),
         ("catalog/plugins/superpowers/skills/x/SKILL.md", True),

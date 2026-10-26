@@ -8,8 +8,7 @@ into the work directory, never committed); HEAD defaults to the ``HEAD`` ref.
 The compared samples come from the task registry: every sample, or, against an
 edition, the samples of the prompts the edition grades (or the samples a task
 name or a sample id selects). Each runs ``--compare-runs`` times (default 3)
-per side; ``--base-prompt-set`` and ``--prompt-set`` pick each side's prompt
-set. Every sample must render on both sides before the first paid run.
+per side. Every sample must render on both sides before the first paid run.
 ``--runner``, ``--judge``, ``--judge-samples`` and ``--full-scoring`` pass through
 to every run, so both sides run with the same runner (and its configured model)
 and judge. The table (or ``--format json``) names them, flags regressions by the
@@ -21,14 +20,14 @@ error, a side that cannot be prepared or a sample that does not render
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Final
+from typing import Final
 
-from coding_agent_playbook.catalog.prompt_sets import DEFAULT_PROMPT_SET, PROMPT_SETS
 from coding_agent_playbook.commands._eval_enumerate import _DEFAULT_RUNNER
 from coding_agent_playbook.commands._eval_options import (
     judge_sample_count,
@@ -59,9 +58,6 @@ from coding_agent_playbook.release.edition_build import EditionBuildError, tag_m
 from coding_agent_playbook.release.edition_freeze import graded_prompt_ids
 from coding_agent_playbook.validation.context import SyncContext
 
-if TYPE_CHECKING:
-    import argparse
-
 #: Runs per eval sample on each side (D37).
 _DEFAULT_COMPARE_RUNS: Final = 3
 #: The HEAD side when ``--compare`` names only the base: the committed ``HEAD``.
@@ -89,13 +85,8 @@ def configure_compare(parser: argparse.ArgumentParser) -> None:
         "HEAD ref) and compare them; a side is a git ref, head (the current text in "
         "place) or edition:<tag> (needs the agent's credentials)",
     )
-    parser.add_argument(
-        "--base-prompt-set",
-        choices=PROMPT_SETS,
-        dest="base_prompt_set",
-        default=DEFAULT_PROMPT_SET,
-        help="--compare: prompt set the base side grades (default: v1; --prompt-set picks HEAD's)",
-    )
+    # ADR 0012: removed with the prompt sets, hidden; removed_flag_error() refuses it.
+    parser.add_argument("--base-prompt-set", dest="removed_base_prompt_set", help=argparse.SUPPRESS)
     parser.add_argument(
         "--compare-runs",
         type=int,
@@ -183,21 +174,7 @@ def _sides(args: argparse.Namespace) -> tuple[ComparisonSide, ComparisonSide] | 
         print(f"error: --compare takes a base and a head side, got {names}", file=sys.stderr)
         return None
     head_name = names[1] if len(names) == _SIDES else _DEFAULT_HEAD_SIDE
-    base = ComparisonSide.parse(names[0], args.base_prompt_set)
-    head = ComparisonSide.parse(head_name, args.prompt_set)
-    _warn_ignored_prompt_set(base, "--base-prompt-set")
-    _warn_ignored_prompt_set(head, "--prompt-set")
-    return base, head
-
-
-def _warn_ignored_prompt_set(side: ComparisonSide, flag: str) -> None:
-    """Warn that ``flag`` does not apply to ``side`` when it is an edition (it holds one text)."""
-    if side.kind == "edition" and side.prompt_set != DEFAULT_PROMPT_SET:
-        print(
-            f"warning: {flag} {side.prompt_set} is ignored for {side.ref}: "
-            "an edition grades its own text",
-            file=sys.stderr,
-        )
+    return ComparisonSide.parse(names[0]), ComparisonSide.parse(head_name)
 
 
 def _hint_id_as_side(names: list[str], registry: TaskRegistry) -> None:

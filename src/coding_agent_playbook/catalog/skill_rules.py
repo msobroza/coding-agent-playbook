@@ -31,8 +31,7 @@ SKILL_MD_NAMES = ("SKILL.md", "SKILL.md.j2")
 def iter_md_files(root: Path, *, skip: Sequence[Path] = ()) -> Iterator[Path]:
     """Yield ``*.md`` and ``*.md.j2`` files under ``root`` in deterministic order.
 
-    Files under a directory of ``skip`` are left out (a prompts root skips its
-    later prompt sets, ``catalog.prompt_sets.prompt_set_dirs``).
+    Files under a directory of ``skip`` are left out.
 
     Example: ``list(iter_md_files(Path("playbook/rules")))`` -> ``[PosixPath('playbook/rules/x.md')]``.
     """

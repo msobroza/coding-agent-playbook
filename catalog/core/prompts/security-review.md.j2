@@ -21,6 +21,25 @@ You are reviewing code for security vulnerabilities, with a focus on the failure
 
 Read the code under review first, then walk the priorities below top-to-bottom. Report findings, and for each one show the concrete refactor that closes it.
 
+## Skills for this task
+
+{% if skill_active('web-application') or skill_active('ml-data') %}
+Load these skills and read the rules their index points to for the code under review:
+
+{% if skill_active('web-application') %}
+- `web-application`: how requests, authentication and database access are handled safely here.
+{% endif %}
+{% if skill_active('ml-data') %}
+- `ml-data`: how models and data are loaded and saved safely here.
+{% endif %}
+{% else %}
+No core skill of this repository covers this task; follow the conventions the surrounding code already uses.
+{% endif %}
+
+## If something is unclear
+
+When the code under review or its trust boundary is unclear, ask the user before you start{% if framework_skill('clarify') %}, using the `{{ framework_skill('clarify') }}` skill{% endif %}. Where untrusted bytes enter decides which findings are real.
+
 ## Priorities, in order
 
 1. **Unsafe deserialization.** The headline ML risk. Any `pickle` / `joblib.load` / `torch.load` (without `weights_only=True`) / `np.load` (with pickle) / `pandas.read_pickle` / `yaml.load` reachable from an artifact, cache entry, request, or file the codebase did not produce itself is arbitrary code execution. Flag it and refactor to a pickle-free format or a `weights_only` / `safe_load` / `allow_pickle=False` form.
@@ -34,6 +53,22 @@ Read the code under review first, then walk the priorities below top-to-bottom. 
 2. For each finding, name the priority bucket, quote the offending line, and explain the exploit in one sentence ("a poisoned `.pkl` in the model bucket runs code on load").
 3. Propose the minimal safe refactor — prefer changing the *format* (safetensors/parquet/json) over adding a fragile check.
 4. Re-read your findings; drop anything that is style-only or already safe. Do not invent vulnerabilities to look thorough — if the code is safe, say so.
+
+## Check and improve your work
+
+{% if framework_skill('review') %}
+- Compare your findings with the checklist of the `{{ framework_skill('review') }}` skill.
+{% endif %}
+{% if framework_skill('verify') %}
+- Before you report a finding, confirm it as the `{{ framework_skill('verify') }}` skill asks: name the input that exploits it.
+{% endif %}
+{% if skill_active('web-application') and has_framework('fastapi') %}
+- `request-lifecycle.md` in the web-application skill says which request step owns each finding and its fix.
+{% endif %}
+{% if skill_active('ml-data') and (has_ml_dep('numpy') or has_ml_dep('pandas') or has_ml_dep('polars')) %}
+- `review-signals.md` in the ml-data skill maps what you see in array and frame code to the rule that fixes it.
+{% endif %}
+- Re-read every finding: drop anything already safe, and keep each refactor minimal.
 
 ## Output format
 

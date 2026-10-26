@@ -517,7 +517,6 @@ def test_evals_and_yaml_load_only_on_an_eval_sample_edit(
                 "catalog._hook_walk",
                 "catalog.skill_rules",
                 "catalog.layers",
-                "catalog.prompt_sets",
                 "catalog.source",
                 "config",
                 "evals",

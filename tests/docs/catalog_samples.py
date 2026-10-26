@@ -60,7 +60,7 @@ SAMPLE_SNAPSHOT = CatalogSnapshot(
     core_skills=(_TESTING,),
     always_rules=(RuleEntry("project-context", "Project context", "Read the glossary."),),
     plugins=(_PLUGIN,),
-    prompts=(PromptEntry("review", "Review", "review", "Review the change.", ("v1", "v2")),),
+    prompts=(PromptEntry("review", "Review", "review", "Review the change."),),
     hooks=(
         HookEntry("zz-new", "New", "A new family.", "zeta", ("stop",), "opt-in", ("opencode",)),
         HookEntry("log", "Log", "Log decisions.", "audit", ("stop",), "default", ("claude_code",)),

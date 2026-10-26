@@ -1,9 +1,9 @@
 """``playbook sync`` writes the review prompt as the ``review-core`` skill Codex reads (#274).
 
 Codex receives no prompts, so with ``shared_skills`` on, sync renders the review
-prompt of the selected prompt set into ``.agents/skills/review-core/`` (rules
-inlined, no command frontmatter), records it in the lockfile and settles it like
-any skill once the adapter is off. No other core prompt becomes a skill there.
+prompt into ``.agents/skills/review-core/`` (rules inlined, no command
+frontmatter), records it in the lockfile and settles it like any skill once the
+adapter is off. No other core prompt becomes a skill there.
 
 Claude Code does not read ``.agents/skills/``, and its output is byte-identical
 with the adapter on or off. OpenCode scans that root too, but adds no command for
@@ -38,18 +38,18 @@ pytestmark = pytest.mark.catalog
 _HARNESSES: Final = '["claude_code", "opencode"]'
 _WITH_SHARED: Final = '["claude_code", "opencode", "shared_skills"]'
 _SKILL_DIR: Final = ".agents/skills/review-core"
-#: A heading only the v2 review body has, so the test tells the two sets apart.
-_V2_ONLY_HEADING: Final = "## Skills for this task"
+#: A heading only the current review text has (the former v2 set, ADR 0012), not v1.
+_CURRENT_TEXT_HEADING: Final = "## Skills for this task"
 
 
 def _ns(repo: Path) -> argparse.Namespace:
     return argparse.Namespace(repo_root=str(repo), check=False)
 
 
-def _config(adapters: str, prompts_line: str = "") -> str:
+def _config(adapters: str) -> str:
     default = _DEFAULT_CONFIG.replace('["continue", "claude_code", "opencode"]', adapters)
     assert default != _DEFAULT_CONFIG, "the default adapters line moved; update this test"
-    return prompts_line + default
+    return default
 
 
 def _synced(root: Path, factory: SyntheticRepoFactory, config_text: str) -> Path:
@@ -73,11 +73,10 @@ def _tree(repo: Path, top: str) -> dict[str, bytes]:
     }
 
 
-@pytest.mark.parametrize("prompts_line", ["", 'prompts = "v2"\n'], ids=["v1", "v2"])
-def test_sync_writes_the_selected_review_prompt_as_the_review_core_skill(
-    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory, prompts_line: str
+def test_sync_writes_the_current_review_prompt_as_the_review_core_skill(
+    tmp_path: Path, make_synthetic_repo: SyntheticRepoFactory
 ) -> None:
-    repo = _synced(tmp_path / "repo", make_synthetic_repo, _config(_WITH_SHARED, prompts_line))
+    repo = _synced(tmp_path / "repo", make_synthetic_repo, _config(_WITH_SHARED))
 
     frontmatter, body = split_frontmatter(
         (repo / _SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
@@ -88,7 +87,7 @@ def test_sync_writes_the_selected_review_prompt_as_the_review_core_skill(
     assert body.lstrip().startswith("<!--")
     assert "# Review" in body
     assert "## Reference rules" in body
-    assert (_V2_ONLY_HEADING in body) is bool(prompts_line)
+    assert _CURRENT_TEXT_HEADING in body
     assert _lock_rows(repo, f"{_SKILL_DIR}/") == {f"{_SKILL_DIR}/SKILL.md": ("prompt", "review")}
 
 

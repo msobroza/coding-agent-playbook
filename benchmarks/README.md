@@ -15,8 +15,8 @@ same model:
 | Key | Harness | Reviewer | What the agent receives |
 |---|---|---|---|
 | `opencode-review` | OpenCode | built-in `/review` | the sample's request only, as `opencode run --command review "<request>"` |
-| `playbook-v1` | OpenCode | playbook review, prompt set v1 | the rendered v1 `review` prompt + the request, as `playbook eval --run --prompt-set v1` builds it |
-| `playbook-v2` | OpenCode | playbook review, prompt set v2 | the same, from prompt set v2 |
+| `playbook-v1` | OpenCode | playbook review, prompt set v1 | the rendered v1 `review` prompt + the request, as `playbook eval --run` builds it (v1 is now edition `v0.1.0`) |
+| `playbook-v2` | OpenCode | playbook review, prompt set v2 | the same, from prompt set v2 (now the current text) |
 | `claude-code-review` | Claude Code | built-in `/code-review` | the request as the command's arguments: `claude -p "/code-review <request>"` |
 | `claude-playbook-v2` | Claude Code | playbook review, prompt set v2 | the rendered v2 prompt + the request, as for `playbook-v2` |
 

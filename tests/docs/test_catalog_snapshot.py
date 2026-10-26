@@ -80,9 +80,10 @@ def test_each_bundled_plugin_carries_its_credit_and_framework_name(
         assert plugin.name, plugin.layer
 
 
-def test_prompts_list_both_prompt_sets(snapshot: CatalogSnapshot) -> None:
-    assert snapshot.prompts
-    assert all(prompt.prompt_sets == ("v1", "v2") for prompt in snapshot.prompts)
+def test_prompts_list_each_prompt_id_once(snapshot: CatalogSnapshot) -> None:
+    ids = [prompt.id for prompt in snapshot.prompts]
+    assert ids
+    assert ids == sorted(set(ids))
 
 
 def test_source_paths_are_repo_relative(snapshot: CatalogSnapshot) -> None:

@@ -95,15 +95,12 @@ skills an agent follows from idea to merge. Choose it with
 `playbook init --framework superpowers | mattpocock | none`. The default is `none`.
 The option writes the committed `framework` key.
 
-A prompt set is one complete version of the core prompts, the slash commands you
-invoke by name. Choose it with the top-level key `prompts = "v1"` or
-`prompts = "v2"`. The default is `v1`.
-
-The v2 prompt set keeps the v1 names and `includes_rules`. It also tells the agent
-which skills to load and how to check its work. Switching changes only the prompt
-text, so the command list stays the same. A prompt with no v2 twin, that is, no
-prompt of the same id in `prompts/v2/`, keeps its v1 text. Eval samples keep grading
-v1. To grade v2, run `playbook eval <id> --run --prompt-set v2`.
+Your repo always gets the current text of the core prompts, the slash commands you
+invoke by name, from the release you installed. Each prompt tells the agent which
+skills to load and how to check its work. There is no choice of prompt version: the
+`prompts` key that once picked `"v1"` or `"v2"` was removed, and a config that still
+sets it fails to load with a message saying so. Delete the line. The prompt names and
+slash commands did not change.
 
 Next, install the git hooks with pre-commit. Install all three hook types, so that
 the automatic sync runs after checkouts and pulls:

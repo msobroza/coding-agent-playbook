@@ -15,7 +15,7 @@ step 9): pristine copies are deleted, edited or tracked ones kept and owned
 Rules are no-ops here: always rules reach every assistant through ``AGENTS.md``,
 and scoped rules travel inside the skills this adapter writes (as the ``rules/``
 files of the skill each one names). Prompts go through the harness adapters,
-except the review prompt of the selected prompt set: Codex receives no prompts,
+except the review prompt: Codex receives no prompts,
 so it is written here as the ``review-core`` skill (``$review-core`` on Codex,
 #274), rendered like an ``agent_harness`` prompt leaf (rules inlined, no command
 frontmatter; ``rendering.prompt_skill``). OpenCode also scans this root but adds
@@ -55,8 +55,7 @@ SHARED_SKILLS_ROOT = Path(".agents") / "skills"
 #: Where engines before SPEC v0.21 wrote this adapter's skills. Declared as a retired
 #: location so the next sync settles that tree by the leftover policy (SPEC §4.2 step 9).
 RETIRED_SHARED_SKILLS_LOCATION = "shared_skills/"
-#: The one prompt this adapter writes, by id, and the skill id it takes (#274). Twins
-#: share the id, so the text written is the selected prompt set's.
+#: The one prompt this adapter writes, by id, and the skill id it takes (#274).
 REVIEW_PROMPT_ID: Final = "review"
 REVIEW_SKILL_ID: Final = "review-core"
 

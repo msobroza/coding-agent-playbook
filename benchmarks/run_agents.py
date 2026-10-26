@@ -30,11 +30,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import _bench
 
+from coding_agent_playbook.catalog.roots import catalog_root
 from coding_agent_playbook.evals.prompting import render_prompt
 from coding_agent_playbook.evals.run.agent_env import unattended_agent_env
 from coding_agent_playbook.evals.run.claude_code_runner import ClaudeCodeRunner
 from coding_agent_playbook.evals.run.harness_runner import AgentRun, materialize
 from coding_agent_playbook.evals.run.opencode_runner import OpenCodeRunner
+from coding_agent_playbook.release.edition import load_edition
+from coding_agent_playbook.release.edition_digests import edition_dir
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -64,7 +67,7 @@ def opencode_command(experiment: _bench.Experiment, scratch: Path) -> list[str]:
         "--dir", str(scratch),
         "--model", _bench.AGENT_MODEL,
     ]  # fmt: skip
-    if experiment.prompt_set is None:
+    if experiment.playbook_text is None:
         return [*base, "--command", "review", "{prompt}"]
     return [*base, "{prompt}"]
 
@@ -135,8 +138,11 @@ def agent_prompt(experiment: _bench.Experiment, sample: EvalSample) -> str:
     OpenCode's ``/review`` takes the request through ``--command review``;
     Claude Code's ``/code-review`` takes it as the slash command's arguments.
     """
-    if experiment.prompt_set is not None:
-        return render_prompt(sample, strict=True, prompt_set=experiment.prompt_set)
+    if experiment.playbook_text == "head":
+        return render_prompt(sample, strict=True)
+    if experiment.playbook_text is not None:
+        edition = load_edition(edition_dir(catalog_root(), experiment.playbook_text))
+        return render_prompt(sample, strict=True, edition=edition)
     if experiment.harness == "claude":
         return f"/code-review {sample.invocation.prompt_args}"
     return sample.invocation.prompt_args
