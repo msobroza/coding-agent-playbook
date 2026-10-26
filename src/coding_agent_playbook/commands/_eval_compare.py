@@ -1,17 +1,22 @@
-"""``playbook eval --compare <base-ref>``: the opt-in base-vs-HEAD eval comparison (D37, D76).
+"""``playbook eval --compare BASE [HEAD]``: the opt-in two-side eval comparison (D37, D76; #281 ticket 14).
 
 Off by default, never run by CI or the final gate: each run drives a real agent,
-so it needs the owner's credentials and costs money. With ``--compare``, every
-eval sample of the seven prompts whose included rule bodies change (or the
-samples a task name or a sample id selects) runs ``--compare-runs`` times (default 3) on a detached
-checkout of the base ref, graded with ``--base-prompt-set``, and on one of HEAD,
-graded with ``--prompt-set`` (both default v1, so v1 and v2 can be compared on one
-ref with ``--compare HEAD``). ``--runner``, ``--judge``, ``--judge-samples`` and
-``--full-scoring`` pass through to every run, so both sides run with the same
-runner (and its configured model) and judge. The table (or ``--format json``)
-names them and flags regressions by the D37 thresholds; it is advisory, so the
-exit code is ``0`` whatever it shows, and ``2`` on a usage error or a ref that
-does not check out (``ComparisonError``, an ``ExitTwoError``).
+so it needs the owner's credentials and costs money. A side is a git ref
+(checked out as a detached worktree), ``head`` (the current text in place) or
+``edition:<tag>`` (release ``<tag>``'s graded set, built from the tag's manifest
+into the work directory, never committed); HEAD defaults to the ``HEAD`` ref.
+The compared samples come from the task registry: every sample, or, against an
+edition, the samples of the prompts the edition grades (or the samples a task
+name or a sample id selects). Each runs ``--compare-runs`` times (default 3)
+per side; ``--base-prompt-set`` and ``--prompt-set`` pick each side's prompt
+set. Every sample must render on both sides before the first paid run.
+``--runner``, ``--judge``, ``--judge-samples`` and ``--full-scoring`` pass through
+to every run, so both sides run with the same runner (and its configured model)
+and judge. The table (or ``--format json``) names them, flags regressions by the
+D37 thresholds and reports a side with no scorable run as unscorable; it is
+advisory, so the exit code is ``0`` whatever it shows, and ``2`` on a usage
+error, a side that cannot be prepared or a sample that does not render
+(``ComparisonError``, an ``ExitTwoError``).
 """
 
 from __future__ import annotations
@@ -39,12 +44,19 @@ from coding_agent_playbook.evals.comparison import (
 )
 from coding_agent_playbook.evals.run.comparison_runner import (
     ComparisonPlan,
-    ComparisonSide,
     PlaybookEvalRun,
-    git_worktree_checkout,
+    SideRenderCheck,
     run_comparison,
 )
+from coding_agent_playbook.evals.run.comparison_sides import (
+    ComparisonSide,
+    SideSources,
+    git_edition_builder,
+    git_worktree_checkout,
+)
 from coding_agent_playbook.evals.task_registry import TaskRegistry, TaskRegistryError
+from coding_agent_playbook.release.edition_build import EditionBuildError, tag_manifest
+from coding_agent_playbook.release.edition_freeze import graded_prompt_ids
 from coding_agent_playbook.validation.context import SyncContext
 
 if TYPE_CHECKING:
@@ -52,6 +64,10 @@ if TYPE_CHECKING:
 
 #: Runs per eval sample on each side (D37).
 _DEFAULT_COMPARE_RUNS: Final = 3
+#: The HEAD side when ``--compare`` names only the base: the committed ``HEAD``.
+_DEFAULT_HEAD_SIDE: Final = "HEAD"
+#: A comparison has a base and a head side.
+_SIDES: Final = 2
 _NO_JUDGE_NOTE: Final = (
     "note: no --judge, so the compared score is the deterministic gate score only; "
     "pass --judge llm to compare judge scores"
@@ -67,9 +83,11 @@ def configure_compare(parser: argparse.ArgumentParser) -> None:
     """
     parser.add_argument(
         "--compare",
-        metavar="BASE_REF",
-        help="opt-in and paid: run the eval samples of the rule-including prompts on "
-        "BASE_REF and on HEAD and compare them (needs the agent's credentials)",
+        nargs="+",
+        metavar=("BASE", "HEAD"),
+        help="opt-in and paid: run the eval samples on BASE and on HEAD (default: the "
+        "HEAD ref) and compare them; a side is a git ref, head (the current text in "
+        "place) or edition:<tag> (needs the agent's credentials)",
     )
     parser.add_argument(
         "--base-prompt-set",
@@ -88,8 +106,8 @@ def configure_compare(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--compare-out",
         dest="compare_out",
-        help="--compare: directory for the checkouts and every run's JSON report "
-        "(default: a new temporary directory)",
+        help="--compare: directory for the checkouts, built editions and every run's "
+        "JSON report (default: a new temporary directory)",
     )
 
 
@@ -105,32 +123,39 @@ class _AgentOptions:
 def run_compare(args: argparse.Namespace, repo_root: Path) -> int:
     """Run the comparison ``args`` describe and print it; ``2`` on a usage error.
 
-    A ref that does not check out raises ``ComparisonError``, which the CLI maps to 2.
+    A side that cannot be prepared or a sample that does not render raises
+    ``ComparisonError``, which the CLI maps to 2.
 
     Example::
 
-        >>> argv = ["eval", "--compare", "origin/main", "--judge", "llm"]
+        >>> argv = ["eval", "--compare", "edition:v0.1.0", "head", "--judge", "llm"]
         >>> run_compare(build_parser().parse_args(argv), repo)  # doctest: +SKIP
         0
     """
     options = _agent_options(args) if _runs_valid(args.compare_runs) else None
-    if options is None:
+    sides = _sides(args) if options is not None else None
+    if options is None or sides is None:
         return 2
-    sample_ids = _selected_samples(getattr(args, "id", None), repo_root)
-    if sample_ids is None:
+    registry = _registry(repo_root)
+    sample_ids = _selected_samples(args, registry, repo_root, sides) if registry else None
+    if registry is None or sample_ids is None:
         return 2
     if options.judge is None:
         print(_NO_JUDGE_NOTE, file=sys.stderr)
     work_dir = Path(args.compare_out or tempfile.mkdtemp(prefix="playbook-eval-compare-"))
+    sources = SideSources(
+        repo_root, git_worktree_checkout(repo_root), git_edition_builder(repo_root)
+    )
+    samples = {sample_id: registry.sample(sample_id) for sample_id in sample_ids}
     plan = ComparisonPlan(
         sample_ids,
         args.compare_runs,
         PlaybookEvalRun(options.flags),
-        git_worktree_checkout(repo_root),
+        sources,
         work_dir,
+        SideRenderCheck(samples),
     )
-    base = ComparisonSide(args.compare, args.base_prompt_set)
-    head = ComparisonSide("HEAD", args.prompt_set)
+    base, head = sides
     rows = run_comparison(plan, base, head)
     setup = ComparisonSetup(base.label, head.label, options.runner, options.judge)
     _print_comparison(rows, setup, getattr(args, "format", None) or "text")
@@ -151,27 +176,63 @@ def _runs_valid(runs: int) -> bool:
     return runs >= 1
 
 
-def _selected_samples(name: str | None, repo_root: Path) -> list[str] | None:
-    """The compared eval samples, or those ``name`` (a task or a sample id) selects.
+def _sides(args: argparse.Namespace) -> tuple[ComparisonSide, ComparisonSide] | None:
+    """The base and HEAD sides ``--compare`` names, or ``None`` after an error line."""
+    names: list[str] = list(args.compare)
+    if len(names) > _SIDES:
+        print(f"error: --compare takes a base and a head side, got {names}", file=sys.stderr)
+        return None
+    head_name = names[1] if len(names) == _SIDES else _DEFAULT_HEAD_SIDE
+    base = ComparisonSide.parse(names[0], args.base_prompt_set)
+    return base, ComparisonSide.parse(head_name, args.prompt_set)
 
-    ``None`` (after an error line) when ``name`` selects no compared sample.
-    """
+
+def _registry(repo_root: Path) -> TaskRegistry | None:
     ctx = SyncContext.from_repo(repo_root)
     try:
-        registry = TaskRegistry.from_catalog(ctx.artifact_source, ctx.prompts_resolved)
-        compared = compared_sample_ids(registry)
-        selected = [s.id for s in registry.select(name)] if name is not None else compared
+        return TaskRegistry.from_catalog(ctx.artifact_source, ctx.prompts_resolved)
     except TaskRegistryError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return None
-    if not set(selected) <= set(compared):
-        print(
-            f"error: {name!r} is not a task or an eval sample of a compared prompt; "
-            f"compared eval samples: {', '.join(compared)}",
-            file=sys.stderr,
-        )
+
+
+def _selected_samples(
+    args: argparse.Namespace,
+    registry: TaskRegistry,
+    repo_root: Path,
+    sides: tuple[ComparisonSide, ComparisonSide],
+) -> list[str] | None:
+    """The compared eval samples, or those the positional name selects.
+
+    Against an edition, the default is the samples of the prompts every edition
+    side grades. ``None`` (after an error line) on an unknown name, an
+    unreadable tag or an empty selection.
+    """
+    name: str | None = getattr(args, "id", None)
+    try:
+        if name is not None:
+            return [sample.id for sample in registry.select(name)]
+        selected = compared_sample_ids(registry, _edition_prompts(repo_root, sides))
+    except (TaskRegistryError, EditionBuildError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return None
+    if not selected:
+        print("error: no eval sample to compare: the editions grade no task", file=sys.stderr)
         return None
     return selected
+
+
+def _edition_prompts(
+    repo_root: Path, sides: tuple[ComparisonSide, ComparisonSide]
+) -> set[str] | None:
+    """The prompts every edition side grades (its tag's manifest), ``None`` without an edition."""
+    graded: set[str] | None = None
+    for side in sides:
+        if side.kind != "edition":
+            continue
+        prompts = set(graded_prompt_ids(tag_manifest(repo_root, side.tag)[1]))
+        graded = prompts if graded is None else graded & prompts
+    return graded
 
 
 def _agent_options(args: argparse.Namespace) -> _AgentOptions | None:

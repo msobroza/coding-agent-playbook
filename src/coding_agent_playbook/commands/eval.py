@@ -51,7 +51,9 @@ one sample.
   grades the frozen copy in ``catalog/editions/vX/``, ignores overlay and local
   overrides, and its result line ends ``graded edition vX (frozen; overrides
   ignored)``; ``--edition head`` grades the current text instead
-  (``evals.graded_source``, #281 ticket 09). The JSON report records the graded
+  (``evals.graded_source``, #281 ticket 09), and ``--edition-dir DIR`` grades
+  the edition built at ``DIR`` (what ``--compare edition:<tag>`` passes, #281
+  ticket 14). The JSON report records the graded
   source, the prompt and sample digests and the engine version.
 
   ``--prompt-set`` (D76) renders the sample's prompt from that prompt set
@@ -69,9 +71,10 @@ one sample.
   of one target, stores the comparison in NEW and exits ``1`` on an unaccepted
   regression.
 
-  ``--compare BASE_REF`` (D37, opt-in and paid; ``commands/_eval_compare.py``)
-  runs the eval samples of the rule-including prompts on a checkout of
-  ``BASE_REF`` and of HEAD and prints a comparison table that flags regressions.
+  ``--compare BASE [HEAD]`` (D37, opt-in and paid; ``commands/_eval_compare.py``)
+  runs every eval sample on two sides (a git ref, ``head`` for the current text
+  in place, or ``edition:<tag>``; HEAD defaults to the ``HEAD`` ref) and prints
+  a comparison table that flags regressions.
 
   Unlike ``playbook metrics``, there is **no ``--run-tests`` flag**: whether the
   execution evaluators (``coverage``/``test_pass_rate``) run is declared by the
@@ -117,6 +120,7 @@ from coding_agent_playbook.evals.report_format import (
     format_sample_result_text,
     sample_result_to_dict,
 )
+from coding_agent_playbook.evals.run.comparison_sides import EDITION_DIR_FLAG
 from coding_agent_playbook.evals.target_config import load_eval_settings
 from coding_agent_playbook.evals.targets import TargetError
 from coding_agent_playbook.evals.task_registry import TaskRegistry, TaskRegistryError
@@ -206,6 +210,13 @@ def configure(parser: argparse.ArgumentParser) -> None:
         choices=(_EDITION_HEAD,),
         help="head: grade the current text, even for a sample pinned to a frozen "
         "edition (default: a pinned sample grades its edition)",
+    )
+    parser.add_argument(
+        EDITION_DIR_FLAG,
+        dest="edition_dir",
+        metavar="DIR",
+        help="grade the edition built at DIR for every selected sample, pinned or not "
+        "(what --compare edition:<tag> passes to each run)",
     )
     _configure_scoring(parser)
     configure_compare(parser)
@@ -323,6 +334,7 @@ class _SampleRun:
     fail_fast: bool
     prompt_set: PromptSet
     head: bool = False
+    edition_root: Path | None = None
 
 
 def _run_sample_cli(args: argparse.Namespace, repo_root: Path) -> int:
@@ -369,7 +381,14 @@ def _run_sample_cli(args: argparse.Namespace, repo_root: Path) -> int:
     # judge tier); --full-scoring grades every check unconditionally.
     fail_fast = not bool(getattr(args, "full_scoring", False))
     head = getattr(args, "edition", None) == _EDITION_HEAD
-    how = _SampleRun(runner, target, judge, judge_samples, fail_fast, args.prompt_set, head)
+    edition_dir = getattr(args, "edition_dir", None)
+    if head and edition_dir is not None:
+        print(f"error: --edition head and {EDITION_DIR_FLAG} exclude each other", file=sys.stderr)
+        return 2
+    edition_root = Path(edition_dir) if edition_dir is not None else None
+    how = _SampleRun(
+        runner, target, judge, judge_samples, fail_fast, args.prompt_set, head, edition_root
+    )
     outcomes = [_run_one(sample, how) for sample in samples]
     results = [result for _, result in outcomes if result is not None]
     _print_results(results, fmt, one_sample=len(samples) == 1)
@@ -379,7 +398,7 @@ def _run_sample_cli(args: argparse.Namespace, repo_root: Path) -> int:
 def _run_one(sample: EvalSample, how: _SampleRun) -> tuple[int, SampleResult | None]:
     """Run and grade ``sample``: ``(0 or 1, result)``, or ``(2, None)`` when unscorable."""
     try:
-        source = graded_source(sample, head=how.head)
+        source = graded_source(sample, head=how.head, edition_root=how.edition_root)
         with tempfile.TemporaryDirectory(prefix="playbook-eval-") as tmp:
             result = how.runner.run_sample(
                 sample,

@@ -886,32 +886,48 @@ A usage error is an unknown sample, runner or judge, or a real runner or judge w
 CLI is not on `PATH`. A sample cannot be scored at all when its prompt fails to
 render, or when the judge gives no score after its retries.
 
-### Comparing a base ref with HEAD (opt-in, paid)
+### Comparing two sides: a ref, an edition or the current text (opt-in, paid)
 
-`playbook eval --compare <base-ref>` runs eval samples on a base ref and on HEAD, and
-compares the results. It covers the seven prompts whose included rule bodies can
-change: `review`, `refactor`, `make-testable`, `review-architecture`,
-`generate-tests`, `characterize` and `security-review`. Together they have 12 eval
-samples.
+`playbook eval --compare <base> [<head>]` runs eval samples on two sides and
+compares the results. A side is one of:
+
+- a git ref (`origin/main`, `HEAD`): a detached `git worktree` of the ref;
+- `head`: the current text in place, uncommitted edits included;
+- `edition:<tag>`: release `<tag>`'s graded set, built from the tag's manifest
+  into the work directory on the fly. Nothing is committed and no pin is needed.
+
+`<head>` defaults to the `HEAD` ref. The compared eval samples come from the
+samples themselves, through the task registry: every eval sample, or, against an
+edition, the eval samples of the prompts the edition grades.
 
 The comparison is off by default: CI and the release gate never run it. Every run
 drives a real agent, and the judge too with `--judge`. It therefore needs your own
 agent credentials, with the `claude` or `opencode` CLI logged in. It also **costs
-money**: the defaults make 12 eval samples x 2 sides x 3 runs = 72 agent runs.
+money**: each eval sample makes 2 sides x 3 runs = 6 agent runs by default.
 
-These commands compare HEAD with `origin/main`, compare two prompt sets on one ref,
-and narrow a comparison to one eval sample:
+These commands measure a text change against a release in place, compare HEAD with
+`origin/main`, compare two prompt sets on one ref, and narrow a comparison to one
+eval sample:
 
 ```bash
+playbook eval --compare edition:v0.1.0 head --judge llm                          # release v0.1.0's text vs the current text
 playbook eval --compare origin/main --judge llm                                  # base origin/main (v1) vs HEAD (v1)
 playbook eval --compare HEAD --base-prompt-set v1 --prompt-set v2 --judge llm     # v1 vs v2 on one ref
 playbook eval refactor/extract-helper --compare origin/main --judge llm --compare-runs 5 --format json
 ```
 
-Each side is a detached `git worktree` of its ref. Every eval sample runs there
-through that checkout's own engine, as `playbook eval <id> --run --format json`, plus
-`--prompt-set` when the side's set is not v1. The base side therefore grades the base
-ref's prompts and rule bodies.
+Every eval sample runs as `playbook eval <id> --run --format json`. A git-ref side
+runs it in its checkout, through that checkout's own engine, plus `--prompt-set`
+when the side's set is not v1: the base side therefore grades the base ref's
+prompts and rule bodies. `head` runs it in the repository with `--edition head`,
+so a pinned sample grades the current text too. An edition side runs it in the
+repository with `--edition-dir <dir>`, so every sample grades the built edition.
+
+Before the first paid run, every selected eval sample must render on both sides:
+a side in place renders it in the engine, and a git ref through one hermetic
+`--runner fake` run of its own engine. When one does not render (an edition lacks
+its prompt, or a ref lacks the sample), the comparison names each failure, runs
+nothing and exits `2`.
 
 These options shape the comparison:
 
@@ -920,9 +936,10 @@ These options shape the comparison:
 | `--base-prompt-set` | `v1` | the prompt set of the base side |
 | `--prompt-set` | `v1` | the prompt set of HEAD |
 | `--compare-runs N` | 3 | the runs per eval sample on each side |
-| `--compare-out` | a new temporary directory, printed on stderr | the directory `<dir>` that keeps the reports |
+| `--compare-out` | a new temporary directory, printed on stderr | the directory `<dir>` that keeps the checkouts, built editions and reports |
 
-A positional `<id>` narrows the comparison to that one compared eval sample.
+A positional `<task>` or `<id>` narrows the comparison to that task's eval samples
+or that one eval sample.
 
 `--runner`, `--judge`, `--judge-samples` and `--full-scoring` are checked once, the
 way `--run` checks them. They then pass through to every run. Both sides therefore
@@ -946,8 +963,11 @@ runs' `aggregate_score`.
 
 A regression is a mean score drop above 0.05, or an eval sample that passes on the
 base but fails in 2 of 3 runs on HEAD. An eval sample passes on the base when a
-majority of its runs pass.
+majority of its runs pass. An eval sample with no scorable run on a side is
+`UNSCORABLE`, never `ok`: the table names the side, and the JSON report lists it
+under the sample's `unscorable` key and counts such samples in `unscorable`.
 
 The comparison is advisory, not a merge gate. It exits `0` whatever it shows. It exits
-`2` on a usage error (an unknown or unavailable runner or judge, or a bad count), or
-when a ref does not check out.
+`2` on a usage error (an unknown or unavailable runner or judge, a bad count, or
+more than two sides), when a ref does not check out, when an edition's tag or
+manifest is missing, or when an eval sample does not render on a side.

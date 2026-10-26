@@ -1,12 +1,18 @@
-"""Run the same eval samples on two sides, a git ref and a prompt set each (D37, D76; prU F-01).
+"""Run the same eval samples on two sides and compare them (D37, D76; prU F-01; #281 ticket 14).
 
-``playbook eval --compare <base-ref>`` is opt-in and paid: every run drives a real
-agent. Each side is checked out as a detached ``git worktree`` of its ref, and each
-eval sample runs there ``runs`` times through that checkout's own engine (``python
--m coding_agent_playbook.cli eval <id> --run --format json``, with the checkout's
-``src/`` first on ``PYTHONPATH``), so the base side grades the base ref's prompts and
-rule bodies. Every run's JSON report is kept under ``<work_dir>/reports/<side>/``;
-:mod:`coding_agent_playbook.evals.comparison` turns the outcomes into the table.
+``playbook eval --compare <base> [<head>]`` is opt-in and paid: every run drives a
+real agent. Each side is a git ref, ``head`` (the current text in place) or
+``edition:<tag>`` (``evals.run.comparison_sides`` prepares them). Every eval
+sample runs ``runs`` times per side through ``python -m coding_agent_playbook.cli
+eval <id> --run --format json`` in the side's directory (a git ref's checkout with
+its ``src/`` first on ``PYTHONPATH``, so the base grades the base ref's text), plus
+the side's flags.
+
+Before the first paid run, every sample must render on both sides
+(:class:`SideRenderCheck`); one that does not is a :class:`ComparisonError`
+(exit 2) and nothing runs. Every run's JSON report is kept under
+``<work_dir>/reports/<side>/``; :mod:`coding_agent_playbook.evals.comparison` turns
+the outcomes into the table.
 """
 
 from __future__ import annotations
@@ -14,47 +20,33 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from contextlib import contextmanager
+from contextlib import ExitStack
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Protocol
 
-from coding_agent_playbook.catalog.prompt_sets import DEFAULT_PROMPT_SET, PromptSet
 from coding_agent_playbook.evals.comparison import RunOutcome, SampleComparison, compare_sample
+from coding_agent_playbook.evals.prompting import PromptResolutionError, render_prompt
+from coding_agent_playbook.evals.run.comparison_sides import (
+    ComparisonError,
+    ComparisonSide,
+    PreparedSide,
+    SideSources,
+    prepare_side,
+)
 from coding_agent_playbook.evals.run.git_env import without_repo_location
-from coding_agent_playbook.exit_two import ExitTwoError
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping, Sequence
-    from contextlib import AbstractContextManager
+    from collections.abc import Mapping, Sequence
     from pathlib import Path
 
-#: Bound on one ``git worktree`` call (it touches only the local repository).
-_GIT_TIMEOUT_S: Final = 120.0
+    from coding_agent_playbook.evals.sample import EvalSample
+
 #: Bound on one paid eval run; a run past it counts as an unscorable run.
 DEFAULT_RUN_TIMEOUT_S: Final = 3600.0
-
-
-class ComparisonError(ExitTwoError):
-    """A side could not be prepared (its ref does not check out); the CLI exits 2."""
-
-
-@dataclass(frozen=True)
-class ComparisonSide:
-    """One side of a comparison: the git ref to check out and the prompt set to grade.
-
-    Example::
-
-        >>> ComparisonSide("origin/main").label
-        'origin/main (v1)'
-    """
-
-    ref: str
-    prompt_set: PromptSet = DEFAULT_PROMPT_SET
-
-    @property
-    def label(self) -> str:
-        """``<ref> (<prompt set>)``, the side's name in the table."""
-        return f"{self.ref} ({self.prompt_set})"
+#: Bound on one hermetic ``--runner fake`` render check of a git-ref side.
+RENDER_CHECK_TIMEOUT_S: Final = 600.0
+#: Render failures listed in full before the rest are counted.
+_MAX_LISTED_FAILURES: Final = 20
 
 
 @dataclass(frozen=True)
@@ -67,41 +59,43 @@ class EvalRunOutput:
 
 
 class SampleRunner(Protocol):
-    """Runs one eval sample once in a checkout with a prompt set (``PlaybookEvalRun`` in prod)."""
+    """Runs one eval sample once in a directory with a side's flags (``PlaybookEvalRun`` in prod)."""
 
-    def __call__(self, checkout: Path, sample_id: str, prompt_set: PromptSet) -> EvalRunOutput: ...
+    def __call__(
+        self, checkout: Path, sample_id: str, side_flags: tuple[str, ...]
+    ) -> EvalRunOutput: ...
 
 
-class CheckoutFactory(Protocol):
-    """Checks ``ref`` out at ``dest`` for a ``with`` block (``git_worktree_checkout`` in prod)."""
+class RenderCheck(Protocol):
+    """Why ``sample_id`` does not render on ``side``, or ``None`` (``SideRenderCheck`` in prod)."""
 
-    def __call__(self, ref: str, dest: Path) -> AbstractContextManager[Path]: ...
+    def __call__(self, side: PreparedSide, sample_id: str) -> str | None: ...
 
 
 @dataclass(frozen=True)
 class ComparisonPlan:
-    """What both sides run: the eval samples, the runs of each, how to run and check out.
+    """What both sides run: the eval samples, the runs of each, how to run, check and prepare.
 
     Example::
 
         >>> plan = ComparisonPlan(["refactor/extract-helper"], 3, PlaybookEvalRun(),  # doctest: +SKIP
-        ...                       git_worktree_checkout(repo), work_dir)
+        ...                       sources, work_dir, SideRenderCheck(samples))
     """
 
     sample_ids: Sequence[str]
     runs: int
     run_sample: SampleRunner
-    checkout_ref: CheckoutFactory
+    sources: SideSources
     work_dir: Path
+    check_render: RenderCheck
 
 
 @dataclass(frozen=True)
 class PlaybookEvalRun:
-    """Run an eval sample through the checkout's own engine as a child process.
+    """Run an eval sample through the directory's own engine as a child process.
 
-    ``flags`` are passed through (``--runner``, ``--judge``, ``--full-scoring``);
-    ``--prompt-set`` is passed only for a set other than v1, so a base ref older
-    than prompt sets still runs. A run past ``timeout_s`` is unscorable (exit 2).
+    ``flags`` are passed through (``--runner``, ``--judge``, ``--full-scoring``),
+    then the side's own flags. A run past ``timeout_s`` is unscorable (exit 2).
 
     Example::
 
@@ -112,11 +106,11 @@ class PlaybookEvalRun:
     flags: tuple[str, ...] = ()
     timeout_s: float = DEFAULT_RUN_TIMEOUT_S
 
-    def __call__(self, checkout: Path, sample_id: str, prompt_set: PromptSet) -> EvalRunOutput:
+    def __call__(
+        self, checkout: Path, sample_id: str, side_flags: tuple[str, ...] = ()
+    ) -> EvalRunOutput:
         argv = [sys.executable, "-m", "coding_agent_playbook.cli", "eval", sample_id, "--run"]
-        argv += ["--format", "json", "--repo-root", str(checkout), *self.flags]
-        if prompt_set != DEFAULT_PROMPT_SET:
-            argv += ["--prompt-set", prompt_set]
+        argv += ["--format", "json", "--repo-root", str(checkout), *self.flags, *side_flags]
         try:
             done = subprocess.run(
                 argv,
@@ -149,43 +143,40 @@ def checkout_env(checkout: Path, parent: Mapping[str, str]) -> dict[str, str]:
     return env
 
 
-def git_worktree_checkout(repo_root: Path) -> CheckoutFactory:
-    """A checkout factory adding a detached ``git worktree`` of ``repo_root`` per ref.
+@dataclass(frozen=True)
+class SideRenderCheck:
+    """Whether a sample's prompt renders on a prepared side: ``None``, or why it does not.
 
-    The worktree is removed when the ``with`` block ends, even on an error.
+    A side in place (``head``, an edition) renders in this process, strictly: a
+    real agent is never driven with a placeholder. A git ref renders through its
+    own engine, as one hermetic ``--runner fake`` run in its checkout that exits
+    2 when the ref does not know the sample or its prompt fails to render.
 
     Example::
 
-        >>> with git_worktree_checkout(repo)("origin/main", dest) as path:  # doctest: +SKIP
-        ...     (path / "README.md").exists()
+        >>> SideRenderCheck(samples)(prepared, "review/spot-the-bug") is None  # doctest: +SKIP
         True
     """
 
-    @contextmanager
-    def checkout(ref: str, dest: Path) -> Iterator[Path]:
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        _git(repo_root, "worktree", "add", "--detach", str(dest), ref)
+    samples: Mapping[str, EvalSample]
+    fake_run: SampleRunner = PlaybookEvalRun(("--runner", "fake"), RENDER_CHECK_TIMEOUT_S)
+
+    def __call__(self, side: PreparedSide, sample_id: str) -> str | None:
+        if side.side.kind == "ref":
+            done = self.fake_run(side.checkout, sample_id, side.flags)
+            if done.exit_code != 2:
+                return None
+            return done.stderr.strip() or "the sample does not render"
         try:
-            yield dest
-        finally:
-            _git(repo_root, "worktree", "remove", "--force", str(dest))
-
-    return checkout
-
-
-def _git(repo_root: Path, *args: str) -> None:
-    try:
-        subprocess.run(
-            ["git", "-C", str(repo_root), *args],
-            env=without_repo_location(os.environ),
-            capture_output=True,
-            text=True,
-            timeout=_GIT_TIMEOUT_S,
-            check=True,
-        )
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
-        detail = getattr(exc, "stderr", None) or str(exc)
-        raise ComparisonError(f"git {' '.join(args)} failed in {repo_root}: {detail}") from exc
+            render_prompt(
+                self.samples[sample_id],
+                strict=True,
+                prompt_set=side.side.prompt_set,
+                edition=side.edition,
+            )
+        except (PromptResolutionError, ValueError) as exc:
+            return str(exc)
+        return None
 
 
 def run_comparison(
@@ -193,29 +184,53 @@ def run_comparison(
 ) -> list[SampleComparison]:
     """Run every eval sample ``plan.runs`` times on each side and compare, one row each.
 
+    Both sides are prepared and every sample's render is checked on both before
+    the first run; a failure raises :class:`ComparisonError` and nothing runs.
+
     Example::
 
-        >>> rows = run_comparison(plan, ComparisonSide("origin/main"), ComparisonSide("HEAD"))  # doctest: +SKIP
+        >>> rows = run_comparison(plan, ComparisonSide("edition:v0.1.0"), ComparisonSide("head"))  # doctest: +SKIP
     """
-    base_outcomes = _run_side(plan, base, "base")
-    head_outcomes = _run_side(plan, head, "head")
+    with ExitStack() as stack:
+        sides = [
+            stack.enter_context(prepare_side(plan.sources, side, name, plan.work_dir))
+            for name, side in (("base", base), ("head", head))
+        ]
+        _check_renders(plan, sides)
+        base_outcomes, head_outcomes = (_run_side(plan, side) for side in sides)
     return [
         compare_sample(sample_id, base_outcomes[sample_id], head_outcomes[sample_id])
         for sample_id in plan.sample_ids
     ]
 
 
-def _run_side(plan: ComparisonPlan, side: ComparisonSide, name: str) -> dict[str, list[RunOutcome]]:
-    """Check out ``side.ref`` once, run each eval sample there, keep each run's report."""
-    reports = plan.work_dir / "reports" / name
+def _check_renders(plan: ComparisonPlan, sides: Sequence[PreparedSide]) -> None:
+    failures = [
+        f"- {sample_id} on {side.side.label}: {why}"
+        for side in sides
+        for sample_id in plan.sample_ids
+        if (why := plan.check_render(side, sample_id)) is not None
+    ]
+    if not failures:
+        return
+    listed = failures[:_MAX_LISTED_FAILURES]
+    if len(failures) > len(listed):
+        listed.append(f"- ... and {len(failures) - len(listed)} more")
+    raise ComparisonError(
+        f"{len(failures)} eval sample render(s) failed, so nothing was run:\n" + "\n".join(listed)
+    )
+
+
+def _run_side(plan: ComparisonPlan, side: PreparedSide) -> dict[str, list[RunOutcome]]:
+    """Run each eval sample on the prepared ``side``, keep each run's report."""
+    reports = plan.work_dir / "reports" / side.name
     reports.mkdir(parents=True, exist_ok=True)
     outcomes: dict[str, list[RunOutcome]] = {}
-    with plan.checkout_ref(side.ref, plan.work_dir / "checkouts" / name) as checkout:
-        for sample_id in plan.sample_ids:
-            runs = [plan.run_sample(checkout, sample_id, side.prompt_set) for _ in range(plan.runs)]
-            for number, run in enumerate(runs, start=1):
-                _keep_report(reports, f"{sample_id}-{number}", run)
-            outcomes[sample_id] = [RunOutcome.from_run(r.exit_code, r.stdout) for r in runs]
+    for sample_id in plan.sample_ids:
+        runs = [plan.run_sample(side.checkout, sample_id, side.flags) for _ in range(plan.runs)]
+        for number, run in enumerate(runs, start=1):
+            _keep_report(reports, f"{sample_id}-{number}", run)
+        outcomes[sample_id] = [RunOutcome.from_run(r.exit_code, r.stdout) for r in runs]
     return outcomes
 
 

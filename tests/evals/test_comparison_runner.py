@@ -1,7 +1,8 @@
-"""The comparison runner runs every eval sample on each side's checkout and prompt set (D37, D76; F-01).
+"""The comparison runner runs every eval sample on both prepared sides (D37, D76; F-01; #281 ticket 14).
 
-``run_comparison`` is tested with a named fake sample runner and a fake checkout;
-``git_worktree_checkout`` against a real throwaway git repo.
+``run_comparison`` is tested with a named fake sample runner, a fake checkout, a
+fake edition builder (the fixture edition of ``tests.edition_fixtures``) and a
+fake render check; ``git_worktree_checkout`` against a real throwaway git repo.
 """
 
 from __future__ import annotations
@@ -10,41 +11,88 @@ import json
 import os
 import subprocess
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
+
+import pytest
 
 from coding_agent_playbook.evals.comparison import RunOutcome
 from coding_agent_playbook.evals.run.comparison_runner import (
     ComparisonPlan,
-    ComparisonSide,
     EvalRunOutput,
     PlaybookEvalRun,
+    SideRenderCheck,
     checkout_env,
-    git_worktree_checkout,
     run_comparison,
+)
+from coding_agent_playbook.evals.run.comparison_sides import (
+    EDITION_DIR_FLAG,
+    ComparisonError,
+    ComparisonSide,
+    PreparedSide,
+    SideSources,
+    git_worktree_checkout,
+)
+from coding_agent_playbook.evals.task_registry import load_task_sample
+from coding_agent_playbook.exit_two import ExitTwoError
+from coding_agent_playbook.release.edition import load_edition
+from coding_agent_playbook.release.edition_digests import edition_dir
+from tests.edition_fixtures import (
+    ENGINE,
+    TAG,
+    write_digests,
+    write_edition_files,
+    write_fixture_catalog,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
-    from coding_agent_playbook.catalog.prompt_sets import PromptSet
     from coding_agent_playbook.evals.comparison import SampleComparison
+
+_SAMPLES = ("sample-a", "sample-b")
+
+
+def _side_key(checkout: Path, flags: tuple[str, ...]) -> str:
+    """``edition`` or ``head`` for a side in place, else the ref its checkout holds."""
+    if EDITION_DIR_FLAG in flags:
+        return "edition"
+    if "--edition" in flags:
+        return "head"
+    return (checkout / "REF").read_text(encoding="utf-8")
 
 
 @dataclass
 class FakeSampleRunner:
-    """Scores an eval sample by the ref its checkout holds; records every call."""
+    """Scores an eval sample by its side; records every call."""
 
-    score_by_ref: dict[str, float]
-    calls: list[tuple[str, str, str]] = field(default_factory=list)
+    score_by_side: dict[str, float]
+    calls: list[tuple[str, str, tuple[str, ...]]] = field(default_factory=list)
 
-    def __call__(self, checkout: Path, sample_id: str, prompt_set: PromptSet) -> EvalRunOutput:
-        ref = (checkout / "REF").read_text(encoding="utf-8")
-        self.calls.append((ref, sample_id, prompt_set))
-        score = self.score_by_ref[ref]
+    def __call__(
+        self, checkout: Path, sample_id: str, side_flags: tuple[str, ...]
+    ) -> EvalRunOutput:
+        key = _side_key(checkout, side_flags)
+        self.calls.append((key, sample_id, side_flags))
+        score = self.score_by_side.get(key)
+        if score is None:
+            return EvalRunOutput(exit_code=2, stdout="", stderr="could not be scored")
         report = {"passed": score >= 0.5, "aggregate_score": score}
         return EvalRunOutput(exit_code=0 if score >= 0.5 else 1, stdout=json.dumps(report))
+
+
+@dataclass
+class FakeRenderCheck:
+    """Fails the ``(side key, sample)`` pairs it is given; records every check."""
+
+    failing: set[tuple[str, str]] = field(default_factory=set)
+    checked: list[tuple[str, str]] = field(default_factory=list)
+
+    def __call__(self, side: PreparedSide, sample_id: str) -> str | None:
+        key = _side_key(side.checkout, side.flags)
+        self.checked.append((key, sample_id))
+        return "the prompt does not render" if (key, sample_id) in self.failing else None
 
 
 @contextmanager
@@ -54,26 +102,76 @@ def fake_checkout(ref: str, dest: Path) -> Iterator[Path]:
     yield dest
 
 
+def fake_edition_builder(tag: str, dest: Path) -> Path:
+    """Build the fixture edition ``tag`` under ``dest`` (no git, no real tag)."""
+    root = write_edition_files(dest, tag)
+    write_digests(root, tag)
+    return root
+
+
+def _plan(
+    tmp_path: Path, runner: FakeSampleRunner, check: FakeRenderCheck | None = None
+) -> ComparisonPlan:
+    repo = tmp_path / "repo"
+    repo.mkdir(exist_ok=True)
+    sources = SideSources(repo, fake_checkout, fake_edition_builder)
+    return ComparisonPlan(
+        _SAMPLES, 3, runner, sources, tmp_path / "work", check or FakeRenderCheck()
+    )
+
+
 def _compare(
-    tmp_path: Path, runner: FakeSampleRunner, base: ComparisonSide, head: ComparisonSide
+    tmp_path: Path,
+    runner: FakeSampleRunner,
+    base: ComparisonSide,
+    head: ComparisonSide,
+    check: FakeRenderCheck | None = None,
 ) -> list[SampleComparison]:
-    plan = ComparisonPlan(["sample-a", "sample-b"], 3, runner, fake_checkout, tmp_path / "work")
-    return run_comparison(plan, base, head)
+    return run_comparison(_plan(tmp_path, runner, check), base, head)
 
 
 def test_each_sample_runs_the_run_count_on_each_side(tmp_path: Path) -> None:
     runner = FakeSampleRunner({"main": 0.9, "HEAD": 0.9})
     _compare(tmp_path, runner, ComparisonSide("main"), ComparisonSide("HEAD"))
     assert sorted(runner.calls) == sorted(
-        [(ref, s, "v1") for ref in ("main", "HEAD") for s in ("sample-a", "sample-b")] * 3
+        [(ref, s, ()) for ref in ("main", "HEAD") for s in _SAMPLES] * 3
     )
 
 
 def test_each_side_runs_its_own_prompt_set(tmp_path: Path) -> None:
     runner = FakeSampleRunner({"HEAD": 0.9})
     _compare(tmp_path, runner, ComparisonSide("HEAD", "v1"), ComparisonSide("HEAD", "v2"))
-    assert sorted({call[2] for call in runner.calls}) == ["v1", "v2"]
+    assert sorted({call[2] for call in runner.calls}) == [(), ("--prompt-set", "v2")]
     assert len(runner.calls) == 12
+
+
+def test_an_edition_side_is_built_in_the_work_dir_and_graded_in_place(tmp_path: Path) -> None:
+    runner = FakeSampleRunner({"edition": 0.9, "head": 0.9})
+    _compare(tmp_path, runner, ComparisonSide("edition:v9.9.9"), ComparisonSide("head"))
+    root = edition_dir(tmp_path / "work" / "edition-base", TAG)
+    assert load_edition(root).tag == TAG
+    assert {call[2] for call in runner.calls if call[0] == "edition"} == {
+        (EDITION_DIR_FLAG, str(root))
+    }
+    assert {call[2] for call in runner.calls if call[0] == "head"} == {("--edition", "head")}
+    assert not (tmp_path / "repo" / "catalog").exists()  # nothing written into the repository
+
+
+def test_every_sample_renders_on_both_sides_before_the_first_run(tmp_path: Path) -> None:
+    runner = FakeSampleRunner({"edition": 0.9, "head": 0.9})
+    check = FakeRenderCheck(failing={("edition", "sample-b")})
+    with pytest.raises(ComparisonError) as raised:
+        _compare(tmp_path, runner, ComparisonSide("edition:v9.9.9"), ComparisonSide("head"), check)
+    assert runner.calls == []  # no paid run
+    assert sorted(check.checked) == sorted((k, s) for k in ("edition", "head") for s in _SAMPLES)
+    assert "sample-b on edition v9.9.9: the prompt does not render" in str(raised.value)
+    assert isinstance(raised.value, ExitTwoError)  # the CLI exits 2
+
+
+def test_a_side_with_no_scorable_run_is_unscorable_not_ok(tmp_path: Path) -> None:
+    runner = FakeSampleRunner({"head": 0.9})
+    rows = _compare(tmp_path, runner, ComparisonSide("edition:v9.9.9"), ComparisonSide("head"))
+    assert [(row.unscorable_sides, row.regressed) for row in rows] == [(("base",), False)] * 2
 
 
 def test_a_lower_scoring_head_is_flagged(tmp_path: Path) -> None:
@@ -90,14 +188,29 @@ def test_every_run_report_is_kept_per_side(tmp_path: Path) -> None:
     _compare(tmp_path, runner, ComparisonSide("main"), ComparisonSide("HEAD"))
     reports = tmp_path / "work" / "reports"
     assert sorted(p.name for p in (reports / "head").iterdir()) == [
-        f"{s}-{n}.json" for s in ("sample-a", "sample-b") for n in (1, 2, 3)
+        f"{s}-{n}.json" for s in _SAMPLES for n in (1, 2, 3)
     ]
     kept = json.loads((reports / "base" / "sample-a-1.json").read_text(encoding="utf-8"))
     assert kept["aggregate_score"] == 0.9
 
 
-def test_a_side_label_names_its_ref_and_prompt_set() -> None:
+def test_a_side_label_names_its_ref_and_prompt_set_or_its_edition() -> None:
     assert ComparisonSide("origin/main", "v2").label == "origin/main (v2)"
+    assert ComparisonSide("head").label == "head (v1)"
+    assert ComparisonSide.parse("edition:v0.1.0").label == "edition v0.1.0"
+
+
+def test_a_side_parses_as_a_ref_head_or_an_edition() -> None:
+    assert [ComparisonSide.parse(t).kind for t in ("HEAD", "head", "edition:v1.2.3")] == [
+        "ref",
+        "head",
+        "edition",
+    ]
+
+
+def test_an_edition_side_needs_a_release_tag() -> None:
+    with pytest.raises(ComparisonError, match="edition:<release tag>"):
+        ComparisonSide.parse("edition:main")
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -135,7 +248,7 @@ def test_rows_name_base_and_head_by_side_not_by_position(tmp_path: Path) -> None
 
 
 def test_a_run_past_its_timeout_is_unscorable(tmp_path: Path) -> None:
-    output = PlaybookEvalRun(timeout_s=0.001)(tmp_path, "refactor-extract-helper", "v1")
+    output = PlaybookEvalRun(timeout_s=0.001)(tmp_path, "refactor/extract-helper", ())
     assert (output.exit_code, output.stdout) == (2, "")
     assert "timed out" in output.stderr
     assert RunOutcome.from_run(output.exit_code, output.stdout).score is None
@@ -151,3 +264,58 @@ def test_a_checkout_with_an_engine_puts_its_src_first_on_pythonpath(tmp_path: Pa
 def test_a_checkout_without_an_engine_keeps_the_parent_pythonpath(tmp_path: Path) -> None:
     assert checkout_env(tmp_path, {"PYTHONPATH": "/other"})["PYTHONPATH"] == "/other"
     assert "PYTHONPATH" not in checkout_env(tmp_path, {})
+
+
+# --------------------------------------------------------------------------- #
+# SideRenderCheck: in place in this process, a git ref through its own engine
+# --------------------------------------------------------------------------- #
+
+
+@dataclass
+class FakeChildRun:
+    """A ``--runner fake`` child that exits with ``exit_code``; records its calls."""
+
+    exit_code: int
+    calls: list[tuple[str, tuple[str, ...]]] = field(default_factory=list)
+
+    def __call__(
+        self, checkout: Path, sample_id: str, side_flags: tuple[str, ...]
+    ) -> EvalRunOutput:
+        self.calls.append((sample_id, side_flags))
+        return EvalRunOutput(self.exit_code, "", "error: no eval sample 'review/pinned'")
+
+
+def _fixture_side(tmp_path: Path, side: ComparisonSide) -> tuple[PreparedSide, SideRenderCheck]:
+    catalog = write_fixture_catalog(tmp_path)
+    sample = load_task_sample(catalog / "core/eval_samples/review/pinned", source_package=ENGINE)
+    edition = None
+    if side.kind == "edition":
+        edition = load_edition(fake_edition_builder(side.tag, tmp_path / "built"))
+    prepared = PreparedSide("base", side, tmp_path, (), edition)
+    return prepared, SideRenderCheck({sample.id: sample}, FakeChildRun(0))
+
+
+def test_a_sample_renders_on_head_and_on_its_edition_in_place(tmp_path: Path) -> None:
+    head, check = _fixture_side(tmp_path / "h", ComparisonSide("head"))
+    edition, edition_check = _fixture_side(tmp_path / "e", ComparisonSide.parse("edition:v9.9.9"))
+    assert check(head, "review/pinned") is None
+    assert edition_check(edition, "review/pinned") is None
+
+
+def test_a_sample_whose_prompt_the_edition_lacks_does_not_render(tmp_path: Path) -> None:
+    side = ComparisonSide.parse("edition:v9.9.9")
+    prepared, check = _fixture_side(tmp_path, side)
+    assert prepared.edition is not None
+    empty = replace(prepared, edition=replace(prepared.edition, prompts={}))
+    why = check(empty, "review/pinned")
+    assert why is not None
+    assert "no prompt 'review'" in why
+
+
+def test_a_git_ref_side_renders_through_a_fake_run_of_its_own_engine(tmp_path: Path) -> None:
+    child = FakeChildRun(2)
+    check = SideRenderCheck({}, child)
+    side = PreparedSide("base", ComparisonSide("origin/main"), tmp_path, ("--prompt-set", "v2"))
+    assert check(side, "review/pinned") == "error: no eval sample 'review/pinned'"
+    assert child.calls == [("review/pinned", ("--prompt-set", "v2"))]
+    assert SideRenderCheck({}, FakeChildRun(1))(side, "review/pinned") is None  # a verdict renders

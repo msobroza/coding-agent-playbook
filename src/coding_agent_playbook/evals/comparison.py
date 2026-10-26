@@ -5,8 +5,9 @@ and hands the outcomes here. This module is pure: it summarizes each side (passe
 mean score, spread), flags regressions by the default thresholds and renders the
 comparison as a table or JSON. An eval sample *regresses* when its mean score drops
 by more than :data:`MAX_SCORE_DROP`, or when it passes on the base (a majority of
-its base runs pass) and fails a majority of its HEAD runs (2 of 3 by default). The
-comparison is advisory, never a merge gate.
+its base runs pass) and fails a majority of its HEAD runs (2 of 3 by default). A
+sample with no scorable run on a side is *unscorable*, never ``ok`` (#281 ticket
+14). The comparison is advisory, never a merge gate.
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Collection, Sequence
 
     from coding_agent_playbook.evals.task_registry import TaskRegistry
 
@@ -28,32 +29,24 @@ MAX_SCORE_DROP: Final = 0.05
 _DIGITS: Final = 6
 
 
-#: The prompts whose included rule bodies change (D30): their eval samples are compared.
-COMPARED_PROMPTS: Final = frozenset(
-    {
-        "characterize",
-        "generate-tests",
-        "make-testable",
-        "refactor",
-        "review",
-        "review-architecture",
-        "security-review",
-    }
-)
+def compared_sample_ids(
+    registry: TaskRegistry, prompt_ids: Collection[str] | None = None
+) -> list[str]:
+    """The sorted ids of every sample the registry holds, or of the tasks of ``prompt_ids``.
 
-
-def compared_sample_ids(registry: TaskRegistry) -> list[str]:
-    """The sorted ids of the samples of the tasks named in :data:`COMPARED_PROMPTS`.
+    The compared prompts come from the samples (#281 ticket 14): a comparison
+    covers every task, or, against an edition, the tasks whose prompt the
+    edition grades.
 
     Example::
 
-        >>> compared_sample_ids(TaskRegistry.build(samples, prompt_ids))  # doctest: +SKIP
+        >>> compared_sample_ids(TaskRegistry.build(samples, prompt_ids), {"review"})  # doctest: +SKIP
         ['review/spot-the-bug', ...]
     """
     return sorted(
         sample.id
         for task in registry.tasks()
-        if task.prompt_id in COMPARED_PROMPTS
+        if prompt_ids is None or task.prompt_id in prompt_ids
         for sample in task.samples
     )
 
@@ -154,6 +147,25 @@ class SampleComparison:
         """Whether any regression rule fired."""
         return bool(self.reasons)
 
+    @property
+    def unscorable_sides(self) -> tuple[str, ...]:
+        """``base`` and/or ``head``: the sides with no scorable run (empty when both scored).
+
+        Such a row has no score to compare, so it is never reported ``ok``.
+
+        Example::
+
+            >>> compare_sample("s", [RunOutcome(False, None)], [RunOutcome(True, 1.0)]).unscorable_sides
+            ('base',)
+        """
+        sides = (("base", self.base), ("head", self.head))
+        return tuple(name for name, side in sides if side.mean is None)
+
+    @property
+    def unscorable(self) -> bool:
+        """Whether a side had no scorable run."""
+        return bool(self.unscorable_sides)
+
 
 @dataclass(frozen=True)
 class ComparisonSetup:
@@ -241,19 +253,20 @@ def format_comparison_table(rows: Sequence[SampleComparison], setup: ComparisonS
 
     The first line names the runner and judge both sides ran with; each side then
     shows ``passes/count pass`` and ``mean ± spread`` of the scores; the last column
-    is ``ok`` or ``REGRESSION: <reasons>``.
+    is ``ok``, ``REGRESSION: <reasons>`` or ``UNSCORABLE: no scorable run on <side>``
+    (or both of the last two).
 
     Example::
 
         >>> row = compare_sample("s", [RunOutcome(True, 0.9)], [RunOutcome(True, 0.9)])
         >>> format_comparison_table([row], ComparisonSetup("b", "h", "fake")).splitlines()[-1]
-        '0 of 1 eval samples regressed (advisory, not a merge gate)'
+        '0 of 1 eval samples regressed, 0 unscorable (advisory, not a merge gate)'
     """
     score = setup.score_name
     header: tuple[str, ...] = ("eval sample", f"{setup.base_label} outcome")
     header += (f"{setup.head_label} outcome", f"{setup.base_label} {score}")
     header += (f"{setup.head_label} {score}", "verdict")
-    table = [header] + [_table_cells(row) for row in rows]
+    table = [header] + [_table_cells(row, setup) for row in rows]
     widths = [max(len(cells[i]) for cells in table) for i in range(len(header) - 1)]
     lines = [_setup_line(setup)]
     lines += [
@@ -261,7 +274,11 @@ def format_comparison_table(rows: Sequence[SampleComparison], setup: ComparisonS
         for cells in table
     ]
     regressed = sum(1 for row in rows if row.regressed)
-    lines.append(f"{regressed} of {len(rows)} eval samples regressed (advisory, not a merge gate)")
+    unscorable = sum(1 for row in rows if row.unscorable)
+    lines.append(
+        f"{regressed} of {len(rows)} eval samples regressed, {unscorable} unscorable "
+        "(advisory, not a merge gate)"
+    )
     return "\n".join(lines)
 
 
@@ -271,10 +288,21 @@ def _setup_line(setup: ComparisonSetup) -> str:
     return f"runner {setup.runner}, no judge: score = deterministic gate score only"
 
 
-def _table_cells(row: SampleComparison) -> tuple[str, ...]:
-    verdict = "REGRESSION: " + "; ".join(row.reasons) if row.regressed else "ok"
+def _table_cells(row: SampleComparison, setup: ComparisonSetup) -> tuple[str, ...]:
     outcomes = (_outcome_cell(row.base), _outcome_cell(row.head))
-    return (row.sample_id, *outcomes, _score_cell(row.base), _score_cell(row.head), verdict)
+    scores = (_score_cell(row.base), _score_cell(row.head))
+    return (row.sample_id, *outcomes, *scores, _verdict_cell(row, setup))
+
+
+def _verdict_cell(row: SampleComparison, setup: ComparisonSetup) -> str:
+    labels = {"base": setup.base_label, "head": setup.head_label}
+    parts: list[str] = []
+    if row.regressed:
+        parts.append("REGRESSION: " + "; ".join(row.reasons))
+    if row.unscorable:
+        sides = " and ".join(labels[side] for side in row.unscorable_sides)
+        parts.append(f"UNSCORABLE: no scorable run on {sides}")
+    return "; ".join(parts) or "ok"
 
 
 def _outcome_cell(side: SideSummary) -> str:
@@ -304,6 +332,7 @@ def comparison_to_dict(
         "judge": setup.judge,
         "score": setup.score_name,
         "regressions": sum(1 for row in rows if row.regressed),
+        "unscorable": sum(1 for row in rows if row.unscorable),
         "samples": [_row_to_dict(row) for row in rows],
     }
 
@@ -315,6 +344,7 @@ def _row_to_dict(row: SampleComparison) -> dict[str, object]:
         "head": _side_to_dict(row.head),
         "regressed": row.regressed,
         "reasons": list(row.reasons),
+        "unscorable": list(row.unscorable_sides),
     }
 
 

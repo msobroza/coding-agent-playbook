@@ -8,7 +8,10 @@ an artifact source; ``changes`` diffs two manifests; ``notes`` writes the
 per-release ``notes.md``; ``versions`` holds the tag and bump-floor rules;
 ``tagging`` decides which commit a release tag goes on and when tagging refuses;
 ``edition_digests`` reads and writes an edition's ``digests.toml`` and
-``edition`` loads an edition (``catalog/editions/<tag>/``) closed-world.
+``edition`` loads an edition (``catalog/editions/<tag>/``) closed-world;
+``edition_freeze`` writes an edition's files from its tag and ``edition_build``
+builds one from a tag through git into any directory (``eval --compare
+edition:<tag>``).
 ``scripts/release.py`` orchestrates git, commitizen and ``playbook forge`` around
 them; evals and CI read the same modules. This module is a docstring only.
 """

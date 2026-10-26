@@ -691,6 +691,21 @@
         {
           "action": "_StoreAction",
           "option_strings": [
+            "--edition-dir"
+          ],
+          "dest": "edition_dir",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "grade the edition built at DIR for every selected sample, pinned or not (what --compare edition:<tag> passes to each run)",
+          "metavar": "DIR"
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
             "--judge"
           ],
           "dest": "judge",
@@ -772,14 +787,17 @@
             "--compare"
           ],
           "dest": "compare",
-          "nargs": null,
+          "nargs": "+",
           "const": null,
           "default": null,
           "type": null,
           "choices": null,
           "required": false,
-          "help": "opt-in and paid: run the eval samples of the rule-including prompts on BASE_REF and on HEAD and compare them (needs the agent's credentials)",
-          "metavar": "BASE_REF"
+          "help": "opt-in and paid: run the eval samples on BASE and on HEAD (default: the HEAD ref) and compare them; a side is a git ref, head (the current text in place) or edition:<tag> (needs the agent's credentials)",
+          "metavar": [
+            "BASE",
+            "HEAD"
+          ]
         },
         {
           "action": "_StoreAction",
@@ -826,7 +844,7 @@
           "type": null,
           "choices": null,
           "required": false,
-          "help": "--compare: directory for the checkouts and every run's JSON report (default: a new temporary directory)",
+          "help": "--compare: directory for the checkouts, built editions and every run's JSON report (default: a new temporary directory)",
           "metavar": null
         },
         {

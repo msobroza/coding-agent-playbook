@@ -86,38 +86,30 @@ def test_an_unscorable_or_unreadable_run_has_no_score() -> None:
     assert RunOutcome.from_run(0, "not json") == RunOutcome(passed=False, score=None)
 
 
-def test_the_compared_samples_are_those_of_the_seven_rule_including_prompts(
-    tmp_path: Path, make_synthetic_repo: Any
-) -> None:
+def _registry(tmp_path: Path, make_synthetic_repo: Any) -> TaskRegistry:
     make_synthetic_repo(tmp_path)
     ctx = SyncContext.from_repo(tmp_path)
-    registry = TaskRegistry.from_catalog(ctx.artifact_source, ctx.prompts_resolved)
-    assert compared_sample_ids(registry) == [
-        "characterize/legacy-pricing",
-        "generate-tests/async-code",
-        "generate-tests/edge-cases",
-        "generate-tests/happy-path",
-        "make-testable/inject-clock",
+    return TaskRegistry.from_catalog(ctx.artifact_source, ctx.prompts_resolved)
+
+
+def test_the_compared_samples_come_from_the_samples_of_every_task(
+    tmp_path: Path, make_synthetic_repo: Any
+) -> None:
+    registry = _registry(tmp_path, make_synthetic_repo)
+    every = sorted(sample.id for task in registry.tasks() for sample in task.samples)
+    assert compared_sample_ids(registry) == every
+    assert "explain/pure-function" in every  # no hard-coded list of prompts
+
+
+def test_the_compared_samples_narrow_to_the_prompts_an_edition_grades(
+    tmp_path: Path, make_synthetic_repo: Any
+) -> None:
+    registry = _registry(tmp_path, make_synthetic_repo)
+    assert compared_sample_ids(registry, {"refactor"}) == [
         "refactor/extract-helper",
         "refactor/rename-for-clarity",
-        "review-architecture/layer-leak",
-        "review/change-drops-part-of-request",
-        "review/clean-multi-file-change",
-        "review/crbug-audio-input-args",
-        "review/crbug-basic-auth-not",
-        "review/crbug-form-method-none",
-        "review/crbug-ftp-active-string",
-        "review/crbug-log-textio",
-        "review/crbug-netrc-env-path",
-        "review/crbug-replace-same-object",
-        "review/crbug-xtrim-maxlen-minid",
-        "review/diff-old-bug-on-untouched-line",
-        "review/rereview-earlier-findings",
-        "review/spot-the-bug",
-        "review/style-only-no-changes-needed",
-        "security-review/already-safe",
-        "security-review/pickle-load",
     ]
+    assert compared_sample_ids(registry, set()) == []
 
 
 _SETUP = ComparisonSetup("main (v1)", "HEAD (v2)", runner="claude_code", judge="llm")
@@ -145,12 +137,34 @@ def test_the_table_lists_each_sample_with_outcome_score_and_spread() -> None:
     assert ok_line.rstrip().endswith("ok")
     bad_line = next(line for line in lines if line.startswith("review-spot-the-bug"))
     assert "REGRESSION: mean score drops 0.400" in bad_line
-    assert lines[-1] == "1 of 2 eval samples regressed (advisory, not a merge gate)"
+    assert lines[-1] == "1 of 2 eval samples regressed, 0 unscorable (advisory, not a merge gate)"
 
 
 def test_an_unscored_side_shows_no_score() -> None:
     row = compare_sample("t", _outcomes(0.9), [RunOutcome(passed=False, score=None)])
     assert "n/a" in format_comparison_table([row], _SETUP)
+
+
+def test_a_side_with_no_scorable_run_is_reported_unscorable_not_ok() -> None:
+    unscored = [RunOutcome(passed=False, score=None)]
+    row = compare_sample("t", unscored, unscored)
+    assert (row.unscorable_sides, row.regressed) == (("base", "head"), False)
+    lines = format_comparison_table([row], _SETUP).splitlines()
+    assert lines[-2].endswith("UNSCORABLE: no scorable run on main (v1) and HEAD (v2)")
+    assert lines[-1].startswith("0 of 1 eval samples regressed, 1 unscorable")
+    view = comparison_to_dict([row], _SETUP)
+    assert view["unscorable"] == 1
+    samples = view["samples"]
+    assert isinstance(samples, list)
+    assert samples[0]["unscorable"] == ["base", "head"]
+
+
+def test_a_regression_with_an_unscorable_head_names_both() -> None:
+    head = [RunOutcome(passed=False, score=None)] * 3
+    row = compare_sample("t", _outcomes(0.9, 0.9, 0.9), head)
+    verdict = format_comparison_table([row], _SETUP).splitlines()[-2]
+    assert "REGRESSION: fails 3 of 3 runs on head" in verdict
+    assert verdict.endswith("UNSCORABLE: no scorable run on HEAD (v2)")
 
 
 def test_the_json_view_carries_both_sides_and_the_reasons() -> None:
@@ -165,7 +179,9 @@ def test_the_json_view_carries_both_sides_and_the_reasons() -> None:
         "head": {"count": 3, "passes": 3, "mean": 0.5, "spread": 0.0},
         "regressed": True,
         "reasons": ["mean score drops 0.400"],
+        "unscorable": [],
     }
+    assert view["unscorable"] == 0
 
 
 def test_without_a_judge_the_table_and_json_name_the_gate_score() -> None:

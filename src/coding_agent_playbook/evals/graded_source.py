@@ -113,16 +113,24 @@ def sample_edition_dir(sample: EvalSample, tag: str) -> Path:
     return edition_dir(layer.parent, tag)
 
 
-def graded_source(sample: EvalSample, *, head: bool = False) -> GradedSource:
+def graded_source(
+    sample: EvalSample, *, head: bool = False, edition_root: Path | None = None
+) -> GradedSource:
     """The text ``sample`` grades: its pinned edition, or the current text when unpinned or ``head``.
 
-    Raises :class:`EditionError` when the pinned edition cannot be loaded.
+    ``edition_root`` grades the edition at that directory instead, pinned or not:
+    ``playbook eval --compare edition:<tag>`` builds one per comparison and
+    passes it to every run with ``--edition-dir`` (#281 ticket 14).
+
+    Raises :class:`EditionError` when the edition cannot be loaded.
 
     Example::
 
         >>> graded_source(unpinned_sample).label  # doctest: +SKIP
         'head'
     """
+    if edition_root is not None:
+        return GradedSource(load_edition(edition_root))
     if head or sample.edition is None:
         return GradedSource(None)
     return GradedSource(load_edition(sample_edition_dir(sample, sample.edition)))
