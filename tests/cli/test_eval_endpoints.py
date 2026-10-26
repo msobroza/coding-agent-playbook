@@ -1,25 +1,26 @@
 """``playbook eval`` on a custom endpoint: the harness wiring, the judge and ``--targets --check``.
 
 Driven through ``cli.main`` (spec #281 tickets 06 and 06b). No harness CLI is run:
-:class:`FakeClaudeCli` answers the ``claude`` and ``opencode`` ``subprocess.run`` calls and records
-each argv and child environment, so the tests assert what the engine would spawn.
+:class:`~tests.cli.claude_cli_fakes.FakeClaudeCli` answers the ``claude`` and
+``opencode`` ``subprocess.run`` calls (a JSON result object when JSON output is asked
+for) and records each argv and child environment, so the tests assert what the engine
+would spawn.
 """
 
 from __future__ import annotations
 
 import json
-import subprocess
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
 from coding_agent_playbook.cli import main
 from coding_agent_playbook.evals.endpoints import endpoint_fingerprint
-from coding_agent_playbook.evals.judge import LLMJudge
-from coding_agent_playbook.evals.run.claude_code_runner import ClaudeCodeRunner
-from coding_agent_playbook.evals.run.opencode_runner import OpenCodeRunner
 from coding_agent_playbook.evals.targets import TARGET_ENV_VAR
+from tests.cli.claude_cli_fakes import FakeClaudeCli
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 _SAMPLE = "refactor-extract-helper"
 _TOKEN = "fake-endpoint-token-0000"
@@ -52,31 +53,6 @@ model = "my-org/coder-32b"
 harness = "claude_code"
 model = "claude-opus-5-5"
 """
-
-
-class FakeClaudeCli:
-    """Stands in for the ``claude`` CLI: records argv, env and the config dir; answers."""
-
-    def __init__(self, monkeypatch: pytest.MonkeyPatch, answer: str = "1", rc: int = 0) -> None:
-        self.calls: list[tuple[list[str], dict[str, str] | None]] = []
-        self.config_dir_entries: list[list[str]] = []
-        self._answer = answer
-        self._rc = rc
-        self._real_run = subprocess.run
-        for cls in (ClaudeCodeRunner, OpenCodeRunner, LLMJudge):
-            monkeypatch.setattr(cls, "available", classmethod(lambda _cls: True))
-        monkeypatch.setattr(subprocess, "run", self._run)
-
-    def _run(self, args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-        if not args or args[0] not in ("claude", "opencode"):
-            return self._real_run(args, **kwargs)
-        env = kwargs.get("env")
-        self.calls.append((list(args), dict(env) if env is not None else None))
-        if env is not None and "CLAUDE_CONFIG_DIR" in env:
-            self.config_dir_entries.append(
-                sorted(p.name for p in Path(env["CLAUDE_CONFIG_DIR"]).iterdir())
-            )
-        return subprocess.CompletedProcess(args, self._rc, self._answer, "")
 
 
 @pytest.fixture

@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from coding_agent_playbook.evals.endpoints import Endpoint
+    from coding_agent_playbook.evals.token_usage import TokenPrice
 
 #: The environment variable that picks a target when ``--target`` is absent.
 TARGET_ENV_VAR: Final = "PLAYBOOK_EVAL_TARGET"
@@ -52,7 +53,9 @@ class EvalTarget:
     ``harness`` is a runner name from the ``coding_agent_playbook.runners`` group
     (``claude_code``, ``opencode``, ``fake``); ``model`` is sent to it unchanged,
     ``None`` leaving the harness on its own default. ``runs`` and ``label`` are
-    optional (``label`` is display only). ``source`` says where the target is
+    optional (``label`` is display only); ``price`` is the optional USD per
+    million input and output tokens release metrics compute cost from (``None``:
+    cost unknown, recorded as ``null``). ``source`` says where the target is
     defined: a config file name, ``--target``, ``--runner``, the environment
     variable or :data:`BUILTIN_SOURCE`. ``endpoint`` is the custom endpoint the
     harness reaches (``None``: the harness's own settings and login), and
@@ -72,6 +75,7 @@ class EvalTarget:
     source: str = BUILTIN_SOURCE
     endpoint: Endpoint | None = None
     small_model: str | None = None
+    price: TokenPrice | None = None
 
     @property
     def display_model(self) -> str:

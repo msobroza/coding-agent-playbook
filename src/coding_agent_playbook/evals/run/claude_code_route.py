@@ -35,6 +35,7 @@ from coding_agent_playbook.evals.endpoints import (
     resolve_endpoint_headers,
     resolve_endpoint_token,
 )
+from coding_agent_playbook.evals.run.secret_redaction import redact_secrets, with_escaped_forms
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
@@ -51,8 +52,6 @@ _QUIET_ENV: Final = {
     "DISABLE_ERROR_REPORTING": "1",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
 }
-#: What a redacted token reads as in a transcript or an error excerpt.
-_REDACTED: Final = "[redacted]"
 
 
 @dataclass(frozen=True)
@@ -120,7 +119,11 @@ class ClaudeCodeRoute:
         return env
 
     def redact(self, text: str) -> str:
-        """``text`` with the token (and the header lines) replaced, for transcripts and errors.
+        """``text`` with the token, the headers value, each of its lines and values replaced.
+
+        Each header line and its value are redacted on their own too: an agent may echo one header,
+        or the lines may come back separated differently. Longest secrets go first
+        so a whole headers value is replaced before its lines are.
 
         Example::
 
@@ -128,10 +131,23 @@ class ClaudeCodeRoute:
             >>> ClaudeCodeRoute(Endpoint("e", "anthropic", "https://x"), "m", token="t0").redact("a t0")
             'a [redacted]'
         """
-        for secret in (self.token, self.headers):
-            if secret:
-                text = text.replace(secret, _REDACTED)
-        return text
+        return redact_secrets(text, self._secrets())
+
+    def _secrets(self) -> set[str]:
+        """The non-empty secrets and their JSON-escaped forms (``secret_redaction``).
+
+        The token, the headers value, each of its lines, and each line's value
+        (after the first ``:``) on its own, since an agent may print just the
+        value. The escaped forms cover raw JSON output kept as is (a result object
+        without a string answer, or a judge's error excerpt).
+        """
+        plain = {self.token}
+        if self.headers:
+            plain.add(self.headers)
+            for line in self.headers.splitlines():
+                plain.add(line.strip())
+                plain.add(line.partition(":")[2].strip())
+        return with_escaped_forms(plain)
 
     def _token_variable(self) -> str:
         """``ANTHROPIC_API_KEY`` for an x-api-key endpoint, else ``ANTHROPIC_AUTH_TOKEN`` (bearer)."""

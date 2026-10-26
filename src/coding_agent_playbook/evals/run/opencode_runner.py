@@ -46,6 +46,7 @@ from coding_agent_playbook.evals.run.cli_argv import PROMPT_TOKEN, build_cli_arg
 from coding_agent_playbook.evals.run.harness_runner import AgentRun, HarnessRunner
 from coding_agent_playbook.evals.run.opencode_output import OpenCodeOutput, parse_opencode_output
 from coding_agent_playbook.evals.run.opencode_route import routed_opencode_env
+from coding_agent_playbook.evals.token_usage import TokenUsage
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -70,6 +71,7 @@ class OpenCodeRun(AgentRun):
 
     ``output`` holds the summed token and cost totals; ``None`` when stdout held
     no JSON events (a custom command, or a run that failed before its first one).
+    Its token totals also fill ``usage``, so release metrics count them.
     """
 
     output: OpenCodeOutput | None = None
@@ -90,6 +92,7 @@ class OpenCodeRunner(HarnessRunner):
     """
 
     name = "opencode"
+    cli = _CLI
     requires_resolved_prompt = True
     accepts_model = True
     accepts_endpoint = True
@@ -146,6 +149,29 @@ class OpenCodeRunner(HarnessRunner):
         transcript = completed.stdout if output is None else output.text
         if completed.stderr:
             transcript = f"{transcript}{completed.stderr}" if transcript else completed.stderr
-        if self.route is not None:
-            transcript = self.route.redact(transcript)
-        return OpenCodeRun(transcript=transcript, returncode=completed.returncode, output=output)
+        return OpenCodeRun(
+            transcript=self._redact(transcript),
+            returncode=completed.returncode,
+            usage=_usage(output),
+            output=output,
+        )
+
+    def _redact(self, text: str) -> str:
+        """``text`` with the endpoint token and header values removed; unchanged without a route."""
+        return text if self.route is None else self.route.redact(text)
+
+
+def _usage(output: OpenCodeOutput | None) -> TokenUsage | None:
+    """The token counts of ``output`` for release metrics; ``None`` without JSON events.
+
+    OpenCode's own ``cost_usd`` is not carried: cost comes only from a target's
+    declared price (``token_usage``).
+
+    Example::
+
+        >>> _usage(OpenCodeOutput("hi", 10, 2, 0.0, 1))
+        TokenUsage(input_tokens=10, output_tokens=2)
+    """
+    if output is None:
+        return None
+    return TokenUsage(output.input_tokens, output.output_tokens)

@@ -811,6 +811,51 @@
           "required": false,
           "help": "--compare: directory for the checkouts and every run's JSON report (default: a new temporary directory)",
           "metavar": null
+        },
+        {
+          "action": "_StoreTrueAction",
+          "option_strings": [
+            "--all"
+          ],
+          "dest": "all_samples",
+          "nargs": 0,
+          "const": true,
+          "default": false,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "--record: run every eval sample (instead of the sample <id>)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--runs"
+          ],
+          "dest": "runs",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": "int",
+          "choices": null,
+          "required": false,
+          "help": "--record: runs per eval sample (default: the target's runs, else 1)",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--record"
+          ],
+          "dest": "record",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "with --run: write the release metrics file (schema version 1) of the samples on one target to PATH; refuses unpinned models",
+          "metavar": "PATH"
         }
       ],
       "exclusive_groups": [

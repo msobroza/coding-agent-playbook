@@ -679,6 +679,7 @@ harness = "claude_code"            # a runner name: claude_code, opencode or fak
 model = "claude-opus-5-5"
 runs = 3                           # optional
 label = "Claude Opus"              # optional, display only
+price = { input = 3.0, output = 15.0 }  # optional, USD per million tokens
 
 [evals.judge]                      # one judge for every target
 model = "claude-opus-5-5"          # the LLM judge's --model
@@ -784,6 +785,53 @@ login were used.
 `playbook eval --targets --check` runs one short prompt through each target's
 harness and prints `ok` or `FAIL` per target, exiting `1` if any fails. It is a
 paid call per target; the harness makes it, the engine makes no network call.
+
+### Release metrics
+
+`playbook eval --run --all --runs N --record <path>` runs every eval sample `N`
+times on one eval target and writes a release metrics file to `<path>`. A sample id
+in place of `--all` records only that sample. `--runs` defaults to the target's
+`runs`, else 1, and `--judge` adds the judge's scores and `--full-scoring` grades
+every check, as in `--run`. `--format` does not apply, since the file is always JSON:
+
+```bash
+playbook eval --run --all --runs 3 --target claude-opus --judge llm \
+  --record catalog/releases/0.3.0/metrics/claude-opus.json
+```
+
+Before any run, `--record` refuses these, with exit 2:
+
+- a target without an explicit model (`--runner`, or the built-in default);
+- a moving model alias as the target's `model` or `small_model`: `opus`,
+  `sonnet`, `haiku`, `opusplan`, `best`, `default` (also with a `[1m]` suffix or
+  a `provider/` prefix) and any name ending in `latest`, because the next release
+  could grade another model;
+- with `--judge`, an `[evals.judge] model` that is missing or a moving alias;
+- a selected sample whose prompt cannot be resolved.
+
+A sample that cannot be scored stops the recording, so a file never lacks a sample
+silently. Once written, the command exits 0 whatever the scores are.
+
+The file is JSON with `"schema_version": 1`. It holds:
+
+| Key | What it records |
+| --- | --- |
+| `release`, `commit` | the engine version, and the checked-out commit (`null` outside git) |
+| `previous` | `null`; the regression check fills it when it compares two releases |
+| `target` | `name`, `harness`, `harness_version` (the CLI's `--version`), `model`, `reported_model` (the model the harness reported most often), `label`, `endpoint`, `price`, `judge_model` and `runs` |
+| `summary` | `samples`, `runs`, `pass_rate` over every run, `mean_score` over the samples, total `tokens` and `cost_usd` |
+| `samples.<id>` | `prompt_id`, `graded` (`head`, the current text), `prompt_digest` (the prompt's artifact digest), `sample_digest` (`sample.toml` and `setup/`), `passes` out of `runs`, `mean_score`, `stdev`, `checks` (the mean score of each check that ran), `duration_seconds_mean`, `tokens_mean` and `cost_usd_mean` |
+
+Cost comes only from the target's `price`. Without one it is `null`, and so are
+tokens and cost when a run's harness reported no tokens. The harness's own cost
+estimate is never used: for a custom endpoint, Claude Code prices an unknown model
+from a bundled table. The Claude Code runner reads tokens and the model from
+`claude -p --output-format json`; the OpenCode runner sums the tokens of the
+`step_finish` events of `opencode run --format json` (subagent steps are not
+emitted, so it undercounts them) and reports no model.
+
+A reader ignores keys it does not know, so comparison keys can be added under
+version 1. Removing or retyping a key needs version 2.
 
 `playbook eval` has no `--run-tests` flag. A sample runs the test suite if and only if
 its `[gate]` references an execution metric, `coverage` or `test_pass_rate`.

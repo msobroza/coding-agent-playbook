@@ -278,11 +278,11 @@ class LLMJudge(Judge):
         except OSError as exc:  # e.g. not executable, or E2BIG for a huge artifact
             raise JudgeError(f"could not launch {self._command[0]!r}: {exc}") from exc
         if completed.returncode != 0:
-            output = self._redact(_excerpt(completed.stderr.strip() or completed.stdout))
+            output = _excerpt(self._redact(completed.stderr.strip() or completed.stdout))
             raise JudgeError(f"exited {completed.returncode}: {output}")
         score = parse_score(completed.stdout)
         if score is None:
-            output = self._redact(_excerpt(completed.stdout))
+            output = _excerpt(self._redact(completed.stdout))
             raise JudgeError(f"answered off-format (want one number in [0, 1]): {output!r}")
         return score
 

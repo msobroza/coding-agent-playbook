@@ -47,6 +47,11 @@ Sub-modes:
   keeps its v1 text). The repo's ``prompts`` key is never read, so the opt-in
   eval comparison (D37) names each side's set explicitly.
 
+  ``--run --all --runs N --record PATH`` (spec #281 ticket 07; ``commands/_eval_record.py``)
+  runs every sample (or the sample ``<id>``) N times on one Eval target and writes
+  a release metrics file (schema version 1); it refuses a target without an
+  explicit model, a moving model alias and an unpinned judge model.
+
   ``--compare BASE_REF`` (D37, opt-in and paid; ``commands/_eval_compare.py``)
   runs the eval samples of the rule-including prompts on a checkout of
   ``BASE_REF`` and of HEAD and prints a comparison table that flags regressions.
@@ -80,8 +85,10 @@ from coding_agent_playbook.commands._eval_options import (
     judge_sample_count,
     select_target,
 )
+from coding_agent_playbook.commands._eval_record import configure_record, run_record, wants_record
 from coding_agent_playbook.commands._eval_targets import check_targets, print_targets
 from coding_agent_playbook.evals.judge import JudgeError
+from coding_agent_playbook.evals.model_pins import RecordRefusedError
 from coding_agent_playbook.evals.prompting import PromptResolutionError
 from coding_agent_playbook.evals.report_format import (
     format_sample_result_text,
@@ -160,6 +167,7 @@ def configure(parser: argparse.ArgumentParser) -> None:
     )
     _configure_scoring(parser)
     configure_compare(parser)
+    configure_record(parser)
 
 
 def _configure_scoring(parser: argparse.ArgumentParser) -> None:
@@ -213,6 +221,13 @@ def run(args: argparse.Namespace) -> int:
         if getattr(args, "check", False):
             return check_targets(repo_root)
         return print_targets(repo_root)
+
+    # ``--record`` (spec #281 ticket 07) runs samples N times on one target and
+    # writes a release metrics file instead of printing one report.
+    if wants_record(args):
+        if not getattr(args, "run", False):
+            raise RecordRefusedError("--record, --all and --runs need --run")
+        return run_record(args, repo_root, load_eval_settings(repo_root))
 
     # ``--run`` is the only path that *executes* a sample; it has its own loading
     # (one sample by id) so it never pays for the full list+resolve unless the sample

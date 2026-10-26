@@ -43,8 +43,11 @@ from coding_agent_playbook.catalog.prompt_sets import DEFAULT_PROMPT_SET, Prompt
 from coding_agent_playbook.evals.prompting import render_prompt
 from coding_agent_playbook.evals.run.git_env import without_repo_location
 from coding_agent_playbook.evals.run.scoring import score
+from coding_agent_playbook.evals.token_usage import TokenUsage, sum_usage
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from coding_agent_playbook.evals.sample import EvalSample
     from coding_agent_playbook.grading.check import Check
     from coding_agent_playbook.grading.types import (
@@ -66,12 +69,14 @@ class AgentRun:
 
     ``returncode`` is ``0`` when the agent loop completed; ``transcript`` is the
     captured conversation/log (the judge's ``artifact`` in R2). ``reported_model``
-    is the model id the harness says it ran, when its output reports one.
+    is the model id the harness says it ran, when its output reports one, and
+    ``usage`` its token counts (``None`` when the harness reports none).
     """
 
     transcript: str
     returncode: int
     reported_model: str | None = None
+    usage: TokenUsage | None = None
 
 
 @dataclass
@@ -85,6 +90,7 @@ class _Trial:
     result: TrialResult
     transcript: str
     reported_model: str | None = None
+    usage: TokenUsage | None = None
 
 
 @dataclass
@@ -113,6 +119,8 @@ class SampleResult:
     ``endpoint`` and ``endpoint_fingerprint`` name the target's endpoint and a
     digest of its URL (never the URL); ``None`` when the run used the harness's
     personal settings.
+    ``usage`` is the token usage summed over every trial (``None`` when any
+    trial's harness reported none).
     """
 
     sample_id: str
@@ -129,6 +137,7 @@ class SampleResult:
     reported_model: str | None = None
     endpoint: str | None = None
     endpoint_fingerprint: str | None = None
+    usage: TokenUsage | None = None
 
 
 @dataclass
@@ -306,13 +315,21 @@ def _uv_sync_scratch(scratch_dir: Path) -> None:
         raise RuntimeError(f"uv sync failed in {scratch_dir}: {result.stderr}")
 
 
-def capture(scratch_dir: Path, baseline: Baseline, transcript: str) -> Candidate:
+def capture(
+    scratch_dir: Path,
+    baseline: Baseline,
+    transcript: str,
+    *,
+    redact: Callable[[str], str] | None = None,
+) -> Candidate:
     """Capture the post-agent tree + ``git diff`` vs baseline + the transcript.
 
     ``git diff <baseline.commit>`` is taken over the scratch repo (after staging
     untracked files so newly-created files appear in the diff and in
     ``changed_files``). The diff string + transcript are retained for R2's judge;
-    R1 scoring reads the tree (and ``changed_files``) directly.
+    R1 scoring reads the tree (and ``changed_files``) directly. ``redact`` (the
+    runner's endpoint redaction) is applied to the diff, so a token an agent wrote
+    into a file never reaches the judge's argv.
     """
     scratch_dir = Path(scratch_dir)
     # Stage everything so new/untracked files participate in the diff.
@@ -322,7 +339,7 @@ def capture(scratch_dir: Path, baseline: Baseline, transcript: str) -> Candidate
     changed = [line for line in name_only.splitlines() if line.strip()]
     return Candidate(
         tree=scratch_dir,
-        diff=diff,
+        diff=diff if redact is None else redact(diff),
         transcript=transcript,
         changed_files=changed,
     )
@@ -374,6 +391,9 @@ class HarnessRunner(ABC):
     """
 
     name: str
+    #: The executable a real runner drives (its ``--version`` names the harness
+    #: version in release metrics); ``None`` for a runner with no CLI.
+    cli: str | None = None
     #: Whether the constructor takes ``model=`` (an Eval target's model). The
     #: CLI runners do; a runner that does not is refused for a target with a model.
     accepts_model: bool = False
@@ -442,6 +462,7 @@ class HarnessRunner(ABC):
         n = compiled.trials_needed
 
         trials: list[TrialResult] = []
+        usages: list[TokenUsage | None] = []
         first: _Trial | None = None
         for i in range(n):
             # Each trial gets its own scratch subdir so a fresh setup/ is
@@ -457,11 +478,14 @@ class HarnessRunner(ABC):
                 fail_fast=fail_fast,
             )
             trials.append(trial.result)
+            usages.append(trial.usage)
             if first is None:
                 first = trial
 
         assert first is not None  # trials_needed is always >= 1
-        return self._assemble(sample, compiled.aggregate, trials, first, started)
+        result = self._assemble(sample, compiled.aggregate, trials, first, started)
+        result.usage = sum_usage(usages)
+        return result
 
     def _run_trial(
         self,
@@ -485,7 +509,7 @@ class HarnessRunner(ABC):
 
         baseline = materialize(sample, trial_dir)
         run = self._invoke_agent(prompt, trial_dir)
-        candidate = capture(trial_dir, baseline, run.transcript)
+        candidate = capture(trial_dir, baseline, run.transcript, redact=self._redact)
         report = score(
             sample,
             baseline,
@@ -498,6 +522,7 @@ class HarnessRunner(ABC):
             result=TrialResult(report=report, verdict=report.passed),
             transcript=run.transcript,
             reported_model=run.reported_model,
+            usage=run.usage,
         )
 
     def _assemble(
@@ -546,6 +571,13 @@ class HarnessRunner(ABC):
             0
         """
         return self._invoke_agent(prompt, scratch_dir)
+
+    def _redact(self, text: str) -> str:
+        """``text`` with the endpoint's secrets replaced; unchanged here (no endpoint).
+
+        A runner with an endpoint route overrides it; the graded diff goes through it.
+        """
+        return text
 
     @abstractmethod
     def _invoke_agent(self, prompt: str, scratch_dir: Path) -> AgentRun:
