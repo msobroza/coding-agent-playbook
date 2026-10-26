@@ -260,7 +260,7 @@ How much a finding blocks a merge: `important` must be fixed before merge, `nit`
 _Avoid_: priority, level; not an **Impact**, which grades a skill's sections
 
 **First pass**:
-The step of a review that reads the change and lists candidate findings, run by a fresh-context subagent; the main agent then checks each candidate against the lines it cites.
+The step of a review that reads the change and lists candidate findings: a fresh-context subagent, and beside it a pass that only hunts bugs (the harness's own reviewer where the agent can run it as a tool, such as Claude Code's `/code-review`, else a second subagent); the main agent merges their candidates and checks each against the lines it cites.
 _Avoid_: pre-review, scan
 
 **Re-review**:
