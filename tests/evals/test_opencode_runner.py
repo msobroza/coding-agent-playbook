@@ -23,7 +23,11 @@ from coding_agent_playbook.evals.endpoints import Endpoint
 from coding_agent_playbook.evals.prompting import PromptResolutionError, render_prompt
 from coding_agent_playbook.evals.run.fake_runner import write_files
 from coding_agent_playbook.evals.run.harness_runner import AgentRun, materialize
-from coding_agent_playbook.evals.run.opencode_route import OpenCodeRoute, opencode_route
+from coding_agent_playbook.evals.run.opencode_route import (
+    OpenCodeKeyRoute,
+    OpenCodeRoute,
+    opencode_route,
+)
 from coding_agent_playbook.evals.run.opencode_runner import OpenCodeRun, OpenCodeRunner
 from coding_agent_playbook.evals.sample import EvalSample, SampleInvocation
 from coding_agent_playbook.evals.token_usage import TokenUsage
@@ -185,6 +189,47 @@ def test_invoke_agent_child_env_keeps_parent_path(
     run = runner._invoke_agent("p", scratch)
 
     assert run.transcript == f"{os.environ['PATH']}|kept"
+
+
+_PRINT_VENV = (
+    "import os, sys; "
+    "sys.stdout.write(os.environ['PATH'].split(os.pathsep)[0] + '|' "
+    "+ os.environ.get('VIRTUAL_ENV', '<unset>'))"
+)
+
+
+@pytest.mark.parametrize(
+    "route",
+    [
+        None,
+        OpenCodeKeyRoute("anthropic/m", "k0"),
+        OpenCodeRoute(Endpoint("e", "openai-chat", "https://x/v1"), "m", token="t0k3n"),
+    ],
+    ids=["plain", "key-isolated", "routed"],
+)
+def test_invoke_agent_runs_on_the_scratch_venv(
+    tmp_path: Path, route: OpenCodeKeyRoute | OpenCodeRoute | None
+) -> None:
+    """The agent's ``python``/``pytest`` are the sample's, synced by ``materialize``."""
+    scratch = tmp_path / "scratch"
+    (scratch / ".venv" / "bin").mkdir(parents=True)
+    runner = OpenCodeRunner(command=[sys.executable, "-c", _PRINT_VENV], route=route)
+
+    run = runner._invoke_agent("p", scratch)
+
+    venv = scratch.absolute() / ".venv"
+    assert run.transcript == f"{venv / 'bin'}|{venv}"
+
+
+def test_invoke_agent_without_a_scratch_venv_keeps_the_parent_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("VIRTUAL_ENV", raising=False)
+    runner = OpenCodeRunner(command=[sys.executable, "-c", _PRINT_VENV])
+
+    run = runner._invoke_agent("p", tmp_path)
+
+    assert run.transcript == f"{os.environ['PATH'].split(os.pathsep)[0]}|<unset>"
 
 
 # --------------------------------------------------------------------------- #

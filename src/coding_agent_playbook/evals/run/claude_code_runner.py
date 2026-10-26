@@ -38,7 +38,7 @@ import shutil
 import subprocess
 from typing import TYPE_CHECKING, Final
 
-from coding_agent_playbook.evals.run.agent_env import unattended_agent_env
+from coding_agent_playbook.evals.run.agent_env import agent_env
 from coding_agent_playbook.evals.run.claude_code_output import (
     JSON_OUTPUT_ARGS,
     parse_claude_code_output,
@@ -146,11 +146,12 @@ class ClaudeCodeRunner(HarnessRunner):
         exits ``0`` but reports ``is_error``. No shell is used — the
         command is an explicit arg-list — and the working directory is the agent's
         scratch repo so any edits land in the tree the scoring layers read. The
-        child env is marked unattended, so lifecycle-hook asks degrade to deny; on
+        child env is marked unattended, so lifecycle-hook asks degrade to deny, and
+        runs on the scratch ``.venv`` (``agent_env``) when the sample has one; on
         an endpoint it is isolated too, and its token and headers are redacted from
         the decoded transcript (and the raw output when it is not JSON).
         """
-        with routed_env(self.route, unattended_agent_env()) as env:
+        with routed_env(self.route, agent_env(scratch_dir)) as env:
             completed = subprocess.run(
                 self._build_command(prompt),
                 cwd=scratch_dir,

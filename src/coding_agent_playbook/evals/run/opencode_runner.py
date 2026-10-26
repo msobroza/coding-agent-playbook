@@ -41,7 +41,7 @@ import subprocess
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from coding_agent_playbook.evals.run.agent_env import unattended_agent_env
+from coding_agent_playbook.evals.run.agent_env import agent_env
 from coding_agent_playbook.evals.run.cli_argv import PROMPT_TOKEN, build_cli_argv
 from coding_agent_playbook.evals.run.harness_runner import AgentRun, HarnessRunner
 from coding_agent_playbook.evals.run.opencode_output import OpenCodeOutput, parse_opencode_output
@@ -133,10 +133,11 @@ class OpenCodeRunner(HarnessRunner):
         lines. The process return code is recorded (``0`` = the agent loop
         completed). No shell is used and the working directory is the agent's
         scratch repo, so any edits land in the tree the scoring layers read. The
-        child env is marked unattended, so lifecycle-hook asks degrade to deny; on
+        child env is marked unattended, so lifecycle-hook asks degrade to deny, and
+        runs on the scratch ``.venv`` (``agent_env``) when the sample has one; on
         an endpoint it is isolated too, and the token is redacted from the transcript.
         """
-        with routed_opencode_env(self.route, unattended_agent_env()) as env:
+        with routed_opencode_env(self.route, agent_env(scratch_dir)) as env:
             completed = subprocess.run(
                 self._build_command(prompt),
                 cwd=scratch_dir,
