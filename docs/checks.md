@@ -949,11 +949,20 @@ playbook eval refactor/extract-helper --compare origin/main --judge llm --compar
 ```
 
 Every eval sample runs as `playbook eval <id> --run --format json`. A git-ref side
-runs it in its checkout, through that checkout's own engine, plus `--prompt-set`
-when the side's set is not v1: the base side therefore grades the base ref's
-prompts and rule bodies. `head` runs it in the repository with `--edition head`,
-so a pinned sample grades the current text too. An edition side runs it in the
-repository with `--edition-dir <dir>`, so every sample grades the built edition.
+runs it in its checkout, through that checkout's own engine, with `--edition head`
+and with `--prompt-set` when the side's set is not v1: the base side therefore
+grades the base ref's prompts and rule bodies, pinned eval samples included. An
+engine older than pinned eval samples does not take `--edition head`; the side
+then runs without it, and grades the ref's text anyway, since no eval sample is
+pinned there. `head` runs it in the repository with `--edition head`, so a pinned
+sample grades the current text too. An edition side runs it in the repository
+with `--edition-dir <dir>`, so every sample grades the built edition. An edition
+holds one text: `--base-prompt-set` or `--prompt-set` on an edition side is
+ignored, with a warning.
+
+`--compare` takes one or two sides, so a task or eval sample id goes before it:
+`playbook eval <id> --compare <base>`. When the second side names a task or an
+eval sample, the comparison prints a hint saying so.
 
 Before the first paid run, every selected eval sample must render on both sides:
 a side in place renders it in the engine, and a git ref through one hermetic

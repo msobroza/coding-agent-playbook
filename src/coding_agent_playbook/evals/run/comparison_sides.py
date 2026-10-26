@@ -1,7 +1,9 @@
 """The sides of ``playbook eval --compare``: a git ref, ``head`` or ``edition:<tag>`` (#281 ticket 14).
 
 - A **git ref** (``origin/main``, ``HEAD``) is checked out as a detached ``git
-  worktree`` and graded through that checkout's own engine and text.
+  worktree`` and graded through that checkout's own engine and text, with
+  ``--edition head`` when that engine takes the flag, so a pinned sample grades
+  the ref's text and not its frozen edition (:func:`takes_edition_head`).
 - ``head`` is the current text in place: the repository itself, uncommitted
   edits included, with ``--edition head`` so a pinned sample grades it too.
 - ``edition:<tag>`` is release ``<tag>``'s graded set, built on the fly from the
@@ -41,6 +43,8 @@ HEAD_SIDE: Final = "head"
 EDITION_PREFIX: Final = "edition:"
 #: The ``playbook eval --run`` flag that grades an edition built at a directory.
 EDITION_DIR_FLAG: Final = "--edition-dir"
+#: The module an engine that takes ``--edition head`` ships (#318); older engines lack both.
+_EDITION_HEAD_MODULE: Final = ("src", "coding_agent_playbook", "evals", "graded_source.py")
 #: Bound on one ``git worktree`` call (it touches only the local repository).
 _GIT_TIMEOUT_S: Final = 120.0
 
@@ -156,7 +160,7 @@ def prepare_side(
     """
     if side.kind == "ref":
         with sources.checkout_ref(side.ref, work_dir / "checkouts" / name) as checkout:
-            yield PreparedSide(name, side, checkout, _prompt_set_flags(side))
+            yield PreparedSide(name, side, checkout, _ref_flags(side, checkout))
         return
     if side.kind == "head":
         flags = ("--edition", HEAD_SIDE, *_prompt_set_flags(side))
@@ -168,6 +172,29 @@ def prepare_side(
     except EditionError as exc:
         raise ComparisonError(f"--compare {side.ref}: {exc}") from exc
     yield PreparedSide(name, side, sources.repo_root, (EDITION_DIR_FLAG, str(root)), edition)
+
+
+def _ref_flags(side: ComparisonSide, checkout: Path) -> tuple[str, ...]:
+    """A git-ref side's flags: ``--edition head`` when its engine takes it, then its prompt set."""
+    edition = ("--edition", HEAD_SIDE) if takes_edition_head(checkout) else ()
+    return (*edition, *_prompt_set_flags(side))
+
+
+def takes_edition_head(checkout: Path) -> bool:
+    """Whether the engine that grades ``checkout`` takes ``--edition head``.
+
+    A checkout without ``src/coding_agent_playbook`` is graded by this engine,
+    which does; a checkout with an engine does when it ships the pinned-sample
+    module (``evals/graded_source.py``, added with the flag). An older engine
+    has no pinned samples, so it grades its own text without the flag.
+
+    Example::
+
+        >>> takes_edition_head(Path("/checkout/without/an/engine"))  # doctest: +SKIP
+        True
+    """
+    engine = checkout.joinpath(*_EDITION_HEAD_MODULE[:2])
+    return not engine.is_dir() or checkout.joinpath(*_EDITION_HEAD_MODULE).is_file()
 
 
 def _prompt_set_flags(side: ComparisonSide) -> tuple[str, ...]:

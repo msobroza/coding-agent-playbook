@@ -184,7 +184,39 @@ def _sides(args: argparse.Namespace) -> tuple[ComparisonSide, ComparisonSide] | 
         return None
     head_name = names[1] if len(names) == _SIDES else _DEFAULT_HEAD_SIDE
     base = ComparisonSide.parse(names[0], args.base_prompt_set)
-    return base, ComparisonSide.parse(head_name, args.prompt_set)
+    head = ComparisonSide.parse(head_name, args.prompt_set)
+    _warn_ignored_prompt_set(base, "--base-prompt-set")
+    _warn_ignored_prompt_set(head, "--prompt-set")
+    return base, head
+
+
+def _warn_ignored_prompt_set(side: ComparisonSide, flag: str) -> None:
+    """Warn that ``flag`` does not apply to ``side`` when it is an edition (it holds one text)."""
+    if side.kind == "edition" and side.prompt_set != DEFAULT_PROMPT_SET:
+        print(
+            f"warning: {flag} {side.prompt_set} is ignored for {side.ref}: "
+            "an edition grades its own text",
+            file=sys.stderr,
+        )
+
+
+def _hint_id_as_side(names: list[str], registry: TaskRegistry) -> None:
+    """Hint that a second ``--compare`` side naming an eval sample or task goes before ``--compare``.
+
+    ``--compare`` takes one or two sides, so ``--compare origin/main review/x``
+    reads ``review/x`` as the HEAD side.
+    """
+    if len(names) != _SIDES:
+        return
+    try:
+        registry.select(names[1])
+    except TaskRegistryError:
+        return
+    print(
+        f"hint: {names[1]!r} names an eval sample or task, not a side; put it before "
+        f"--compare: playbook eval {names[1]} --compare {names[0]}",
+        file=sys.stderr,
+    )
 
 
 def _registry(repo_root: Path) -> TaskRegistry | None:
@@ -206,8 +238,10 @@ def _selected_samples(
 
     Against an edition, the default is the samples of the prompts every edition
     side grades. ``None`` (after an error line) on an unknown name, an
-    unreadable tag or an empty selection.
+    unreadable tag or an empty selection. A HEAD side that names an eval sample
+    or task prints a hint first.
     """
+    _hint_id_as_side(list(args.compare), registry)
     name: str | None = getattr(args, "id", None)
     try:
         if name is not None:
