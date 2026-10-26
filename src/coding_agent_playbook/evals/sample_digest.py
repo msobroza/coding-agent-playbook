@@ -77,6 +77,28 @@ def rendered_prompt_digest(sample: EvalSample, edition: Edition) -> str:
     return _sha256(render_prompt(sample, strict=True, edition=edition).encode("utf-8"))
 
 
+def inputs_digest(sample: EvalSample, rendered_prompt: str) -> str:
+    """The sha256 hex digest of what ``sample`` sends the agent, with its :func:`sample_digest`.
+
+    ``rendered_prompt`` is the text :func:`render_prompt` returned for the run
+    (prompt body, included rules' text, templating, prompt arguments), so an
+    edited rule moves the digest of exactly the samples whose prompt includes
+    it, and frontmatter the agent never receives (``output_contract``) moves
+    none (#329). The caller passes the render it already did before the first
+    paid run instead of rendering twice.
+
+    Example::
+
+        >>> inputs_digest(sample, render_prompt(sample, strict=True))  # doctest: +SKIP
+        '3a4c...'
+    """
+    payload = {
+        "prompt": _sha256(rendered_prompt.encode("utf-8")),
+        "sample": sample_digest(sample),
+    }
+    return _sha256(canonical_json(payload))
+
+
 def _tree_hashes(root: Path) -> dict[str, str]:
     """``{posix path under root: sha256}`` of every regular file under ``root``."""
     return {path.relative_to(root).as_posix(): _file_sha256(path) for path in _files_under(root)}

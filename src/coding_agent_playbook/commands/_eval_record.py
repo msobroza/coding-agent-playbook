@@ -11,7 +11,8 @@ as for ``--run``. A sample that cannot
 be scored stops the recording, so a file never silently lacks a sample. Every
 sample grades the current text (``samples``); a pinned sample also runs on its
 edition as a control (``controls``, #281 ticket 15), whose edition is loaded and
-rendered before any paid run too. The
+rendered before any paid run too. Each entry records the inputs digest of that
+pre-run render (#329 ticket 03). The
 file is written whatever the scores are: exit ``0`` once it is written, ``2`` on
 a refusal or an unscorable sample.
 """
@@ -47,7 +48,7 @@ from coding_agent_playbook.evals.release_metrics import (
 from coding_agent_playbook.evals.release_metrics_schema import validate_release_metrics
 from coding_agent_playbook.evals.run.git_env import without_repo_location
 from coding_agent_playbook.evals.run.harness_version import harness_cli_version
-from coding_agent_playbook.evals.sample_digest import prompt_digest, sample_digest
+from coding_agent_playbook.evals.sample_digest import inputs_digest, prompt_digest, sample_digest
 from coding_agent_playbook.evals.task_registry import TaskRegistry, TaskRegistryError
 from coding_agent_playbook.release.edition import EditionError
 from coding_agent_playbook.validation.context import SyncContext
@@ -115,8 +116,8 @@ def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings
     plan = _build_plan(args, settings, target, runs)
     if plan is None:
         return 2
-    plan.check_prompts(samples)
-    editions = plan.control_editions(samples)
+    inputs = plan.check_prompts(samples)
+    controls = plan.control_editions(samples)
     recorded = RecordedTarget(
         target=target,
         harness_version=harness_cli_version(plan.runner.cli),
@@ -127,18 +128,21 @@ def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings
         release=coding_agent_playbook.__version__,
         commit=_head_commit(repo_root),
         recorded=recorded,
-        samples=[plan.run(sample, index, len(samples)) for index, sample in enumerate(samples)],
-        controls=[
-            plan.run(sample, index, len(samples), edition=editions[sample.id])
+        samples=[
+            plan.run(sample, index, len(samples), inputs[sample.id])
             for index, sample in enumerate(samples)
-            if sample.id in editions
+        ],
+        controls=[
+            plan.run(sample, index, len(samples), control.inputs_digest, edition=control.edition)
+            for index, sample in enumerate(samples)
+            if (control := controls.get(sample.id)) is not None
         ],
     )
     validate_release_metrics(metrics)
     _write(out_path, metrics)
-    controls = f" (+{len(editions)} edition controls)" if editions else ""
+    extra = f" (+{len(controls)} edition controls)" if controls else ""
     print(
-        f"recorded {len(samples)} samples{controls} x {runs} runs on target "
+        f"recorded {len(samples)} samples{extra} x {runs} runs on target "
         f"{target.name!r} to {out_path}"
     )
     return 0
@@ -159,6 +163,14 @@ def _build_plan(
 
 
 @dataclass(frozen=True)
+class _Control:
+    """A pinned sample's control: its edition and the inputs digest of the edition's render."""
+
+    edition: Edition
+    inputs_digest: str
+
+
+@dataclass(frozen=True)
 class _RecordPlan:
     """How each sample runs: the runner, the judge, the run count and fail-fast.
 
@@ -171,38 +183,53 @@ class _RecordPlan:
     runs: int
     fail_fast: bool = True
 
-    def check_prompts(self, samples: list[EvalSample]) -> None:
-        """Resolve every sample's prompt before the first paid run; refuse on the first bad one."""
+    def check_prompts(self, samples: list[EvalSample]) -> dict[str, str]:
+        """Render every sample's prompt before the first paid run; refuse on the first bad one.
+
+        Returns each sample's inputs digest, by id, hashed from that one render (#329).
+        """
+        digests: dict[str, str] = {}
         for sample in samples:
             try:
-                render_prompt(sample, strict=self.runner.requires_resolved_prompt)
+                text = render_prompt(sample, strict=self.runner.requires_resolved_prompt)
             except PromptResolutionError as exc:
                 raise RecordRefusedError(
                     f"sample {sample.id!r} has no prompt to run, so nothing was run: {exc}"
                 ) from exc
+            digests[sample.id] = inputs_digest(sample, text)
+        return digests
 
-    def control_editions(self, samples: list[EvalSample]) -> dict[str, Edition]:
-        """The edition of each pinned sample, loaded and rendered before the first paid run."""
-        editions: dict[str, Edition] = {}
+    def control_editions(self, samples: list[EvalSample]) -> dict[str, _Control]:
+        """Each pinned sample's control, its edition loaded and rendered before the first paid run."""
+        controls: dict[str, _Control] = {}
         for sample in samples:
             if sample.edition is None:
                 continue
             try:
                 edition = graded_source(sample).edition
                 assert edition is not None  # a pinned sample without head grades its edition
-                render_prompt(sample, strict=self.runner.requires_resolved_prompt, edition=edition)
+                strict = self.runner.requires_resolved_prompt
+                text = render_prompt(sample, strict=strict, edition=edition)
             except (EditionError, PromptResolutionError) as exc:
                 raise RecordRefusedError(
                     f"pinned sample {sample.id!r} cannot run on edition {sample.edition} as a "
                     f"control, so nothing was run: {exc}"
                 ) from exc
-            editions[sample.id] = edition
-        return editions
+            controls[sample.id] = _Control(edition, inputs_digest(sample, text))
+        return controls
 
     def run(
-        self, sample: EvalSample, index: int, total: int, *, edition: Edition | None = None
+        self,
+        sample: EvalSample,
+        index: int,
+        total: int,
+        inputs: str,
+        *,
+        edition: Edition | None = None,
     ) -> SampleRuns:
         """``sample``'s runs and digests on the current text, or on ``edition`` as a control.
+
+        ``inputs`` is the inputs digest of the render checked before the first run.
 
         Each run is reported on stderr as it ends.
         """
@@ -224,6 +251,7 @@ class _RecordPlan:
             prompt_digest=prompt_digest(sample, edition=edition),
             sample_digest=sample_digest(sample),
             results=results,
+            inputs_digest=inputs,
         )
 
     def _run_once(self, sample: EvalSample, edition: Edition | None) -> SampleResult:

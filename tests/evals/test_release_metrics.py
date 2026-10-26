@@ -27,6 +27,7 @@ from coding_agent_playbook.evals.targets import EvalTarget
 from coding_agent_playbook.evals.token_usage import TokenPrice, TokenUsage
 from coding_agent_playbook.grading.scope import CostTier, Determinism
 from coding_agent_playbook.grading.types import CheckResult, EvaluationReport
+from tests.evals.release_metrics_files import metrics_file, sample_entry
 
 _USAGE = TokenUsage(1000, 500)
 _PRICED = EvalTarget(
@@ -233,3 +234,45 @@ def test_validation_checks_each_control_entry() -> None:
     metrics["controls"] = []
     with pytest.raises(ReleaseMetricsError, match="controls: expected dict"):
         validate_release_metrics(metrics)
+
+
+def test_entries_record_the_inputs_digest_of_head_and_control_runs() -> None:
+    # #329 ticket 03: each entry records the digest of what its agent received.
+    recorded = RecordedTarget(_PRICED, harness_version="1.2.3", judge_model=None, runs=1)
+    head = SampleRuns(
+        "review/a", "review", GRADED_HEAD, "p" * 64, "s" * 64, [_result(1.0, passed=True)], "h" * 64
+    )
+    control = SampleRuns(
+        "review/a", "review", "v9.9.8", "e" * 64, "s" * 64, [_result(1.0, passed=True)], "c" * 64
+    )
+    metrics = build_release_metrics(
+        release="9.9.9", commit=None, recorded=recorded, samples=[head], controls=[control]
+    )
+    validate_release_metrics(json.loads(json.dumps(metrics)))
+    controls = metrics["controls"]
+    assert isinstance(controls, dict)
+    assert _sample_entry(metrics, "review/a")["inputs_digest"] == "h" * 64
+    assert controls["review/a"]["inputs_digest"] == "c" * 64
+
+
+def test_an_entry_without_an_inputs_digest_leaves_the_key_out_and_validates() -> None:
+    metrics = _build(_PRICED, _runs("review/a", _result(1.0, passed=True)))
+    assert "inputs_digest" not in _sample_entry(metrics, "review/a")
+    validate_release_metrics(metrics)  # files recorded before #329 ticket 03
+
+
+def test_validation_rejects_an_inputs_digest_that_is_not_a_string() -> None:
+    metrics = _build(_PRICED, _runs("review/a", _result(1.0, passed=True)))
+    _sample_entry(metrics, "review/a")["inputs_digest"] = None
+    with pytest.raises(
+        ReleaseMetricsError, match=r"samples\.review/a\.inputs_digest: expected str"
+    ):
+        validate_release_metrics(metrics)
+
+
+def test_hand_written_files_with_and_without_inputs_digests_validate() -> None:
+    with_digest = sample_entry(0.9, inputs="i" * 64)
+    without = sample_entry(0.9)
+    validate_release_metrics(metrics_file("9.9.9", {"review/a": with_digest, "review/b": without}))
+    assert with_digest["inputs_digest"] == "i" * 64
+    assert "inputs_digest" not in without
