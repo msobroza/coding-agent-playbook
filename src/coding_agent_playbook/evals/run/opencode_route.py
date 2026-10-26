@@ -20,6 +20,10 @@ OpenCode splices an ``{env:VAR}`` value into the JSON text unescaped (and an uns
 one silently becomes ``""``), so the token is checked non-empty and free of
 quotes, backslashes and control characters first. This needs OpenCode 1.1.64 or
 later (``{env:}`` substitution in inline config).
+
+An :class:`OpenCodeKeyRoute` isolates a run the same way without an endpoint: the
+built-in ``anthropic`` provider, reached with an API key in ``ANTHROPIC_API_KEY``
+(``--record``, #329 ticket 02).
 """
 
 from __future__ import annotations
@@ -69,12 +73,14 @@ _SCRUBBED_PREFIXES: Final = ("OPENCODE_", "OTEL_", "ANTHROPIC_", "OPENAI_")
 _SCRUBBED_SUFFIX: Final = "_API_KEY"
 #: Inherited credential variables dropped by name.
 _SCRUBBED_NAMES: Final = frozenset({"AWS_BEARER_TOKEN_BEDROCK"})
-#: Switches that keep a run off the network paths it does not need; OpenCode reads "1".
-_QUIET_ENV: Final = {
+#: Switches every isolated run gets: no self-update, no Claude Code instructions; OpenCode reads "1".
+_ISOLATED_ENV: Final = {
     "OPENCODE_DISABLE_AUTOUPDATE": "1",
-    "OPENCODE_DISABLE_MODELS_FETCH": "1",
     "OPENCODE_DISABLE_CLAUDE_CODE": "1",
 }
+#: An endpoint run also skips the models catalog fetch: its inline config declares its models.
+#: A key route keeps the fetch, since its built-in provider's models come from that catalog.
+_QUIET_ENV: Final = {**_ISOLATED_ENV, "OPENCODE_DISABLE_MODELS_FETCH": "1"}
 #: The scratch subdirectory each XDG base variable points at.
 _XDG_DIRS: Final = {"XDG_CONFIG_HOME": "config", "XDG_DATA_HOME": "data", "XDG_STATE_HOME": "state"}
 #: Characters an unescaped ``{env:}`` value may not hold inside a JSON string.
@@ -211,6 +217,59 @@ class OpenCodeRoute:
         return entry
 
 
+@dataclass(frozen=True)
+class OpenCodeKeyRoute:
+    """An isolated OpenCode run on its built-in providers, given only an Anthropic API key.
+
+    What a ``--record`` run without an endpoint gets (#329 ticket 02): the same
+    scrubbed env and empty XDG directories as :class:`OpenCodeRoute`, so no
+    personal config, stored keys, plugins or Claude Code instructions reach the
+    run, and the key as ``ANTHROPIC_API_KEY``. ``model`` is sent as written
+    (``anthropic/<model id>``). ``token`` is kept out of ``repr``.
+
+    Example::
+
+        >>> OpenCodeKeyRoute("anthropic/m", "k0").model_ref
+        'anthropic/m'
+    """
+
+    model: str
+    token: str = field(repr=False)
+
+    @property
+    def model_ref(self) -> str:
+        """The target's model, exactly as written: what ``opencode run --model`` takes."""
+        return self.model
+
+    def child_env(self, base: Mapping[str, str], scratch: Path) -> dict[str, str]:
+        """``base`` scrubbed of the user's OpenCode setup, then the scratch XDG dirs and the key.
+
+        Example::
+
+            >>> OpenCodeKeyRoute("anthropic/m", "k0").child_env({"OPENAI_API_KEY": "o"}, Path("/s"))
+            {'XDG_CONFIG_HOME': '/s/config', 'XDG_DATA_HOME': '/s/data', 'XDG_STATE_HOME': '/s/state', 'ANTHROPIC_API_KEY': 'k0', 'OPENCODE_DISABLE_AUTOUPDATE': '1', 'OPENCODE_DISABLE_CLAUDE_CODE': '1'}
+        """
+        env = {name: value for name, value in base.items() if not _scrubbed(name)}
+        env.update({name: str(scratch / sub) for name, sub in _XDG_DIRS.items()})
+        env["ANTHROPIC_API_KEY"] = self.token
+        env.update(_ISOLATED_ENV)
+        return env
+
+    def redact(self, text: str) -> str:
+        """``text`` with the key and its JSON-escaped forms replaced.
+
+        Example::
+
+            >>> OpenCodeKeyRoute("anthropic/m", "k0").redact("a k0")
+            'a [redacted]'
+        """
+        return redact_secrets(text, with_escaped_forms((self.token,)))
+
+
+#: How an OpenCode run is isolated: through an endpoint, or on an API key.
+type OpenCodeIsolation = OpenCodeRoute | OpenCodeKeyRoute
+
+
 def _scrubbed(name: str) -> bool:
     return (
         name.startswith(_SCRUBBED_PREFIXES)
@@ -283,7 +342,7 @@ def _parse_headers(raw: str, endpoint: Endpoint) -> dict[str, str]:
 
 @contextmanager
 def routed_opencode_env(
-    route: OpenCodeRoute | None, base: Mapping[str, str] | None
+    route: OpenCodeIsolation | None, base: Mapping[str, str] | None
 ) -> Iterator[dict[str, str] | None]:
     """The child env for one OpenCode process: ``base`` unrouted, else isolated.
 

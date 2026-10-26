@@ -52,7 +52,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
-    from coding_agent_playbook.evals.run.opencode_route import OpenCodeRoute
+    from coding_agent_playbook.evals.run.opencode_route import OpenCodeIsolation
 
 #: Name of the OpenCode executable looked up on ``PATH``.
 _CLI = "opencode"
@@ -87,8 +87,9 @@ class OpenCodeRunner(HarnessRunner):
     ``model`` (an Eval target's model) is passed as ``--model <model>``, exactly
     as written; ``None`` leaves the CLI on its own default model. ``route`` (an
     Eval target's endpoint) isolates the run and points it at that endpoint, the
-    model then sent as ``playbook-target/<model>``; ``None`` keeps the user's
-    own OpenCode setup.
+    model then sent as ``playbook-target/<model>``; under ``--record`` without
+    an endpoint, an ``OpenCodeKeyRoute`` isolates it on an API key. ``None``
+    keeps the user's own OpenCode setup.
     """
 
     name = "opencode"
@@ -103,7 +104,7 @@ class OpenCodeRunner(HarnessRunner):
         command: Sequence[str] | None = None,
         timeout: float = _DEFAULT_TIMEOUT,
         model: str | None = None,
-        route: OpenCodeRoute | None = None,
+        route: OpenCodeIsolation | None = None,
     ) -> None:
         self.model = model
         self.route = route

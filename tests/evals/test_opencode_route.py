@@ -11,6 +11,7 @@ from coding_agent_playbook.evals.endpoints import Endpoint, EndpointError
 from coding_agent_playbook.evals.run.opencode_route import (
     PROVIDER_ID,
     TOKEN_VARIABLE,
+    OpenCodeKeyRoute,
     OpenCodeRoute,
     opencode_route,
     routed_opencode_env,
@@ -265,4 +266,46 @@ def test_routed_opencode_env_gives_fresh_scratch_xdg_dirs_removed_after() -> Non
         assert config_home.is_dir()
         assert list(config_home.iterdir()) == []
         assert Path(env["XDG_DATA_HOME"]).is_dir()
+    assert not config_home.exists()
+
+
+_KEY = "fake-record-key"
+
+
+def test_key_route_env_is_isolated_and_carries_only_the_anthropic_key() -> None:
+    # #329 ticket 02: a record run without an endpoint, on the built-in provider.
+    route = OpenCodeKeyRoute("anthropic/claude-opus-5-5", _KEY)
+    env = route.child_env(_PARENT_ENV, Path("/scratch"))
+    assert env["ANTHROPIC_API_KEY"] == _KEY
+    assert env["XDG_CONFIG_HOME"] == "/scratch/config"
+    assert env["XDG_DATA_HOME"] == "/scratch/data"
+    assert env["XDG_STATE_HOME"] == "/scratch/state"
+    for dropped in (
+        "OPENAI_API_KEY",
+        "GROQ_API_KEY",
+        "AWS_BEARER_TOKEN_BEDROCK",
+        "OPENCODE_CONFIG",
+        "OPENCODE_CONFIG_DIR",
+        "OTEL_EXPORTER_OTLP_ENDPOINT",
+        "ANTHROPIC_BASE_URL",
+        "OPENCODE_CONFIG_CONTENT",
+        TOKEN_VARIABLE,
+    ):
+        assert dropped not in env, dropped
+    assert env["OPENCODE_DISABLE_CLAUDE_CODE"] == "1"
+    assert env["OPENCODE_DISABLE_AUTOUPDATE"] == "1"
+
+
+def test_key_route_sends_the_model_as_written_and_hides_the_key() -> None:
+    route = OpenCodeKeyRoute("anthropic/claude-opus-5-5", _KEY)
+    assert route.model_ref == "anthropic/claude-opus-5-5"
+    assert _KEY not in repr(route)
+    assert route.redact(f"401 for {_KEY}") == "401 for [redacted]"
+
+
+def test_routed_opencode_env_on_a_key_route_gives_fresh_scratch_xdg_dirs() -> None:
+    with routed_opencode_env(OpenCodeKeyRoute("anthropic/m", _KEY), _PARENT_ENV) as env:
+        assert env is not None
+        config_home = Path(env["XDG_CONFIG_HOME"])
+        assert list(config_home.iterdir()) == []
     assert not config_home.exists()

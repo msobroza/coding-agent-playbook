@@ -8,7 +8,8 @@ One file holds one release's scores on one Eval target
       "release": "<engine version>", "previous": null, "commit": "<sha>" | null,
       "target": {"name", "harness", "harness_version", "model", "reported_model",
                  "label", "endpoint": {"name", "fingerprint"} | null,
-                 "price": {"input", "output"} | null, "judge_model", "runs"},
+                 "price": {"input", "output"} | null, "judge_model", "runs",
+                 "isolated"?},
       "summary": {"samples", "runs", "pass_rate", "mean_score", "tokens", "cost_usd"},
       "samples": {"<sample id>": {"prompt_id", "graded", "prompt_digest", "sample_digest",
                   "passes", "runs", "mean_score", "stdev", "checks": {"<check id>": score},
@@ -27,6 +28,10 @@ before it still validates, and the summary counts ``samples`` only.
 the strict render of the prompt the entry ran (the current text for ``samples``,
 the edition's for ``controls``) together with ``sample_digest``. It is optional,
 so a file written before it still validates; when present it is a string.
+
+``target.isolated`` (#329 ticket 02) is ``true`` when the harness and the judge
+ran with an empty config directory, without the user's personal settings
+(``evals.record_isolation``). It is optional too; when present it is a bool.
 
 ``previous`` is ``null`` until the regression check compares the file with the
 previous release; that check may add comparison keys (``vs_previous`` per
@@ -50,6 +55,8 @@ SCHEMA_VERSION: Final = 1
 CONTROLS_KEY: Final = "controls"
 #: The optional per-entry key of the digest of what the agent received.
 INPUTS_DIGEST_KEY: Final = "inputs_digest"
+#: The optional target key saying the run was isolated from personal settings.
+ISOLATED_KEY: Final = "isolated"
 
 _STR: Final = (str,)
 _OPT_STR: Final = (str, type(None))
@@ -81,6 +88,8 @@ _TARGET: Final[_Fields] = {
     "judge_model": _OPT_STR,
     "runs": _INT,
 }
+#: Target keys added under version 1: absent in older files, typed when present.
+_OPTIONAL_TARGET: Final[_Fields] = {ISOLATED_KEY: (bool,)}
 _ENDPOINT: Final[_Fields] = {"name": _STR, "fingerprint": _STR}
 _PRICE: Final[_Fields] = {"input": _NUM, "output": _NUM}
 _SUMMARY: Final[_Fields] = {
@@ -145,6 +154,7 @@ def _problems(data: object) -> list[str]:
     problems += _nested(data, "summary", _SUMMARY)
     target = data.get("target")
     if isinstance(target, dict):
+        problems += _check_fields(target, _OPTIONAL_TARGET, "target.", optional=True)
         problems += _nested(target, "endpoint", _ENDPOINT, prefix="target.")
         problems += _nested(target, "price", _PRICE, prefix="target.")
     controls = data.get(CONTROLS_KEY, {})

@@ -16,6 +16,9 @@ isolated from the user's own Claude Code settings and login:
 
 The request model is the runner's ``--model``. Without a route a run keeps the
 user's personal Claude Code settings (today's behaviour).
+
+A :class:`ClaudeCodeKeyRoute` isolates a run the same way without an endpoint:
+Anthropic's own API, reached with an API key (``--record``, #329 ticket 02).
 """
 
 from __future__ import annotations
@@ -167,6 +170,63 @@ class ClaudeCodeRoute:
         return env
 
 
+@dataclass(frozen=True)
+class ClaudeCodeKeyRoute:
+    """An isolated Claude Code run on Anthropic's API, authenticated by an API key only.
+
+    What a ``--record`` run without an endpoint gets (#329 ticket 02): the same
+    scrubbed env and empty ``CLAUDE_CONFIG_DIR`` as :class:`ClaudeCodeRoute`, so no
+    personal instructions, plugins, hooks or MCP servers reach the run, and the key
+    as ``ANTHROPIC_API_KEY``. No ``--settings``: there is nothing to route. ``token``
+    is kept out of ``repr``.
+
+    Example::
+
+        >>> ClaudeCodeKeyRoute("k0").child_env({"PATH": "/bin"}, Path("/c"))["ANTHROPIC_API_KEY"]
+        'k0'
+    """
+
+    token: str = field(repr=False)
+
+    def settings_argv(self) -> list[str]:
+        """No ``--settings``: the run talks to Anthropic's API, Claude Code's default.
+
+        Example::
+
+            >>> ClaudeCodeKeyRoute("k0").settings_argv()
+            []
+        """
+        return []
+
+    def child_env(self, base: Mapping[str, str], config_dir: Path) -> dict[str, str]:
+        """``base`` scrubbed of the user's Claude Code setup, then the empty config dir and the key.
+
+        Example::
+
+            >>> ClaudeCodeKeyRoute("k0").child_env({"CLAUDE_CONFIG_DIR": "/me"}, Path("/c"))["CLAUDE_CONFIG_DIR"]
+            '/c'
+        """
+        env = {name: value for name, value in base.items() if not _scrubbed(name)}
+        env["CLAUDE_CONFIG_DIR"] = str(config_dir)
+        env["ANTHROPIC_API_KEY"] = self.token
+        env.update(_QUIET_ENV)
+        return env
+
+    def redact(self, text: str) -> str:
+        """``text`` with the key and its JSON-escaped forms replaced.
+
+        Example::
+
+            >>> ClaudeCodeKeyRoute("k0").redact("a k0")
+            'a [redacted]'
+        """
+        return redact_secrets(text, with_escaped_forms({self.token}))
+
+
+#: How a Claude Code run is isolated: through an endpoint, or on an API key.
+type ClaudeCodeIsolation = ClaudeCodeRoute | ClaudeCodeKeyRoute
+
+
 def _scrubbed(name: str) -> bool:
     return name.startswith(_SCRUBBED_PREFIXES) or name in _SCRUBBED_NAMES
 
@@ -205,7 +265,7 @@ def claude_code_route(
     )
 
 
-def routed_argv(argv: list[str], route: ClaudeCodeRoute | None) -> list[str]:
+def routed_argv(argv: list[str], route: ClaudeCodeIsolation | None) -> list[str]:
     """``argv``, followed by the route's ``--settings`` when there is a route.
 
     Example::
@@ -218,7 +278,7 @@ def routed_argv(argv: list[str], route: ClaudeCodeRoute | None) -> list[str]:
 
 @contextmanager
 def routed_env(
-    route: ClaudeCodeRoute | None, base: Mapping[str, str] | None
+    route: ClaudeCodeIsolation | None, base: Mapping[str, str] | None
 ) -> Iterator[dict[str, str] | None]:
     """The child env for one Claude Code process: ``base`` unrouted, else isolated.
 

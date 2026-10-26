@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.evals.run.agent_env import unattended_agent_env
 from coding_agent_playbook.evals.run.claude_code_output import (
@@ -51,7 +51,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
-    from coding_agent_playbook.evals.run.claude_code_route import ClaudeCodeRoute
+    from coding_agent_playbook.evals.run.claude_code_route import ClaudeCodeIsolation
 
 #: Name of the Claude Code executable looked up on ``PATH``.
 _CLI = "claude"
@@ -64,6 +64,27 @@ _DEFAULT_COMMAND: tuple[str, ...] = (_CLI, "-p", PROMPT_TOKEN, *JSON_OUTPUT_ARGS
 #: Default wall-clock bound (seconds) for one agent invocation.
 _DEFAULT_TIMEOUT = 600.0
 
+#: The tools a routed (isolated) agent run may use without a prompt: reading and
+#: searching, plus git, Python, pytest, uv and ls in the shell. The benchmark harness
+#: uses the same list. Anything else is denied, so an eval agent never runs an
+#: arbitrary command on the maintainer's machine.
+ISOLATED_ALLOWED_TOOLS: Final = (
+    "Read,Grep,Glob,Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)"
+)
+
+#: The permissions of every routed (isolated) agent run. Why: an isolated run has an
+#: empty ``CLAUDE_CONFIG_DIR`` (so no personal default mode or allow list), and ``-p``
+#: auto-denies every permission prompt, so a sample that must write files would
+#: otherwise fail. ``acceptEdits`` lets the agent edit files in the scratch repo, and
+#: :data:`ISOLATED_ALLOWED_TOOLS` lists the rest; ``bypassPermissions`` is never used.
+#: Kept here, not in ``routed_argv``, because the judge calls that too and needs no tools.
+_ISOLATED_PERMISSION_ARGS: Final = (
+    "--permission-mode",
+    "acceptEdits",
+    "--allowedTools",
+    ISOLATED_ALLOWED_TOOLS,
+)
+
 
 class ClaudeCodeRunner(HarnessRunner):
     """A :class:`HarnessRunner` that drives the Claude Code CLI in ``scratch_dir``.
@@ -75,7 +96,9 @@ class ClaudeCodeRunner(HarnessRunner):
     ``model`` (an Eval target's model) is passed as ``--model <model>``, exactly
     as written; ``None`` leaves the CLI on its own default model. ``route``
     (an Eval target's endpoint) isolates the run and points it at that endpoint
-    (``claude_code_route``); ``None`` keeps the user's own Claude Code settings.
+    (``claude_code_route``), or, under ``--record`` without an endpoint, a
+    ``ClaudeCodeKeyRoute`` isolates it on an API key; ``None`` keeps the user's
+    own Claude Code settings.
     """
 
     name = "claude_code"
@@ -90,7 +113,7 @@ class ClaudeCodeRunner(HarnessRunner):
         command: Sequence[str] | None = None,
         timeout: float = _DEFAULT_TIMEOUT,
         model: str | None = None,
-        route: ClaudeCodeRoute | None = None,
+        route: ClaudeCodeIsolation | None = None,
     ) -> None:
         self.model = model
         self.route = route
@@ -107,8 +130,12 @@ class ClaudeCodeRunner(HarnessRunner):
         return shutil.which(_CLI) is not None
 
     def _build_command(self, prompt: str) -> list[str]:
-        """The argv for one run: the template with ``prompt`` and the model (``cli_argv``)."""
-        return routed_argv(build_cli_argv(self._command, prompt, self.model), self.route)
+        """The argv for one run: the template with ``prompt`` and the model (``cli_argv``).
+
+        A routed run also gets :data:`_ISOLATED_PERMISSION_ARGS`.
+        """
+        argv = routed_argv(build_cli_argv(self._command, prompt, self.model), self.route)
+        return argv if self.route is None else [*argv, *_ISOLATED_PERMISSION_ARGS]
 
     def _invoke_agent(self, prompt: str, scratch_dir: Path) -> AgentRun:
         """Run the configured command with ``cwd=scratch_dir`` and capture output.
