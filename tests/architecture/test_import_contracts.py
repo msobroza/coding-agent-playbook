@@ -50,7 +50,9 @@ _CONTRACT_IDS: Final = (
 #: The top-level packages of ADR 0002's target layout that sit in engine-layers.
 #: hook_runtime is a separate stack (hook-runtime-stack), never a layer. exit_two (the
 #: shared exit-2 error base) joined in CP-3, because B9 landed none for CP-D5 to use;
-#: forge (the forge tables, a stdlib leaf) in F1 (specs/prF-forge-adapter.md §4).
+#: forge (the forge tables, a stdlib leaf) in F1 (specs/prF-forge-adapter.md §4);
+#: release (manifests, digest diffs and notes) in #281 ticket 10, below evals and
+#: validation, which read it for release metrics and edition checks.
 _TARGET_PACKAGES: Final = frozenset(
     {
         "_plugin_registry",
@@ -71,6 +73,7 @@ _TARGET_PACKAGES: Final = frozenset(
         "lockfile",
         "metrics_gate",
         "precommit",
+        "release",
         "rendering",
         "security",
         "skills",

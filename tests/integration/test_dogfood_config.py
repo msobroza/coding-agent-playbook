@@ -37,6 +37,7 @@ from coding_agent_playbook.config.tables.hooks import (
     policy_tables,
 )
 from coding_agent_playbook.hook_runtime.judges.commit_cutover import parse_cutover
+from release import COMMITIZEN_REQUIREMENT
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG_PATH = ROOT / ".coding-agent-playbook.toml"
@@ -171,8 +172,16 @@ def test_engine_root_validates_with_dogfood_config(capsys: pytest.CaptureFixture
 def test_pyproject_commitizen_uses_conventional_commits() -> None:
     commitizen = _toml(PYPROJECT_PATH)["tool"]["commitizen"]
 
-    # No version or bump keys: hatch's [project] version stays the one version source.
-    assert commitizen == {"name": "cz_conventional_commits"}
+    # pep621 and no `version` key: hatch's [project] version stays the one version
+    # source. No changelog keys: the release notes are the only changelog (ADR 0012).
+    assert commitizen == {
+        "name": "cz_conventional_commits",
+        "version_provider": "pep621",
+        "version_scheme": "pep440",
+        "tag_format": "v$version",
+        "major_version_zero": True,
+        "bump_message": "chore(release): v$new_version",
+    }
 
 
 def test_ci_playbook_ci_job_runs_commit_convention_on_pull_requests_only() -> None:
@@ -202,7 +211,8 @@ def test_ci_playbook_ci_job_installs_commitizen() -> None:
     argv = shlex.split(_step_running(_job(), "pip install")["run"])
 
     assert argv[:6] == ["python", "-m", "pip", "install", "-e", "."]
-    assert [arg for arg in argv[6:] if arg.startswith("commitizen>=")], argv
+    # The range scripts/release.py runs, so `cz check` and the bump read one commitizen.
+    assert argv[6:] == [COMMITIZEN_REQUIREMENT], argv
 
 
 def test_ci_test_matrix_and_dev_extra_stay_without_commitizen() -> None:
