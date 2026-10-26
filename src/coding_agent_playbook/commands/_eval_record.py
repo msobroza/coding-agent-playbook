@@ -237,8 +237,8 @@ def _selected_samples(args: argparse.Namespace, repo_root: Path) -> list[EvalSam
     every = getattr(args, "all_samples", False)
     if every == (sample_id is not None):
         raise RecordRefusedError(
-            "--record runs either --all samples or the samples <task> or <task>/<name> "
-            f"selects, got --all={every} and id={sample_id!r}"
+            "--record runs either --all samples or one sample or task (<task>/<name> or <task>), "
+            f"got --all={every} and id={sample_id!r}"
         )
     ctx = SyncContext.from_repo(repo_root)
     try:
