@@ -1,0 +1,41 @@
+{
+  "sample_id": "review-crbug-ftp-active-string",
+  "experiment": "playbook-v1",
+  "defect": {
+    "description": "The setting is read as settings['FEED_STORAGE_FTP_ACTIVE'] or False instead of settings.getbool(...): command-line overrides arrive as text, so -s FEED_STORAGE_FTP_ACTIVE=False (or =0) gives the non-empty string 'False', which is truthy and turns active mode on.",
+    "location": "src/feedstorage.py (from_settings)"
+  },
+  "judge": {
+    "backend": "anthropic",
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "partial",
+  "strict": 0.0,
+  "lenient": 0.5,
+  "top5": 0.0,
+  "first_match": 1,
+  "n_items": 5,
+  "votes": [
+    {
+      "detected": "partial",
+      "review_items": [
+        "from_settings uses settings[...] or False without bool coercion; command-line 'true' stays a string; use getbool",
+        "`or False` is redundant/smell patching missing conversion",
+        "store() leaks FTP connection without with/try-finally on exceptions",
+        "Design: from_settings bypasses Settings.getbool coercion (information expert/coupling)",
+        "Test only passes True directly; add test for command-line string path"
+      ],
+      "item_matches": [
+        1,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence_quote": "from_settings reads settings[\"FEED_STORAGE_FTP_ACTIVE\"] or False but never coerces the value to bool. ... Should use settings.getbool(\"FEED_STORAGE_FTP_ACTIVE\", False) instead.",
+      "justification": "The review points at the right line, the missing getbool coercion, and command-line string values. But it says the only harm is that self.active becomes the string \"true\". It even claims `or False` recovers the right value for \"0\". So it misses that \"False\" or \"0\" from the command line is truthy and wrongly turns active mode on."
+    }
+  ]
+}

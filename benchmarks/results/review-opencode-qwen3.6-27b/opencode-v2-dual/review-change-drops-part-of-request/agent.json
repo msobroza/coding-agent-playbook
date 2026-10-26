@@ -1,0 +1,24 @@
+{
+  "experiment": "opencode-v2-dual",
+  "sample_id": "review-change-drops-part-of-request",
+  "harness": "opencode",
+  "model": "openrouter/qwen/qwen3.6-27b",
+  "command": [
+    "opencode",
+    "run",
+    "--pure",
+    "--dir",
+    "/Users/msobroza/.cache/playbook-bench/review-opencode-qwen3.6-27b/opencode-v2-dual/review-change-drops-part-of-request/scratch",
+    "--model",
+    "openrouter/qwen/qwen3.6-27b",
+    "{prompt}"
+  ],
+  "returncode": 0,
+  "timed_out": false,
+  "duration_seconds": 93.7,
+  "baseline_commit": "5bb5f36a6452f7f3f242dec0a910a92841e998b4",
+  "scratch": "/Users/msobroza/.cache/playbook-bench/review-opencode-qwen3.6-27b/opencode-v2-dual/review-change-drops-part-of-request/scratch",
+  "setup_snapshot": "/Users/msobroza/.cache/playbook-bench/review-opencode-qwen3.6-27b/opencode-v2-dual/review-change-drops-part-of-request/scratch__setup_baseline",
+  "main_loop_tools": null,
+  "native_pass_ran": false
+}

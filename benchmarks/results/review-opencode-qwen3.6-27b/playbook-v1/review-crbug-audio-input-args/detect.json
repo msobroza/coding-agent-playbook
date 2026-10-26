@@ -1,0 +1,39 @@
+{
+  "sample_id": "review-crbug-audio-input-args",
+  "experiment": "playbook-v1",
+  "defect": {
+    "description": "Input_args given as ordinary ffmpeg arguments in a string rather than a preset name (for example '-rtsp_transport tcp') are concatenated as a str onto the argument list: get_ffmpeg_arg_list(...) + '-rtsp_transport tcp' raises TypeError (can only concatenate list to list), so audio detection fails to start; the fallbacks need get_ffmpeg_arg_list(...) like the global args.",
+    "location": "src/audio.py (get_ffmpeg_command)"
+  },
+  "judge": {
+    "backend": "anthropic",
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "yes",
+  "strict": 1.0,
+  "lenient": 1.0,
+  "top5": 1.0,
+  "first_match": 1,
+  "n_items": 4,
+  "votes": [
+    {
+      "detected": "yes",
+      "review_items": [
+        "Non-preset string input_args fall through the or chain as raw str; list + str raises TypeError; get_ffmpeg_arg_list not applied on fallback",
+        "[0] on audio-role comprehension raises IndexError if no input has audio role",
+        "Fallback input_args bypass shlex parsing via get_ffmpeg_arg_list unlike global_args; should run through it",
+        "Verdict: request changes due to string-input-args crash"
+      ],
+      "item_matches": [
+        1,
+        0,
+        1,
+        1
+      ],
+      "evidence_quote": "When `ffmpeg_input.input_args` or `ffmpeg.input_args` is a non-preset **string** (e.g., `\"-rtsp_transport tcp\"`), `parse_preset_input` returns `None`, so the `or` chain falls through to the raw string. Then `list[str] + str` on line 15 raises `TypeError`.",
+      "justification": "The review names the exact cause: the fallback for a non-preset string input_args is a raw str concatenated onto a list, which raises TypeError. It also gives the fix of running the fallbacks through get_ffmpeg_arg_list, all in get_ffmpeg_command in src/audio.py."
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "sample_id": "review-crbug-netrc-env-path",
+  "experiment": "claude-v2-dual",
+  "defect": {
+    "description": "A NETRC path is still expanded under the home directory: os.path.expanduser(f\"~/{name}\") turns NETRC=/etc/ci/netrc into a path like /home/user//etc/ci/netrc, so a NETRC file outside the home directory (an absolute path, or one starting with ~) is never found and no credentials are returned; only the default NETRC_FILES names should get the ~/ prefix.",
+    "location": "src/netrc_auth.py (the expanduser call in get_netrc_auth)"
+  },
+  "judge": {
+    "backend": "anthropic",
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "yes",
+  "strict": 1.0,
+  "lenient": 1.0,
+  "top5": 1.0,
+  "first_match": 1,
+  "n_items": 4,
+  "votes": [
+    {
+      "detected": "yes",
+      "review_items": [
+        "netrc_auth.py:17 expanduser(f\"~/{name}\") prepends ~/ to absolute NETRC path, file never found, credentials lost",
+        "netrc_auth.py:12 empty NETRC string accepted, resolves to home dir, netrc raises and returns None",
+        "netrc_auth.py:17 tilde-prefixed NETRC (~/my_netrc) becomes ~/~/my_netrc, file not found",
+        "test only covers relative NETRC name, not absolute path"
+      ],
+      "item_matches": [
+        1,
+        0,
+        1,
+        0
+      ],
+      "evidence_quote": "`os.path.expanduser(f\"~/{name}\")` always prepends `~/` to the NETRC value. When the user sets `NETRC=/etc/secrets/netrc` (the convention followed by git, curl, wget), `name` is `/etc/secrets/netrc`, so the expression produces `~/etc/secrets/netrc` \u2192 `$HOME/etc/secrets/netrc`. The file is never found, credentials are silently lost.",
+      "justification": "The review identifies the expanduser call at line 17 in get_netrc_auth. It explains that an absolute NETRC path ends up under the home directory, so the file is never found and no credentials are returned, which is the known defect. A separate item covers the tilde-prefixed case, which is part of the same defect."
+    }
+  ]
+}

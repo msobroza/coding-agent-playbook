@@ -7,6 +7,7 @@ as ``python benchmarks/<script>.py`` from the repo root).
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from dataclasses import dataclass
@@ -42,7 +43,8 @@ OPENROUTER_ANTHROPIC_BASE_URL: Final = "https://openrouter.ai/api"
 #: Tools a reviewer needs: read the tree, run git, Python and the tests. Edits in
 #: the scratch tree are allowed (as in OpenCode) and caught by the gate.
 CLAUDE_ALLOWED_TOOLS: Final = (
-    "Read,Grep,Glob,Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)"
+    "Read,Grep,Glob,Task,Skill,"
+    "Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)"
 )
 
 #: The judge: Opus 5.5 at medium effort, reached through one of two backends.
@@ -62,6 +64,9 @@ AGENT_ENV: Final = {
     "NO_COLOR": "1",
     "OPENCODE_DISABLE_CLAUDE_CODE": "1",
     "PYTHONDONTWRITEBYTECODE": "1",
+    # The default model for an OpenCode run started from inside a run (the
+    # prototype that ran `opencode run --command review` through the bash tool).
+    "OPENCODE_CONFIG_CONTENT": json.dumps({"model": AGENT_MODEL}),
 }
 
 #: Variables a parent Claude Code session exports to its children. Inherited by
@@ -82,13 +87,21 @@ class Experiment:
     sample's request alone (OpenCode's ``/review``, Claude Code's
     ``/code-review``); ``"v1"``/``"v2"`` send the playbook's rendered review
     prompt from that prompt set, exactly as ``playbook eval --run`` would.
-    ``harness`` is ``"opencode"`` or ``"claude"``.
+    ``harness`` is ``"opencode"`` or ``"claude"``. ``first_pass`` rewrites the v2
+    review's first pass (prototypes of wrapping the harness's native reviewer):
+    ``"code-review"`` replaces both first passes with Claude Code's
+    ``/code-review``; ``"dual"`` ran v2's subagent and the harness's own reviewer
+    side by side, which v2's step 1 now ships in general form. A recorded
+    prototype (``runnable=False``) keeps its results and label but is not re-run:
+    its prompt edits fit only the v2 text it was run on.
     """
 
     key: str
     label: str
     prompt_set: str | None
     harness: str = "opencode"
+    first_pass: str | None = None
+    runnable: bool = True
 
 
 EXPERIMENTS: Final = (
@@ -97,6 +110,28 @@ EXPERIMENTS: Final = (
     Experiment("playbook-v2", "OpenCode + playbook v2", "v2"),
     Experiment("claude-code-review", "Claude Code /code-review", None, harness="claude"),
     Experiment("claude-playbook-v2", "Claude Code + playbook v2", "v2", harness="claude"),
+    Experiment(
+        "claude-v2-over-code-review",
+        "Claude Code + v2 over /code-review",
+        "v2",
+        harness="claude",
+        first_pass="code-review",
+    ),
+    Experiment(
+        "opencode-v2-dual",
+        "OpenCode + v2 with /review alongside",
+        "v2",
+        first_pass="dual",
+        runnable=False,
+    ),
+    Experiment(
+        "claude-v2-dual",
+        "Claude Code + v2 with /code-review alongside",
+        "v2",
+        harness="claude",
+        first_pass="dual",
+        runnable=False,
+    ),
 )
 
 
@@ -165,7 +200,12 @@ def drop_parent_session_env() -> list[str]:
     return names
 
 
-def claude_agent_env(openrouter_key: str) -> dict[str, str]:
+#: Settings every Claude Code run gets through ``--settings`` (which still applies
+#: when ``--setting-sources ""`` drops the developer's own settings files).
+CLAUDE_ISOLATION_SETTINGS: Final = '{"autoMemoryEnabled": false}'
+
+
+def claude_agent_env(openrouter_key: str, config_dir: Path) -> dict[str, str]:
     """The extra env that points Claude Code at Qwen through OpenRouter.
 
     Example::
@@ -184,6 +224,9 @@ def claude_agent_env(openrouter_key: str) -> dict[str, str]:
         # Qwen3.6 27B's real window; Claude Code does not know the model and would
         # otherwise assume 200k and print a notice on every run.
         "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "262144",
+        # An empty config dir per run: no user CLAUDE.md, settings, plugins or hooks.
+        "CLAUDE_CONFIG_DIR": str(config_dir),
+        "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
     }
 
 

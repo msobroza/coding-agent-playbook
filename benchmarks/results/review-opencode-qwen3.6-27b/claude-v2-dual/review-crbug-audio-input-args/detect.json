@@ -1,0 +1,39 @@
+{
+  "sample_id": "review-crbug-audio-input-args",
+  "experiment": "claude-v2-dual",
+  "defect": {
+    "description": "Input_args given as ordinary ffmpeg arguments in a string rather than a preset name (for example '-rtsp_transport tcp') are concatenated as a str onto the argument list: get_ffmpeg_arg_list(...) + '-rtsp_transport tcp' raises TypeError (can only concatenate list to list), so audio detection fails to start; the fallbacks need get_ffmpeg_arg_list(...) like the global args.",
+    "location": "src/audio.py (get_ffmpeg_command)"
+  },
+  "judge": {
+    "backend": "anthropic",
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "yes",
+  "strict": 1.0,
+  "lenient": 1.0,
+  "top5": 1.0,
+  "first_match": 1,
+  "n_items": 4,
+  "votes": [
+    {
+      "detected": "yes",
+      "review_items": [
+        "TypeError when input_args is a plain ffmpeg-arg string: or-fallback concatenates str onto list (lines 15-20)",
+        "No test for plain-string input_args",
+        "IndexError when no input has audio role (pre-existing)",
+        "Hardcoded detect_fps=1 for audio stream; add comment"
+      ],
+      "item_matches": [
+        1,
+        0,
+        0,
+        0
+      ],
+      "evidence_quote": "when `parse_preset_input(ffmpeg_input.input_args, 1)` returns `None` (not a preset name), line 17's `or ffmpeg_input.input_args` yields the raw string, and `list + str` on line 15 raises `TypeError: can only concatenate list (not \"str\")`.",
+      "justification": "The review reports the known defect: a plain string of ffmpeg arguments is concatenated onto a list and raises TypeError. It places this in get_ffmpeg_command in src/audio.py and proposes the same fix, wrapping the fallback in get_ffmpeg_arg_list."
+    }
+  ]
+}

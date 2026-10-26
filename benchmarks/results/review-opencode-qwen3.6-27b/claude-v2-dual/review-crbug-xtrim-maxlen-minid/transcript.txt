@@ -1,0 +1,34 @@
+
+
+Now I have all the context. Let me verify each candidate finding against the actual code and draft the review.
+
+---
+
+## Review
+
+### Correctness
+
+**`src/streams.py:35-44` — `important`** — When both `maxlen` and `minid` are passed, the command becomes `XTRIM events MAXLEN MINID ~ 100 "id"`. Redis syntax is `<MAXLEN | MINID>` (one or the other, not both). The code appends both keywords and both values with a single `~` sandwiched between all of them, producing an invalid command that Redis rejects. There is no guard against the caller supplying both.
+- Input: `xtrim("events", maxlen=100, minid="0-0")`
+
+**`src/streams.py:34,39,48` — `important`** — Nothing requires at least one of `maxlen` or `minid`. Calling `xtrim("events")` with defaults produces `XTRIM events ~` (since `approximate=True`), which Redis rejects — no trim strategy is present. The original signature enforced `maxlen: int` as a required positional argument; removing that guard without a replacement validation is a regression.
+- Input: `xtrim("events")`
+
+**`src/streams.py:45-47` — `important`** — `limit` can be supplied without any trim strategy, producing `XTRIM events ~ LIMIT 10`. The Redis protocol requires `LIMIT` to follow a `MAXLEN` or `MINID` clause; a bare `LIMIT` is rejected.
+- Input: `xtrim("events", limit=10)`
+
+### Design
+
+**`src/streams.py:22` — `nit`** — Changing `maxlen` from required positional to `maxlen: int | None = None` silently permits calls with no trim strategy at all. A validation at the top of the function (`if maxlen is None and minid is None: raise ValueError(...)`) would catch this immediately rather than delegating the error to Redis.
+
+**`src/streams.py:39` — `nit`** — `approximate` is a single boolean shared across both directives. There is no way to make `MAXLEN` approximate while `MINID` is exact. For the current one-strategy-per-call constraint this is fine, but if dual-strategy support is ever added, the `~` token would need per-directive control. Consider whether `approximate` should be a per-strategy concern.
+
+### Test Coverage
+
+**`tests/test_streams.py:35` — `nit`** — No test exercises the boundary cases: neither strategy provided, both strategies provided, or `limit` without a strategy. Adding assertions that these raise (or document which combinations are allowed) would catch the correctness bugs above.
+
+---
+
+Findings: 3 important, 4 nit, 0 pre-existing
+
+request changes

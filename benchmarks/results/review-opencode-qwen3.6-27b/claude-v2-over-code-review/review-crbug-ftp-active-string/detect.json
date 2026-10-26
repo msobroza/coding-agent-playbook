@@ -1,0 +1,41 @@
+{
+  "sample_id": "review-crbug-ftp-active-string",
+  "experiment": "claude-v2-over-code-review",
+  "defect": {
+    "description": "The setting is read as settings['FEED_STORAGE_FTP_ACTIVE'] or False instead of settings.getbool(...): command-line overrides arrive as text, so -s FEED_STORAGE_FTP_ACTIVE=False (or =0) gives the non-empty string 'False', which is truthy and turns active mode on.",
+    "location": "src/feedstorage.py (from_settings)"
+  },
+  "judge": {
+    "backend": "anthropic",
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "yes",
+  "strict": 1.0,
+  "lenient": 1.0,
+  "top5": 1.0,
+  "first_match": 1,
+  "n_items": 5,
+  "votes": [
+    {
+      "detected": "yes",
+      "review_items": [
+        "feedstorage.py:27 string 'false' from CLI is truthy with `or False`, enabling active mode; use getbool",
+        "tests don't exercise from_command_line string values",
+        "tests don't verify store() calls set_pasv(False)",
+        "`or False` is dead code since DEFAULTS provides False; use getbool",
+        "pre-existing FTP connection leak when cwd/storbinary raises"
+      ],
+      "item_matches": [
+        1,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence_quote": "When the user passes `-s FEED_STORAGE_FTP_ACTIVE=false`, the value is the string `\"false\"`, which is truthy, so `or False` is never reached and `self.active` becomes truthy \u2014 enabling active mode when the user explicitly disabled it. Use `settings.getbool(\"FEED_STORAGE_FTP_ACTIVE\")` instead",
+      "justification": "The review places the bug at the right line in from_settings. It gives the right cause: a command-line string is truthy under `or False`. It gives the right symptom (active mode turns on) and the right fix (getbool)."
+    }
+  ]
+}

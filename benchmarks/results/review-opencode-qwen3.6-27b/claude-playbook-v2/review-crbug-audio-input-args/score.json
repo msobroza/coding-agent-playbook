@@ -1,9 +1,17 @@
 {
   "sample_id": "review-crbug-audio-input-args",
-  "harness": "opencode:claude-playbook-v2",
-  "passed": true,
+  "harness": "claude:claude-playbook-v2",
+  "target": {
+    "name": null,
+    "harness": "claude:claude-playbook-v2",
+    "model": null,
+    "reported_model": null,
+    "endpoint": null,
+    "harness_settings": "personal"
+  },
+  "passed": null,
   "aggregate_score": 1.0,
-  "duration_seconds": 146.6,
+  "duration_seconds": 620.0,
   "report": {
     "passed": true,
     "warn_count": 0,
@@ -21,19 +29,18 @@
       },
       {
         "check_id": "rubric",
-        "passed": true,
-        "score": 1.0,
+        "passed": false,
+        "score": null,
         "weight": 0.0,
         "required": true,
-        "status": "run",
+        "status": "skipped",
         "subresults": []
       }
     ],
     "findings": []
   },
-  "uncalibrated_judge": true,
+  "uncalibrated_judge": false,
   "experiment": "claude-playbook-v2",
-  "sample_version": 1,
   "agent": {
     "experiment": "claude-playbook-v2",
     "sample_id": "review-crbug-audio-input-args",
@@ -42,14 +49,18 @@
     "command": [
       "claude",
       "-p",
-      "--bare",
+      "--setting-sources",
+      "",
+      "--strict-mcp-config",
+      "--settings",
+      "{\"autoMemoryEnabled\": false}",
       "--model",
       "qwen/qwen3.6-27b",
       "--no-session-persistence",
       "--permission-mode",
       "acceptEdits",
       "--allowedTools",
-      "Read,Grep,Glob,Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)",
+      "Read,Grep,Glob,Task,Skill,Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)",
       "--output-format",
       "text",
       "--",
@@ -57,10 +68,10 @@
     ],
     "returncode": 0,
     "timed_out": false,
-    "duration_seconds": 146.6,
-    "baseline_commit": "5c41e669b7cb38c192e028def27b4942c362ba63",
-    "scratch": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-playbook-v2/review-crbug-audio-input-args/scratch",
-    "setup_snapshot": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-playbook-v2/review-crbug-audio-input-args/scratch__setup_baseline"
+    "duration_seconds": 620.0,
+    "baseline_commit": "797b34ed57bcd2f726be0e8bd20f41c32a1dd4c0",
+    "scratch": "/Users/msobroza/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-playbook-v2/review-crbug-audio-input-args/scratch",
+    "setup_snapshot": "/Users/msobroza/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-playbook-v2/review-crbug-audio-input-args/scratch__setup_baseline"
   },
   "judge": {
     "backend": "anthropic",
@@ -74,21 +85,9 @@
       "score": 0.9,
       "n": 1,
       "weight": 0.6
-    },
-    {
-      "criterion": "The review treats that bug as blocking (important, not a nit or an open question), cites its file and line in src/audio.py (get_ffmpeg_command), and its verdict is 'request changes'.",
-      "score": 0.9,
-      "n": 1,
-      "weight": 0.2
-    },
-    {
-      "criterion": "The review does not invent bugs: anything else it raises is a real problem in the code shown, and it does not ask to rewrite code that works.",
-      "score": 0.8,
-      "n": 1,
-      "weight": 0.2
     }
   ],
-  "rubric_weighted_score": 0.8800000000000001,
+  "rubric_weighted_score": 0.9000000000000001,
   "gate_detail": {
     "audio_untouched": true,
     "config_untouched": true,
@@ -99,5 +98,6 @@
   },
   "gate_detail_matches_engine": true,
   "changed_files": [],
-  "graded_artifact": "transcript"
+  "graded_artifact": "transcript",
+  "judge_error": "judge 'claude' gave no score after 3 attempt(s): exited 1: ion or change your model. Learn more: https://support.claude.com/en/articles/8106465 Details: `[reasoning_extraction]` Request ID: req_011CgQnYnWE46Hy7BaQxLyTH Message ID: msg_011CgQnYnvHeQXrCAVvyHfJz"
 }

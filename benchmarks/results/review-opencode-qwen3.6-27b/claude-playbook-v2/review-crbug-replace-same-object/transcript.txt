@@ -1,11 +1,14 @@
+**Correctness**
 
+- **src/scene.py:37–38** — `important` — new — The guard `if new_m in mobj_list: mobj_list.remove(new_m)` runs on *every* recursive call to `replace_in_list`, so it removes `new_m` from whatever list it visits first, even when that list is unrelated to where `old_m` actually lives. Input: `scene.mobjects = [a, group]` where `group.submobjects = [b]`; calling `scene.replace(b, a)` removes `a` from `scene.mobjects` on the top-level call (before finding `b` in the nested list), leaving `scene.mobjects = [group]` with `group.submobjects = [a]`. The top-level reference to `a` is destroyed.
 
-All 5 tests pass. Here's my review:
+- **src/scene.py:37–38** — `important` — new — When `old_mobject is new_mobject`, the guard removes the object from the list before the search loop, so `replace_in_list` returns `False` and the `ValueError("Could not find …")` fires. Before the patch, replacing an object with itself was a harmless no-op. Input: `scene.add(a); scene.replace(a, a)`.
 
-The fix is straightforward and correct. Line 37–38 in `src/scene.py` removes `new_m` from the current list before searching for `old_m`, which prevents the two-reference state. The recursion means the guard fires at whichever nesting level the duplicate lives — the top-level list or a group's `submobjects` — and the `remove()` call correctly deletes only the first occurrence. The two new tests cover both the top-level and nested cases cleanly.
+- **tests/test_scene.py:37** — `important` — new — Missing test for the cross-level scenario where `new_m` sits at one nesting depth and `old_m` is nested deeper. This is the precise case that triggers the first bug. A test along the lines of: `a, b = Mobject('a'), Mobject('b'); group = Mobject('group', b); scene.add(a, group); scene.replace(b, a)` should assert `a` remains in `scene.mobjects`.
 
-No findings.
+- **tests/test_scene.py** — `nit` — new — No test verifies that `scene.replace(x, x)` (self-replacement) is handled gracefully.
 
-Findings: 0 important, 0 nit, 0 pre-existing
-approve
+Findings: 3 important, 1 nit, 0 pre-existing
+
+request changes
 [claude-code:unrecognized_model] {"model":"qwen/qwen3.6-27b","query_source":"sdk"}

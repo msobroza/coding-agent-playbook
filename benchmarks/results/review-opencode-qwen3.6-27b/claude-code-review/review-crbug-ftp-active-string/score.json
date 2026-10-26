@@ -1,9 +1,17 @@
 {
   "sample_id": "review-crbug-ftp-active-string",
-  "harness": "opencode:claude-code-review",
+  "harness": "claude:claude-code-review",
+  "target": {
+    "name": null,
+    "harness": "claude:claude-code-review",
+    "model": null,
+    "reported_model": null,
+    "endpoint": null,
+    "harness_settings": "personal"
+  },
   "passed": false,
   "aggregate_score": 0.0,
-  "duration_seconds": 185.2,
+  "duration_seconds": 227.4,
   "report": {
     "passed": false,
     "warn_count": 0,
@@ -33,7 +41,6 @@
   },
   "uncalibrated_judge": true,
   "experiment": "claude-code-review",
-  "sample_version": 1,
   "agent": {
     "experiment": "claude-code-review",
     "sample_id": "review-crbug-ftp-active-string",
@@ -42,14 +49,18 @@
     "command": [
       "claude",
       "-p",
-      "--bare",
+      "--setting-sources",
+      "",
+      "--strict-mcp-config",
+      "--settings",
+      "{\"autoMemoryEnabled\": false}",
       "--model",
       "qwen/qwen3.6-27b",
       "--no-session-persistence",
       "--permission-mode",
       "acceptEdits",
       "--allowedTools",
-      "Read,Grep,Glob,Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)",
+      "Read,Grep,Glob,Task,Skill,Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)",
       "--output-format",
       "text",
       "--",
@@ -57,10 +68,10 @@
     ],
     "returncode": 0,
     "timed_out": false,
-    "duration_seconds": 185.2,
-    "baseline_commit": "d4ebf2f46009dd8657ae536cf5b5518b08b97a89",
-    "scratch": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-code-review/review-crbug-ftp-active-string/scratch",
-    "setup_snapshot": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-code-review/review-crbug-ftp-active-string/scratch__setup_baseline"
+    "duration_seconds": 227.4,
+    "baseline_commit": "2287129e809239639f1885213461bab6e24c69b1",
+    "scratch": "/Users/msobroza/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-code-review/review-crbug-ftp-active-string/scratch",
+    "setup_snapshot": "/Users/msobroza/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-code-review/review-crbug-ftp-active-string/scratch__setup_baseline"
   },
   "judge": {
     "backend": "anthropic",
@@ -77,13 +88,13 @@
     },
     {
       "criterion": "The review treats that bug as blocking (important, not a nit or an open question), cites its file and line in src/feedstorage.py (from_settings), and its verdict is 'request changes'.",
-      "score": 0.4,
+      "score": 0.2,
       "n": 1,
       "weight": 0.2
     },
     {
       "criterion": "The review does not invent bugs: anything else it raises is a real problem in the code shown, and it does not ask to rewrite code that works.",
-      "score": 0.3,
+      "score": 0.5,
       "n": 1,
       "weight": 0.2
     }
@@ -98,5 +109,6 @@
   },
   "gate_detail_matches_engine": true,
   "changed_files": [],
-  "graded_artifact": "transcript"
+  "graded_artifact": "transcript",
+  "judge_error": null
 }

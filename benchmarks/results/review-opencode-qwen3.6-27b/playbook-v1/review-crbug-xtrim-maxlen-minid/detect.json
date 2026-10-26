@@ -1,0 +1,29 @@
+{
+  "sample_id": "review-crbug-xtrim-maxlen-minid",
+  "experiment": "playbook-v1",
+  "defect": {
+    "description": "Xtrim does not enforce that MAXLEN and MINID are mutually exclusive and that one of them is given: xtrim('s', maxlen=10, minid='1-0') sends XTRIM s MAXLEN MINID ~ 10 1-0 and xtrim('s') sends XTRIM s ~, both invalid commands, where xtrim should raise an error (for example a DataError) before sending anything.",
+    "location": "src/streams.py (xtrim)"
+  },
+  "judge": {
+    "backend": "anthropic",
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "no",
+  "strict": 0.0,
+  "lenient": 0.0,
+  "top5": 0.0,
+  "first_match": null,
+  "n_items": 0,
+  "votes": [
+    {
+      "detected": "no",
+      "review_items": [],
+      "item_matches": [],
+      "evidence_quote": "",
+      "justification": "The review has no findings. It contains only the tool log: a rejected permission request, a failed read of CHANGE.diff, and a glob. It never mentions xtrim's missing check that MAXLEN and MINID are mutually exclusive and that one is required."
+    }
+  ]
+}

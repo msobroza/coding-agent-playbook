@@ -1,0 +1,24 @@
+I'll read the surrounding code to check seams, then produce the review.
+Review:
+
+**Correctness**
+
+- `src/inventory.py:15` — pre-existing — `items_to_reorder` docstring says "fallen **to or below** their reorder level" but the guard is `item.quantity < item.reorder_level` (strictly less-than). When `quantity == reorder_level`, the item is excluded despite the contract promising inclusion. Fix: change `<` to `<=`.
+
+The new `restock` function and its tests are correct:
+
+- Input validation (`units <= 0` → `ValueError`) matches the docstring and is covered by parametrized tests.
+- The `KeyError` path for unknown SKUs is correct and tested.
+- The happy path mutates `item.quantity` in place and returns the item; the dataclass equality check in the test is sound because fields are compared positionally.
+- `restock` mutates the `items` list's contents, which is consistent with the `list[Item]` parameter type (not `Sequence[Item]`).
+
+Findings: 0 important, 0 nit, 1 pre-existing
+
+approve
+
+> build · qwen/qwen3.6-27b
+
+→ Read CHANGE.diff
+→ Read src/inventory.py
+→ Read tests/test_inventory.py
+✱ Glob "**/*.md" in . · 0 matches

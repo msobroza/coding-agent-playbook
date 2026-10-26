@@ -1,0 +1,28 @@
+Here is the review:
+
+---
+
+**Correctness**
+
+- **src/audio.py:15-20** — `important` — When `input_args` is a plain string of ffmpeg arguments (not a preset name), the `or` chain returns the raw string, which cannot be concatenated with the list from `get_ffmpeg_arg_list`. With `CameraInput(input_args="-rtsp_transport tcp")`, line 17's `parse_preset_input` returns `None` (not a preset name), then `or ffmpeg_input.input_args` returns the string `"-rtsp_transport tcp"`, and `list + str` raises `TypeError: can only concatenate list (not "str") to list`. The config docstring at `src/config.py:3-4` explicitly allows "a string of ordinary ffmpeg arguments" as a valid value. The test at `test_audio.py:80-85` only covers the `list[str]` case; a string-of-args case is missing.
+
+- **src/audio.py:15-20** — `nit` — When both `ffmpeg_input.input_args` and `ffmpeg.input_args` are empty strings `""`, the `or` chain returns `""` (the last falsy value), and `list + ""` raises `TypeError`. This requires explicitly overriding the camera-wide default from `"preset-rtsp-generic"` to `""`, which is unusual, so it's unlikely in practice.
+
+**Failure modes**
+
+*(none beyond the correctness issues above)*
+
+**Pre-existing**
+
+- **src/audio.py:14** — `pre-existing` — No guard against missing audio input; `[i for i in ffmpeg.inputs if "audio" in i.roles][0]` raises bare `IndexError: list index out of range` when no input carries the `"audio"` role. The old `AudioEventMaintainer.__init__` had the same pattern (`[i.path for i in camera.ffmpeg.inputs if "audio" in i.roles][0]`), so this is unchanged.
+
+- **src/audio.py:16,19** — `pre-existing` — Hardcoded `detect_fps=1` passed to `parse_preset_input`. For `preset-http-reolink`, this injects `-r 1` into the command. The old code already passed `1` to `parse_preset_input("preset-rtsp-audio-only", 1)` (line 46 of the diff). For audio-only processing, `-r` is harmless — ffmpeg ignores frame rate for audio inputs — but the value has no meaningful source.
+
+---
+
+The positive note: passing the entire `FfmpegConfig` to `get_ffmpeg_command` instead of pre-assembling the arg list at the call site is cleaner — it gives the function all the context it needs and removes the string-formatting approach from the old code.
+
+Findings: 1 important, 1 nit, 2 pre-existing
+
+request changes
+[claude-code:unrecognized_model] {"model":"qwen/qwen3.6-27b","query_source":"sdk"}

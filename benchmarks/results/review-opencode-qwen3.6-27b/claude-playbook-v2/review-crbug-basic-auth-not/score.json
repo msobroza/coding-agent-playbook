@@ -1,11 +1,19 @@
 {
   "sample_id": "review-crbug-basic-auth-not",
-  "harness": "opencode:claude-playbook-v2",
-  "passed": true,
-  "aggregate_score": 1.0,
-  "duration_seconds": 54.5,
+  "harness": "claude:claude-playbook-v2",
+  "target": {
+    "name": null,
+    "harness": "claude:claude-playbook-v2",
+    "model": null,
+    "reported_model": null,
+    "endpoint": null,
+    "harness_settings": "personal"
+  },
+  "passed": false,
+  "aggregate_score": 0.0,
+  "duration_seconds": 112.3,
   "report": {
-    "passed": true,
+    "passed": false,
     "warn_count": 0,
     "fail_count": 0,
     "composite": null,
@@ -21,8 +29,8 @@
       },
       {
         "check_id": "rubric",
-        "passed": true,
-        "score": 1.0,
+        "passed": false,
+        "score": 0.0,
         "weight": 0.0,
         "required": true,
         "status": "run",
@@ -33,7 +41,6 @@
   },
   "uncalibrated_judge": true,
   "experiment": "claude-playbook-v2",
-  "sample_version": 1,
   "agent": {
     "experiment": "claude-playbook-v2",
     "sample_id": "review-crbug-basic-auth-not",
@@ -42,14 +49,18 @@
     "command": [
       "claude",
       "-p",
-      "--bare",
+      "--setting-sources",
+      "",
+      "--strict-mcp-config",
+      "--settings",
+      "{\"autoMemoryEnabled\": false}",
       "--model",
       "qwen/qwen3.6-27b",
       "--no-session-persistence",
       "--permission-mode",
       "acceptEdits",
       "--allowedTools",
-      "Read,Grep,Glob,Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)",
+      "Read,Grep,Glob,Task,Skill,Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)",
       "--output-format",
       "text",
       "--",
@@ -57,10 +68,10 @@
     ],
     "returncode": 0,
     "timed_out": false,
-    "duration_seconds": 54.5,
-    "baseline_commit": "034fb7786fb31bc804395281075de7d0087ad292",
-    "scratch": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-playbook-v2/review-crbug-basic-auth-not/scratch",
-    "setup_snapshot": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-playbook-v2/review-crbug-basic-auth-not/scratch__setup_baseline"
+    "duration_seconds": 112.3,
+    "baseline_commit": "9cb62d296ad35569c468fdda7c827b120fb594f5",
+    "scratch": "/Users/msobroza/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-playbook-v2/review-crbug-basic-auth-not/scratch",
+    "setup_snapshot": "/Users/msobroza/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-playbook-v2/review-crbug-basic-auth-not/scratch__setup_baseline"
   },
   "judge": {
     "backend": "anthropic",
@@ -71,13 +82,13 @@
   "judge_calls": [
     {
       "criterion": "The review reports that the new condition is not valid Python: `!` is not a negation operator (it should be `not hmac.compare_digest(...)`), so src/auth.py raises SyntaxError on import and every caller and test of is_authorized breaks.",
-      "score": 0.85,
+      "score": 0.0,
       "n": 1,
       "weight": 0.6
     },
     {
       "criterion": "The review treats that bug as blocking (important, not a nit or an open question), cites its file and line in src/auth.py (the if condition in is_authorized), and its verdict is 'request changes'.",
-      "score": 0.5,
+      "score": 0.95,
       "n": 1,
       "weight": 0.2
     },
@@ -88,7 +99,7 @@
       "weight": 0.2
     }
   ],
-  "rubric_weighted_score": 0.67,
+  "rubric_weighted_score": 0.25,
   "gate_detail": {
     "auth_untouched": true,
     "tests_untouched": true,
@@ -97,5 +108,6 @@
   },
   "gate_detail_matches_engine": true,
   "changed_files": [],
-  "graded_artifact": "transcript"
+  "graded_artifact": "transcript",
+  "judge_error": null
 }

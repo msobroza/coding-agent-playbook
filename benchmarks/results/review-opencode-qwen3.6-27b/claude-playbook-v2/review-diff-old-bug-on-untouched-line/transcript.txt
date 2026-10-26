@@ -1,34 +1,20 @@
-I don't have a subagent tool available, so I'll perform steps 3–4 myself. I've read the diff and both files in full. Let me now draft the review.
+Let me verify the subagent's key finding about the pre-existing bug:
+
+The docstring at `src/inventory.py:13` says "fallen **to or below** their reorder level", but line 14 uses `item.quantity < item.reorder_level` (strict less-than, missing the equality case). An `Item("x", 5, 5)` with quantity equal to reorder_level should be included per the docstring but is not. This is a genuine pre-existing correctness bug on an untouched line.
+
+The other findings from the subagent (test coverage of mutation, test robustness, mutation design) are either not actual bugs or are design opinions that the code already documents. The `restock` function's mutation is clearly documented in its docstring and is the natural behavior for a function named "restock". The return-value assertion on a dataclass does implicitly verify the mutation since `restock` returns the same mutated object it stores in the list.
 
 ---
 
-**Correctness**
+## Review
 
-- **pre-existing** — `src/inventory.py:15` — The docstring of `items_to_reorder` says "Items whose stock has fallen **to or below** their reorder level" but the filter uses `item.quantity < item.reorder_level` (strict less-than). An item whose quantity exactly equals its reorder level — e.g. `Item("pen", 1, 1)` — is excluded despite the stated contract. The fix is `<=`.
+### Correctness
 
----
+- **`src/inventory.py:14`** — **pre-existing** — `items_to_reorder` uses `item.quantity < item.reorder_level` but the docstring says "fallen **to or below** their reorder level". An item whose quantity equals its reorder level is excluded: `Item("x", 5, 5)` should appear in the result but does not. The operator should be `<=`.
 
-**Failure modes**
+### Nit
 
-No issues found. `restock` raises explicitly named exceptions for its two failure paths; the tests cover both. The `list[Item]` parameter is used as a mutable in/out, which the signature and docstring make clear enough.
-
-**Security**
-
-No issues found.
-
-**Design and boundaries**
-
-No issues found. The new function is a simple operation fitting the existing module scope.
-
-**Readability**
-
-No issues found. Names are clear; the function is short; the docstring documents the exceptions.
-
-**Style**
-
-No issues found.
-
----
+No new findings on the changed code. The `restock` implementation correctly validates input, matches by SKU, mutates in-place, and raises the documented exceptions. Tests cover the success path, both rejection cases for non-positive units, and the unknown-SKU case.
 
 Findings: 0 important, 0 nit, 1 pre-existing
 

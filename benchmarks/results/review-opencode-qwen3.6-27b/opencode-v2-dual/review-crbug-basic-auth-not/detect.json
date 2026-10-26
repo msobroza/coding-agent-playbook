@@ -1,0 +1,35 @@
+{
+  "sample_id": "review-crbug-basic-auth-not",
+  "experiment": "opencode-v2-dual",
+  "defect": {
+    "description": "The new condition is not valid Python: `!` is not a negation operator (it should be `not hmac.compare_digest(...)`), so src/auth.py raises SyntaxError on import and every caller and test of is_authorized breaks.",
+    "location": "src/auth.py (the if condition in is_authorized)"
+  },
+  "judge": {
+    "backend": "anthropic",
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "yes",
+  "strict": 1.0,
+  "lenient": 1.0,
+  "top5": 1.0,
+  "first_match": 1,
+  "n_items": 2,
+  "votes": [
+    {
+      "detected": "yes",
+      "review_items": [
+        "src/auth.py:16 - `!` is invalid Python negation, causing SyntaxError on import; use `not`",
+        "src/auth.py:16-17 - `or` short-circuit still leaks via timing whether the username matched; evaluate both comparisons unconditionally"
+      ],
+      "item_matches": [
+        1,
+        0
+      ],
+      "evidence_quote": "`!hmac.compare_digest(...)` uses C-style `!` for logical negation, which is invalid Python. The file will fail to parse with a `SyntaxError` and the module cannot be imported. Use `not hmac.compare_digest(...)` instead.",
+      "justification": "The first finding names the exact defect at src/auth.py:16: `!` used as negation, causing a SyntaxError on import. It also gives the correct fix."
+    }
+  ]
+}

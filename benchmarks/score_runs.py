@@ -69,7 +69,7 @@ def judge_command(backend: str) -> list[str]:
     raise ValueError(f"unknown judge backend {backend!r}; expected 'anthropic' or 'openrouter'")
 
 
-def _prepare_backend_env(backend: str, usage_log: Path) -> None:
+def prepare_backend_env(backend: str, usage_log: Path) -> None:
     """Point the judge subprocesses at the right credential (inherited via os.environ)."""
     _bench.drop_parent_session_env()
     if backend == "anthropic":
@@ -79,7 +79,7 @@ def _prepare_backend_env(backend: str, usage_log: Path) -> None:
         os.environ["JUDGE_USAGE_LOG"] = str(usage_log)
 
 
-def _judge_model(backend: str) -> str:
+def judge_model_name(backend: str) -> str:
     models = {
         "anthropic": _bench.JUDGE_MODEL_ANTHROPIC,
         "openrouter": _bench.JUDGE_MODEL_OPENROUTER,
@@ -209,7 +209,7 @@ def score_one(sample: EvalSample, out: Path, judge: Judge, args: argparse.Namesp
     payload.update(
         experiment=meta["experiment"],
         agent=meta,
-        judge={"backend": args.judge_backend, "model": _judge_model(args.judge_backend),
+        judge={"backend": args.judge_backend, "model": judge_model_name(args.judge_backend),
                "effort": _bench.JUDGE_EFFORT, "judge_samples": args.judge_samples},
         judge_calls=recorder.calls,
         rubric_weighted_score=rubric_weighted(sample, recorder.calls),
@@ -268,7 +268,7 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     _bench.load_env_file()
     usage_log = _bench.RESULTS_ROOT / args.run_name / "judge_usage.jsonl"
-    _prepare_backend_env(args.judge_backend, usage_log)
+    prepare_backend_env(args.judge_backend, usage_log)
     judge = build_judge(args.judge_backend)
     runs = _saved_runs(args.run_name)
     failures = 0

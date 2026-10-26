@@ -1,0 +1,37 @@
+Now I've verified the key finding. Let me compile the merged review.
+
+The floating-point issue is confirmed: `68.34 lb → 31.000000000000004 kg → ceil=32`, overcharging by one kilogram. This happens for many values — 22 cases between 1 and 499 kg. The bug fires whenever the caller enters a pound weight that is mathematically an exact kilogram boundary, and IEEE 754 arithmetic pushes the result one epsilon above the integer.
+
+Here is the merged review:
+
+---
+
+**Correctness**
+
+- **`src/shipping.py:15` — `math.ceil(to_kilograms(weight, unit))` overcharges at exact kilogram boundaries for pound weights.** When a pound weight is mathematically an exact number of kilograms, the round-trip `weight / factor * factor` can land one epsilon above the integer, causing `math.ceil` to return N+1 instead of N. For example, `quote_cents(68.34330127731205, "lb")` should charge 31 kg but charges 32 kg because `68.34330127731205 * 0.45359237 == 31.000000000000004`. This happens for 22 values between 1 and 499 kg. A small tolerance or rounding before `math.ceil` (e.g., `math.ceil(to_kilograms(weight, unit) - 1e-9)`) would fix it. — **important**
+
+---
+
+**Failure Modes**
+
+- **`src/units.py:4` — `KILOGRAMS_PER_UNIT` is a mutable module-level dict.** Any code that imports it can mutate it in place (`KILOGRAMS_PER_UNIT["oz"] = 0.0283495`), silently changing conversion behavior for all subsequent callers. A `frozenset`-backed lookup or freezing the dict after initialization would prevent this. — **nit**
+
+---
+
+**Design and Boundaries**
+
+- **`src/shipping.py:11` — `unit: str` accepts any string; a typo fails at runtime.** `"lbs"`, `"pound"`, or `"KG"` all pass type checking and produce a `ValueError` only at call time. Annotating `unit: Literal["kg", "lb"]` catches typos at type-check time. — **nit**
+
+- **`src/units.py:15` — `to_kilograms` accepts negative weights without validation.** It returns a negative kilogram value silently. If a caller uses it outside `quote_cents`, the negative result feeds into `math.ceil` and produces wrong pricing. `quote_cents` validates `weight <= 0` before calling, so the current caller is safe, but the utility has no contract of its own. — **nit**
+
+---
+
+**Test Coverage**
+
+- **`tests/test_shipping.py:53` — No test exercises a pound weight at an exact kilogram boundary.** The only pound test uses `5 lb` (2.27 kg), which is clearly between integers. A test like `quote_cents(2.20462262185, "lb")` would expose the floating-point ceiling bug above. — **nit**
+
+---
+
+Findings: 1 important, 4 nit, 0 pre-existing
+
+request changes

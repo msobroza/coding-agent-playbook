@@ -1,45 +1,45 @@
-
-
-Here is the review output:
+Here are the findings from the high-effort review:
 
 ```json
 [
   {
     "file": "src/audio.py",
-    "line": 17,
-    "summary": "TypeError when ffmpeg_input.input_args is a non-preset string (e.g. \"-rtsp_transport udp\") because parse_preset_input returns None and the raw string is concatenated with a list.",
-    "failure_scenario": "User sets input_args='-rtsp_transport udp' on an audio CameraInput. parse_preset_input('-rtsp_transport udp', 1) returns None (not a preset). The fallback 'or ffmpeg_input.input_args' yields the raw string '-rtsp_transport udp'. Python tries list + str and raises TypeError: can only concatenate list (not 'str') to list."
+    "line": 15,
+    "summary": "TypeError when input_args is a non-preset string — the PR's promised feature crashes",
+    "failure_scenario": "User sets ffmpeg_input.input_args = \"-rtsp_transport tcp\" (a string of ordinary ffmpeg args, as the PR description says is supported). parse_preset_input returns None, the or chain short-circuits on the truthy raw string, and get_ffmpeg_arg_list(global_args) + str raises TypeError: can only concatenate list to list. Same crash for ffmpeg.input_args as a non-preset string in the fallback position."
   },
   {
     "file": "src/audio.py",
-    "line": 19,
-    "summary": "Camera-wide ffmpeg.input_args used as a bare string when it falls through the or-chain, causing the same list+str TypeError as the per-input case.",
-    "failure_scenario": "User sets camera ffmpeg.input_args='-rtsp_transport tcp -timeout 5000000' (not a preset name). The audio input has empty input_args=''. parse_preset_input('', 1) returns None, '' is falsy so 'or' continues, parse_preset_input of camera-wide also returns None, then 'or ffmpeg.input_args' yields the raw string. TypeError on concatenation."
+    "line": 14,
+    "summary": "IndexError with no audio input — bare crash with no guard or context message",
+    "failure_scenario": "get_ffmpeg_command is called with an FfmpegConfig whose inputs have no entry with \"audio\" in roles. The list comprehension returns [], and [0] raises a bare IndexError. Previously this risk was confined to AudioEventMaintainer.__init__; now the function is standalone and callable directly (and already is in tests), widening the blast radius."
   },
   {
     "file": "src/audio.py",
-    "line": 17,
-    "summary": "Empty input_args=[] on the audio input is treated as unset due to the falsy or-chain, silently falling through to the camera-wide preset instead of being respected.",
-    "failure_scenario": "User intentionally sets input_args=[] on the audio CameraInput to mean 'no special args, just use global_args'. parse_preset_input([], 1) returns None (not a string). Then '[] or ...' evaluates [] as falsy, falling through to parse_preset_input(ffmpeg.input_args) and ultimately the camera-wide preset. The user's intentional empty list is silently ignored and preset-rtsp-generic args are added."
-  },
-  {
-    "file": "src/audio.py",
-    "line": 18,
-    "summary": "Empty input_args='' on the audio input is treated as unset due to the falsy or-chain, silently falling through to the camera-wide preset.",
-    "failure_scenario": "User sets input_args='' on the audio CameraInput meaning 'no input args'. parse_preset_input('', 1) returns None (not a preset). Then 'or ffmpeg_input.input_args' yields '', but '' is falsy in Python so 'or' continues to parse_preset_input(ffmpeg.input_args, 1), which resolves the camera-wide default preset-rtsp-generic. The user's explicit empty string is ignored and RTSP args are added."
+    "line": 16,
+    "summary": "detect_fps hardcoded to 1 injects -r 1 (1 FPS) into audio-only streams using preset-http-reolink",
+    "failure_scenario": "User sets input_args=\"preset-http-reolink\" for an audio input. parse_preset_input appends [\"-r\", \"1\"] because detect_fps=1 is hardcoded. The resulting ffmpeg command has -r 1 on a video-disabled (-vn) audio-only stream — semantically wrong, potentially affecting demuxers that throttle, and not asserted by any test."
   },
   {
     "file": "src/audio.py",
     "line": 15,
-    "summary": "Inconsistent handling: ffmpeg.global_args is always passed through get_ffmpeg_arg_list() which shell-splits strings, but input_args (both per-input and camera-wide) bypasses this splitting when it is a non-preset string.",
-    "failure_scenario": "The config module documents that every *_args option can be 'a preset name, a string of ordinary ffmpeg arguments, or a list of arguments'. For global_args, a string like '-hide_banner -loglevel warning' is correctly split via get_ffmpeg_arg_list(). But for input_args, the same string form either crashes (bugs 1/2) or is silently ignored (bugs 3/4). This violates the documented contract in src/config.py where FfmpegArgs = str | list[str]."
+    "summary": "global_args not resolved as a preset — a preset name string gets shlex.split() instead of being expanded",
+    "failure_scenario": "If ffmpeg.global_args is set to a preset name like \"preset-rtsp-generic\" (FfmpegArgs type permits preset strings), get_ffmpeg_arg_list calls shlex.split(\"preset-rtsp-generic\") returning [\"-hide_banner\", \"-loglevel\", \"warning\"] only for the default value, but [\"preset-rtsp-generic\"] for a preset name — a single opaque token ffmpeg cannot parse. Pre-existing in the touched function, re-exposed by this change."
   },
   {
     "file": "tests/test_audio.py",
-    "line": 80,
-    "summary": "Test 'test_a_list_of_arguments_is_used_as_is' only validates the list[str] case for input_args, leaving the documented string-of-arguments case untested and uncaught.",
-    "failure_scenario": "The config.py docstring and FfmpegArgs type alias state that input_args can be 'a string of ordinary ffmpeg arguments'. The test only exercises input_args as a list. Had a test used input_args='-rtsp_transport udp' (string form), it would have caught the TypeError crash. The test gap means the regression is not detected by the existing test suite."
+    "line": 34,
+    "summary": "No test for non-preset string input_args — the exact case that produces the TypeError above",
+    "failure_scenario": "test_a_list_of_arguments_is_used_as_is covers list input_args. test_the_audio_input_preset_wins_over_the_camera_wide_one covers a preset-name string. There is no test for a plain argument string like \"-rtsp_transport tcp\", so the TypeError finding goes undetected by the test suite."
   }
 ]
 ```
+
+**Key files:**
+- `/Users/msobroza/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-code-review/review-crbug-audio-input-args/scratch/src/audio.py` (lines 14–20)
+- `/Users/msobroza/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-code-review/review-crbug-audio-input-args/scratch/tests/test_audio.py` (line 34)
+- `/Users/msobroza/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-code-review/review-crbug-audio-input-args/scratch/src/ffmpeg_presets.py` (lines 16–22, 25–27)
+- `/Users/msobroza/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-code-review/review-crbug-audio-input-args/scratch/src/config.py` (line 11)
+
+**Summary:** The most critical bug (finding 1) is that the `or` chain on lines 15–20 can return a raw string when `input_args` is a non-preset string value, which the PR explicitly promises to support. Since the left side of `+` is always a list, this produces a runtime `TypeError`. The fix would be to wrap each fallback path through `get_ffmpeg_arg_list()` or to convert the string to a list before concatenation. Finding 2 is an unguarded `[0]` that crashes silently. Finding 3 is a hardcoded `detect_fps=1` that injects a meaningless video frame rate into audio streams.
 [claude-code:unrecognized_model] {"model":"qwen/qwen3.6-27b","query_source":"agent:custom"}

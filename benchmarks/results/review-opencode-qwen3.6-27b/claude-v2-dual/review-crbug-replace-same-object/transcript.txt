@@ -1,0 +1,23 @@
+I've read both files and received findings from both passes. Let me verify the critical findings by mental trace, then write the review.
+
+---
+
+## Review
+
+### Correctness
+
+**src/scene.py:37** — **important** — The dedup guard runs at every recursion level, so when `new_m` exists at a parent level and `old_m` is nested deeper, the parent-level `new_m` is incorrectly removed. Tracing `scene.mobjects = [group, square]` with `group.submobjects = [circle, square]`, calling `replace(circle, square)`: the top-level call removes `square` from `[group, square]` → `[group]`; the recursive call removes `square` from `[circle, square]` → `[circle]`, then replaces `circle` with `square` → `[square]`. Final state: `scene.mobjects = [group]` (the standalone `square` is gone), `group.submobjects = [square]`. The guard should only deduplicate in the list where the actual replacement occurs, not on the way down.
+
+**src/scene.py:37** — **important** — The removal of `new_m` executes before confirming `old_m` exists anywhere, so when `old_m` is not found the scene is already corrupted by the time `ValueError` is raised. Tracing `scene.mobjects = [square]`, calling `replace(circle, square)` where `circle` is not in the scene: `mobj_list.remove(new_m)` turns the list into `[]`, then the search fails and raises `ValueError` — but the scene now has no objects. The caller catches the exception and loses `square` silently.
+
+**src/scene.py:37** — **important** — When `old_m is new_m`, the guard removes the object before the search can find it, so `replace(obj, obj)` raises `ValueError` instead of being a harmless no-op. Tracing `scene.mobjects = [obj]`, calling `replace(obj, obj)`: `obj in [obj]` is True, so `remove(obj)` → `[]`, then the search for `obj` in `[]` finds nothing and raises. This is a corruption on what should be an identity operation. A simple `if old_m is new_m: return` guard at the top of `replace_in_list` (or the outer `replace` method) would handle this.
+
+### Test Coverage
+
+**tests/test_scene.py:37** — **nit** — No test covers the cross-level scenario where `new_m` exists at a different nesting depth than `old_m`, which is the exact case that exposes the recursive removal bug. A test with `scene.mobjects = [group, square]` and `group.submobjects = [circle, square]`, calling `replace(circle, square)`, would demonstrate that the top-level `square` is incorrectly removed.
+
+**tests/test_scene.py** — **nit** — No test verifies that the scene is left intact when `replace` raises `ValueError` for a missing `old_m`. With the current code, the scene *isn't* left intact — but the absence of a test means there's no safety net if someone else tries to "fix" the dedup logic later.
+
+Findings: 3 important, 2 nit, 0 pre-existing
+
+request changes

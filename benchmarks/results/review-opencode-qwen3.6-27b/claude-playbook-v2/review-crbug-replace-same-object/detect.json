@@ -1,0 +1,39 @@
+{
+  "sample_id": "review-crbug-replace-same-object",
+  "experiment": "claude-playbook-v2",
+  "defect": {
+    "description": "The edge case where new_mobject is old_mobject: the new deduplication removes the object from the list before searching, so scene.replace(a, a) no longer finds a, raises ValueError and leaves a removed from the scene; the deduplication must skip the case new_m is old_m (or run only after the replacement).",
+    "location": "src/scene.py (the deduplication at the top of replace_in_list)"
+  },
+  "judge": {
+    "backend": "anthropic",
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "yes",
+  "strict": 1.0,
+  "lenient": 1.0,
+  "top5": 1.0,
+  "first_match": 2,
+  "n_items": 4,
+  "votes": [
+    {
+      "detected": "yes",
+      "review_items": [
+        "scene.py:37-38 dedup guard removes new_m from unrelated list on recursive calls (cross-level replace destroys top-level reference)",
+        "scene.py:37-38 when old_mobject is new_mobject, guard removes object before search, causing ValueError on replace(a, a)",
+        "test_scene.py:37 missing test for cross-level nesting scenario",
+        "test_scene.py nit: no test for self-replacement replace(x, x)"
+      ],
+      "item_matches": [
+        0,
+        1,
+        0,
+        0
+      ],
+      "evidence_quote": "When `old_mobject is new_mobject`, the guard removes the object from the list before the search loop, so `replace_in_list` returns `False` and the `ValueError(\"Could not find \u2026\")` fires.",
+      "justification": "The second finding names the exact defect. In replace_in_list, the deduplication removes the object before the search, so scene.replace(a, a) raises a ValueError instead of being a no-op."
+    }
+  ]
+}

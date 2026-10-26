@@ -1,0 +1,37 @@
+{
+  "sample_id": "review-crbug-log-textio",
+  "experiment": "claude-playbook-v2",
+  "defect": {
+    "description": "Isinstance(self.log_output, TextIO) never matches a real file: typing.TextIO is not a base class of what open() returns (io.TextIOWrapper, or the io.BufferedWriter of the default os.devnull log), so stop() still leaves every file log open, as before; it should test io.IOBase (or for a close method).",
+    "location": "src/service.py (stop)"
+  },
+  "judge": {
+    "backend": "anthropic",
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "partial",
+  "strict": 0.0,
+  "lenient": 0.5,
+  "top5": 0.0,
+  "first_match": null,
+  "n_items": 3,
+  "votes": [
+    {
+      "detected": "partial",
+      "review_items": [
+        "src/service.py:37 isinstance TextIO check doesn't close binary-mode files (default devnull 'wb' or caller BinaryIO), leaking the handle",
+        "src/service.py:40 os.close() has no OSError handling, so a failure skips process termination",
+        "tests/test_service.py:22 no test covers text file path or log_output=None default"
+      ],
+      "item_matches": [
+        0,
+        0,
+        0
+      ],
+      "evidence_quote": "`isinstance(self.log_output, TextIO)` doesn't close binary-mode files. When `log_output=None`, line 23 assigns `open(os.devnull, \"wb\")`, which produces a `BinaryIO`. Neither the `TextIO` nor `int` branch matches, so the handle leaks.",
+      "justification": "The review flags the right `isinstance(..., TextIO)` check in stop() and the leaked default devnull handle. But it blames binary vs text mode and assumes text-mode files are matched and closed. It misses that typing.TextIO is never a base class of real file objects, so every file log leaks."
+    }
+  ]
+}

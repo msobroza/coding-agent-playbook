@@ -1,0 +1,37 @@
+{
+  "sample_id": "review-crbug-netrc-env-path",
+  "experiment": "opencode-v2-dual",
+  "defect": {
+    "description": "A NETRC path is still expanded under the home directory: os.path.expanduser(f\"~/{name}\") turns NETRC=/etc/ci/netrc into a path like /home/user//etc/ci/netrc, so a NETRC file outside the home directory (an absolute path, or one starting with ~) is never found and no credentials are returned; only the default NETRC_FILES names should get the ~/ prefix.",
+    "location": "src/netrc_auth.py (the expanduser call in get_netrc_auth)"
+  },
+  "judge": {
+    "backend": "anthropic",
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "yes",
+  "strict": 1.0,
+  "lenient": 1.0,
+  "top5": 1.0,
+  "first_match": 1,
+  "n_items": 3,
+  "votes": [
+    {
+      "detected": "yes",
+      "review_items": [
+        "netrc_auth.py:17 expanduser(~/name) prepends ~/ to absolute NETRC path, resolving to $HOME//etc/netrc",
+        "netrc_auth.py:12 empty NETRC string passes `is not None` check, so the home directory is parsed as a netrc file",
+        "test only covers a home-relative NETRC filename, not an absolute path"
+      ],
+      "item_matches": [
+        1,
+        0,
+        0
+      ],
+      "evidence_quote": "`os.path.expanduser(f\"~/{name}\")` unconditionally prepends `~/` to the NETRC value. When `NETRC` is an absolute path like `/etc/netrc` (the conventional use), this resolves to `$HOME//etc/netrc`, which is a non-existent file under the home directory.",
+      "justification": "The first finding names the expanduser call in get_netrc_auth and explains that it prefixes absolute NETRC paths with the home directory, so the file is never found. That is the known defect."
+    }
+  ]
+}

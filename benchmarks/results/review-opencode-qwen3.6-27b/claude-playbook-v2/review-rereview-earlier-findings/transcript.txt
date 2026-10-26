@@ -1,16 +1,28 @@
-**Earlier finding statuses:**
+## Earlier Findings Status
 
-1. src/cart.py:15 (remove() lets quantity go negative) — **fixed**. Line 17-18 now guards `0 < quantity <= held` and raises.
-2. src/cart.py:19 (total_cents() accepts any discount_percent) — **still open**. The diff does not touch `total_cents()` at all; `discount_percent=150` still returns a negative total, and `discount_percent=-10` inflates the charge.
-3. src/cart.py:9 (add() accepts zero or negative quantity) — **fixed**. Lines 10-11 now reject `quantity <= 0`.
+1. **src/cart.py:15 - remove() lets quantity go negative** — **Fixed.** Guard at line 17 validates `0 < quantity <= held` before modifying state.
+2. **src/cart.py:19 - total_cents() accepts any discount_percent** — **Still open.** Lines 24–26 are untouched; no validation added.
+3. **src/cart.py:9 - add() accepts zero/negative quantity** — **Fixed.** Lines 10–11 raise `ValueError` for `quantity <= 0`.
 
 ---
 
-### Correctness
+## Correctness
 
-- **src/cart.py:24** — important — pre-existing — `total_cents()` has no guard on `discount_percent`. `discount_percent=150` → `subtotal * (100 - 150) // 100` = negative cents; `discount_percent=-10` → charges more than the subtotal. The fix commit left this function untouched.
+- **src/cart.py:24 — total_cents() accepts any discount_percent (important, still open).** `discount_percent=150` produces a negative total; `discount_percent=-10` inflates the charge. No range guard was added.
 
-Findings: 1 important, 0 nit, 0 pre-existing
+## Failure Modes
+
+- **src/cart.py:16 — `self.lines[sku]` raises bare `KeyError` for unknown sku (pre-existing).** `cart.remove("nonexistent")` on any cart crashes with `KeyError` before reaching the guard at line 17. The lookup on line 16 must happen inside or after a presence check.
+
+## Design and Boundaries
+
+- **src/cart.py:12 — `add()` silently uses the old price when sku exists (pre-existing).** `add("pen", 2000)` then `add("pen", 3000)` keeps the price at 2000 with no indication to the caller. The method name `add` suggests appending quantity, not updating price, but the behaviour may not be what the caller expects.
+
+---
+
+The fix for `remove()` (earlier finding #1) is correct: the guard `not 0 < quantity <= held` at line 17 rejects zero, negative, and over-removal; deleting the line when `quantity == held` avoids leaving a zero-quantity entry. The test coverage is appropriate.
+
+Findings: 1 important, 0 nit, 2 pre-existing
 
 request changes
 [claude-code:unrecognized_model] {"model":"qwen/qwen3.6-27b","query_source":"sdk"}

@@ -1,0 +1,28 @@
+Now let me read the existing source files to understand context, and launch the explore subagent in parallel.
+Now let me verify the key finding by checking the actual code:
+Confirmed: `--since` does not appear anywhere in the codebase. The diff and source are consistent. Here is the review:
+
+- **src/report.py:46** — correctness — important — the `--since YYYY-MM-DD` option is entirely absent — the user asked for two features; only `--csv` was implemented. Invoking `main(["ledger", "--since", "2024-02-01"])` raises `argparse.error: unrecognized arguments: --since`. No argument is added to the parser, and no filtering logic exists in `read_ledger()` or `main()`.
+- **tests/test_report.py:24** — correctness — important — no test covers `--since` filtering — the only new integration test, `test_main_prints_csv_with_the_flag`, exercises `--csv` exclusively. There is no test to verify that ledger entries before a given date are excluded.
+- **CHANGE.diff:1** — correctness — important — the commit message `"feat(report): add a --csv option"` only mentions `--csv` — the second half of the request (`--since`) was silently dropped without acknowledgment.
+- **src/report.py:39** — failure modes — pre-existing — `f"{cents / 100:.2f}"` uses float division for money amounts — this replicates the same pattern already present at line 30 in `format_table`. While `:.2f` formatting masks most rounding artifacts for display, holding monetary values in `float` is a design smell. A cent-integer-to-string conversion like `f"{cents // 100}.{cents % 100:02d}"` avoids the float entirely.
+
+Findings: 3 important, 0 nit, 1 pre-existing
+
+request changes
+
+> build · qwen/qwen3.6-27b
+
+→ Read CHANGE.diff
+✱ Glob "{CLAUDE.md,AGENTS.md,.claude/rules/**,.opencode/command/**,REVIEW.md}" in . · 0 matches
+→ Read src/report.py
+→ Read tests/test_report.py
+• First pass review of diff Explore Agent
+✓ First pass review of diff Explore Agent
+✱ Grep "--since" in . · 0 matches
+
+$ git diff --stat HEAD~1
+fatal: ambiguous argument 'HEAD~1': unknown revision or path not in the working tree.
+Use '--' to separate paths from revisions, like this:
+'git <command> [<revision>...] -- [<file>...]'
+

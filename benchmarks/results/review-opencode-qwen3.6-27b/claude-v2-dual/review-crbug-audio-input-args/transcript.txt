@@ -1,0 +1,25 @@
+
+
+Both passes are complete. I've merged their findings and verified each against the cited lines. Here is the review:
+
+---
+
+### Correctness
+
+- **src/audio.py:15-20 — `important`** — `TypeError` when `input_args` is a plain string of ffmpeg arguments. The `or` chain conflates preset resolution with passthrough: when `parse_preset_input(ffmpeg_input.input_args, 1)` returns `None` (not a preset name), line 17's `or ffmpeg_input.input_args` yields the raw string, and `list + str` on line 15 raises `TypeError: can only concatenate list (not "str")`. Same on line 19 for the camera-wide fallback. Input that breaks it: `CameraInput("/stream", ["audio"], input_args="-rtsp_transport udp")`. The user's request explicitly says "each can be a preset name or ordinary ffmpeg arguments" — this is the ordinary-string case, and it crashes. The bare `or ffmpeg_input.input_args` should run the value through `get_ffmpeg_arg_list` instead.
+
+- **tests/test_audio.py:34-39 — `nit`** — No test for plain-string `input_args`. The new tests cover preset-name strings (`test_the_audio_input_preset_wins_over_the_camera_wide_one`) and list-of-strings (`test_a_list_of_arguments_is_used_as_is`), but neither exercises `input_args="-rtsp_transport udp"`. A test with that shape would have caught the TypeError above.
+
+### Failure Modes
+
+- **src/audio.py:14 — `pre-existing`** — `IndexError` when no input has the `"audio"` role. The list comprehension `[i for i in ffmpeg.inputs if "audio" in i.roles][0]` raises `IndexError` on an empty list. This pattern existed in the old `AudioEventMaintainer.__init__` and was just moved into `get_ffmpeg_command`. Worth noting but doesn't block this change.
+
+### Readability
+
+- **src/audio.py:16 — `nit`** — `parse_preset_input(ffmpeg_input.input_args, 1)` hardcodes `detect_fps=1` for an audio stream. For `preset-http-reolink`, this injects `-r 1` (1 fps) into the ffmpeg command — semantically meaningless with `-vn` (no video), but harmless. A comment like `# detect_fps not relevant for audio; 1 is a placeholder` would prevent future confusion.
+
+---
+
+Findings: 1 important, 3 nit/pre-existing.
+
+request changes

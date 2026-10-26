@@ -1,0 +1,41 @@
+{
+  "sample_id": "review-crbug-netrc-env-path",
+  "experiment": "claude-v2-over-code-review",
+  "defect": {
+    "description": "A NETRC path is still expanded under the home directory: os.path.expanduser(f\"~/{name}\") turns NETRC=/etc/ci/netrc into a path like /home/user//etc/ci/netrc, so a NETRC file outside the home directory (an absolute path, or one starting with ~) is never found and no credentials are returned; only the default NETRC_FILES names should get the ~/ prefix.",
+    "location": "src/netrc_auth.py (the expanduser call in get_netrc_auth)"
+  },
+  "judge": {
+    "backend": "anthropic",
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "yes",
+  "strict": 1.0,
+  "lenient": 1.0,
+  "top5": 1.0,
+  "first_match": 1,
+  "n_items": 5,
+  "votes": [
+    {
+      "detected": "yes",
+      "review_items": [
+        "Absolute NETRC paths mangled by unconditional ~/ prefix in expanduser (line 17)",
+        "Empty NETRC string not treated as unset, resolves to home directory",
+        "Tilde-prefixed NETRC values double-prefixed",
+        "NETRC treated as filename inside ~/ rather than full path; skip prefix for NETRC",
+        "Test only covers relative NETRC path; add absolute path test"
+      ],
+      "item_matches": [
+        1,
+        0,
+        1,
+        1,
+        0
+      ],
+      "evidence_quote": "Line 17 constructs `f\"~/{name}\"` \u2192 `~/etc/custom_netrc`, and `expanduser` turns that into `/Users/msobroza//etc/custom_netrc`, which doesn't exist. The function returns `None` instead of reading the intended file.",
+      "justification": "The review's first finding names the unconditional ~/ prefix in the expanduser call. It says this breaks absolute NETRC paths so no credentials are returned, which is the known defect. Later findings on tilde values and NETRC as a full path also cover it."
+    }
+  ]
+}

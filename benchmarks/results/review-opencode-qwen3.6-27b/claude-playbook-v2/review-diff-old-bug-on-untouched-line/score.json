@@ -1,9 +1,17 @@
 {
   "sample_id": "review-diff-old-bug-on-untouched-line",
-  "harness": "opencode:claude-playbook-v2",
+  "harness": "claude:claude-playbook-v2",
+  "target": {
+    "name": null,
+    "harness": "claude:claude-playbook-v2",
+    "model": null,
+    "reported_model": null,
+    "endpoint": null,
+    "harness_settings": "personal"
+  },
   "passed": true,
   "aggregate_score": 1.0,
-  "duration_seconds": 37.1,
+  "duration_seconds": 133.5,
   "report": {
     "passed": true,
     "warn_count": 0,
@@ -33,7 +41,6 @@
   },
   "uncalibrated_judge": true,
   "experiment": "claude-playbook-v2",
-  "sample_version": 1,
   "agent": {
     "experiment": "claude-playbook-v2",
     "sample_id": "review-diff-old-bug-on-untouched-line",
@@ -42,14 +49,18 @@
     "command": [
       "claude",
       "-p",
-      "--bare",
+      "--setting-sources",
+      "",
+      "--strict-mcp-config",
+      "--settings",
+      "{\"autoMemoryEnabled\": false}",
       "--model",
       "qwen/qwen3.6-27b",
       "--no-session-persistence",
       "--permission-mode",
       "acceptEdits",
       "--allowedTools",
-      "Read,Grep,Glob,Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)",
+      "Read,Grep,Glob,Task,Skill,Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)",
       "--output-format",
       "text",
       "--",
@@ -57,10 +68,10 @@
     ],
     "returncode": 0,
     "timed_out": false,
-    "duration_seconds": 37.1,
-    "baseline_commit": "c00b0af0dac99e7c396ce04330e56e5cfb16409d",
-    "scratch": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-playbook-v2/review-diff-old-bug-on-untouched-line/scratch",
-    "setup_snapshot": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-playbook-v2/review-diff-old-bug-on-untouched-line/scratch__setup_baseline"
+    "duration_seconds": 133.5,
+    "baseline_commit": "e3cc45ba8040084a9eb44fcb9ba88bd428ba9b5b",
+    "scratch": "/Users/msobroza/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-playbook-v2/review-diff-old-bug-on-untouched-line/scratch",
+    "setup_snapshot": "/Users/msobroza/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-playbook-v2/review-diff-old-bug-on-untouched-line/scratch__setup_baseline"
   },
   "judge": {
     "backend": "anthropic",
@@ -89,12 +100,12 @@
     },
     {
       "criterion": "The review cites file and line for each comment and proposes no edits of its own to the files.",
-      "score": 0.9,
+      "score": 0.95,
       "n": 1,
       "weight": 0.1
     }
   ],
-  "rubric_weighted_score": 0.99,
+  "rubric_weighted_score": 0.995,
   "gate_detail": {
     "inventory_untouched": true,
     "tests_untouched": true,
@@ -104,5 +115,6 @@
   },
   "gate_detail_matches_engine": true,
   "changed_files": [],
-  "graded_artifact": "transcript"
+  "graded_artifact": "transcript",
+  "judge_error": null
 }

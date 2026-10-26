@@ -1,0 +1,36 @@
+Both passes have completed. Let me verify the findings against the cited lines and produce the review.
+
+Verifying against `src/service.py`:
+
+- **Line 23**: `self.log_output = open(os.devnull, "wb")` — opens in binary mode, producing a `BinaryIO`.
+- **Line 37**: `isinstance(self.log_output, TextIO)` — `BinaryIO` is not a `TextIO`, so this is `False`.
+- **Line 39**: `isinstance(self.log_output, int)` — `BinaryIO` is not `int`, so this is also `False`.
+- Result: neither branch matches, the handle is never closed. Confirmed.
+
+- **Line 38** (`self.log_output.close()`): if this raises, lines 42–45 (`process.terminate()`, `process.wait()`) never execute. The old `try/except Exception: pass` prevented that. Confirmed.
+
+- **Line 40** (`os.close(self.log_output)`): on double `stop()`, `self.log_output` is not nulled, so `os.close()` fires again on an already-closed fd and raises `OSError`. `TextIO.close()` is idempotent, so the file path is safe on double call — only the int fd path breaks. Confirmed.
+
+---
+
+### Correctness
+
+* **src/service.py:23,37** — **important** — `BinaryIO` file handle leaks on the default path. When `log_output=None`, line 23 opens `os.devnull` in binary mode (`"wb"`), producing a `BinaryIO`. Line 37's `isinstance(self.log_output, TextIO)` is `False` for it, and line 39's `isinstance(..., int)` is also `False`, so neither close branch executes. Every `Service` instance using the default (no log_output) leaks a file descriptor on `stop()`.
+
+* **src/service.py:37** — **important** — Any caller-passed `BinaryIO` is not closed. A caller passing `open("app.log", "ab")` as `log_output` gets the same treatment — the `TextIO` check rejects binary files, so they are never closed. The old code's `hasattr(self.log_output, "close")` handled any file-like object.
+
+### Failure Modes
+
+* **src/service.py:38** — **important** — Exception during `close()` skips process termination. If `self.log_output.close()` raises (broken pipe, already closed externally), the exception propagates and lines 42–45 (`process.terminate()`, `process.wait()`) never run — the child process becomes an orphan. The old code wrapped the close in `try/except Exception: pass`, guaranteeing termination always proceeded.
+
+* **src/service.py:40** — **important** — Calling `stop()` twice raises `OSError` for an integer fd. After the first `stop()`, `self.log_output` still holds the fd value (it's never nulled). A second `stop()` re-enters line 39–40 and calls `os.close()` on an already-closed fd, raising `OSError`. (The `TextIO` path is safe — `.close()` is idempotent.)
+
+### Test Coverage
+
+* **tests/test_service.py:22** — **nit** — No test covers the `TextIO` close path. When `log_output` is a string (e.g., `"/tmp/driver.log"`), `__init__` opens it in text mode (`"a+"`), producing a `TextIO`. None of the three tests exercise that `stop()` closes it.
+
+* **tests/test_service.py:22** — **nit** — No test covers the default `log_output=None` path (`BinaryIO`), which is the most common usage and is where the leak in the first finding lives.
+
+Findings: 4 important, 2 nit, 0 pre-existing
+
+request changes

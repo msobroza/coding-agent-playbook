@@ -6,14 +6,18 @@
   "command": [
     "claude",
     "-p",
-    "--bare",
+    "--setting-sources",
+    "",
+    "--strict-mcp-config",
+    "--settings",
+    "{\"autoMemoryEnabled\": false}",
     "--model",
     "qwen/qwen3.6-27b",
     "--no-session-persistence",
     "--permission-mode",
     "acceptEdits",
     "--allowedTools",
-    "Read,Grep,Glob,Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)",
+    "Read,Grep,Glob,Task,Skill,Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)",
     "--output-format",
     "text",
     "--",
@@ -21,8 +25,8 @@
   ],
   "returncode": 0,
   "timed_out": false,
-  "duration_seconds": 58.6,
-  "baseline_commit": "a9fff000718bbf4746248fdcce08461373a4fb2c",
-  "scratch": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-playbook-v2/review-clean-multi-file-change/scratch",
-  "setup_snapshot": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-playbook-v2/review-clean-multi-file-change/scratch__setup_baseline"
+  "duration_seconds": 231.7,
+  "baseline_commit": "0b09579de511874ee51af0778e268fe44e54b614",
+  "scratch": "/Users/msobroza/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-playbook-v2/review-clean-multi-file-change/scratch",
+  "setup_snapshot": "/Users/msobroza/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-playbook-v2/review-clean-multi-file-change/scratch__setup_baseline"
 }

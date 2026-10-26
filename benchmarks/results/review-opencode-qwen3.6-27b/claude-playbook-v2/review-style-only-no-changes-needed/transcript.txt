@@ -1,8 +1,10 @@
+The subagent's first pass found no issues. I've now read the file and confirmed independently.
 
+---
 
-**Review of `src/temperature.py`**
+## Review: `src/temperature.py`
 
-The three functions are correct, properly type-annotated, and well-documented. The Celsius-to-Kelvin conversion correctly guards against below-absolute-zero values and raises with a descriptive message. No mutable defaults, no exception swallowing, no external calls, no security surface. The module does one thing and does it right.
+This is a small, correct utility module. The three conversion functions implement the standard formulas, are fully type-annotated, and carry clear docstrings. `celsius_to_kelvin` appropriately raises `ValueError` for physically impossible input with a descriptive message. The other two conversions correctly omit that check — negative Celsius and Fahrenheit values are physically valid.
 
 No findings across any priority bucket.
 

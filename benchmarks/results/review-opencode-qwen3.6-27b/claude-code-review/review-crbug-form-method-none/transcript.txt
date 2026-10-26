@@ -1,45 +1,59 @@
+The instructions say not to use the ReportFindings tool. I will output the findings as a JSON array directly.
 
-
-Here are the findings from the review:
+Here are the findings from the high-effort review:
 
 ```json
 [
   {
     "file": "src/forms.py",
     "line": 43,
-    "summary": "AttributeError when form.method is None because .upper() is called on the result of kwargs.pop before any None handling",
-    "failure_scenario": "Form(action='/test', method=None) is passed to FormRequest.from_form(). kwargs.pop('method', form.method) returns None, then None.upper() raises AttributeError. The previous code passed method=None through to __post_init__ which handled it via (self.method or 'GET').upper(), so this is a regression that breaks existing callers with None-valued form methods."
+    "summary": "Calling `.upper()` on the method value crashes with `AttributeError` when the caller explicitly passes `method=None` as a keyword argument.",
+    "failure_scenario": "FormRequest.from_form(LOGIN, method=None) — kwargs.pop('method', form.method) returns None (the key exists in kwargs), then None.upper() raises AttributeError. The old code handled this gracefully: None was passed to cls(...), and Request.__post_init__ did (self.method or 'GET').upper()."
   },
   {
     "file": "src/forms.py",
     "line": 43,
-    "summary": "AttributeError when caller explicitly passes method=None as a keyword argument override",
-    "failure_scenario": "FormRequest.from_form(Form(action='/test', method='post'), method=None) -- kwargs.pop('method', form.method) returns the explicit None value (not the default), then None.upper() raises AttributeError. No test covers this case."
+    "summary": "Calling `.upper()` on the method value crashes if `form.method` is None at runtime — the Form dataclass type annotation says str but Python does not enforce it.",
+    "failure_scenario": "Form(action='/x', method=None) is valid at runtime despite the str annotation. Then FormRequest.from_form(form) hits None.upper() and raises AttributeError. The prior code tolerated this by deferring the None→GET conversion to __post_init__."
   },
   {
     "file": "src/forms.py",
     "line": 33,
-    "summary": "valid_form_methods is a mutable list class variable, allowing external code to alter allowed methods at runtime for all instances",
-    "failure_scenario": "An external module does FormRequest.valid_form_methods.append('DELETE'), after which all FormRequest.from_form() calls accept DELETE as a valid method. Using a tuple or frozenset would prevent this. The test file also accesses it directly via FormRequest.valid_form_methods, coupling tests to implementation details."
+    "summary": "valid_form_methods is a mutable list at the class level, so any code can mutate it, silently changing behavior globally.",
+    "failure_scenario": "A subclass or external code does FormRequest.valid_form_methods.append('PUT'), and every subsequent from_form call now accepts PUT — a global side effect. Should be a tuple or frozenset."
+  },
+  {
+    "file": "src/forms.py",
+    "line": 44,
+    "summary": "Validation is bypassable: calling the FormRequest constructor directly (cls(url=..., method='PATCH', ...)) skips the from_form guard entirely.",
+    "failure_scenario": "A caller does FormRequest(url='/api', method='DELETE', data={}) directly, bypassing the browser-method check. The fix should live in Request.__post_init__ or FormRequest.__post_init__ — the single constructor entry point — not only in from_form."
+  },
+  {
+    "file": "tests/test_forms.py",
+    "line": 19,
+    "summary": "No test covers method=None passed as a keyword argument to from_form, which triggers the AttributeError on line 43.",
+    "failure_scenario": "The regression from finding 1 is not caught by any test. A test such as FormRequest.from_form(LOGIN, method=None) should assert it falls back to GET without raising."
   },
   {
     "file": "src/forms.py",
     "line": 43,
-    "summary": "No test coverage for None-valued form.method, which is a regression from the previous behavior where __post_init__ safely converted None to GET",
-    "failure_scenario": "The diff removes the implicit None-to-GET safety net from __post_init__ without adding a test for the None path. The test suite (tests/test_forms.py) only tests with concrete string methods ('post', 'GET', 'UNKNOWN', 'get', 'post'), leaving the regression undetected by the new tests."
+    "summary": "The method is uppercased here in from_form, then uppercased again in Request.__post_init__ (line 27) — redundant computation.",
+    "failure_scenario": "Every call to FormRequest.from_form(...) runs .upper() twice on the same string. In a hot path serving thousands of requests, this is wasted CPU."
   },
   {
     "file": "src/forms.py",
-    "line": 43,
-    "summary": "Non-string method values on Form cause AttributeError since Form's method field has no runtime type enforcement",
-    "failure_scenario": "Form(action='/test', method=0) or Form(action='/test', method=123) -- the Form dataclass is typed with method: str but Python does not enforce this. Passing an integer results in int.upper() raising AttributeError. The old code would have crashed too in __post_init__ via int.upper(), so this is a pre-existing latent issue not introduced by the diff."
+    "line": 45,
+    "summary": "The GET fallback at line 45 is redundant with the GET fallback in Request.__post_init__ (line 27), since from_form always passes a non-empty string by the time it reaches cls(...).",
+    "failure_scenario": "Having two fallback mechanisms means future changes to one will not affect the other, creating confusion about which path actually handles the fallback. The __post_init__ fallback is sufficient for the from_form path."
   },
   {
-    "file": "src/forms.py",
-    "line": 43,
-    "summary": "Method is uppercased twice -- once in from_form at line 43 and again in Request.__post_init__ at line 27 -- redundant computation on every call",
-    "failure_scenario": "Every call to FormRequest.from_form() performs str.upper() on the method value twice (line 43 then line 27 of Request.__post_init__). Not a correctness bug, but wasted work that accumulates on high-throughput paths. Since the value is already guaranteed uppercased by line 44's validation, the __post_init__ uppercasing is a no-op."
+    "file": "tests/test_forms.py",
+    "line": 23,
+    "summary": "The parametrized test imports FormRequest.valid_form_methods — coupling the test to an internal implementation detail.",
+    "failure_scenario": "Renaming or privatizing valid_form_methods breaks the test at import time with AttributeError rather than surfacing a meaningful test failure. The test should hard-code ['GET', 'POST'] to stay independent."
   }
 ]
 ```
+
+**Summary:** 8 findings across `src/forms.py` and `tests/test_forms.py`. The two most severe are correctness bugs on line 43: `.upper()` will crash with `AttributeError` when the method value is `None` — either from an explicit `method=None` kwarg (which the old code handled via `__post_init__`) or from a `Form` instance whose `method` field is `None` at runtime. Finding #4 exposes that the entire validation is only in `from_form`, meaning direct constructor calls bypass it. The remaining findings cover a mutable class attribute, redundant double uppercasing, redundant double GET fallback, missing test coverage for the None regression, and test coupling to an implementation detail.
 [claude-code:unrecognized_model] {"model":"qwen/qwen3.6-27b","query_source":"agent:custom"}

@@ -1,0 +1,39 @@
+{
+  "sample_id": "review-crbug-replace-same-object",
+  "experiment": "claude-v2-over-code-review",
+  "defect": {
+    "description": "The edge case where new_mobject is old_mobject: the new deduplication removes the object from the list before searching, so scene.replace(a, a) no longer finds a, raises ValueError and leaves a removed from the scene; the deduplication must skip the case new_m is old_m (or run only after the replacement).",
+    "location": "src/scene.py (the deduplication at the top of replace_in_list)"
+  },
+  "judge": {
+    "backend": "anthropic",
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "yes",
+  "strict": 1.0,
+  "lenient": 1.0,
+  "top5": 1.0,
+  "first_match": 2,
+  "n_items": 4,
+  "votes": [
+    {
+      "detected": "yes",
+      "review_items": [
+        "Dedup guard only removes new_m at current recursion depth; nested new_m in sibling group leaves duplicate",
+        "replace(x, x) now raises ValueError because dedup removes the object before search",
+        "Tests only cover same-list case; cross-list scenario untested",
+        "in + remove double O(n) scan; use index()+pop()"
+      ],
+      "item_matches": [
+        0,
+        1,
+        0,
+        0
+      ],
+      "evidence_quote": "`replace(x, x)` now raises `ValueError` instead of being a no-op. When `old_m` and `new_m` are the same object, line 37 finds it in the list, line 38 removes it, then line 43 can no longer find it, returns `False`, and the caller raises `ValueError(\"Could not find \u2026\")`.",
+      "justification": "The second finding reports the same defect at the same deduplication guard. With replace(x, x), the guard removes the object before the search, so the search fails and the call raises ValueError. It does not say outright that the object is left removed from the scene, but the faulty behaviour and its cause are identified."
+    }
+  ]
+}

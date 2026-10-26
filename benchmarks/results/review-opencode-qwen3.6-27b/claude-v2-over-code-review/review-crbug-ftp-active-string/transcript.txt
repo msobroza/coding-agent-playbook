@@ -1,0 +1,43 @@
+
+
+I've read the diff and all three affected files. Let me verify each finding against the cited lines.
+
+---
+
+**Findings from first pass:**
+
+- Finding 1 (string "false" enables active mode): **Confirmed.** `Settings.from_command_line(["FEED_STORAGE_FTP_ACTIVE=false"])` stores the string `"false"`. On line 27, `"false" or False` → `"false"` (truthy). `if self.active:` on line 34 is `True`, so `ftp.set_pasv(False)` fires — the opposite of what the user intended.
+- Finding 2 (bypasses `getbool()`): **Confirmed.** `Settings.getbool()` at `src/settings.py:36` handles `"true"`/`"false"` text. This is the fix for finding 1; same root cause.
+- Finding 3 (no test for CLI string values): **Confirmed.** Both tests pass native `True`/`False`; neither exercises `from_command_line()`.
+- Finding 4 (tests don't verify `store()` behavior): **Confirmed.** If the `if self.active:` block inside `store()` were ever removed or mis-indented, no test catches it.
+- Finding 5 (FTP connection leak): **Pre-existing.** `ftp.quit()` was already present before this diff; the change doesn't introduce or worsen it.
+- Finding 6 (`or False` redundant): **Confirmed.** `DEFAULTS` already provides `False`, so the `or False` clause is dead code that masks the real issue.
+
+---
+
+## Review
+
+### Correctness
+
+- **`src/feedstorage.py:27`** — **important** — `settings["FEED_STORAGE_FTP_ACTIVE"] or False` does not convert the string `"false"` from command-line input to the boolean `False`. When the user passes `-s FEED_STORAGE_FTP_ACTIVE=false`, the value is the string `"false"`, which is truthy, so `or False` is never reached and `self.active` becomes truthy — enabling active mode when the user explicitly disabled it. Use `settings.getbool("FEED_STORAGE_FTP_ACTIVE")` instead, which handles `True`/`False`, `1`/`0`, and their text forms.
+
+### Test Coverage
+
+- **`tests/test_feedstorage.py:16-18`** — **nit** — Both new tests pass native `True`/`False` through the `Settings` constructor. Neither exercises `Settings.from_command_line()`, which produces string values. A test with `Settings.from_command_line(["FEED_STORAGE_FTP_ACTIVE=true"])` would have caught the bug above.
+
+- **`tests/test_feedstorage.py:12-13`** — **nit** — `test_passive_mode_is_the_default` and `test_the_setting_turns_active_mode_on` verify the `active` attribute on the instance but do not mock the `FTP` object to confirm that `store()` calls (or skips) `ftp.set_pasv(False)`. If the `if self.active:` block in `store()` is later accidentally removed or restructured, no test will fail.
+
+### Readability
+
+- **`src/feedstorage.py:27`** — **nit** — `or False` is dead code: `DEFAULTS` already provides `False` as the default, so `settings["FEED_STORAGE_FTP_ACTIVE"]` never returns `None`. The fallback does nothing but obscure the real issue — this line should use `getbool()`.
+
+### Failure Modes
+
+- **`src/feedstorage.py:30-38`** — **pre-existing** — If `ftp.cwd(dirname)` or `ftp.storbinary()` raises, the connection is not closed because `ftp.quit()` on line 39 is unreachable. The socket leaks, and under repeated failures this can exhaust the server's connection limit. Wrapping the body in `try` / `finally: ftp.quit()` (with a guard for a disconnected socket) resolves this. This predates the change.
+
+---
+
+Findings: 1 important, 3 nit, 1 pre-existing
+
+request changes
+[claude-code:unrecognized_model] {"model":"qwen/qwen3.6-27b","query_source":"sdk"}

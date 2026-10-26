@@ -1,0 +1,29 @@
+{
+  "sample_id": "review-crbug-netrc-env-path",
+  "experiment": "claude-playbook-v2",
+  "defect": {
+    "description": "A NETRC path is still expanded under the home directory: os.path.expanduser(f\"~/{name}\") turns NETRC=/etc/ci/netrc into a path like /home/user//etc/ci/netrc, so a NETRC file outside the home directory (an absolute path, or one starting with ~) is never found and no credentials are returned; only the default NETRC_FILES names should get the ~/ prefix.",
+    "location": "src/netrc_auth.py (the expanduser call in get_netrc_auth)"
+  },
+  "judge": {
+    "backend": "anthropic",
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "no",
+  "strict": 0.0,
+  "lenient": 0.0,
+  "top5": 0.0,
+  "first_match": null,
+  "n_items": 0,
+  "votes": [
+    {
+      "detected": "no",
+      "review_items": [],
+      "item_matches": [],
+      "evidence_quote": "",
+      "justification": "The review text only says the first-pass findings align with an earlier review and that there is nothing new to add. It contains no actual findings, so it never reports the NETRC expanduser path defect."
+    }
+  ]
+}

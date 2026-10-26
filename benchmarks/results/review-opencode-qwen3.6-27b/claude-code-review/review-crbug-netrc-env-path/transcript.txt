@@ -1,39 +1,32 @@
 
 
-Here are the findings:
+Here are 6 findings from the review:
 
-```json
-[
-  {
-    "file": "src/netrc_auth.py",
-    "line": 17,
-    "summary": "Absolute paths in NETRC env var get ~/ prepended, producing invalid paths that never match the intended file.",
-    "failure_scenario": "User sets NETRC=/etc/.netrc expecting the function to read that file. Line 17 constructs expanduser(\"~//etc/.netrc\") which resolves to \"/home/user//etc/.netrc\" — a non-existent path. The function returns None instead of reading /etc/.netrc. Verified: os.path.expanduser(\"~//etc/.netrc\") yields \"~//etc/.netrc\"."
-  },
-  {
-    "file": "src/netrc_auth.py",
-    "line": 12,
-    "summary": "NETRC set to empty string is treated as a valid location, suppressing fallback to default .netrc/_netrc files.",
-    "failure_scenario": "User sets NETRC=\"\" (intending no override, or by accident from a template). netrc_file is \"\" which is not None, so netrc_locations becomes (\"\",). Line 17 then computes expanduser(\"~/\") which yields the home directory itself (not a file). os.path.exists checks the directory and continues looping, but no match is found. The default NETRC_FILES (\".netrc\", \"_netrc\") are never searched, so credentials in a valid ~/.netrc are silently ignored."
-  },
-  {
-    "file": "src/netrc_auth.py",
-    "line": 17,
-    "summary": "NETRC values already prefixed with ~/ get double-prefixed, turning the tilde into a literal directory name.",
-    "failure_scenario": "User sets NETRC=~/.netrc-work. Line 17 constructs expanduser(\"~/~/.netrc-work\") which resolves to \"/home/user/~/.netrc-work\" — the second tilde is treated as a literal subdirectory. The intended file ~/.netrc-work (/home/user/.netrc-work) is never found."
-  },
-  {
-    "file": "tests/test_netrc_auth.py",
-    "line": 34,
-    "summary": "Test only covers a relative path resolved via HOME, never exercises absolute paths — the most common NETRC use case — leaving Bug 1 undetected.",
-    "failure_scenario": "NETRC is set to \".netrc-ci\" and HOME is set to tmp_path, so expanduser(\"~/.netrc-ci\") resolves to tmp_path/.netrc-ci which exists. But if NETRC=\"/some/absolute/path\" were tested, expanduser(\"~/some/absolute/path\") would produce a broken path. The test passes while the absolute-path bug remains in production code."
-  },
-  {
-    "file": "src/netrc_auth.py",
-    "line": 12,
-    "summary": "When NETRC is set but the specified file does not exist, the code silently returns None with no fallback to default locations.",
-    "failure_scenario": "User sets NETRC=/opt/ci/.netrc but forgets to create that file, while they have credentials in ~/.netrc. The loop only checks the NETRC-specified path (the sole element in netrc_locations). It does not exist, so get_netrc_auth returns None. No error is raised even if raise_errors=True, and the user's ~/.netrc credentials are never consulted. This is a change in user-visible behavior compared to the unset-NETRC case where both .netrc and _netrc in HOME are tried."
-  }
-]
-```
+**File: `src/netrc_auth.py`**
+
+1. **Line 17 — Absolute NETRC paths get ~/ prefix** (Critical correctness bug)
+
+   When the user sets `NETRC=/etc/netrc`, the code constructs `os.path.expanduser("~//etc/netrc")`, which resolves to `/home/user//etc/netrc` — not `/etc/netrc`. The standard NETRC convention (curl, git, wget) is that the variable holds the full path. This means the most common usage pattern simply does not work.
+
+2. **Line 12 — Empty string `NETRC=""` treats home directory as netrc file** (Critical correctness bug)
+
+   `os.environ.get("NETRC")` returns `""` for `NETRC=""`, which is not `None`, so `netrc_locations = ("",)`. Then `expanduser("~/")` is the home directory, `os.path.exists` returns True, and the code attempts to parse the home directory as a netrc file. Should skip empty strings.
+
+3. **Line 17 — Relative NETRC paths expanded incorrectly** (Correctness bug)
+
+   A value like `NETRC=../netrc` becomes `expanduser("~//../netrc")`, expanding to `/home/user/../netrc` instead of the intended `../netrc` relative to CWD. The `~/` prefix should not be added to paths that are already explicit.
+
+4. **Line 11 — Inverts the established NETRC convention** (Correctness bug)
+
+   The implementation treats NETRC as a filename relative to HOME (because of the `~/{name}` template), but the real-world convention is that it holds the full filesystem path. Users setting `NETRC=/path/to/netrc` following curl/git/wget conventions will silently fail.
+
+**File: `tests/test_netrc_auth.py`**
+
+5. **Line 34 — No test for absolute NETRC path** (Test coverage gap)
+
+   The only test passes `".netrc-ci"` (a bare filename). There is no test with `NETRC=/absolute/path/to/netrc`, which is the most common usage pattern, so the absolute-path bug on line 17 goes undetected.
+
+6. **Line 11 — Docstring omits NETRC env var documentation** (Documentation)
+
+   The docstring does not mention the NETRC environment variable, so users cannot discover this feature without reading the source code.
 [claude-code:unrecognized_model] {"model":"qwen/qwen3.6-27b","query_source":"agent:custom"}

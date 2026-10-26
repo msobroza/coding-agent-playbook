@@ -1,0 +1,39 @@
+{
+  "sample_id": "review-crbug-replace-same-object",
+  "experiment": "opencode-v2-dual",
+  "defect": {
+    "description": "The edge case where new_mobject is old_mobject: the new deduplication removes the object from the list before searching, so scene.replace(a, a) no longer finds a, raises ValueError and leaves a removed from the scene; the deduplication must skip the case new_m is old_m (or run only after the replacement).",
+    "location": "src/scene.py (the deduplication at the top of replace_in_list)"
+  },
+  "judge": {
+    "backend": "anthropic",
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "yes",
+  "strict": 1.0,
+  "lenient": 1.0,
+  "top5": 1.0,
+  "first_match": 4,
+  "n_items": 4,
+  "votes": [
+    {
+      "detected": "yes",
+      "review_items": [
+        "src/scene.py:37 important - remove(new_m) runs before searching, so new_m is dropped when old_m is missing and ValueError is raised",
+        "src/scene.py:37 important - remove(new_m) at current recursion level strips top-level new_m when old_m is nested",
+        "src/scene.py:37 important - list.remove only removes first occurrence, leaving duplicates of new_m",
+        "tests/test_scene.py:30 nit - no test for replace(obj, obj); remove drops the object and the search then raises a misleading ValueError"
+      ],
+      "item_matches": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "evidence_quote": "With the current code, line 37's `remove` drops the object, then the search fails to find `old_m` (it was just removed), raising the misleading `ValueError(\"Could not find\")`.",
+      "justification": "The review's nit names the self-replace case and gives the right cause: the dedup `remove` at line 37 drops the object before the search, so the search fails and raises ValueError. It labels this a nit about missing test coverage, but the behaviour, cause and location all match the known defect."
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "experiment": "opencode-v2-dual",
+  "sample_id": "review-spot-the-bug",
+  "harness": "opencode",
+  "model": "openrouter/qwen/qwen3.6-27b",
+  "command": [
+    "opencode",
+    "run",
+    "--pure",
+    "--dir",
+    "/Users/msobroza/.cache/playbook-bench/review-opencode-qwen3.6-27b/opencode-v2-dual/review-spot-the-bug/scratch",
+    "--model",
+    "openrouter/qwen/qwen3.6-27b",
+    "{prompt}"
+  ],
+  "returncode": 0,
+  "timed_out": false,
+  "duration_seconds": 136.7,
+  "baseline_commit": "febfece8dfa99ffb7e816430c1390c194edef2f6",
+  "scratch": "/Users/msobroza/.cache/playbook-bench/review-opencode-qwen3.6-27b/opencode-v2-dual/review-spot-the-bug/scratch",
+  "setup_snapshot": "/Users/msobroza/.cache/playbook-bench/review-opencode-qwen3.6-27b/opencode-v2-dual/review-spot-the-bug/scratch__setup_baseline",
+  "main_loop_tools": null,
+  "native_pass_ran": false
+}

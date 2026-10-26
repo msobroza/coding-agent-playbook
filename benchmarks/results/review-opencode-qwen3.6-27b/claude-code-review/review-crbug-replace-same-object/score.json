@@ -1,9 +1,17 @@
 {
   "sample_id": "review-crbug-replace-same-object",
-  "harness": "opencode:claude-code-review",
+  "harness": "claude:claude-code-review",
+  "target": {
+    "name": null,
+    "harness": "claude:claude-code-review",
+    "model": null,
+    "reported_model": null,
+    "endpoint": null,
+    "harness_settings": "personal"
+  },
   "passed": false,
   "aggregate_score": 0.0,
-  "duration_seconds": 292.7,
+  "duration_seconds": 189.7,
   "report": {
     "passed": false,
     "warn_count": 0,
@@ -33,7 +41,6 @@
   },
   "uncalibrated_judge": true,
   "experiment": "claude-code-review",
-  "sample_version": 1,
   "agent": {
     "experiment": "claude-code-review",
     "sample_id": "review-crbug-replace-same-object",
@@ -42,14 +49,18 @@
     "command": [
       "claude",
       "-p",
-      "--bare",
+      "--setting-sources",
+      "",
+      "--strict-mcp-config",
+      "--settings",
+      "{\"autoMemoryEnabled\": false}",
       "--model",
       "qwen/qwen3.6-27b",
       "--no-session-persistence",
       "--permission-mode",
       "acceptEdits",
       "--allowedTools",
-      "Read,Grep,Glob,Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)",
+      "Read,Grep,Glob,Task,Skill,Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)",
       "--output-format",
       "text",
       "--",
@@ -57,10 +68,10 @@
     ],
     "returncode": 0,
     "timed_out": false,
-    "duration_seconds": 292.7,
-    "baseline_commit": "2685e638159a4f3b9d5b14aa63f76b0ad5868396",
-    "scratch": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-code-review/review-crbug-replace-same-object/scratch",
-    "setup_snapshot": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-code-review/review-crbug-replace-same-object/scratch__setup_baseline"
+    "duration_seconds": 189.7,
+    "baseline_commit": "e675fa062fb047bcd84b48daccfe7ef25df9dfe3",
+    "scratch": "/Users/msobroza/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-code-review/review-crbug-replace-same-object/scratch",
+    "setup_snapshot": "/Users/msobroza/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-code-review/review-crbug-replace-same-object/scratch__setup_baseline"
   },
   "judge": {
     "backend": "anthropic",
@@ -71,7 +82,7 @@
   "judge_calls": [
     {
       "criterion": "The review reports the edge case where new_mobject is old_mobject: the new deduplication removes the object from the list before searching, so scene.replace(a, a) no longer finds a, raises ValueError and leaves a removed from the scene; the deduplication must skip the case new_m is old_m (or run only after the replacement).",
-      "score": 0.7,
+      "score": 0.8,
       "n": 1,
       "weight": 0.6
     },
@@ -83,12 +94,12 @@
     },
     {
       "criterion": "The review does not invent bugs: anything else it raises is a real problem in the code shown, and it does not ask to rewrite code that works.",
-      "score": 0.3,
+      "score": 0.2,
       "n": 1,
       "weight": 0.2
     }
   ],
-  "rubric_weighted_score": 0.54,
+  "rubric_weighted_score": 0.58,
   "gate_detail": {
     "scene_untouched": true,
     "tests_untouched": true,
@@ -97,5 +108,6 @@
   },
   "gate_detail_matches_engine": true,
   "changed_files": [],
-  "graded_artifact": "transcript"
+  "graded_artifact": "transcript",
+  "judge_error": null
 }

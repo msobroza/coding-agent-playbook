@@ -1,0 +1,15 @@
+Review of `src/temperature.py`
+
+The code-review first pass returned no findings. I've read the file and confirmed against each priority bucket:
+
+- **Correctness:** All three conversion formulas are standard and correct. The absolute-zero guard on `celsius_to_kelvin` fires at the right boundary.
+- **Failure modes:** No mutable defaults, no swallowed exceptions, no I/O, no unbounded recursion. The `ValueError` on line 26 carries the offending value in its message. Nothing to flag.
+- **Security:** Not applicable — pure arithmetic utilities with no external input.
+- **Design:** Three focused functions, each a single formula. No seams to question.
+- **Readability:** Names are self-documenting, docstrings are present, each function fits on a screen (they fit on a line).
+- **Style:** Clean, type-annotated, PEP 8 conforming.
+
+Findings: 0 important, 0 nit, 0 pre-existing
+
+approve
+[claude-code:unrecognized_model] {"model":"qwen/qwen3.6-27b","query_source":"sdk"}

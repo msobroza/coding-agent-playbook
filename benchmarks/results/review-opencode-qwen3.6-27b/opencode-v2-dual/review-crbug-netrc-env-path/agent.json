@@ -1,0 +1,24 @@
+{
+  "experiment": "opencode-v2-dual",
+  "sample_id": "review-crbug-netrc-env-path",
+  "harness": "opencode",
+  "model": "openrouter/qwen/qwen3.6-27b",
+  "command": [
+    "opencode",
+    "run",
+    "--pure",
+    "--dir",
+    "/Users/msobroza/.cache/playbook-bench/review-opencode-qwen3.6-27b/opencode-v2-dual/review-crbug-netrc-env-path/scratch",
+    "--model",
+    "openrouter/qwen/qwen3.6-27b",
+    "{prompt}"
+  ],
+  "returncode": 0,
+  "timed_out": false,
+  "duration_seconds": 255.0,
+  "baseline_commit": "08ff6db272bb3e91ffdda2102d197daaaa498810",
+  "scratch": "/Users/msobroza/.cache/playbook-bench/review-opencode-qwen3.6-27b/opencode-v2-dual/review-crbug-netrc-env-path/scratch",
+  "setup_snapshot": "/Users/msobroza/.cache/playbook-bench/review-opencode-qwen3.6-27b/opencode-v2-dual/review-crbug-netrc-env-path/scratch__setup_baseline",
+  "main_loop_tools": null,
+  "native_pass_ran": false
+}

@@ -1,0 +1,29 @@
+Now let me start the two parallel first passes as the workflow requires.
+Now let me verify the findings against the cited lines:
+Findings verified. Here's the review:
+
+- **Correctness**
+  - `src/forms.py:43` - **important** - `kwargs.pop("method", form.method).upper()` raises `AttributeError` when `form.method` is `None` (Python doesn't enforce type annotations at runtime). Breaking input: `Form(action="/x", method=None)` — this is precisely the case the stated intent claims to guard against ("a misspelled method attribute" would parse as `None`).
+  - `src/forms.py:43` - **important** - Same crash when the caller explicitly passes `method=None` as a keyword override. Breaking input: `FormRequest.from_form(form, method=None)`.
+  - `src/forms.py:33` - **nit** - `valid_form_methods = ["GET", "POST"]` is a mutable class attribute shared across the class and subclasses. `FormRequest.valid_form_methods.append("PUT")` would silently corrupt all lookups. Use a tuple: `("GET", "POST")`.
+
+Findings: 2 important, 1 nit, 0 pre-existing
+
+request changes
+
+> build · qwen/qwen3.6-27b
+
+→ Read CHANGE.diff
+
+$ git diff HEAD~1 --stat
+fatal: ambiguous argument 'HEAD~1': unknown revision or path not in the working tree.
+Use '--' to separate paths from revisions, like this:
+'git <command> [<revision>...] -- [<file>...]'
+
+→ Read src/forms.py
+→ Read tests/test_forms.py
+✱ Glob "{AGENTS.md,CLAUDE.md,REVIEW.md,.claude/rules/*.md,.opencode/**/*.md}" 0 matches
+✱ Glob ".opencode/**/*review*" 0 matches
+• First pass code review Explore Agent
+✓ First pass code review Explore Agent
+→ Read src/forms.py [offset=40, limit=10]

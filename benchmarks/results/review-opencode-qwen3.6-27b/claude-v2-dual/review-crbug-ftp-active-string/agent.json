@@ -1,0 +1,43 @@
+{
+  "experiment": "claude-v2-dual",
+  "sample_id": "review-crbug-ftp-active-string",
+  "harness": "claude",
+  "model": "qwen/qwen3.6-27b",
+  "command": [
+    "claude",
+    "-p",
+    "--setting-sources",
+    "",
+    "--strict-mcp-config",
+    "--settings",
+    "{\"autoMemoryEnabled\": false}",
+    "--model",
+    "qwen/qwen3.6-27b",
+    "--no-session-persistence",
+    "--permission-mode",
+    "acceptEdits",
+    "--allowedTools",
+    "Read,Grep,Glob,Task,Skill,Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--",
+    "{prompt}"
+  ],
+  "returncode": 0,
+  "timed_out": false,
+  "duration_seconds": 180.6,
+  "baseline_commit": "c80e77f4176766b13f39b056a2c0fc5c102c60a1",
+  "scratch": "/Users/msobroza/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-v2-dual/review-crbug-ftp-active-string/scratch",
+  "setup_snapshot": "/Users/msobroza/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-v2-dual/review-crbug-ftp-active-string/scratch__setup_baseline",
+  "main_loop_tools": [
+    "Read",
+    "Glob",
+    "Agent:Plan",
+    "Skill:code-review",
+    "Read",
+    "Read",
+    "Read"
+  ],
+  "native_pass_ran": true
+}

@@ -1,0 +1,29 @@
+**Correctness**
+
+- **src/auth.py:16** - `important` - `!hmac.compare_digest(...)` uses C-style `!` for logical negation, which is invalid Python. The file will fail to parse with a `SyntaxError` and the module cannot be imported. Use `not hmac.compare_digest(...)` instead.
+
+**Security**
+
+- **src/auth.py:16-17** - `important` - Even once the syntax is fixed, the `or` between the two `not hmac.compare_digest(...)` calls short-circuits: if the username doesn't match, the password comparison is never executed. An attacker can still measure whether the *username* is correct (just not which character mismatches). To fully close the timing side-channel, both comparisons must execute regardless of the other's result, e.g., store each result in a variable, then `return user_ok and pass_ok`.
+
+Findings: 2 important, 0 nit, 0 pre-existing
+
+request changes
+
+> build · qwen/qwen3.6-27b
+
+→ Read CHANGE.diff
+✱ Glob "{CLAUDE.md,AGENTS.md,.claude/rules/**/*.md,.opencode/**/*.md,REVIEW.md}" 0 matches
+• First pass code review Explore Agent
+
+$ opencode run --dir /Users/msobroza/.cache/playbook-bench/review-opencode-qwen3.6-27b/opencode-v2-dual/review-crbug-basic-auth-not/scratch --command 'review my change in CHANGE.diff (it is already applied to the working tree). It switches the admin credential check to a constant-time comparison, so the check no longer leaks through its timing how much of a username or password matched.'
+Error: {
+  "name": "UnknownError",
+  "data": {
+    "message": "Unexpected server error. Check server logs for details.",
+    "ref": "err_33676b67"
+  }
+}
+
+✓ First pass code review Explore Agent
+→ Read src/auth.py

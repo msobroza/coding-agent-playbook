@@ -1,0 +1,43 @@
+{
+  "sample_id": "review-crbug-form-method-none",
+  "experiment": "playbook-v2",
+  "defect": {
+    "description": "The backward-incompatible crash: kwargs.pop('method', form.method).upper() raises AttributeError when a caller passes method=None explicitly, which used to work (Request turns a None method into GET); the change should treat None like a missing method.",
+    "location": "src/forms.py (from_form)"
+  },
+  "judge": {
+    "backend": "anthropic",
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "yes",
+  "strict": 1.0,
+  "lenient": 1.0,
+  "top5": 1.0,
+  "first_match": 1,
+  "n_items": 6,
+  "votes": [
+    {
+      "detected": "yes",
+      "review_items": [
+        "Important: kwargs.pop('method', form.method).upper() raises AttributeError when method is None (regression; previously Request handled None as GET)",
+        "Nit: valid_form_methods is a mutable list class attribute; use tuple/frozenset",
+        "Nit: method is upper()'d twice (from_form and Request.__post_init__), redundant",
+        "Nit: tests lack coverage for method=None and method='' edge cases",
+        "Pre-existing: unknown-method test only uses uppercase 'UNKNOWN', not lowercase",
+        "Nit: non-string form.method (e.g. int) would raise AttributeError on .upper()"
+      ],
+      "item_matches": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence_quote": "\u5f53 `form.method` \u4e3a `None` \u6216\u663e\u5f0f\u4f20\u5165 `method=None` \u65f6\uff0c`kwargs.pop(\"method\", form.method).upper()` \u4f1a\u629b\u51fa `AttributeError: 'NoneType' object has no attribute 'upper'`\u3002",
+      "justification": "The review names the exact expression in from_form and the AttributeError it raises when method=None is passed explicitly. It explains that this used to work because Request mapped None to GET, and it suggests the `or \"GET\"` fix."
+    }
+  ]
+}

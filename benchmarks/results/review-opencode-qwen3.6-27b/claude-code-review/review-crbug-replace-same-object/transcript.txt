@@ -1,37 +1,47 @@
-No CLAUDE.md files present. Here are the 5 findings, ranked by severity:
+Now let me compile the findings, ranked by severity.
 
-```json
 [
   {
     "file": "src/scene.py",
     "line": 37,
-    "summary": "replace(obj, obj) now raises ValueError instead of succeeding as a no-op, because the dedup guard removes obj before the search can find it.",
-    "failure_scenario": "scene.add(circle); scene.replace(circle, circle) -- the guard at line 37 removes circle from mobj_list (since circle == new_m and circle is in the list), then the loop at line 42 searches the now-empty list for old_m (which is circle), does not find it, returns False, and the caller raises ValueError. Previously this was a harmless no-op."
+    "summary": "The dedup guard removes new_m from every list the recursion visits, not just the list where old_m lives, corrupting unrelated groups",
+    "failure_scenario": "scene.mobjects = [group1, group2], group1.submobjects = [square], group2.submobjects = [circle]; replace(circle, square) removes square from group1 as a side effect of the guard running on that list before finding circle in group2, so square gets moved from group1 to group2 instead of being inserted alongside circle's position"
   },
   {
     "file": "src/scene.py",
     "line": 37,
-    "summary": "When new_m is nested inside a group at a deeper level and old_m is at a higher level, the dedup check misses new_m and it ends up duplicated in both places.",
-    "failure_scenario": "scene.mobjects = [old, group]; group.submobjects = [new]. scene.replace(old, new) -- line 37 checks 'new in [old, group]' which is False (new is not directly in the top-level list), so no dedup occurs. The loop replaces old with new at index 0. Result: scene.mobjects = [new, group] AND group.submobjects = [new], leaving new referenced in two places in the scene graph."
+    "summary": "replace(obj, obj) — replacing an object with itself — removes that object from the scene because the guard removes it before the search finds it",
+    "failure_scenario": "scene.add(square); scene.replace(square, square) → guard removes square from mobjects, then the search for old_m (same object) finds nothing, so ValueError is raised and the object is gone from the scene"
   },
   {
     "file": "src/scene.py",
     "line": 37,
-    "summary": "When old_m and new_m are in separate sibling groups, the dedup only runs at each individual group's submobjects list and does not remove new_m from its original group.",
-    "failure_scenario": "g1.submobjects = [old]; g2.submobjects = [new]; scene.add(g1, g2). scene.replace(old, new) -- top-level dedup finds new is not directly in [g1, g2]. Recurse into g1: dedup finds new not in [old]. Replace old with new in g1. Function returns True early, never recursing into g2. Result: g1.submobjects = [new], g2.submobjects = [new] -- duplicate persists."
+    "summary": "The guard runs recursively on submobjects lists it traverses, stripping new_m from groups that contain both new_m and old_m at the same nesting level where only old_m should be replaced",
+    "failure_scenario": "group.submobjects = [A, new_m, old_m, B]; replace(old_m, new_m) → guard removes new_m first, yielding [A, old_m, B], then replaces old_m with new_m → [A, new_m, B], losing the correct final placement where new_m should occupy old_m's original slot without shifting other elements unnecessarily"
   },
   {
     "file": "src/scene.py",
     "line": 37,
-    "summary": "Replacing a child mobject with its ancestor group removes the ancestor from the list before searching inside it, making the child unfoundable and raising a misleading 'Could not find' error.",
-    "failure_scenario": "scene.mobjects = [parent]; parent.submobjects = [child]. scene.replace(child, parent) -- line 37 checks 'parent in [parent]' which is True, removes parent. mobjects is now []. The search loop runs over an empty list and cannot descend into parent to find child. Raises ValueError('Could not find child'). The error message blames the missing child, not the dedup guard removing the parent."
+    "summary": "The dedup guard is placed at the wrong depth — it should only check the specific list where the replacement occurs, not every list the breadth-first search traverses",
+    "failure_scenario": "Any scene graph where new_m appears in a group that the search passes through without finding old_m will lose new_m from that group; the guard is a fragile bandaid that works for flat lists and the two test cases but fails for general nesting"
   },
   {
     "file": "src/scene.py",
     "line": 38,
-    "summary": "list.remove() only removes the first matching element, so if new_m appears multiple times in the same list (e.g., manually constructed), only one copy is removed and duplicates remain.",
-    "failure_scenario": "group.submobjects = [old, new, new] (manually set). scene.replace(old, new) -- line 37 finds new in the list, line 38 calls remove(new) which removes only the first occurrence. Line 44 replaces old with new. Result: submobjects = [new, new] -- two copies of new remain. The dedup guard did not fully eliminate duplicates."
+    "summary": "mobj_list.remove(new_m) mutates the list before the search loop, but if old_m and new_m share the same list and old_m is at a higher index, the index shift is correctly handled — however remove() only removes the first occurrence, which matters if identity-equal duplicates somehow exist",
+    "failure_scenario": "If somehow the same mobject instance appears twice in a single list (possible through manual list mutation bypassing add()), remove() drops only the first occurrence, leaving a stale second reference that the dedup guard intended to clean"
+  },
+  {
+    "file": "tests/test_scene.py",
+    "line": 33,
+    "summary": "Test coverage is insufficient: both new tests only exercise the case where old_m and new_m are in the same list, so the cross-contamination bug in angle A finding 1 is not caught by tests",
+    "failure_scenario": "The tests pass but the bug remains in production because no test has new_m in one group and old_m in a sibling group, which is the exact scenario where the guard strips new_m from an unrelated group"
+  },
+  {
+    "file": "tests/test_scene.py",
+    "line": 37,
+    "summary": "Missing test for replace(obj, obj) — replacing an object with itself — which the guard corrupts by removing then failing to re-insert",
+    "failure_scenario": "A caller that transforms an object in-place calls replace(obj, obj); the guard removes it and the search fails, raising ValueError and dropping the object from the scene with no test to catch it"
   }
 ]
-```
 [claude-code:unrecognized_model] {"model":"qwen/qwen3.6-27b","query_source":"agent:custom"}
