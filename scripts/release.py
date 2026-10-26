@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Prepare a release pull request from any worktree (#281 ticket 10, ADR 0012).
+"""Prepare a release pull request from any worktree, and tag it once merged (#281, ADR 0012).
 
 Run it from any checkout of the engine repository, in an environment with the
 engine installed::
 
     uv run scripts/release.py prepare                  # next version from the commits
     uv run scripts/release.py prepare --version 0.1.0  # the first release, or an override
+    uv run scripts/release.py tag                      # by hand, when CI could not tag
 
 ``prepare`` fetches ``origin`` with its tags and works in a throwaway detached
 worktree at ``origin/main``, so the caller's tree is never touched. There it
@@ -14,6 +15,8 @@ re-runs itself (``prepare-checkout``) on that checkout's own engine, which:
 1. refuses unless the tag of the current ``[project]`` version exists (otherwise
    that release is merged but not tagged) and no release pull request is open;
    with no release tag at all it is the first release and needs ``--version``;
+   an untagged release whose base moved under its pull request is superseded,
+   never tagged: ``--version`` releases over it, from the last release tag;
 2. takes the next version from commitizen over the Conventional Commits since
    that tag, raised to at least a minor when the graded set's digests changed;
 3. writes ``catalog/releases/<version>/manifest.toml`` and ``notes.md``
@@ -22,7 +25,9 @@ re-runs itself (``prepare-checkout``) on that checkout's own engine, which:
    ``chore(release): v<version>`` on ``release/v<version>``, pushes it and opens
    the pull request through ``playbook forge`` (ADR 0003).
 
-Merging that pull request is the release; tagging is a separate step. A failed
+Merging that pull request is the release; the ``tag-release`` CI job then tags
+it, and ``tag`` does the same checks by hand (``release_tag``: the release
+commit, never HEAD; its recorded base; green tests; tags never moved). A failed
 run leaves no worktree, no local release branch and no change in the caller's
 tree, and a re-run starts over from ``origin/main`` (it overwrites a release
 branch a failed run pushed, with a lease). Exit codes: 0 done, 1 refused or
@@ -56,6 +61,7 @@ from coding_agent_playbook.release.manifest import (
     render_manifest,
 )
 from coding_agent_playbook.release.notes import CommitMessage, pull_requests, render_notes
+from coding_agent_playbook.release.tagging import TagRefusal
 from coding_agent_playbook.release.versions import (
     VersionError,
     check_next_version,
@@ -63,6 +69,7 @@ from coding_agent_playbook.release.versions import (
     raises_minor,
     release_tag,
 )
+from release_tag import superseded, tag_release
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -249,7 +256,7 @@ def plan_release(
     if head != base:
         raise ReleaseError(f"the checkout is at {head}, not at the base {base}")
     current = _project_version(tools.cwd)
-    previous = _previous_release(tools, current, base)
+    previous = _previous_release(tools, current, base, version)
     _refuse_open_release_pull(tools)
     previous_manifest = None if previous is None else _manifest_of(tools.cwd, previous)
     manifest = snapshot(base)
@@ -275,8 +282,13 @@ def _project_version(checkout: Path) -> str:
     return str(project["version"])
 
 
-def _previous_release(tools: Tools, current: str, base: str) -> str | None:
-    """The version of the last release, or ``None`` for the first; refuses an untagged one."""
+def _previous_release(tools: Tools, current: str, base: str, version: str | None) -> str | None:
+    """The version of the last release, or ``None`` for the first; refuses an untagged one.
+
+    An untagged ``current`` whose release commit lost its base (main moved under
+    its pull request, ``release_tag.superseded``) is never tagged: with an explicit
+    ``version`` the release goes over it, from the last release tag.
+    """
     tags = tools.git("tag", "--list", "v*").split()
     tag = release_tag(current)
     if tag in tags:
@@ -285,10 +297,31 @@ def _previous_release(tools: Tools, current: str, base: str) -> str | None:
         return current
     if not any(is_release_tag(name) for name in tags):
         return None
-    raise ReleaseError(
-        f"release {tag} is merged but not tagged: tag it first, then re-run prepare "
-        f"(the version in {_PYPROJECT} is {current} and no tag {tag} exists)"
-    )
+    reason = superseded(tools, current, base)
+    if reason is None:
+        raise ReleaseError(
+            f"release {tag} is merged but not tagged: tag it first, then re-run prepare "
+            f"(the version in {_PYPROJECT} is {current} and no tag {tag} exists)"
+        )
+    if version is None:
+        # cz finds no tag for the current version and would count every commit since
+        # the start of history, so the version over a superseded release is explicit.
+        raise ReleaseError(
+            f"release {tag} is superseded ({reason}): pass --version, higher than {current}, "
+            "for the release over it"
+        )
+    return _last_release(tools, base)
+
+
+def _last_release(tools: Tools, base: str) -> str:
+    """The version of the newest final release tag merged into ``base``."""
+    merged = tools.git("tag", "--list", "v*", "--merged", base, "--sort=-v:refname").split()
+    final = next((name for name in merged if is_release_tag(name)), None)
+    if final is None:
+        raise ReleaseError(
+            f"no final release tag is an ancestor of {REMOTE}/{MAIN_BRANCH} ({base})"
+        )
+    return final.removeprefix("v")
 
 
 def _refuse_open_release_pull(tools: Tools) -> None:
@@ -434,6 +467,12 @@ def _parser() -> argparse.ArgumentParser:
     inner = commands.add_parser("prepare-checkout", help=argparse.SUPPRESS)
     inner.add_argument("--base", required=True)
     inner.add_argument("--version")
+    tag = commands.add_parser("tag", help="tag the merged release commit (CI does it on push)")
+    tag.add_argument(
+        "--tested-commit",
+        metavar="SHA",
+        help="the CI tag job's commit, whose tests passed: tag only it, skip the CI lookup",
+    )
     return parser
 
 
@@ -450,11 +489,14 @@ def main(
     try:
         if args.command == "prepare":
             return prepare(here, version=args.version, runner=runner)
+        if args.command == "tag":
+            print(f"release: {tag_release(Tools(runner, here), tested_commit=args.tested_commit)}")
+            return 0
         build = _default_snapshot(here) if snapshot is None else snapshot
         url = prepare_checkout(
             Tools(runner, here), base=args.base, version=args.version, snapshot=build
         )
-    except (ReleaseError, ManifestError, GradedSetError) as exc:
+    except (ReleaseError, ManifestError, GradedSetError, TagRefusal) as exc:
         print(f"release: {exc}", file=sys.stderr)
         return FAILED_EXIT
     print(f"release: opened {url}")

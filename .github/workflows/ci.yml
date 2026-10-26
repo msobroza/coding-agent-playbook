@@ -16,6 +16,10 @@ on:
     branches: [main]
     types: [opened, synchronize, reopened, labeled]
 
+# Read-only by default; only the tag-release job asks for more.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -98,6 +102,44 @@ jobs:
             > "$RUNNER_TEMP/simulate.json"
           cat "$RUNNER_TEMP/simulate.json"
           python -c "import json, os; r = json.load(open(os.path.join(os.environ['RUNNER_TEMP'], 'simulate.json'))); assert r['exit_code'] == 2, r"
+
+  # Merging the release pull request is the release (#281 ticket 11, ADR 0012).
+  # After the tests passed on a push to main, release.py finds the commit that
+  # introduced the [project] version (never HEAD), checks its parent is the base
+  # in catalog/releases/<version>/manifest.toml, and creates and pushes the
+  # annotated tag v<version> on it. Most pushes have nothing to tag; a tag
+  # already at the commit is a no-op, one elsewhere fails the job, and a tag is
+  # never moved. The decisions live in coding_agent_playbook.release.tagging;
+  # `scripts/release.py tag` is the manual fallback. contents: write is only
+  # for the tag push; a tag pushed with GITHUB_TOKEN starts no other workflow.
+  tag-release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: tag-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the first-parent walk back to the release commit, and the tags
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the engine
+        run: python -m pip install -e .
+
+      - name: Tag the release commit
+        env:
+          TESTED_COMMIT: ${{ github.sha }}
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        run: python scripts/release.py tag --tested-commit "$TESTED_COMMIT"
 
   # Dogfoods the commit convention (specs/prK-lifecycle-hooks.md §K OQ-6): only the
   # `commit-convention` step of `playbook ci` runs here, on pull requests. It checks
