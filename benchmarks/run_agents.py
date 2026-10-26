@@ -16,11 +16,13 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from time import monotonic
@@ -38,13 +40,14 @@ from coding_agent_playbook.evals.run.harness_runner import AgentRun, materialize
 from coding_agent_playbook.evals.run.opencode_output import parse_opencode_output
 from coding_agent_playbook.evals.run.opencode_runner import OpenCodeRunner
 from coding_agent_playbook.release.edition import load_edition
-from coding_agent_playbook.release.edition_digests import edition_dir
+from coding_agent_playbook.release.edition_build import build_edition
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     from coding_agent_playbook.evals.run.harness_runner import HarnessRunner
     from coding_agent_playbook.evals.sample import EvalSample
+    from coding_agent_playbook.release.edition import Edition
 
 #: Tool caches an agent may create while it inspects the code. Excluded so they
 #: never show up in the captured diff (the judge grades the diff when there is one).
@@ -298,11 +301,22 @@ def agent_prompt(experiment: _bench.Experiment, sample: EvalSample) -> str:
         rendered = render_prompt(sample, strict=True)
         return native_first_pass(rendered) if experiment.first_pass == "code-review" else rendered
     if experiment.playbook_text is not None:
-        edition = load_edition(edition_dir(catalog_root(), experiment.playbook_text))
-        return render_prompt(sample, strict=True, edition=edition)
+        return render_prompt(sample, strict=True, edition=edition_of(experiment.playbook_text))
     if experiment.harness == "claude":
         return f"/code-review {sample.invocation.prompt_args}"
     return sample.invocation.prompt_args
+
+
+@functools.cache
+def edition_of(tag: str) -> Edition:
+    """Edition ``tag``, built once per run from the engine checkout's git tag.
+
+    The engine keeps an edition under ``catalog/editions/`` only while a pin
+    needs it (ADR 0012), so the benchmark builds the one it grades from the tag,
+    as ``playbook eval --compare edition:<tag>`` does.
+    """
+    work = Path(tempfile.mkdtemp(prefix=f"bench-edition-{tag}-"))
+    return load_edition(build_edition(catalog_root().parent, tag, work))
 
 
 def _exclude_caches(scratch: Path) -> None:

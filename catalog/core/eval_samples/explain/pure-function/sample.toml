@@ -1,6 +1,5 @@
 id = "explain/pure-function"
 description = "Happy path: a small pure function with a non-obvious invariant — a clear explanation names the invariant."
-edition = "v0.1.0"
 
 [setup]
 files = ["src/midpoint.py"]

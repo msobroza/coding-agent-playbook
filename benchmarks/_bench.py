@@ -88,7 +88,7 @@ class Experiment:
     ``/code-review``); otherwise the playbook's rendered review prompt is sent,
     exactly as ``playbook eval --run`` builds it: ``"head"`` renders the current
     text (the former prompt set v2, ADR 0012) and a release tag renders that
-    edition (the former v1 is edition ``v0.1.0``, under ``catalog/editions/``).
+    edition, built from its git tag (the former v1 is edition ``v0.1.0``).
     ``harness`` is ``"opencode"`` or ``"claude"``. ``first_pass`` rewrites the
     current review's first pass (prototypes of wrapping the harness's native
     reviewer): ``"code-review"`` replaces both first passes with Claude Code's

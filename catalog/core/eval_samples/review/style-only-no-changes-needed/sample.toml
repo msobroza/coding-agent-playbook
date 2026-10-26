@@ -1,6 +1,5 @@
 id = "review/style-only-no-changes-needed"
 description = "Regression target: code is correct and idiomatic; the review must NOT invent problems or rewrite working code."
-edition = "v0.1.0"
 
 [setup]
 files = ["src/temperature.py"]
