@@ -1,0 +1,28 @@
+{
+  "experiment": "claude-playbook-v2",
+  "sample_id": "review-spot-the-bug",
+  "harness": "claude",
+  "model": "qwen/qwen3.6-27b",
+  "command": [
+    "claude",
+    "-p",
+    "--bare",
+    "--model",
+    "qwen/qwen3.6-27b",
+    "--no-session-persistence",
+    "--permission-mode",
+    "acceptEdits",
+    "--allowedTools",
+    "Read,Grep,Glob,Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)",
+    "--output-format",
+    "text",
+    "--",
+    "{prompt}"
+  ],
+  "returncode": 0,
+  "timed_out": false,
+  "duration_seconds": 47.9,
+  "baseline_commit": "895de84f76e49ffc3376a5fa3fb94d936199af42",
+  "scratch": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-playbook-v2/review-spot-the-bug/scratch",
+  "setup_snapshot": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-playbook-v2/review-spot-the-bug/scratch__setup_baseline"
+}

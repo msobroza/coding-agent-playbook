@@ -1,0 +1,31 @@
+Let me verify the findings by reading the relevant files.
+**Bug: `from_settings` bypasses `getbool`, breaking command-line string overrides**
+
+`src/feedstorage.py:27` reads the setting with `settings["FEED_STORAGE_FTP_ACTIVE"] or False`. When the setting is set via command line (`-s FEED_STORAGE_FTP_ACTIVE=false`), `Settings.from_command_line` stores it as the raw string `"false"`. The expression `"false" or False` evaluates to `"false"` (truthy non-empty string), so **active mode is incorrectly enabled** even though the user explicitly requested passive mode.
+
+`src/settings.py:36` already has `getbool()` to handle this — it converts `"true"`/`"false"` strings, `1`/`0`, and native booleans correctly. The fix is:
+
+```python
+return cls(host, path, active=settings.getbool("FEED_STORAGE_FTP_ACTIVE", False))
+```
+
+**Missing test coverage.** The new tests in `tests/test_feedstorage.py` only pass native `True` through `Settings({...})`. No test exercises `Settings.from_command_line()` with string values, which is where the bug manifests. Add a test like:
+
+```python
+def test_command_line_string_enables_active_mode() -> None:
+    settings = Settings.from_command_line(["FEED_STORAGE_FTP_ACTIVE=true"])
+    assert FTPFeedStorage.from_settings(settings, HOST, PATH).active is True
+
+def test_command_line_string_false_keeps_passive() -> None:
+    settings = Settings.from_command_line(["FEED_STORAGE_FTP_ACTIVE=false"])
+    assert FTPFeedStorage.from_settings(settings, HOST, PATH).active is False
+```
+
+> build · qwen/qwen3.6-27b
+
+• review changes [commit|branch|pr], defaults to uncommitted Build Agent
+✓ review changes [commit|branch|pr], defaults to uncommitted Build Agent
+→ Read src/feedstorage.py
+→ Read src/settings.py
+✱ Glob "**/CHANGE.diff" 1 match
+→ Read CHANGE.diff

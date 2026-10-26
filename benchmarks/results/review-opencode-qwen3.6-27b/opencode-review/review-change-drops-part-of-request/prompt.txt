@@ -1,0 +1,1 @@
+review my change in CHANGE.diff (it is already applied to the working tree). I asked for two things: a --csv option that prints the report as CSV, and a --since YYYY-MM-DD option that leaves out ledger entries dated before that day.

@@ -1,0 +1,14 @@
+- **src/pagination.py:22** — correctness — **important** — Off-by-one in slice clamping: `end = len(items) - 1` clamps one position too far. `paginate(["a"], 0, 10)` computes `end = 0`, producing `items[0:0]` → `[]` instead of `["a"]`. Should be `end = len(items)`.
+
+- **src/pagination.py:8** — failure modes — **nit** — `items: list[str]` on `@dataclass(frozen=True)` (line 6) — the list is mutable in-place (`page.items.append(...)`) evading the frozen guard, and the `Page` instance is unhashable (can't be a dict key or set member) because `list` has no `__hash__`. If `Page` instances are never keyed or mutated after creation, consider `frozen=False`; if they are, use `tuple[str]` or a wrapper that copies on access (e.g., `field(default_factory=list, hash=False, compare=False)` paired with a property that returns a copy).
+
+Findings: 1 important, 1 nit, 0 pre-existing
+
+request changes
+
+> build · qwen/qwen3.6-27b
+
+• First-pass code review Explore Agent
+✓ First-pass code review Explore Agent
+→ Read src/pagination.py
+→ Read src

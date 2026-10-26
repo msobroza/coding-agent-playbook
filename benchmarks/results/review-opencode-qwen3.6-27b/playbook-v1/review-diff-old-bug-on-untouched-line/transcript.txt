@@ -1,0 +1,21 @@
+## Review
+
+**1. Correctness**
+
+- `src/inventory.py:15` — `items_to_reorder` uses `item.quantity < item.reorder_level`, but the docstring says "fallen **to or below** their reorder level." The `<` operator excludes the equality case; an item with `quantity == reorder_level` will not be included. Should this be `<=` to match the documented contract?
+
+**5. Readability**
+
+- `src/inventory.py:23` — `restock` mutates `item.quantity` in place but only communicates the change through the return value. A caller who discards the return value won't know the mutation happened. Consider noting the in-place mutation in the docstring (e.g., "Mutates the matching item's quantity in place").
+
+---
+
+The new `restock` function and its tests are sound: validation, happy path, and unknown-SKU error are all covered. Input aligns with the module's existing `list[Item]` pattern.
+
+**Verdict:** approve with comments
+
+> build · qwen/qwen3.6-27b
+
+→ Read CHANGE.diff
+→ Read src/inventory.py
+→ Read tests/test_inventory.py

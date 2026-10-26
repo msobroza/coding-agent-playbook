@@ -1,0 +1,21 @@
+{
+  "experiment": "playbook-v1",
+  "sample_id": "review-crbug-xtrim-maxlen-minid",
+  "model": "openrouter/qwen/qwen3.6-27b",
+  "command": [
+    "opencode",
+    "run",
+    "--pure",
+    "--dir",
+    "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/playbook-v1/review-crbug-xtrim-maxlen-minid/scratch",
+    "--model",
+    "openrouter/qwen/qwen3.6-27b",
+    "{prompt}"
+  ],
+  "returncode": 0,
+  "timed_out": false,
+  "duration_seconds": 51.5,
+  "baseline_commit": "b6890ee9d38d5cda612007f2f38a389d0e438c2a",
+  "scratch": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/playbook-v1/review-crbug-xtrim-maxlen-minid/scratch",
+  "setup_snapshot": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/playbook-v1/review-crbug-xtrim-maxlen-minid/scratch__setup_baseline"
+}

@@ -1,0 +1,14 @@
+Now I have everything I need. The change is small, and I can see the full file. Let me verify my findings against the cited lines.
+
+**src/auth.py:16-17** — Lines 16-17 use `!` as a negation operator before `hmac.compare_digest(...)`. Python has no `!` unary operator; negation is done with the `not` keyword. This is a `SyntaxError` — the module won't load at all, so the constant-time comparison never runs.
+
+**src/auth.py:3** — `import hmac` is placed before the `from dataclasses import dataclass` line. The standard-library `import` and `from`...`import` groups are conventionally separated, and within each group they are sorted alphabetically. `hmac` comes after `dataclasses` alphabetically, so it should go after the `from dataclasses` line (or on its own line after a blank line separating stdlib bare imports from `from`...`import` forms). This is a style nit that `ruff` (ISC001) or `isort` would flag.
+
+Findings: 1 important, 1 nit
+
+- **src/auth.py:16-17** — **Correctness** — `important` — `!hmac.compare_digest(given.username, expected.username)` uses `!` as a unary negation operator, which is invalid Python syntax. The module fails to parse with `SyntaxError` at import time, so the admin credential check never works at all. The fix is to use `not hmac.compare_digest(...)` instead.
+
+- **src/auth.py:3** — **Style** — `nit` — `import hmac` is placed before `from dataclasses import dataclass`. Within standard-library imports, `from`...`import` lines and bare `import` lines are conventionally grouped separately (with `from` lines sorted after bare `import` lines, or all sorted alphabetically per group). An import sorter like `isort` or ruff's `I001` would reorder this.
+
+request changes
+[claude-code:unrecognized_model] {"model":"qwen/qwen3.6-27b","query_source":"sdk"}

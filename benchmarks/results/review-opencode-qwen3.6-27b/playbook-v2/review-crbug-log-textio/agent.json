@@ -1,0 +1,21 @@
+{
+  "experiment": "playbook-v2",
+  "sample_id": "review-crbug-log-textio",
+  "model": "openrouter/qwen/qwen3.6-27b",
+  "command": [
+    "opencode",
+    "run",
+    "--pure",
+    "--dir",
+    "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/playbook-v2/review-crbug-log-textio/scratch",
+    "--model",
+    "openrouter/qwen/qwen3.6-27b",
+    "{prompt}"
+  ],
+  "returncode": 0,
+  "timed_out": false,
+  "duration_seconds": 226.3,
+  "baseline_commit": "dc9c0b82be546d4968233042ee8ae550ace0c18d",
+  "scratch": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/playbook-v2/review-crbug-log-textio/scratch",
+  "setup_snapshot": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/playbook-v2/review-crbug-log-textio/scratch__setup_baseline"
+}

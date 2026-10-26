@@ -1,0 +1,21 @@
+{
+  "experiment": "playbook-v2",
+  "sample_id": "review-diff-old-bug-on-untouched-line",
+  "model": "openrouter/qwen/qwen3.6-27b",
+  "command": [
+    "opencode",
+    "run",
+    "--pure",
+    "--dir",
+    "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/playbook-v2/review-diff-old-bug-on-untouched-line/scratch",
+    "--model",
+    "openrouter/qwen/qwen3.6-27b",
+    "{prompt}"
+  ],
+  "returncode": 0,
+  "timed_out": false,
+  "duration_seconds": 130.7,
+  "baseline_commit": "cc18cb7c90d5a8a9d0344500ac66e0ceee7f4dda",
+  "scratch": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/playbook-v2/review-diff-old-bug-on-untouched-line/scratch",
+  "setup_snapshot": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/playbook-v2/review-diff-old-bug-on-untouched-line/scratch__setup_baseline"
+}

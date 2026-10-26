@@ -1,0 +1,10 @@
+## Review
+
+**Findings**
+
+- **Correctness — `src/report.py` (entire file) — `important` — new** — The stated intent asked for two features: `--csv` *and* `--since YYYY-MM-DD`. Only `--csv` was implemented. The `--since` option (filtering out ledger entries dated before the given date) is entirely absent — no argument was added to the parser, no filtering was added to `read_ledger` or `monthly_totals`, and no test covers it.
+
+**Findings: 1 important, 0 nit, 0 pre-existing**
+
+request changes
+[claude-code:unrecognized_model] {"model":"qwen/qwen3.6-27b","query_source":"sdk"}

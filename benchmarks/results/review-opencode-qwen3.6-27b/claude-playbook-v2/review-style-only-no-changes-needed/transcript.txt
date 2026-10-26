@@ -1,0 +1,12 @@
+
+
+**Review of `src/temperature.py`**
+
+The three functions are correct, properly type-annotated, and well-documented. The Celsius-to-Kelvin conversion correctly guards against below-absolute-zero values and raises with a descriptive message. No mutable defaults, no exception swallowing, no external calls, no security surface. The module does one thing and does it right.
+
+No findings across any priority bucket.
+
+Findings: 0 important, 0 nit, 0 pre-existing
+
+approve
+[claude-code:unrecognized_model] {"model":"qwen/qwen3.6-27b","query_source":"sdk"}

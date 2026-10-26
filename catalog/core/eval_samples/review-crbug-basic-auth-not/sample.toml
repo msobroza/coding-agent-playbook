@@ -1,0 +1,43 @@
+id = "review-crbug-basic-auth-not"
+prompt_id = "review"
+description = "Review a change meant to compare admin credentials in constant time that negates with `!`, which is not Python, so the module no longer parses. Paraphrases the bug a reviewer caught in fastapi pull request 807, from CRBugBench; see eval_samples/ATTRIBUTIONS.md."
+version = 1
+
+[setup]
+files = [
+  "CHANGE.diff",
+  "src/auth.py",
+  "tests/test_auth.py",
+]
+project_kind = "python-application"
+
+[invocation]
+prompt_args = "review my change in CHANGE.diff (it is already applied to the working tree). It switches the admin credential check to a constant-time comparison, so the check no longer leaks through its timing how much of a username or password matched."
+input_variables = {}
+
+[gate]
+# Review-only: the agent must report, not edit. The change carries one real bug
+# (see the rubric), so a correct answer from either prompt set ends on request
+# changes, never an approving verdict line. Whether the answer names the right bug
+# is the judge's call: no bug-specific pattern here, so wording cannot sink a
+# correct review. An empty answer has no verdict line.
+expr = "auth_untouched and tests_untouched and blocks and not approves"
+
+[gate.bind]
+auth_untouched  = { check = "file_unchanged", path = "src/auth.py" }
+tests_untouched = { check = "file_unchanged", path = "tests/test_auth.py" }
+blocks          = { check = "answer_matches", pattern = '(?im)^\W*(?:verdict\W*)?request changes\W*$' }
+approves        = { check = "answer_matches", pattern = '(?im)^\W*(?:verdict\W*)?approve(?: with comments)?\W*$' }
+
+[rubric]
+expr = "quality"
+
+[rubric.bind]
+quality = { fail = 0.5, rubric = [
+  { judge = "The review reports that the new condition is not valid Python: `!` is not a negation operator (it should be `not hmac.compare_digest(...)`), so src/auth.py raises SyntaxError on import and every caller and test of is_authorized breaks.", weight = 0.6 },
+  { judge = "The review treats that bug as blocking (important, not a nit or an open question), cites its file and line in src/auth.py (the if condition in is_authorized), and its verdict is 'request changes'.", weight = 0.2 },
+  { judge = "The review does not invent bugs: anything else it raises is a real problem in the code shown, and it does not ask to rewrite code that works.", weight = 0.2 },
+] }
+
+[verdict]
+trial = "gate and rubric"

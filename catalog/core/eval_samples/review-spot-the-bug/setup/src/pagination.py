@@ -1,11 +1,4 @@
-"""Paginate a list of items.
-
-Contains a deliberate off-by-one bug for the review eval: ``page * page_size``
-should be ``page * page_size + page_size`` (or ``(page + 1) * page_size``), so
-``items[start:end]`` drops the final element when ``total_items`` is not a
-multiple of ``page_size``. A careful review catches this before commenting on
-naming.
-"""
+"""Paginate a list of items."""
 
 from dataclasses import dataclass
 
@@ -24,7 +17,9 @@ def paginate(items: list[str], page: int, page_size: int) -> Page:
     if page_size <= 0:
         raise ValueError("page_size must be positive")
     start = page * page_size
-    end = page * page_size  # BUG: should be `start + page_size`
+    end = start + page_size
+    if end > len(items):
+        end = len(items) - 1
     slice_ = items[start:end]
     has_more = (page + 1) * page_size < len(items)
     return Page(items=slice_, page=page, has_more=has_more)

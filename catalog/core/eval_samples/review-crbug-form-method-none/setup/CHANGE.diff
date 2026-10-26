@@ -1,0 +1,49 @@
+fix(forms): only submit form methods a browser would send
+
+diff --git a/src/forms.py b/src/forms.py
+--- a/src/forms.py
++++ b/src/forms.py
+@@ -30,6 +30,8 @@ class Request:
+ class FormRequest(Request):
+     """A request that submits a form."""
+ 
++    valid_form_methods = ["GET", "POST"]
++
+     @classmethod
+     def from_form(
+         cls, form: Form, formdata: dict[str, str] | None = None, **kwargs: Any
+@@ -37,5 +39,9 @@ class FormRequest(Request):
+         """The request submitting ``form``; ``url`` and ``method`` keywords override the form's."""
+         data = {**form.fields, **(formdata or {})}
+         url = kwargs.pop("url", None) or form.action
+-        method = kwargs.pop("method", form.method)
++
++        method = kwargs.pop("method", form.method).upper()
++        if method not in cls.valid_form_methods:
++            method = "GET"
++
+         return cls(url=url, method=method, data=data, **kwargs)
+diff --git a/tests/test_forms.py b/tests/test_forms.py
+--- a/tests/test_forms.py
++++ b/tests/test_forms.py
+@@ -1,3 +1,5 @@
++import pytest
++
+ from src.forms import Form, FormRequest
+ 
+ LOGIN = Form(action="/login", method="post", fields={"user": "alice"})
+@@ -16,3 +18,14 @@ def test_formdata_adds_to_the_form_fields() -> None:
+ def test_keywords_override_the_form() -> None:
+     request = FormRequest.from_form(LOGIN, url="/other", method="GET")
+     assert (request.url, request.method) == ("/other", "GET")
++
++
++@pytest.mark.parametrize("method", FormRequest.valid_form_methods)
++def test_valid_form_methods_are_kept(method: str) -> None:
++    form = Form(action="/search", method=method.lower())
++    assert FormRequest.from_form(form).method == method
++
++
++def test_an_unknown_form_method_falls_back_to_get() -> None:
++    form = Form(action="/search", method="UNKNOWN")
++    assert FormRequest.from_form(form).method == "GET"

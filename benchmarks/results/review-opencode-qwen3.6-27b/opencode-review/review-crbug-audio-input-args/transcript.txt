@@ -1,0 +1,23 @@
+The review found a **bug** in `src/audio.py`. Let me verify it against the actual code.
+Now let me check how other parts of the codebase handle this pattern to see if the same bug exists elsewhere or if there's an established pattern.
+The review identified a confirmed **bug** at `src/audio.py:15-20`:
+
+**`TypeError` when `input_args` is a plain string of arguments**
+
+`config.py:3-4` documents that `*_args` can be "a string of ordinary ffmpeg arguments". When `input_args` is a plain string like `"-rtsp_transport udp"`, `parse_preset_input()` returns `None`, and the `or` chain falls through to the raw string. Then `list[str] + str` raises `TypeError`.
+
+The same applies to the camera-wide fallback (`ffmpeg.input_args`).
+
+The existing tests cover presets and lists, but not plain strings.
+
+> build · qwen/qwen3.6-27b
+
+• review changes [commit|branch|pr], defaults to uncommitted Build Agent
+✓ review changes [commit|branch|pr], defaults to uncommitted Build Agent
+→ Read src/audio.py
+→ Read src/config.py [limit=50]
+✱ Glob "**/CHANGE.diff" 1 match
+→ Read CHANGE.diff
+→ Read src/ffmpeg_presets.py
+✱ Grep "parse_preset_input.*\nor.*input_args" in . · 0 matches
+✱ Grep "get_ffmpeg_arg_list.*\+" in . · 2 matches

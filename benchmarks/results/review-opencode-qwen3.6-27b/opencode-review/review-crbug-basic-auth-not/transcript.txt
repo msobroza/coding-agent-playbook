@@ -1,0 +1,26 @@
+**Critical bug — `!` is not valid Python syntax.**
+
+Lines 16–17 in `src/auth.py` use `!` to negate `hmac.compare_digest()`:
+
+```python
+if (!hmac.compare_digest(given.username, expected.username) or
+    !hmac.compare_digest(given.password, expected.password)):
+```
+
+Python uses the `not` keyword, not `!`, for boolean negation. This is a `SyntaxError` — the module won't load and any endpoint that imports `is_authorized` will crash at startup.
+
+**Fix:**
+
+```python
+if (not hmac.compare_digest(given.username, expected.username) or
+    not hmac.compare_digest(given.password, expected.password)):
+```
+
+Severity: **critical** — the file is unimportable; the admin auth check is completely broken.
+
+> build · qwen/qwen3.6-27b
+
+• review changes [commit|branch|pr], defaults to uncommitted Build Agent
+✓ review changes [commit|branch|pr], defaults to uncommitted Build Agent
+→ Read CHANGE.diff
+→ Read src/auth.py

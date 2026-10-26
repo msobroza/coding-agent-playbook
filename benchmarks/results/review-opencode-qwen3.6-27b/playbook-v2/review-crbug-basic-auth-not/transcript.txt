@@ -1,0 +1,20 @@
+**Correctness**
+
+- **src/auth.py:16** — `!hmac.compare_digest(...)` — `important` — `!` is not a valid Python operator; the module fails to parse with `SyntaxError`, so no admin request succeeds. Use `not` instead.
+
+**Security**
+
+- **src/auth.py:16-17** — `(!hmac.compare_digest(...) or ...)` — `important` — Short-circuit evaluation of `or` defeats the constant-time guarantee. If the username mismatches, `hmac.compare_digest` on the password is never called, so timing still leaks whether the username was correct. Even after fixing `!` → `not`, the same short-circuit applies. Evaluate both comparisons unconditionally first (store each in a variable), then combine the booleans.
+
+Findings: 2 important, 0 nit, 0 pre-existing
+
+request changes
+
+> build · qwen/qwen3.6-27b
+
+→ Read CHANGE.diff
+✱ Glob "{CLAUDE.md,AGENTS.md,.claude/rules/**,.opencode/**,REVIEW.md}" 0 matches
+→ Read src/auth.py
+✱ Glob "**/review-core*" 0 matches
+• First-pass diff review Explore Agent
+✓ First-pass diff review Explore Agent

@@ -1,0 +1,43 @@
+id = "review-crbug-xtrim-maxlen-minid"
+prompt_id = "review"
+description = "Review a change adding MINID and LIMIT to xtrim that lets MAXLEN and MINID be sent together, or neither. Paraphrases the bug a reviewer caught in redis-py pull request 1508, from CRBugBench; see eval_samples/ATTRIBUTIONS.md."
+version = 1
+
+[setup]
+files = [
+  "CHANGE.diff",
+  "src/streams.py",
+  "tests/test_streams.py",
+]
+project_kind = "library"
+
+[invocation]
+prompt_args = "review my change in CHANGE.diff (it is already applied to the working tree). It adds the MINID trimming strategy and the LIMIT option to xtrim, following Redis 6.2's syntax: XTRIM key <MAXLEN | MINID> [= | ~] threshold [LIMIT count]."
+input_variables = {}
+
+[gate]
+# Review-only: the agent must report, not edit. The change carries one real bug
+# (see the rubric), so a correct answer from either prompt set ends on request
+# changes, never an approving verdict line. Whether the answer names the right bug
+# is the judge's call: no bug-specific pattern here, so wording cannot sink a
+# correct review. An empty answer has no verdict line.
+expr = "streams_untouched and tests_untouched and blocks and not approves"
+
+[gate.bind]
+streams_untouched = { check = "file_unchanged", path = "src/streams.py" }
+tests_untouched   = { check = "file_unchanged", path = "tests/test_streams.py" }
+blocks            = { check = "answer_matches", pattern = '(?im)^\W*(?:verdict\W*)?request changes\W*$' }
+approves          = { check = "answer_matches", pattern = '(?im)^\W*(?:verdict\W*)?approve(?: with comments)?\W*$' }
+
+[rubric]
+expr = "quality"
+
+[rubric.bind]
+quality = { fail = 0.5, rubric = [
+  { judge = "The review reports that xtrim does not enforce that MAXLEN and MINID are mutually exclusive and that one of them is given: xtrim('s', maxlen=10, minid='1-0') sends XTRIM s MAXLEN MINID ~ 10 1-0 and xtrim('s') sends XTRIM s ~, both invalid commands, where xtrim should raise an error (for example a DataError) before sending anything.", weight = 0.6 },
+  { judge = "The review treats that bug as blocking (important, not a nit or an open question), cites its file and line in src/streams.py (xtrim), and its verdict is 'request changes'.", weight = 0.2 },
+  { judge = "The review does not invent bugs: anything else it raises is a real problem in the code shown, and it does not ask to rewrite code that works.", weight = 0.2 },
+] }
+
+[verdict]
+trial = "gate and rubric"

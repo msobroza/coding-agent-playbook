@@ -1,0 +1,10 @@
+Findings: 1 important, 0 nit, 0 pre-existing
+
+### Correctness
+
+- **src/feedstorage.py:27** — `important` — Line 27's `settings["FEED_STORAGE_FTP_ACTIVE"] or False` does not handle the string values that arrive from command-line overrides. The `from_command_line` method (settings.py:27) stores every override as a raw string. When a user passes `-s FEED_STORAGE_FTP_ACTIVE=0`, the value is the string `"0"`; the expression `"0" or False` evaluates to `"0"` (non-empty strings are truthy), so `active` becomes truthy and active mode is *enabled* even though the user explicitly requested passive mode. The same happens with `"false"` or `"False"`. Use `settings.getbool("FEED_STORAGE_FTP_ACTIVE")` instead — that method already exists (settings.py:36) and correctly converts the string forms `"0"`, `"1"`, `"true"`, `"false"` to booleans.
+
+Findings: 1 important, 0 nit, 0 pre-existing
+
+request changes
+[claude-code:unrecognized_model] {"model":"qwen/qwen3.6-27b","query_source":"sdk"}

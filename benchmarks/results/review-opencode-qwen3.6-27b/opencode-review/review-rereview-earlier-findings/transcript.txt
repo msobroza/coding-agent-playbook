@@ -1,0 +1,14 @@
+The subagent re-reviewed the fix commit. Two of three findings are addressed, but the `total_cents()` discount validation remains unfixed. Let me verify this myself.
+Confirmed. Two of three findings are fixed correctly:
+
+1. **`remove()` negative quantity** — Fixed. `src/cart.py:17` guards `0 < quantity <= held`.
+2. **`add()` zero/negative quantity** — Fixed. `src/cart.py:10` rejects `quantity <= 0`.
+
+3. **`total_cents()` unbounded discount_percent** — Still broken. `src/cart.py:24-26` has no validation. `discount_percent=150` produces a negative total; `discount_percent=-10` overcharges. No test covers this either.
+
+> build · qwen/qwen3.6-27b
+
+• review changes [commit|branch|pr], defaults to uncommitted Build Agent
+✓ review changes [commit|branch|pr], defaults to uncommitted Build Agent
+→ Read CHANGE.diff
+→ Read src/cart.py

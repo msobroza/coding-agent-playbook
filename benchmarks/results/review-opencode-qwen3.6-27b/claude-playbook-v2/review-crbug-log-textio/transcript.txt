@@ -1,0 +1,24 @@
+
+
+Here is the review.
+
+---
+
+**Correctness**
+
+- **src/service.py:37-38** — important — new — Binary streams are never closed. When `log_output` is `None` (the default), `__init__` assigns `open(os.devnull, "wb")` which returns a `BufferedWriter` (binary). `isinstance(self.log_output, TextIO)` is `False` and `isinstance(self.log_output, int)` is `False`, so neither branch runs and the file handle leaks. The same gap applies to any caller-provided `BinaryIO`. Input that breaks it: `Service("chromedriver")` (default `log_output=None`). The stated intent is "no log file is left open once the driver stops" — this case contradicts that. Using `IO[Any]` (which covers both text and binary) instead of `TextIO` would close both.
+
+**Failure modes**
+
+- **src/service.py:36-40** — nit — new — If `self.log_output.close()` or `os.close()` raises (e.g. the fd was already closed by someone else), the `terminate()`/`wait()` block on line 42 is never reached, leaving the driver process alive. Consider wrapping the close in a try/finally so termination always runs, or accepting that a failing close is an exceptional case that should crash with a traceback (the current behaviour).
+
+**Readability**
+
+- **tests/test_service.py:22-27** — nit — new — The new test covers the fd case well, but there is no test for the string-path (text file) case, which is the other common user input. A test like `Service("chromedriver", log_output=tmp_path).stop()` followed by an assertion that the file is closed would make the coverage complete.
+
+---
+
+Findings: 1 important, 2 nit, 0 pre-existing
+
+request changes
+[claude-code:unrecognized_model] {"model":"qwen/qwen3.6-27b","query_source":"sdk"}

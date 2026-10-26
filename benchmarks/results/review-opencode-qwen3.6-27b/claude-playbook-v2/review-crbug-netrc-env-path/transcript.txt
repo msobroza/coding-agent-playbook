@@ -1,0 +1,16 @@
+## Review
+
+**Correctness**
+
+- `src/netrc_auth.py:17` — **important** — Line 17's `os.path.expanduser(f"~/{name}")` unconditionally prepends `~/` to the `NETRC` value. By long-standing convention (curl, wget, gettext), `NETRC` holds a **full path** (e.g. `NETRC=/etc/credentials/.netrc-ci`). With that input the expression produces `~//etc/credentials/.netrc-ci`, which `expanduser` resolves to something like `/home/user/etc/credentials/.netrc-ci` — a file that doesn't exist, so lookup silently returns `None`. The new test on line 33–34 only sets `NETRC=".netrc-ci"` (a bare name), so it never exercises an absolute path.
+
+**Nit**
+
+- `tests/test_netrc_auth.py:33` — **nit** — The test should also assert the happy path when `NETRC` is an absolute path, e.g. `monkeypatch.setenv("NETRC", str(tmp_path / ".netrc-ci"))`, to cover the typical real-world usage of this variable.
+
+---
+
+Findings: 1 important, 1 nit, 0 pre-existing
+
+request changes
+[claude-code:unrecognized_model] {"model":"qwen/qwen3.6-27b","query_source":"sdk"}

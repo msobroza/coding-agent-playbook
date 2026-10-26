@@ -1,0 +1,1 @@
+/code-review review my change in CHANGE.diff (it is already applied to the working tree). It adds a FEED_STORAGE_FTP_ACTIVE setting so feeds can be uploaded in FTP active mode instead of the default passive mode; like every setting, it can be set in the project settings or overridden on the command line.
