@@ -822,8 +822,10 @@ plugins, hooks, MCP servers and login do not reach a measured run, so a recordin
 can be reproduced on another machine, and the judge starts in seconds. The
 isolated judge also starts in an empty temporary directory, so no project
 `CLAUDE.md` or `.claude/` settings reach it. Isolated Claude Code agent runs use
-`--permission-mode bypassPermissions`, because nobody can answer a prompt in print
-mode, so recorded scores no longer depend on a personal default mode. Inherited
+`--permission-mode acceptEdits` with an allow list of read and search tools and of
+`git`, `python`, `pytest`, `uv` and `ls` in the shell, because nobody can answer a
+prompt in print mode: the agent edits files in its scratch repo, any other command
+is denied, and recorded scores no longer depend on a personal default mode. Inherited
 `ANTHROPIC_*`, `CLAUDE_CODE_USE_*` and OAuth variables are dropped (for OpenCode,
 also other provider keys and `OPENCODE_*` and `OTEL_*` variables). Each process
 therefore needs a credential in the environment: a target or judge on an endpoint

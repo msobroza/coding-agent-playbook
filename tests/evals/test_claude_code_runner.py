@@ -22,7 +22,10 @@ import pytest
 from coding_agent_playbook.evals.endpoints import Endpoint
 from coding_agent_playbook.evals.prompting import PromptResolutionError, render_prompt
 from coding_agent_playbook.evals.run.claude_code_route import ClaudeCodeKeyRoute, ClaudeCodeRoute
-from coding_agent_playbook.evals.run.claude_code_runner import ClaudeCodeRunner
+from coding_agent_playbook.evals.run.claude_code_runner import (
+    ISOLATED_ALLOWED_TOOLS,
+    ClaudeCodeRunner,
+)
 from coding_agent_playbook.evals.run.fake_runner import write_files
 from coding_agent_playbook.evals.run.harness_runner import AgentRun, Candidate, materialize
 from coding_agent_playbook.evals.sample import EvalSample, SampleInvocation
@@ -286,7 +289,7 @@ def test_no_model_leaves_the_cli_on_its_default_model() -> None:
     assert "--model" not in ClaudeCodeRunner()._build_command("p")
 
 
-_BYPASS = ["--permission-mode", "bypassPermissions"]
+_ISOLATED = ["--permission-mode", "acceptEdits", "--allowedTools", ISOLATED_ALLOWED_TOOLS]
 
 
 @pytest.mark.parametrize(
@@ -296,11 +299,29 @@ _BYPASS = ["--permission-mode", "bypassPermissions"]
         ClaudeCodeRoute(Endpoint("e", "anthropic", "https://x"), "m", token="t0k3n"),
     ],
 )
-def test_a_routed_run_bypasses_permission_prompts(
+def test_a_routed_run_accepts_edits_and_allows_only_the_listed_tools(
     route: ClaudeCodeKeyRoute | ClaudeCodeRoute,
 ) -> None:
     # An isolated run has no personal default mode, and -p auto-denies prompts.
-    assert ClaudeCodeRunner(model="m", route=route)._build_command("p")[-2:] == _BYPASS
+    argv = ClaudeCodeRunner(model="m", route=route)._build_command("p")
+    assert argv[-4:] == _ISOLATED
+    assert "bypassPermissions" not in argv
+
+
+def test_the_isolated_allow_list_is_read_search_git_python_pytest_uv_and_ls() -> None:
+    # No catch-all Bash and no network or file-deleting commands: anything else is denied.
+    tools = ISOLATED_ALLOWED_TOOLS.split(",")
+    assert tools == [
+        "Read",
+        "Grep",
+        "Glob",
+        "Bash(git:*)",
+        "Bash(python:*)",
+        "Bash(python3:*)",
+        "Bash(pytest:*)",
+        "Bash(uv:*)",
+        "Bash(ls:*)",
+    ]
 
 
 def test_an_unrouted_run_keeps_the_user_permission_mode() -> None:

@@ -64,12 +64,26 @@ _DEFAULT_COMMAND: tuple[str, ...] = (_CLI, "-p", PROMPT_TOKEN, *JSON_OUTPUT_ARGS
 #: Default wall-clock bound (seconds) for one agent invocation.
 _DEFAULT_TIMEOUT = 600.0
 
-#: The permission mode of every routed (isolated) agent run. Why: the scratch repo
-#: is a throwaway sandbox, an isolated run has an empty ``CLAUDE_CONFIG_DIR`` (so no
-#: personal default mode or allow list), and ``-p`` auto-denies every permission
-#: prompt, so a sample that must write files would otherwise fail. Kept here, not in
-#: ``routed_argv``, because the judge calls that too and needs no tools.
-_ISOLATED_PERMISSION_ARGS: Final = ("--permission-mode", "bypassPermissions")
+#: The tools a routed (isolated) agent run may use without a prompt: reading and
+#: searching, plus git, Python, pytest, uv and ls in the shell. The benchmark harness
+#: uses the same list. Anything else is denied, so an eval agent never runs an
+#: arbitrary command on the maintainer's machine.
+ISOLATED_ALLOWED_TOOLS: Final = (
+    "Read,Grep,Glob,Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)"
+)
+
+#: The permissions of every routed (isolated) agent run. Why: an isolated run has an
+#: empty ``CLAUDE_CONFIG_DIR`` (so no personal default mode or allow list), and ``-p``
+#: auto-denies every permission prompt, so a sample that must write files would
+#: otherwise fail. ``acceptEdits`` lets the agent edit files in the scratch repo, and
+#: :data:`ISOLATED_ALLOWED_TOOLS` lists the rest; ``bypassPermissions`` is never used.
+#: Kept here, not in ``routed_argv``, because the judge calls that too and needs no tools.
+_ISOLATED_PERMISSION_ARGS: Final = (
+    "--permission-mode",
+    "acceptEdits",
+    "--allowedTools",
+    ISOLATED_ALLOWED_TOOLS,
+)
 
 
 class ClaudeCodeRunner(HarnessRunner):

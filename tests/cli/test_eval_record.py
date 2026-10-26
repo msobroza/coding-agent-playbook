@@ -23,7 +23,10 @@ from coding_agent_playbook.evals.endpoints import endpoint_fingerprint
 from coding_agent_playbook.evals.judge import LLMJudge, StubJudge
 from coding_agent_playbook.evals.prompting import render_prompt
 from coding_agent_playbook.evals.release_metrics_schema import validate_release_metrics
-from coding_agent_playbook.evals.run.claude_code_runner import ClaudeCodeRunner
+from coding_agent_playbook.evals.run.claude_code_runner import (
+    ISOLATED_ALLOWED_TOOLS,
+    ClaudeCodeRunner,
+)
 from coding_agent_playbook.evals.run.fake_runner import FakeRunner
 from coding_agent_playbook.evals.run.harness_runner import SampleResult
 from coding_agent_playbook.evals.sample_digest import inputs_digest
@@ -249,7 +252,8 @@ def test_record_runs_the_agent_and_the_judge_isolated_on_the_api_key(
     assert judge_calls, cli.calls
     assert len(judge_calls) < len(cli.calls)  # the agent ran too
     agent_calls = [argv for argv, _env in cli.calls if "--output-format" in argv]
-    assert all(_has_adjacent(argv, _BYPASS) for argv in agent_calls), agent_calls
+    assert all(_has_adjacent(argv, _ISOLATED) for argv in agent_calls), agent_calls
+    assert not any("bypassPermissions" in argv for argv, _env in cli.calls)
     assert not any("--permission-mode" in argv for argv in judge_calls), judge_calls
     for argv, env in cli.calls:
         assert env is not None
@@ -263,8 +267,8 @@ def test_record_runs_the_agent_and_the_judge_isolated_on_the_api_key(
     assert _RECORD_KEY not in captured.out + captured.err
 
 
-#: The permission mode an isolated agent run gets (and the judge never does).
-_BYPASS = ("--permission-mode", "bypassPermissions")
+#: The permissions an isolated agent run gets (and the judge never does).
+_ISOLATED = ("--permission-mode", "acceptEdits", "--allowedTools", ISOLATED_ALLOWED_TOOLS)
 
 
 def _has_adjacent(argv: list[str], words: tuple[str, ...]) -> bool:
