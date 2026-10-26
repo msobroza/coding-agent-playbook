@@ -12,7 +12,8 @@ One file holds one release's scores on one Eval target
       "summary": {"samples", "runs", "pass_rate", "mean_score", "tokens", "cost_usd"},
       "samples": {"<sample id>": {"prompt_id", "graded", "prompt_digest", "sample_digest",
                   "passes", "runs", "mean_score", "stdev", "checks": {"<check id>": score},
-                  "duration_seconds_mean", "tokens_mean", "cost_usd_mean"}},
+                  "duration_seconds_mean", "tokens_mean", "cost_usd_mean",
+                  "inputs_digest"?}},
       "controls": {"<sample id>": {the same keys, "graded": "<edition tag>"}}
     }
 
@@ -21,6 +22,11 @@ editions; each pinned sample is in ``samples`` too, graded on the current text.
 A control that moves between releases while its edition stayed fixed points at a
 model or harness drift, not at the guidance. It is optional, so a file written
 before it still validates, and the summary counts ``samples`` only.
+
+``inputs_digest`` (#329 ticket 03) is the sha256 of what the agent received:
+the strict render of the prompt the entry ran (the current text for ``samples``,
+the edition's for ``controls``) together with ``sample_digest``. It is optional,
+so a file written before it still validates; when present it is a string.
 
 ``previous`` is ``null`` until the regression check compares the file with the
 previous release; that check may add comparison keys (``vs_previous`` per
@@ -42,6 +48,8 @@ if TYPE_CHECKING:
 SCHEMA_VERSION: Final = 1
 #: The optional key of the pinned samples' runs on their editions.
 CONTROLS_KEY: Final = "controls"
+#: The optional per-entry key of the digest of what the agent received.
+INPUTS_DIGEST_KEY: Final = "inputs_digest"
 
 _STR: Final = (str,)
 _OPT_STR: Final = (str, type(None))
@@ -97,6 +105,8 @@ _SAMPLE: Final[_Fields] = {
     "tokens_mean": _OPT_NUM,
     "cost_usd_mean": _OPT_NUM,
 }
+#: Entry keys added under version 1: absent in older files, typed when present.
+_OPTIONAL_SAMPLE: Final[_Fields] = {INPUTS_DIGEST_KEY: _STR}
 
 
 class ReleaseMetricsError(ExitTwoError):
@@ -151,6 +161,7 @@ def _sample_problems(label: str, entry: object) -> list[str]:
     if not isinstance(entry, dict):
         return [f"{label}: expected an object, got {type(entry).__name__}"]
     problems = _check_fields(entry, _SAMPLE, f"{label}.")
+    problems += _check_fields(entry, _OPTIONAL_SAMPLE, f"{label}.", optional=True)
     checks = entry.get("checks")
     if isinstance(checks, dict):
         problems += [
@@ -167,11 +178,15 @@ def _nested(parent: Mapping[str, object], key: str, fields: _Fields, prefix: str
     return _check_fields(value, fields, f"{prefix}{key}.") if isinstance(value, dict) else []
 
 
-def _check_fields(table: Mapping[str, object], fields: _Fields, prefix: str) -> list[str]:
+def _check_fields(
+    table: Mapping[str, object], fields: _Fields, prefix: str, *, optional: bool = False
+) -> list[str]:
+    """The problems of ``fields`` in ``table``; an ``optional`` field may be absent."""
     problems: list[str] = []
     for key, types in fields.items():
         if key not in table:
-            problems.append(f"{prefix}{key}: missing")
+            if not optional:
+                problems.append(f"{prefix}{key}: missing")
         elif not _fits(table[key], types):
             expected = " or ".join(_type_name(t) for t in types)
             problems.append(f"{prefix}{key}: expected {expected}, got {table[key]!r}")
