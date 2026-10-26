@@ -819,13 +819,18 @@ settings, as a target on an endpoint always is. Claude Code starts with an empty
 temporary `CLAUDE_CONFIG_DIR`, and OpenCode with empty temporary XDG config, data
 and state directories and without Claude Code instructions. Your own instructions,
 plugins, hooks, MCP servers and login do not reach a measured run, so a recording
-can be reproduced on another machine, and the judge starts in seconds. Inherited
+can be reproduced on another machine, and the judge starts in seconds. The
+isolated judge also starts in an empty temporary directory, so no project
+`CLAUDE.md` or `.claude/` settings reach it. Isolated Claude Code agent runs use
+`--permission-mode bypassPermissions`, because nobody can answer a prompt in print
+mode, so recorded scores no longer depend on a personal default mode. Inherited
 `ANTHROPIC_*`, `CLAUDE_CODE_USE_*` and OAuth variables are dropped (for OpenCode,
 also other provider keys and `OPENCODE_*` and `OTEL_*` variables). Each process
 therefore needs a credential in the environment: a target or judge on an endpoint
 uses the token named by that endpoint's `token_env` (or its `token_command`), and
 one without an endpoint uses `ANTHROPIC_API_KEY`. An OpenCode target without an
-endpoint sends its `model` exactly as written, so name it `anthropic/<model id>`.
+endpoint sends its `model` exactly as written, so name it `anthropic/<model id>`:
+any other model is refused with exit 2 before the first paid call.
 When a credential is missing, `--record` exits 2 before the first paid call, and
 the message names `ANTHROPIC_API_KEY` and `token_env`. The key goes only into the
 child environment: never into argv, the logs or the file. The `fake` runner needs
