@@ -2,7 +2,9 @@
 
 :func:`shipped_source` opens the engine's catalog with every bundled plugin;
 :func:`build_manifest` digests what it ships (``catalog.digest.artifact_digest``)
-and the graded set (``release.graded_set``) into one manifest.
+and the graded set (``release.graded_set``) into one manifest;
+:func:`core_artifact_paths` says where each core prompt and rule lives today, for
+the edition tag check's error messages.
 """
 
 from __future__ import annotations
@@ -26,7 +28,7 @@ if TYPE_CHECKING:
     from coding_agent_playbook.artifacts.prompt import Prompt
     from coding_agent_playbook.artifacts.rule import Rule
 
-__all__ = ["build_manifest", "shipped_source"]
+__all__ = ["build_manifest", "core_artifact_paths", "shipped_source"]
 
 type _Shipped = Rule | Prompt | Skill | Hook
 
@@ -78,6 +80,23 @@ def build_manifest(
             (item for item in shipped if item.source_package != REPO_LOCAL_SOURCE), catalog_dir
         ),
     )
+
+
+def core_artifact_paths(
+    source: FileSystemArtifactSource, catalog_dir: Path
+) -> dict[tuple[str, str], str]:
+    """``(kind, id)`` to the repo path (``catalog/...``) of each core prompt and rule ``source`` loads.
+
+    Example::
+
+        >>> core_artifact_paths(source, catalog_root())[("prompt", "review")]  # doctest: +SKIP
+        'catalog/core/prompts/review.md.j2'
+    """
+    loaded: list[_Shipped] = [*source.list_rules(), *source.list_prompts()]
+    core = [item for item in loaded if item.source_package == source.engine_package]
+    return {
+        (digest_kind(item), artifact_id_of(item)): _repo_path(item, catalog_dir) for item in core
+    }
 
 
 def _entries(artifacts: Iterable[_Shipped], catalog_dir: Path) -> tuple[ManifestEntry, ...]:

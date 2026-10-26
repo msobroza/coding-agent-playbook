@@ -505,6 +505,26 @@ def test_editions_and_releases_are_scanned_with_their_policies(tmp_path: Path) -
     assert [v.kind for t in targets for v in scan_file(t)] == ["url"]
 
 
+def _shipped_core_notices() -> list[Path]:
+    """``ATTRIBUTIONS.md`` and every ``references/LICENSE.*``: what ``freeze`` copies as notices."""
+    licenses = sorted(CORE_ROOT.glob("skills/*/references/LICENSE*"))
+    return [Path(_ATTRIBUTIONS_NAME), *(path.relative_to(CORE_ROOT) for path in licenses)]
+
+
+@pytest.mark.parametrize("rel", _shipped_core_notices(), ids=str)
+def test_an_editions_frozen_notice_passes_with_its_core_policy(rel: Path, tmp_path: Path) -> None:
+    """#319 review: freeze copies the notices byte for byte; their core exemptions still apply."""
+    catalog = tmp_path / "catalog"
+    frozen = catalog / "editions" / "v9.9.9" / CORE_ROOT.name / rel
+    frozen.parent.mkdir(parents=True)
+    frozen.write_bytes((CORE_ROOT / rel).read_bytes())
+
+    (target,) = frozen_catalog_targets(catalog)
+
+    assert target.policy == policy_for(rel)
+    assert scan_file(target) == []
+
+
 def test_a_catalog_without_editions_or_releases_adds_no_targets(tmp_path: Path) -> None:
     assert frozen_catalog_targets(tmp_path / "catalog") == []
 

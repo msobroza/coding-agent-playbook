@@ -131,7 +131,43 @@ def test_an_existing_edition_line_is_replaced() -> None:
 
 
 def test_a_file_without_tables_gets_the_line_at_the_end() -> None:
-    assert with_edition_line('id = "review/x"', TAG) == f'id = "review/x"\nedition = "{TAG}"\n'
+    assert with_edition_line('id = "review/x"\n', TAG) == f'id = "review/x"\nedition = "{TAG}"\n'
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        'id = "review/x"',
+        'id = "review/x"\r\ndescription = "d"',
+        'id = "review/x"\n\n[gate]\nexpr = "a"',
+        'id = "review/x"\n# a closing comment',
+        'id = "review/x"\nedition = "v9.9.8"',
+    ],
+    ids=["no-newline", "crlf-no-newline", "table-no-newline", "comment-no-newline", "re-pin"],
+)
+def test_unpinning_gives_back_the_exact_bytes_of_a_file_without_a_final_newline(
+    text: str,
+) -> None:
+    """Regression: pinning added a final newline that unpinning left behind (#319 review)."""
+    pinned = with_edition_line(text, TAG)
+
+    assert not pinned.endswith("\n")
+    assert without_edition_line(pinned) == without_edition_line(text)
+    if "edition" not in text:
+        assert without_edition_line(pinned) == text
+
+
+def test_unpinning_a_sample_without_a_final_newline_restores_its_bytes(tmp_path: Path) -> None:
+    catalog = _unpinned_edition(tmp_path)
+    sample = catalog / SAMPLE_TOML
+    sample.write_bytes(sample.read_bytes().rstrip(b"\n"))
+    before = sample.read_bytes()
+    _pin(catalog, ["review"])
+    assert sample.read_bytes() != before
+
+    unpin_samples(catalog, TAG)
+
+    assert sample.read_bytes() == before
 
 
 def test_an_edit_that_would_change_other_keys_refuses() -> None:

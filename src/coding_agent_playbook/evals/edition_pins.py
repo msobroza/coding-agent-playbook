@@ -46,7 +46,7 @@ __all__ = [
 ]
 
 _EDITION_KEY: Final = "edition"
-_EDITION_LINE: Final = re.compile(r"(?m)^edition[ \t]*=.*(?:\r?\n|$)")
+_EDITION_LINE: Final = re.compile(r"(?m)^edition[ \t]*=[^\r\n]*(?P<end>\r?\n|$)")
 _TABLE_HEADER: Final = re.compile(r"[ \t]*\[")
 _CORE_DIRNAME: Final = "core"
 
@@ -140,39 +140,56 @@ def _edited(path: Path, edit: Callable[[str], str]) -> str | None:
 def with_edition_line(text: str, tag: str) -> str:
     """``text`` (a ``sample.toml``) with ``edition = "<tag>"`` among its top-level keys.
 
-    An existing ``edition`` line is replaced; otherwise the line goes after the
-    last top-level key, before the first table.
+    An existing ``edition`` line is replaced, keeping its line ending; otherwise
+    the line goes after the last top-level key, before the first table. A file
+    that ends without a newline still does, so :func:`without_edition_line`
+    gives back the exact bytes.
 
     Example::
 
         >>> with_edition_line('id = "review/x"\\n\\n[gate]\\n', "v9.9.9")
         'id = "review/x"\\nedition = "v9.9.9"\\n\\n[gate]\\n'
+        >>> with_edition_line('id = "review/x"', "v9.9.9")
+        'id = "review/x"\\nedition = "v9.9.9"'
     """
-    line = f'{_EDITION_KEY} = "{tag}"\n'
+    line = f'{_EDITION_KEY} = "{tag}"'
     if _EDITION_LINE.search(text):
-        new = _EDITION_LINE.sub(line, text, count=1)
+        new = _EDITION_LINE.sub(lambda found: line + found["end"], text, count=1)
     else:
         lines = text.splitlines(keepends=True)
         at = next((i for i, row in enumerate(lines) if _TABLE_HEADER.match(row)), len(lines))
         while at > 0 and _blank_or_comment(lines[at - 1]):
             at -= 1
         if at > 0 and not lines[at - 1].endswith("\n"):
-            lines[at - 1] += "\n"
-        lines.insert(at, line)
+            # Only the last line lacks a newline, so ``at`` is the end of the file.
+            lines.append(f"\n{line}")
+        else:
+            lines.insert(at, f"{line}\n")
         new = "".join(lines)
     _check_only_edition_changed(text, new, tag)
     return new
 
 
 def without_edition_line(text: str) -> str:
-    """``text`` without its top-level ``edition`` line.
+    """``text`` without its top-level ``edition`` line; undoes :func:`with_edition_line` exactly.
+
+    A last line ``edition = ...`` with no newline of its own was appended to a
+    file that ended without one, so the newline before it goes too.
 
     Example::
 
         >>> without_edition_line('id = "review/x"\\nedition = "v9.9.9"\\n')
         'id = "review/x"\\n'
+        >>> without_edition_line('id = "review/x"\\nedition = "v9.9.9"')
+        'id = "review/x"'
     """
-    new = _EDITION_LINE.sub("", text, count=1)
+    found = _EDITION_LINE.search(text)
+    if found is None:
+        return text
+    start = found.start()
+    if not found["end"] and start > 0:
+        start -= 2 if text[:start].endswith("\r\n") else 1
+    new = text[:start] + text[found.end() :]
     _check_only_edition_changed(text, new, None)
     return new
 

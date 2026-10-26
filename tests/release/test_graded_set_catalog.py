@@ -16,7 +16,12 @@ from coding_agent_playbook.release.graded_set import (
     graded_set,
 )
 from coding_agent_playbook.release.manifest import parse_manifest, render_manifest
-from coding_agent_playbook.release.snapshot import build_manifest, shipped_source
+from coding_agent_playbook.release.snapshot import (
+    build_manifest,
+    core_artifact_paths,
+    shipped_source,
+)
+from release_edition import engine_current_paths
 from tests._catalog import REPO_ROOT
 
 if TYPE_CHECKING:
@@ -101,3 +106,19 @@ def test_manifest_lists_every_shipped_layer_and_kind_and_round_trips() -> None:
     assert set(manifest.graded) <= set(manifest.artifacts)
     assert all((REPO_ROOT / e.path).exists() for e in manifest.artifacts)
     assert parse_manifest(render_manifest(manifest)) == manifest
+
+
+def test_core_artifact_paths_name_each_graded_file_where_the_manifest_does() -> None:
+    paths = core_artifact_paths(_source(), catalog_root())
+
+    assert {(e.kind, e.id): e.path for e in _manifest().graded}.items() <= paths.items()
+    assert all((REPO_ROOT / path).is_file() for path in paths.values())
+    assert {kind for kind, _ in paths} == {"prompt", "rule"}
+
+
+def test_engine_current_paths_finds_a_graded_prompt_and_nothing_for_an_unknown_id() -> None:
+    find = engine_current_paths(REPO_ROOT)
+    entry = next(e for e in _manifest().graded if e.kind == "prompt")
+
+    assert find("prompt", entry.id) == entry.path
+    assert find("prompt", "no-such-prompt") is None

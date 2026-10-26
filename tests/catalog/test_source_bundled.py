@@ -19,7 +19,9 @@ from coding_agent_playbook.catalog import roots as catalog
 from coding_agent_playbook.catalog.roots import ENGINE_PACKAGE, CatalogMissingError
 from coding_agent_playbook.catalog.source import FileSystemArtifactSource, _resource_subdir
 from coding_agent_playbook.cli import main
+from coding_agent_playbook.evals.edition_pins import with_edition_line, without_edition_line
 from coding_agent_playbook.evals.prompting import _infer_prompts_dir, _resolve_prompt
+from coding_agent_playbook.evals.task_registry import load_layer_samples
 from coding_agent_playbook.validation.preflight import unusable_overlays
 from tests._catalog import CORE_ROOT, core_rule_paths, core_skill_root, plugin_root
 from tests.core_skill_pins import ALL_PINS, PLAIN_CORE_SKILL_IDS
@@ -140,13 +142,36 @@ def _write_demo_catalog(catalog_dir: Path) -> Path:
     sample_dir.mkdir(parents=True)
     (plugin / "prompts").mkdir()
     shipped = (CORE_ROOT / "eval_samples" / _SHIPPED_SAMPLE_ID / "sample.toml").read_text("utf-8")
-    renamed = shipped.replace(f'id = "{_SHIPPED_SAMPLE_ID}"', f'id = "{_DEMO_SAMPLE_ID}"', 1)
-    assert renamed != shipped, f"no id line to rename in the shipped {_SHIPPED_SAMPLE_ID} sample"
-    (sample_dir / "sample.toml").write_text(renamed, encoding="utf-8")
+    (sample_dir / "sample.toml").write_text(_plugin_copy_of(shipped), encoding="utf-8")
     prompt = (CORE_ROOT / "prompts" / _SHIPPED_PROMPT_FILE).read_text("utf-8")
     for layer in (plugin, catalog_dir / "core"):
         (layer / "prompts" / _SHIPPED_PROMPT_FILE).write_text(prompt, encoding="utf-8")
     return plugin
+
+
+def _plugin_copy_of(shipped: str) -> str:
+    """The shipped core ``sample.toml`` text as the demo plugin's sample: renamed, never pinned.
+
+    Only core samples may carry ``edition`` (``evals.sample``), and the shipped
+    one carries it once an edition is frozen, so the copy drops the line.
+    """
+    renamed = shipped.replace(f'id = "{_SHIPPED_SAMPLE_ID}"', f'id = "{_DEMO_SAMPLE_ID}"', 1)
+    assert renamed != shipped, f"no id line to rename in the shipped {_SHIPPED_SAMPLE_ID} sample"
+    return without_edition_line(renamed)
+
+
+def test_a_pinned_shipped_sample_copies_into_a_plugin_unpinned(tmp_path: Path) -> None:
+    """Regression (#319 review): a pinned core sample copied into a plugin still loads there."""
+    shipped = (CORE_ROOT / "eval_samples" / _SHIPPED_SAMPLE_ID / "sample.toml").read_text("utf-8")
+    pinned = with_edition_line(without_edition_line(shipped), "v9.9.9")
+    sample_dir = tmp_path / "eval_samples" / _DEMO_SAMPLE_ID
+    sample_dir.mkdir(parents=True)
+
+    (sample_dir / "sample.toml").write_text(_plugin_copy_of(pinned), encoding="utf-8")
+
+    (sample,) = load_layer_samples(tmp_path / "eval_samples", _DEMO_PLUGIN_NAME)
+    assert (sample.id, sample.edition) == (_DEMO_SAMPLE_ID, None)
+    assert _plugin_copy_of(pinned) == _plugin_copy_of(shipped)
 
 
 def _use_demo_catalog(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:

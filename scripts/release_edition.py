@@ -6,12 +6,14 @@ this module gathers their inputs through git and says what to commit:
 
 - :func:`freeze_change` resolves tag ``vX`` to its commit, reads that commit's
   ``catalog/releases/X/manifest.toml`` with ``git show`` (never today's loaders
-  over the old tree), copies each graded file's blob into the edition, pins the
-  graded core samples, records the digests and re-runs the offline edition
+  over the old tree), copies each graded file's blob into the edition with the
+  license and attribution notices it needs (found with ``git ls-tree``), pins
+  the graded core samples, records the digests and re-runs the offline edition
   checks over the result;
 - :func:`unfreeze_change` drops the pins and the edition;
-- :func:`check_editions` compares every edition with its tag's blobs, for the
-  CI job that has the full history and the tags.
+- :func:`check_editions` compares every edition with its tag's manifest and
+  blobs, for the CI job that has the full history and the tags; a file that
+  moved since the tag is named at its current path.
 
 ``release.py`` commits a change on its branch, pushes it and opens (or reuses)
 its pull request through the same path ``prepare`` uses.
@@ -19,15 +21,19 @@ its pull request through the same path ``prepare`` uses.
 
 from __future__ import annotations
 
+import functools
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Protocol
 
+from coding_agent_playbook.catalog.roots import catalog_root
+from coding_agent_playbook.catalog.source import FileSystemArtifactSource
 from coding_agent_playbook.evals.edition_checks import edition_problems
 from coding_agent_playbook.evals.edition_pins import pin_graded_samples, unpin_samples
-from coding_agent_playbook.release.edition_build import git_blob_reader
-from coding_agent_playbook.release.edition_digests import edition_dir
+from coding_agent_playbook.release.edition_build import git_blob_reader, git_tree_lister
+from coding_agent_playbook.release.edition_digests import NOTICE_KIND, edition_dir
 from coding_agent_playbook.release.edition_freeze import (
+    CurrentPathFinder,
     edition_tag_problems,
     graded_prompt_ids,
     remove_edition,
@@ -40,6 +46,7 @@ from coding_agent_playbook.release.manifest import (
     parse_manifest,
     release_dir,
 )
+from coding_agent_playbook.release.snapshot import core_artifact_paths
 from coding_agent_playbook.release.versions import is_release_tag
 
 if TYPE_CHECKING:
@@ -100,16 +107,19 @@ def freeze_change(tools: EditionTools, tag: str) -> EditionChange:
         raise EditionRefusal(f"no tag {tag}: freeze copies a released tag (fetch the tags first)")
     manifest = _manifest_at(tools, tag, commit)
     catalog = tools.cwd / _CATALOG
-    digests = write_edition(catalog, tag, commit, manifest, git_blob_reader(tools.cwd))
+    reader, lister = git_blob_reader(tools.cwd), git_tree_lister(tools.cwd)
+    digests = write_edition(catalog, tag, commit, manifest, reader, lister)
     pins = pin_graded_samples(catalog, tag, graded_prompt_ids(manifest))
     write_edition_digests(edition_dir(catalog, tag), digests, pins)
     problems = edition_problems(catalog)
     if problems:
         raise EditionRefusal(f"edition {tag} fails the edition checks:\n" + "\n".join(problems))
     samples = "".join(f"- `{pin.sample}`\n" for pin in sorted(pins))
+    notices = sum(artifact.kind == NOTICE_KIND for artifact in digests.artifacts)
     body = (
-        f"Freezes edition `{tag}` (commit `{commit}`): the {len(digests.artifacts)} graded files "
-        f"of its manifest, copied from the tag into `catalog/editions/{tag}/`, and pins "
+        f"Freezes edition `{tag}` (commit `{commit}`): the {len(digests.artifacts) - notices} "
+        f"graded files of its manifest and the {notices} license and attribution notices they "
+        f"need, copied from the tag into `catalog/editions/{tag}/`, and pins "
         f"these core eval samples to it:\n\n{samples}\n"
         f"Written by `scripts/release.py freeze {tag}`; undo with `unfreeze {tag}`.\n"
     )
@@ -133,12 +143,36 @@ def unfreeze_change(tools: EditionTools, tag: str) -> EditionChange:
     return EditionChange(f"chore(evals): unfreeze edition {tag}", body)
 
 
-def check_editions(tools: EditionTools) -> list[str]:
-    """Every way the checkout's editions differ from their tags' blobs; ``[]`` when none does."""
+def check_editions(tools: EditionTools, current_path: CurrentPathFinder | None = None) -> list[str]:
+    """Every way the checkout's editions differ from their tags; ``[]`` when none does.
+
+    ``current_path`` defaults to a lookup in the engine's own catalog
+    (:func:`engine_current_paths`), which loads only when a recorded path is gone.
+    """
     catalog = tools.cwd / _CATALOG
     return edition_tag_problems(
-        catalog, lambda tag: _tag_commit(tools, tag), git_blob_reader(tools.cwd)
+        catalog,
+        lambda tag: _tag_commit(tools, tag),
+        git_blob_reader(tools.cwd),
+        git_tree_lister(tools.cwd),
+        current_path or engine_current_paths(tools.cwd),
     )
+
+
+def engine_current_paths(repo: Path) -> CurrentPathFinder:
+    """``(kind, id)`` to its file in the engine's own catalog, loaded on the first lookup.
+
+    Example::
+
+        >>> engine_current_paths(Path("."))("prompt", "review")  # doctest: +SKIP
+        'catalog/core/prompts/review.md.j2'
+    """
+
+    @functools.cache
+    def paths() -> dict[tuple[str, str], str]:
+        return core_artifact_paths(FileSystemArtifactSource(repo_root=repo), catalog_root())
+
+    return lambda kind, artifact_id: paths().get((kind, artifact_id))
 
 
 def _refuse_non_release_tag(tag: str) -> None:

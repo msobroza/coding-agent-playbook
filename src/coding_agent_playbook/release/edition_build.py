@@ -4,7 +4,10 @@
 freezing it: :func:`build_edition` resolves the tag, reads the tag's own
 manifest with ``git show`` and copies each graded file's blob with
 ``release.edition_freeze.write_edition``, the copy ``scripts/release.py freeze``
-makes, into a scratch catalog directory (the comparison's work directory).
+makes (license and attribution notices included, listed with
+:func:`git_tree_lister`), into a scratch catalog directory (the comparison's
+work directory). ``scripts/release.py`` freezes and checks editions through the
+same two git readers, so a built edition and a frozen one hold the same files.
 Nothing is committed and the repository's ``catalog/editions/`` is not touched.
 
 Every git call is bounded by :data:`GIT_TIMEOUT_SECONDS` and touches only the
@@ -34,12 +37,14 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from coding_agent_playbook.release.edition_freeze import BlobReader
+    from coding_agent_playbook.release.edition_notices import TreeLister
 
 __all__ = [
     "GIT_TIMEOUT_SECONDS",
     "EditionBuildError",
     "build_edition",
     "git_blob_reader",
+    "git_tree_lister",
     "tag_commit",
     "tag_manifest",
 ]
@@ -77,7 +82,8 @@ def build_edition(repo: Path, tag: str, catalog_dir: Path) -> Path:
     """
     commit, manifest = tag_manifest(repo, tag)
     try:
-        write_edition(catalog_dir, tag, commit, manifest, git_blob_reader(repo))
+        reader, lister = git_blob_reader(repo), git_tree_lister(repo)
+        write_edition(catalog_dir, tag, commit, manifest, reader, lister)
     except ValueError as exc:
         raise EditionBuildError(f"edition {tag} cannot be built: {exc}") from exc
     return edition_dir(catalog_dir, tag)
@@ -136,6 +142,34 @@ def git_blob_reader(repo: Path) -> BlobReader:
         return done.stdout if done.returncode == 0 else None
 
     return read
+
+
+def git_tree_lister(repo: Path) -> TreeLister:
+    """List the files directly in one directory of a commit (``git ls-tree``, blobs only).
+
+    Raises :class:`EditionBuildError` when git cannot list ``directory``.
+
+    Example::
+
+        >>> git_tree_lister(Path("."))("HEAD", "catalog/core")  # doctest: +SKIP
+        ['catalog/core/ATTRIBUTIONS.md']
+    """
+
+    def list_files(commit: str, directory: str) -> list[str]:
+        args = ["ls-tree", "-z", commit, "--", f"{directory}/"]
+        done = _git(repo, args)
+        if done.returncode != 0:
+            stderr = done.stderr.decode("utf-8", "replace").strip()
+            raise EditionBuildError(f"`git {' '.join(args)}` failed in {repo}: {stderr}")
+        rows = done.stdout.decode("utf-8").split("\0")
+        return [row.partition("\t")[2] for row in rows if _is_blob_row(row)]
+
+    return list_files
+
+
+def _is_blob_row(row: str) -> bool:
+    """Whether a ``git ls-tree`` row (``<mode> <type> <sha>\\t<path>``) names a file."""
+    return row.split(" ", 2)[1:2] == ["blob"]
 
 
 def _git(repo: Path, args: Sequence[str]) -> subprocess.CompletedProcess[bytes]:
