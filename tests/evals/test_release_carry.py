@@ -231,5 +231,5 @@ def test_load_baseline_refuses_a_missing_or_unreadable_file(
 
 def test_load_baseline_refuses_an_invalid_file(tmp_path: Path) -> None:
     path = _write(tmp_path / "base.json", {"schema_version": 1})
-    with pytest.raises(ReleaseMetricsError):
+    with pytest.raises(CarryFromError, match=r"--carry-from .*base\.json: release metrics file: "):
         load_baseline(path, "claude-opus")

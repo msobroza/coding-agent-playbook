@@ -29,6 +29,7 @@ from coding_agent_playbook.evals.release_metrics_schema import (
     MEASURED_IN_KEY,
     SETUP_DIGEST_KEY,
     SETUP_KEY,
+    ReleaseMetricsError,
     validate_release_metrics,
 )
 from coding_agent_playbook.evals.setup_digest import differing_setup_parts
@@ -89,7 +90,10 @@ def load_baseline(path: Path, target_name: str) -> dict[str, Any]:
         data: Any = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         raise CarryFromError(f"--carry-from {path}: cannot read the baseline: {exc}") from exc
-    validate_release_metrics(data)
+    try:
+        validate_release_metrics(data)
+    except ReleaseMetricsError as exc:
+        raise CarryFromError(f"--carry-from {path}: {exc}") from exc
     baseline_target = data["target"]["name"]
     if baseline_target != target_name:
         raise CarryFromError(
