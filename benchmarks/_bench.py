@@ -84,8 +84,9 @@ class Experiment:
     ``playbook_text`` ``None`` gives the harness's built-in reviewer the
     sample's request alone (OpenCode's ``/review``, Claude Code's
     ``/code-review``). Otherwise the agent gets the playbook's rendered
-    ``review`` prompt, as ``playbook eval --run`` builds it: ``"head"`` is the
-    current text, and a release tag such as ``"v0.1.0"`` is that edition.
+    ``review`` prompt, as ``playbook eval --run`` builds it: a release tag
+    such as ``"v0.2.0"`` is that edition, and ``"head"`` is the checkout's
+    current text (for a change not released yet).
     """
 
     key: str
@@ -94,12 +95,19 @@ class Experiment:
     harness: str = "opencode"
 
 
+#: Each harness's built-in reviewer, then the playbook's releases in order.
 EXPERIMENTS: Final = (
     Experiment("opencode-review", "OpenCode /review", None),
     Experiment("opencode-playbook-v0.1.0", "OpenCode + playbook v0.1.0", "v0.1.0"),
-    Experiment("opencode-playbook", "OpenCode + playbook", "head"),
+    Experiment("opencode-playbook-v0.2.0", "OpenCode + playbook v0.2.0", "v0.2.0"),
+    Experiment("opencode-playbook-v0.3.0", "OpenCode + playbook v0.3.0", "v0.3.0"),
     Experiment("claude-code-review", "Claude Code /code-review", None, harness="claude"),
-    Experiment("claude-playbook", "Claude Code + playbook", "head", harness="claude"),
+    Experiment(
+        "claude-playbook-v0.2.0", "Claude Code + playbook v0.2.0", "v0.2.0", harness="claude"
+    ),
+    Experiment(
+        "claude-playbook-v0.3.0", "Claude Code + playbook v0.3.0", "v0.3.0", harness="claude"
+    ),
 )
 
 

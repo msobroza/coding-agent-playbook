@@ -1,0 +1,50 @@
+
+
+Now let me verify the findings by reading the relevant lines in the applied code.
+
+
+
+
+
+
+Now I have all the context. Let me verify each finding and write the review.
+
+---
+
+**Earlier findings status:**
+- `src/shipping.py:23 - Failure modes - float imprecision with math.ceil` - still open
+- `src/shipping.py:18 - Design - bare str for unit` - still open
+- `src/units.py:32 - Failure modes - mutable module-level dict` - still open
+- `src/shipping.py:10 - Design - new inter-module dependency` - still open (but dismissed, see below)
+- `src/units.py:39 - Failure modes - except KeyError absorbs TypeError` - still open
+- `src/shipping.py:22 - Readability - guard checks raw weight` - still open (but dismissed, see below)
+
+---
+
+**Correctness**
+
+*none*
+
+**Failure modes**
+
+- `src/units.py:4` - `KILOGRAMS_PER_UNIT: dict[str, float] = {"kg": 1.0, "lb": 0.45359237}` - nit - mutable module-level dict; any caller can mutate it (`KILOGRAMS_PER_UNIT["oz"] = 0.0283495`) corrupting all subsequent conversions. Consider `tuple` of pairs, `frozenset`, or `typing.Final`.
+
+**Design and boundaries**
+
+- `src/shipping.py:11` - `unit: str = "kg"` - nit - bare `str` lets a typo like `"lbs"` or `"kgs"` slip through to the type checker and surface only as a runtime `ValueError`. Use `Literal["kg", "lb"]` (and the same in `to_kilograms`) to catch misspellings at call time.
+
+---
+
+Two earlier findings are dismissed on re-reading:
+
+- *Float imprecision at kg boundaries* (`src/shipping.py:15`): for the kg path, `weight * 1.0` is IEEE-exact, so behavior is identical to the old `math.ceil(weight)`. For the lb path, `n * 0.45359237` never lands on an integer kg boundary for round inputs. This would only trigger if a caller manually computed `kg / 0.45359237` and passed the result as pounds — an unlikely usage pattern. Not a bug reachable in normal operation.
+
+- *`except KeyError` absorbing `TypeError`* (`src/units.py:11`): `None` is hashable, so `KILOGRAMS_PER_UNIT[None]` raises `KeyError`, which is caught correctly. Only unhashable types (e.g., `[]`) would raise `TypeError` instead of `ValueError`, but passing a list as a unit string is not a realistic input.
+
+- *Guard checks raw weight* (`src/shipping.py:13`): discarding — the guard is correct. A positive weight in any supported unit yields a positive kg value (all factors are positive), so checking the raw input is equivalent.
+
+- *New inter-module dependency* (`src/shipping.py:5`): discarding — this is the stated intent of the change, not a design concern.
+
+Findings: 0 important, 2 nit, 0 pre-existing
+
+approve with comments

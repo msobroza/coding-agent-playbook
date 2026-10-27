@@ -10,7 +10,7 @@ without paying for the agent runs again. A finished run is skipped unless
 Usage::
 
     python benchmarks/run_agents.py --workers 3
-    python benchmarks/run_agents.py --experiments opencode-playbook --samples review/spot-the-bug
+    python benchmarks/run_agents.py --experiments opencode-playbook-v0.3.0 --samples review/spot-the-bug
 """
 
 from __future__ import annotations
@@ -91,7 +91,7 @@ def claude_command(experiment: _bench.Experiment) -> list[str]:
 
     Example::
 
-        claude_command(_bench.experiment_by_key("claude-playbook"))[-2:]  # ["--", "{prompt}"]
+        claude_command(_bench.experiment_by_key("claude-playbook-v0.3.0"))[-2:]  # ["--", "{prompt}"]
     """
     return [
         _bench.CLAUDE_BIN, "-p",
@@ -234,18 +234,21 @@ def _call_name(block: dict[str, object]) -> str:
 #: Tool calls that start a subagent: Claude Code's Agent (Task in older builds), OpenCode's task.
 _SUBAGENT_TOOLS = ("Agent", "Task", "task")
 
+#: How a review prompt asks for the bug-only second pass (added in v0.3.0, #327).
+_SECOND_PASS_ASK = "A second, independent pass that only hunts bugs"
 
-def second_pass_ran(experiment: _bench.Experiment, tool_calls: Sequence[str]) -> bool | None:
-    """Whether the run started the bug-only pass the current review asks for; else None.
+
+def second_pass_ran(prompt: str, tool_calls: Sequence[str]) -> bool | None:
+    """Whether the run started the bug-only pass its prompt asks for; None when it asks for none.
 
     That pass is the ``code-review`` skill (Claude Code) or a second subagent
     beside the first-pass subagent.
 
     Example::
 
-        second_pass_ran(_bench.experiment_by_key("opencode-playbook"), ["task:explore"] * 2)  # True
+        second_pass_ran(agent_prompt(v0_3_0, sample), ["task:explore"] * 2)  # True
     """
-    if experiment.playbook_text != "head":
+    if _SECOND_PASS_ASK not in prompt:
         return None
     if "Skill:code-review" in tool_calls:
         return True
@@ -350,6 +353,16 @@ def _invoke(runner: HarnessRunner, prompt: str, scratch: Path) -> tuple[AgentRun
         return AgentRun(transcript=partial, returncode=-1), True
 
 
+def home_relative(text: str) -> str:
+    """``text`` with the home directory written as ``~``: results are committed without it.
+
+    Example::
+
+        home_relative("/Users/me/.cache/playbook-bench/x")  # "~/.cache/playbook-bench/x"
+    """
+    return text.replace(str(Path.home()), "~")
+
+
 def run_one(experiment: _bench.Experiment, sample: EvalSample, args: argparse.Namespace) -> str:
     """Run one experiment x sample and save its files; a one-line status."""
     out = _bench.run_dir(args.run_name, experiment.key, sample.id)
@@ -376,15 +389,15 @@ def run_one(experiment: _bench.Experiment, sample: EvalSample, args: argparse.Na
         "model": _bench.CLAUDE_AGENT_MODEL
         if experiment.harness == "claude"
         else _bench.AGENT_MODEL,
-        "command": list(runner._command),
+        "command": [home_relative(part) for part in runner._command],
         "returncode": run.returncode,
         "timed_out": timed_out,
         "duration_seconds": round(duration, 1),
         "baseline_commit": baseline.commit,
-        "scratch": str(scratch),
-        "setup_snapshot": str(baseline.setup_snapshot),
+        "scratch": home_relative(str(scratch)),
+        "setup_snapshot": home_relative(str(baseline.setup_snapshot)),
         "main_loop_tools": getattr(runner, "tool_calls", None),
-        "second_pass_ran": second_pass_ran(experiment, getattr(runner, "tool_calls", [])),
+        "second_pass_ran": second_pass_ran(prompt, getattr(runner, "tool_calls", [])),
         "subagent_starts": subagent_starts(scratch),
     }
     (out / "agent.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")

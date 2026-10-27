@@ -1,0 +1,125 @@
+{
+  "sample_id": "review/crbug-audio-input-args",
+  "harness": "opencode:opencode-playbook",
+  "target": {
+    "name": null,
+    "harness": "opencode:opencode-playbook",
+    "model": null,
+    "reported_model": null,
+    "endpoint": null,
+    "harness_settings": "personal"
+  },
+  "passed": true,
+  "aggregate_score": 1.0,
+  "duration_seconds": 194.3,
+  "report": {
+    "passed": true,
+    "warn_count": 0,
+    "fail_count": 0,
+    "composite": null,
+    "checks": [
+      {
+        "check_id": "gate",
+        "passed": true,
+        "score": 1.0,
+        "weight": 0.0,
+        "required": true,
+        "status": "run",
+        "subresults": []
+      },
+      {
+        "check_id": "rubric",
+        "passed": true,
+        "score": 1.0,
+        "weight": 0.0,
+        "required": true,
+        "status": "run",
+        "subresults": []
+      }
+    ],
+    "findings": []
+  },
+  "uncalibrated_judge": true,
+  "experiment": "opencode-playbook-v0.3.0",
+  "agent": {
+    "experiment": "opencode-playbook-v0.3.0",
+    "sample_id": "review/crbug-audio-input-args",
+    "harness": "opencode",
+    "model": "openrouter/qwen/qwen3.6-27b",
+    "command": [
+      "opencode",
+      "run",
+      "--pure",
+      "--dir",
+      "~/.cache/playbook-bench/review-qwen3.6-27b/opencode-playbook/review-crbug-audio-input-args/scratch",
+      "--model",
+      "openrouter/qwen/qwen3.6-27b",
+      "--format",
+      "json",
+      "{prompt}"
+    ],
+    "returncode": 0,
+    "timed_out": false,
+    "duration_seconds": 194.3,
+    "baseline_commit": "26f1f0cf41d6ee20e7e8594cca3db5ed03283c82",
+    "scratch": "~/.cache/playbook-bench/review-qwen3.6-27b/opencode-playbook/review-crbug-audio-input-args/scratch",
+    "setup_snapshot": "~/.cache/playbook-bench/review-qwen3.6-27b/opencode-playbook/review-crbug-audio-input-args/scratch__setup_baseline",
+    "main_loop_tools": [
+      "read",
+      "glob",
+      "read",
+      "read",
+      "read",
+      "read",
+      "read",
+      "read",
+      "task:explore",
+      "task:explore",
+      "read",
+      "read",
+      "read",
+      "bash",
+      "bash"
+    ],
+    "second_pass_ran": true,
+    "subagent_starts": null
+  },
+  "judge": {
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "judge_samples": 1
+  },
+  "judge_calls": [
+    {
+      "criterion": "The review reports that input_args given as ordinary ffmpeg arguments in a string rather than a preset name (for example '-rtsp_transport tcp') are concatenated as a str onto the argument list: get_ffmpeg_arg_list(...) + '-rtsp_transport tcp' raises TypeError (can only concatenate list to list), so audio detection fails to start; the fallbacks need get_ffmpeg_arg_list(...) like the global args.",
+      "score": 0.9,
+      "n": 1,
+      "weight": 0.6
+    },
+    {
+      "criterion": "The review treats that bug as blocking (important, not a nit or an open question), cites its file and line in src/audio.py (get_ffmpeg_command), and its verdict is 'request changes'.",
+      "score": 1.0,
+      "n": 1,
+      "weight": 0.2
+    },
+    {
+      "criterion": "The review does not invent bugs: anything else it raises is a real problem in the code shown, and it does not ask to rewrite code that works.",
+      "score": 0.75,
+      "n": 1,
+      "weight": 0.2
+    }
+  ],
+  "rubric_weighted_score": 0.8900000000000001,
+  "gate_detail": {
+    "audio_untouched": true,
+    "config_untouched": true,
+    "presets_untouched": true,
+    "tests_untouched": true,
+    "blocks": true,
+    "approves": false
+  },
+  "gate_detail_matches_engine": true,
+  "changed_files": [],
+  "graded_artifact": "transcript",
+  "judge_error": null
+}

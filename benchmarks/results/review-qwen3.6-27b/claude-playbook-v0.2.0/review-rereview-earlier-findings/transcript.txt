@@ -1,0 +1,28 @@
+Now I have everything I need. Here's the re-review:
+
+## Earlier Findings Status
+
+1. **src/cart.py:15 — remove() negative quantity** — **fixed**. The guard `if not 0 < quantity <= held:` at line 17 rejects any removal that would overdraw, and lines 19–22 delete the entry rather than leaving a zero-quantity line.
+2. **src/cart.py:19 — total_cents() unbounded discount_percent** — **still open**. The method is untouched by this diff. `discount_percent=150` still returns a negative total; `discount_percent=-10` still inflates the charge above the subtotal.
+3. **src/cart.py:9 — add() zero/negative quantity** — **fixed**. Lines 10–11 now raise `ValueError` for `quantity <= 0`, with a matching parametrized test at `tests/test_cart.py:19`.
+
+---
+
+## Correctness
+
+- **src/cart.py:26 — important — still open —** `total_cents(discount_percent=150)` returns a negative integer, and `total_cents(discount_percent=-10)` returns more than the subtotal. The parameter is unconstrained; a guard such as `if not 0 <= discount_percent <= 100: raise ValueError(...)` is needed.
+
+## Failure Modes (pre-existing)
+
+- **src/cart.py:16 — pre-existing —** `self.lines[sku]` raises a bare `KeyError` when the SKU is not in the cart. The new guard on line 17 only fires after this lookup succeeds, so `cart.remove("nonexistent", 1)` crashes with an uncontextualized `KeyError`.
+
+## Design (pre-existing)
+
+- **src/cart.py:9 — pre-existing —** `add()` never validates `unit_cents`; `cart.add("pen", -500, 1)` stores a negative price and silently corrupts `total_cents()`.
+- **src/cart.py:12 — pre-existing —** `add()` silently ignores a changed `unit_cents` for an existing SKU. `cart.add("pen", 1000)` then `cart.add("pen", 2000, 3)` records all three units at 1000 — the caller gets no signal that the price was discarded.
+
+---
+
+Findings: 1 important, 0 nit, 3 pre-existing
+
+request changes

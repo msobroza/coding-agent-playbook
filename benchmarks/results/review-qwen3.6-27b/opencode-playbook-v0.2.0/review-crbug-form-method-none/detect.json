@@ -1,0 +1,40 @@
+{
+  "sample_id": "review-crbug-form-method-none",
+  "experiment": "opencode-playbook-v0.2.0",
+  "defect": {
+    "description": "The backward-incompatible crash: kwargs.pop('method', form.method).upper() raises AttributeError when a caller passes method=None explicitly, which used to work (Request turns a None method into GET); the change should treat None like a missing method.",
+    "location": "src/forms.py (from_form)"
+  },
+  "judge": {
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "yes",
+  "strict": 1.0,
+  "lenient": 1.0,
+  "top5": 1.0,
+  "first_match": 1,
+  "n_items": 5,
+  "votes": [
+    {
+      "detected": "yes",
+      "review_items": [
+        "src/forms.py:43 important - method=None explicit causes AttributeError on .upper()",
+        "src/forms.py:33 important - valid_form_methods mutable class list; use tuple",
+        "tests/test_forms.py:23 nit - parametrize reads mutable list, order-fragile",
+        "src/forms.py:43 nit - redundant double uppercasing",
+        "tests/test_forms.py:29 nit - no test covers method=None"
+      ],
+      "item_matches": [
+        1,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence_quote": "`kwargs.pop(\"method\", form.method).upper()` raises `AttributeError` when the caller passes `method=None` explicitly, because `None.upper()` is invalid.",
+      "justification": "The first finding names the exact line in from_form and the AttributeError on an explicit method=None. It also notes that the parent Request handles None, so None should be accepted, which matches the known defect."
+    }
+  ]
+}

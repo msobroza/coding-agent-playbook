@@ -162,10 +162,20 @@ def build_judge(stub: bool) -> Judge:
     return LLMJudge(command=judge_command(), timeout=_bench.JUDGE_TIMEOUT_S)
 
 
+def _has_judge_score(out: Path) -> bool:
+    """Whether ``out`` holds a ``score.json`` the judge scored.
+
+    A run the judge refused or could not reach (a network outage) is tried
+    again on the next pass instead of being skipped.
+    """
+    path = out / "score.json"
+    return path.is_file() and not json.loads(path.read_text(encoding="utf-8")).get("judge_error")
+
+
 def score_one(sample: EvalSample, out: Path, judge: Judge, args: argparse.Namespace) -> str:
     """Grade one saved run into ``score.json``; a one-line status."""
     meta = json.loads((out / "agent.json").read_text(encoding="utf-8"))
-    if (out / "score.json").is_file() and not args.force:
+    if _has_judge_score(out) and not args.force:
         return f"skip  {meta['experiment']:16} {sample.id}"
     transcript = (out / "transcript.txt").read_text(encoding="utf-8")
     # Saved paths may start with ~ (results are committed without the home path).
@@ -218,7 +228,7 @@ def score_one(sample: EvalSample, out: Path, judge: Judge, args: argparse.Namesp
         judge_error=judge_error,
     )  # fmt: skip
     (out / "score.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-    shown = {True: "PASS", False: "fail", None: "n/a (judge refused)"}[verdict]
+    shown = {True: "PASS", False: "fail", None: "n/a (no judge score)"}[verdict]
     return f"score {meta['experiment']:16} {sample.id:42} {shown}"
 
 

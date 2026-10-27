@@ -1,0 +1,117 @@
+{
+  "sample_id": "review/crbug-ftp-active-string",
+  "harness": "opencode:opencode-playbook-v0.2.0",
+  "target": {
+    "name": null,
+    "harness": "opencode:opencode-playbook-v0.2.0",
+    "model": null,
+    "reported_model": null,
+    "endpoint": null,
+    "harness_settings": "personal"
+  },
+  "passed": true,
+  "aggregate_score": 1.0,
+  "duration_seconds": 103.6,
+  "report": {
+    "passed": true,
+    "warn_count": 0,
+    "fail_count": 0,
+    "composite": null,
+    "checks": [
+      {
+        "check_id": "gate",
+        "passed": true,
+        "score": 1.0,
+        "weight": 0.0,
+        "required": true,
+        "status": "run",
+        "subresults": []
+      },
+      {
+        "check_id": "rubric",
+        "passed": true,
+        "score": 1.0,
+        "weight": 0.0,
+        "required": true,
+        "status": "run",
+        "subresults": []
+      }
+    ],
+    "findings": []
+  },
+  "uncalibrated_judge": true,
+  "experiment": "opencode-playbook-v0.2.0",
+  "agent": {
+    "experiment": "opencode-playbook-v0.2.0",
+    "sample_id": "review/crbug-ftp-active-string",
+    "harness": "opencode",
+    "model": "openrouter/qwen/qwen3.6-27b",
+    "command": [
+      "opencode",
+      "run",
+      "--pure",
+      "--dir",
+      "~/.cache/playbook-bench/review-qwen3.6-27b/opencode-playbook-v0.2.0/review-crbug-ftp-active-string/scratch",
+      "--model",
+      "openrouter/qwen/qwen3.6-27b",
+      "--format",
+      "json",
+      "{prompt}"
+    ],
+    "returncode": 0,
+    "timed_out": false,
+    "duration_seconds": 103.6,
+    "baseline_commit": "0910b195d6b40a23ee064048f1e0269eb8298b7f",
+    "scratch": "~/.cache/playbook-bench/review-qwen3.6-27b/opencode-playbook-v0.2.0/review-crbug-ftp-active-string/scratch",
+    "setup_snapshot": "~/.cache/playbook-bench/review-qwen3.6-27b/opencode-playbook-v0.2.0/review-crbug-ftp-active-string/scratch__setup_baseline",
+    "main_loop_tools": [
+      "read",
+      "task:explore",
+      "read",
+      "read",
+      "read",
+      "grep",
+      "grep",
+      "glob"
+    ],
+    "second_pass_ran": null,
+    "subagent_starts": null
+  },
+  "judge": {
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "judge_samples": 1
+  },
+  "judge_calls": [
+    {
+      "criterion": "The review reports that the setting is read as settings['FEED_STORAGE_FTP_ACTIVE'] or False instead of settings.getbool(...): command-line overrides arrive as text, so -s FEED_STORAGE_FTP_ACTIVE=False (or =0) gives the non-empty string 'False', which is truthy and turns active mode on.",
+      "score": 1.0,
+      "n": 1,
+      "weight": 0.6
+    },
+    {
+      "criterion": "The review treats that bug as blocking (important, not a nit or an open question), cites its file and line in src/feedstorage.py (from_settings), and its verdict is 'request changes'.",
+      "score": 1.0,
+      "n": 1,
+      "weight": 0.2
+    },
+    {
+      "criterion": "The review does not invent bugs: anything else it raises is a real problem in the code shown, and it does not ask to rewrite code that works.",
+      "score": 0.75,
+      "n": 1,
+      "weight": 0.2
+    }
+  ],
+  "rubric_weighted_score": 0.95,
+  "gate_detail": {
+    "storage_untouched": true,
+    "settings_untouched": true,
+    "tests_untouched": true,
+    "blocks": true,
+    "approves": false
+  },
+  "gate_detail_matches_engine": true,
+  "changed_files": [],
+  "graded_artifact": "transcript",
+  "judge_error": null
+}

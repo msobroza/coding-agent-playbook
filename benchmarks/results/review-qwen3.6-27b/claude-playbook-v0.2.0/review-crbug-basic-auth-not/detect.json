@@ -1,0 +1,38 @@
+{
+  "sample_id": "review-crbug-basic-auth-not",
+  "experiment": "claude-playbook-v0.2.0",
+  "defect": {
+    "description": "The new condition is not valid Python: `!` is not a negation operator (it should be `not hmac.compare_digest(...)`), so src/auth.py raises SyntaxError on import and every caller and test of is_authorized breaks.",
+    "location": "src/auth.py (the if condition in is_authorized)"
+  },
+  "judge": {
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "yes",
+  "strict": 1.0,
+  "lenient": 1.0,
+  "top5": 1.0,
+  "first_match": 1,
+  "n_items": 4,
+  "votes": [
+    {
+      "detected": "yes",
+      "review_items": [
+        "`!` is not valid negation in Python; SyntaxError on import, use `not`",
+        "`or` short-circuits, defeating constant-time comparison",
+        "hmac.compare_digest raises TypeError on non-str/bytes arguments",
+        "Comment reads as instruction rather than documentation"
+      ],
+      "item_matches": [
+        1,
+        0,
+        0,
+        0
+      ],
+      "evidence_quote": "The module will fail to parse with a `SyntaxError` and cannot be imported. The correct operator is `not`.",
+      "justification": "The review's first finding names the exact defect at src/auth.py's condition. It says `!` is invalid negation in Python, which causes a SyntaxError on import, and that the fix is `not`."
+    }
+  ]
+}

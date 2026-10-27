@@ -1,0 +1,46 @@
+{
+  "sample_id": "review-crbug-xtrim-maxlen-minid",
+  "experiment": "claude-playbook-v0.2.0",
+  "defect": {
+    "description": "Xtrim does not enforce that MAXLEN and MINID are mutually exclusive and that one of them is given: xtrim('s', maxlen=10, minid='1-0') sends XTRIM s MAXLEN MINID ~ 10 1-0 and xtrim('s') sends XTRIM s ~, both invalid commands, where xtrim should raise an error (for example a DataError) before sending anything.",
+    "location": "src/streams.py (xtrim)"
+  },
+  "judge": {
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "yes",
+  "strict": 1.0,
+  "lenient": 1.0,
+  "top5": 1.0,
+  "first_match": 1,
+  "n_items": 8,
+  "votes": [
+    {
+      "detected": "yes",
+      "review_items": [
+        "Both MAXLEN and MINID emitted when both provided; should validate exactly one",
+        "Bare tilde emitted when neither maxlen nor minid provided; should raise",
+        "LIMIT and tilde emitted without any strategy",
+        "Docstring omits mutual exclusivity constraint",
+        "No test for MINID combined with LIMIT",
+        "No test for MINID with approximate=False",
+        "No negative tests for invalid parameter combinations",
+        "Commit message misattributes LIMIT to Redis 6.2"
+      ],
+      "item_matches": [
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence_quote": "Calling `xtrim(\"s\", maxlen=10, minid=\"0-0\")` produces `XTRIM s MAXLEN MINID ~ 10 0-0`, which Redis rejects as a syntax error. The function should validate that exactly one of `maxlen` or `minid` is provided.",
+      "justification": "The review identifies both halves of the known defect in xtrim. Passing both maxlen and minid emits both keywords. Passing neither produces `XTRIM s ~`. It recommends validating that exactly one strategy is provided."
+    }
+  ]
+}

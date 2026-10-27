@@ -1,0 +1,19 @@
+
+
+Earlier findings status:
+- src/cart.py:15 (remove() negative quantity) — **fixed**
+- src/cart.py:19 (total_cents() unbounded discount_percent) — **still open**
+- src/cart.py:9 (add() accepts zero/negative quantity) — **fixed**
+
+**Correctness**
+
+- `src/cart.py:26` — still open (important) — `total_cents()` still accepts any `discount_percent`: `discount_percent=150` yields `subtotal * (100 - 150) // 100`, a negative total; `discount_percent=-10` surcharges the customer.
+- `src/cart.py:16` — pre-existing (nit) — `remove()` does `self.lines[sku]` *before* the guard on line 17, so `cart.remove("nonexistent")` raises a bare `KeyError` with no context about the cart or SKU.
+
+**Failure modes**
+
+- `src/cart.py:12` — pre-existing (nit) — `add()` locks in `unit_cents` on the first insert: `add("pen", 150, 2)` then `add("pen", 200, 1)` prices all 3 units at 150. If the caller expects the latest price to apply, the subtotal is wrong. If price-locking is intentional, the invariant should be documented.
+
+Findings: 1 important, 0 nit, 2 pre-existing
+
+request changes

@@ -1,0 +1,58 @@
+Good, I have all the context. Now let me write the review.
+
+---
+
+## Review: `CHANGE.diff` — Close the driver log output on quit
+
+**Stated intent:** *Makes `Service.stop()` close the driver's log output on quit, whether `log_output` is an open file or a file descriptor, so no log file is left open once the driver stops.*
+
+---
+
+### Correctness
+
+- **`src/service.py:37` — important — new** — `isinstance(self.log_output, TextIO)` does not match the file created when `log_output=None`. Line 23 opens `open(os.devnull, "wb")`, which produces a `BufferedRandom` (binary mode). That object is neither `TextIO` nor `int`, so neither `close()` nor `os.close()` fires and the devnull file handle leaks. Input: `Service("x").stop()` — the file opened on line 23 is never closed.
+
+- **`src/service.py:37` — important — new** — Binary file objects passed directly as `log_output` also fall through both branches and leak. The old code's `hasattr(self.log_output, "close")` would have caught any closable object; the `isinstance(..., TextIO)` check is narrower than the caller contract promises. Input: `Service("x", log_output=open("f", "wb")).stop()` — `f` is never closed.
+
+  **Suggestion:** Replace the type check with `hasattr(self.log_output, "close")` so it covers text files, binary files, and any duck-typed closable. Or, alternatively, open `os.devnull` in text mode (`"a"` instead of `"wb"`) and narrow the annotation — but `hasattr` is the safer, more general pattern.
+
+---
+
+### Failure modes
+
+- **`src/service.py:40` — nit — new** — `os.close(self.log_output)` can raise `OSError` (e.g., `EBADF` if the fd was already closed externally). The old code suppressed this with `except Exception: pass`. The new behavior (propagating the error) is generally better, but callers that treat `stop()` as fire-and-forget cleanup may now see unexpected exceptions. A narrow `except OSError: pass` around just this line preserves the cleanup intent without swallowing programming errors like `TypeError`.
+
+- **`tests/test_service.py:23` — nit — new** — If `stop()` raises an exception for any reason, `read_end` is never closed. A `try/finally` around the assertion would make the test self-cleaning:
+
+  ```python
+  read_end, write_end = os.pipe()
+  try:
+      Service("chromedriver", log_output=write_end).stop()
+      with pytest.raises(OSError):
+          os.close(write_end)
+  finally:
+      try:
+          os.close(read_end)
+      except OSError:
+          pass
+  ```
+
+  (Minor, since the test's subject is `stop()` and a failure there is already visible.)
+
+---
+
+### Pre-existing
+
+- **`src/service.py:18` — pre-existing** — The parameter annotation `IO[Any]` suggests the code accepts any IO object (text or binary), but the runtime close logic on line 37 only checks `TextIO`. The type and the behavior don't match — any `BinaryIO` passes type-checking but is never closed. This is pre-existing in the annotation but the new code makes the mismatch observable at runtime.
+
+---
+
+### What's improved
+
+The change fixes the old code's use of `self.log_file.close()` (a nonexistent attribute — `self.log_file` doesn't exist; the correct name is `self.log_output`). It also adds explicit handling for file descriptors and removes the blanket `except Exception: pass`. Those are solid improvements.
+
+---
+
+Findings: 2 important, 2 nit, 1 pre-existing
+
+request changes
