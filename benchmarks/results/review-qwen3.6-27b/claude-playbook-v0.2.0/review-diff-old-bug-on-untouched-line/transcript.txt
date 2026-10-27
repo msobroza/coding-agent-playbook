@@ -1,0 +1,33 @@
+I'll wait for the subagent's findings to arrive.
+
+The subagent has completed. Let me verify the findings against the cited lines, then produce the review.
+
+Verified line 15 (`src/inventory.py`): docstring says "to or below" (≤), code uses `<`. An `Item("x", 5, 5)` is excluded — confirmed pre-existing correctness bug.
+
+Now the review:
+
+---
+
+## Correctness
+
+**`src/inventory.py:15` — pre-existing** — `items_to_reorder` uses `item.quantity < item.reorder_level` (strict less-than) while the docstring at line 14 says "to or below." An item whose quantity exactly equals its reorder level — e.g., `Item("x", 5, 5)` — is silently excluded from the reorder list. The operator should be `<=`. This line is untouched by the diff but worth fixing before shipping the restock feature, since restocked items are the natural input to this function.
+
+## Failure Modes
+
+**`src/inventory.py:30-32` — nit** — The `for item in items` loop returns on first SKU match. If `items` somehow contains two entries with the same `sku`, only the first is restocked and no warning is raised. Is that the intended behavior, or should duplicate SKUs raise an error? In a well-maintained inventory, duplicates shouldn't exist, but a data import bug could create them silently.
+
+## Design
+
+**`src/inventory.py:24` — nit** — The docstring says "Add `units` to the item `sku` and return that item" — this implies in-place mutation of the list element, but doesn't state it explicitly. A caller might reasonably expect a new `Item` returned with the list unchanged. Consider adding "Mutates the matched item in the passed list."
+
+## Test Coverage
+
+**`tests/test_inventory.py:13` — nit** — The assertion `restock(items, "ink", 5) == Item("ink", 9, 2)` checks the returned object's value, but never verifies `items[1].quantity == 9` directly. If someone later refactored `restock` to return a copy (e.g., via `dataclasses.replace`), this test would still pass while the list mutation silently breaks.
+
+**`tests/test_inventory.py:11-14` — nit** — No test for `restock([], "pen", 1)` with an empty list. The function raises `KeyError` correctly, and the unknown-SKU test at line 23 covers that code path indirectly, but an explicit empty-list case is a cheap addition that removes ambiguity.
+
+---
+
+Findings: 0 important, 4 nit, 1 pre-existing
+
+approve with comments

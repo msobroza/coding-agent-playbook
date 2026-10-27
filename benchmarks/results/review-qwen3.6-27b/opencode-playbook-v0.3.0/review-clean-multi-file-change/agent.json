@@ -1,0 +1,41 @@
+{
+  "experiment": "opencode-playbook-v0.3.0",
+  "sample_id": "review/clean-multi-file-change",
+  "harness": "opencode",
+  "model": "openrouter/qwen/qwen3.6-27b",
+  "command": [
+    "opencode",
+    "run",
+    "--pure",
+    "--dir",
+    "~/.cache/playbook-bench/review-qwen3.6-27b/opencode-playbook/review-clean-multi-file-change/scratch",
+    "--model",
+    "openrouter/qwen/qwen3.6-27b",
+    "--format",
+    "json",
+    "{prompt}"
+  ],
+  "returncode": 0,
+  "timed_out": false,
+  "duration_seconds": 234.7,
+  "baseline_commit": "46ed2cd6eb27b845a92f5875b2a6edcc7e9d21b3",
+  "scratch": "~/.cache/playbook-bench/review-qwen3.6-27b/opencode-playbook/review-clean-multi-file-change/scratch",
+  "setup_snapshot": "~/.cache/playbook-bench/review-qwen3.6-27b/opencode-playbook/review-clean-multi-file-change/scratch__setup_baseline",
+  "main_loop_tools": [
+    "read",
+    "task:explore",
+    "task:explore",
+    "read",
+    "read",
+    "read",
+    "read",
+    "bash",
+    "bash",
+    "bash",
+    "bash",
+    "bash",
+    "bash"
+  ],
+  "second_pass_ran": true,
+  "subagent_starts": null
+}

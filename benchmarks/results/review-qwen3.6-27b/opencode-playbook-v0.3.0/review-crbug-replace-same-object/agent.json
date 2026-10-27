@@ -1,0 +1,38 @@
+{
+  "experiment": "opencode-playbook-v0.3.0",
+  "sample_id": "review/crbug-replace-same-object",
+  "harness": "opencode",
+  "model": "openrouter/qwen/qwen3.6-27b",
+  "command": [
+    "opencode",
+    "run",
+    "--pure",
+    "--dir",
+    "~/.cache/playbook-bench/review-qwen3.6-27b/opencode-playbook/review-crbug-replace-same-object/scratch",
+    "--model",
+    "openrouter/qwen/qwen3.6-27b",
+    "--format",
+    "json",
+    "{prompt}"
+  ],
+  "returncode": 0,
+  "timed_out": false,
+  "duration_seconds": 198.5,
+  "baseline_commit": "207142dd2668f138284ac6e45c42b34402be0ff3",
+  "scratch": "~/.cache/playbook-bench/review-qwen3.6-27b/opencode-playbook/review-crbug-replace-same-object/scratch",
+  "setup_snapshot": "~/.cache/playbook-bench/review-qwen3.6-27b/opencode-playbook/review-crbug-replace-same-object/scratch__setup_baseline",
+  "main_loop_tools": [
+    "read",
+    "bash",
+    "bash",
+    "read",
+    "read",
+    "glob",
+    "glob",
+    "task:explore",
+    "task:explore",
+    "read"
+  ],
+  "second_pass_ran": true,
+  "subagent_starts": null
+}

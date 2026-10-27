@@ -1,0 +1,58 @@
+
+
+Now let me verify the key findings by tracing through the code logic.
+
+
+
+
+Verified the critical findings by tracing the code:
+
+- **Both maxlen+minid**: `xtrim("s", maxlen=100, minid="0-0")` produces `[b"MAXLEN", b"MINID", b"~", 100, "0-0"]` — two policy keywords, invalid. **CONFIRMED.**
+- **Neither maxlen nor minid**: `xtrim("s")` produces `[]` pieces — `XTRIM s` with no policy. **CONFIRMED.**
+- **LIMIT with approximate=False**: Redis 7.0+ accepts `XTRIM key MAXLEN 100 LIMIT 10` without `~` — LIMIT is a no-op, not rejected. Downgrading this finding.
+- **No limit > 0 validation**: `limit=0` or `limit=-1` produces valid Python but semantically wrong commands. **CONFIRMED.**
+
+
+
+
+---
+
+## Correctness
+
+- **src/streams.py:35-44** — correctness — **important** — No guard prevents both `maxlen` and `minid` being set. `xtrim("s", maxlen=100, minid="0-0")` produces `XTRIM s MAXLEN MINID ~ 100 0-0` with two policy keywords; Redis requires exactly one and rejects the command with `ERR syntax error`.
+
+- **src/streams.py:39-47** — correctness — **important** — Calling `xtrim("events")` with neither `maxlen` nor `minid` leaves `pieces` empty. The resulting `XTRIM events` has no trimming policy; Redis rejects it.
+
+- **src/streams.py:45-47** — correctness — **nit** — No validation that `limit > 0`. `xtrim("events", maxlen=100, limit=-1)` produces `XTRIM events MAXLEN ~ 100 LIMIT -1`. Redis may accept it but the behaviour is undefined.
+
+- **tests/test_streams.py:29-32** — correctness — **nit** — No test covers `xtrim(minid="0-0", approximate=False)` which should produce `XTRIM events MINID 0-0` without `~`. The only minid test assumes the default `approximate=True`.
+
+- **tests/test_streams.py:35-38** — correctness — **nit** — `test_xtrim_with_a_limit` passes `100` positionally for `maxlen` after the signature changed; there is no test that exercises the old positional call `xtrim("events", 100)` to guard against future signature regressions.
+
+## Failure modes
+
+*(none)*
+
+## Security
+
+*(none)*
+
+## Design
+
+- **src/streams.py:27-32** — design — **nit** — `maxlen` shifted from required to optional, changing the contract from "always trim by count" to "trim by one of two policies." The docstring doesn't state the precondition that at least one policy must be provided. Dependency inversion principle — the public contract should be derivable from the signature and docstring without reading the body.
+
+## Readability
+
+- **src/streams.py:30** — readability — **nit** — The docstring reads "approximate: let the server keep slightly more than maxlen" but `approximate` also controls `~` for `MINID`. A reader using only `minid` would incorrectly assume `approximate` has no effect.
+
+## Style
+
+- **src/streams.py:26** — style — **pre-existing** — Return type is `Any`. XTRIM returns `1` on success (or raises); `-> int` would be more precise. (Same pattern on `xlen` at line 15.)
+
+- **src/streams.py:34** — style — **pre-existing** — `pieces: list[Any]` is overly broad; `list[int | str | bytes]` matches what the executor actually receives.
+
+---
+
+Findings: 2 important, 5 nit, 2 pre-existing
+
+request changes

@@ -1,0 +1,42 @@
+{
+  "sample_id": "review-crbug-form-method-none",
+  "experiment": "claude-playbook-v0.2.0",
+  "defect": {
+    "description": "The backward-incompatible crash: kwargs.pop('method', form.method).upper() raises AttributeError when a caller passes method=None explicitly, which used to work (Request turns a None method into GET); the change should treat None like a missing method.",
+    "location": "src/forms.py (from_form)"
+  },
+  "judge": {
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "yes",
+  "strict": 1.0,
+  "lenient": 1.0,
+  "top5": 1.0,
+  "first_match": 1,
+  "n_items": 6,
+  "votes": [
+    {
+      "detected": "yes",
+      "review_items": [
+        "forms.py:43 method=None kwarg causes AttributeError on .upper() (regression from Request handling None)",
+        "forms.py:43 crash when form.method is None and no method kwarg",
+        "forms.py:33 valid_form_methods mutable list shared state; use tuple",
+        "forms.py:43/27 redundant double uppercasing",
+        "tests missing method=None kwarg case",
+        "test reads mutable class list valid_form_methods directly"
+      ],
+      "item_matches": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence_quote": "`kwargs.pop(\"method\", form.method).upper()` raises `AttributeError` when `method=None` is passed as a keyword argument.",
+      "justification": "The first finding names the exact expression in from_form. It gives the exact cause: pop returns the stored None, and None.upper() crashes. It also notes the regression, since Request previously turned None into GET."
+    }
+  ]
+}

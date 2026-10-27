@@ -1,0 +1,11 @@
+
+
+**Correctness**
+
+- `src/inventory.py:15` — correctness — pre-existing — `items_to_reorder` uses `item.quantity < item.reorder_level` but the docstring says "to or below their reorder level". An item with `quantity == reorder_level` is excluded by the code but included per the spec. For example, `Item("x", 5, 5)` should reorder per docstring but won't.
+
+The new `restock` function and its tests are correct. The validation, mutation, error raising, and edge cases are all properly handled.
+
+Findings: 0 important, 0 nit, 1 pre-existing
+
+approve

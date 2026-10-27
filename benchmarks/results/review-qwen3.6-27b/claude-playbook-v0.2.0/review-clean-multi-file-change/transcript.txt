@@ -1,0 +1,21 @@
+Here is my review of the change.
+
+---
+
+**Correctness**
+
+* `src/shipping.py:15` — `math.ceil(to_kilograms(weight, unit))` — The conversion factor `0.45359237` is not exactly representable in IEEE 754 double precision. For a pound weight whose true kilogram product lands exactly on an integer boundary (e.g., ~2.20462262 lb → exactly 1 kg), the float product could be `1.00000000002`, causing `math.ceil` to return 2 instead of 1 and charge an extra kilogram. In practice this requires a precisely crafted weight, so the risk is low. **nit**
+
+**Design**
+
+* `src/shipping.py:11` — `unit: str` — Any string is accepted by the type signature; only `"kg"` and `"lb"` are valid. `Literal["kg", "lb"]` would let the type checker reject `quote_cents(5, "oz")` at the call site instead of at runtime. **nit**
+
+* `src/units.py:4` — `KILOGRAMS_PER_UNIT: dict[str, float] = {"kg": 1.0, "lb": 0.45359237}` — This mutable module-level dict is shared across the process. Any caller can do `KILOGRAMS_PER_UNIT["lb"] = 0` and silently corrupt every subsequent conversion. Consider `types.MappingProxyType(...)` if mutability is not intended. **nit**
+
+---
+
+The change is structurally sound and well-tested. The `from None` on the `KeyError` in `src/units.py:14` is correct per the error-handling rule — the inner exception is noise the caller cannot act on. The backward-compatible default `unit="kg"` preserves the old call shape. Tests cover the new happy path and the unknown-unit error case.
+
+Findings: 0 important, 3 nit, 0 pre-existing
+
+approve with comments

@@ -1,0 +1,44 @@
+{
+  "sample_id": "review-crbug-log-textio",
+  "experiment": "opencode-playbook-v0.2.0",
+  "defect": {
+    "description": "Isinstance(self.log_output, TextIO) never matches a real file: typing.TextIO is not a base class of what open() returns (io.TextIOWrapper, or the io.BufferedWriter of the default os.devnull log), so stop() still leaves every file log open, as before; it should test io.IOBase (or for a close method).",
+    "location": "src/service.py (stop)"
+  },
+  "judge": {
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "partial",
+  "strict": 0.0,
+  "lenient": 0.5,
+  "top5": 0.0,
+  "first_match": 1,
+  "n_items": 7,
+  "votes": [
+    {
+      "detected": "partial",
+      "review_items": [
+        "service.py:37 important: default devnull binary handle (and binary IO) not closed by stop() since only TextIO is closed",
+        "service.py:40 nit: os.close may raise OSError, skipping process.terminate()",
+        "service.py:36 nit: comparison to PIPE (-1) sentinel is opaque",
+        "pre-existing: open(log_output, 'a+') on unvalidated user path",
+        "pre-existing: os.devnull opened in binary mode",
+        "pre-existing: IO[Any] erases buffer type",
+        "pre-existing: test for fd log never calls stop()"
+      ],
+      "item_matches": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence_quote": "`stop()` checks `isinstance(self.log_output, TextIO)` (False) then `isinstance(self.log_output, int)` (False) \u2014 neither branch closes the handle.",
+      "justification": "The review flags the right check in stop() and correctly says the default os.devnull handle leaks. But it attributes the leak to binary vs text mode and assumes text files from open() are closed (\"only `TextIO` is closed\"). It misses that typing.TextIO never matches any real file object, so every file log stays open."
+    }
+  ]
+}

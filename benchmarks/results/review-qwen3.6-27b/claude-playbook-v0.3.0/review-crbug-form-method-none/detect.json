@@ -1,0 +1,39 @@
+{
+  "sample_id": "review/crbug-form-method-none",
+  "experiment": "claude-playbook-v0.3.0",
+  "defect": {
+    "description": "The backward-incompatible crash: kwargs.pop('method', form.method).upper() raises AttributeError when a caller passes method=None explicitly, which used to work (Request turns a None method into GET); the change should treat None like a missing method.",
+    "location": "src/forms.py (from_form)"
+  },
+  "judge": {
+    "backend": "anthropic",
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "yes",
+  "strict": 1.0,
+  "lenient": 1.0,
+  "top5": 1.0,
+  "first_match": 1,
+  "n_items": 4,
+  "votes": [
+    {
+      "detected": "yes",
+      "review_items": [
+        "from_form .upper() crashes with AttributeError when method=None passed explicitly (backward-incompatible)",
+        "from_form .upper() crashes when form.method is None and no method kwarg passed",
+        "valid_form_methods is a mutable class-level list; use tuple/frozenset",
+        "Redundant uppercase in from_form duplicates Request.__post_init__ normalization"
+      ],
+      "item_matches": [
+        1,
+        0,
+        0,
+        0
+      ],
+      "evidence_quote": "`kwargs.pop(\"method\", form.method).upper()` raises `AttributeError` when the caller explicitly passes `method=None`.",
+      "justification": "The review's first finding names the exact defect at from_form. It identifies the AttributeError on an explicit method=None and explains that the code previously worked because Request normalized None to GET."
+    }
+  ]
+}

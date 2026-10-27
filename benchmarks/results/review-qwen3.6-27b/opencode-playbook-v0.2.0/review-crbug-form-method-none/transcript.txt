@@ -1,0 +1,24 @@
+Now let me verify the subagent's findings against the cited lines.
+
+
+**Correctness**
+
+- **src/forms.py:43 - important** — `kwargs.pop("method", form.method).upper()` raises `AttributeError` when the caller passes `method=None` explicitly, because `None.upper()` is invalid. The parent `Request.__post_init__` (line 27) handles `None` with `(self.method or "GET").upper()`, so `FormRequest` is expected to accept it. Input: `FormRequest.from_form(form, method=None)`.
+
+**Failure modes**
+
+- **src/forms.py:33 - important** — `valid_form_methods = ["GET", "POST"]` is a mutable class attribute. Any caller doing `FormRequest.valid_form_methods.append("PUT")` silently corrupts method validation for every subsequent `FormRequest` creation. Use a tuple `("GET", "POST")` instead.
+
+- **tests/test_forms.py:23 - nit** — `FormRequest.valid_form_methods` in the `@pytest.mark.parametrize` reads from the same mutable list; if it's mutated before tests run, the parametrized inputs change, making the test fragile to execution order.
+
+**Design**
+
+- **src/forms.py:43 - nit** — Redundant uppercasing: `from_form` calls `.upper()` on line 43, then passes `method` to `cls(...)` which triggers `Request.__post_init__` (line 27) that uppercases again.
+
+**Readability**
+
+- **tests/test_forms.py:29 - nit** — `test_an_unknown_form_method_falls_back_to_get` only tests an uppercase unknown method. No test covers `method=None`, which crashes per the first finding above. Should `None` be covered too?
+
+Findings: 2 important, 3 nit, 0 pre-existing
+
+request changes

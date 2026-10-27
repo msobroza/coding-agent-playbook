@@ -1,0 +1,20 @@
+The first-pass subagent is running. I'll wait for its findings before proceeding with the review.
+
+I've read the source and verified the subagent's findings. Here's the review.
+
+---
+
+### Correctness
+
+* **`src/netrc_auth.py:17` — `important` — `f"~/{name}"` unconditionally prepends `~/` to the NETRC env var value.** When `NETRC=/etc/custom-netrc`, the loop binds `name = "/etc/custom-netrc"`, so `os.path.expanduser(f"~/{name}")` becomes `os.path.expanduser("~/etc/custom-netrc")`, which resolves to something like `/home/user/etc/custom-netrc` — the wrong path. The standard convention is that `NETRC` holds the complete path. The code should use the env var value directly (perhaps only expanding `~` if the value itself starts with it), rather than always treating it as a basename.
+* **`tests/test_netrc_auth.py:34` — `important` — `monkeypatch.setenv("NETRC", ".netrc-ci")` passes a bare filename, which masks the line-17 bug.** Because `HOME` is patched to `tmp_path`, `os.path.expanduser(f"~/.netrc-ci")` resolves to `tmp_path/.netrc-ci` — exactly where the test wrote the file. The test passes, but only because the wrong path happens to land on the right place. Add a test with an absolute path (`NETRC=/tmp/something/.netrc-ci`) to exercise the actual intended behavior.
+
+### Failure Modes
+
+* **`src/netrc_auth.py:12` — `nit` — `netrc_file is not None` treats an empty string as valid.** When `NETRC=""`, `netrc_locations` becomes `("",)`, line 17 produces `os.path.expanduser("~/")` (the home directory), and `os.path.exists()` on that succeeds, causing the code to attempt parsing the user's home directory as a netrc file. The existing `except (NetrcParseError, OSError)` on line 30 catches the resulting error, so no crash occurs, but it's an unnecessary lookup. Consider `if netrc_file` instead of `if netrc_file is not None`.
+
+---
+
+Findings: 2 important, 1 nit, 0 pre-existing
+
+request changes

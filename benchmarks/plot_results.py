@@ -5,7 +5,7 @@ Reads every ``score.json`` of one run and writes, next to them:
 - ``summary.csv``: one row per experiment x sample.
 - ``summary.md``: per-experiment totals, the per-sample grid and why gates failed.
 - ``overview.png``: pass rate, mean judge score and median agent time per reviewer.
-- ``judge_score_by_sample.png``: the weighted judge score of every run.
+- ``judge_score_by_sample.png``: a sample x reviewer grid of weighted judge scores.
 - ``detection.png``: CRBugBench-style detection next to the pass rate, on the
   samples with one known defect (when ``detect_runs.py`` has run).
 
@@ -30,16 +30,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import _bench
 
-#: Categorical slots 1-5 of the reference palette, in order (validated for CVD on
-#: adjacent pairs; slots below 3:1 contrast get value labels on their bars, and
-#: summary.md serves as the table view).
+#: Categorical slots 1-7 of the reference palette, in experiment order (validated
+#: for CVD on adjacent pairs; slots below 3:1 contrast get value labels on their
+#: bars, and summary.md serves as the table view).
 SERIES_COLORS = {
     "opencode-review": "#2a78d6",
     "opencode-playbook-v0.1.0": "#eb6834",
-    "opencode-playbook": "#1baf7a",
-    "claude-code-review": "#eda100",
-    "claude-playbook": "#e87ba4",
+    "opencode-playbook-v0.2.0": "#1baf7a",
+    "opencode-playbook-v0.3.0": "#eda100",
+    "claude-code-review": "#e87ba4",
+    "claude-playbook-v0.2.0": "#008300",
+    "claude-playbook-v0.3.0": "#6250d6",
 }
+#: The sequential ramp for judge scores: one hue, light at 0 to dark at 1.
+SCORE_RAMP = ("#cde2fb", "#86b6ef", "#3987e5", "#256abf", "#184f95", "#0d366b")
 INK, INK_2, MUTED, GRID, AXIS, SURFACE = (
     "#0b0b0b", "#52514e", "#898781", "#e1e0d9", "#c3c2b7", "#fcfcfb",
 )  # fmt: skip
@@ -68,7 +72,7 @@ class RunRow:
     detect_top5: float | None = None
     first_match: int | None = None
     n_items: int | None = None
-    second_pass_ran: bool | None = None  # current playbook text: did the bug-only pass start?
+    second_pass_ran: bool | None = None  # None unless the prompt asks for a bug-only pass
     subagent_starts: dict[str, int] | None = None  # Claude Code: foreground/background counts
 
 
@@ -306,21 +310,14 @@ def _detection_section(rows: list[RunRow]) -> list[str]:
 
 
 def _second_pass_calls(rows: list[RunRow]) -> list[str]:
-    """For the current playbook text, how many runs started its second, bug-only pass."""
-    keys = [
-        k
-        for k in dict.fromkeys(r.experiment for r in rows)
-        if _bench.experiment_by_key(k).playbook_text == "head"
-    ]
+    """For the setups whose prompt asks for a second, bug-only pass, how many runs started it."""
+    keys = list(dict.fromkeys(r.experiment for r in rows if r.second_pass_ran is not None))
     if not keys:
         return []
-    out = ["", "## Did the second pass run? (current playbook text)", ""]
+    out = ["", "## Did the second pass run? (v0.3.0 and later)", ""]
     for key in keys:
         mine = [r for r in rows if r.experiment == key]
         known = [r for r in mine if r.second_pass_ran is not None]
-        if not known:
-            out.append(f"- {_label(key)}: not recorded (run before this field)")
-            continue
         ran = sum(r.second_pass_ran is True for r in known)
         missing = len(mine) - len(known)
         unknown = f" ({_runs(missing)} not recorded)" if missing else ""
@@ -484,41 +481,66 @@ def _plot_panels(keys: list[str], panels: list[Panel], title: str, path: Path) -
 
 
 def plot_judge_by_sample(rows: list[RunRow], path: Path) -> None:
-    """Grouped horizontal bars: each sample's weighted judge score per reviewer."""
+    """A sample x reviewer grid of weighted judge scores, every cell labelled.
+
+    A gap separates the harnesses; a run the judge could not score reads ``n/a``.
+    """
     import matplotlib.pyplot as plt
+    import numpy as np
+    from matplotlib.colors import LinearSegmentedColormap
 
     keys = list(dict.fromkeys(r.experiment for r in rows))
     samples = sorted({r.sample_id for r in rows})
     by_key = {(r.experiment, r.sample_id): r for r in rows}
-    fig, ax = plt.subplots(figsize=(9, 0.25 * len(samples) * len(keys) + 1.6), facecolor=SURFACE)
-    _style_axes(ax)
-    height = 0.8 / len(keys)
-    for i, key in enumerate(keys):
-        scores = [(by_key.get((key, s)) or _missing(key, s)).judge_score or 0.0 for s in samples]
-        offsets = [j + (i - (len(keys) - 1) / 2) * height for j in range(len(samples))]
-        ax.barh(offsets, scores, height=height * 0.92, color=SERIES_COLORS[key], label=_label(key))
-    ax.axvline(RUBRIC_FAIL_BOUND, color=MUTED, linestyle="--", linewidth=1)
-    ax.set_yticks(range(len(samples)), [_short(s) for s in samples])
+    scores = np.ma.masked_invalid([[_score(by_key.get((k, s))) for k in keys] for s in samples])
+    cmap = LinearSegmentedColormap.from_list("judge_score", SCORE_RAMP)
+    cmap.set_bad(GRID)
+    fig, ax = plt.subplots(
+        figsize=(2.6 + 1.25 * len(keys), 1.8 + 0.4 * len(samples)), facecolor=SURFACE
+    )
+    mesh = ax.pcolormesh(scores, cmap=cmap, vmin=0, vmax=1, edgecolors=SURFACE, linewidth=2)
+    for i, j in np.ndindex(scores.shape):
+        value = scores[i, j]
+        text = "n/a" if value is np.ma.masked else f"{value:.2f}"
+        dark = value is not np.ma.masked and value > 0.55
+        ax.text(j + 0.5, i + 0.5, text, ha="center", va="center", fontsize=8,
+                color=SURFACE if dark else INK)  # fmt: skip
+    for j in _harness_breaks(keys):
+        ax.axvline(j, color=SURFACE, linewidth=8)
+    ax.set_xticks([j + 0.5 for j in range(len(keys))], [_wrapped_label(k) for k in keys])
+    ax.set_yticks([i + 0.5 for i in range(len(samples))], [_short(s) for s in samples])
+    ax.xaxis.tick_top()
     ax.invert_yaxis()
-    ax.set_xlim(0, 1)
-    ax.set_xlabel(
-        f"Weighted judge score (0-1); dashed line = rubric fail bound ({RUBRIC_FAIL_BOUND})",
+    ax.tick_params(colors=INK_2, labelsize=8, length=0)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+    bar = fig.colorbar(mesh, ax=ax, fraction=0.025, pad=0.02)
+    bar.outline.set_visible(False)
+    bar.ax.tick_params(colors=INK_2, labelsize=8, length=0)
+    bar.set_label(
+        f"Weighted judge score (0-1); the rubric fails below {RUBRIC_FAIL_BOUND}",
         color=INK_2,
-        fontsize=9,
+        fontsize=8,
     )
-    legend_rows = -(-len(keys) // 3)
-    ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.0), ncol=min(len(keys), 3), frameon=False,
-              fontsize=9, labelcolor=INK)  # fmt: skip
-    ax.set_title(
-        _figure_title(rows), loc="left", color=INK, fontsize=11, pad=12 + 16 * legend_rows + 14
-    )
+    ax.set_title(_figure_title(rows), loc="left", color=INK, fontsize=11, pad=36)
     fig.tight_layout()
     fig.savefig(path, dpi=160, facecolor=SURFACE)
     plt.close(fig)
 
 
-def _missing(experiment: str, sample_id: str) -> RunRow:
-    return RunRow(experiment, sample_id, False, None, None, None, "", "", 0.0, False, "")
+def _score(row: RunRow | None) -> float:
+    return float("nan") if row is None or row.judge_score is None else row.judge_score
+
+
+def _wrapped_label(key: str) -> str:
+    """A setup's label on two lines, harness first: ``"OpenCode\\n+ playbook v0.2.0"``."""
+    return _label(key).replace(" + ", "\n+ ").replace(" /", "\n/")
+
+
+def _harness_breaks(keys: list[str]) -> list[int]:
+    """The column indexes where the harness changes, for a gap between the groups."""
+    harnesses = [_bench.experiment_by_key(k).harness for k in keys]
+    return [j for j in range(1, len(keys)) if harnesses[j] != harnesses[j - 1]]
 
 
 _HARNESS_NAMES = {"opencode": "OpenCode", "claude": "Claude Code"}

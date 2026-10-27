@@ -1,0 +1,44 @@
+{
+  "experiment": "claude-playbook-v0.2.0",
+  "sample_id": "review/change-drops-part-of-request",
+  "harness": "claude",
+  "model": "qwen/qwen3.6-27b",
+  "command": [
+    "claude",
+    "-p",
+    "--setting-sources",
+    "",
+    "--strict-mcp-config",
+    "--settings",
+    "{\"autoMemoryEnabled\": false}",
+    "--model",
+    "qwen/qwen3.6-27b",
+    "--no-session-persistence",
+    "--permission-mode",
+    "acceptEdits",
+    "--allowedTools",
+    "Read,Grep,Glob,Task,Skill,Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--",
+    "{prompt}"
+  ],
+  "returncode": 0,
+  "timed_out": false,
+  "duration_seconds": 108.2,
+  "baseline_commit": "d0059b36b1f73a830a76233e858966d2ef9ed596",
+  "scratch": "~/.cache/playbook-bench/review-qwen3.6-27b/claude-playbook-v0.2.0/review-change-drops-part-of-request/scratch",
+  "setup_snapshot": "~/.cache/playbook-bench/review-qwen3.6-27b/claude-playbook-v0.2.0/review-change-drops-part-of-request/scratch__setup_baseline",
+  "main_loop_tools": [
+    "Read",
+    "Glob",
+    "Agent:Plan",
+    "Read",
+    "Read"
+  ],
+  "second_pass_ran": null,
+  "subagent_starts": {
+    "foreground": 1
+  }
+}

@@ -1,0 +1,23 @@
+Now I have everything I need. Here's the review:
+
+---
+
+### Correctness
+
+- **`src/report.py:46` — `important` —** The `--since YYYY-MM-DD` option the user requested is entirely absent. Only `--csv` was implemented. Running `main(["ledger.csv", "--since", "2024-06-01"])` raises `ArgumentError: unrecognized arguments: --since, 2024-06-01` and crashes. The stated intent asks for two features; only one is delivered.
+
+- **`src/report.py:48` — `important` —** Even if `--since` were wired to argparse, there is no filtering step between `read_ledger()` and `monthly_totals()`. The call `monthly_totals(read_ledger(args.ledger))` passes every entry regardless of date. Entries before the cutoff date will be included in the totals, producing wrong results.
+
+- **`tests/test_report.py:24-28` — `important` —** No test exercises `--since`. The test suite only validates the `--csv` path, so the incomplete implementation is not flagged. A test should write entries spanning multiple months, pass `--since`, and assert only post-cutoff rows appear in the output.
+
+### Style
+
+- **`src/report.py:3-8` — `nit` —** The new imports break alphabetical order within the stdlib group. Current order is `argparse`, `csv`, `io`, `sys`, `collections`, `datetime`; PEP 8 expects `argparse`, `collections`, `csv`, `datetime`, `io`, `sys`.
+
+### Design
+
+- **`src/report.py:30,39` — `nit` —** The `cents / 100` division and `.2f` formatting are duplicated in `format_table` and `format_csv`. A shared helper such as `cents_to_dollars(cents: int) -> str` would avoid drift if the conversion changes.
+
+Findings: 3 important, 2 nit, 0 pre-existing
+
+request changes

@@ -1,0 +1,31 @@
+{
+  "experiment": "opencode-playbook-v0.2.0",
+  "sample_id": "review/diff-old-bug-on-untouched-line",
+  "harness": "opencode",
+  "model": "openrouter/qwen/qwen3.6-27b",
+  "command": [
+    "opencode",
+    "run",
+    "--pure",
+    "--dir",
+    "~/.cache/playbook-bench/review-qwen3.6-27b/opencode-playbook-v0.2.0/review-diff-old-bug-on-untouched-line/scratch",
+    "--model",
+    "openrouter/qwen/qwen3.6-27b",
+    "--format",
+    "json",
+    "{prompt}"
+  ],
+  "returncode": 0,
+  "timed_out": false,
+  "duration_seconds": 23.0,
+  "baseline_commit": "d77b5b7576eaadc6381001c6b3e7c02db014d2b5",
+  "scratch": "~/.cache/playbook-bench/review-qwen3.6-27b/opencode-playbook-v0.2.0/review-diff-old-bug-on-untouched-line/scratch",
+  "setup_snapshot": "~/.cache/playbook-bench/review-qwen3.6-27b/opencode-playbook-v0.2.0/review-diff-old-bug-on-untouched-line/scratch__setup_baseline",
+  "main_loop_tools": [
+    "read",
+    "read",
+    "read"
+  ],
+  "second_pass_ran": null,
+  "subagent_starts": null
+}

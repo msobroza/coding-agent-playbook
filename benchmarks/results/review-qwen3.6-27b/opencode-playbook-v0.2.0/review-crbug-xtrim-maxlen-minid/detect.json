@@ -1,0 +1,48 @@
+{
+  "sample_id": "review-crbug-xtrim-maxlen-minid",
+  "experiment": "opencode-playbook-v0.2.0",
+  "defect": {
+    "description": "Xtrim does not enforce that MAXLEN and MINID are mutually exclusive and that one of them is given: xtrim('s', maxlen=10, minid='1-0') sends XTRIM s MAXLEN MINID ~ 10 1-0 and xtrim('s') sends XTRIM s ~, both invalid commands, where xtrim should raise an error (for example a DataError) before sending anything.",
+    "location": "src/streams.py (xtrim)"
+  },
+  "judge": {
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "yes",
+  "strict": 1.0,
+  "lenient": 1.0,
+  "top5": 1.0,
+  "first_match": 1,
+  "n_items": 9,
+  "votes": [
+    {
+      "detected": "yes",
+      "review_items": [
+        "No guard against both maxlen and minid being set; produces invalid XTRIM with two policy keywords",
+        "Neither maxlen nor minid leaves pieces empty; XTRIM with no policy rejected",
+        "No validation that limit > 0",
+        "No test for minid with approximate=False",
+        "No test of old positional call xtrim('events', 100)",
+        "Docstring doesn't state precondition that at least one policy must be provided",
+        "Docstring for approximate only mentions maxlen though it also affects MINID",
+        "Return type Any should be int (pre-existing)",
+        "pieces: list[Any] overly broad (pre-existing)"
+      ],
+      "item_matches": [
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence_quote": "No guard prevents both `maxlen` and `minid` being set. `xtrim(\"s\", maxlen=100, minid=\"0-0\")` produces `XTRIM s MAXLEN MINID ~ 100 0-0` with two policy keywords; Redis requires exactly one and rejects the command with `ERR syntax error`.",
+      "justification": "The review reports both halves of the defect in xtrim in src/streams.py. Nothing prevents passing both maxlen and minid, and calling it with neither produces an XTRIM with no policy. Both produce invalid commands."
+    }
+  ]
+}

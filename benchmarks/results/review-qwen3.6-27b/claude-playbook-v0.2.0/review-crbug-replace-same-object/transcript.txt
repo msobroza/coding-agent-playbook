@@ -1,0 +1,66 @@
+The subagent failed due to context limits. I've already read the diff and source files, so I'll proceed directly with the review.
+
+---
+
+Here is my review of the change:
+
+### Correctness
+
+- **`src/scene.py:37-38` — `important` — The removal of `new_m` is eager and not rolled back on failure.** `mobj_list.remove(new_m)` on line 38 runs before any search for `old_m`. If `old_m` is not in this list or any descendant group, the function raises `ValueError` on line 52 — but `new_m` is already gone.  
+  **Breaking state:** `scene.mobjects = [square, group]` where `group.submobjects = [circle]`. Call `scene.replace(Mobject("nonexistent"), square)`. The `remove` on line 38 strips `square` from the top-level list; `old_m` is never found; `ValueError` is raised. The scene is now `[group]` — `square` is lost with no way to recover it. The original code would raise the same error but leave the scene untouched.
+
+- **`src/scene.py:37-38` — `important` — `new_m` is removed from the wrong nesting level when `old_m` is found deeper.** The guard at lines 37–38 fires at every level of the recursive descent. When the search recurses into nested groups, `new_m` has already been removed from the shallower list on the way down, even if the replacement ultimately happens in a child group.  
+  **Breaking state:** `scene.mobjects = [square, group]` where `group.submobjects = [circle]`. Call `scene.replace(circle, square)`. The top-level call removes `square` from `scene.mobjects` (line 38), then recurses, finds `circle` in `group.submobjects`, and replaces it. Result: `scene.mobjects = [group]`, `group.submobjects = [square]`. The square moved from top level into the group — but the user asked to put a square *where the circle was*, not to also yank the existing top-level square away.
+
+- **`src/scene.py:37-38` — `important` — Replacing an object with itself now raises `ValueError`.** When `old_m` and `new_m` are the same object, line 38 removes it from the list before the search runs; the search then cannot find it and raises on line 52. Before this change, replacing an object with itself was a harmless no-op.  
+  **Breaking state:** `scene.mobjects = [square]`. Call `scene.replace(square, square)`. Result: `ValueError("Could not find square")`.
+
+### Nit — Design
+
+- **`src/scene.py:37-38` — `nit` — The removal-then-search approach should be search-then-remove.** The correct structure: first locate `old_m` in the BFS traversal. If found, check whether `new_m` also lives in that *same* list and remove it there. If not found, raise without touching anything. This guarantees the scene is modified only when the replacement actually succeeds, and the removal happens at the correct nesting level.
+
+### Tests
+
+The two new tests are well-targeted for the happy path the change intends to fix. However, they do not cover the three breaking scenarios above. In particular, no test exercises a failed replace after `new_m` was already removed, a same-object replace, or a case where `new_m` is at a different nesting level from `old_m`.
+
+---
+
+Findings: 3 important, 1 nit, 0 pre-existing
+
+request changes
+
+Good, I already have the file content. Let me cross-reference my findings with the subagent's and produce the final review.
+
+---
+
+## Review
+
+### Correctness
+
+**`src/scene.py:36-38` — `important` — Removal runs before the search and is not rolled back on failure.** `mobj_list.remove(new_m)` executes unconditionally (when `new_m` is present) before any attempt to locate `old_m`. If `old_m` is nowhere in the tree, the function raises `ValueError` at line 52 but the scene has already been mutated — `new_m` is gone.
+Breaking state: `scene.mobjects = [square, group]` where `group.submobjects = [circle]`. Call `scene.replace(Mobject("nonexistent"), square)`. The `remove` on line 38 strips `square` from `scene.mobjects`; `old_m` is never found; `ValueError` is raised. The scene is now `[group]` — `square` is irrecoverably lost.
+
+**`src/scene.py:36-38` — `important` — `new_m` is removed at the wrong nesting level on recursive descent.** The guard at lines 36–38 fires at every level of the recursive call. When `new_m` lives in a shallower list than `old_m`, it is yanked from that shallow list even though the replacement lands deeper.
+Breaking state: `scene.mobjects = [square, group]` where `group.submobjects = [circle]`. Call `scene.replace(circle, square)`. The top-level call removes `square` from `scene.mobjects` (now `[group]`), then recurses into the group, finds `circle`, and replaces it with `square`. Result: `scene.mobjects = [group]`, `group.submobjects = [square]`. The square moved from the top level into the group — an unintended side effect.
+
+**`src/scene.py:36-38` — `important` — Replacing an object with itself now raises `ValueError`.** When `old_m` and `new_m` are the same object, line 38 removes it before the search begins; the search cannot find it and the function raises at line 52. Before this change this was a harmless no-op.
+Breaking state: `scene.mobjects = [square]`. Call `scene.replace(square, square)`. Result: `ValueError("Could not find square")`.
+
+**`src/scene.py:38` — `important` — `list.remove()` only drops the first match, so multiple references to `new_m` in the same list leave duplicates.** If the same object legitimately appears twice in a list (e.g., `[A, B, B]`), calling `remove(B)` produces `[A, B]`; the replacement then inserts `B` back, yielding `[A, B, B]` again — the original duplicate plus the new one, or at best the original duplicate remains.
+Breaking state: `scene.mobjects = [square, label, square]`. Call `scene.replace(label, square)`. After `remove(square)`: `[label, square]`; after replacement: `[square, square]`.
+
+**`src/scene.py:37` — `nit` — The guard uses `==` (equality) rather than `is` (identity).** Currently `Mobject` has no `__eq__`, so both fall back to identity. If `__eq__` is ever added (e.g., comparing by `name`), the dedup would silently trigger on different objects that share a name. The intent is identity-based dedup, so `is` would document that contract.
+
+### Design
+
+**`src/scene.py:36-48` — `nit` — The removal should happen after the search succeeds, not before.** The correct structure: search for `old_m` first. If found, check whether `new_m` also lives in that *same* list (the one where the replacement occurs) and remove it there. If not found, raise without touching anything. This guarantees atomicity — the scene is only modified when the replacement actually succeeds — and avoids the cross-level removal problem. Cohesion: the dedup belongs with the replacement site, not at the function entry.
+
+### Tests
+
+The two new tests correctly exercise the intended happy path. No test covers the failure modes above: same-object replace, failed replace with `new_m` already on screen, multiple `new_m` references, or `new_m` at a different nesting level from `old_m`.
+
+---
+
+Findings: 4 important, 2 nit, 0 pre-existing
+
+request changes
