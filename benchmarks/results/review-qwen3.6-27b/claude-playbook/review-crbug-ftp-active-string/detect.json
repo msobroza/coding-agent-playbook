@@ -1,0 +1,41 @@
+{
+  "sample_id": "review/crbug-ftp-active-string",
+  "experiment": "claude-playbook",
+  "defect": {
+    "description": "The setting is read as settings['FEED_STORAGE_FTP_ACTIVE'] or False instead of settings.getbool(...): command-line overrides arrive as text, so -s FEED_STORAGE_FTP_ACTIVE=False (or =0) gives the non-empty string 'False', which is truthy and turns active mode on.",
+    "location": "src/feedstorage.py (from_settings)"
+  },
+  "judge": {
+    "backend": "anthropic",
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "yes",
+  "strict": 1.0,
+  "lenient": 1.0,
+  "top5": 1.0,
+  "first_match": 1,
+  "n_items": 5,
+  "votes": [
+    {
+      "detected": "yes",
+      "review_items": [
+        "feedstorage.py:27 \u2014 `or False` doesn't convert to bool; CLI '0' is truthy string enabling active mode; should use getbool()",
+        "test_feedstorage.py:17 \u2014 test passes Python bool, doesn't cover from_command_line string path",
+        "feedstorage.py:29-39 \u2014 store() lacks try/finally, ftp.quit() skipped on error (pre-existing)",
+        "feedstorage.py:32 \u2014 ftp.connect() has no timeout (pre-existing)",
+        "`or False` guard unnecessary since DEFAULTS defines the key (cleanup)"
+      ],
+      "item_matches": [
+        1,
+        0,
+        0,
+        0,
+        0
+      ],
+      "evidence_quote": "`settings[\"FEED_STORAGE_FTP_ACTIVE\"] or False` does not convert the setting to a bool, so two command-line inputs break: `-s FEED_STORAGE_FTP_ACTIVE=0` yields the string `\"0\"`, which is truthy, enabling active mode when the user explicitly disabled it;",
+      "justification": "The review flags the `or False` read in from_settings instead of getbool(). It explains that command-line overrides arrive as strings, so '0' is truthy and turns active mode on. That matches the known defect exactly."
+    }
+  ]
+}

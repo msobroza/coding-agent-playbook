@@ -6,6 +6,8 @@ Reads every ``score.json`` of one run and writes, next to them:
 - ``summary.md``: per-experiment totals, the per-sample grid and why gates failed.
 - ``overview.png``: pass rate, mean judge score and median agent time per reviewer.
 - ``judge_score_by_sample.png``: the weighted judge score of every run.
+- ``detection.png``: CRBugBench-style detection next to the pass rate, on the
+  samples with one known defect (when ``detect_runs.py`` has run).
 
 Needs only matplotlib, not the engine, so it runs outside the project venv::
 
@@ -15,8 +17,10 @@ Needs only matplotlib, not the engine, so it runs outside the project venv::
 from __future__ import annotations
 
 import argparse
+import collections
 import csv
 import json
+import re
 import statistics
 import sys
 from dataclasses import asdict, dataclass
@@ -27,14 +31,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _bench
 
 #: Categorical slots 1-5 of the reference palette, in order (validated for CVD on
-#: adjacent pairs; three slots sit below 3:1 contrast, so bars carry value labels
-#: or summary.md serves as the table view).
+#: adjacent pairs; slots below 3:1 contrast get value labels on their bars, and
+#: summary.md serves as the table view).
 SERIES_COLORS = {
     "opencode-review": "#2a78d6",
-    "playbook-v1": "#eb6834",
-    "playbook-v2": "#1baf7a",
+    "opencode-playbook-v0.1.0": "#eb6834",
+    "opencode-playbook": "#1baf7a",
     "claude-code-review": "#eda100",
-    "claude-playbook-v2": "#e87ba4",
+    "claude-playbook": "#e87ba4",
 }
 INK, INK_2, MUTED, GRID, AXIS, SURFACE = (
     "#0b0b0b", "#52514e", "#898781", "#e1e0d9", "#c3c2b7", "#fcfcfb",
@@ -58,6 +62,14 @@ class RunRow:
     timed_out: bool
     judge_model: str
     judge_error: str = ""
+    detected: str = ""  # yes / partial / no; "" when the run has no detection verdict
+    detect_strict: float | None = None
+    detect_lenient: float | None = None
+    detect_top5: float | None = None
+    first_match: int | None = None
+    n_items: int | None = None
+    second_pass_ran: bool | None = None  # current playbook text: did the bug-only pass start?
+    subagent_starts: dict[str, int] | None = None  # Claude Code: foreground/background counts
 
 
 def _layer(payload: dict, layer: str) -> bool | None:
@@ -89,18 +101,18 @@ def load_rows(run_root: Path) -> list[RunRow]:
     if not paths:
         raise FileNotFoundError(f"no score.json under {run_root}; run score_runs.py first")
     exprs = _gate_exprs()
-    rows = [_row(json.loads(p.read_text(encoding="utf-8")), exprs) for p in paths]
+    rows = [
+        _with_detection(_row(json.loads(p.read_text(encoding="utf-8")), exprs), p) for p in paths
+    ]
     order = [e.key for e in _bench.EXPERIMENTS]
     return sorted(rows, key=lambda r: (order.index(r.experiment), r.sample_id))
 
 
 def _gate_exprs() -> dict[str, str]:
-    # Key each gate by its <task>/<name> id and by the flat id runs before #302 recorded.
     return {
-        key: s.gate.expr or next(iter(s.gate.bind))  # a None expr names the sole handle
+        s.id: s.gate.expr or next(iter(s.gate.bind))  # a None expr names the sole handle
         for s in _bench.review_samples()
         if s.gate is not None
-        for key in (s.id, _bench.run_key(s.id))
     }
 
 
@@ -119,12 +131,32 @@ def _row(payload: dict, exprs: dict[str, str]) -> RunRow:
         timed_out=bool(payload["agent"]["timed_out"]),
         judge_model=payload["judge"]["model"],
         judge_error=payload.get("judge_error") or "",
+        second_pass_ran=payload["agent"].get("second_pass_ran"),
+        subagent_starts=payload["agent"].get("subagent_starts"),
     )
 
 
+def _with_detection(row: RunRow, score_path: Path) -> RunRow:
+    """``row`` plus the run's ``detect.json`` verdict, when there is one without an error."""
+    path = score_path.with_name("detect.json")
+    if not path.is_file():
+        return row
+    found = json.loads(path.read_text(encoding="utf-8"))
+    if found.get("error"):
+        row.detected = "error"
+        return row
+    row.detected = found["detected"]
+    row.detect_strict, row.detect_lenient = found["strict"], found["lenient"]
+    row.detect_top5, row.first_match, row.n_items = (
+        found["top5"],
+        found["first_match"],
+        found["n_items"],
+    )
+    return row
+
+
 def _short(sample_id: str) -> str:
-    # New runs record "review/<name>", runs before #302 "review-<name>".
-    return sample_id.removeprefix("review/").removeprefix("review-")
+    return sample_id.removeprefix("review/")
 
 
 def _label(key: str) -> str:
@@ -182,7 +214,8 @@ def write_markdown(rows: list[RunRow], path: Path, run_name: str) -> None:
             f"{int(t['rubric_passed'])}/{n} | {t['mean_judge']:.2f} | "
             f"{t['median_seconds']:.0f} s | {int(t['edited'])}/{n} |"
         )
-    lines += ["", *_set_totals(rows), "", *_sample_grid(rows), "", *_gate_failures(rows)]
+    lines += ["", *_set_totals(rows), *_detection_section(rows), *_second_pass_calls(rows)]
+    lines += ["", *_sample_grid(rows), "", *_gate_failures(rows)]
     lines += ["", *_judge_refusals(rows)] if any(r.judge_error for r in rows) else []
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -194,9 +227,7 @@ def sample_set(sample_id: str) -> str:
 
         sample_set("review/crbug-log-textio")  # "CRBugBench"
     """
-    # Runs recorded before #302 carry the flat ids (review-crbug-*).
-    crbug = sample_id.startswith(("review/crbug-", "review-crbug-"))
-    return "CRBugBench" if crbug else "original"
+    return "CRBugBench" if sample_id.startswith("review/crbug-") else "original"
 
 
 def _set_totals(rows: list[RunRow]) -> list[str]:
@@ -223,6 +254,94 @@ def _set_totals(rows: list[RunRow]) -> list[str]:
     return out
 
 
+def detection_totals(rows: list[RunRow]) -> dict[str, dict[str, float]]:
+    """Per reviewer, over its runs with a detection verdict: pass rate and detection rates."""
+    totals: dict[str, dict[str, float]] = {}
+    for key in dict.fromkeys(r.experiment for r in rows):
+        mine = [r for r in rows if r.experiment == key and r.detect_strict is not None]
+        if not mine:
+            continue
+        firsts = [r.first_match for r in mine if r.first_match is not None]
+        totals[key] = {
+            "runs": len(mine),
+            "passed": sum(r.passed is True for r in mine) / len(mine),
+            "strict": statistics.fmean(r.detect_strict or 0.0 for r in mine),
+            "lenient": statistics.fmean(r.detect_lenient or 0.0 for r in mine),
+            "top5": statistics.fmean(r.detect_top5 or 0.0 for r in mine),
+            "median_first": statistics.median(firsts) if firsts else float("nan"),
+            "mean_items": statistics.fmean(r.n_items or 0 for r in mine),
+        }
+    return totals
+
+
+def _detection_section(rows: list[RunRow]) -> list[str]:
+    """CRBugBench-style detection beside the pass rate, on the samples with a known defect."""
+    totals = detection_totals(rows)
+    if not totals:
+        return []
+    errors = [r for r in rows if r.detected == "error"]
+    out = [
+        "",
+        "## CRBugBench-style detection (samples with one known defect)",
+        "",
+        "Did the review catch the known defect? Strict counts the judge's `yes`; "
+        "lenient counts `yes` as 1 and `partial` as 0.5; top-5 is a `yes` whose first "
+        "matching comment is among the review's first five. Passed is this "
+        "benchmark's gate-and-rubric verdict on the same runs.",
+        "",
+        "| Reviewer | Runs | Passed | Strict detection | Lenient detection | Found in first 5 comments "
+        "| Median first match | Comments per review |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for key, t in totals.items():
+        first = "n/a" if t["median_first"] != t["median_first"] else f"{t['median_first']:.0f}"
+        out.append(
+            f"| {_label(key)} | {int(t['runs'])} | {t['passed']:.0%} | {t['strict']:.0%} | "
+            f"{t['lenient']:.0%} | {t['top5']:.0%} | {first} | {t['mean_items']:.1f} |"
+        )
+    if errors:
+        names = ", ".join(f"{_label(r.experiment)} / {_short(r.sample_id)}" for r in errors)
+        out += ["", f"No detection verdict (the judge refused or failed): {names}."]
+    return out
+
+
+def _second_pass_calls(rows: list[RunRow]) -> list[str]:
+    """For the current playbook text, how many runs started its second, bug-only pass."""
+    keys = [
+        k
+        for k in dict.fromkeys(r.experiment for r in rows)
+        if _bench.experiment_by_key(k).playbook_text == "head"
+    ]
+    if not keys:
+        return []
+    out = ["", "## Did the second pass run? (current playbook text)", ""]
+    for key in keys:
+        mine = [r for r in rows if r.experiment == key]
+        known = [r for r in mine if r.second_pass_ran is not None]
+        if not known:
+            out.append(f"- {_label(key)}: not recorded (run before this field)")
+            continue
+        ran = sum(r.second_pass_ran is True for r in known)
+        missing = len(mine) - len(known)
+        unknown = f" ({_runs(missing)} not recorded)" if missing else ""
+        out.append(f"- {_label(key)}: {ran} of {_runs(len(known))}{unknown}{_background(mine)}")
+    return out
+
+
+def _runs(count: int) -> str:
+    return f"{count} run" if count == 1 else f"{count} runs"
+
+
+def _background(rows: list[RunRow]) -> str:
+    """How many of ``rows``' recorded subagent starts were background tasks, as a suffix."""
+    starts = [r.subagent_starts for r in rows if r.subagent_starts is not None]
+    if not starts:
+        return ""
+    total = sum(sum(s.values()) for s in starts)
+    background = sum(s.get("background", 0) for s in starts)
+    return f"; {background} of {total} subagent starts in the background"
+
+
 def _sample_grid(rows: list[RunRow]) -> list[str]:
     keys = list(dict.fromkeys(r.experiment for r in rows))
     out = [
@@ -246,6 +365,24 @@ def _cell(row: RunRow | None) -> str:
     return f"{verdict} ({score})"
 
 
+#: The refusal code the Anthropic API puts in brackets, e.g. ``[reasoning_extraction]``.
+_REFUSAL_CODE_RE = re.compile(r"\[([a-z_]+)\]")
+
+
+def judge_error_reason(error: str) -> str:
+    """A short reason for a judge failure: the API's refusal code, else the error's lead.
+
+    Example::
+
+        judge_error_reason("... Details: `[reasoning_extraction]` ...")
+        # "refused (`reasoning_extraction`)"
+    """
+    found = _REFUSAL_CODE_RE.search(error)
+    if found:
+        return f"refused (`{found.group(1)}`)"
+    return f"{error.split(':', 1)[0]} (details in its score.json)"
+
+
 def _judge_refusals(rows: list[RunRow]) -> list[str]:
     """The runs the judge could not score, with its reason (their mean leaves them out)."""
     refused = [r for r in rows if r.judge_error]
@@ -253,18 +390,27 @@ def _judge_refusals(rows: list[RunRow]) -> list[str]:
         return []
     out = ["## Runs the judge could not score", ""]
     for r in refused:
-        out.append(f"- {_label(r.experiment)} / {_short(r.sample_id)}: {r.judge_error[-160:]}")
+        reason = judge_error_reason(r.judge_error)
+        out.append(f"- {_label(r.experiment)} / {_short(r.sample_id)}: {reason}")
     return out
 
 
 def _gate_failures(rows: list[RunRow]) -> list[str]:
+    """Each setup's failed gate checks, counted over its runs (per run: ``summary.csv``)."""
     out = ["## Why gates failed", ""]
     failed = [r for r in rows if r.gate_passed is False]
     if not failed:
         return [*out, "Every gate passed."]
-    for r in failed:
-        edits = f" (edited: {r.edited_files})" if r.edited_files else ""
-        out.append(f"- {_label(r.experiment)} / {_short(r.sample_id)}: `{r.gate_failed_by}`{edits}")
+    out += ["Failed gate checks per setup, with the number of runs each failed in:", ""]
+    for key in dict.fromkeys(r.experiment for r in failed):
+        mine = [r for r in failed if r.experiment == key]
+        checks = collections.Counter(
+            check for r in mine for check in r.gate_failed_by.split("; ") if check
+        )
+        listed = ", ".join(f"`{check}` {count}" for check, count in checks.most_common())
+        edited = sum(bool(r.edited_files) for r in mine)
+        note = f"; {_runs(edited)} edited files" if edited else ""
+        out.append(f"- {_label(key)} ({_runs(len(mine))}): {listed}{note}")
     return out
 
 
@@ -283,19 +429,44 @@ def _style_axes(ax) -> None:
     ax.set_axisbelow(True)
 
 
+Panel = tuple[str, list[float], str, float | None]
+
+
 def plot_overview(rows: list[RunRow], path: Path) -> None:
     """Three small multiples, one measure each (never two scales on one axis)."""
-    import matplotlib.pyplot as plt
-
     totals = experiment_totals(rows)
-    keys = list(totals)
-    panels = [
+    panels: list[Panel] = [
         ("Samples passed (%)", [100 * t["passed"] / t["runs"] for t in totals.values()], "{:.0f}%", 100),
         ("Mean judge score (0-1)", [t["mean_judge"] for t in totals.values()], "{:.2f}", 1),
         ("Median agent time (s)", [t["median_seconds"] for t in totals.values()], "{:.0f} s", None),
     ]  # fmt: skip
-    fig, axes = plt.subplots(1, 3, figsize=(12, 1.4 + 0.45 * len(keys)), facecolor=SURFACE)
-    for ax, (title, values, fmt, xmax) in zip(axes, panels, strict=True):
+    _plot_panels(list(totals), panels, _figure_title(rows), path)
+
+
+def plot_detection(rows: list[RunRow], path: Path) -> bool:
+    """Pass rate beside strict detection and top-5 detection; False when nothing to plot."""
+    totals = detection_totals(rows)
+    if not totals:
+        return False
+    panels: list[Panel] = [
+        ("Passed: gate and rubric (%)", [100 * t["passed"] for t in totals.values()], "{:.0f}%", 100),
+        ("Strict detection: judge says yes (%)", [100 * t["strict"] for t in totals.values()], "{:.0f}%", 100),
+        ("Found in the first 5 comments (%)", [100 * t["top5"] for t in totals.values()], "{:.0f}%", 100),
+    ]  # fmt: skip
+    runs = int(max(t["runs"] for t in totals.values()))
+    title = f"CRBugBench-style detection vs pass rate, {runs} samples with a known defect"
+    _plot_panels(list(totals), panels, f"{title}\njudge {rows[0].judge_model}", path)
+    return True
+
+
+def _plot_panels(keys: list[str], panels: list[Panel], title: str, path: Path) -> None:
+    """One horizontal bar chart per panel, one bar per reviewer, value-labelled."""
+    import matplotlib.pyplot as plt
+
+    fig, axes = plt.subplots(
+        1, len(panels), figsize=(12, 1.4 + 0.45 * len(keys)), facecolor=SURFACE
+    )
+    for ax, (panel_title, values, fmt, xmax) in zip(axes, panels, strict=True):
         _style_axes(ax)
         y = range(len(keys))
         ax.barh(y, values, height=0.56, color=[SERIES_COLORS[k] for k in keys], edgecolor=SURFACE)
@@ -305,8 +476,8 @@ def plot_overview(rows: list[RunRow], path: Path) -> None:
         ax.set_xlim(0, top)
         for yi, v in zip(y, values, strict=True):
             ax.text(v + top * 0.02, yi, fmt.format(v), va="center", color=INK, fontsize=9)
-        ax.set_title(title, loc="left", color=INK, fontsize=10)
-    fig.suptitle(_figure_title(rows), x=0.01, ha="left", color=INK, fontsize=11)
+        ax.set_title(panel_title, loc="left", color=INK, fontsize=10)
+    fig.suptitle(title, x=0.01, ha="left", color=INK, fontsize=11)
     fig.tight_layout()
     fig.savefig(path, dpi=160, facecolor=SURFACE)
     plt.close(fig)
@@ -375,7 +546,10 @@ def main(argv: list[str] | None = None) -> int:
     write_markdown(rows, run_root / "summary.md", args.run_name)
     plot_overview(rows, run_root / "overview.png")
     plot_judge_by_sample(rows, run_root / "judge_score_by_sample.png")
-    print(f"wrote summary.csv, summary.md, overview.png, judge_score_by_sample.png in {run_root}")
+    written = "summary.csv, summary.md, overview.png, judge_score_by_sample.png"
+    if plot_detection(rows, run_root / "detection.png"):
+        written += ", detection.png"
+    print(f"wrote {written} in {run_root}")
     return 0
 
 

@@ -1,0 +1,103 @@
+{
+  "sample_id": "review/rereview-earlier-findings",
+  "harness": "opencode:opencode-review",
+  "passed": false,
+  "aggregate_score": 0.0,
+  "duration_seconds": 39.1,
+  "report": {
+    "passed": false,
+    "warn_count": 0,
+    "fail_count": 0,
+    "composite": null,
+    "checks": [
+      {
+        "check_id": "gate",
+        "passed": false,
+        "score": 0.0,
+        "weight": 0.0,
+        "required": true,
+        "status": "run",
+        "subresults": []
+      },
+      {
+        "check_id": "rubric",
+        "passed": true,
+        "score": 1.0,
+        "weight": 0.0,
+        "required": true,
+        "status": "run",
+        "subresults": []
+      }
+    ],
+    "findings": []
+  },
+  "uncalibrated_judge": true,
+  "experiment": "opencode-review",
+  "agent": {
+    "experiment": "opencode-review",
+    "sample_id": "review/rereview-earlier-findings",
+    "model": "openrouter/qwen/qwen3.6-27b",
+    "command": [
+      "opencode",
+      "run",
+      "--pure",
+      "--dir",
+      "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/opencode-review/review-rereview-earlier-findings/scratch",
+      "--model",
+      "openrouter/qwen/qwen3.6-27b",
+      "--command",
+      "review",
+      "{prompt}"
+    ],
+    "returncode": 0,
+    "timed_out": false,
+    "duration_seconds": 39.1,
+    "baseline_commit": "5baca4e40d431973c0f09709f756b00f67f859a8",
+    "scratch": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/opencode-review/review-rereview-earlier-findings/scratch",
+    "setup_snapshot": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/opencode-review/review-rereview-earlier-findings/scratch__setup_baseline"
+  },
+  "judge": {
+    "backend": "anthropic",
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "judge_samples": 1
+  },
+  "judge_calls": [
+    {
+      "criterion": "The review gives each of the three earlier findings one status: remove() going negative is fixed, add() accepting a non-positive quantity is fixed, and total_cents() accepting any discount_percent is still open.",
+      "score": 1.0,
+      "n": 1,
+      "weight": 0.4
+    },
+    {
+      "criterion": "The review keeps the still-open discount finding important (blocking) and its verdict is 'request changes'.",
+      "score": 0.2,
+      "n": 1,
+      "weight": 0.3
+    },
+    {
+      "criterion": "The review does not raise the fixed remove() or add() findings again as new findings, and does not invent new bugs in the fix commit.",
+      "score": 1.0,
+      "n": 1,
+      "weight": 0.2
+    },
+    {
+      "criterion": "The review cites file and line for the still-open finding (total_cents in src/cart.py) and proposes no edits of its own to the files.",
+      "score": 1.0,
+      "n": 1,
+      "weight": 0.1
+    }
+  ],
+  "rubric_weighted_score": 0.76,
+  "gate_detail": {
+    "cart_untouched": true,
+    "tests_untouched": true,
+    "remove_fixed": true,
+    "discount_open": true,
+    "blocks": false,
+    "approves": false
+  },
+  "gate_detail_matches_engine": true,
+  "changed_files": [],
+  "graded_artifact": "transcript"
+}

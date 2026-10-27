@@ -1,0 +1,48 @@
+Now I have all the context needed. Let me run through all 8 finder angles systematically.
+
+**Angle A — Line-by-line diff scan:**
+- Lines 16-17: `!hmac.compare_digest(...) or !hmac.compare_digest(...)` — The `or` operator short-circuits. If the first `!hmac.compare_digest` is True (username doesn't match), the second comparison is never executed. This defeats the constant-time goal because an attacker can measure whether one or two comparisons ran.
+
+**Angle B — Removed-behavior auditor:**
+- The original `!=` operator handled any types implementing `__ne__`. `hmac.compare_digest` requires both args to be the same type (both str or both bytes). Non-str field values (e.g., `int(0)`, `None`) now raise `TypeError` instead of returning False.
+- The original code also performed both `!=` checks regardless of outcome (both sides of `or` are evaluated before the `or` short-circuits on their boolean results). This behavior is lost.
+
+**Angle C — Cross-file tracer:**
+- Only caller is `tests/test_auth.py`. Tests check boolean return values only. No timing tests exist, so the constant-time property has no test coverage.
+
+**Angles D–G (Reuse/Simplification/Efficiency/Altitude):**
+- The fix targets the right level (constant-time comparison at the credential check). No unnecessary complexity. `hmac.compare_digest` is the standard library idiom.
+
+**Angle H — Conventions:** No CLAUDE.md found in the repo.
+
+Now let me deduplicate and rank the findings.
+
+```json
+[
+  {
+    "file": "src/auth.py",
+    "line": 16,
+    "summary": "Short-circuiting `or` on line 16 skips the password comparison when the username doesn't match, leaking whether the username was correct via timing and defeating the constant-time goal.",
+    "failure_scenario": "Attacker sends request with wrong username: the function returns after one hmac.compare_digest call. Attacker sends request with correct username but wrong password: the function makes two calls. The timing difference reveals username correctness, enabling character-by-character brute force of the username. The fix is to evaluate both comparisons unconditionally, e.g., using `and` logic: `if not (hmac.compare_digest(user1, user2) and hmac.compare_digest(pass1, pass2))`."
+  },
+  {
+    "file": "tests/test_auth.py",
+    "line": 1,
+    "summary": "No test verifies that is_authorized runs in constant time, so the security property introduced by this change has zero test coverage.",
+    "failure_scenario": "A future refactor replaces hmac.compare_digest with != or re-introduces short-circuiting. All three existing tests still pass because they only assert boolean correctness. The timing-side-channel regression goes undetected."
+  },
+  {
+    "file": "src/auth.py",
+    "line": 16,
+    "summary": "hmac.compare_digest raises TypeError when either argument is not str or bytes, narrowing the accepted input types compared to the original != operator.",
+    "failure_scenario": "A caller constructs Credentials(password=0) or Credentials(username=None) — values that the original != check would handle (returning False for non-matching types). The new code raises TypeError instead, turning an auth rejection into an unhandled server error."
+  },
+  {
+    "file": "src/auth.py",
+    "line": 19,
+    "summary": "The comment warns about timing attacks but the implementation still leaks timing information via the short-circuiting `or` on lines 16-17, making the comment misleading.",
+    "failure_scenario": "A code reviewer reads the comment, assumes the function is fully constant-time, and skips further review. The short-circuit vulnerability on lines 16-17 goes unnoticed."
+  }
+]
+```
+[claude-code:unrecognized_model] {"model":"qwen/qwen3.6-27b","query_source":"agent:custom"}

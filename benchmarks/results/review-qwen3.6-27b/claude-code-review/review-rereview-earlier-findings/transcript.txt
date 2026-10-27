@@ -1,0 +1,44 @@
+Now I have all the context needed. Let me work through the 8 finder angles systematically.
+
+**File state summary:**
+- `src/cart.py` — 27 lines, single `Cart` class with `add()`, `remove()`, `total_cents()`
+- `tests/test_cart.py` — 39 lines, 6 test functions
+- No CLAUDE.md files exist
+- `Cart` is only imported by `tests/test_cart.py`
+
+**Angle A — Line-by-line diff scan (changed lines + enclosing functions):**
+
+1. `cart.py:26` — `total_cents()` still has no validation on `discount_percent`. The earlier review flagged this; the fix did not address it. `discount_percent=150` → `(100-150) = -50`, so `subtotal * (-50) // 100` = negative total. `discount_percent=-10` → `subtotal * 110 // 100` = charges 110%.
+
+2. `cart.py:12` — Unchanged line inside `add()`: `price, held = self.lines.get(sku, (unit_cents, 0))`. The default tuple uses the `unit_cents` from the *first* call for that SKU. Adding the same SKU at a different price silently keeps the original price.
+
+3. `cart.py:16` — Unchanged line inside `remove()`: `price, held = self.lines[sku]`. No existence check — `remove("keyboard", 1)` on an empty cart raises bare `KeyError`.
+
+4. `cart.py:9` — Unchanged: `add()` accepts any `unit_cents` including negatives. `cart.add("pen", -100, 1)` produces a negative subtotal line.
+
+**Angle B — Removed-behavior auditor:**
+
+The old `self.lines[sku] = (price, held - quantity)` is replaced by guarded logic with deletion. No invariant is lost — the old behavior's problems (negative quantities, zero-quantity residue) are properly replaced.
+
+**Angle C — Cross-file tracer:**
+
+Only caller is `tests/test_cart.py`. No external callers. The `add()` now raises for `quantity <= 0` and `remove()` raises `ValueError` for invalid quantity — both safe for existing tests. The `KeyError` on unknown SKU is a pre-existing path no test covers.
+
+**Reuse / Simplification / Efficiency:**
+
+Single-file codebase, no utility modules. No duplicated logic, no redundant computation, no closures capturing large scopes.
+
+**Altitude:**
+
+The `total_cents()` discount validation gap is a root-cause issue, not a patch opportunity — it simply needs bounds checking.
+
+**Conventions:**
+
+No CLAUDE.md files exist.
+
+**Test coverage gaps:**
+
+No test exercises `remove()` on unknown SKU (KeyError path). No test exercises `total_cents()` with extreme `discount_percent` values.
+
+[{"file": "src/cart.py", "line": 26, "summary": "total_cents() accepts any discount_percent: 150 yields a negative total, and -10 charges more than the subtotal", "failure_scenario": "cart.add('pen', 1000, 1); cart.total_cents(discount_percent=150) returns -500 (store pays customer); cart.total_cents(discount_percent=-10) returns 1100 (overcharges buyer)"}, {"file": "src/cart.py", "line": 12, "summary": "add() silently keeps the first price for a SKU when adding the same item at a different price", "failure_scenario": "cart.add('pen', 1500, 1); cart.add('pen', 2000, 1) — both units priced at 1500 cents in total_cents(), ignoring the 2000 supplied on the second call"}, {"file": "src/cart.py", "line": 16, "summary": "remove() raises bare KeyError for unknown SKUs instead of a meaningful error", "failure_scenario": "cart.remove('keyboard', 1) on an empty cart raises KeyError: 'keyboard' with no context that the item is missing"}, {"file": "src/cart.py", "line": 9, "summary": "add() accepts negative unit_cents, enabling items that reduce the cart total", "failure_scenario": "cart.add('pen', -100, 2) creates a line worth -200 cents; total_cents() returns a negative or artificially low total"}, {"file": "tests/test_cart.py", "line": 16, "summary": "No test coverage for total_cents() with discount_percent > 100 or < 0", "failure_scenario": "The negative-total and overcharge bugs in total_cents() go undetected because only discount_percent=25 is tested"}, {"file": "tests/test_cart.py", "line": 25, "summary": "No test coverage for remove() on an unknown SKU, leaving the KeyError path untested", "failure_scenario": "Calling cart.remove('nonexistent', 1) crashes with KeyError and no test catches or documents this behavior"}]
+[claude-code:unrecognized_model] {"model":"qwen/qwen3.6-27b","query_source":"agent:custom"}

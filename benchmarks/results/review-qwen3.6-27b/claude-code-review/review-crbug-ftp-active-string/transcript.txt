@@ -1,0 +1,67 @@
+I now have all the context needed. Let me run through the 8 finder angles and compile findings.
+
+**Angle A (line-by-line):** Line 27 in `feedstorage.py` — `settings["FEED_STORAGE_FTP_ACTIVE"] or False` — when CLI passes `-s FEED_STORAGE_FTP_ACTIVE=false`, the value is the string `"false"`, which is truthy, so `"false" or False` yields `"false"`, and `if self.active:` on line 34 evaluates to True, enabling active mode when the user explicitly wanted passive. The existing `Settings.getbool()` method handles this coercion but is not used.
+
+**Angle B (removed behavior):** No functional deletions — only additions. No removed guards.
+
+**Angle C (cross-file tracer):** `from_settings` is only called by tests. The `getbool()` method on `Settings` exists but is unused anywhere in the codebase — including by `from_settings`, which does raw dict access. The `from_command_line` path stores string values, so the bug is real for CLI usage.
+
+**Reuse:** `Settings.getbool()` is the existing helper for boolean settings from CLI — `from_settings` re-invents the logic with `or False` instead.
+
+**Simplification:** `or False` is dead code since `FEED_STORAGE_FTP_ACTIVE` is now in `DEFAULTS` with `False`, so `settings["FEED_STORAGE_FTP_ACTIVE"]` never returns `None`.
+
+**Efficiency:** No performance concerns.
+
+**Altitude:** Instead of using the existing `getbool()` coercion mechanism, the change adds a shallow `or False` workaround that only works for native Python bools.
+
+**Conventions:** No CLAUDE.md files found — nothing to flag.
+
+Here are the findings ranked by severity:
+
+```json
+[
+  {
+    "file": "src/feedstorage.py",
+    "line": 27,
+    "summary": "CLI string \"false\" enables active mode because from_settings does not coerce string values to bool",
+    "failure_scenario": "User runs with -s FEED_STORAGE_FTP_ACTIVE=false; from_command_line stores the string \"false\"; settings[\"FEED_STORAGE_FTP_ACTIVE\"] returns \"false\"; \"false\" or False evaluates to the truthy string \"false\"; if self.active: on line 34 is True; ftp.set_pasv(False) executes and active mode is enabled despite the user requesting passive mode. Should use settings.getbool(\"FEED_STORAGE_FTP_ACTIVE\")."
+  },
+  {
+    "file": "tests/test_feedstorage.py",
+    "line": 18,
+    "summary": "No test verifies that store() actually calls ftp.set_pasv(False) when active mode is enabled",
+    "failure_scenario": "New tests only assert the storage.active attribute is True/False, but never mock the FTP connection and call store() to verify ftp.set_pasv(False) is invoked. A future change to store() that removes or misplaces the set_pasv call would not be caught by these tests."
+  },
+  {
+    "file": "tests/test_feedstorage.py",
+    "line": 16,
+    "summary": "No test exercises the Settings.from_command_line() path where setting values are strings, missing the coercion bug",
+    "failure_scenario": "test_the_setting_turns_active_mode_on passes a native Python bool True in a dict, which works correctly. It never exercises Settings.from_command_line() with [\"FEED_STORAGE_FTP_ACTIVE=true\"], which would store the string \"true\" and expose the lack of string-to-bool coercion in from_settings."
+  },
+  {
+    "file": "src/feedstorage.py",
+    "line": 27,
+    "summary": "from_settings bypasses Settings.getbool() and re-invents bool reading with raw dict access and \"or False\"",
+    "failure_scenario": "The Settings class provides getbool() to handle CLI string values (\"true\", \"false\", \"1\", \"0\") for boolean settings, but from_settings uses settings[\"...\"] or False instead. This duplicates logic that already exists and breaks for CLI string input. Replacing with settings.getbool(\"FEED_STORAGE_FTP_ACTIVE\") fixes both the bug and the redundancy."
+  },
+  {
+    "file": "src/feedstorage.py",
+    "line": 27,
+    "summary": "\"or False\" fallback is dead code because FEED_STORAGE_FTP_ACTIVE now has a default in DEFAULTS",
+    "failure_scenario": "Since FEED_STORAGE_FTP_ACTIVE: False is in DEFAULTS, settings[\"FEED_STORAGE_FTP_ACTIVE\"] never returns None — the \"or False\" branch is unreachable. The guard should be removed and replaced with settings.getbool() for clarity and correctness."
+  },
+  {
+    "file": "src/feedstorage.py",
+    "line": 36,
+    "summary": "store() leaks FTP connection if cwd() or storbinary() raises an exception before quit()",
+    "failure_scenario": "If ftp.cwd(dirname) or ftp.storbinary() raises (e.g., directory not found, network error), ftp.quit() on line 39 is never reached and the TCP connection is leaked. The store() method was touched by this change (adding set_pasv on line 34-35), so the unchanged connection handling in this function is in scope. Should wrap in try/finally."
+  },
+  {
+    "file": "src/feedstorage.py",
+    "line": 26,
+    "summary": "from_settings reads active from settings but leaves port, username, password at hardcoded defaults — asymmetric factory",
+    "failure_scenario": "If a user later wants to configure the FTP port or credentials via project settings or CLI, from_settings will not pick them up. The factory now has a precedent of reading settings (for active) but does not extend this to other parameters, requiring a separate mechanism or future breaking change to from_settings to support it."
+  }
+]
+```
+[claude-code:unrecognized_model] {"model":"qwen/qwen3.6-27b","query_source":"agent:custom"}

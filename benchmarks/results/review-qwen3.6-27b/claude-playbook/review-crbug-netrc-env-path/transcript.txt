@@ -1,0 +1,19 @@
+Good, both agents completed. I have their findings from the task notifications. Let me now verify each finding against the source code and write the review.
+
+I already read the files earlier. Here are the merged findings from both passes, verified against the cited lines:
+
+---
+
+- **`src/netrc_auth.py:17`** — **Correctness** — **important** — `os.path.expanduser(f"~/{name}")` always prepends `~/` to the value of the `NETRC` variable, so an absolute path like `NETRC="/etc/custom.netrc"` becomes `~/etc/custom.netrc`, which `expanduser` resolves to `$HOME/etc/custom.netrc` — the wrong file entirely. The `NETRC` convention (curl, git, etc.) is that the env var holds the full path to the netrc file. The expression should either use the value as-is when it's an absolute path, or only prepend `~/` when it's a bare filename. Both passes found this.
+
+- **`src/netrc_auth.py:12`** — **Correctness** — **important** — `os.environ.get("NETRC")` returns `""` (empty string) when `NETRC=""`, which is not `None`, so `netrc_locations` becomes `("",)`. Line 17 then computes `expanduser("~/")` which is the home directory; `os.path.exists()` returns `True` for it, and the code tries to pass a directory to `netrc()` on line 29 — it raises `OSError`, which is caught and returns `None`. An empty `NETRC=""` should fall back to `NETRC_FILES`. Both passes found this.
+
+- **`tests/test_netrc_auth.py:34`** — **Test coverage** — **nit** — The new test only exercises `NETRC=".netrc-ci"` (a relative name), which happens to work with the `~/` prefix on line 17. No test sets `NETRC` to an absolute path like `/tmp/.netrc`, so the bug on line 17 goes undetected. First pass found this.
+
+- **`tests/test_netrc_auth.py:1`** — **Test coverage** — **pre-existing** — No test exercises `raise_errors=True` (the parameter on line 9, the re-raise on lines 31–32). The exception-re-raise path is untested. First pass found this.
+
+Findings: 2 important, 1 nit, 1 pre-existing
+
+request changes
+
+Both agents completed, and the review is already finished above. The findings from both passes were merged, verified against the source, and the verdict is **request changes** (2 important findings: the `~/` prefix on absolute paths, and the empty-string `NETRC=""` case).

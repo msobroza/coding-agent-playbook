@@ -1,0 +1,16 @@
+Both passes identified the syntax error. The first pass additionally caught the short-circuit timing leak. Let me verify the short-circuit claim against the cited lines.
+
+Lines 16-17 use `or` — Python short-circuits `or`, so if the first `not hmac.compare_digest(...)` evaluates to `True`, the password comparison is skipped entirely. This is a real issue even after fixing the `!` syntax.
+
+- **Correctness.**
+  - `src/auth.py:16` — `!` is not a valid Python negation operator; Python uses `not`. The module `SyntaxError`s on import and never loads. The same applies on line 17. (**important**)
+
+- **Security.**
+  - `src/auth.py:16-17` — Even after fixing `!` to `not`, Python's `or` short-circuits: when the username doesn't match, `hmac.compare_digest` on the password is never reached. An attacker who knows the correct username can measure the timing difference to determine whether only the username comparison ran or both, leaking whether the username was correct. To preserve constant-time behavior, both comparisons must evaluate regardless of the first result — e.g., store each in a temporary, then `if not (user_ok and pass_ok)`. (**important**)
+
+- **Readability.**
+  - `src/auth.py:16-17` — The double-negative logic (`not match or not match → False`) is harder to follow than the positive form: `hmac.compare_digest(u1, u2) and hmac.compare_digest(p1, p2) → True`. Consider inverting to return `True` on the positive match path. (**nit**)
+
+Findings: 2 important, 1 nit, 0 pre-existing
+
+request changes

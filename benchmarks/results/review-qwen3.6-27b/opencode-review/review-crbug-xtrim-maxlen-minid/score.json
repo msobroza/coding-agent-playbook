@@ -1,0 +1,96 @@
+{
+  "sample_id": "review/crbug-xtrim-maxlen-minid",
+  "harness": "opencode:opencode-review",
+  "passed": false,
+  "aggregate_score": 0.0,
+  "duration_seconds": 140.7,
+  "report": {
+    "passed": false,
+    "warn_count": 0,
+    "fail_count": 0,
+    "composite": null,
+    "checks": [
+      {
+        "check_id": "gate",
+        "passed": false,
+        "score": 0.0,
+        "weight": 0.0,
+        "required": true,
+        "status": "run",
+        "subresults": []
+      },
+      {
+        "check_id": "rubric",
+        "passed": true,
+        "score": 1.0,
+        "weight": 0.0,
+        "required": true,
+        "status": "run",
+        "subresults": []
+      }
+    ],
+    "findings": []
+  },
+  "uncalibrated_judge": true,
+  "experiment": "opencode-review",
+  "sample_version": 1,
+  "agent": {
+    "experiment": "opencode-review",
+    "sample_id": "review/crbug-xtrim-maxlen-minid",
+    "model": "openrouter/qwen/qwen3.6-27b",
+    "command": [
+      "opencode",
+      "run",
+      "--pure",
+      "--dir",
+      "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/opencode-review/review-crbug-xtrim-maxlen-minid/scratch",
+      "--model",
+      "openrouter/qwen/qwen3.6-27b",
+      "--command",
+      "review",
+      "{prompt}"
+    ],
+    "returncode": 0,
+    "timed_out": false,
+    "duration_seconds": 140.7,
+    "baseline_commit": "a8eccada6e653de0fcc1aa0fd82b66c5f9b3eea9",
+    "scratch": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/opencode-review/review-crbug-xtrim-maxlen-minid/scratch",
+    "setup_snapshot": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/opencode-review/review-crbug-xtrim-maxlen-minid/scratch__setup_baseline"
+  },
+  "judge": {
+    "backend": "anthropic",
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "judge_samples": 1
+  },
+  "judge_calls": [
+    {
+      "criterion": "The review reports that xtrim does not enforce that MAXLEN and MINID are mutually exclusive and that one of them is given: xtrim('s', maxlen=10, minid='1-0') sends XTRIM s MAXLEN MINID ~ 10 1-0 and xtrim('s') sends XTRIM s ~, both invalid commands, where xtrim should raise an error (for example a DataError) before sending anything.",
+      "score": 0.9,
+      "n": 1,
+      "weight": 0.6
+    },
+    {
+      "criterion": "The review treats that bug as blocking (important, not a nit or an open question), cites its file and line in src/streams.py (xtrim), and its verdict is 'request changes'.",
+      "score": 0.5,
+      "n": 1,
+      "weight": 0.2
+    },
+    {
+      "criterion": "The review does not invent bugs: anything else it raises is a real problem in the code shown, and it does not ask to rewrite code that works.",
+      "score": 0.8,
+      "n": 1,
+      "weight": 0.2
+    }
+  ],
+  "rubric_weighted_score": 0.8,
+  "gate_detail": {
+    "streams_untouched": true,
+    "tests_untouched": true,
+    "blocks": false,
+    "approves": false
+  },
+  "gate_detail_matches_engine": true,
+  "changed_files": [],
+  "graded_artifact": "transcript"
+}

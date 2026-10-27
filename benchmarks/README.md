@@ -3,108 +3,113 @@
 Live, paid runs of the engine's eval samples against real harnesses and models.
 Nothing here runs in CI.
 
-## Review: Qwen3.6 27B in OpenCode and Claude Code, five reviewers
+## Review benchmark
 
-Grades the eval samples of the core `review` prompt (`prompt_id = "review"`):
-the six original `review/*` samples and the eight `review/crbug-*` samples that
-paraphrase bugs from the CRBugBench code-review benchmark (see
-`catalog/core/eval_samples/ATTRIBUTIONS.md`). `summary.md` reports the two sets
-apart as well as together. Each runs under five reviewer setups, all driving the
-same model:
+Grades code reviewers on the 14 eval samples of the core `review` prompt: six
+original `review/*` samples and eight `review/crbug-*` samples that paraphrase
+bugs from the CRBugBench benchmark (see `catalog/core/eval_samples/ATTRIBUTIONS.md`).
+Every setup drives Qwen3.6 27B; Opus 5.5 judges.
 
-| Key | Harness | Reviewer | What the agent receives |
-|---|---|---|---|
-| `opencode-review` | OpenCode | built-in `/review` | the sample's request only, as `opencode run --command review "<request>"` |
-| `playbook-v1` | OpenCode | playbook review, edition `v0.1.0` (the former prompt set v1) | the `review` prompt of edition `v0.1.0`, built from the tag and rendered as `playbook eval --run` renders a sample graded on that edition, + the request |
-| `playbook-v2` | OpenCode | playbook review, current text (the former prompt set v2) | the rendered current `review` prompt + the request, as `playbook eval --run --edition head` builds it |
-| `claude-code-review` | Claude Code | built-in `/code-review` | the request as the command's arguments: `claude -p "/code-review <request>"` |
-| `claude-playbook-v2` | Claude Code | playbook review, current text | the rendered current prompt + the request, as for `playbook-v2` |
+| Setup | Harness | Reviewer |
+|---|---|---|
+| `opencode-review` | OpenCode | built-in `/review`, given the request |
+| `opencode-playbook-v0.1.0` | OpenCode | the playbook's `review` prompt at release v0.1.0 |
+| `opencode-playbook` | OpenCode | the playbook's current `review` prompt |
+| `claude-code-review` | Claude Code | built-in `/code-review`, given the request |
+| `claude-playbook` | Claude Code | the playbook's current `review` prompt |
 
-- **Harnesses:** OpenCode 1.19.4 (`opencode run --pure --dir <scratch>`) and
-  Claude Code 2.1.292 (`claude -p --bare --permission-mode acceptEdits`, with
-  read, search, git, Python and pytest allowed).
-- **Agent model:** Qwen3.6 27B through OpenRouter: `openrouter/qwen/qwen3.6-27b`
-  in OpenCode, and `qwen/qwen3.6-27b` in Claude Code through OpenRouter's
-  Anthropic-compatible API (`ANTHROPIC_BASE_URL=https://openrouter.ai/api`).
-  Every Claude Code model alias (subagents, the background model) maps to the
-  same model, so no Anthropic model is called.
-- **Judge:** the engine's `LLMJudge`, Opus 5.5 at medium effort
-  (`claude -p --bare --model claude-opus-5-5 --effort medium`, Anthropic API key),
-  one judge sample per criterion. `judge_openrouter.py` reaches the same model
-  through OpenRouter when the Anthropic key cannot be used.
-- **Scoring:** the engine's own `materialize` / `capture` / `score`, with full
-  scoring (no fail-fast), so every run gets both its deterministic `[gate]` and
-  its judged `[rubric]`. A sample passes when its `[verdict]` expression holds
-  (`gate and rubric` for every review sample). The built-in reviewers do not
-  write the playbook's one-line verdict, so they lose the gate's verdict check by
-  design; compare them on the judge score.
+Results: [`results/review-qwen3.6-27b/summary.md`](results/review-qwen3.6-27b/summary.md),
+with charts beside it. Each run's `prompt.txt` holds exactly what the agent
+received. The built-in and v0.1.0 runs do not depend on the current prompt and
+were recorded first; the two current-prompt setups were recorded on the text
+they show.
 
-```mermaid
-flowchart LR
-  S[review sample] --> M[materialize setup/ in ~/.cache/playbook-bench]
-  M --> A["opencode run / claude -p (per experiment)"]
-  A --> T[transcript.txt + agent.json]
-  T --> G["score(): gate + LLM judge"]
-  G --> R[score.json]
-  R --> P[plot_results.py: summary + charts]
-```
+### Metrics
+
+- **Passed and judge score.** The engine's own `score`, without fail-fast: a
+  run passes when its deterministic gate and its judged rubric both pass. The
+  built-in reviewers write no one-line verdict, so they fail the gate's verdict
+  check by design; compare them on the judge score.
+- **Detection** (`review/crbug-*` only), as CRBugBench measures it: did the
+  review catch the sample's known defect (`yes`, `partial`, `no`), and which
+  comment reports it. *Strict* counts `yes`, *lenient* counts `partial` as 0.5,
+  *top-5* is a `yes` among the first five comments. The known defect is the
+  sample's highest-weight rubric criterion. Unlike the paper: one judge model,
+  our own prompt wording, and small paraphrased fixtures.
+- **Second pass.** For the current prompt, whether the run started its
+  bug-only second pass (`second_pass_ran` in `agent.json`).
 
 ### Run it
+
+From the repo root, with the project venv active and `OPENROUTER_API_KEY` plus
+`ANTHROPIC_API_KEY` (or `ANT_API_KEY`) in the nearest `.env`:
 
 ```bash
 python benchmarks/run_agents.py --workers 3
 ```
 
 ```bash
-python benchmarks/score_runs.py --judge-backend anthropic
+python benchmarks/score_runs.py
+```
+
+```bash
+python benchmarks/detect_runs.py
 ```
 
 ```bash
 uv run --no-project --with matplotlib python benchmarks/plot_results.py
 ```
 
-Run them from the repo root with the project venv active. Keys come from the nearest
-`.env` at or above the repo root: `OPENROUTER_API_KEY` for the agent (and the
-OpenRouter judge) and `ANT_API_KEY` for the Anthropic judge. Each phase skips
-runs it already finished; `--force` redoes them.
+Each script skips runs it already finished (`--force` redoes them) and takes
+`--run-name`. `run_agents.py` also takes `--experiments` and `--samples`, and
+`score_runs.py --stub-judge` dry-runs the pipeline for free.
 
-### Deviations from `playbook eval --run`
+```mermaid
+flowchart LR
+  S[review sample] --> A["opencode run / claude -p"]
+  A --> T[transcript.txt + agent.json]
+  T --> G["score_runs.py: gate + judge"] --> P[plot_results.py]
+  T --> D["detect_runs.py: detection"] --> P
+```
 
-- `--dir <scratch>` is passed to `opencode run`. OpenCode 1.19 takes its project
-  directory from the inherited `PWD` rather than the process cwd, so the shipped
-  `OpenCodeRunner` (cwd only) reviews the caller's checkout instead of the sample.
-- Working trees live outside the repo (`~/.cache/playbook-bench`, or
-  `BENCH_WORK_ROOT`), so no `AGENTS.md`/`CLAUDE.md` above them leaks into the run.
-- The agent runs with `NO_COLOR=1`, `OPENCODE_DISABLE_CLAUDE_CODE=1` (no
-  `~/.claude` rules or skills) and `PYTHONDONTWRITEBYTECODE=1`, and the scratch
-  repo's `.git/info/exclude` lists tool caches. The judge grades the diff when
-  there is one, so a stray `__pycache__` would otherwise replace the review text.
-- Transcripts are saved with terminal escape codes stripped, and the committed
-  results show the home directory as `~` (`score_runs.py` expands it back).
-- The judge is the engine's `LLMJudge` with an explicit command. The engine's
-  `[evals.judge]` config sets the judge's model and sample count, but not the
-  effort level or `--bare` isolation this benchmark needs.
-- Both phases drop a parent Claude Code session's variables (`ANTHROPIC_*`,
-  `CLAUDE_*`, `CLAUDECODE`) before spawning anything. Run from inside a Claude
-  Code session, the judge's `claude -p` otherwise inherits `ANTHROPIC_BASE_URL`
-  and bills the parent app's account instead of the `.env` key.
-- Claude Code runs in `--bare` mode, so the developer's hooks, plugins,
-  `CLAUDE.md` and auto-memory stay out; built-in skills such as `/code-review`
-  still resolve. Its OpenRouter settings are passed to each Claude Code run only,
-  never to OpenCode runs in the same batch. Claude Code does not know the model
-  and logs an `unrecognized_model` line on stderr, which ends up at the end of
-  those transcripts.
+### How runs are isolated
+
+- **Working trees outside the repo** (`~/.cache/playbook-bench`), so no
+  `AGENTS.md` or `CLAUDE.md` above them leaks in. OpenCode also gets
+  `--dir <scratch>`: it takes its project directory from `PWD`, not the cwd.
+- **Claude Code without the developer's setup:** an empty `CLAUDE_CONFIG_DIR`
+  per run, `--setting-sources ""`, `--strict-mcp-config` and auto-memory off.
+  Not `--bare`, which hides the Agent and Skill tools the review needs. It
+  reaches Qwen through OpenRouter's Anthropic-compatible API, with every model
+  alias mapped to it.
+- **No parent-session variables:** every script drops `ANTHROPIC_*`, `CLAUDE_*`
+  and `CLAUDECODE` first. Inherited, they would bill the parent Claude Code
+  app instead of the `.env` key.
+- **The judge** is the engine's `LLMJudge` running
+  `claude -p --bare --model claude-opus-5-5 --effort medium`.
+
+### Known issues
+
+- **Claude Code starts some subagents in the background on its own** (15 of 28
+  in the last run, though the model never asked). Each finished background task
+  adds a turn, so the transcript joins every turn's answer.
+- **One trial per sample is noisy.** A second `opencode-playbook` trial passed
+  12 of 14 against this folder's 8 of 14; compare setups on the judge score and
+  detection, not on one or two passes.
+- **OpenCode ends a run on a mistyped path.** Qwen sometimes writes the scratch
+  path with a stray space (`/Users/me/. cache/...`); OpenCode treats it as an
+  outside directory, auto-rejects the access and stops (3 of 28 runs).
+- **The judge can refuse a transcript** (`[reasoning_extraction]`). The run is
+  left unscored, never rewritten.
 
 ### Layout
 
 ```
 benchmarks/results/<run-name>/
-  <experiment>/<sample>/prompt.txt       what the agent received
-  <experiment>/<sample>/transcript.txt   what it answered (stdout + stderr)
-  <experiment>/<sample>/agent.json       command, return code, duration
-  <experiment>/<sample>/score.json       engine report + judge settings
-  summary.csv, summary.md, *.png         written by plot_results.py
+  <setup>/<sample>/prompt.txt       what the agent received
+  <setup>/<sample>/transcript.txt   what it answered
+  <setup>/<sample>/agent.json       command, timing, tool calls
+  <setup>/<sample>/score.json       gate, rubric and judge details
+  <setup>/<sample>/detect.json      detection verdict (review/crbug-* only)
+  summary.md, summary.csv, *.png    written by plot_results.py
 ```
-
-`<sample>` is the sample id with its slash flattened (`review/spot-the-bug` is
-stored as `review-spot-the-bug`), so every sample keeps one directory.

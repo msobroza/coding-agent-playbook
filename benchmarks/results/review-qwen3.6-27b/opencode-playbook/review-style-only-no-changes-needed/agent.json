@@ -1,0 +1,30 @@
+{
+  "experiment": "opencode-playbook",
+  "sample_id": "review/style-only-no-changes-needed",
+  "harness": "opencode",
+  "model": "openrouter/qwen/qwen3.6-27b",
+  "command": [
+    "opencode",
+    "run",
+    "--pure",
+    "--dir",
+    "~/.cache/playbook-bench/review-qwen3.6-27b/opencode-playbook/review-style-only-no-changes-needed/scratch",
+    "--model",
+    "openrouter/qwen/qwen3.6-27b",
+    "--format",
+    "json",
+    "{prompt}"
+  ],
+  "returncode": 0,
+  "timed_out": false,
+  "duration_seconds": 10.6,
+  "baseline_commit": "b41fdf7aba5d79aac0eec30f78e3d317370fa258",
+  "scratch": "~/.cache/playbook-bench/review-qwen3.6-27b/opencode-playbook/review-style-only-no-changes-needed/scratch",
+  "setup_snapshot": "~/.cache/playbook-bench/review-qwen3.6-27b/opencode-playbook/review-style-only-no-changes-needed/scratch__setup_baseline",
+  "main_loop_tools": [
+    "read",
+    "glob"
+  ],
+  "second_pass_ran": false,
+  "subagent_starts": null
+}

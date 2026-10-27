@@ -1,0 +1,45 @@
+Here are the findings from the review:
+
+```json
+[
+  {
+    "file": "src/report.py",
+    "line": 43,
+    "summary": "Missing --since YYYY-MM-DD option: user requested two features but only --csv was implemented",
+    "failure_scenario": "User runs `python -m src.report ledger.csv --since 2024-06-01` expecting entries before June 2024 to be filtered out; argparse raises `unrecognized arguments: --since 2024-06-01` and the program exits with error code 2. No date filter argument is registered, no filtering logic exists in read_ledger or main, and no test covers this feature."
+  },
+  {
+    "file": "src/report.py",
+    "line": 50,
+    "summary": "CSV path uses sys.stdout.write() which silently drops trailing newline if format_csv ever omits it, unlike table path which uses print()",
+    "failure_scenario": "If format_csv is modified to use a different lineterminator or to strip the final newline (e.g., refactoring the csv.writer setup), sys.stdout.write() outputs the string as-is with no trailing newline, causing the shell prompt to merge with the last line of output. The table path cannot have this problem because print() always appends a newline."
+  },
+  {
+    "file": "src/report.py",
+    "line": 46,
+    "summary": "args.csv attribute name is identical to the csv module name, creating maintenance confusion",
+    "failure_scenario": "A developer scanning main() sees `args.csv` and the `import csv` at the top and momentarily conflates the boolean flag with the module reference. Any future refactoring that attempts `csv = args.csv` or similar would silently break format_csv() which depends on the module-level `csv` binding. Renaming the flag to `--format-csv` (stored as `args.format_csv`) eliminates the ambiguity."
+  },
+  {
+    "file": "tests/test_report.py",
+    "line": 24,
+    "summary": "No integration test exercises the table (default) path through main()",
+    "failure_scenario": "The only test calling main() is `test_main_prints_csv_with_the_flag`, which exercises the --csv branch. A future change that breaks the `print(format_table(totals))` path in main() (e.g., swapping the if/else branches or removing the else) would go undetected by integration tests."
+  },
+  {
+    "file": "src/report.py",
+    "line": 35,
+    "summary": "format_csv buffers the entire CSV output in an io.StringIO before writing to stdout",
+    "failure_scenario": "For a ledger file producing thousands of unique months, the complete CSV string (header + all rows) is held in memory as a single Python str object. Streaming directly to sys.stdout via csv.writer(sys.stdout, ...) would produce the same output with O(1) memory regardless of row count."
+  }
+]
+```
+
+**Summary of key findings:**
+
+- **Finding 1 (Critical):** The `--since YYYY-MM-DD` feature the user explicitly requested is entirely absent — no argparse entry, no filtering logic, no test. This is the most severe finding.
+- **Finding 2 (Robustness):** The CSV and table output paths use different newline mechanisms (`sys.stdout.write` vs `print`), making the CSV path fragile to future changes in `format_csv`.
+- **Finding 3 (Maintainability):** `args.csv` and `import csv` share the same identifier, confusing readers and inviting accidental shadowing.
+- **Finding 4 (Test coverage):** Only the CSV branch of `main()` has an integration test; the default table path has none.
+- **Finding 5 (Efficiency):** `io.StringIO` buffers all CSV output in memory rather than streaming.
+[claude-code:unrecognized_model] {"model":"qwen/qwen3.6-27b","query_source":"agent:custom"}

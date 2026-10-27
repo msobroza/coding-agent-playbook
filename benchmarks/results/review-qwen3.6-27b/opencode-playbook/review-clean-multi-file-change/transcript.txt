@@ -1,0 +1,25 @@
+Now let me verify the NaN/inf finding:
+
+
+Now let me verify one more edge case — integer-conversion-failure for very large weights:
+
+
+- **Correctness**
+
+  - `src/shipping.py:13` — `important` — `weight <= 0` is `False` for `float('nan')` and `float('inf')`, so non-finite values bypass validation. `quote_cents(float('nan'), "kg")` raises `ValueError: cannot convert float NaN to integer` from `math.ceil()` with no context about the input weight or unit. Similarly `quote_cents(float('inf'), "kg")` raises `OverflowError`.
+
+  - `src/units.py:15` — `nit` — `to_kilograms(-5, "lb")` returns `-2.26796185`. Negative weight is silently accepted; the caller (`quote_cents`) validates before converting, so this only matters if `to_kilograms` is called directly.
+
+- **Failure modes**
+
+  - `src/units.py:4` — `nit` — `KILOGRAMS_PER_UNIT` is a mutable `dict` exposed at module level. Any importer can mutate it (`from src.units import KILOGRAMS_PER_UNIT; KILOGRAMS_PER_UNIT["oz"] = 0.028`) and silently corrupt all subsequent conversions. Consider returning a `frozendict`-like view or documenting it as internal.
+
+- **Readability**
+
+  - `src/shipping.py:14` — `nit` — The error message `f"weight must be positive, got {weight}"` omits the `unit` parameter. `quote_cents(-1, "lb")` produces `"weight must be positive, got -1"` — the author can't tell from the message that the weight was in pounds.
+
+  - `src/units.py:13` — `nit` — `sorted(KILOGRAMS_PER_UNIT)` assumes all keys are comparable strings. If a future contributor adds a non-string key (e.g., `KILOGRAMS_PER_UNIT[0] = 1.0`), the error path raises `TypeError` instead of `ValueError`, masking the original programming error. Use `sorted(KILOGRAMS_PER_UNIT.keys())` for clarity, or pin the expected defaults in the error string.
+
+Findings: 1 important, 4 nit, 0 pre-existing
+
+request changes

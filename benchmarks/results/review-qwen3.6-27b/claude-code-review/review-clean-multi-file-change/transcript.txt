@@ -1,0 +1,81 @@
+Now I have all the context I need. Let me systematically work through the 8 finder angles on the diff.
+
+**Angle A — Line-by-line diff scan:** I have all four files read. Let me examine each changed line carefully.
+
+**Angle B — Removed-behavior auditor:** The original code used `weight` directly (assumed kg). Now it goes through `to_kilograms(weight, unit)`. The weight validation (`weight <= 0`) is preserved. The ceiling logic is preserved. The original docstring explicitly said "kilograms" — the new one says "unit" without listing supported values. The original signature was self-documenting about the unit; now it's not.
+
+**Angle C — Cross-file tracer:** I already grepped — only test files call `quote_cents`, and only `shipping.py` calls `to_kilograms`. Existing calls without the `unit` arg still work due to the default `"kg"`.
+
+**Reuse / Simplification / Efficiency:** The new module is clean, minimal, and doesn't duplicate anything. No redundant computation, no unnecessary state.
+
+**Altitude:** The change addresses the stated requirement directly. It doesn't patch a symptom — it adds a proper conversion layer.
+
+**Conventions:** No CLAUDE.md in the project.
+
+Now let me compile all candidates across all angles, deduplicate, and rank by severity.
+
+Key findings from the analysis:
+
+1. **Validation order (weight before unit)**: `quote_cents(-1, "oz")` raises "weight must be positive" — masking the unknown unit. The user gets a misleading error when the real problem might be the unit.
+
+2. **Type hint too broad**: `unit: str` should be `Literal["kg", "lb"]` so type checkers catch typos at call sites.
+
+3. **Docstring doesn't list supported units**: The original docstring said "kilograms" — unambiguous. The new docstring says "unit" without listing accepted values. Caller has no way to know what's valid without reading the source.
+
+4. **No test for negative weight with non-default unit**: Existing tests don't cover `quote_cents(-1, "lb")` — leaves the validation-order behavior untested.
+
+5. **Mutable module-level dict**: `KILOGRAMS_PER_UNIT` is exposed as a mutable dict; any module could mutate it and cause silent mispricing.
+
+6. **Case sensitivity not documented**: "LB" or "kg" (lowercase) are rejected with an opaque "unknown unit" error. Users typing naturally might hit this.
+
+7. **`from None` suppresses diagnostic context**: If `KeyError` somehow arises from a bug (not just user input), the original traceback is lost. Minor but reduces debuggability.
+
+Let me produce the final JSON output.
+
+```json
+[
+  {
+    "file": "src/shipping.py",
+    "line": 13,
+    "summary": "Weight validation fires before unit validation, masking invalid unit errors",
+    "failure_scenario": "quote_cents(-1, 'oz') raises 'weight must be positive, got -1' — the caller never learns that 'oz' is an unsupported unit, getting a misleading error that attributes the failure to the weight value"
+  },
+  {
+    "file": "src/shipping.py",
+    "line": 11,
+    "summary": "unit parameter type hint is str instead of Literal, so type checkers won't catch invalid values",
+    "failure_scenario": "quote_cents(5, 'lbs') passes type checking (str is accepted) but raises a runtime ValueError — callers writing 'lbs' or 'pound' get no static warning; Literal['kg', 'lb'] would catch this at call sites"
+  },
+  {
+    "file": "src/shipping.py",
+    "line": 12,
+    "summary": "Docstring says 'unit' without listing supported values, unlike the original which explicitly said 'kilograms'",
+    "failure_scenario": "A caller reading only the docstring has no way to know the accepted unit values — the original docstring ('weight kilograms') was self-documenting; the new docstring ('weight in unit') requires reading the source or trial-and-error to discover valid units"
+  },
+  {
+    "file": "tests/test_shipping.py",
+    "line": 19,
+    "summary": "No test covers negative weight with a non-default unit, leaving the weight-then-unit validation order untested",
+    "failure_scenario": "quote_cents(-1, 'lb') is untested — if the validation order were accidentally reversed (e.g., to_kilograms called before the weight check), existing tests would pass but the behavior for negative-pound inputs would change silently"
+  },
+  {
+    "file": "src/units.py",
+    "line": 4,
+    "summary": "KILOGRAMS_PER_UNIT is a mutable module-level dict exposed to any importer, allowing silent mispricing if mutated",
+    "failure_scenario": "Any module importing src.units could run KILOGRAMS_PER_UNIT['lb'] = 0.5, causing all subsequent pound conversions to use the wrong factor with no notification — the dict should be frozen or reconstructed at import time to prevent accidental mutation"
+  },
+  {
+    "file": "src/units.py",
+    "line": 10,
+    "summary": "Case-sensitive unit matching rejects common variants like 'LB' or 'KG' with an opaque error",
+    "failure_scenario": "quote_cents(5, 'LB') raises 'unknown weight unit' — users naturally typing 'LB' (standard abbreviation) get rejected without the error suggesting the correct lowercase form or explaining case sensitivity"
+  },
+  {
+    "file": "src/units.py",
+    "line": 42,
+    "summary": "Exception chaining suppressed with 'from None' in to_kilograms, losing diagnostic context if KeyError arises from a bug",
+    "failure_scenario": "If a future code change corrupts KILOGRAMS_PER_UNIT (e.g., deletes the 'kg' key), the KeyError traceback is discarded — debugging would show only the ValueError with no indication the lookup table itself is broken"
+  }
+]
+```
+[claude-code:unrecognized_model] {"model":"qwen/qwen3.6-27b","query_source":"agent:custom"}

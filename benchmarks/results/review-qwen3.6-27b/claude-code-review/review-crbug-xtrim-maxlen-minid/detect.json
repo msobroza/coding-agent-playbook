@@ -1,0 +1,43 @@
+{
+  "sample_id": "review/crbug-xtrim-maxlen-minid",
+  "experiment": "claude-code-review",
+  "defect": {
+    "description": "Xtrim does not enforce that MAXLEN and MINID are mutually exclusive and that one of them is given: xtrim('s', maxlen=10, minid='1-0') sends XTRIM s MAXLEN MINID ~ 10 1-0 and xtrim('s') sends XTRIM s ~, both invalid commands, where xtrim should raise an error (for example a DataError) before sending anything.",
+    "location": "src/streams.py (xtrim)"
+  },
+  "judge": {
+    "backend": "anthropic",
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "yes",
+  "strict": 1.0,
+  "lenient": 1.0,
+  "top5": 1.0,
+  "first_match": 1,
+  "n_items": 6,
+  "votes": [
+    {
+      "detected": "yes",
+      "review_items": [
+        "No mutual exclusivity guard on MAXLEN and MINID; both set yields invalid command",
+        "No validation that at least one of MAXLEN/MINID is provided; xtrim('events') sends 'XTRIM events ~'",
+        "'~' token appended even when no strategy keyword present",
+        "No test for passing both maxlen and minid",
+        "No test for calling xtrim with neither maxlen nor minid",
+        "minid appended as str while other tokens are bytes"
+      ],
+      "item_matches": [
+        1,
+        1,
+        1,
+        0,
+        0,
+        0
+      ],
+      "evidence_quote": "No mutual exclusivity guard on MAXLEN and MINID \u2014 both can be set simultaneously, producing an invalid Redis command.",
+      "justification": "The review flags in src/streams.py xtrim that both maxlen and minid can be set, producing 'XTRIM events MAXLEN MINID ~ 100 0-0'. It also flags that neither can be given, producing 'XTRIM events ~'. Together these match the known defect."
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+Now I have both passes and have verified the key findings against the source. Let me compile the review.
+
+---
+
+## Review
+
+### Correctness
+
+**`src/forms.py:43` — `important`, new** — `kwargs.pop("method", form.method).upper()` raises `AttributeError` when the caller explicitly passes `method=None`. Because the key `"method"` exists in `kwargs` with value `None`, `pop` returns `None` (not the fallback `form.method`), and `None.upper()` crashes. The original code survived this: it passed `None` to `cls(...)`, and `Request.__post_init__` normalized it via `(self.method or "GET").upper()`. Breaking input: `FormRequest.from_form(form, method=None)`.
+
+**`src/forms.py:43` — `important`, new** — The same `.upper()` also crashes when `form.method` is `None` and no `method` kwarg is passed. `Form.method` is typed `str`, but type hints aren't enforced at runtime on frozen dataclasses, so `Form(action="/x", method=None)` constructs successfully. Breaking input: `FormRequest.from_form(Form(action="/x", method=None))`.
+
+### Failure Modes
+
+**`src/forms.py:33` — `nit`, new** — `valid_form_methods = ["GET", "POST"]` is a mutable class-level list shared by every instance and subclass. `FormRequest.valid_form_methods.append("PUT")` anywhere in the codebase silently corrupts the check for all future calls. Use a tuple `("GET", "POST")` or `frozenset({"GET", "POST"})` instead.
+
+### Design
+
+**`src/forms.py:43` — `nit`, new** — Redundant uppercase: `from_form` calls `.upper()` on line 43, then `cls(...)` invokes `Request.__post_init__` which calls `.upper()` again on line 27. Harmless (idempotent), but it signals that `from_form` is bypassing the parent's normalization contract rather than delegating to it — if `__post_init__` ever changes its normalization logic, `from_form` would need a second update.
+
+---
+
+Findings: 3 important, 2 nit, 0 pre-existing
+
+request changes

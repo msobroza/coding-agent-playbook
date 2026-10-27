@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 REPO_ROOT: Final = Path(__file__).resolve().parents[1]
 BENCH_ROOT: Final = REPO_ROOT / "benchmarks"
 RESULTS_ROOT: Final = BENCH_ROOT / "results"
-DEFAULT_RUN_NAME: Final = "review-opencode-qwen3.6-27b"
+DEFAULT_RUN_NAME: Final = "review-qwen3.6-27b"
 
 #: Where the agents' working trees live: outside the repo on purpose. OpenCode
 #: walks up from its directory for AGENTS.md/CLAUDE.md, and this checkout's own
@@ -42,12 +42,12 @@ OPENROUTER_ANTHROPIC_BASE_URL: Final = "https://openrouter.ai/api"
 #: Tools a reviewer needs: read the tree, run git, Python and the tests. Edits in
 #: the scratch tree are allowed (as in OpenCode) and caught by the gate.
 CLAUDE_ALLOWED_TOOLS: Final = (
-    "Read,Grep,Glob,Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)"
+    "Read,Grep,Glob,Task,Skill,"
+    "Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)"
 )
 
-#: The judge: Opus 5.5 at medium effort, reached through one of two backends.
-JUDGE_MODEL_ANTHROPIC: Final = "claude-opus-5-5"
-JUDGE_MODEL_OPENROUTER: Final = "anthropic/claude-opus-5.5"
+#: The judge: Opus 5.5 at medium effort, through the ``claude`` CLI.
+JUDGE_MODEL: Final = "claude-opus-5-5"
 JUDGE_EFFORT: Final = "medium"
 JUDGE_TIMEOUT_S: Final = 180.0
 
@@ -70,21 +70,22 @@ AGENT_ENV: Final = {
 #: answered "credit balance is too low" while the key itself worked).
 _SESSION_ENV_RE: Final = re.compile(r"^(ANTHROPIC_.*|CLAUDECODE|CLAUDE_.*)$")
 
+#: What the loaded ``.env`` file itself sets, apart from the inherited environment.
+_ENV_FILE_VALUES: dict[str, str] = {}
+
 _ANSI_RE: Final = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 _ENV_LINE_RE: Final = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$")
 
 
 @dataclass(frozen=True)
 class Experiment:
-    """One reviewer configuration of one harness.
+    """One reviewer setup: a harness and what it reviews with.
 
-    ``playbook_text`` ``None`` means the harness's built-in review command gets
-    the sample's request alone (OpenCode's ``/review``, Claude Code's
-    ``/code-review``); otherwise the playbook's rendered review prompt is sent,
-    exactly as ``playbook eval --run`` builds it: ``"head"`` renders the current
-    text (the former prompt set v2, ADR 0012) and a release tag renders that
-    edition, built from its git tag (the former v1 is edition ``v0.1.0``).
-    ``harness`` is ``"opencode"`` or ``"claude"``.
+    ``playbook_text`` ``None`` gives the harness's built-in reviewer the
+    sample's request alone (OpenCode's ``/review``, Claude Code's
+    ``/code-review``). Otherwise the agent gets the playbook's rendered
+    ``review`` prompt, as ``playbook eval --run`` builds it: ``"head"`` is the
+    current text, and a release tag such as ``"v0.1.0"`` is that edition.
     """
 
     key: str
@@ -95,10 +96,10 @@ class Experiment:
 
 EXPERIMENTS: Final = (
     Experiment("opencode-review", "OpenCode /review", None),
-    Experiment("playbook-v1", "OpenCode + playbook v1", "v0.1.0"),
-    Experiment("playbook-v2", "OpenCode + playbook v2", "head"),
+    Experiment("opencode-playbook-v0.1.0", "OpenCode + playbook v0.1.0", "v0.1.0"),
+    Experiment("opencode-playbook", "OpenCode + playbook", "head"),
     Experiment("claude-code-review", "Claude Code /code-review", None, harness="claude"),
-    Experiment("claude-playbook-v2", "Claude Code + playbook v2", "head", harness="claude"),
+    Experiment("claude-playbook", "Claude Code + playbook", "head", harness="claude"),
 )
 
 
@@ -107,7 +108,7 @@ def experiment_by_key(key: str) -> Experiment:
 
     Example::
 
-        experiment_by_key("playbook-v1").playbook_text  # "v0.1.0"
+        experiment_by_key("opencode-playbook-v0.1.0").playbook_text  # "v0.1.0"
     """
     for experiment in EXPERIMENTS:
         if experiment.key == key:
@@ -140,7 +141,21 @@ def _apply_env_lines(lines: list[str]) -> None:
         if match is None or line.lstrip().startswith("#"):
             continue
         name, value = match.group(1), match.group(2).strip("'\"")
+        _ENV_FILE_VALUES[name] = value
         os.environ.setdefault(name, value)
+
+
+def env_file_value(name: str) -> str:
+    """``name`` as the loaded ``.env`` file sets it, never an inherited value ('' when unset).
+
+    A parent Claude Code session exports its own ``ANTHROPIC_*`` variables, so a
+    key the benchmark must not take from the environment is read here instead.
+
+    Example::
+
+        env_file_value("ANTHROPIC_API_KEY")  # "sk-ant-..." or ""
+    """
+    return _ENV_FILE_VALUES.get(name, "")
 
 
 def require_env(name: str) -> str:
@@ -167,7 +182,12 @@ def drop_parent_session_env() -> list[str]:
     return names
 
 
-def claude_agent_env(openrouter_key: str) -> dict[str, str]:
+#: Settings every Claude Code run gets through ``--settings`` (which still applies
+#: when ``--setting-sources ""`` drops the developer's own settings files).
+CLAUDE_ISOLATION_SETTINGS: Final = '{"autoMemoryEnabled": false}'
+
+
+def claude_agent_env(openrouter_key: str, config_dir: Path) -> dict[str, str]:
     """The extra env that points Claude Code at Qwen through OpenRouter.
 
     Example::
@@ -186,6 +206,9 @@ def claude_agent_env(openrouter_key: str) -> dict[str, str]:
         # Qwen3.6 27B's real window; Claude Code does not know the model and would
         # otherwise assume 200k and print a notice on every run.
         "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "262144",
+        # An empty config dir per run: no user CLAUDE.md, settings, plugins or hooks.
+        "CLAUDE_CONFIG_DIR": str(config_dir),
+        "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",
     }
 
 

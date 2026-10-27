@@ -1,0 +1,31 @@
+Both subagents are still running. I'll wait for their results.
+
+I've read the cited line for the pre-existing finding. Line 15 uses `item.quantity < item.reorder_level` while the docstring says "to or below" — confirmed pre-existing bug. Waiting for the second subagent.
+
+## Review
+
+### Correctness
+
+- **`src/inventory.py:15`** — pre-existing — `items_to_reorder` uses `item.quantity < item.reorder_level` (strict less-than) but the docstring claims items "fallen **to or below** their reorder level." An `Item("x", 5, 5)` is excluded by the code but the docstring implies it should be included. The fix would be `<=`. This is on an untouched line and predates this change.
+
+### Design and Boundaries
+
+- **`src/inventory.py:30-32`** — nit — When the list contains duplicate SKUs (e.g., `[Item("a", 1, 0), Item("a", 2, 0)]`), `restock` silently updates only the first match and returns it. The docstring says "the item `sku`" (singular), so the behavior is internally consistent, but it may be worth documenting that only the first match is affected, so a future reader isn't surprised.
+
+### Test Coverage
+
+- **`tests/test_inventory.py:13`** — nit — `assert restock(items, "ink", 5) == Item("ink", 9, 2)` compares the returned object by dataclass equality, which passes whether `restock` mutated `items[1]` in place or returned a fresh copy. Adding `assert items[1].quantity == 9` would close that gap. The test does confirm `items[0]` is untouched, which is good.
+
+---
+
+Findings: 0 important, 2 nit, 1 pre-existing.
+
+approve with comments
+
+The review was already completed in my previous message. To summarize:
+
+- **0 important findings** — no bugs in the new `restock` function or its tests.
+- **2 nit findings** — a design note about duplicate SKUs and a test-coverage gap where the equality assertion doesn't prove in-place mutation.
+- **1 pre-existing finding** — `items_to_reorder` uses `<` instead of `<=`, contradicting its docstring's "to or below."
+
+**Verdict: approve with comments.**

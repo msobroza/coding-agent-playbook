@@ -1,8 +1,8 @@
-"""Phase 1 of the review benchmark: run OpenCode on every review sample, per experiment.
+"""Phase 1 of the review benchmark: run every setup on every review sample.
 
 Each run materializes the sample's ``setup/`` with the engine's own
-:func:`materialize`, drives OpenCode through the engine's ``OpenCodeRunner`` and
-saves the prompt, transcript and working tree for phase 2 (``score_runs.py``),
+:func:`materialize`, drives OpenCode or Claude Code through the engine's runners
+and saves the prompt, transcript and working tree for phase 2 (``score_runs.py``),
 which grades them. Splitting the phases lets the judge be re-run or swapped
 without paying for the agent runs again. A finished run is skipped unless
 ``--force`` is given, so an interrupted batch resumes.
@@ -10,12 +10,13 @@ without paying for the agent runs again. A finished run is skipped unless
 Usage::
 
     python benchmarks/run_agents.py --workers 3
-    python benchmarks/run_agents.py --experiments playbook-v2 --samples review/spot-the-bug
+    python benchmarks/run_agents.py --experiments opencode-playbook --samples review/spot-the-bug
 """
 
 from __future__ import annotations
 
 import argparse
+import collections
 import functools
 import json
 import os
@@ -37,6 +38,7 @@ from coding_agent_playbook.evals.prompting import render_prompt
 from coding_agent_playbook.evals.run.agent_env import unattended_agent_env
 from coding_agent_playbook.evals.run.claude_code_runner import ClaudeCodeRunner
 from coding_agent_playbook.evals.run.harness_runner import AgentRun, materialize
+from coding_agent_playbook.evals.run.opencode_output import parse_opencode_output
 from coding_agent_playbook.evals.run.opencode_runner import OpenCodeRunner
 from coding_agent_playbook.release.edition import load_edition
 from coding_agent_playbook.release.edition_build import build_edition
@@ -58,7 +60,8 @@ def opencode_command(experiment: _bench.Experiment, scratch: Path) -> list[str]:
 
     ``--dir`` is required: OpenCode 1.19 takes its project directory from the
     inherited ``PWD``, not the process cwd, so without it the agent reviews the
-    caller's checkout. ``--pure`` skips external OpenCode plugins.
+    caller's checkout. ``--pure`` skips external OpenCode plugins. ``--format
+    json`` is the engine's own default: its events carry the tool calls too.
 
     Example::
 
@@ -69,30 +72,37 @@ def opencode_command(experiment: _bench.Experiment, scratch: Path) -> list[str]:
         _bench.OPENCODE_BIN, "run", "--pure",
         "--dir", str(scratch),
         "--model", _bench.AGENT_MODEL,
+        "--format", "json",
     ]  # fmt: skip
     if experiment.playbook_text is None:
         return [*base, "--command", "review", "{prompt}"]
     return [*base, "{prompt}"]
 
 
-def claude_command() -> list[str]:
+def claude_command(experiment: _bench.Experiment) -> list[str]:
     """The ``claude -p`` arg-list template (``{prompt}`` filled per run).
 
-    ``--bare`` keeps the developer's hooks, plugins, CLAUDE.md and auto-memory
-    out of the run; built-in skills such as ``/code-review`` still resolve.
-    ``--`` ends the options, so a prompt can never be read as a flag.
+    Not ``--bare``: in bare mode Claude Code offers the model neither the Task
+    (subagent) nor the Skill tool, so the review's first passes could never run.
+    Isolation comes instead from an
+    empty ``CLAUDE_CONFIG_DIR`` per run (see ``claude_agent_env``), no setting
+    sources, no MCP servers and auto-memory off. ``--`` ends the options, so a
+    prompt can never be read as a flag.
 
     Example::
 
-        claude_command()[-2:]  # ["--", "{prompt}"]
+        claude_command(_bench.experiment_by_key("claude-playbook"))[-2:]  # ["--", "{prompt}"]
     """
     return [
-        _bench.CLAUDE_BIN, "-p", "--bare",
+        _bench.CLAUDE_BIN, "-p",
+        "--setting-sources", "",
+        "--strict-mcp-config",
+        "--settings", _bench.CLAUDE_ISOLATION_SETTINGS,
         "--model", _bench.CLAUDE_AGENT_MODEL,
         "--no-session-persistence",
         "--permission-mode", "acceptEdits",
         "--allowedTools", _bench.CLAUDE_ALLOWED_TOOLS,
-        "--output-format", "text",
+        "--output-format", "stream-json", "--verbose",
         "--", "{prompt}",
     ]  # fmt: skip
 
@@ -109,6 +119,8 @@ class OpenRouterClaudeRunner(ClaudeCodeRunner):
     ) -> None:
         super().__init__(command=command, timeout=timeout)
         self._extra_env = dict(extra_env)
+        #: The main loop's tool calls in the last run, e.g. ``["Read", "Skill:code-review"]``.
+        self.tool_calls: list[str] = []
 
     def _invoke_agent(self, prompt: str, scratch_dir: Path) -> AgentRun:
         completed = subprocess.run(
@@ -120,19 +132,162 @@ class OpenRouterClaudeRunner(ClaudeCodeRunner):
             timeout=self._timeout,
             check=False,
         )
-        return AgentRun(
-            transcript=completed.stdout + completed.stderr, returncode=completed.returncode
+        answer, self.tool_calls = parse_stream_json(completed.stdout)
+        transcript = completed.stdout if answer is None else answer
+        if answer is None or completed.returncode != 0:
+            # stderr only explains a failure; on success it holds just a model notice.
+            transcript += completed.stderr
+        return AgentRun(transcript=transcript, returncode=completed.returncode)
+
+
+class ToolLoggingOpenCodeRunner(OpenCodeRunner):
+    """The engine's ``OpenCodeRunner``, keeping the main session's tool calls as well.
+
+    The engine reads only the text and the token totals from OpenCode's JSON
+    events; the benchmark also needs the tool calls, to tell whether a review
+    started both of its first passes.
+    """
+
+    def __init__(self, *, command: Sequence[str], timeout: float) -> None:
+        super().__init__(command=command, timeout=timeout)
+        #: The main session's tool calls in the last run, e.g. ``["read", "task:explore"]``.
+        self.tool_calls: list[str] = []
+
+    def _invoke_agent(self, prompt: str, scratch_dir: Path) -> AgentRun:
+        completed = subprocess.run(
+            self._build_command(prompt),
+            cwd=scratch_dir,
+            env=unattended_agent_env(),
+            capture_output=True,
+            text=True,
+            timeout=self._timeout,
+            check=False,
         )
+        self.tool_calls = opencode_tool_calls(completed.stdout)
+        output = parse_opencode_output(completed.stdout)
+        transcript = completed.stdout if output is None else output.text
+        return AgentRun(transcript=transcript + completed.stderr, returncode=completed.returncode)
+
+
+def opencode_tool_calls(stdout: str) -> list[str]:
+    """The main session's tool calls in ``opencode run --format json`` output.
+
+    A ``task`` call is named with its subagent type, as :func:`parse_stream_json`
+    names Claude Code's. Subagents' own calls are not in this stream.
+
+    Example::
+
+        opencode_tool_calls(out)  # ["read", "task:explore", "task:explore"]
+    """
+    calls: list[str] = []
+    for line in stdout.splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        part = event.get("part") if isinstance(event, dict) else None
+        if event.get("type") != "tool_use" or not isinstance(part, dict):
+            continue
+        state = part.get("state")
+        given = state.get("input") if isinstance(state, dict) else None
+        calls.append(_call_name({"name": part.get("tool"), "input": given}))
+    return calls
+
+
+def parse_stream_json(stdout: str) -> tuple[str | None, list[str]]:
+    """Every answer and the main loop's tool calls from ``claude -p`` stream-JSON output.
+
+    Each turn ends in its own ``result`` event: a subagent started in the
+    background starts another turn when it finishes, so the review can be in an
+    earlier result than the last one. All of them are kept, in order. A Skill or
+    Task call is named with its skill or subagent type, plus ``:background`` when
+    the model asked for a background task. Subagents' own calls (events with a
+    ``parent_tool_use_id``) are left out.
+
+    Example::
+
+        parse_stream_json(out)  # ("Findings: ...", ["Read", "Skill:code-review", "Agent:Plan"])
+    """
+    answers: list[str] = []
+    calls: list[str] = []
+    for line in stdout.splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("type") == "result":
+            answers.append(str(event.get("result") or "").strip())
+        elif event.get("type") == "assistant" and not event.get("parent_tool_use_id"):
+            blocks = event.get("message", {}).get("content", [])
+            calls += [_call_name(b) for b in blocks if b.get("type") == "tool_use"]
+    return ("\n\n".join(a for a in answers if a) if answers else None), calls
+
+
+def _call_name(block: dict[str, object]) -> str:
+    given = block.get("input")
+    inputs = given if isinstance(given, dict) else {}
+    detail = inputs.get("skill") or inputs.get("subagent_type")
+    name = f"{block['name']}:{detail}" if detail else str(block["name"])
+    return f"{name}:background" if inputs.get("run_in_background") is True else name
+
+
+#: Tool calls that start a subagent: Claude Code's Agent (Task in older builds), OpenCode's task.
+_SUBAGENT_TOOLS = ("Agent", "Task", "task")
+
+
+def second_pass_ran(experiment: _bench.Experiment, tool_calls: Sequence[str]) -> bool | None:
+    """Whether the run started the bug-only pass the current review asks for; else None.
+
+    That pass is the ``code-review`` skill (Claude Code) or a second subagent
+    beside the first-pass subagent.
+
+    Example::
+
+        second_pass_ran(_bench.experiment_by_key("opencode-playbook"), ["task:explore"] * 2)  # True
+    """
+    if experiment.playbook_text != "head":
+        return None
+    if "Skill:code-review" in tool_calls:
+        return True
+    return sum(call.split(":")[0] in _SUBAGENT_TOOLS for call in tool_calls) >= 2
+
+
+def _claude_config_dir(scratch: Path) -> Path:
+    # The run's own empty CLAUDE_CONFIG_DIR, beside its scratch tree.
+    return scratch.parent / "claude-config"
+
+
+def subagent_starts(scratch: Path) -> dict[str, int] | None:
+    """How a Claude Code run started its subagents, by Claude Code's own record; None elsewhere.
+
+    Claude Code writes one ``meta.json`` per subagent under the run's config
+    dir, whose ``requestShape`` is ``foreground`` or ``background``. A pass left
+    in the background can still be running when ``claude -p`` answers and exits.
+
+    Example::
+
+        subagent_starts(scratch)  # {"foreground": 2}
+    """
+    config_dir = _claude_config_dir(scratch)
+    if not config_dir.is_dir():
+        return None
+    metas = config_dir.glob("projects/*/*/subagents/*.meta.json")
+    shapes = collections.Counter(
+        str(json.loads(meta.read_text(encoding="utf-8")).get("requestShape")) for meta in metas
+    )
+    return dict(shapes)
 
 
 def build_runner(experiment: _bench.Experiment, scratch: Path, timeout: float) -> HarnessRunner:
     """The engine runner that drives ``experiment``'s harness in ``scratch``."""
     if experiment.harness == "claude":
-        extra_env = _bench.claude_agent_env(_bench.require_env("OPENROUTER_API_KEY"))
+        config_dir = _claude_config_dir(scratch)
+        config_dir.mkdir(parents=True, exist_ok=True)
+        extra_env = _bench.claude_agent_env(_bench.require_env("OPENROUTER_API_KEY"), config_dir)
         return OpenRouterClaudeRunner(
-            command=claude_command(), timeout=timeout, extra_env=extra_env
+            command=claude_command(experiment), timeout=timeout, extra_env=extra_env
         )
-    return OpenCodeRunner(command=opencode_command(experiment, scratch), timeout=timeout)
+    return ToolLoggingOpenCodeRunner(command=opencode_command(experiment, scratch), timeout=timeout)
 
 
 def agent_prompt(experiment: _bench.Experiment, sample: EvalSample) -> str:
@@ -167,6 +322,16 @@ def _exclude_caches(scratch: Path) -> None:
     exclude.parent.mkdir(parents=True, exist_ok=True)
     with exclude.open("a", encoding="utf-8") as handle:
         handle.write("\n".join(_CACHE_EXCLUDES) + "\n")
+
+
+def _drop_venvs(*trees: Path) -> None:
+    """Delete the ``uv sync`` venvs of a finished run: tens of MB each, unused by scoring.
+
+    Scoring a review sample reads the tree and the git diff only (no tests run);
+    a sample whose ``[metrics]`` runs tests needs ``--keep-venvs``.
+    """
+    for tree in trees:
+        shutil.rmtree(tree / ".venv", ignore_errors=True)
 
 
 def _decode(stream: bytes | str | None) -> str:
@@ -218,8 +383,13 @@ def run_one(experiment: _bench.Experiment, sample: EvalSample, args: argparse.Na
         "baseline_commit": baseline.commit,
         "scratch": str(scratch),
         "setup_snapshot": str(baseline.setup_snapshot),
+        "main_loop_tools": getattr(runner, "tool_calls", None),
+        "second_pass_ran": second_pass_ran(experiment, getattr(runner, "tool_calls", [])),
+        "subagent_starts": subagent_starts(scratch),
     }
     (out / "agent.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+    if not args.keep_venvs:
+        _drop_venvs(scratch, baseline.setup_snapshot)
     status = "TIMEOUT" if timed_out else f"rc={run.returncode}"
     return f"done  {experiment.key:16} {sample.id:42} {status} {duration:6.0f}s"
 
@@ -232,6 +402,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--workers", type=int, default=3)
     parser.add_argument("--timeout", type=float, default=_bench.AGENT_TIMEOUT_S)
     parser.add_argument("--force", action="store_true", help="re-run finished runs")
+    parser.add_argument(
+        "--keep-venvs",
+        action="store_true",
+        help="keep each run's .venv (needed only by samples whose metrics run tests)",
+    )
     return parser.parse_args(argv)
 
 
