@@ -966,7 +966,8 @@ A target without a previous file is recorded without a comparison.
   there instead of running it again, if it was recorded on the same base commit.
 
 The pull request body adds a `Release metrics` section to the notes, with one line
-per target and its notes. These runs are paid and only the maintainer starts them;
+per target and its notes; each line says how many samples were rerun and how many
+carried ("N rerun, M carried"). These runs are paid and only the maintainer starts them;
 CI never does.
 
 `playbook eval` has no `--run-tests` flag. A sample runs the test suite if and only if
