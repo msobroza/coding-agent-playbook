@@ -37,7 +37,8 @@ class FakeReleaseHost:
     ``<command>-checkout`` re-run is the inner step: it prints ``inner out``.
     ``playbook eval --record PATH --target NAME`` stands for the engine's fake
     runner: it writes ``recordings[NAME]`` to ``PATH`` (exit 2 for a target it
-    has no recording for). ``timeouts`` holds each command's ``timeout``, and
+    has no recording for), printing ``record_stdout[NAME]`` (a carry plan, say)
+    before its own line. ``timeouts`` holds each command's ``timeout``, and
     ``bodies`` the text of each ``pr create --body-file``.
     """
 
@@ -53,6 +54,7 @@ class FakeReleaseHost:
     commands: list[list[str]] = field(default_factory=list)
     envs: list[Mapping[str, str] | None] = field(default_factory=list)
     recordings: dict[str, dict[str, object]] = field(default_factory=dict)
+    record_stdout: dict[str, str] = field(default_factory=dict)
     timeouts: list[float | None] = field(default_factory=list)
     bodies: list[str] = field(default_factory=list)
 
@@ -102,7 +104,8 @@ class FakeReleaseHost:
         path = Path(command[command.index("--record") + 1])
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(metrics), encoding="utf-8")
-        return Completed(0, f"recorded target {target!r} to {path}\n")
+        printed = self.record_stdout.get(target, "")
+        return Completed(0, f"{printed}recorded target {target!r} to {path}\n")
 
     def _git(self, args: list[str]) -> Completed:
         handlers: dict[str, Callable[[list[str]], Completed]] = {

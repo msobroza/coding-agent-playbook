@@ -951,11 +951,31 @@ pull request. In its scratch checkout of `origin/main`, before any release file 
 written, it runs `playbook eval --run --all --target <name> --record
 catalog/releases/<version>/metrics/<name>.json` on that checkout's engine for every
 target in the `[evals] release` list of the committed `.coding-agent-playbook.toml`,
-with `--judge llm` when `[evals.judge] model` is set. Those runs are isolated, so
-set `ANTHROPIC_API_KEY` (or each endpoint's `token_env`) before you start. It
-sets each file's `release` to the version being prepared and compares it with the previous release's file for
-the same target, as `--check-regressions` does, storing the comparison in the file.
-A target without a previous file is recorded without a comparison.
+with `--judge llm` when `[evals.judge] model` is set. Those runs are isolated
+(the harness and the judge start from an empty temporary config directory,
+without your personal settings), so set `ANTHROPIC_API_KEY` (or each endpoint's
+`token_env`) before you start: without credentials the recording is refused
+before the first paid call. It sets each file's `release` to the version being
+prepared and compares it with the previous release's file for the same target,
+as `--check-regressions` does, storing the comparison in the file. A target
+without a previous file is recorded without a comparison.
+
+It runs in one of two modes per target:
+
+- **changed-only** (the default): when the previous release has a file for the
+  target, `catalog/releases/<previous>/metrics/<name>.json` is passed as
+  `--carry-from`. Only new samples, samples whose `inputs_digest` changed and the
+  edition controls rerun; every other entry is carried from that file, with
+  `measured_in`, and its regression status is `carried`, which never blocks. A
+  `setup` part that differs, or a baseline without the digests, reruns everything.
+- **full run**: `--full` omits the baseline and reruns every sample, still
+  compared with the previous file. A target without a previous file always runs
+  in full. `--full` without `--eval` is a usage error (exit 2).
+
+```bash
+uv run scripts/release.py prepare --eval          # changed-only per target
+uv run scripts/release.py prepare --eval --full   # every sample on every target
+```
 
 - `--accept SAMPLE=REASON` (repeatable) accepts that sample's regression on every
   target where it regressed; one that regressed on no target is refused.
@@ -964,10 +984,15 @@ A target without a previous file is recorded without a comparison.
 - On a refusal after recording, the recorded files are copied to a kept temporary
   directory named in the error. `--reuse-metrics DIR` reads a target's file from
   there instead of running it again, if it was recorded on the same base commit.
+  A reused file's mode comes from the file, not from this run's flags, and
+  `--full` refuses a reused file that holds carried entries.
 
-The pull request body adds a `Release metrics` section to the notes, with one line
-per target and its notes; each line says how many samples were rerun and how many
-carried ("N rerun, M carried"). These runs are paid and only the maintainer starts them;
+Each record run's carry plan (why samples rerun, or which `setup` part made every
+sample rerun) is printed per target. The pull request body adds a `Release
+metrics` section to the notes, with one line per target and its notes; each line
+names the mode: "changed-only: N rerun, M carried" (with the reason when every
+sample reran) or "full run". A reused file is changed-only when it holds carried
+entries or its summary counts `carried`. These runs are paid and only the maintainer starts them;
 CI never does.
 
 `playbook eval` has no `--run-tests` flag. A sample runs the test suite if and only if
