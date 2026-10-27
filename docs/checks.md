@@ -924,16 +924,19 @@ Per sample:
   is a `regression` (the same rule as `--compare`); the mirror is an `improvement`;
 - a sample whose `sample_digest` changed is `not_comparable`, never a regression;
 - a sample the baseline lacks is `new`; one the new file lacks is noted;
+- a carried entry (one with `measured_in`, copied by `--carry-from`) is `carried`:
+  its `vs_previous` holds the previous mean and a delta of 0, and it never blocks;
 - a cost per run rise above 25%, or a token rise when either cost is `null`, is a
   warning only.
 
 A harness version change between the files is noted as a likely cause, and so is
 a control whose score moved on the same edition; controls never block.
 `--accept SAMPLE=REASON` (repeatable) accepts one regression; accepting a sample
-that did not regress is refused. The command stores the comparison in the new
-file: `previous`, each sample's `vs_previous` (`mean_score`, `delta`, `status`,
-`reasons`, `warnings` and the `accepted` reason) and `regressions`,
-`accepted_regressions`, `improvements` and `not_comparable` in the summary. A
+that did not regress, a carried one included, is refused. The command stores the
+comparison in the new file: `previous`, each sample's `vs_previous` (`mean_score`,
+`delta`, `status`, `reasons`, `warnings` and the `accepted` reason) and
+`regressions`, `accepted_regressions`, `improvements`, `not_comparable`, `rerun`
+and `carried` in the summary. A
 reason stored there still holds when the check runs again against the same
 baseline.
 

@@ -118,7 +118,7 @@ def test_an_accepted_regression_does_not_block_and_keeps_its_reason() -> None:
 
 
 def test_accepting_a_sample_that_did_not_regress_is_refused() -> None:
-    with pytest.raises(RegressionCheckError, match=r"'s'.*not a regression"):
+    with pytest.raises(RegressionCheckError, match=r"'s'.*did not regress"):
         _check({"s": sample_entry(0.9)}, {"s": sample_entry(0.9)}, s="why")
 
 
@@ -179,7 +179,7 @@ def test_the_table_names_each_sample_and_the_verdict() -> None:
     assert "REGRESSION: mean score drops 0.200" in table
     assert (
         table.splitlines()[-1]
-        == "1 regression (0 accepted), 0 improvements, 0 not comparable: BLOCKED"
+        == "1 regression (0 accepted), 0 improvements, 0 not comparable, 0 carried: BLOCKED"
     )
 
 
@@ -214,3 +214,78 @@ def test_parse_acceptances_strips_and_refuses_a_value_without_a_reason() -> None
     assert parse_acceptances(["s = a reason "]) == {"s": "a reason"}
     with pytest.raises(RegressionCheckError, match="SAMPLE=REASON"):
         parse_acceptances(["s="])
+
+
+# --------------------------------------------------------------------------- #
+# Carried entries (#329 ticket 06)
+# --------------------------------------------------------------------------- #
+
+
+def _carried(mean: float, **extra: Any) -> dict[str, Any]:
+    """An entry ``--carry-from`` copied from the baseline: it names where it was measured."""
+    return sample_entry(mean, **extra) | {"measured_in": {"release": _OLD, "commit": None}}
+
+
+def test_a_carried_entry_is_carried_with_the_previous_mean_and_no_delta() -> None:
+    check = _check({"s": sample_entry(0.9)}, {"s": _carried(0.9)})
+    verdict = check.samples[0]
+    assert (verdict.status, verdict.previous_mean, verdict.delta) == ("carried", 0.9, 0.0)
+    assert check.count("carried") == 1
+    assert not check.blocked
+
+
+def test_a_carried_entry_never_blocks_even_when_its_scores_would_regress() -> None:
+    # Checked against another baseline than the one it was carried from.
+    old = {"s": sample_entry(0.9, cost=0.1)}
+    check = _check(old, {"s": _carried(0.5, passes=0, cost=0.5)})
+    verdict = check.samples[0]
+    assert (verdict.status, verdict.delta, verdict.reasons, verdict.warnings) == (
+        "carried",
+        0.0,
+        (),
+        (),
+    )
+    assert not check.blocked
+
+
+def test_a_carried_entry_the_baseline_lacks_keeps_its_own_mean_as_the_previous() -> None:
+    verdict = _check({}, {"s": _carried(0.8)}).samples[0]
+    assert (verdict.status, verdict.previous_mean, verdict.delta) == ("carried", 0.8, 0.0)
+
+
+def test_accepting_a_carried_sample_is_refused_as_did_not_regress() -> None:
+    with pytest.raises(RegressionCheckError, match=r"'s'.*did not regress"):
+        _check({"s": sample_entry(0.9)}, {"s": _carried(0.9)}, s="why")
+
+
+def test_annotating_counts_the_rerun_and_the_carried_samples() -> None:
+    old = {"c": sample_entry(0.9), "r": sample_entry(0.9)}
+    new_file = metrics_file(_NEW, {"c": _carried(0.9), "r": sample_entry(0.9)})
+    check = check_regressions(new_file, metrics_file(_OLD, old))
+
+    annotated: Any = annotate_release_metrics(new_file, check)
+
+    validate_release_metrics(annotated)
+    assert annotated["samples"]["c"]["vs_previous"] == {
+        "mean_score": 0.9,
+        "delta": 0.0,
+        "status": "carried",
+    }
+    assert (annotated["summary"]["rerun"], annotated["summary"]["carried"]) == (1, 1)
+
+
+def test_a_full_record_counts_every_sample_as_rerun() -> None:
+    new_file = metrics_file(_NEW, {"s": sample_entry(0.9)})
+    check = check_regressions(new_file, metrics_file(_OLD, {"s": sample_entry(0.9)}))
+    summary: Any = annotate_release_metrics(new_file, check)["summary"]
+    assert (summary["rerun"], summary["carried"]) == (1, 0)
+
+
+def test_the_table_and_the_json_view_count_the_carried_samples() -> None:
+    check = _check({"s": sample_entry(0.9)}, {"s": _carried(0.9)})
+    table = format_regression_table(check)
+    assert "s       0.900     0.900  +0.000  carried" in table
+    assert table.splitlines()[-1] == (
+        "0 regressions (0 accepted), 0 improvements, 0 not comparable, 1 carried: ok"
+    )
+    assert regression_check_to_dict(check)["carried"] == 1

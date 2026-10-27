@@ -76,7 +76,7 @@ def test_json_format(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None
     [
         (["--accept", "s"], "SAMPLE=REASON"),
         (["--accept", "s= "], "SAMPLE=REASON"),
-        (["--accept", "other=why"], "not a regression"),
+        (["--accept", "other=why"], "did not regress"),
     ],
 )
 def test_a_bad_accept_exits_two(

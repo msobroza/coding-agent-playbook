@@ -14,6 +14,13 @@ never block: a control that regressed or improved against the baseline's control
 on the same edition is noted, because its text did not change and the model or
 harness must have.
 
+A *carried entry* (``measured_in``, copied by ``eval --record --carry-from``,
+#329 ticket 06) is ``carried``: its inputs and setup did not change, so it was
+not measured again. Its ``vs_previous`` holds the previous mean and a delta of
+0, it never blocks, and an ``--accept`` naming it is refused like any sample
+that did not regress. The annotated summary counts the ``rerun`` and
+``carried`` samples.
+
 A regression is *accepted* with a reason; :func:`annotate_release_metrics`
 stores it in the new file (``samples.<id>.vs_previous.accepted``), so a rerun
 against the same baseline keeps it. The check is *blocked* while any regression
@@ -32,13 +39,13 @@ from coding_agent_playbook.evals.comparison import (
     improvement_reasons,
     regression_reasons,
 )
-from coding_agent_playbook.evals.release_metrics_schema import CONTROLS_KEY
+from coding_agent_playbook.evals.release_metrics_schema import CONTROLS_KEY, MEASURED_IN_KEY
 from coding_agent_playbook.exit_two import ExitTwoError
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-type SampleStatus = Literal["ok", "improvement", "regression", "not_comparable", "new"]
+type SampleStatus = Literal["ok", "improvement", "regression", "not_comparable", "new", "carried"]
 type _Entry = Mapping[str, object]
 
 #: A cost (or token) rise above this fraction of the previous release's is a warning.
@@ -60,8 +67,9 @@ class RegressionCheckError(ExitTwoError):
 class SampleVerdict:
     """One sample's verdict against the previous release.
 
-    ``previous_mean`` and ``delta`` are ``None`` for a ``new`` sample;
-    ``accepted`` is the reason a regression was accepted, else ``None``.
+    ``previous_mean`` and ``delta`` are ``None`` for a ``new`` sample, and
+    ``delta`` is 0 for a ``carried`` one; ``accepted`` is the reason a
+    regression was accepted, else ``None``.
     """
 
     sample_id: str
@@ -74,7 +82,9 @@ class SampleVerdict:
 
     @property
     def delta(self) -> float | None:
-        """The new mean minus the previous one (``None`` without a previous one)."""
+        """The new mean minus the previous one (``None`` without a previous one, 0 if carried)."""
+        if self.status == "carried":
+            return 0.0
         if self.previous_mean is None:
             return None
         return round(self.mean - self.previous_mean, _DIGITS)
@@ -190,6 +200,9 @@ def annotate_release_metrics(
     summary["accepted_regressions"] = check.accepted_regressions
     summary["improvements"] = check.count("improvement")
     summary["not_comparable"] = check.count("not_comparable")
+    carried = check.count("carried")
+    summary["rerun"] = len(check.samples) - carried
+    summary["carried"] = carried
     return annotated
 
 
@@ -218,6 +231,8 @@ def _same_target(new: Mapping[str, object], baseline: Mapping[str, object]) -> s
 
 def _verdict(sample_id: str, entry: _Entry, old: _Entry | None, release: str) -> SampleVerdict:
     mean = _num(entry["mean_score"])
+    if MEASURED_IN_KEY in entry:
+        return _carried_verdict(sample_id, mean, old)
     if old is None:
         return SampleVerdict(sample_id, "new", None, mean)
     previous_mean = _num(old["mean_score"])
@@ -234,6 +249,15 @@ def _verdict(sample_id: str, entry: _Entry, old: _Entry | None, release: str) ->
     return SampleVerdict(sample_id, status, previous_mean, mean, improved, warnings)
 
 
+def _carried_verdict(sample_id: str, mean: float, old: _Entry | None) -> SampleVerdict:
+    """A carried entry's verdict: the baseline's mean as the previous one (its own without one).
+
+    Its scores are not compared: they were measured in an earlier release.
+    """
+    previous_mean = mean if old is None else _num(old["mean_score"])
+    return SampleVerdict(sample_id, "carried", previous_mean, mean)
+
+
 def _accept(
     verdicts: tuple[SampleVerdict, ...], reasons: Mapping[str, str], requested: Mapping[str, str]
 ) -> tuple[SampleVerdict, ...]:
@@ -242,7 +266,7 @@ def _accept(
     stray = sorted(set(requested) - regressions)
     if stray:
         raise RegressionCheckError(
-            f"cannot accept {', '.join(repr(s) for s in stray)}: not a regression "
+            f"cannot accept {', '.join(repr(s) for s in stray)}: it did not regress "
             f"against this baseline (regressions: {', '.join(sorted(regressions)) or 'none'})"
         )
     return tuple(
