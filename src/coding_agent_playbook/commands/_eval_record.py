@@ -15,13 +15,16 @@ rendered before any paid run too. Each entry records the inputs digest of that
 pre-run render (#329 ticket 03). The
 harness and the judge run isolated from the user's personal settings, so a
 missing credential is refused before any paid run too, and the target block
-records ``isolated`` (#329 ticket 02, ``evals.record_isolation``). The
+records ``isolated`` (#329 ticket 02, ``evals.record_isolation``). The file
+records its setup digest and parts (#329 ticket 04, ``evals.setup_digest``),
+with the judge CLI's version probed once like the harness's. The
 file is written whatever the scores are: exit ``0`` once it is written, ``2`` on
 a refusal or an unscorable sample.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import subprocess
@@ -54,6 +57,7 @@ from coding_agent_playbook.evals.release_metrics_schema import validate_release_
 from coding_agent_playbook.evals.run.git_env import without_repo_location
 from coding_agent_playbook.evals.run.harness_version import harness_cli_version
 from coding_agent_playbook.evals.sample_digest import inputs_digest, prompt_digest, sample_digest
+from coding_agent_playbook.evals.setup_digest import UNKNOWN_VERSION, SetupParts, scoring_digest
 from coding_agent_playbook.evals.task_registry import TaskRegistry, TaskRegistryError
 from coding_agent_playbook.release.edition import EditionError
 from coding_agent_playbook.validation.context import SyncContext
@@ -61,6 +65,7 @@ from coding_agent_playbook.validation.context import SyncContext
 if TYPE_CHECKING:
     import argparse
 
+    from coding_agent_playbook.evals.endpoints import Endpoint
     from coding_agent_playbook.evals.judge import Judge
     from coding_agent_playbook.evals.run.harness_runner import HarnessRunner, SampleResult
     from coding_agent_playbook.evals.sample import EvalSample
@@ -124,13 +129,8 @@ def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings
         return 2
     inputs = plan.check_prompts(samples)
     controls = plan.control_editions(samples)
-    recorded = RecordedTarget(
-        target=target,
-        harness_version=harness_cli_version(plan.runner.cli),
-        judge_model=settings.judge.model if uses_judge else None,
-        runs=runs,
-        isolated=isolated,
-    )
+    judge_model = settings.judge.model if uses_judge else None
+    recorded = plan.recorded_target(target, judge_model=judge_model, isolated=isolated)
     metrics = build_release_metrics(
         release=coding_agent_playbook.__version__,
         commit=_head_commit(repo_root),
@@ -171,7 +171,8 @@ def _build_plan(
     if runner is None or (judge_name is not None and judge is None) or judge_samples is None:
         return None
     fail_fast = not getattr(args, "full_scoring", False)
-    return _RecordPlan(runner, judge, judge_samples, runs, fail_fast)
+    judge_endpoint = settings.judge.endpoint if judge is not None else None
+    return _RecordPlan(runner, judge, judge_samples, runs, fail_fast, judge_endpoint)
 
 
 def _check_credentials(target: EvalTarget, settings: EvalSettings, judge_name: str | None) -> bool:
@@ -229,6 +230,49 @@ class _RecordPlan:
     judge_samples: int
     runs: int
     fail_fast: bool = True
+    #: ``[evals.judge] endpoint``, set only when the run has a judge.
+    judge_endpoint: Endpoint | None = None
+
+    def recorded_target(
+        self, target: EvalTarget, *, judge_model: str | None, isolated: bool
+    ) -> RecordedTarget:
+        """The target block's facts and the setup parts (#329 ticket 04) of this run.
+
+        The harness and judge CLIs' versions are probed once each (once in all
+        when both are the same CLI), time-bounded; a failed probe is ``None`` in
+        the target block and :data:`UNKNOWN_VERSION` in the setup parts.
+        """
+        judge_cli = self.judge.cli if self.judge is not None else None
+        versions = _cli_versions(self.runner.cli, judge_cli)
+        recorded = RecordedTarget(
+            target=target,
+            harness_version=versions[self.runner.cli],
+            judge_model=judge_model,
+            runs=self.runs,
+            isolated=isolated,
+        )
+        judge_version = _setup_version(judge_cli, versions[judge_cli])
+        return dataclasses.replace(recorded, setup=self._setup_parts(recorded, judge_version))
+
+    def _setup_parts(self, recorded: RecordedTarget, judge_version: str | None) -> SetupParts:
+        """Everything outside the samples that decides this run's scores, by name."""
+        target = recorded.target
+        judged = self.judge is not None
+        return SetupParts(
+            harness=target.harness,
+            harness_version=_setup_version(self.runner.cli, recorded.harness_version),
+            model=target.model,
+            endpoint_fingerprint=_fingerprint(target.endpoint),
+            small_model=target.small_model,
+            runs=recorded.runs,
+            judge_model=recorded.judge_model,
+            judge_endpoint_fingerprint=_fingerprint(self.judge_endpoint) if judged else None,
+            judge_samples=self.judge_samples if judged else None,
+            judge_version=judge_version,
+            fail_fast=self.fail_fast,
+            isolated=recorded.isolated,
+            scoring_digest=scoring_digest(),
+        )
 
     def check_prompts(self, samples: list[EvalSample]) -> dict[str, str]:
         """Render every sample's prompt before the first paid run; refuse on the first bad one.
@@ -316,6 +360,33 @@ class _RecordPlan:
             raise RecordRefusedError(
                 f"sample {sample.id!r} could not be scored, so nothing was recorded: {exc}"
             ) from exc
+
+
+def _cli_versions(*clis: str | None) -> dict[str | None, str | None]:
+    """Each distinct CLI's ``--version``, probed once; ``None`` (no CLI) maps to ``None``.
+
+    Example::
+
+        >>> _cli_versions(None)
+        {None: None}
+    """
+    return {cli: harness_cli_version(cli) for cli in dict.fromkeys(clis)}
+
+
+def _setup_version(cli: str | None, version: str | None) -> str | None:
+    """A CLI's setup part: :data:`UNKNOWN_VERSION` when its probe failed, ``None`` without a CLI.
+
+    Example::
+
+        >>> _setup_version("claude", None), _setup_version(None, None), _setup_version("claude", "2")
+        ('unknown', None, '2')
+    """
+    return UNKNOWN_VERSION if cli is not None and version is None else version
+
+
+def _fingerprint(endpoint: Endpoint | None) -> str | None:
+    """The endpoint's URL fingerprint, or ``None`` without an endpoint."""
+    return endpoint.fingerprint if endpoint is not None else None
 
 
 def _record_path(args: argparse.Namespace) -> Path:
