@@ -1,2 +1,0 @@
-The subagent's findings align with my review. No additional bugs surfaced — the report already stands.
-[claude-code:unrecognized_model] {"model":"qwen/qwen3.6-27b","query_source":"sdk"}

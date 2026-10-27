@@ -1,0 +1,32 @@
+{
+  "experiment": "claude-code-review",
+  "sample_id": "review/crbug-xtrim-maxlen-minid",
+  "harness": "claude",
+  "model": "qwen/qwen3.6-27b",
+  "command": [
+    "claude",
+    "-p",
+    "--setting-sources",
+    "",
+    "--strict-mcp-config",
+    "--settings",
+    "{\"autoMemoryEnabled\": false}",
+    "--model",
+    "qwen/qwen3.6-27b",
+    "--no-session-persistence",
+    "--permission-mode",
+    "acceptEdits",
+    "--allowedTools",
+    "Read,Grep,Glob,Task,Skill,Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)",
+    "--output-format",
+    "text",
+    "--",
+    "{prompt}"
+  ],
+  "returncode": 0,
+  "timed_out": false,
+  "duration_seconds": 283.0,
+  "baseline_commit": "6998e19e44edecab6eef09ca2511a87b70c45e97",
+  "scratch": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-code-review/review-crbug-xtrim-maxlen-minid/scratch",
+  "setup_snapshot": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-code-review/review-crbug-xtrim-maxlen-minid/scratch__setup_baseline"
+}

@@ -4,16 +4,14 @@ For each run ``run_agents.py`` saved, this rebuilds the engine's ``Baseline`` an
 ``Candidate`` from the kept working tree and transcript, then calls the engine's
 own :func:`score` with full scoring (no fail-fast: the judge grades every run,
 even one whose deterministic gate failed). The judge is the engine's
-``LLMJudge`` pointed at Opus 5.5 at medium effort, through either backend:
-
-- ``anthropic``: the ``claude`` CLI in ``--bare`` mode, authenticated with the
-  ``ANT_API_KEY`` from ``.env`` (no hooks, plugins, CLAUDE.md or tools).
-- ``openrouter``: ``judge_openrouter.py`` with ``OPENROUTER_API_KEY``.
+``LLMJudge`` running Opus 5.5 at medium effort through the ``claude`` CLI in
+``--bare`` mode (no hooks, plugins, CLAUDE.md or tools), with ``ANT_API_KEY`` or
+the ``ANTHROPIC_API_KEY`` from ``.env``.
 
 Usage::
 
-    python benchmarks/score_runs.py --judge-backend openrouter
-    python benchmarks/score_runs.py --judge-backend anthropic --force
+    python benchmarks/score_runs.py
+    python benchmarks/score_runs.py --stub-judge   # free fixed 0.5 judge, a dry run
 """
 
 from __future__ import annotations
@@ -48,44 +46,39 @@ if TYPE_CHECKING:
     from coding_agent_playbook.grading.types import EvaluationReport
 
 
-def judge_command(backend: str) -> list[str]:
-    """The ``LLMJudge`` command template for ``backend`` (``{prompt}`` filled per call).
+def judge_command() -> list[str]:
+    """The ``LLMJudge`` command template (``{prompt}`` filled per call).
 
     Example::
 
-        judge_command("anthropic")[:3]  # ["claude", "-p", "--bare"]
+        judge_command()[:3]  # ["claude", "-p", "--bare"]
     """
-    if backend == "anthropic":
-        return [
-            "claude", "-p", "--bare",
-            "--model", _bench.JUDGE_MODEL_ANTHROPIC,
-            "--effort", _bench.JUDGE_EFFORT,
-            "--tools", "",
-            "--no-session-persistence",
-            "{prompt}",
-        ]  # fmt: skip
-    if backend == "openrouter":
-        return [sys.executable, str(_bench.BENCH_ROOT / "judge_openrouter.py"), "{prompt}"]
-    raise ValueError(f"unknown judge backend {backend!r}; expected 'anthropic' or 'openrouter'")
+    return [
+        "claude", "-p", "--bare",
+        "--model", _bench.JUDGE_MODEL,
+        "--effort", _bench.JUDGE_EFFORT,
+        "--tools", "",
+        "--no-session-persistence",
+        "{prompt}",
+    ]  # fmt: skip
 
 
-def prepare_backend_env(backend: str, usage_log: Path) -> None:
-    """Point the judge subprocesses at the right credential (inherited via os.environ)."""
+def prepare_judge_env() -> None:
+    """Give the judge subprocesses the benchmark's key, never the parent session's."""
     _bench.drop_parent_session_env()
-    if backend == "anthropic":
-        os.environ["ANTHROPIC_API_KEY"] = _bench.require_env("ANT_API_KEY")
-    elif backend == "openrouter":
-        _bench.require_env("OPENROUTER_API_KEY")
-        os.environ["JUDGE_USAGE_LOG"] = str(usage_log)
+    os.environ["ANTHROPIC_API_KEY"] = anthropic_judge_key()
 
 
-def judge_model_name(backend: str) -> str:
-    models = {
-        "anthropic": _bench.JUDGE_MODEL_ANTHROPIC,
-        "openrouter": _bench.JUDGE_MODEL_OPENROUTER,
-        "stub": "stub-0.5",
-    }
-    return str(models[backend])
+def anthropic_judge_key() -> str:
+    """The Anthropic judge's key: ``ANT_API_KEY``, else the ``.env`` file's ``ANTHROPIC_API_KEY``.
+
+    Never an inherited ``ANTHROPIC_API_KEY``: inside a Claude Code session that
+    one belongs to the parent app (see :func:`_bench.drop_parent_session_env`).
+    """
+    key = os.environ.get("ANT_API_KEY") or _bench.env_file_value("ANTHROPIC_API_KEY")
+    if not key:
+        raise RuntimeError("no Anthropic judge key: set ANT_API_KEY or ANTHROPIC_API_KEY in .env")
+    return key
 
 
 class RecordingJudge:
@@ -158,11 +151,15 @@ def rubric_weighted(sample: EvalSample, calls: list[dict[str, object]]) -> float
     return sum(w * s for w, s in scored) / total if total else None
 
 
-def build_judge(backend: str) -> Judge:
-    """The judge for ``backend``; ``stub`` is a free, fixed 0.5 for dry runs."""
-    if backend == "stub":
+#: What score.json records as the stub judge's model.
+_STUB_MODEL = "stub-0.5"
+
+
+def build_judge(stub: bool) -> Judge:
+    """The Opus 5.5 judge, or with ``stub`` a free fixed 0.5 for dry runs."""
+    if stub:
         return StubJudge(default=0.5)
-    return LLMJudge(command=judge_command(backend), timeout=_bench.JUDGE_TIMEOUT_S)
+    return LLMJudge(command=judge_command(), timeout=_bench.JUDGE_TIMEOUT_S)
 
 
 def score_one(sample: EvalSample, out: Path, judge: Judge, args: argparse.Namespace) -> str:
@@ -209,7 +206,7 @@ def score_one(sample: EvalSample, out: Path, judge: Judge, args: argparse.Namesp
     payload.update(
         experiment=meta["experiment"],
         agent=meta,
-        judge={"backend": args.judge_backend, "model": judge_model_name(args.judge_backend),
+        judge={"model": _STUB_MODEL if args.stub_judge else _bench.JUDGE_MODEL,
                "effort": _bench.JUDGE_EFFORT, "judge_samples": args.judge_samples},
         judge_calls=recorder.calls,
         rubric_weighted_score=rubric_weighted(sample, recorder.calls),
@@ -253,10 +250,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--run-name", default=_bench.DEFAULT_RUN_NAME)
     parser.add_argument(
-        "--judge-backend",
-        choices=("anthropic", "openrouter", "stub"),
-        required=True,
-        help="stub: a free fixed 0.5 judge to dry-run the pipeline",
+        "--stub-judge", action="store_true", help="a free fixed 0.5 judge, to dry-run the pipeline"
     )
     parser.add_argument("--judge-samples", type=int, default=1)
     parser.add_argument("--workers", type=int, default=4)
@@ -267,9 +261,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     _bench.load_env_file()
-    usage_log = _bench.RESULTS_ROOT / args.run_name / "judge_usage.jsonl"
-    prepare_backend_env(args.judge_backend, usage_log)
-    judge = build_judge(args.judge_backend)
+    if not args.stub_judge:
+        prepare_judge_env()
+    judge = build_judge(args.stub_judge)
     runs = _saved_runs(args.run_name)
     failures = 0
     with ThreadPoolExecutor(max_workers=args.workers) as pool:

@@ -17,8 +17,10 @@ Needs only matplotlib, not the engine, so it runs outside the project venv::
 from __future__ import annotations
 
 import argparse
+import collections
 import csv
 import json
+import re
 import statistics
 import sys
 from dataclasses import asdict, dataclass
@@ -28,18 +30,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import _bench
 
-#: Categorical slots 1-8 of the reference palette, in order (validated for CVD on
-#: adjacent pairs; three slots sit below 3:1 contrast, so bars carry value labels
-#: or summary.md serves as the table view).
+#: Categorical slots 1-5 of the reference palette, in order (validated for CVD on
+#: adjacent pairs; slots below 3:1 contrast get value labels on their bars, and
+#: summary.md serves as the table view).
 SERIES_COLORS = {
     "opencode-review": "#2a78d6",
-    "playbook-v1": "#eb6834",
-    "playbook-v2": "#1baf7a",
+    "opencode-playbook-v0.1.0": "#eb6834",
+    "opencode-playbook": "#1baf7a",
     "claude-code-review": "#eda100",
-    "claude-playbook-v2": "#e87ba4",
-    "claude-v2-over-code-review": "#008300",
-    "opencode-v2-dual": "#6250d6",
-    "claude-v2-dual": "#e34948",
+    "claude-playbook": "#e87ba4",
 }
 INK, INK_2, MUTED, GRID, AXIS, SURFACE = (
     "#0b0b0b", "#52514e", "#898781", "#e1e0d9", "#c3c2b7", "#fcfcfb",
@@ -69,7 +68,7 @@ class RunRow:
     detect_top5: float | None = None
     first_match: int | None = None
     n_items: int | None = None
-    second_pass_ran: bool | None = None  # v2 runs: did the bug-only pass start?
+    second_pass_ran: bool | None = None  # current playbook text: did the bug-only pass start?
     subagent_starts: dict[str, int] | None = None  # Claude Code: foreground/background counts
 
 
@@ -110,12 +109,10 @@ def load_rows(run_root: Path) -> list[RunRow]:
 
 
 def _gate_exprs() -> dict[str, str]:
-    # Key each gate by its <task>/<name> id and by the flat id runs before #302 recorded.
     return {
-        key: s.gate.expr or next(iter(s.gate.bind))  # a None expr names the sole handle
+        s.id: s.gate.expr or next(iter(s.gate.bind))  # a None expr names the sole handle
         for s in _bench.review_samples()
         if s.gate is not None
-        for key in (s.id, _bench.run_key(s.id))
     }
 
 
@@ -134,10 +131,7 @@ def _row(payload: dict, exprs: dict[str, str]) -> RunRow:
         timed_out=bool(payload["agent"]["timed_out"]),
         judge_model=payload["judge"]["model"],
         judge_error=payload.get("judge_error") or "",
-        # Runs before the general v2 recorded only the prototypes' native reviewer.
-        second_pass_ran=payload["agent"].get(
-            "second_pass_ran", payload["agent"].get("native_pass_ran")
-        ),
+        second_pass_ran=payload["agent"].get("second_pass_ran"),
         subagent_starts=payload["agent"].get("subagent_starts"),
     )
 
@@ -162,8 +156,7 @@ def _with_detection(row: RunRow, score_path: Path) -> RunRow:
 
 
 def _short(sample_id: str) -> str:
-    # New runs record "review/<name>", runs before #302 "review-<name>".
-    return sample_id.removeprefix("review/").removeprefix("review-")
+    return sample_id.removeprefix("review/")
 
 
 def _label(key: str) -> str:
@@ -234,9 +227,7 @@ def sample_set(sample_id: str) -> str:
 
         sample_set("review/crbug-log-textio")  # "CRBugBench"
     """
-    # Runs recorded before #302 carry the flat ids (review-crbug-*).
-    crbug = sample_id.startswith(("review/crbug-", "review-crbug-"))
-    return "CRBugBench" if crbug else "original"
+    return "CRBugBench" if sample_id.startswith("review/crbug-") else "original"
 
 
 def _set_totals(rows: list[RunRow]) -> list[str]:
@@ -315,7 +306,7 @@ def _detection_section(rows: list[RunRow]) -> list[str]:
 
 
 def _second_pass_calls(rows: list[RunRow]) -> list[str]:
-    """For the v2 setups, how many runs started the second, bug-only pass they ask for."""
+    """For the current playbook text, how many runs started its second, bug-only pass."""
     keys = [
         k
         for k in dict.fromkeys(r.experiment for r in rows)
@@ -323,14 +314,22 @@ def _second_pass_calls(rows: list[RunRow]) -> list[str]:
     ]
     if not keys:
         return []
-    out = ["", "## Did the second pass run? (v2 setups)", ""]
+    out = ["", "## Did the second pass run? (current playbook text)", ""]
     for key in keys:
         mine = [r for r in rows if r.experiment == key]
         known = [r for r in mine if r.second_pass_ran is not None]
+        if not known:
+            out.append(f"- {_label(key)}: not recorded (run before this field)")
+            continue
         ran = sum(r.second_pass_ran is True for r in known)
-        unknown = f" ({len(mine) - len(known)} runs not recorded)" if len(known) < len(mine) else ""
-        out.append(f"- {_label(key)}: {ran} of {len(known)} runs{unknown}{_background(mine)}")
+        missing = len(mine) - len(known)
+        unknown = f" ({_runs(missing)} not recorded)" if missing else ""
+        out.append(f"- {_label(key)}: {ran} of {_runs(len(known))}{unknown}{_background(mine)}")
     return out
+
+
+def _runs(count: int) -> str:
+    return f"{count} run" if count == 1 else f"{count} runs"
 
 
 def _background(rows: list[RunRow]) -> str:
@@ -366,6 +365,24 @@ def _cell(row: RunRow | None) -> str:
     return f"{verdict} ({score})"
 
 
+#: The refusal code the Anthropic API puts in brackets, e.g. ``[reasoning_extraction]``.
+_REFUSAL_CODE_RE = re.compile(r"\[([a-z_]+)\]")
+
+
+def judge_error_reason(error: str) -> str:
+    """A short reason for a judge failure: the API's refusal code, else the error's lead.
+
+    Example::
+
+        judge_error_reason("... Details: `[reasoning_extraction]` ...")
+        # "refused (`reasoning_extraction`)"
+    """
+    found = _REFUSAL_CODE_RE.search(error)
+    if found:
+        return f"refused (`{found.group(1)}`)"
+    return f"{error.split(':', 1)[0]} (details in its score.json)"
+
+
 def _judge_refusals(rows: list[RunRow]) -> list[str]:
     """The runs the judge could not score, with its reason (their mean leaves them out)."""
     refused = [r for r in rows if r.judge_error]
@@ -373,18 +390,27 @@ def _judge_refusals(rows: list[RunRow]) -> list[str]:
         return []
     out = ["## Runs the judge could not score", ""]
     for r in refused:
-        out.append(f"- {_label(r.experiment)} / {_short(r.sample_id)}: {r.judge_error[-160:]}")
+        reason = judge_error_reason(r.judge_error)
+        out.append(f"- {_label(r.experiment)} / {_short(r.sample_id)}: {reason}")
     return out
 
 
 def _gate_failures(rows: list[RunRow]) -> list[str]:
+    """Each setup's failed gate checks, counted over its runs (per run: ``summary.csv``)."""
     out = ["## Why gates failed", ""]
     failed = [r for r in rows if r.gate_passed is False]
     if not failed:
         return [*out, "Every gate passed."]
-    for r in failed:
-        edits = f" (edited: {r.edited_files})" if r.edited_files else ""
-        out.append(f"- {_label(r.experiment)} / {_short(r.sample_id)}: `{r.gate_failed_by}`{edits}")
+    out += ["Failed gate checks per setup, with the number of runs each failed in:", ""]
+    for key in dict.fromkeys(r.experiment for r in failed):
+        mine = [r for r in failed if r.experiment == key]
+        checks = collections.Counter(
+            check for r in mine for check in r.gate_failed_by.split("; ") if check
+        )
+        listed = ", ".join(f"`{check}` {count}" for check, count in checks.most_common())
+        edited = sum(bool(r.edited_files) for r in mine)
+        note = f"; {_runs(edited)} edited files" if edited else ""
+        out.append(f"- {_label(key)} ({_runs(len(mine))}): {listed}{note}")
     return out
 
 

@@ -1,0 +1,45 @@
+Here are the findings from the high-effort review:
+
+```json
+[
+  {
+    "file": "src/audio.py",
+    "line": 15,
+    "summary": "TypeError when input_args is a non-preset string — the PR's promised feature crashes",
+    "failure_scenario": "User sets ffmpeg_input.input_args = \"-rtsp_transport tcp\" (a string of ordinary ffmpeg args, as the PR description says is supported). parse_preset_input returns None, the or chain short-circuits on the truthy raw string, and get_ffmpeg_arg_list(global_args) + str raises TypeError: can only concatenate list to list. Same crash for ffmpeg.input_args as a non-preset string in the fallback position."
+  },
+  {
+    "file": "src/audio.py",
+    "line": 14,
+    "summary": "IndexError with no audio input — bare crash with no guard or context message",
+    "failure_scenario": "get_ffmpeg_command is called with an FfmpegConfig whose inputs have no entry with \"audio\" in roles. The list comprehension returns [], and [0] raises a bare IndexError. Previously this risk was confined to AudioEventMaintainer.__init__; now the function is standalone and callable directly (and already is in tests), widening the blast radius."
+  },
+  {
+    "file": "src/audio.py",
+    "line": 16,
+    "summary": "detect_fps hardcoded to 1 injects -r 1 (1 FPS) into audio-only streams using preset-http-reolink",
+    "failure_scenario": "User sets input_args=\"preset-http-reolink\" for an audio input. parse_preset_input appends [\"-r\", \"1\"] because detect_fps=1 is hardcoded. The resulting ffmpeg command has -r 1 on a video-disabled (-vn) audio-only stream — semantically wrong, potentially affecting demuxers that throttle, and not asserted by any test."
+  },
+  {
+    "file": "src/audio.py",
+    "line": 15,
+    "summary": "global_args not resolved as a preset — a preset name string gets shlex.split() instead of being expanded",
+    "failure_scenario": "If ffmpeg.global_args is set to a preset name like \"preset-rtsp-generic\" (FfmpegArgs type permits preset strings), get_ffmpeg_arg_list calls shlex.split(\"preset-rtsp-generic\") returning [\"-hide_banner\", \"-loglevel\", \"warning\"] only for the default value, but [\"preset-rtsp-generic\"] for a preset name — a single opaque token ffmpeg cannot parse. Pre-existing in the touched function, re-exposed by this change."
+  },
+  {
+    "file": "tests/test_audio.py",
+    "line": 34,
+    "summary": "No test for non-preset string input_args — the exact case that produces the TypeError above",
+    "failure_scenario": "test_a_list_of_arguments_is_used_as_is covers list input_args. test_the_audio_input_preset_wins_over_the_camera_wide_one covers a preset-name string. There is no test for a plain argument string like \"-rtsp_transport tcp\", so the TypeError finding goes undetected by the test suite."
+  }
+]
+```
+
+**Key files:**
+- `~/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-code-review/review-crbug-audio-input-args/scratch/src/audio.py` (lines 14–20)
+- `~/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-code-review/review-crbug-audio-input-args/scratch/tests/test_audio.py` (line 34)
+- `~/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-code-review/review-crbug-audio-input-args/scratch/src/ffmpeg_presets.py` (lines 16–22, 25–27)
+- `~/.cache/playbook-bench/review-opencode-qwen3.6-27b/claude-code-review/review-crbug-audio-input-args/scratch/src/config.py` (line 11)
+
+**Summary:** The most critical bug (finding 1) is that the `or` chain on lines 15–20 can return a raw string when `input_args` is a non-preset string value, which the PR explicitly promises to support. Since the left side of `+` is always a list, this produces a runtime `TypeError`. The fix would be to wrap each fallback path through `get_ffmpeg_arg_list()` or to convert the string to a list before concatenation. Finding 2 is an unguarded `[0]` that crashes silently. Finding 3 is a hardcoded `detect_fps=1` that injects a meaningless video frame rate into audio streams.
+[claude-code:unrecognized_model] {"model":"qwen/qwen3.6-27b","query_source":"agent:custom"}

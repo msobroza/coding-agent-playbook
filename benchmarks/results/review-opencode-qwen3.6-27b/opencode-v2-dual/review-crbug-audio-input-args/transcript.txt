@@ -1,3 +1,0 @@
-Error: Unexpected error
-
-database is locked

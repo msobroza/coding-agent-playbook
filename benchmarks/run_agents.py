@@ -1,8 +1,8 @@
-"""Phase 1 of the review benchmark: run OpenCode on every review sample, per experiment.
+"""Phase 1 of the review benchmark: run every setup on every review sample.
 
 Each run materializes the sample's ``setup/`` with the engine's own
-:func:`materialize`, drives OpenCode through the engine's ``OpenCodeRunner`` and
-saves the prompt, transcript and working tree for phase 2 (``score_runs.py``),
+:func:`materialize`, drives OpenCode or Claude Code through the engine's runners
+and saves the prompt, transcript and working tree for phase 2 (``score_runs.py``),
 which grades them. Splitting the phases lets the judge be re-run or swapped
 without paying for the agent runs again. A finished run is skipped unless
 ``--force`` is given, so an interrupted batch resumes.
@@ -10,7 +10,7 @@ without paying for the agent runs again. A finished run is skipped unless
 Usage::
 
     python benchmarks/run_agents.py --workers 3
-    python benchmarks/run_agents.py --experiments playbook-v2 --samples review/spot-the-bug
+    python benchmarks/run_agents.py --experiments opencode-playbook --samples review/spot-the-bug
 """
 
 from __future__ import annotations
@@ -83,15 +83,15 @@ def claude_command(experiment: _bench.Experiment) -> list[str]:
     """The ``claude -p`` arg-list template (``{prompt}`` filled per run).
 
     Not ``--bare``: in bare mode Claude Code offers the model neither the Task
-    (subagent) nor the Skill tool, so the v2 review's first-pass subagent and the
-    wrapped ``/code-review`` could never run. Isolation comes instead from an
+    (subagent) nor the Skill tool, so the review's first passes could never run.
+    Isolation comes instead from an
     empty ``CLAUDE_CONFIG_DIR`` per run (see ``claude_agent_env``), no setting
     sources, no MCP servers and auto-memory off. ``--`` ends the options, so a
     prompt can never be read as a flag.
 
     Example::
 
-        claude_command(_bench.experiment_by_key("claude-playbook-v2"))[-2:]  # ["--", "{prompt}"]
+        claude_command(_bench.experiment_by_key("claude-playbook"))[-2:]  # ["--", "{prompt}"]
     """
     return [
         _bench.CLAUDE_BIN, "-p",
@@ -236,22 +236,19 @@ _SUBAGENT_TOOLS = ("Agent", "Task", "task")
 
 
 def second_pass_ran(experiment: _bench.Experiment, tool_calls: Sequence[str]) -> bool | None:
-    """Whether the run started the bug-only pass its prompt asks for; None when none is asked.
+    """Whether the run started the bug-only pass the current review asks for; else None.
 
-    The current review text asks for two first passes: the ``code-review`` skill
-    (Claude Code) or a second subagent beside the first. The ``code-review`` prototype asks for the
-    skill alone.
+    That pass is the ``code-review`` skill (Claude Code) or a second subagent
+    beside the first-pass subagent.
 
     Example::
 
-        second_pass_ran(_bench.experiment_by_key("playbook-v2"), ["task:explore"] * 2)  # True
+        second_pass_ran(_bench.experiment_by_key("opencode-playbook"), ["task:explore"] * 2)  # True
     """
     if experiment.playbook_text != "head":
         return None
     if "Skill:code-review" in tool_calls:
         return True
-    if experiment.first_pass == "code-review":
-        return False
     return sum(call.split(":")[0] in _SUBAGENT_TOOLS for call in tool_calls) >= 2
 
 
@@ -293,45 +290,14 @@ def build_runner(experiment: _bench.Experiment, scratch: Path, timeout: float) -
     return ToolLoggingOpenCodeRunner(command=opencode_command(experiment, scratch), timeout=timeout)
 
 
-#: v2's first pass (steps 1-2) as the prototype rewrites it: Claude Code's built-in
-#: /code-review finds candidates, and v2's own steps 5 onwards verify, rate and
-#: write the verdict. Everything else in the prompt is unchanged.
-_NATIVE_FIRST_PASS = """1. Before you read the diff or open any file under review, run Claude Code's built-in `/code-review` as the first pass: invoke the Skill tool with the skill `code-review` and, as its arguments, the user's request exactly as written. Run it once, in the foreground, and wait for its findings. Never pass `--fix` or `--comment`: the first pass changes nothing.
-2. When its findings arrive, skip steps 3-4 and go to step 5. Treat each finding as a candidate, not a conclusion: it may be wrong, a duplicate or outside the change, and step 5 checks it against the lines it cites. Do not read the diff or the reviewed files yourself, except the lines a finding cites. If the skill cannot be started, or it fails or returns no usable findings, do steps 3-4 yourself.
-"""
-_FIRST_PASS_START = "1. Before you read the diff or open any file under review"
-_FIRST_PASS_END = "3. Collect the stated intent"
-
-
-def native_first_pass(rendered: str) -> str:
-    """``rendered`` (the v2 review prompt) with its first pass run by ``/code-review``.
-
-    Raises :class:`ValueError` when the prompt no longer has the two anchors, so a
-    reworded v2 prompt fails loudly instead of silently running the plain v2.
-
-    Example::
-
-        native_first_pass(v2_text).count("/code-review")  # 1
-    """
-    start, end = rendered.find(_FIRST_PASS_START), rendered.find(_FIRST_PASS_END)
-    if start < 0 or end <= start:
-        raise ValueError(
-            f"v2 prompt lacks the first-pass anchors {_FIRST_PASS_START!r} / {_FIRST_PASS_END!r}"
-        )
-    return rendered[:start] + _NATIVE_FIRST_PASS + rendered[end:]
-
-
 def agent_prompt(experiment: _bench.Experiment, sample: EvalSample) -> str:
     """What the agent receives: the request for the built-in reviewer, or the playbook prompt.
 
     OpenCode's ``/review`` takes the request through ``--command review``;
     Claude Code's ``/code-review`` takes it as the slash command's arguments.
     """
-    if not experiment.runnable:
-        raise ValueError(f"{experiment.key} is a recorded prototype; the review now ships its pass")
     if experiment.playbook_text == "head":
-        rendered = render_prompt(sample, strict=True)
-        return native_first_pass(rendered) if experiment.first_pass == "code-review" else rendered
+        return render_prompt(sample, strict=True)
     if experiment.playbook_text is not None:
         return render_prompt(sample, strict=True, edition=edition_of(experiment.playbook_text))
     if experiment.harness == "claude":
@@ -431,9 +397,7 @@ def run_one(experiment: _bench.Experiment, sample: EvalSample, args: argparse.Na
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--run-name", default=_bench.DEFAULT_RUN_NAME)
-    parser.add_argument(
-        "--experiments", nargs="*", default=[e.key for e in _bench.EXPERIMENTS if e.runnable]
-    )
+    parser.add_argument("--experiments", nargs="*", default=[e.key for e in _bench.EXPERIMENTS])
     parser.add_argument("--samples", nargs="*", default=None, help="sample ids (default: all)")
     parser.add_argument("--workers", type=int, default=3)
     parser.add_argument("--timeout", type=float, default=_bench.AGENT_TIMEOUT_S)

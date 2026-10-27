@@ -1,0 +1,22 @@
+{
+  "experiment": "opencode-playbook-v0.1.0",
+  "sample_id": "review/crbug-ftp-active-string",
+  "harness": "opencode",
+  "model": "openrouter/qwen/qwen3.6-27b",
+  "command": [
+    "opencode",
+    "run",
+    "--pure",
+    "--dir",
+    "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/playbook-v1/review-crbug-ftp-active-string/scratch",
+    "--model",
+    "openrouter/qwen/qwen3.6-27b",
+    "{prompt}"
+  ],
+  "returncode": 0,
+  "timed_out": false,
+  "duration_seconds": 46.5,
+  "baseline_commit": "3defb7daf2d861fbb46fad3ccd31272c85e9ddad",
+  "scratch": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/playbook-v1/review-crbug-ftp-active-string/scratch",
+  "setup_snapshot": "~/.cache/playbook-bench/review-opencode-qwen3.6-27b/playbook-v1/review-crbug-ftp-active-string/scratch__setup_baseline"
+}

@@ -7,7 +7,6 @@ as ``python benchmarks/<script>.py`` from the repo root).
 
 from __future__ import annotations
 
-import json
 import os
 import re
 from dataclasses import dataclass
@@ -20,7 +19,7 @@ if TYPE_CHECKING:
 REPO_ROOT: Final = Path(__file__).resolve().parents[1]
 BENCH_ROOT: Final = REPO_ROOT / "benchmarks"
 RESULTS_ROOT: Final = BENCH_ROOT / "results"
-DEFAULT_RUN_NAME: Final = "review-opencode-qwen3.6-27b"
+DEFAULT_RUN_NAME: Final = "review-qwen3.6-27b"
 
 #: Where the agents' working trees live: outside the repo on purpose. OpenCode
 #: walks up from its directory for AGENTS.md/CLAUDE.md, and this checkout's own
@@ -47,9 +46,8 @@ CLAUDE_ALLOWED_TOOLS: Final = (
     "Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)"
 )
 
-#: The judge: Opus 5.5 at medium effort, reached through one of two backends.
-JUDGE_MODEL_ANTHROPIC: Final = "claude-opus-5-5"
-JUDGE_MODEL_OPENROUTER: Final = "anthropic/claude-opus-5.5"
+#: The judge: Opus 5.5 at medium effort, through the ``claude`` CLI.
+JUDGE_MODEL: Final = "claude-opus-5-5"
 JUDGE_EFFORT: Final = "medium"
 JUDGE_TIMEOUT_S: Final = 180.0
 
@@ -64,9 +62,6 @@ AGENT_ENV: Final = {
     "NO_COLOR": "1",
     "OPENCODE_DISABLE_CLAUDE_CODE": "1",
     "PYTHONDONTWRITEBYTECODE": "1",
-    # The default model for an OpenCode run started from inside a run (the
-    # prototype that ran `opencode run --command review` through the bash tool).
-    "OPENCODE_CONFIG_CONTENT": json.dumps({"model": AGENT_MODEL}),
 }
 
 #: Variables a parent Claude Code session exports to its children. Inherited by
@@ -75,65 +70,36 @@ AGENT_ENV: Final = {
 #: answered "credit balance is too low" while the key itself worked).
 _SESSION_ENV_RE: Final = re.compile(r"^(ANTHROPIC_.*|CLAUDECODE|CLAUDE_.*)$")
 
+#: What the loaded ``.env`` file itself sets, apart from the inherited environment.
+_ENV_FILE_VALUES: dict[str, str] = {}
+
 _ANSI_RE: Final = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
 _ENV_LINE_RE: Final = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$")
 
 
 @dataclass(frozen=True)
 class Experiment:
-    """One reviewer configuration of one harness.
+    """One reviewer setup: a harness and what it reviews with.
 
-    ``playbook_text`` ``None`` means the harness's built-in review command gets
-    the sample's request alone (OpenCode's ``/review``, Claude Code's
-    ``/code-review``); otherwise the playbook's rendered review prompt is sent,
-    exactly as ``playbook eval --run`` builds it: ``"head"`` renders the current
-    text (the former prompt set v2, ADR 0012) and a release tag renders that
-    edition, built from its git tag (the former v1 is edition ``v0.1.0``).
-    ``harness`` is ``"opencode"`` or ``"claude"``. ``first_pass`` rewrites the
-    current review's first pass (prototypes of wrapping the harness's native
-    reviewer): ``"code-review"`` replaces both first passes with Claude Code's
-    ``/code-review``; ``"dual"`` ran the one-subagent text's subagent and the
-    harness's own reviewer side by side, which the review's step 1 now ships in
-    general form. A recorded prototype (``runnable=False``) keeps its results and
-    label but is not re-run: its prompt edits fit only the text it was run on.
+    ``playbook_text`` ``None`` gives the harness's built-in reviewer the
+    sample's request alone (OpenCode's ``/review``, Claude Code's
+    ``/code-review``). Otherwise the agent gets the playbook's rendered
+    ``review`` prompt, as ``playbook eval --run`` builds it: ``"head"`` is the
+    current text, and a release tag such as ``"v0.1.0"`` is that edition.
     """
 
     key: str
     label: str
     playbook_text: str | None
     harness: str = "opencode"
-    first_pass: str | None = None
-    runnable: bool = True
 
 
 EXPERIMENTS: Final = (
     Experiment("opencode-review", "OpenCode /review", None),
-    Experiment("playbook-v1", "OpenCode + playbook v1", "v0.1.0"),
-    Experiment("playbook-v2", "OpenCode + playbook v2", "head"),
+    Experiment("opencode-playbook-v0.1.0", "OpenCode + playbook v0.1.0", "v0.1.0"),
+    Experiment("opencode-playbook", "OpenCode + playbook", "head"),
     Experiment("claude-code-review", "Claude Code /code-review", None, harness="claude"),
-    Experiment("claude-playbook-v2", "Claude Code + playbook v2", "head", harness="claude"),
-    Experiment(
-        "claude-v2-over-code-review",
-        "Claude Code + v2 over /code-review",
-        "head",
-        harness="claude",
-        first_pass="code-review",
-    ),
-    Experiment(
-        "opencode-v2-dual",
-        "OpenCode + v2 with /review alongside",
-        "head",
-        first_pass="dual",
-        runnable=False,
-    ),
-    Experiment(
-        "claude-v2-dual",
-        "Claude Code + v2 with /code-review alongside",
-        "head",
-        harness="claude",
-        first_pass="dual",
-        runnable=False,
-    ),
+    Experiment("claude-playbook", "Claude Code + playbook", "head", harness="claude"),
 )
 
 
@@ -142,7 +108,7 @@ def experiment_by_key(key: str) -> Experiment:
 
     Example::
 
-        experiment_by_key("playbook-v1").playbook_text  # "v0.1.0"
+        experiment_by_key("opencode-playbook-v0.1.0").playbook_text  # "v0.1.0"
     """
     for experiment in EXPERIMENTS:
         if experiment.key == key:
@@ -175,7 +141,21 @@ def _apply_env_lines(lines: list[str]) -> None:
         if match is None or line.lstrip().startswith("#"):
             continue
         name, value = match.group(1), match.group(2).strip("'\"")
+        _ENV_FILE_VALUES[name] = value
         os.environ.setdefault(name, value)
+
+
+def env_file_value(name: str) -> str:
+    """``name`` as the loaded ``.env`` file sets it, never an inherited value ('' when unset).
+
+    A parent Claude Code session exports its own ``ANTHROPIC_*`` variables, so a
+    key the benchmark must not take from the environment is read here instead.
+
+    Example::
+
+        env_file_value("ANTHROPIC_API_KEY")  # "sk-ant-..." or ""
+    """
+    return _ENV_FILE_VALUES.get(name, "")
 
 
 def require_env(name: str) -> str:

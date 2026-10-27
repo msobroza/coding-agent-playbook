@@ -13,8 +13,8 @@ cite: one source of truth, no second copy of the ground truth.
 
 Usage::
 
-    python benchmarks/detect_runs.py --judge-backend anthropic
-    python benchmarks/detect_runs.py --judge-backend anthropic --votes 3 --force
+    python benchmarks/detect_runs.py
+    python benchmarks/detect_runs.py --votes 3 --force
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import _bench
 import _detection
-from score_runs import judge_command, judge_model_name, prepare_backend_env
+from score_runs import judge_command, prepare_judge_env
 
 #: Run directories of samples whose rubric names one known defect, the way
 #: CRBugBench tasks do (``_bench.run_key`` of ``review/crbug-<name>``).
@@ -126,8 +126,7 @@ def detect_one(run: Path, sample_id: str, command: list[str], args: argparse.Nam
         "experiment": experiment,
         "defect": asdict(defect),
         "judge": {
-            "backend": args.judge_backend,
-            "model": judge_model_name(args.judge_backend),
+            "model": _bench.JUDGE_MODEL,
             "effort": _bench.JUDGE_EFFORT,
             "votes": args.votes,
         },
@@ -158,7 +157,6 @@ def _runs(run_name: str, experiments: list[str] | None) -> list[tuple[Path, str]
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--run-name", default=_bench.DEFAULT_RUN_NAME)
-    parser.add_argument("--judge-backend", choices=("anthropic", "openrouter"), required=True)
     parser.add_argument("--votes", type=int, default=1, help="judge verdicts per run, averaged")
     parser.add_argument("--experiments", nargs="*", default=None)
     parser.add_argument("--workers", type=int, default=4)
@@ -172,9 +170,8 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     _bench.load_env_file()
-    usage_log = _bench.RESULTS_ROOT / args.run_name / "judge_usage.jsonl"
-    prepare_backend_env(args.judge_backend, usage_log)
-    command = judge_command(args.judge_backend)
+    prepare_judge_env()
+    command = judge_command()
     errors = 0
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = [

@@ -1,0 +1,35 @@
+{
+  "sample_id": "review/crbug-replace-same-object",
+  "experiment": "opencode-review",
+  "defect": {
+    "description": "The edge case where new_mobject is old_mobject: the new deduplication removes the object from the list before searching, so scene.replace(a, a) no longer finds a, raises ValueError and leaves a removed from the scene; the deduplication must skip the case new_m is old_m (or run only after the replacement).",
+    "location": "src/scene.py (the deduplication at the top of replace_in_list)"
+  },
+  "judge": {
+    "backend": "anthropic",
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "no",
+  "strict": 0.0,
+  "lenient": 0.0,
+  "top5": 0.0,
+  "first_match": null,
+  "n_items": 2,
+  "votes": [
+    {
+      "detected": "no",
+      "review_items": [
+        "LGTM \u2014 no issues found; dedup guard at top of replace_in_list mirrors Scene.add() logic",
+        "Two tests cover top-level and nested scenarios, all 5 tests pass; safe to land"
+      ],
+      "item_matches": [
+        0,
+        0
+      ],
+      "evidence_quote": "",
+      "justification": "The review approves the change with no issues found. It describes the dedup guard but never mentions the new_m is old_m case, which makes scene.replace(a, a) raise ValueError and remove a from the scene."
+    }
+  ]
+}

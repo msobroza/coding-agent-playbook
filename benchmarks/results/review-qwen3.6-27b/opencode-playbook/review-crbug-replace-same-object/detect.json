@@ -1,0 +1,36 @@
+{
+  "sample_id": "review/crbug-replace-same-object",
+  "experiment": "opencode-playbook",
+  "defect": {
+    "description": "The edge case where new_mobject is old_mobject: the new deduplication removes the object from the list before searching, so scene.replace(a, a) no longer finds a, raises ValueError and leaves a removed from the scene; the deduplication must skip the case new_m is old_m (or run only after the replacement).",
+    "location": "src/scene.py (the deduplication at the top of replace_in_list)"
+  },
+  "judge": {
+    "model": "claude-opus-5-5",
+    "effort": "medium",
+    "votes": 1
+  },
+  "detected": "yes",
+  "strict": 1.0,
+  "lenient": 1.0,
+  "top5": 1.0,
+  "first_match": 2,
+  "n_items": 3,
+  "votes": [
+    {
+      "detected": "yes",
+      "review_items": [
+        "Guard removes new_m from unrelated lists during recursive descent (src/scene.py:38)",
+        "Same-object replace raises spurious ValueError because guard removes it before search (src/scene.py:38)",
+        "Nit: comment states only positive intent; note guard runs recursively at every level (src/scene.py:36)"
+      ],
+      "item_matches": [
+        0,
+        1,
+        0
+      ],
+      "evidence_quote": "same-object replace raises spurious `ValueError`. When `old_m` and `new_m` are the same object, the guard removes it from the list, then the search finds nothing and raises \"Could not find\".",
+      "justification": "The second finding identifies the same-object case at the deduplication guard. It names the cause: the object is removed before the search, which then fails with ValueError. This matches the known defect, though the review does not explicitly mention that the object is left removed from the scene."
+    }
+  ]
+}

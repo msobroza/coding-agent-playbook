@@ -1,0 +1,9 @@
+Earlier findings:
+
+- src/cart.py:15 (important, remove() negative quantity): **fixed** — line 17 now guards `0 < quantity <= held`.
+- src/cart.py:19 (important, total_cents() unbounded discount_percent): **still open** — `total_cents()` is untouched; `discount_percent=150` still produces a negative total, `discount_percent=-10` still inflates it.
+- src/cart.py:9 (nit, add() zero/negative quantity): **fixed** — line 10 now raises on `quantity <= 0`.
+
+Findings: 1 important, 0 nit, 0 pre-existing
+
+request changes
