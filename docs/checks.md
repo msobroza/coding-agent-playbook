@@ -984,11 +984,15 @@ uv run scripts/release.py prepare --eval --full   # every sample on every target
 - On a refusal after recording, the recorded files are copied to a kept temporary
   directory named in the error. `--reuse-metrics DIR` reads a target's file from
   there instead of running it again, if it was recorded on the same base commit.
+  A reused file's mode comes from the file, not from this run's flags, and
+  `--full` refuses a reused file that holds carried entries.
 
-The pull request body adds a `Release metrics` section to the notes, with one line
-per target and its notes; each line names the mode: "changed-only: N rerun, M
-carried" or "full run". A file reused with `--reuse-metrics` that holds carried
-entries is changed-only. These runs are paid and only the maintainer starts them;
+Each record run's carry plan (why samples rerun, or which `setup` part made every
+sample rerun) is printed per target. The pull request body adds a `Release
+metrics` section to the notes, with one line per target and its notes; each line
+names the mode: "changed-only: N rerun, M carried" (with the reason when every
+sample reran) or "full run". A reused file is changed-only when it holds carried
+entries or its summary counts `carried`. These runs are paid and only the maintainer starts them;
 CI never does.
 
 `playbook eval` has no `--run-tests` flag. A sample runs the test suite if and only if

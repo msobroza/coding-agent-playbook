@@ -21,12 +21,14 @@ previous release's file for the same target (``check_regressions``), and the
 comparison is stored in it. ``--accept SAMPLE=REASON`` (repeatable) accepts that
 sample's regression on every target where it regressed; one that regressed on
 no target is refused. An unaccepted regression refuses the release pull request,
-whose body says per target "changed-only: N rerun, M carried" or "full run".
+whose body says per target "changed-only: N rerun, M carried" or "full run";
+the engine's carry plan (why samples rerun) is passed on to the output.
 
 Recording is paid and slow, so on any refusal after it the recorded files are
 copied to a kept directory outside the checkout, and ``--reuse-metrics DIR``
 reads a target's file from there instead of recording it again (only when it
-was recorded on the same base commit).
+was recorded on the same base commit). A reused file's mode comes from the file,
+not from this run's flags, and ``--full`` refuses one that holds carried entries.
 """
 
 from __future__ import annotations
@@ -104,8 +106,10 @@ class TargetMetrics:
     name: str
     metrics: Mapping[str, object]
     check: RegressionCheck | None
-    #: Recorded with a ``--carry-from`` baseline, or reused with carried entries.
+    #: Recorded with a ``--carry-from`` baseline; a reused file: recorded so (``_reused_mode``).
     changed_only: bool = False
+    #: The engine's reason when a changed-only recording reran every sample.
+    full_rerun_reason: str | None = None
 
 
 def release_targets(checkout: Path) -> ReleaseTargets:
@@ -143,16 +147,14 @@ def record_release_metrics(
     """
     out_dir = release_dir(tools.cwd / _CATALOG, version) / METRICS_DIRNAME
     with metrics_kept_on_refusal(tools.cwd, version, request):
-        recorded: dict[str, dict[str, object]] = {}
-        baselined: set[str] = set()
+        results: dict[str, _RecordResult] = {}
         for name in targets.names:
             carry_from = None if request.full else _previous_file(tools.cwd, previous, name)
             recording = _Recording(name, out_dir / f"{name}.json", targets.judged, carry_from)
-            metrics = _recorded(tools, recording, request.reuse, base)
-            # The recording names the installed engine's version; the file is this release's.
-            recorded[name] = {**metrics, "release": version}
-            baselined |= {name} if carry_from is not None else set()
-        checked = _with_modes(_checked(tools.cwd, recorded, previous, request.accepted), baselined)
+            results[name] = _recorded(tools, recording, request, base)
+        # The recording names the installed engine's version; the file is this release's.
+        recorded = {name: {**r.metrics, "release": version} for name, r in results.items()}
+        checked = _with_modes(_checked(tools.cwd, recorded, previous, request.accepted), results)
         for outcome in checked:
             _write(out_dir / f"{outcome.name}.json", outcome.metrics)
         _refuse_blocked(checked)
@@ -175,7 +177,7 @@ def metrics_kept_on_refusal(checkout: Path, version: str, request: EvalRequest) 
     try:
         yield
     except ReleaseError as exc:
-        raise ReleaseError(f"{exc}\n{_kept_note(out_dir, request.make_kept_dir)}") from exc
+        raise ReleaseError(f"{exc}\n{_kept_note(out_dir, request)}") from exc
 
 
 def metrics_body(outcomes: Sequence[TargetMetrics]) -> str:
@@ -206,15 +208,19 @@ def _summary_line(outcome: TargetMetrics) -> str:
 
 
 def _with_modes(
-    outcomes: Sequence[TargetMetrics], baselined: set[str]
+    outcomes: Sequence[TargetMetrics], results: Mapping[str, _RecordResult]
 ) -> tuple[TargetMetrics, ...]:
-    """Mark each outcome changed-only when it had a baseline or carries entries (#329 ticket 07).
+    """Each outcome with the mode its file was recorded in (#329 ticket 07).
 
     A file reused with ``--reuse-metrics`` was recorded by an earlier run, so its
-    carried entries also mark it changed-only.
+    mode comes from the file (``_reused_mode``), not from this run's flags.
     """
     return tuple(
-        dataclasses.replace(o, changed_only=o.name in baselined or _carried(o.metrics) > 0)
+        dataclasses.replace(
+            o,
+            changed_only=results[o.name].changed_only,
+            full_rerun_reason=results[o.name].full_rerun_reason,
+        )
         for o in outcomes
     )
 
@@ -233,7 +239,18 @@ def _mode(outcome: TargetMetrics) -> str:
     carried = _carried(outcome.metrics)
     samples = outcome.metrics.get("samples")
     total = len(samples) if isinstance(samples, dict) else 0
-    return f"changed-only: {total - carried} rerun, {carried} carried"
+    why = "" if outcome.full_rerun_reason is None else f" ({outcome.full_rerun_reason})"
+    return f"changed-only: {total - carried} rerun{why}, {carried} carried"
+
+
+def _reused_mode(metrics: Mapping[str, object]) -> bool:
+    """Whether a kept file was recorded changed-only: it carries entries, or counts them.
+
+    Only a ``--carry-from`` recording writes ``carried`` in the summary, so a
+    changed-only file whose every sample changed (0 carried) still reads so.
+    """
+    summary = metrics.get("summary")
+    return _carried(metrics) > 0 or (isinstance(summary, dict) and "carried" in summary)
 
 
 @dataclass(frozen=True)
@@ -246,21 +263,45 @@ class _Recording:
     carry_from: Path | None
 
 
+@dataclass(frozen=True)
+class _RecordResult:
+    """One target's metrics file, the mode it was recorded in, and why it reran everything."""
+
+    metrics: dict[str, object]
+    changed_only: bool
+    full_rerun_reason: str | None = None
+
+
 def _recorded(
-    tools: Tools, recording: _Recording, reuse: Path | None, base: str
-) -> dict[str, object]:
-    """The target's metrics: reused from ``reuse`` when recorded there on ``base``, else recorded."""
-    name, path = recording.name, recording.path
-    kept = None if reuse is None else reuse / f"{name}.json"
+    tools: Tools, recording: _Recording, request: EvalRequest, base: str
+) -> _RecordResult:
+    """The target's metrics: reused from ``request.reuse`` when kept there, else recorded."""
+    kept = None if request.reuse is None else request.reuse / f"{recording.name}.json"
     if kept is not None and kept.is_file():
-        metrics = _load(kept)
-        if metrics.get("commit") != base:
-            raise ReleaseError(
-                f"{kept} was recorded on commit {metrics.get('commit')}, not on the base {base}: "
-                "drop --reuse-metrics or remove that file to record the target again"
-            )
-        print(f"release: reused the metrics of target {name!r} from {kept}")
-        return metrics
+        return _reused(kept, recording.name, base, full=request.full)
+    return _fresh(tools, recording)
+
+
+def _reused(kept: Path, name: str, base: str, *, full: bool) -> _RecordResult:
+    """The kept file of target ``name``; refuses another base, or carried entries under --full."""
+    metrics = _load(kept)
+    if metrics.get("commit") != base:
+        raise ReleaseError(
+            f"{kept} was recorded on commit {metrics.get('commit')}, not on the base {base}: "
+            "drop --reuse-metrics or remove that file to record the target again"
+        )
+    if full and _carried(metrics) > 0:
+        raise ReleaseError(
+            f"{kept} carries {_carried(metrics)} entries from a baseline, but --full reruns "
+            "every sample: drop --reuse-metrics or remove that file to record the target again"
+        )
+    print(f"release: reused the metrics of target {name!r} from {kept}")
+    return _RecordResult(metrics, changed_only=_reused_mode(metrics))
+
+
+def _fresh(tools: Tools, recording: _Recording) -> _RecordResult:
+    """Record the target in a subprocess; pass its carry plan on to the output."""
+    name, path = recording.name, recording.path
     path.parent.mkdir(parents=True, exist_ok=True)
     argv = _record_argv(tools.cwd, recording)
     done = tools.runner(argv, cwd=tools.cwd, timeout=RECORD_TIMEOUT_SECONDS)
@@ -272,8 +313,45 @@ def _recorded(
     mode = (
         "in full" if recording.carry_from is None else f"changed-only from {recording.carry_from}"
     )
+    plan = carry_plan_lines(done.stdout)
+    for line in plan:
+        print(f"release: {name}: {line}")
     print(f"release: recorded the metrics of target {name!r} {mode}")
-    return _load(path)
+    changed_only = recording.carry_from is not None
+    return _RecordResult(_load(path), changed_only, full_rerun_reason(plan))
+
+
+def carry_plan_lines(stdout: str) -> list[str]:
+    """The record run's carry plan: its ``carry plan:`` line and the indented reasons under it.
+
+    Example::
+
+        >>> carry_plan_lines("x\ncarry plan: 1 rerun, 0 carried\n  a: new sample\ndone\n")
+        ['carry plan: 1 rerun, 0 carried', '  a: new sample']
+    """
+    lines: list[str] = []
+    inside = False
+    for line in stdout.splitlines():
+        if line.startswith("carry plan:"):
+            inside = True
+        elif inside and not line.startswith("  "):
+            inside = False
+        if inside:
+            lines.append(line)
+    return lines
+
+
+def full_rerun_reason(plan: Sequence[str]) -> str | None:
+    """Why a changed-only recording reran every sample, from its carry plan; ``None`` if not.
+
+    Example::
+
+        >>> full_rerun_reason(["carry plan: every sample reruns, setup differs: 2 rerun, 0 carried"])
+        'every sample reruns, setup differs'
+    """
+    prefix = "carry plan: every sample reruns, "
+    first = next((line for line in plan if line.startswith(prefix)), None)
+    return None if first is None else first.removeprefix("carry plan: ").rpartition(": ")[0]
 
 
 def _record_argv(checkout: Path, recording: _Recording) -> list[str]:
@@ -351,14 +429,17 @@ def _refuse_blocked(outcomes: Sequence[TargetMetrics]) -> None:
         )
 
 
-def _kept_note(out_dir: Path, make_kept_dir: Callable[[], Path]) -> str:
+def _kept_note(out_dir: Path, request: EvalRequest) -> str:
     """Copy the recorded files out of the checkout; the sentence that names where."""
     if not out_dir.is_dir() or not any(out_dir.glob("*.json")):
         return "no metrics file was recorded"
-    kept = make_kept_dir()
+    kept = request.make_kept_dir()
     for path in sorted(out_dir.glob("*.json")):
         shutil.copy2(path, kept / path.name)
-    return f"the recorded metrics are kept in {kept}: pass --reuse-metrics {kept} to reuse them"
+    full = " --full" if request.full else ""
+    return (
+        f"the recorded metrics are kept in {kept}: pass --reuse-metrics {kept}{full} to reuse them"
+    )
 
 
 def _load(path: Path) -> dict[str, object]:
