@@ -10,11 +10,12 @@ One file holds one release's scores on one Eval target
                  "label", "endpoint": {"name", "fingerprint"} | null,
                  "price": {"input", "output"} | null, "judge_model", "runs",
                  "isolated"?},
-      "summary": {"samples", "runs", "pass_rate", "mean_score", "tokens", "cost_usd"},
+      "summary": {"samples", "runs", "pass_rate", "mean_score", "tokens", "cost_usd",
+                  "rerun"?, "carried"?},
       "samples": {"<sample id>": {"prompt_id", "graded", "prompt_digest", "sample_digest",
                   "passes", "runs", "mean_score", "stdev", "checks": {"<check id>": score},
                   "duration_seconds_mean", "tokens_mean", "cost_usd_mean",
-                  "inputs_digest"?}},
+                  "inputs_digest"?, "measured_in"?: {"release", "commit"}}},
       "controls": {"<sample id>": {the same keys, "graded": "<edition tag>"}},
       "setup_digest"?: "<sha256>",
       "setup"?: {"harness", "harness_version", "model", "endpoint_fingerprint",
@@ -44,6 +45,13 @@ samples that decides scores, and ``setup`` holds its named parts
 differs. Both are optional, so a file written before them still validates; when
 present, the digest is a string and every part is present and typed.
 
+``measured_in`` and the summary's ``rerun`` and ``carried`` counts (#329 ticket
+05, ``evals.release_carry``) come with ``playbook eval --record --carry-from``:
+a carried entry is copied from the baseline file, and its ``measured_in`` names
+the release and commit that measured it; ``rerun`` counts the entries this
+record measured and ``carried`` the copied ones. All are optional, so a file
+written without them still validates; when present they are typed.
+
 ``previous`` is ``null`` until the regression check compares the file with the
 previous release; that check may add comparison keys (``vs_previous`` per
 sample, regression counts in the summary) without a new version, because a
@@ -72,6 +80,8 @@ ISOLATED_KEY: Final = "isolated"
 SETUP_DIGEST_KEY: Final = "setup_digest"
 #: The optional top-level key of the setup digest's named parts.
 SETUP_KEY: Final = "setup"
+#: The optional per-entry key naming the release and commit that measured a carried entry.
+MEASURED_IN_KEY: Final = "measured_in"
 
 _STR: Final = (str,)
 _OPT_STR: Final = (str, type(None))
@@ -135,6 +145,8 @@ _SUMMARY: Final[_Fields] = {
     "tokens": (int, type(None)),
     "cost_usd": _OPT_NUM,
 }
+#: Summary keys added under version 1 (#329 ticket 05): absent in older files, typed when present.
+_OPTIONAL_SUMMARY: Final[_Fields] = {"rerun": _INT, "carried": _INT}
 _SAMPLE: Final[_Fields] = {
     "prompt_id": _STR,
     "graded": _STR,
@@ -150,7 +162,8 @@ _SAMPLE: Final[_Fields] = {
     "cost_usd_mean": _OPT_NUM,
 }
 #: Entry keys added under version 1: absent in older files, typed when present.
-_OPTIONAL_SAMPLE: Final[_Fields] = {INPUTS_DIGEST_KEY: _STR}
+_OPTIONAL_SAMPLE: Final[_Fields] = {INPUTS_DIGEST_KEY: _STR, MEASURED_IN_KEY: (dict,)}
+_MEASURED_IN: Final[_Fields] = {"release": _STR, "commit": _OPT_STR}
 
 
 class ReleaseMetricsError(ExitTwoError):
@@ -187,6 +200,9 @@ def _problems(data: object) -> list[str]:
         )
     problems += _nested(data, "target", _TARGET)
     problems += _nested(data, "summary", _SUMMARY)
+    summary = data.get("summary")
+    if isinstance(summary, dict):
+        problems += _check_fields(summary, _OPTIONAL_SUMMARY, "summary.", optional=True)
     problems += _check_fields(data, _OPTIONAL_TOP, "", optional=True)
     problems += _nested(data, SETUP_KEY, SETUP_PART_TYPES)
     target = data.get("target")
@@ -209,6 +225,7 @@ def _sample_problems(label: str, entry: object) -> list[str]:
         return [f"{label}: expected an object, got {type(entry).__name__}"]
     problems = _check_fields(entry, _SAMPLE, f"{label}.")
     problems += _check_fields(entry, _OPTIONAL_SAMPLE, f"{label}.", optional=True)
+    problems += _nested(entry, MEASURED_IN_KEY, _MEASURED_IN, prefix=f"{label}.")
     checks = entry.get("checks")
     if isinstance(checks, dict):
         problems += [

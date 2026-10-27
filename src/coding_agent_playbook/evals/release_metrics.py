@@ -21,7 +21,7 @@ from __future__ import annotations
 import statistics
 from collections import Counter
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.evals.release_metrics_schema import (
     CONTROLS_KEY,
@@ -34,7 +34,7 @@ from coding_agent_playbook.evals.release_metrics_schema import (
 from coding_agent_playbook.grading.types import CheckResult
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence
+    from collections.abc import Iterator, Mapping, Sequence
 
     from coding_agent_playbook.evals.run.harness_runner import SampleResult
     from coding_agent_playbook.evals.setup_digest import SetupParts
@@ -209,6 +209,30 @@ def _summary(samples: Sequence[SampleRuns], price: TokenPrice | None) -> dict[st
         "mean_score": _round(_mean(sample_means)) if sample_means else None,
         "tokens": int(tokens) if tokens is not None else None,
         "cost_usd": _round_or_none(cost),
+    }
+
+
+def entries_summary(entries: Mapping[str, Mapping[str, Any]]) -> dict[str, object]:
+    """The summary's sample, run, pass-rate and mean-score keys, folded from recorded entries.
+
+    The same semantics as a fresh record's summary: ``pass_rate`` pools the
+    passes of every run, ``mean_score`` is the mean of the per-sample means. A
+    ``--carry-from`` record (#329 ticket 05) folds fresh and carried entries
+    alike, so its headline numbers stay comparable across releases.
+
+    Example::
+
+        >>> entries_summary({"a": {"passes": 1, "runs": 2, "mean_score": 0.5}})
+        {'samples': 1, 'runs': 2, 'pass_rate': 0.5, 'mean_score': 0.5}
+    """
+    runs = sum(int(entry["runs"]) for entry in entries.values())
+    passes = sum(int(entry["passes"]) for entry in entries.values())
+    means = [float(entry["mean_score"]) for entry in entries.values()]
+    return {
+        "samples": len(entries),
+        "runs": runs,
+        "pass_rate": _round(passes / runs) if runs else 0.0,
+        "mean_score": _round(_mean(means)) if means else None,
     }
 
 
