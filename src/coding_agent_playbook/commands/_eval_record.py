@@ -17,7 +17,13 @@ harness and the judge run isolated from the user's personal settings, so a
 missing credential is refused before any paid run too, and the target block
 records ``isolated`` (#329 ticket 02, ``evals.record_isolation``). The file
 records its setup digest and parts (#329 ticket 04, ``evals.setup_digest``),
-with the judge CLI's version probed once like the harness's. The
+with the judge CLI's version probed once like the harness's.
+``--carry-from PREVIOUS`` (with ``--all`` only, #329 ticket 05,
+``evals.release_carry``) loads that baseline before any run, refusing one of
+another target, prints the plan (each rerun with its reason, the carried count)
+before the first paid run, runs only new samples, samples whose inputs digest
+changed and every edition control (every sample when the setup differs or the
+baseline lacks the digests), and carries the other entries. The
 file is written whatever the scores are: exit ``0`` once it is written, ``2`` on
 a refusal or an unscorable sample.
 """
@@ -32,7 +38,7 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Any, Final
 
 import coding_agent_playbook
 from coding_agent_playbook.commands._eval_options import (
@@ -47,6 +53,13 @@ from coding_agent_playbook.evals.judge import JudgeError
 from coding_agent_playbook.evals.model_pins import RecordRefusedError, check_recordable
 from coding_agent_playbook.evals.prompting import PromptResolutionError, render_prompt
 from coding_agent_playbook.evals.record_isolation import check_record_credentials
+from coding_agent_playbook.evals.release_carry import (
+    CarryPlan,
+    carry_plan_lines,
+    load_baseline,
+    merge_carried,
+    plan_carry,
+)
 from coding_agent_playbook.evals.release_metrics import (
     GRADED_HEAD,
     RecordedTarget,
@@ -64,6 +77,7 @@ from coding_agent_playbook.validation.context import SyncContext
 
 if TYPE_CHECKING:
     import argparse
+    from collections.abc import Mapping
 
     from coding_agent_playbook.evals.endpoints import Endpoint
     from coding_agent_playbook.evals.judge import Judge
@@ -100,11 +114,23 @@ def configure_record(parser: argparse.ArgumentParser) -> None:
         help="with --run: write the release metrics file (schema version 1) of the "
         "samples on one target to PATH; refuses unpinned models",
     )
+    parser.add_argument(
+        "--carry-from",
+        metavar="PREVIOUS",
+        dest="carry_from",
+        help="--record --all: rerun only new samples, samples whose inputs changed and "
+        "edition controls, copying the other entries from the metrics file PREVIOUS of "
+        "the same target; a different setup reruns everything",
+    )
 
 
 def wants_record(args: argparse.Namespace) -> bool:
-    """Whether ``args`` ask for a recording (``--record``, ``--all`` or ``--runs``)."""
-    flags = (getattr(args, "record", None), getattr(args, "runs", None))
+    """Whether ``args`` ask for a recording (``--record``, ``--all``, ``--runs`` or ``--carry-from``)."""
+    flags = (
+        getattr(args, "record", None),
+        getattr(args, "runs", None),
+        getattr(args, "carry_from", None),
+    )
     return getattr(args, "all_samples", False) or any(flag is not None for flag in flags)
 
 
@@ -118,7 +144,9 @@ def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings
     """
     out_path = _record_path(args)
     _refuse_format(args)
+    carry_from = _carry_from_path(args)
     target = select_target(args, settings)
+    baseline = load_baseline(carry_from, target.name) if carry_from is not None else None
     runs = _run_count(getattr(args, "runs", None), target.runs)
     uses_judge = getattr(args, "judge", None) is not None
     check_recordable(target, judge_model=settings.judge.model, uses_judge=uses_judge)
@@ -131,28 +159,62 @@ def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings
     controls = plan.control_editions(samples)
     judge_model = settings.judge.model if uses_judge else None
     recorded = plan.recorded_target(target, judge_model=judge_model, isolated=isolated)
+    carry = _plan_carry(baseline, recorded, inputs, controls)
+    metrics = _record_metrics(plan, recorded, samples, inputs, controls, carry, repo_root)
+    validate_release_metrics(metrics)
+    _write(out_path, metrics)
+    extra = f" (+{len(controls)} edition controls)" if controls else ""
+    carried = "" if carry is None else f" ({len(carry.rerun)} rerun, {len(carry.carried)} carried)"
+    print(
+        f"recorded {len(samples)} samples{carried}{extra} x {runs} runs on target "
+        f"{target.name!r} to {out_path}"
+    )
+    return 0
+
+
+def _plan_carry(
+    baseline: Mapping[str, Any] | None,
+    recorded: RecordedTarget,
+    inputs: Mapping[str, str],
+    controls: Mapping[str, _Control],
+) -> CarryPlan | None:
+    """The ``--carry-from`` plan, printed before the first paid run; ``None`` without a baseline."""
+    if baseline is None:
+        return None
+    assert recorded.setup is not None  # a record always computes its setup parts
+    carry = plan_carry(baseline, setup=recorded.setup.as_dict(), inputs=inputs)
+    for line in carry_plan_lines(carry, controls=sorted(controls)):
+        print(line)
+    return carry
+
+
+def _record_metrics(
+    plan: _RecordPlan,
+    recorded: RecordedTarget,
+    samples: list[EvalSample],
+    inputs: Mapping[str, str],
+    controls: Mapping[str, _Control],
+    carry: CarryPlan | None,
+    repo_root: Path,
+) -> dict[str, object]:
+    """Run what reruns (every sample without ``carry``) and build the file; carry the rest."""
+    total = len(samples)
     metrics = build_release_metrics(
         release=coding_agent_playbook.__version__,
         commit=_head_commit(repo_root),
         recorded=recorded,
         samples=[
-            plan.run(sample, index, len(samples), inputs[sample.id])
+            plan.run(sample, index, total, inputs[sample.id])
             for index, sample in enumerate(samples)
+            if carry is None or carry.reruns(sample.id)
         ],
         controls=[
-            plan.run(sample, index, len(samples), control.inputs_digest, edition=control.edition)
+            plan.run(sample, index, total, control.inputs_digest, edition=control.edition)
             for index, sample in enumerate(samples)
             if (control := controls.get(sample.id)) is not None
         ],
     )
-    validate_release_metrics(metrics)
-    _write(out_path, metrics)
-    extra = f" (+{len(controls)} edition controls)" if controls else ""
-    print(
-        f"recorded {len(samples)} samples{extra} x {runs} runs on target "
-        f"{target.name!r} to {out_path}"
-    )
-    return 0
+    return metrics if carry is None else merge_carried(metrics, carry)
 
 
 def _build_plan(
@@ -392,8 +454,23 @@ def _fingerprint(endpoint: Endpoint | None) -> str | None:
 def _record_path(args: argparse.Namespace) -> Path:
     record = getattr(args, "record", None)
     if record is None:
-        raise RecordRefusedError("--all and --runs belong to --record <path>; pass --record too")
+        raise RecordRefusedError(
+            "--all, --runs and --carry-from belong to --record <path>; pass --record too"
+        )
     return Path(record)
+
+
+def _carry_from_path(args: argparse.Namespace) -> Path | None:
+    """The ``--carry-from`` baseline path; refused unless the record runs ``--all`` samples."""
+    carry_from = getattr(args, "carry_from", None)
+    if carry_from is None:
+        return None
+    if not getattr(args, "all_samples", False):
+        raise RecordRefusedError(
+            f"--carry-from needs --all: a record carried from {carry_from} must cover every "
+            "sample, so pass --all instead of a sample or task"
+        )
+    return Path(carry_from)
 
 
 def _refuse_format(args: argparse.Namespace) -> None:
