@@ -129,6 +129,9 @@ def test_an_unchanged_catalog_and_setup_runs_nothing_and_copies_the_baseline(
     assert (summary["rerun"], summary["carried"]) == (0, len(baseline["samples"]))
     for key in ("samples", "runs", "pass_rate", "mean_score"):
         assert summary[key] == baseline["summary"][key]
+    # tokens and cost_usd count fresh runs only; the fake target has no price.
+    assert summary["tokens"] == 0
+    assert summary["cost_usd"] is None
     assert f"0 rerun, {len(baseline['samples'])} carried" in capsys.readouterr().out
 
 
@@ -284,6 +287,18 @@ def test_a_baseline_for_another_target_is_refused_before_any_run(
                 "fake-pinned",
             ],
             "--carry-from needs --all",
+        ),
+        (
+            [
+                "eval",
+                "refactor/extract-helper",
+                "--run",
+                "--carry-from",
+                "b.json",
+                "--target",
+                "fake-pinned",
+            ],
+            "pass --record too",
         ),
         (
             ["eval", "--all", "--record", "x.json", "--carry-from", "b.json"],

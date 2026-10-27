@@ -8,15 +8,18 @@ from __future__ import annotations
 
 import dataclasses
 import json
+from typing import Any
 
 import pytest
 
 from coding_agent_playbook.evals.endpoints import Endpoint
+from coding_agent_playbook.evals.release_carry import merge_carried, plan_carry
 from coding_agent_playbook.evals.release_metrics import (
     GRADED_HEAD,
     RecordedTarget,
     SampleRuns,
     build_release_metrics,
+    entries_summary,
 )
 from coding_agent_playbook.evals.release_metrics_schema import (
     SCHEMA_VERSION,
@@ -365,3 +368,34 @@ def test_validation_types_the_setup_digest_and_each_part() -> None:
 
 def test_the_schema_types_every_setup_part() -> None:
     assert set(SETUP_PART_TYPES) == {field.name for field in dataclasses.fields(SetupParts)}
+
+
+def test_an_unpriced_target_with_no_run_records_an_unknown_cost() -> None:
+    # An unpriced target's cost is unknown even when nothing ran (a fully carried record).
+    recorded = RecordedTarget(EvalTarget("t", "fake", "m"), None, None, runs=1)
+    metrics = build_release_metrics(release="9.9.9", commit=None, recorded=recorded, samples=[])
+    assert metrics["summary"]["cost_usd"] is None  # type: ignore[index]
+    assert metrics["summary"]["tokens"] == 0  # type: ignore[index]
+
+
+def _scored(sample_id: str, *scores: float) -> SampleRuns:
+    results = [_result(score, passed=score >= 0.5) for score in scores]
+    return dataclasses.replace(_runs(sample_id, *results), inputs_digest="i" * 64)
+
+
+def test_a_fully_carried_record_keeps_the_baseline_mean_score_to_the_last_digit() -> None:
+    # Per-sample means 1/6, 5/12 and 0: folding the unrounded means gave 0.194444,
+    # folding the recorded (rounded) ones 0.194445, so carrying moved the summary.
+    recorded = RecordedTarget(_PRICED, "1.2.3", None, runs=3, setup=_SETUP)
+    samples = [_scored("review/a", 0.5, 0, 0), _scored("review/b", 0.5, 0.25, 0.5)]
+    samples.append(_scored("review/c", 0, 0, 0))
+    baseline = build_release_metrics(
+        release="9.9.9", commit=None, recorded=recorded, samples=samples
+    )
+    entries: Any = baseline["samples"]
+    assert baseline["summary"]["mean_score"] == entries_summary(entries)["mean_score"]  # type: ignore[index]
+    plan = plan_carry(baseline, setup=_SETUP.as_dict(), inputs=dict.fromkeys(entries, "i" * 64))
+    fresh = build_release_metrics(release="9.9.10", commit=None, recorded=recorded, samples=[])
+    carried = merge_carried(fresh, plan)
+    assert len(plan.carried) == 3
+    assert carried["summary"]["mean_score"] == baseline["summary"]["mean_score"]  # type: ignore[index]
