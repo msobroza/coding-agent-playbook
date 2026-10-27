@@ -8,15 +8,20 @@ checkout's own engine, in a subprocess::
     python -m coding_agent_playbook.cli eval --run --all --repo-root <checkout> \\
         --target <name> --record catalog/releases/<version>/metrics/<name>.json \\
         [--judge llm]      # when [evals.judge] names a model
+        [--carry-from catalog/releases/<previous>/metrics/<name>.json]
 
 so every sample grades the release's current text, and pinned samples also run
-on their edition as a control (``controls`` in the file). Each file's
+on their edition as a control (``controls`` in the file). The run is
+changed-only by default (#329 ticket 07): when the previous release has a file
+for the target, it is the ``--carry-from`` baseline, so only the samples whose
+inputs changed rerun and the others are carried; ``--full`` (``EvalRequest.full``)
+omits it and reruns everything. Each file's
 ``release`` is set to the version being prepared, then it is compared with the
 previous release's file for the same target (``check_regressions``), and the
 comparison is stored in it. ``--accept SAMPLE=REASON`` (repeatable) accepts that
 sample's regression on every target where it regressed; one that regressed on
 no target is refused. An unaccepted regression refuses the release pull request,
-whose body says per target how many samples were rerun and how many carried.
+whose body says per target "changed-only: N rerun, M carried" or "full run".
 
 Recording is paid and slow, so on any refusal after it the recorded files are
 copied to a kept directory outside the checkout, and ``--reuse-metrics DIR``
@@ -27,6 +32,7 @@ was recorded on the same base commit).
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import json
 import re
 import shutil
@@ -74,10 +80,12 @@ def _make_kept_dir() -> Path:
 
 @dataclass(frozen=True)
 class EvalRequest:
-    """What ``prepare --eval`` was asked: accepted regressions, and a directory to reuse."""
+    """What ``prepare --eval`` was asked: accepted regressions, a directory to reuse, full runs."""
 
     accepted: Mapping[str, str] = field(default_factory=dict)
     reuse: Path | None = None
+    #: ``--full``: record without the previous release's file as ``--carry-from``.
+    full: bool = False
     make_kept_dir: Callable[[], Path] = _make_kept_dir
 
 
@@ -96,6 +104,8 @@ class TargetMetrics:
     name: str
     metrics: Mapping[str, object]
     check: RegressionCheck | None
+    #: Recorded with a ``--carry-from`` baseline, or reused with carried entries.
+    changed_only: bool = False
 
 
 def release_targets(checkout: Path) -> ReleaseTargets:
@@ -134,11 +144,15 @@ def record_release_metrics(
     out_dir = release_dir(tools.cwd / _CATALOG, version) / METRICS_DIRNAME
     with metrics_kept_on_refusal(tools.cwd, version, request):
         recorded: dict[str, dict[str, object]] = {}
+        baselined: set[str] = set()
         for name in targets.names:
-            metrics = _recorded(tools, name, out_dir, targets.judged, request.reuse, base)
+            carry_from = None if request.full else _previous_file(tools.cwd, previous, name)
+            recording = _Recording(name, out_dir / f"{name}.json", targets.judged, carry_from)
+            metrics = _recorded(tools, recording, request.reuse, base)
             # The recording names the installed engine's version; the file is this release's.
             recorded[name] = {**metrics, "release": version}
-        checked = _checked(tools.cwd, recorded, previous, request.accepted)
+            baselined |= {name} if carry_from is not None else set()
+        checked = _with_modes(_checked(tools.cwd, recorded, previous, request.accepted), baselined)
         for outcome in checked:
             _write(out_dir / f"{outcome.name}.json", outcome.metrics)
         _refuse_blocked(checked)
@@ -178,7 +192,7 @@ def _summary_line(outcome: TargetMetrics) -> str:
     summary = outcome.metrics.get("summary")
     facts = summary if isinstance(summary, dict) else {}
     line = (
-        f"{facts.get('samples')} samples ({_rerun_and_carried(facts)}), "
+        f"{facts.get('samples')} samples ({_mode(outcome)}), "
         f"pass rate {facts.get('pass_rate')}, mean score {facts.get('mean_score')}"
     )
     check = outcome.check
@@ -191,17 +205,52 @@ def _summary_line(outcome: TargetMetrics) -> str:
     )
 
 
-def _rerun_and_carried(summary: Mapping[str, object]) -> str:
-    """``N rerun, M carried`` (#329 ticket 06); a file without the counts reran every sample."""
-    carried = summary.get("carried", 0)
-    return f"{summary.get('rerun', summary.get('samples'))} rerun, {carried} carried"
+def _with_modes(
+    outcomes: Sequence[TargetMetrics], baselined: set[str]
+) -> tuple[TargetMetrics, ...]:
+    """Mark each outcome changed-only when it had a baseline or carries entries (#329 ticket 07).
+
+    A file reused with ``--reuse-metrics`` was recorded by an earlier run, so its
+    carried entries also mark it changed-only.
+    """
+    return tuple(
+        dataclasses.replace(o, changed_only=o.name in baselined or _carried(o.metrics) > 0)
+        for o in outcomes
+    )
+
+
+def _carried(metrics: Mapping[str, object]) -> int:
+    """The number of carried entries (those with ``measured_in``) in ``metrics``."""
+    samples = metrics.get("samples")
+    entries = samples.values() if isinstance(samples, dict) else ()
+    return sum(1 for entry in entries if isinstance(entry, dict) and "measured_in" in entry)
+
+
+def _mode(outcome: TargetMetrics) -> str:
+    """``changed-only: N rerun, M carried`` or ``full run``, as the pull request says it."""
+    if not outcome.changed_only:
+        return "full run"
+    carried = _carried(outcome.metrics)
+    samples = outcome.metrics.get("samples")
+    total = len(samples) if isinstance(samples, dict) else 0
+    return f"changed-only: {total - carried} rerun, {carried} carried"
+
+
+@dataclass(frozen=True)
+class _Recording:
+    """One target's record command: where it writes, with a judge, from which baseline."""
+
+    name: str
+    path: Path
+    judged: bool
+    carry_from: Path | None
 
 
 def _recorded(
-    tools: Tools, name: str, out_dir: Path, judged: bool, reuse: Path | None, base: str
+    tools: Tools, recording: _Recording, reuse: Path | None, base: str
 ) -> dict[str, object]:
-    """``name``'s metrics: reused from ``reuse`` when recorded there on ``base``, else recorded."""
-    path = out_dir / f"{name}.json"
+    """The target's metrics: reused from ``reuse`` when recorded there on ``base``, else recorded."""
+    name, path = recording.name, recording.path
     kept = None if reuse is None else reuse / f"{name}.json"
     if kept is not None and kept.is_file():
         metrics = _load(kept)
@@ -213,21 +262,26 @@ def _recorded(
         print(f"release: reused the metrics of target {name!r} from {kept}")
         return metrics
     path.parent.mkdir(parents=True, exist_ok=True)
-    argv = _record_argv(tools.cwd, name, path, judged)
+    argv = _record_argv(tools.cwd, recording)
     done = tools.runner(argv, cwd=tools.cwd, timeout=RECORD_TIMEOUT_SECONDS)
     if done.returncode != 0:
         detail = (done.stderr or done.stdout).strip().splitlines()[-5:]
         raise ReleaseError(
             f"recording target {name!r} exited {done.returncode}: " + "\n".join(detail)
         )
-    print(f"release: recorded the metrics of target {name!r}")
+    mode = (
+        "in full" if recording.carry_from is None else f"changed-only from {recording.carry_from}"
+    )
+    print(f"release: recorded the metrics of target {name!r} {mode}")
     return _load(path)
 
 
-def _record_argv(checkout: Path, name: str, path: Path, judged: bool) -> list[str]:
-    judge = ["--judge", RELEASE_JUDGE] if judged else []
+def _record_argv(checkout: Path, recording: _Recording) -> list[str]:
+    judge = ["--judge", RELEASE_JUDGE] if recording.judged else []
+    carry = [] if recording.carry_from is None else ["--carry-from", str(recording.carry_from)]
     cli = [sys.executable, "-m", "coding_agent_playbook.cli", "eval", "--run", "--all"]
-    return [*cli, "--repo-root", str(checkout), "--target", name, "--record", str(path), *judge]
+    where = ["--repo-root", str(checkout), "--target", recording.name]
+    return [*cli, *where, "--record", str(recording.path), *judge, *carry]
 
 
 def _checked(
@@ -272,11 +326,17 @@ def _check(
 
 
 def _baseline(checkout: Path, previous: str | None, name: str) -> dict[str, object] | None:
-    """The previous release's file for target ``name``, or ``None`` when it has none."""
+    """The previous release's file for target ``name``, loaded, or ``None`` when it has none."""
+    path = _previous_file(checkout, previous, name)
+    return None if path is None else _load(path)
+
+
+def _previous_file(checkout: Path, previous: str | None, name: str) -> Path | None:
+    """The path of the previous release's file for target ``name``, or ``None`` without one."""
     if previous is None:
         return None
     path = release_dir(checkout / _CATALOG, previous) / METRICS_DIRNAME / f"{name}.json"
-    return _load(path) if path.is_file() else None
+    return path if path.is_file() else None
 
 
 def _refuse_blocked(outcomes: Sequence[TargetMetrics]) -> None:
