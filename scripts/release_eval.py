@@ -15,7 +15,8 @@ on their edition as a control (``controls`` in the file). Each file's
 previous release's file for the same target (``check_regressions``), and the
 comparison is stored in it. ``--accept SAMPLE=REASON`` (repeatable) accepts that
 sample's regression on every target where it regressed; one that regressed on
-no target is refused. An unaccepted regression refuses the release pull request.
+no target is refused. An unaccepted regression refuses the release pull request,
+whose body says per target how many samples were rerun and how many carried.
 
 Recording is paid and slow, so on any refusal after it the recorded files are
 copied to a kept directory outside the checkout, and ``--reuse-metrics DIR``
@@ -177,8 +178,8 @@ def _summary_line(outcome: TargetMetrics) -> str:
     summary = outcome.metrics.get("summary")
     facts = summary if isinstance(summary, dict) else {}
     line = (
-        f"{facts.get('samples')} samples, pass rate {facts.get('pass_rate')}, "
-        f"mean score {facts.get('mean_score')}"
+        f"{facts.get('samples')} samples ({_rerun_and_carried(facts)}), "
+        f"pass rate {facts.get('pass_rate')}, mean score {facts.get('mean_score')}"
     )
     check = outcome.check
     if check is None:
@@ -188,6 +189,12 @@ def _summary_line(outcome: TargetMetrics) -> str:
         f"({check.accepted_regressions} accepted), {check.count('improvement')} improvements, "
         f"{check.count('not_comparable')} not comparable"
     )
+
+
+def _rerun_and_carried(summary: Mapping[str, object]) -> str:
+    """``N rerun, M carried`` (#329 ticket 06); a file without the counts reran every sample."""
+    carried = summary.get("carried", 0)
+    return f"{summary.get('rerun', summary.get('samples'))} rerun, {carried} carried"
 
 
 def _recorded(

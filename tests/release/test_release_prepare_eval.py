@@ -196,7 +196,7 @@ def test_without_previous_files_nothing_is_compared(tmp_path: Path) -> None:
     assert _stored(checkout, _OPUS)["previous"] is None
     (body,) = host.bodies
     assert body.startswith(f"# Release {_NEW}\n")
-    assert f"- `{_OPUS}`: 2 samples, pass rate 1.0, mean score 0.9; no previous" in body
+    assert f"- `{_OPUS}`: 2 samples (2 rerun, 0 carried), pass rate 1.0, mean score 0.9; no" in body
 
 
 def test_the_comparison_is_stored_and_summarised_in_the_pull_request(tmp_path: Path) -> None:
@@ -212,6 +212,24 @@ def test_the_comparison_is_stored_and_summarised_in_the_pull_request(tmp_path: P
     (body,) = host.bodies
     assert f"vs {_OLD}: 0 regressions (0 accepted), 1 improvements" in body
     assert "## Release metrics" in body
+
+
+def test_the_pull_request_says_how_many_samples_were_rerun_and_carried(tmp_path: Path) -> None:
+    # #329 ticket 06: a carried entry is not compared, so it never blocks.
+    carried = sample_entry(0.5) | {"measured_in": {"release": _OLD, "commit": "0ld"}}
+    recorded = _recorded(_OPUS, 0.9)
+    recorded["samples"]["review/b"] = carried
+    checkout = _checkout(tmp_path, previous={_OPUS: _previous(_OPUS)})
+    host = _host(claude_opus=recorded, coder=_recorded(_CODER, 0.9))
+
+    assert _run(checkout, host) == 0
+
+    stored = _stored(checkout, _OPUS)
+    assert stored["samples"]["review/b"]["vs_previous"]["status"] == "carried"
+    assert (stored["summary"]["rerun"], stored["summary"]["carried"]) == (1, 1)
+    (body,) = host.bodies
+    assert f"- `{_OPUS}`: 2 samples (1 rerun, 1 carried), pass rate" in body
+    assert f"- `{_CODER}`: 2 samples (2 rerun, 0 carried), pass rate" in body
 
 
 # --------------------------------------------------------------------------- #
