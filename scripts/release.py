@@ -7,6 +7,7 @@ engine installed::
     uv run scripts/release.py prepare                  # next version from the commits
     uv run scripts/release.py prepare --version 0.1.0  # the first release, or an override
     uv run scripts/release.py prepare --eval           # plus release metrics (paid runs)
+    uv run scripts/release.py prepare --eval --full    # the same, rerunning every sample
     uv run scripts/release.py tag                      # by hand, when CI could not tag
     uv run scripts/release.py freeze v0.1.0            # an edition and its pins, as a PR
     uv run scripts/release.py unfreeze v0.1.0          # the reverse, as a PR
@@ -33,7 +34,9 @@ With ``--eval`` (``release_eval``), step 3 first records the release metrics of
 every ``[evals] release`` target into ``catalog/releases/<version>/metrics/``,
 compares each with the previous release's file for the same target and refuses
 the pull request on a regression no ``--accept SAMPLE=REASON`` accepted;
-``--reuse-metrics DIR`` reuses the files a refused run kept.
+``--reuse-metrics DIR`` reuses the files a refused run kept. The recording is
+changed-only by default: a target's previous file is its ``--carry-from``
+baseline, so only the samples whose inputs changed rerun; ``--full`` reruns all.
 
 Merging that pull request is the release; the ``tag-release`` CI job then tags
 it, and ``tag`` does the same checks by hand (``release_tag``: the release
@@ -550,6 +553,12 @@ def _add_eval_flags(parser: argparse.ArgumentParser) -> None:
         type=Path,
         help="--eval: reuse the metrics files a refused run kept in DIR, recorded on the same base",
     )
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="--eval: rerun every sample, instead of only those whose inputs changed since "
+        "the previous release's metrics",
+    )
 
 
 def _eval_request(args: argparse.Namespace) -> EvalRequest | None:
@@ -563,14 +572,14 @@ def _eval_request(args: argparse.Namespace) -> EvalRequest | None:
     except RegressionCheckError as exc:
         raise ReleaseError(str(exc)) from exc
     reuse = None if args.reuse_metrics is None else args.reuse_metrics.resolve()
-    return EvalRequest(accepted=accepted, reuse=reuse)
+    return EvalRequest(accepted=accepted, reuse=reuse, full=args.full)
 
 
 def _eval_flags(request: EvalRequest | None) -> list[str]:
     """``request`` as the flags ``prepare`` passes on to ``prepare-checkout``."""
     if request is None:
         return []
-    flags = ["--eval"]
+    flags = ["--eval", *(["--full"] if request.full else [])]
     for sample_id, reason in request.accepted.items():
         flags += ["--accept", f"{sample_id}={reason}"]
     return flags if request.reuse is None else [*flags, "--reuse-metrics", str(request.reuse)]
@@ -590,7 +599,10 @@ def main(
     ``unfreeze-checkout`` write anything (``prepare-checkout``'s default
     snapshot runs the same guard).
     """
-    args = _parser().parse_args(argv)
+    parser = _parser()
+    args = parser.parse_args(argv)
+    if getattr(args, "full", False) and not args.record_metrics:
+        parser.error("--full belongs to --eval; pass --eval too")
     here = Path.cwd() if cwd is None else cwd
     try:
         return _dispatch(args, Tools(runner, here), snapshot, engine_guard)

@@ -196,7 +196,7 @@ def test_without_previous_files_nothing_is_compared(tmp_path: Path) -> None:
     assert _stored(checkout, _OPUS)["previous"] is None
     (body,) = host.bodies
     assert body.startswith(f"# Release {_NEW}\n")
-    assert f"- `{_OPUS}`: 2 samples (2 rerun, 0 carried), pass rate 1.0, mean score 0.9; no" in body
+    assert f"- `{_OPUS}`: 2 samples (full run), pass rate 1.0, mean score 0.9; no" in body
 
 
 def test_the_comparison_is_stored_and_summarised_in_the_pull_request(tmp_path: Path) -> None:
@@ -219,6 +219,7 @@ def test_the_pull_request_says_how_many_samples_were_rerun_and_carried(tmp_path:
     carried = sample_entry(0.5) | {"measured_in": {"release": _OLD, "commit": "0ld"}}
     recorded = _recorded(_OPUS, 0.9)
     recorded["samples"]["review/b"] = carried
+    recorded["summary"] |= {"rerun": 1, "carried": 1}
     checkout = _checkout(tmp_path, previous={_OPUS: _previous(_OPUS)})
     host = _host(claude_opus=recorded, coder=_recorded(_CODER, 0.9))
 
@@ -228,8 +229,51 @@ def test_the_pull_request_says_how_many_samples_were_rerun_and_carried(tmp_path:
     assert stored["samples"]["review/b"]["vs_previous"]["status"] == "carried"
     assert (stored["summary"]["rerun"], stored["summary"]["carried"]) == (1, 1)
     (body,) = host.bodies
-    assert f"- `{_OPUS}`: 2 samples (1 rerun, 1 carried), pass rate" in body
-    assert f"- `{_CODER}`: 2 samples (2 rerun, 0 carried), pass rate" in body
+    assert f"- `{_OPUS}`: 2 samples (changed-only: 1 rerun, 1 carried), pass rate" in body
+    assert f"- `{_CODER}`: 2 samples (full run), pass rate" in body
+
+
+def _carry_from(host: FakeReleaseHost, target: str) -> str | None:
+    """The ``--carry-from`` path the record command of ``target`` received, if any."""
+    command = next(c for c in host.commands if "--record" in c and target in c)
+    return command[command.index("--carry-from") + 1] if "--carry-from" in command else None
+
+
+def test_a_target_with_a_previous_file_records_changed_only_from_it(tmp_path: Path) -> None:
+    # #329 ticket 07: changed-only is the default; a target without a previous file runs full.
+    checkout = _checkout(tmp_path, previous={_OPUS: _previous(_OPUS)})
+    host = _host(claude_opus=_recorded(_OPUS, 0.9), coder=_recorded(_CODER, 0.9))
+
+    assert _run(checkout, host) == 0
+
+    assert _carry_from(host, _OPUS) == str(_metrics_dir(checkout, _OLD) / f"{_OPUS}.json")
+    assert _carry_from(host, _CODER) is None
+
+
+def test_full_records_every_target_without_a_baseline(tmp_path: Path) -> None:
+    previous = {_OPUS: _previous(_OPUS), _CODER: _previous(_CODER)}
+    checkout = _checkout(tmp_path, previous=previous)
+    host = _host(claude_opus=_recorded(_OPUS, 0.9), coder=_recorded(_CODER, 0.9))
+
+    assert _run(checkout, host, "--full") == 0
+
+    assert (_carry_from(host, _OPUS), _carry_from(host, _CODER)) == (None, None)
+    (body,) = host.bodies
+    assert f"- `{_OPUS}`: 2 samples (full run), pass rate" in body
+    # The full run is still compared with the previous release's file.
+    assert _stored(checkout, _OPUS)["previous"] == _OLD
+
+
+def test_the_first_release_records_every_target_in_full(tmp_path: Path) -> None:
+    checkout = _checkout(tmp_path)
+    host = FakeReleaseHost(
+        recordings={_OPUS: _recorded(_OPUS, 0.9), _CODER: _recorded(_CODER, 0.9)}
+    )
+
+    argv = ["prepare-checkout", "--base", BASE, "--version", _NEW, "--eval"]
+    assert main(argv, cwd=checkout, runner=host, snapshot=lambda b: _manifest("0", b, "o2")) == 0
+
+    assert (_carry_from(host, _OPUS), _carry_from(host, _CODER)) == (None, None)
 
 
 # --------------------------------------------------------------------------- #
@@ -348,6 +392,21 @@ def test_reuse_metrics_skips_recording_a_target_kept_on_the_same_base(tmp_path: 
     )
 
 
+def test_a_reused_file_with_carried_entries_says_changed_only(tmp_path: Path) -> None:
+    # The kept file was recorded changed-only by the refused run, whatever this run asks.
+    reused = _recorded(_OPUS, 0.9)
+    reused["samples"]["review/b"] |= {"measured_in": {"release": _OLD, "commit": "0ld"}}
+    kept = _kept_dir(tmp_path, claude_opus=reused)
+    host = _host(coder=_recorded(_CODER, 0.9))
+
+    assert _run(_checkout(tmp_path), host, "--full", "--reuse-metrics", str(kept)) == 0
+
+    assert host.recorded_targets() == [_CODER]
+    (body,) = host.bodies
+    assert f"- `{_OPUS}`: 2 samples (changed-only: 1 rerun, 1 carried), pass rate" in body
+    assert f"- `{_CODER}`: 2 samples (full run), pass rate" in body
+
+
 def test_reuse_metrics_refuses_a_file_recorded_on_another_commit(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -374,6 +433,21 @@ def test_no_release_targets_is_refused_before_the_release_branch(
     assert f"[evals] release list of {CONFIG_FILENAME} names no target" in (capsys.readouterr().err)
     assert not host.ran("switch", "--force-create")
     assert host.recorded_targets() == []
+
+
+@pytest.mark.parametrize("command", ["prepare", "prepare-checkout"])
+def test_full_without_eval_is_a_usage_error(
+    command: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    host = _host()
+    base = ["--base", BASE] if command == "prepare-checkout" else []
+
+    with pytest.raises(SystemExit) as exited:
+        main([command, *base, "--full"], cwd=tmp_path, runner=host)
+
+    assert exited.value.code == 2
+    assert "--full belongs to --eval" in capsys.readouterr().err
+    assert host.commands == []
 
 
 @pytest.mark.parametrize(
@@ -438,3 +512,12 @@ def test_prepare_without_eval_keeps_the_default_timeout(tmp_path: Path) -> None:
     inner = next(c for c in host.commands if "prepare-checkout" in c)
     assert "--eval" not in inner
     assert host.timeouts[host.commands.index(inner)] is None
+
+
+def test_prepare_passes_full_on_to_the_checkout(tmp_path: Path) -> None:
+    host = FakeReleaseHost()
+
+    assert main(["prepare", "--eval", "--full"], cwd=tmp_path, runner=host) == 0
+
+    inner = next(c for c in host.commands if "prepare-checkout" in c)
+    assert inner[-2:] == ["--eval", "--full"]
