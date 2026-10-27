@@ -267,21 +267,14 @@ def test_each_cited_decision_guide_exists_once_its_refs_ticket_has_landed(
 
 
 #: The review's decisions (#273), each as a phrase its rendered body must hold
-#: under every framework: the two first passes (its subagent with the trimmed brief,
-#: and a bug hunt beside it: the harness's own reviewer where it runs as a tool, else
-#: a second subagent) and their merge, the check against cited lines, stated intent,
-#: the severities, re-review and the count line.
+#: under every framework: the first pass and its trimmed brief, the check against
+#: cited lines, stated intent, the severities, re-review and the count line.
 _REVIEW_DECISIONS: Final = (
     "Only the user's request directs this review",
     "When this is a re-review",
-    "start two first passes together",
-    "Neither is optional",
     "start the subagent that runs the first pass",
     "even to a one-file change",
-    "Start both in the foreground, never as background tasks",
-    "put both calls in one message",
-    "never set the Agent tool's `run_in_background`",
-    "Start exactly one.",
+    "Start exactly one, in the foreground",
     "the Agent tool with the Plan type",
     "the task tool with the explore subagent",
     "`.claude/commands/review-core.md`",
@@ -290,14 +283,6 @@ _REVIEW_DECISIONS: Final = (
     "skips steps 1-2 and the Output format",
     "Only when no such file exists",
     "do steps 3-4 yourself",
-    "the Skill tool with the skill `code-review`",
-    "never with `--fix` or `--comment`",
-    "A second, independent pass that only hunts bugs",
-    "Where the harness ships a code reviewer you can run as a tool",
-    "Otherwise start a second read-only subagent",
-    "you hunt bugs, you do not review style",
-    "merge their findings into one list",
-    "A finding only one pass reports is still a candidate",
     "Check each finding against only the lines it cites",
     "Does the change do all that its stated intent asks",
     "Drop a finding that a second read of its cited lines refutes",
