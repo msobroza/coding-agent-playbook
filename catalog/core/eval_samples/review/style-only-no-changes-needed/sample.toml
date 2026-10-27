@@ -10,10 +10,18 @@ prompt_args = "review src/temperature.py — be honest if there's nothing to cha
 input_variables = {}
 
 [gate]
-expr = "untouched"
+# Review-only: the agent must report, not edit. The file is correct, so a correct
+# answer from either prompt set ends on an approving verdict line, never a
+# request-changes one, and (in the v2 count line) counts no important finding.
+# An empty answer has no verdict line: the rubric alone once passed one at 0.6,
+# because three of its criteria only ask that nothing be claimed.
+expr = "untouched and approves and not blocks and not counts_important"
 
 [gate.bind]
-untouched = { check = "file_unchanged", path = "src/temperature.py" }
+untouched        = { check = "file_unchanged", path = "src/temperature.py" }
+approves         = { check = "answer_matches", pattern = '(?im)^\W*(?:verdict\W*)?approve(?: with comments)?\W*$' }
+blocks           = { check = "answer_matches", pattern = '(?im)^\W*(?:verdict\W*)?request changes\W*$' }
+counts_important = { check = "answer_matches", pattern = '(?i)\bfindings\W*[1-9]\d*\s+important\b' }
 
 [rubric]
 expr = "quality"

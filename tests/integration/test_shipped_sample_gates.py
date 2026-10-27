@@ -94,7 +94,6 @@ LEGACY_SAMPLES_WITHOUT_SOLUTION = frozenset(
         "refactor/extract-helper",
         "refactor/rename-for-clarity",
         "review/spot-the-bug",
-        "review/style-only-no-changes-needed",
         "security-review/already-safe",
         "security-review/pickle-load",
     }
