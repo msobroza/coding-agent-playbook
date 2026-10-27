@@ -14,6 +14,10 @@ duration, the mean tokens and the mean cost. Cost comes only from the target's
 A pinned sample also runs on its edition as a **control** (#281 ticket 15): those
 runs go under ``controls`` in the same per-sample shape, with ``graded`` the
 edition tag, and stay out of the summary, which scores the current text only.
+
+A ``--carry-from`` record (#329 ticket 05, ``evals.release_carry``) folds its
+summary from the recorded entries instead (:func:`entries_summary`), with the
+same pass-rate and mean-score semantics, so carried entries count too.
 """
 
 from __future__ import annotations
