@@ -18,6 +18,7 @@ from coding_agent_playbook.cli import main
 from coding_agent_playbook.evals.endpoints import endpoint_fingerprint
 from coding_agent_playbook.evals.targets import TARGET_ENV_VAR
 from tests.cli.claude_cli_fakes import FakeClaudeCli
+from tests.evals.openai_api_fakes import FakeOpenAIServer, serving
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -199,6 +200,30 @@ def test_judge_on_an_endpoint_grades_isolated_with_its_model(
     assert env["ANTHROPIC_AUTH_TOKEN"] == _TOKEN
     assert "ANTHROPIC_API_KEY" not in env
     assert "CLAUDE_CONFIG_DIR" in env
+    assert _TOKEN not in capsys.readouterr().out
+
+
+def test_judge_on_an_openai_endpoint_grades_over_http_without_the_cli(
+    repo: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cli = FakeClaudeCli(monkeypatch, answer="1")
+    with serving(FakeOpenAIServer(answer="1")) as server:
+        (repo / ".coding-agent-playbook.local.toml").write_text(
+            "[evals.endpoints.judge-api]\n"
+            'api = "openai-chat"\n'
+            f'base_url = "{server.base_url}"\n'
+            'token_env = "INTERNAL_LLM_TOKEN"\n\n'
+            '[evals.judge]\nendpoint = "judge-api"\nmodel = "judge-gpt"\n',
+            encoding="utf-8",
+        )
+        _run(repo, "--target", "personal", "--judge", "llm", "--full-scoring")
+
+    assert server.requests, "the judge never reached the endpoint"
+    request = server.requests[0]
+    assert request.path == "/v1/chat/completions"
+    assert request.headers["Authorization"] == f"Bearer {_TOKEN}"
+    assert request.body["model"] == "judge-gpt"
+    assert not [argv for argv, _ in cli.calls if "judge-gpt" in argv]
     assert _TOKEN not in capsys.readouterr().out
 
 

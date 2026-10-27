@@ -14,6 +14,9 @@ import sys
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.evals import registry
+from coding_agent_playbook.evals.api_judge import API_JUDGE_APIS, build_api_judge
+from coding_agent_playbook.evals.endpoints import API_ANTHROPIC
+from coding_agent_playbook.evals.judge import LLMJudge
 from coding_agent_playbook.evals.record_isolation import check_opencode_key_model, record_api_key
 from coding_agent_playbook.evals.run.claude_code_route import ClaudeCodeKeyRoute, claude_code_route
 from coding_agent_playbook.evals.run.opencode_route import OpenCodeKeyRoute, opencode_route
@@ -162,12 +165,17 @@ def build_judge(name: str, settings: JudgeSettings, *, isolated: bool = False) -
     """The judge ``name`` names, sent ``[evals.judge] model``; ``None`` after an error line.
 
     ``isolated`` (``--record``) isolates a judge without an endpoint too, on the
-    API key in ``ANTHROPIC_API_KEY``; one on an endpoint is isolated already.
+    API key in ``ANTHROPIC_API_KEY``; one on an endpoint is isolated already. The
+    ``llm`` judge on an ``openai-*`` endpoint grades over HTTPS (``ApiJudge``), so
+    it needs no ``claude`` CLI; on an ``anthropic`` endpoint it drives the CLI.
 
     Example::
 
         >>> build_judge("llm", JudgeSettings(model="claude-opus-5-5"))  # doctest: +SKIP
     """
+    if _is_api_judge(name, settings):
+        assert settings.endpoint is not None and settings.model is not None  # by _is_api_judge
+        return build_api_judge(settings.endpoint, settings.model, os.environ)
     judge_cls = load_usable_judge(name)
     if judge_cls is None:
         return None
@@ -190,8 +198,29 @@ def build_judge(name: str, settings: JudgeSettings, *, isolated: bool = False) -
             "remove [evals.judge] endpoint or use --judge llm"
         )
         return None
+    if settings.endpoint.api != API_ANTHROPIC:
+        _error(
+            f"judge {name!r} drives Claude Code, which cannot reach endpoint "
+            f"{settings.endpoint.name!r} (api = {settings.endpoint.api!r}); use --judge llm"
+        )
+        return None
     route = claude_code_route(settings.endpoint, settings.model)
     return judge_cls(model=settings.model, route=route)  # type: ignore[call-arg]
+
+
+def _is_api_judge(name: str, settings: JudgeSettings) -> bool:
+    """Whether ``name`` is the LLM judge on an OpenAI-API endpoint with a model (no CLI needed).
+
+    Example::
+
+        >>> _is_api_judge("llm", JudgeSettings(model="m"))
+        False
+    """
+    endpoint = settings.endpoint
+    if endpoint is None or endpoint.api not in API_JUDGE_APIS or settings.model is None:
+        return False
+    judge_cls = registry.load_judge_class(name)
+    return judge_cls is not None and issubclass(judge_cls, LLMJudge)
 
 
 def load_usable_judge(name: str) -> type[Judge] | None:

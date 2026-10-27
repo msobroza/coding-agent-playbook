@@ -45,7 +45,7 @@ from coding_agent_playbook.evals.run.claude_code_route import routed_argv, route
 from coding_agent_playbook.evals.run.cli_argv import PROMPT_TOKEN, build_cli_argv
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence
+    from collections.abc import Callable, Iterator, Sequence
 
     from coding_agent_playbook.evals.run.claude_code_route import ClaudeCodeIsolation
 
@@ -187,6 +187,29 @@ def parse_score(text: str) -> float | None:
     return value if 0.0 <= value <= 1.0 else None
 
 
+def grade_with_retries(attempt: Callable[[], float], attempts: int, who: str) -> float:
+    """``attempt()``'s score, tried immediately up to ``attempts`` times in all.
+
+    Each failed try raises :class:`JudgeError`; after the last one, a
+    :class:`JudgeError` naming ``who`` and the attempt count carries its reason.
+    Shared by the CLI judge and the API judge, so both retry alike.
+
+    Example::
+
+        >>> grade_with_retries(lambda: 0.5, 3, "judge 'claude'")
+        0.5
+    """
+    last_failure: JudgeError | None = None
+    for _ in range(attempts):
+        try:
+            return attempt()
+        except JudgeError as failure:
+            last_failure = failure
+    raise JudgeError(
+        f"{who} gave no score after {attempts} attempt(s): {last_failure}"
+    ) from last_failure
+
+
 def _excerpt(text: str) -> str:
     """The last :data:`_OUTPUT_EXCERPT_CHARS` of ``text``, whitespace-collapsed."""
     return " ".join(text.split())[-_OUTPUT_EXCERPT_CHARS:]
@@ -275,16 +298,9 @@ class LLMJudge(Judge):
             # argv cannot carry a NUL (subprocess raises ValueError); retrying
             # cannot help, so fail now. A binary-ish diff can contain one.
             raise JudgeError("the artifact contains a NUL byte, which cannot be passed to the CLI")
-        attempts = self._retries + 1
-        last_failure: JudgeError | None = None
-        for _ in range(attempts):
-            try:
-                return self._attempt(prompt)
-            except JudgeError as failure:
-                last_failure = failure
-        raise JudgeError(
-            f"judge {self._command[0]!r} gave no score after {attempts} attempt(s): {last_failure}"
-        ) from last_failure
+        return grade_with_retries(
+            lambda: self._attempt(prompt), self._retries + 1, f"judge {self._command[0]!r}"
+        )
 
     def _attempt(self, prompt: str) -> float:
         """Run the CLI once; its score, or :class:`JudgeError` saying why not."""
