@@ -49,8 +49,11 @@ present, the digest is a string and every part is present and typed.
 05, ``evals.release_carry``) come with ``playbook eval --record --carry-from``:
 a carried entry is copied from the baseline file, and its ``measured_in`` names
 the release and commit that measured it; ``rerun`` counts the entries this
-record measured and ``carried`` the copied ones. All are optional, so a file
-written without them still validates; when present they are typed.
+record measured and ``carried`` the copied ones. The regression check
+(``evals.release_regression``) also writes both counts on every file it
+annotates; in a full record every entry counts as rerun and ``carried`` is 0.
+All are optional, so a file written without them still validates; when present
+they are typed.
 
 ``previous`` is ``null`` until the regression check compares the file with the
 previous release; that check may add comparison keys (``vs_previous`` per

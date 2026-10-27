@@ -866,7 +866,7 @@ The file is JSON with `"schema_version": 1`. It holds:
 | `release`, `commit` | the engine version, and the checked-out commit (`null` outside git) |
 | `previous` | `null`; the regression check sets the baseline release it compared with |
 | `target` | `name`, `harness`, `harness_version` (the CLI's `--version`), `model`, `reported_model` (the model the harness reported most often), `label`, `endpoint`, `price`, `judge_model`, `runs` and `isolated` (`true`: the harness and the judge ran without your personal settings; absent in older files) |
-| `summary` | `samples`, `runs`, `pass_rate` over every run, `mean_score` over the samples, total `tokens` and `cost_usd`; with `--carry-from`, `rerun` and `carried` counts too, and `tokens` and `cost_usd` count only the fresh runs |
+| `summary` | `samples`, `runs`, `pass_rate` over every run, `mean_score` over the samples, total `tokens` and `cost_usd`; `rerun` and `carried` counts, written by `--carry-from` and by the regression check (in a full record every entry counts as rerun); with `--carry-from`, `tokens` and `cost_usd` count only the fresh runs |
 | `samples.<id>` | `prompt_id`, `graded` (`head`, the current text), `prompt_digest` (the prompt's artifact digest), `sample_digest` (`sample.toml` and `setup/`), `inputs_digest` (the strict render of what the agent received, rules included, with `sample_digest`; absent in older files), `passes` out of `runs`, `mean_score`, `stdev`, `checks` (the mean score of each check that ran), `duration_seconds_mean`, `tokens_mean` and `cost_usd_mean`; a carried entry adds `measured_in` (`release` and `commit`) |
 | `controls.<id>` | a pinned sample's runs on its frozen edition, in the same shape, with `graded` the edition tag and `inputs_digest` hashing the edition's render; left out of `summary` |
 | `setup_digest`, `setup` | `setup_digest` is the sha256 of everything outside the samples that decides scores, and `setup` holds its parts by name: `harness`, `harness_version` (`"unknown"` when the CLI's `--version` probe fails, `null` without a CLI), `model`, `endpoint_fingerprint`, `small_model`, `runs`, `judge_model`, `judge_endpoint_fingerprint` (the `[evals.judge] endpoint`'s, `null` without one), `judge_samples`, `judge_version` (the judge CLI's `--version`, in the same way), `fail_fast`, `isolated` and `scoring_digest` (the engine's scoring modules: checks, rubric compiler, scoring, runners, the judge and its prompt, the sample model and the release metrics fold), so a later record can name the part that differs; an `"unknown"` version never matches; both keys are absent in older files |
@@ -924,16 +924,19 @@ Per sample:
   is a `regression` (the same rule as `--compare`); the mirror is an `improvement`;
 - a sample whose `sample_digest` changed is `not_comparable`, never a regression;
 - a sample the baseline lacks is `new`; one the new file lacks is noted;
+- a carried entry (one with `measured_in`, copied by `--carry-from`) is `carried`:
+  its `vs_previous` holds the previous mean and a delta of 0, and it never blocks;
 - a cost per run rise above 25%, or a token rise when either cost is `null`, is a
   warning only.
 
 A harness version change between the files is noted as a likely cause, and so is
 a control whose score moved on the same edition; controls never block.
 `--accept SAMPLE=REASON` (repeatable) accepts one regression; accepting a sample
-that did not regress is refused. The command stores the comparison in the new
-file: `previous`, each sample's `vs_previous` (`mean_score`, `delta`, `status`,
-`reasons`, `warnings` and the `accepted` reason) and `regressions`,
-`accepted_regressions`, `improvements` and `not_comparable` in the summary. A
+that did not regress, a carried one included, is refused. The command stores the
+comparison in the new file: `previous`, each sample's `vs_previous` (`mean_score`,
+`delta`, `status`, `reasons`, `warnings` and the `accepted` reason) and
+`regressions`, `accepted_regressions`, `improvements`, `not_comparable`, `rerun`
+and `carried` in the summary. A
 reason stored there still holds when the check runs again against the same
 baseline.
 
@@ -963,7 +966,8 @@ A target without a previous file is recorded without a comparison.
   there instead of running it again, if it was recorded on the same base commit.
 
 The pull request body adds a `Release metrics` section to the notes, with one line
-per target and its notes. These runs are paid and only the maintainer starts them;
+per target and its notes; each line says how many samples were rerun and how many
+carried ("N rerun, M carried"). These runs are paid and only the maintainer starts them;
 CI never does.
 
 `playbook eval` has no `--run-tests` flag. A sample runs the test suite if and only if
