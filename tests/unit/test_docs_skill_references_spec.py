@@ -36,6 +36,20 @@ def test_spec_section_documents_skill_reference_delivery(start: str, end: str, p
     assert phrase in _spec_section(start, end), f"SPEC {start.strip('# ')} must say {phrase!r}"
 
 
+def test_spec_claude_rules_file_describes_only_always_rule_sections() -> None:
+    """Scoped-rule glob lines belong to skill references, outside the always-loaded rules file.
+
+    Validation (V1) refuses a scoped rule without ``skill:``, so no section of
+    ``.claude/rules/coding-agent-playbook.md`` ever carries an ``*Applies to:*`` line.
+    """
+    prose = _spec_section("#### 6.1.4", "#### 6.1.5")
+    template = _spec_section("#### 10.3.1", "#### 10.3.2")
+    assert "Each always-rule section gets a" in prose
+    assert "for scoped rules, their globs" not in prose
+    assert "[for each always rule," in template
+    assert "*Applies to:" not in template
+
+
 def test_spec_skill_reference_row_matches_the_rendered_rule_line() -> None:
     # The §9.7 row quotes the reference's first line; take its shape from the renderer, so
     # a change to the rule line fails here instead of leaving the row stale.
