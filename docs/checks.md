@@ -866,8 +866,8 @@ The file is JSON with `"schema_version": 1`. It holds:
 | `release`, `commit` | the engine version, and the checked-out commit (`null` outside git) |
 | `previous` | `null`; the regression check sets the baseline release it compared with |
 | `target` | `name`, `harness`, `harness_version` (the CLI's `--version`), `model`, `reported_model` (the model the harness reported most often), `label`, `endpoint`, `price`, `judge_model`, `runs` and `isolated` (`true`: the harness and the judge ran without your personal settings; absent in older files) |
-| `summary` | `samples`, `runs`, `pass_rate` over every run, `mean_score` over the samples, total `tokens` and `cost_usd` |
-| `samples.<id>` | `prompt_id`, `graded` (`head`, the current text), `prompt_digest` (the prompt's artifact digest), `sample_digest` (`sample.toml` and `setup/`), `inputs_digest` (the strict render of what the agent received, rules included, with `sample_digest`; absent in older files), `passes` out of `runs`, `mean_score`, `stdev`, `checks` (the mean score of each check that ran), `duration_seconds_mean`, `tokens_mean` and `cost_usd_mean` |
+| `summary` | `samples`, `runs`, `pass_rate` over every run, `mean_score` over the samples, total `tokens` and `cost_usd`; with `--carry-from`, `rerun` and `carried` counts too, and `tokens` and `cost_usd` count only the fresh runs |
+| `samples.<id>` | `prompt_id`, `graded` (`head`, the current text), `prompt_digest` (the prompt's artifact digest), `sample_digest` (`sample.toml` and `setup/`), `inputs_digest` (the strict render of what the agent received, rules included, with `sample_digest`; absent in older files), `passes` out of `runs`, `mean_score`, `stdev`, `checks` (the mean score of each check that ran), `duration_seconds_mean`, `tokens_mean` and `cost_usd_mean`; a carried entry adds `measured_in` (`release` and `commit`) |
 | `controls.<id>` | a pinned sample's runs on its frozen edition, in the same shape, with `graded` the edition tag and `inputs_digest` hashing the edition's render; left out of `summary` |
 | `setup_digest`, `setup` | `setup_digest` is the sha256 of everything outside the samples that decides scores, and `setup` holds its parts by name: `harness`, `harness_version` (`"unknown"` when the CLI's `--version` probe fails, `null` without a CLI), `model`, `endpoint_fingerprint`, `small_model`, `runs`, `judge_model`, `judge_endpoint_fingerprint` (the `[evals.judge] endpoint`'s, `null` without one), `judge_samples`, `judge_version` (the judge CLI's `--version`, in the same way), `fail_fast`, `isolated` and `scoring_digest` (the engine's scoring modules: checks, rubric compiler, scoring, runners, the judge and its prompt, the sample model and the release metrics fold), so a later record can name the part that differs; an `"unknown"` version never matches; both keys are absent in older files |
 
@@ -876,6 +876,25 @@ that edition as a control, `N` times too, so `--record` costs one more set of ru
 per pinned sample. Its edition is loaded and its prompt rendered before any run.
 Since the edition's text never changes, a control that moves between two
 releases points at a model or harness drift rather than at the guidance.
+
+`--carry-from PREVIOUS.json`, with `--all` and `--record` only (else exit 2),
+reruns only what changed since that metrics file and writes one complete file:
+
+```bash
+playbook eval --run --all --target claude-opus --judge llm \
+  --record catalog/releases/0.4.0/metrics/claude-opus.json \
+  --carry-from catalog/releases/0.3.0/metrics/claude-opus.json
+```
+
+A baseline of another target is refused before any run. When the baseline has no
+`setup_digest`, an entry without `inputs_digest` (as in 0.2.0's files), or a
+`setup` part that differs from this run's, every sample reruns and the command
+says why, naming the parts. Otherwise new samples, samples whose `inputs_digest`
+changed and every edition control rerun; every other entry is carried: copied
+from the baseline without `vs_previous` or `accepted`, with `measured_in` naming
+the release and commit that measured it (kept when it was already carried).
+Before the first paid run the command prints the plan: each rerun with its
+reason, and the carried count.
 
 Cost comes only from the target's `price`. Without one it is `null`, and so are
 tokens and cost when a run's harness reported no tokens. The harness's own cost

@@ -14,6 +14,11 @@ duration, the mean tokens and the mean cost. Cost comes only from the target's
 A pinned sample also runs on its edition as a **control** (#281 ticket 15): those
 runs go under ``controls`` in the same per-sample shape, with ``graded`` the
 edition tag, and stay out of the summary, which scores the current text only.
+
+Fresh and ``--carry-from`` records (#329 ticket 05, ``evals.release_carry``)
+both fold the summary's sample, run, pass-rate and mean-score keys from the
+recorded entries (:func:`entries_summary`), so a carried entry counts exactly as
+it did when it was measured; ``tokens`` and ``cost_usd`` count fresh runs only.
 """
 
 from __future__ import annotations
@@ -21,7 +26,7 @@ from __future__ import annotations
 import statistics
 from collections import Counter
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.evals.release_metrics_schema import (
     CONTROLS_KEY,
@@ -34,7 +39,7 @@ from coding_agent_playbook.evals.release_metrics_schema import (
 from coding_agent_playbook.grading.types import CheckResult
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Sequence
+    from collections.abc import Iterator, Mapping, Sequence
 
     from coding_agent_playbook.evals.run.harness_runner import SampleResult
     from coding_agent_playbook.evals.setup_digest import SetupParts
@@ -117,7 +122,7 @@ def build_release_metrics(
         {'samples': 0, 'runs': 0, 'pass_rate': 0.0, 'mean_score': None, 'tokens': 0, 'cost_usd': ...}
     """
     price = recorded.target.price
-    entries = {runs.sample_id: _sample_entry(runs, price) for runs in samples}
+    entries = dict(sorted({runs.sample_id: _sample_entry(runs, price) for runs in samples}.items()))
     control_entries = {runs.sample_id: _sample_entry(runs, price) for runs in controls}
     return _setup_keys(recorded.setup) | {
         "schema_version": SCHEMA_VERSION,
@@ -125,8 +130,9 @@ def build_release_metrics(
         "previous": None,
         "commit": commit,
         "target": _target_block(recorded, samples),
-        "summary": _summary(samples, price),
-        "samples": dict(sorted(entries.items())),
+        # One fold for fresh and carried records, so carrying an entry never moves the summary.
+        "summary": entries_summary(entries) | _fresh_totals(samples, price),
+        "samples": entries,
         CONTROLS_KEY: dict(sorted(control_entries.items())),
     }
 
@@ -196,19 +202,42 @@ def _sample_entry(runs: SampleRuns, price: TokenPrice | None) -> dict[str, objec
     }
 
 
-def _summary(samples: Sequence[SampleRuns], price: TokenPrice | None) -> dict[str, object]:
-    """Totals over every run; the mean score is the mean of the per-sample means."""
+def _fresh_totals(samples: Sequence[SampleRuns], price: TokenPrice | None) -> dict[str, object]:
+    """The summary's ``tokens`` and ``cost_usd`` over every fresh run.
+
+    ``cost_usd`` stays ``null`` without a price even when nothing ran: an
+    unpriced target's cost is unknown, not zero.
+    """
     results = [result for runs in samples for result in runs.results]
-    sample_means = [_mean([r.aggregate_score for r in runs.results]) for runs in samples]
     tokens = _total_or_none(_run_tokens(results))
-    cost = _total_or_none(_run_costs(results, price))
+    cost = _total_or_none(_run_costs(results, price)) if price is not None else None
     return {
-        "samples": len(samples),
-        "runs": len(results),
-        "pass_rate": _round(_mean([float(result.passed) for result in results])),
-        "mean_score": _round(_mean(sample_means)) if sample_means else None,
         "tokens": int(tokens) if tokens is not None else None,
         "cost_usd": _round_or_none(cost),
+    }
+
+
+def entries_summary(entries: Mapping[str, Mapping[str, Any]]) -> dict[str, object]:
+    """The summary's sample, run, pass-rate and mean-score keys, folded from recorded entries.
+
+    The same semantics as a fresh record's summary: ``pass_rate`` pools the
+    passes of every run, ``mean_score`` is the mean of the per-sample means. A
+    ``--carry-from`` record (#329 ticket 05) folds fresh and carried entries
+    alike, so its headline numbers stay comparable across releases.
+
+    Example::
+
+        >>> entries_summary({"a": {"passes": 1, "runs": 2, "mean_score": 0.5}})
+        {'samples': 1, 'runs': 2, 'pass_rate': 0.5, 'mean_score': 0.5}
+    """
+    runs = sum(int(entry["runs"]) for entry in entries.values())
+    passes = sum(int(entry["passes"]) for entry in entries.values())
+    means = [float(entry["mean_score"]) for entry in entries.values()]
+    return {
+        "samples": len(entries),
+        "runs": runs,
+        "pass_rate": _round(passes / runs) if runs else 0.0,
+        "mean_score": _round(_mean(means)) if means else None,
     }
 
 

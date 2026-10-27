@@ -63,7 +63,9 @@ one sample.
   ``--run --all --runs N --record PATH`` (spec #281 ticket 07; ``commands/_eval_record.py``)
   runs every sample (or the sample ``<id>``) N times on one Eval target and writes
   a release metrics file (schema version 1); it refuses a target without an
-  explicit model, a moving model alias and an unpinned judge model.
+  explicit model, a moving model alias and an unpinned judge model. With
+  ``--all``, ``--carry-from PREVIOUS`` (#329 ticket 05) reruns only what changed
+  since that metrics file of the same target and carries the other entries.
 
   ``--check-regressions NEW --against BASELINE [--accept SAMPLE=REASON]`` (spec #281
   ticket 08; ``commands/_eval_regressions.py``) compares two release metrics files
@@ -281,7 +283,7 @@ def run(args: argparse.Namespace) -> int:
     # writes a release metrics file instead of printing one report.
     if wants_record(args):
         if not getattr(args, "run", False):
-            raise RecordRefusedError("--record, --all and --runs need --run")
+            raise RecordRefusedError("--record, --all, --runs and --carry-from need --run")
         return run_record(args, repo_root, load_eval_settings(repo_root))
 
     # ``--run`` is the only path that *executes* samples: a task name runs every

@@ -889,6 +889,21 @@
         {
           "action": "_StoreAction",
           "option_strings": [
+            "--carry-from"
+          ],
+          "dest": "carry_from",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "--record --all: rerun only new samples, samples whose inputs changed and edition controls, copying the other entries from the metrics file PREVIOUS of the same target; a different setup reruns everything",
+          "metavar": "PREVIOUS"
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
             "--check-regressions"
           ],
           "dest": "check_regressions",
