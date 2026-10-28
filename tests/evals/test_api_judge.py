@@ -74,6 +74,21 @@ def test_an_endpoint_output_cap_is_sent(endpoint: Endpoint, key: str) -> None:
     assert grading_request(capped, "gpt-x", "p")[1][key] == 64
 
 
+def test_a_reasoning_effort_is_sent_as_each_api_names_it() -> None:
+    responses = grading_request(_RESPONSES, "gpt-x", "p", reasoning_effort="high")[1]
+    chat = grading_request(_CHAT, "gpt-x", "p", reasoning_effort="high")[1]
+
+    assert responses["reasoning"] == {"effort": "high"}
+    assert chat["reasoning_effort"] == "high"
+
+
+def test_the_judge_sends_its_reasoning_effort_with_every_grading() -> None:
+    post = FakeJsonPost([responses_payload("0.5")])
+    _judge(post, reasoning_effort="high").score_criterion("ok?", "artifact")
+
+    assert post.calls[0][2]["reasoning"] == {"effort": "high"}
+
+
 def test_a_responses_answer_skips_reasoning_items() -> None:
     assert answer_text("openai-responses", responses_payload("0.75")) == "0.75"
 

@@ -25,6 +25,7 @@ from coding_agent_playbook.evals.release_metrics import (
     sample_record,
 )
 from coding_agent_playbook.evals.release_metrics_schema import (
+    OPTIONAL_SETUP_PART_TYPES,
     SCHEMA_VERSION,
     SETUP_PART_TYPES,
     ReleaseMetricsError,
@@ -373,7 +374,9 @@ def test_validation_types_the_setup_digest_and_each_part() -> None:
 
 
 def test_the_schema_types_every_setup_part() -> None:
-    assert set(SETUP_PART_TYPES) == {field.name for field in dataclasses.fields(SetupParts)}
+    typed = set(SETUP_PART_TYPES) | set(OPTIONAL_SETUP_PART_TYPES)
+    assert typed == {field.name for field in dataclasses.fields(SetupParts)}
+    assert not set(SETUP_PART_TYPES) & set(OPTIONAL_SETUP_PART_TYPES)
 
 
 def test_an_unpriced_target_with_no_run_records_an_unknown_cost() -> None:

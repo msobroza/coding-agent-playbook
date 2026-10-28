@@ -162,3 +162,31 @@ def test_record_only_flags_without_record_are_refused(
     rc = main(["eval", "--run", "--repo-root", str(repo), "refactor/extract-helper", *flags])
     assert rc == 2
     assert "belong to --record" in capsys.readouterr().err
+
+
+_EFFORT_JUDGE = """
+[evals.endpoints.openai]
+api = "openai-responses"
+base_url = "https://api.example/v1"
+token_env = "FAKE_JUDGE_TOKEN"
+
+[evals.judge]
+endpoint = "openai"
+model = "gpt-6-luna"
+reasoning_effort = "high"
+"""
+
+
+def test_the_judge_reasoning_effort_is_a_recorded_setup_part(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    committed = repo / CONFIG_FILENAME
+    committed.write_text(_text(committed) + _EFFORT_JUDGE, encoding="utf-8")
+    monkeypatch.setenv("FAKE_JUDGE_TOKEN", "fake-judge-token-0000")
+    CannedRuns(monkeypatch)
+    out = repo / "metrics" / "judged.json"
+    argv = ["eval", "--run", "--repo-root", str(repo), "refactor/extract-helper"]
+    flags = ["--target", "fake-pinned", "--record", str(out), "--judge", "llm"]
+
+    assert main([*argv, *flags]) == 0
+    assert json.loads(_text(out))["setup"]["judge_reasoning_effort"] == "high"

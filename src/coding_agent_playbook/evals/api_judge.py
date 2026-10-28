@@ -111,12 +111,15 @@ def _json_object(raw: bytes) -> JsonObject:
     return payload
 
 
-def grading_request(endpoint: Endpoint, model: str, prompt: str) -> tuple[str, JsonObject]:
+def grading_request(
+    endpoint: Endpoint, model: str, prompt: str, *, reasoning_effort: str | None = None
+) -> tuple[str, JsonObject]:
     """The URL and JSON body that ask ``endpoint`` to answer ``prompt`` with ``model``.
 
     ``openai-responses`` asks not to store the response (``store: false``): the
     artifact under grading is the eval's, not the provider's. ``max_output_tokens``
     is sent only when the endpoint sets it, so a reasoning model is never cut short.
+    ``reasoning_effort`` (``[evals.judge]``) is sent only when set, as each API names it.
 
     Example::
 
@@ -129,10 +132,14 @@ def grading_request(endpoint: Endpoint, model: str, prompt: str) -> tuple[str, J
         body: JsonObject = {"model": model, "input": prompt, "store": False}
         if limit is not None:
             body["max_output_tokens"] = limit
+        if reasoning_effort is not None:
+            body["reasoning"] = {"effort": reasoning_effort}
         return f"{base}/responses", body
     body = {"model": model, "messages": [{"role": "user", "content": prompt}]}
     if limit is not None:
         body["max_tokens"] = limit
+    if reasoning_effort is not None:
+        body["reasoning_effort"] = reasoning_effort
     return f"{base}/chat/completions", body
 
 
@@ -232,6 +239,7 @@ class ApiJudge(Judge):
         timeout: float = _DEFAULT_TIMEOUT,
         retries: int = _DEFAULT_RETRIES,
         post: JsonPost = post_json,
+        reasoning_effort: str | None = None,
     ) -> None:
         _check_endpoint(endpoint)
         if retries < 0:
@@ -243,6 +251,7 @@ class ApiJudge(Judge):
         self._timeout = timeout
         self._retries = retries
         self._post = post
+        self.reasoning_effort = reasoning_effort
 
     def score_criterion(self, criterion: str, artifact: Any, n: int = 1) -> float:
         """Average ``n`` independent gradings of ``criterion`` over ``artifact``."""
@@ -251,7 +260,9 @@ class ApiJudge(Judge):
 
     def _grade_once(self, criterion: str, artifact: Any) -> float:
         prompt = GRADING_PROMPT.format(criterion=criterion, artifact=str(artifact))
-        url, body = grading_request(self.endpoint, self.model, prompt)
+        url, body = grading_request(
+            self.endpoint, self.model, prompt, reasoning_effort=self.reasoning_effort
+        )
         who = f"judge {self.model!r} on endpoint {self.endpoint.name!r}"
         return grade_with_retries(lambda: self._attempt(url, body), self._retries + 1, who)
 
@@ -284,7 +295,9 @@ def _check_endpoint(endpoint: Endpoint) -> None:
         )
 
 
-def build_api_judge(endpoint: Endpoint, model: str, env: Mapping[str, str]) -> ApiJudge:
+def build_api_judge(
+    endpoint: Endpoint, model: str, env: Mapping[str, str], *, reasoning_effort: str | None = None
+) -> ApiJudge:
     """The ``llm`` judge on ``endpoint``, its token and extra headers read from ``env`` now.
 
     A missing token raises :class:`~coding_agent_playbook.evals.endpoints.EndpointError`
@@ -297,4 +310,10 @@ def build_api_judge(endpoint: Endpoint, model: str, env: Mapping[str, str]) -> A
     token = resolve_endpoint_token(endpoint, env)
     raw_headers = resolve_endpoint_headers(endpoint, env)
     headers = parse_header_lines(raw_headers, endpoint) if raw_headers is not None else {}
-    return ApiJudge(endpoint=endpoint, model=model, token=token, headers=headers)
+    return ApiJudge(
+        endpoint=endpoint,
+        model=model,
+        token=token,
+        headers=headers,
+        reasoning_effort=reasoning_effort,
+    )

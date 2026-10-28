@@ -27,6 +27,7 @@ list; the local file may add targets, change the default and override
     model = "claude-opus-5-5"
     samples = 3
     endpoint = "internal"       # optional
+    reasoning_effort = "high"   # optional, an openai-* judge endpoint only
 
 ``[evals.endpoints]`` is read by ``evals.endpoint_config``. A committed target or
 judge may name only a committed endpoint. Claude Code speaks only the Anthropic
@@ -54,7 +55,7 @@ from coding_agent_playbook.evals.config_shapes import (
     text,
 )
 from coding_agent_playbook.evals.endpoint_config import parse_endpoints
-from coding_agent_playbook.evals.endpoints import API_ANTHROPIC
+from coding_agent_playbook.evals.endpoints import API_ANTHROPIC, REASONING_EFFORTS
 from coding_agent_playbook.evals.targets import (
     EvalSettings,
     EvalTarget,
@@ -81,7 +82,7 @@ _COMMITTED_KEYS: Final = frozenset({"default", "release", "targets", "judge", "e
 #: The keys of ``[evals]`` in the local file: no ``release`` (release metrics are the team's).
 _LOCAL_KEYS: Final = frozenset({"default", "targets", "judge", "endpoints"})
 #: The keys of ``[evals.judge]``.
-_JUDGE_KEYS: Final = frozenset({"model", "samples", "endpoint"})
+_JUDGE_KEYS: Final = frozenset({"model", "samples", "endpoint", "reasoning_effort"})
 #: A target name: no ``:``, which would read as the ``<harness>:<model>`` shorthand.
 _TARGET_NAME: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 #: The harness that speaks only the Anthropic Messages API.
@@ -295,8 +296,22 @@ def _judge(
         if "endpoint" in judge:
             endpoint = _endpoint_ref(judge, source, label, visible)
             settings = replace(settings, endpoint=endpoint)
+        if "reasoning_effort" in judge:
+            effort = _reasoning_effort(judge, source, label)
+            settings = replace(settings, reasoning_effort=effort)
     _check_judge_endpoint(settings)
     return settings
+
+
+def _reasoning_effort(judge: Mapping[str, object], source: str, label: str) -> str:
+    """``reasoning_effort``: one of :data:`REASONING_EFFORTS`."""
+    effort = text(judge, "reasoning_effort", source, label)
+    if effort not in REASONING_EFFORTS:
+        raise ConfigError(
+            f"{source}: {label} reasoning_effort = {effort!r}, expected one of "
+            f"{', '.join(REASONING_EFFORTS)}"
+        )
+    return effort
 
 
 def _check_judge_endpoint(settings: JudgeSettings) -> None:
@@ -306,9 +321,16 @@ def _check_judge_endpoint(settings: JudgeSettings) -> None:
     and grades over HTTPS on an ``openai-*`` one.
     """
     endpoint = settings.endpoint
+    label = "[evals.judge]"
+    if settings.reasoning_effort is not None and (
+        endpoint is None or endpoint.api == API_ANTHROPIC
+    ):
+        raise ConfigError(
+            f"{label} reasoning_effort = {settings.reasoning_effort!r} is sent only by the judge "
+            "on an openai-responses or openai-chat endpoint; set endpoint to one or remove it"
+        )
     if endpoint is None:
         return
-    label = "[evals.judge]"
     if settings.model is None:
         raise ConfigError(
             f"{endpoint.source}: {label} needs model = the id endpoint {endpoint.name!r} serves"

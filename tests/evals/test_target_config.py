@@ -146,3 +146,33 @@ def test_a_misread_price_is_refused(price: object, message: str) -> None:
     spec = {"harness": "opencode", "price": price}
     with pytest.raises(ConfigError, match=message):
         parse_eval_settings({"targets": {"t": spec}}, {})
+
+
+_OPENAI_JUDGE = """\
+[evals.endpoints.openai]
+api = "openai-responses"
+base_url = "https://api.example/v1"
+token_env = "OPENAI_API_KEY"
+
+[evals.judge]
+endpoint = "openai"
+model = "gpt-6-luna"
+reasoning_effort = "{effort}"
+"""
+
+
+def test_a_judge_reasoning_effort_is_read(tmp_path: Path) -> None:
+    settings = load_eval_settings(_repo(tmp_path, committed=_OPENAI_JUDGE.format(effort="high")))
+    assert settings.judge.reasoning_effort == "high"
+
+
+def test_an_unknown_reasoning_effort_is_refused(tmp_path: Path) -> None:
+    repo = _repo(tmp_path, committed=_OPENAI_JUDGE.format(effort="max"))
+    with pytest.raises(ConfigError, match=r"reasoning_effort = 'max', expected one of none, "):
+        load_eval_settings(repo)
+
+
+def test_a_reasoning_effort_without_an_openai_endpoint_is_refused(tmp_path: Path) -> None:
+    committed = _COMMITTED + 'reasoning_effort = "high"\n'
+    with pytest.raises(ConfigError, match=r"reasoning_effort = 'high' is sent only by the judge"):
+        load_eval_settings(_repo(tmp_path, committed=committed))

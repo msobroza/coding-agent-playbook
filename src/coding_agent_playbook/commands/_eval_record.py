@@ -251,8 +251,10 @@ def _build_plan(
     if runner is None or (judge_name is not None and judge is None) or judge_samples is None:
         return None
     fail_fast = not getattr(args, "full_scoring", False)
-    judge_endpoint = settings.judge.endpoint if judge is not None else None
-    return _RecordPlan(runner, judge, judge_samples, runs, fail_fast, judge_endpoint)
+    judged = judge is not None
+    judge_endpoint = settings.judge.endpoint if judged else None
+    effort = settings.judge.reasoning_effort if judged else None
+    return _RecordPlan(runner, judge, judge_samples, runs, fail_fast, judge_endpoint, effort)
 
 
 def _check_credentials(target: EvalTarget, settings: EvalSettings, judge_name: str | None) -> bool:
@@ -312,6 +314,8 @@ class _RecordPlan:
     fail_fast: bool = True
     #: ``[evals.judge] endpoint``, set only when the run has a judge.
     judge_endpoint: Endpoint | None = None
+    #: ``[evals.judge] reasoning_effort``, set only when the run has a judge.
+    judge_reasoning_effort: str | None = None
 
     def recorded_target(
         self, target: EvalTarget, *, judge_model: str | None, isolated: bool
@@ -352,6 +356,7 @@ class _RecordPlan:
             fail_fast=self.fail_fast,
             isolated=recorded.isolated,
             scoring_digest=scoring_digest(),
+            judge_reasoning_effort=self.judge_reasoning_effort if judged else None,
         )
 
     def check_prompts(self, samples: list[EvalSample]) -> dict[str, str]:

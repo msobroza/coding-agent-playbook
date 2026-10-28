@@ -175,7 +175,12 @@ def build_judge(name: str, settings: JudgeSettings, *, isolated: bool = False) -
     """
     if _is_api_judge(name, settings):
         assert settings.endpoint is not None and settings.model is not None  # by _is_api_judge
-        return build_api_judge(settings.endpoint, settings.model, os.environ)
+        return build_api_judge(
+            settings.endpoint,
+            settings.model,
+            os.environ,
+            reasoning_effort=settings.reasoning_effort,
+        )
     judge_cls = load_usable_judge(name)
     if judge_cls is None:
         return None
