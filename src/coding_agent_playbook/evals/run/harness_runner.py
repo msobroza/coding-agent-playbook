@@ -37,7 +37,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 from time import monotonic
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.evals.prompting import render_prompt
 from coding_agent_playbook.evals.run.git_env import without_repo_location
@@ -78,6 +78,36 @@ class AgentRun:
     returncode: int
     reported_model: str | None = None
     usage: TokenUsage | None = None
+
+
+#: The return code a run stopped at its timeout records, as ``timeout(1)`` exits.
+TIMED_OUT_RETURNCODE: Final = 124
+
+
+def timed_out_run(exc: subprocess.TimeoutExpired, redact: Callable[[str], str]) -> AgentRun:
+    """The :class:`AgentRun` of an agent stopped at its timeout: its partial output and a note.
+
+    The partial output goes through ``redact`` (the runner's endpoint secrets), as
+    a finished run's transcript does.
+
+    Example::
+
+        >>> exc = subprocess.TimeoutExpired(["agent"], 600, output=b"half an answer")
+        >>> run = timed_out_run(exc, str)
+        >>> run.returncode, run.transcript
+        (124, 'half an answer\\n[the agent was stopped at its 600 s timeout]')
+    """
+    partial = _decoded(exc.stdout) + _decoded(exc.stderr)
+    note = f"[the agent was stopped at its {exc.timeout:g} s timeout]"
+    transcript = f"{partial}\n{note}" if partial else note
+    return AgentRun(transcript=redact(transcript), returncode=TIMED_OUT_RETURNCODE)
+
+
+def _decoded(stream: bytes | str | None) -> str:
+    """A partial stream as text: ``TimeoutExpired`` carries bytes even in text mode."""
+    if stream is None:
+        return ""
+    return stream if isinstance(stream, str) else stream.decode("utf-8", errors="replace")
 
 
 @dataclass
@@ -511,7 +541,7 @@ class HarnessRunner(ABC):
         from coding_agent_playbook.grading.types import TrialResult
 
         baseline = materialize(sample, trial_dir)
-        run = self._invoke_agent(prompt, trial_dir)
+        run = self._invoke_bounded(prompt, trial_dir)
         candidate = capture(trial_dir, baseline, run.transcript, redact=self._redact)
         report = score(
             sample,
@@ -527,6 +557,20 @@ class HarnessRunner(ABC):
             reported_model=run.reported_model,
             usage=run.usage,
         )
+
+    def _invoke_bounded(self, prompt: str, trial_dir: Path) -> AgentRun:
+        """:meth:`_invoke_agent`, with a run stopped at its timeout kept as a scored trial.
+
+        Why: a CLI runner's ``subprocess.run(..., timeout=...)`` raises
+        ``TimeoutExpired``, and one stuck agent then aborted a whole
+        ``eval --run --all --record`` with no metrics written (the first v0.4.0
+        release eval). The trial is graded on the tree and partial transcript the
+        agent left, like any other.
+        """
+        try:
+            return self._invoke_agent(prompt, trial_dir)
+        except subprocess.TimeoutExpired as exc:
+            return timed_out_run(exc, self._redact)
 
     def _assemble(
         self,
