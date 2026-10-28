@@ -221,6 +221,30 @@ def test_invoke_agent_runs_on_the_scratch_venv(
     assert run.transcript == f"{venv / 'bin'}|{venv}"
 
 
+@pytest.mark.parametrize(
+    "route",
+    [
+        None,
+        OpenCodeKeyRoute("anthropic/m", "k0"),
+        OpenCodeRoute(Endpoint("e", "openai-chat", "https://x/v1"), "m", token="t0k3n"),
+    ],
+    ids=["plain", "key-isolated", "routed"],
+)
+def test_invoke_agent_runs_with_the_scratch_as_pwd(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, route: OpenCodeKeyRoute | OpenCodeRoute | None
+) -> None:
+    """Regression: OpenCode's project directory is ``PWD``; the caller's let it edit the caller's tree."""
+    monkeypatch.setenv("PWD", "/the/caller/checkout")
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    program = "import os, sys; sys.stdout.write(os.environ['PWD'])"
+    runner = OpenCodeRunner(command=[sys.executable, "-c", program], route=route)
+
+    run = runner._invoke_agent("p", scratch)
+
+    assert run.transcript == str(scratch.absolute())
+
+
 def test_invoke_agent_without_a_scratch_venv_keeps_the_parent_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

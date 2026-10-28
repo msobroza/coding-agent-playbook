@@ -100,3 +100,12 @@ def test_agent_env_is_unattended_and_on_the_scratch_venv(tmp_path: Path) -> None
     env = agent_env(scratch, {"PATH": "/usr/bin"})
     assert env[UNATTENDED_ENV_VAR] == "1"
     assert env["VIRTUAL_ENV"] == str(scratch.absolute() / ".venv")
+
+
+def test_agent_env_names_the_scratch_as_pwd_over_the_callers(tmp_path: Path) -> None:
+    """Regression: OpenCode reads its project directory from ``PWD``, not the cwd."""
+    scratch = tmp_path / "scratch"
+
+    env = agent_env(scratch, {"PATH": "/usr/bin", "PWD": "/the/caller/checkout"})
+
+    assert env["PWD"] == str(scratch.absolute())

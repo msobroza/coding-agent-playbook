@@ -67,16 +67,24 @@ def scratch_venv_env(base: Mapping[str, str], scratch_dir: Path) -> dict[str, st
 
 
 def agent_env(scratch_dir: Path, base: Mapping[str, str] | None = None) -> dict[str, str]:
-    """The env every eval agent process starts from: unattended, on the scratch venv.
+    """The env every eval agent process starts from: unattended, on the scratch venv, in the scratch.
 
-    Both real runners pass it to their route helper, which keeps ``PATH`` and
-    ``VIRTUAL_ENV`` when it isolates the run, so plain, routed and key-isolated
-    runs all get the sample's environment from this one place.
+    Both real runners pass it to their route helper, which keeps ``PATH``,
+    ``VIRTUAL_ENV`` and ``PWD`` when it isolates the run, so plain, routed and
+    key-isolated runs all get the sample's environment from this one place.
+
+    ``PWD`` names the scratch tree. Why: OpenCode takes its project directory
+    from the inherited ``PWD``, not from the process's working directory, so
+    with the caller's ``PWD`` the agent read and edited the checkout that
+    launched the eval (the first v0.4.0 release eval wrote a sample's tests
+    into the caller's catalog, and graded an untouched scratch tree).
 
     Example::
 
         >>> from pathlib import Path
         >>> agent_env(Path("/no/such/scratch"), {"PATH": "/usr/bin"})
-        {'PATH': '/usr/bin', 'PLAYBOOK_HOOK_UNATTENDED': '1'}
+        {'PATH': '/usr/bin', 'PLAYBOOK_HOOK_UNATTENDED': '1', 'PWD': '/no/such/scratch'}
     """
-    return scratch_venv_env(unattended_agent_env(base), scratch_dir)
+    env = scratch_venv_env(unattended_agent_env(base), scratch_dir)
+    env["PWD"] = str(scratch_dir.absolute())
+    return env
