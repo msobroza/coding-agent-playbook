@@ -10,11 +10,14 @@ prompt_args = "for the quotient function in src/quotient.py — make sure every 
 input_variables = { target = "src/quotient.py::quotient" }
 
 [gate]
-expr = "test_created and names_test and parametrized and raises_zerodiv and src_unchanged and no_fixed_copy"
+# The prompt never names the tests, so the gate asks for a test function, not
+# for one called test_quotient*: that literal failed every run of two models
+# (v0.2.0 and v0.4.0 release metrics) whose tests were named by branch instead.
+expr = "test_created and defines_tests and parametrized and raises_zerodiv and src_unchanged and no_fixed_copy"
 
 [gate.bind]
 test_created = { check = "file_exists", path = "tests/test_quotient.py" }
-names_test = { check = "file_contains", path = "tests/test_quotient.py", pattern = "def test_quotient" }
+defines_tests = { check = "file_contains", path = "tests/test_quotient.py", pattern = '(?m)^\s*(async\s+)?def test_' }
 parametrized = { check = "file_contains", path = "tests/test_quotient.py", pattern = "parametrize" }
 raises_zerodiv = { check = "file_contains", path = "tests/test_quotient.py", pattern = "ZeroDivisionError" }
 src_unchanged = { check = "file_unchanged", path = "src/quotient.py" }
