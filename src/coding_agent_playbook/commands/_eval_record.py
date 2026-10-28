@@ -25,7 +25,10 @@ before the first paid run, runs only new samples, samples whose inputs digest
 changed and every edition control (every sample when the setup differs or the
 baseline lacks the digests), and carries the other entries. The
 file is written whatever the scores are: exit ``0`` once it is written, ``2`` on
-a refusal or an unscorable sample.
+a refusal or an unscorable sample. Each finished sample is saved to a
+checkpoint as it ends (``--checkpoint``, ``evals.record_checkpoint``), which
+``--resume`` reuses; ``--jobs N`` runs N samples at a time
+(``commands._eval_record_runs``).
 """
 
 from __future__ import annotations
@@ -47,11 +50,23 @@ from coding_agent_playbook.commands._eval_options import (
     judge_sample_count,
     select_target,
 )
+from coding_agent_playbook.commands._eval_record_flags import (
+    carry_from_path,
+    job_count,
+    record_path,
+    refuse_format,
+    run_count,
+)
+from coding_agent_playbook.commands._eval_record_runs import RecordUnit, record_units
 from coding_agent_playbook.evals import registry
 from coding_agent_playbook.evals.graded_source import graded_source
 from coding_agent_playbook.evals.judge import JudgeError
 from coding_agent_playbook.evals.model_pins import RecordRefusedError, check_recordable
 from coding_agent_playbook.evals.prompting import PromptResolutionError, render_prompt
+from coding_agent_playbook.evals.record_checkpoint import (
+    RecordCheckpoint,
+    default_checkpoint_path,
+)
 from coding_agent_playbook.evals.record_isolation import check_record_credentials
 from coding_agent_playbook.evals.release_carry import (
     CarryPlan,
@@ -63,8 +78,10 @@ from coding_agent_playbook.evals.release_carry import (
 from coding_agent_playbook.evals.release_metrics import (
     GRADED_HEAD,
     RecordedTarget,
+    SampleRecord,
     SampleRuns,
-    build_release_metrics,
+    build_release_metrics_from_records,
+    sample_record,
 )
 from coding_agent_playbook.evals.release_metrics_schema import validate_release_metrics
 from coding_agent_playbook.evals.run.git_env import without_repo_location
@@ -77,7 +94,7 @@ from coding_agent_playbook.validation.context import SyncContext
 
 if TYPE_CHECKING:
     import argparse
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
     from coding_agent_playbook.evals.endpoints import Endpoint
     from coding_agent_playbook.evals.judge import Judge
@@ -90,50 +107,6 @@ if TYPE_CHECKING:
 _GIT_TIMEOUT: Final = 30.0
 
 
-def configure_record(parser: argparse.ArgumentParser) -> None:
-    """Declare ``--all``, ``--runs`` and ``--record`` on ``playbook eval``.
-
-    Example::
-
-        >>> configure_record(argparse.ArgumentParser())  # doctest: +SKIP
-    """
-    parser.add_argument(
-        "--all",
-        action="store_true",
-        dest="all_samples",
-        help="--record: run every eval sample (instead of the sample <id>)",
-    )
-    parser.add_argument(
-        "--runs",
-        type=int,
-        help="--record: runs per eval sample (default: the target's runs, else 1)",
-    )
-    parser.add_argument(
-        "--record",
-        metavar="PATH",
-        help="with --run: write the release metrics file (schema version 1) of the "
-        "samples on one target to PATH; refuses unpinned models",
-    )
-    parser.add_argument(
-        "--carry-from",
-        metavar="PREVIOUS",
-        dest="carry_from",
-        help="--record --all: rerun only new samples, samples whose inputs changed and "
-        "edition controls, copying the other entries from the metrics file PREVIOUS of "
-        "the same target; a different setup reruns everything",
-    )
-
-
-def wants_record(args: argparse.Namespace) -> bool:
-    """Whether ``args`` ask for a recording (``--record``, ``--all``, ``--runs`` or ``--carry-from``)."""
-    flags = (
-        getattr(args, "record", None),
-        getattr(args, "runs", None),
-        getattr(args, "carry_from", None),
-    )
-    return getattr(args, "all_samples", False) or any(flag is not None for flag in flags)
-
-
 def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings) -> int:
     """Run the samples on the target and write the release metrics file; see the module doc.
 
@@ -142,12 +115,13 @@ def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings
         >>> run_record(args, Path("."), load_eval_settings(Path(".")))  # doctest: +SKIP
         0
     """
-    out_path = _record_path(args)
-    _refuse_format(args)
-    carry_from = _carry_from_path(args)
+    out_path = record_path(args)
+    refuse_format(args)
+    carry_from = carry_from_path(args)
     target = select_target(args, settings)
     baseline = load_baseline(carry_from, target.name) if carry_from is not None else None
-    runs = _run_count(getattr(args, "runs", None), target.runs)
+    runs = run_count(getattr(args, "runs", None), target.runs)
+    jobs = job_count(getattr(args, "jobs", None))
     uses_judge = getattr(args, "judge", None) is not None
     check_recordable(target, judge_model=settings.judge.model, uses_judge=uses_judge)
     isolated = _check_credentials(target, settings, getattr(args, "judge", None))
@@ -160,14 +134,18 @@ def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings
     judge_model = settings.judge.model if uses_judge else None
     recorded = plan.recorded_target(target, judge_model=judge_model, isolated=isolated)
     carry = _plan_carry(baseline, recorded, inputs, controls)
-    metrics = _record_metrics(plan, recorded, samples, inputs, controls, carry, repo_root)
+    checkpoint = _open_checkpoint(args, out_path, recorded)
+    work = _RecordWork(plan, recorded, jobs, checkpoint)
+    metrics = _record_metrics(work, samples, inputs, controls, carry, repo_root)
     validate_release_metrics(metrics)
     _write(out_path, metrics)
+    checkpoint.remove()
     extra = f" (+{len(controls)} edition controls)" if controls else ""
+    jobs_note = f" on {jobs} jobs" if jobs > 1 else ""
     carried = "" if carry is None else f" ({len(carry.rerun)} rerun, {len(carry.carried)} carried)"
     print(
         f"recorded {len(samples)} samples{carried}{extra} x {runs} runs on target "
-        f"{target.name!r} to {out_path}"
+        f"{target.name!r}{jobs_note} to {out_path}"
     )
     return 0
 
@@ -188,9 +166,32 @@ def _plan_carry(
     return carry
 
 
+@dataclass(frozen=True)
+class _RecordWork:
+    """What runs each unit: the plan, the target block, ``--jobs`` and the checkpoint."""
+
+    plan: _RecordPlan
+    recorded: RecordedTarget
+    jobs: int
+    checkpoint: RecordCheckpoint
+
+
+def _open_checkpoint(
+    args: argparse.Namespace, out_path: Path, recorded: RecordedTarget
+) -> RecordCheckpoint:
+    """The run's checkpoint; with ``--resume``, say how many samples it may reuse."""
+    flag = getattr(args, "checkpoint", None)
+    path = Path(flag) if flag is not None else default_checkpoint_path(out_path)
+    assert recorded.setup is not None  # a record always computes its setup parts
+    resume = getattr(args, "resume", False)
+    checkpoint = RecordCheckpoint.open(path, setup_digest=recorded.setup.digest, resume=resume)
+    if resume:
+        print(f"checkpoint: {checkpoint.resumable} finished sample(s) to reuse from {path}")
+    return checkpoint
+
+
 def _record_metrics(
-    plan: _RecordPlan,
-    recorded: RecordedTarget,
+    work: _RecordWork,
     samples: list[EvalSample],
     inputs: Mapping[str, str],
     controls: Mapping[str, _Control],
@@ -198,23 +199,40 @@ def _record_metrics(
     repo_root: Path,
 ) -> dict[str, object]:
     """Run what reruns (every sample without ``carry``) and build the file; carry the rest."""
-    total = len(samples)
-    metrics = build_release_metrics(
+    units = [
+        RecordUnit("sample", sample, index, inputs[sample.id])
+        for index, sample in enumerate(samples)
+        if carry is None or carry.reruns(sample.id)
+    ]
+    units += [
+        RecordUnit("control", sample, index, control.inputs_digest, control.edition)
+        for index, sample in enumerate(samples)
+        if (control := controls.get(sample.id)) is not None
+    ]
+    records = record_units(
+        units, jobs=work.jobs, run=_unit_runner(work, len(samples)), checkpoint=work.checkpoint
+    )
+    metrics = build_release_metrics_from_records(
         release=coding_agent_playbook.__version__,
         commit=_head_commit(repo_root),
-        recorded=recorded,
-        samples=[
-            plan.run(sample, index, total, inputs[sample.id])
-            for index, sample in enumerate(samples)
-            if carry is None or carry.reruns(sample.id)
-        ],
-        controls=[
-            plan.run(sample, index, total, control.inputs_digest, edition=control.edition)
-            for index, sample in enumerate(samples)
-            if (control := controls.get(sample.id)) is not None
-        ],
+        recorded=work.recorded,
+        samples=[records[unit.key] for unit in units if unit.kind == "sample"],
+        controls=[records[unit.key] for unit in units if unit.kind == "control"],
     )
     return metrics if carry is None else merge_carried(metrics, carry)
+
+
+def _unit_runner(work: _RecordWork, total: int) -> Callable[[RecordUnit], SampleRecord]:
+    """Run one unit's ``runs`` and fold them into its record."""
+    price = work.recorded.target.price
+
+    def run(unit: RecordUnit) -> SampleRecord:
+        runs = work.plan.run(
+            unit.sample, unit.index, total, unit.inputs_digest, edition=unit.edition
+        )
+        return sample_record(runs, price)
+
+    return run
 
 
 def _build_plan(
@@ -449,45 +467,6 @@ def _setup_version(cli: str | None, version: str | None) -> str | None:
 def _fingerprint(endpoint: Endpoint | None) -> str | None:
     """The endpoint's URL fingerprint, or ``None`` without an endpoint."""
     return endpoint.fingerprint if endpoint is not None else None
-
-
-def _record_path(args: argparse.Namespace) -> Path:
-    record = getattr(args, "record", None)
-    if record is None:
-        raise RecordRefusedError(
-            "--all, --runs and --carry-from belong to --record <path>; pass --record too"
-        )
-    return Path(record)
-
-
-def _carry_from_path(args: argparse.Namespace) -> Path | None:
-    """The ``--carry-from`` baseline path; refused unless the record runs ``--all`` samples."""
-    carry_from = getattr(args, "carry_from", None)
-    if carry_from is None:
-        return None
-    if not getattr(args, "all_samples", False):
-        raise RecordRefusedError(
-            f"--carry-from needs --all: a record carried from {carry_from} must cover every "
-            "sample, so pass --all instead of a sample or task"
-        )
-    return Path(carry_from)
-
-
-def _refuse_format(args: argparse.Namespace) -> None:
-    """``--format`` shapes the one-sample ``--run`` report; ``--record`` writes JSON only."""
-    fmt = getattr(args, "format", None)
-    if fmt is not None:
-        raise RecordRefusedError(
-            f"--format {fmt} does not apply to --record, which always writes the release "
-            "metrics JSON file; drop --format"
-        )
-
-
-def _run_count(flag: int | None, target_runs: int | None) -> int:
-    runs = flag if flag is not None else (target_runs or 1)
-    if runs < 1:
-        raise RecordRefusedError(f"--runs must be >= 1, got {runs}")
-    return runs
 
 
 def _selected_samples(args: argparse.Namespace, repo_root: Path) -> list[EvalSample]:

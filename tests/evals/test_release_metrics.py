@@ -8,18 +8,21 @@ from __future__ import annotations
 
 import dataclasses
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
 from coding_agent_playbook.evals.endpoints import Endpoint
+from coding_agent_playbook.evals.record_checkpoint import RecordCheckpoint
 from coding_agent_playbook.evals.release_carry import merge_carried, plan_carry
 from coding_agent_playbook.evals.release_metrics import (
     GRADED_HEAD,
     RecordedTarget,
     SampleRuns,
     build_release_metrics,
+    build_release_metrics_from_records,
     entries_summary,
+    sample_record,
 )
 from coding_agent_playbook.evals.release_metrics_schema import (
     SCHEMA_VERSION,
@@ -34,6 +37,9 @@ from coding_agent_playbook.evals.token_usage import TokenPrice, TokenUsage
 from coding_agent_playbook.grading.scope import CostTier, Determinism
 from coding_agent_playbook.grading.types import CheckResult, EvaluationReport
 from tests.evals.release_metrics_files import metrics_file, sample_entry
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 _USAGE = TokenUsage(1000, 500)
 _PRICED = EvalTarget(
@@ -399,3 +405,34 @@ def test_a_fully_carried_record_keeps_the_baseline_mean_score_to_the_last_digit(
     carried = merge_carried(fresh, plan)
     assert len(plan.carried) == 3
     assert carried["summary"]["mean_score"] == baseline["summary"]["mean_score"]  # type: ignore[index]
+
+
+def test_records_saved_to_a_checkpoint_fold_into_the_same_file(tmp_path: Path) -> None:
+    # A resumed record must write exactly what the uninterrupted run would have.
+    samples = tuple(
+        dataclasses.replace(runs, inputs_digest="i" * 64)
+        for runs in (
+            _runs("review/b", _result(0.5, passed=False), _result(1.0, passed=True, reported="x")),
+            _runs("review/a", _result(1.0, passed=True), _result(0.0, passed=False, usage=None)),
+        )
+    )
+    recorded = RecordedTarget(_PRICED, harness_version="1.2.3", judge_model=None, runs=2)
+    direct = build_release_metrics(
+        release="9.9.9", commit="abc123", recorded=recorded, samples=samples
+    )
+    checkpoint = RecordCheckpoint.open(tmp_path / "c.jsonl", setup_digest="d", resume=False)
+    for runs in samples:
+        checkpoint.append("sample", sample_record(runs, _PRICED.price))
+    reopened = RecordCheckpoint.open(tmp_path / "c.jsonl", setup_digest="d", resume=True)
+    records = [
+        reopened.resumed("sample", runs.sample_id, inputs_digest="i" * 64, graded=GRADED_HEAD)
+        for runs in samples
+    ]
+    assert all(record is not None for record in records)
+    folded = build_release_metrics_from_records(
+        release="9.9.9",
+        commit="abc123",
+        recorded=recorded,
+        samples=[record for record in records if record is not None],
+    )
+    assert folded == direct

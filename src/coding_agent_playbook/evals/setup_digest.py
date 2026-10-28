@@ -143,6 +143,7 @@ SCORING_EXEMPT: Final[Mapping[str, str]] = {
     "evals.model_pins": "refuses a moving model before a run; the model parts record it",
     "evals.prompting": "rendering: the inputs digest hashes the rendered text",
     "evals.record_isolation": "refuses a missing credential; the isolated part records isolation",
+    "evals.record_checkpoint": "saves finished entries; reuses one only on the same setup digest",
     "evals.registry": "looks runners and judges up; the harness part names the runner",
     "evals.release_carry": "picks the samples that rerun and copies recorded entries as they are",
     "evals.release_metrics_schema": _AFTER_SCORING,

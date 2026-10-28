@@ -134,7 +134,9 @@ def _kept(temp: Path) -> list[Path]:
 # --------------------------------------------------------------------------- #
 
 
-def test_every_release_target_is_recorded_by_the_checkouts_engine(tmp_path: Path) -> None:
+def test_every_release_target_is_recorded_by_the_checkouts_engine(
+    tmp_path: Path, _temp_in_tmp_path: Path
+) -> None:
     checkout = _checkout(tmp_path)
     host = _host(claude_opus=_recorded(_OPUS, 0.9), coder=_recorded(_CODER, 0.9))
 
@@ -158,6 +160,12 @@ def test_every_release_target_is_recorded_by_the_checkouts_engine(tmp_path: Path
         str(out),
         "--judge",
         "llm",
+        # Each finished sample is saved outside the checkout, per base and target.
+        "--checkpoint",
+        str(_temp_in_tmp_path / "playbook-release-checkpoints" / BASE / f"{_OPUS}.partial.jsonl"),
+        "--resume",
+        "--jobs",
+        "1",
     ]
     assert host.timeouts[host.commands.index(command)] == RECORD_TIMEOUT_SECONDS
     # Recorded before the release files and the version bump, on the base's catalog.
@@ -621,3 +629,43 @@ def test_prepare_passes_full_on_to_the_checkout(tmp_path: Path) -> None:
 
     inner = next(c for c in host.commands if "prepare-checkout" in c)
     assert inner[-2:] == ["--eval", "--full"]
+
+
+def test_prepare_passes_jobs_on_to_the_checkout(tmp_path: Path) -> None:
+    host = FakeReleaseHost()
+
+    assert main(["prepare", "--eval", "--jobs", "4"], cwd=tmp_path, runner=host) == 0
+
+    inner = next(c for c in host.commands if "prepare-checkout" in c)
+    assert inner[-3:] == ["--eval", "--jobs", "4"]
+
+
+def test_jobs_reach_every_recording(tmp_path: Path, _temp_in_tmp_path: Path) -> None:
+    checkout = _checkout(tmp_path)
+    host = _host(claude_opus=_recorded(_OPUS, 0.9), coder=_recorded(_CODER, 0.9))
+
+    assert _run(checkout, host, "--jobs", "3") == 0
+
+    records = [c for c in host.commands if "--record" in c]
+    assert [c[-2:] for c in records] == [["--jobs", "3"], ["--jobs", "3"]]
+    checkpoints = [c[c.index("--checkpoint") + 1] for c in records]
+    root = _temp_in_tmp_path / "playbook-release-checkpoints" / BASE
+    assert checkpoints == [str(root / f"{name}.partial.jsonl") for name in (_OPUS, _CODER)]
+
+
+def test_jobs_without_eval_is_a_usage_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    host = FakeReleaseHost()
+
+    with pytest.raises(SystemExit) as exited:
+        main(["prepare", "--jobs", "2"], cwd=tmp_path, runner=host)
+
+    assert exited.value.code == 2
+    assert "--jobs belongs to --eval" in capsys.readouterr().err
+    assert host.commands == []
+
+
+def test_zero_jobs_are_refused(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["prepare", "--eval", "--jobs", "0"], cwd=tmp_path, runner=FakeReleaseHost()) == 1
+    assert "--jobs must be >= 1, got 0" in capsys.readouterr().err
