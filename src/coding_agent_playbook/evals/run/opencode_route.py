@@ -42,6 +42,7 @@ from coding_agent_playbook.evals.endpoints import (
     API_OPENAI_RESPONSES,
     AUTH_X_API_KEY,
     EndpointError,
+    parse_header_lines,
     resolve_endpoint_headers,
     resolve_endpoint_token,
 )
@@ -307,7 +308,7 @@ def opencode_route(
         model=model,
         small_model=small_model,
         token=token,
-        headers=_parse_headers(raw_headers, endpoint) if raw_headers is not None else {},
+        headers=parse_header_lines(raw_headers, endpoint) if raw_headers is not None else {},
     )
 
 
@@ -324,20 +325,6 @@ def _check_splice_safe(token: str, endpoint: Endpoint) -> None:
         f"endpoint {endpoint.name!r}: {origin} holds a double quote, backslash or control "
         "character, which OpenCode would splice unescaped into its inline JSON config"
     )
-
-
-def _parse_headers(raw: str, endpoint: Endpoint) -> dict[str, str]:
-    """``Name: Value`` lines into a mapping; a line without a name and a colon is refused."""
-    headers: dict[str, str] = {}
-    for line in filter(None, (line.strip() for line in raw.splitlines())):
-        name, colon, value = line.partition(":")
-        if not colon or not name.strip():
-            raise EndpointError(
-                f"endpoint {endpoint.name!r}: its headers variable {endpoint.headers_env} "
-                'has a line that is not "Name: Value"'
-            )
-        headers[name.strip()] = value.strip()
-    return headers
 
 
 @contextmanager

@@ -39,13 +39,34 @@ cutover_date = "2026-10-15"
 [evals]
 # The targets every release measures (catalog/releases/<version>/metrics/<name>.json).
 # Models are pinned ids, never moving aliases: `--record` refuses those.
-release = ["claude-opus"]
+release = ["opencode-qwen"]
 
+# Qwen3.6 27B through OpenRouter's OpenAI-compatible API, driven by OpenCode.
+[evals.endpoints.openrouter]
+api = "openai-chat"
+base_url = "https://openrouter.ai/api/v1"
+token_env = "OPENROUTER_API_KEY"
+context_tokens = 262144
+
+# The judge's endpoint: the LLM judge grades over HTTPS here, without the claude CLI.
+[evals.endpoints.openai]
+api = "openai-responses"
+base_url = "https://api.openai.com/v1"
+token_env = "OPENAI_API_KEY"
+
+[evals.targets.opencode-qwen]
+harness = "opencode"
+endpoint = "openrouter"
+model = "qwen/qwen3.6-27b"
+runs = 3
+
+# Measured v0.1.0 and v0.2.0; kept for comparisons, no longer a release target.
 [evals.targets.claude-opus]
 harness = "claude_code"
 model = "claude-opus-5-5"
 runs = 3
 
 [evals.judge]
-model = "claude-opus-5-5"
+endpoint = "openai"
+model = "gpt-6.1-terra"
 samples = 3

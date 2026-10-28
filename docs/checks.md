@@ -765,9 +765,29 @@ part (`token_env` or `token_command`) to an endpoint the committed file declares
 and a committed target or judge may name only a committed endpoint. A missing or
 empty token variable is a usage error (exit `2`) that names the variable.
 
-Claude Code speaks only the Anthropic Messages API, so a Claude Code target or the
-judge on an `openai-chat` or `openai-responses` endpoint is refused with a hint to
-use an OpenCode target.
+Claude Code speaks only the Anthropic Messages API, so a Claude Code target on an
+`openai-chat` or `openai-responses` endpoint is refused with a hint to use an
+OpenCode target.
+
+The judge (`--judge llm`) works on any endpoint. On an `anthropic` one it drives the
+`claude` CLI. On an `openai-responses` or `openai-chat` one it needs no CLI: it posts
+the same grading prompt to `<base_url>/responses` or `<base_url>/chat/completions`
+with the token as a bearer header (plus any `headers_env` lines), a 120-second
+timeout and two immediate retries, and parses the answer as strictly. A Responses
+request asks the provider not to store it (`store: false`); `max_output_tokens`, when
+set, caps the answer. Such a judge has no CLI version for a record to probe. For
+example, gpt-6.1-terra on OpenAI's API:
+
+```toml
+[evals.endpoints.openai]
+api = "openai-responses"
+base_url = "https://api.openai.com/v1"
+token_env = "OPENAI_API_KEY"
+
+[evals.judge]
+endpoint = "openai"
+model = "gpt-6.1-terra"
+```
 
 A Claude Code run on an endpoint is isolated from your own settings: it gets an
 empty scratch `CLAUDE_CONFIG_DIR`; inherited `ANTHROPIC_*`, `CLAUDE_CODE_USE_*` and

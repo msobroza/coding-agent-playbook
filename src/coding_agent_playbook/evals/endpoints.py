@@ -145,6 +145,26 @@ def resolve_endpoint_headers(endpoint: Endpoint, env: Mapping[str, str]) -> str 
     return _non_empty(value, endpoint, f"its headers variable {endpoint.headers_env} is unset or")
 
 
+def parse_header_lines(raw: str, endpoint: Endpoint) -> dict[str, str]:
+    """``Name: Value`` lines into a mapping; a line without a name and a colon is refused.
+
+    Example::
+
+        >>> parse_header_lines("X-Team: evals\\n", Endpoint("e", "openai-chat", "https://x"))
+        {'X-Team': 'evals'}
+    """
+    headers: dict[str, str] = {}
+    for line in filter(None, (line.strip() for line in raw.splitlines())):
+        name, colon, value = line.partition(":")
+        if not colon or not name.strip():
+            raise EndpointError(
+                f"endpoint {endpoint.name!r}: its headers variable {endpoint.headers_env} "
+                'has a line that is not "Name: Value"'
+            )
+        headers[name.strip()] = value.strip()
+    return headers
+
+
 def _non_empty(value: str, endpoint: Endpoint, what: str) -> str:
     """``value`` stripped, else :class:`EndpointError` saying ``what`` was empty."""
     stripped = value.strip()

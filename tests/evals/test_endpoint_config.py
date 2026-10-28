@@ -148,10 +148,12 @@ def test_opencode_target_may_name_a_non_anthropic_endpoint() -> None:
     assert endpoint.api == "openai-chat"
 
 
-def test_judge_on_a_non_anthropic_endpoint_points_to_opencode() -> None:
+def test_judge_may_name_an_openai_endpoint() -> None:
+    """The LLM judge grades over HTTPS there (``evals.api_judge``), not through Claude Code."""
     committed = {"endpoints": {"oai": _OPENAI}, "judge": {"endpoint": "oai", "model": "m"}}
-    with pytest.raises(ConfigError, match=r"\[evals\.judge\] the LLM judge.*opencode"):
-        parse_eval_settings(committed, {})
+    endpoint = parse_eval_settings(committed, {}).judge.endpoint
+    assert endpoint is not None
+    assert endpoint.api == "openai-chat"
 
 
 @pytest.mark.parametrize(

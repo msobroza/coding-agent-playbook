@@ -45,7 +45,12 @@ SCORING_PACKAGES: Final = ("evals.checks", "evals.compile", "evals.run", "gradin
 SCORING_TOP_LEVEL: Final = ("evals",)
 
 #: The listed modules outside :data:`SCORING_PACKAGES`, so a test can tell them from a typo.
-SCORING_MODULES_OUTSIDE_PACKAGES: Final = ("evals.judge", "evals.release_metrics", "evals.sample")
+SCORING_MODULES_OUTSIDE_PACKAGES: Final = (
+    "evals.api_judge",
+    "evals.judge",
+    "evals.release_metrics",
+    "evals.sample",
+)
 
 #: The version part of a CLI whose ``--version`` probe failed. Equality cannot
 #: prove that harness or judge unchanged, so this value never matches (ADR 0013:
@@ -111,9 +116,10 @@ SCORING_MODULES: Final = (
     "grading.static_metrics.wmc",
     "grading.tool_runner",
     "grading.types",
-    # Score-deciding modules outside SCORING_PACKAGES: the LLM judge (prompt, answer
-    # parsing, sample averaging, retries), the sample model (default verdict) and the
-    # release metrics fold (each entry's passes, mean score and stdev).
+    # Score-deciding modules outside SCORING_PACKAGES: the LLM judge on the CLI and
+    # over an OpenAI API (prompt, answer parsing, sample averaging, retries), the sample
+    # model (default verdict) and the release metrics fold (each entry's passes, mean
+    # score and stdev).
     *SCORING_MODULES_OUTSIDE_PACKAGES,
 )
 

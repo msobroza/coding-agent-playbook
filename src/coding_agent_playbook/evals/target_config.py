@@ -30,7 +30,9 @@ list; the local file may add targets, change the default and override
 
 ``[evals.endpoints]`` is read by ``evals.endpoint_config``. A committed target or
 judge may name only a committed endpoint. Claude Code speaks only the Anthropic
-Messages API, so a Claude Code target or the judge on another API is refused.
+Messages API, so a Claude Code target on another API is refused; the LLM judge
+drives Claude Code on an ``anthropic`` endpoint and grades straight over HTTPS on
+an ``openai-responses`` or ``openai-chat`` one (``evals.api_judge``).
 
 Every mistake is a :class:`~coding_agent_playbook.config.schema.ConfigError`
 naming the file, the key, the value and the expected shape.
@@ -82,7 +84,7 @@ _LOCAL_KEYS: Final = frozenset({"default", "targets", "judge", "endpoints"})
 _JUDGE_KEYS: Final = frozenset({"model", "samples", "endpoint"})
 #: A target name: no ``:``, which would read as the ``<harness>:<model>`` shorthand.
 _TARGET_NAME: Final = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
-#: The harness that speaks only the Anthropic Messages API (the LLM judge drives it too).
+#: The harness that speaks only the Anthropic Messages API.
 _CLAUDE_CODE: Final = "claude_code"
 _OPENCODE_HINT: Final = 'use harness = "opencode" for this endpoint'
 
@@ -298,12 +300,15 @@ def _judge(
 
 
 def _check_judge_endpoint(settings: JudgeSettings) -> None:
-    """The judge drives Claude Code: an ``anthropic`` endpoint, and an explicit model."""
+    """A judge on an endpoint needs an explicit model: the id the endpoint serves.
+
+    Any API is fine: the LLM judge drives Claude Code on an ``anthropic`` endpoint
+    and grades over HTTPS on an ``openai-*`` one.
+    """
     endpoint = settings.endpoint
     if endpoint is None:
         return
     label = "[evals.judge]"
-    _require_anthropic(endpoint, endpoint.source, label, "the LLM judge (Claude Code)")
     if settings.model is None:
         raise ConfigError(
             f"{endpoint.source}: {label} needs model = the id endpoint {endpoint.name!r} serves"
