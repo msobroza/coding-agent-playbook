@@ -106,6 +106,7 @@ SCORING_MODULES: Final = (
     "grading.scheduler",
     "grading.scope",
     "grading.static_metrics.cbo",
+    "grading.static_metrics.cognitive",
     "grading.static_metrics.cyclomatic",
     "grading.static_metrics.dit",
     "grading.static_metrics.docstring_example",

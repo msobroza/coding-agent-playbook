@@ -43,12 +43,13 @@ ENTRY_POINT_GROUP = "coding_agent_playbook.metrics"
 #: name -> Metric subclass, populated by the decorator on import.
 _METRIC_REGISTRY: dict[str, type[Metric]] = {}
 
-#: The 12 in-tree metric modules, static first, each family in the order its
+#: The 13 in-tree metric modules, static first, each family in the order its
 #: package ``__init__`` imported it: importing one fires its ``@register_metric``.
 #: A package ``__init__`` holds only a docstring (ADR 0002), so the list names
 #: every module.
 _BUILTIN_METRIC_MODULES: Final = (
     "coding_agent_playbook.grading.static_metrics.cbo",
+    "coding_agent_playbook.grading.static_metrics.cognitive",
     "coding_agent_playbook.grading.static_metrics.cyclomatic",
     "coding_agent_playbook.grading.static_metrics.dit",
     "coding_agent_playbook.grading.static_metrics.docstring_example",
@@ -83,6 +84,9 @@ class Metric(ABC):
     normalizer: Normalizer
     #: Optional importable dependency/capability; ``None`` means stdlib-only.
     requires: str | None = None
+    #: The consumer-toolchain binary this metric runs, as a ``tool_paths`` key
+    #: (``"ruff"``, ``"complexipy"``); ``None`` means it runs no tool.
+    tool: str | None = None
     #: ``True`` for execution metrics that need a runnable project
     #: (``ctx.project``). This is the explicit "static vs execution"
     #: discriminator: :func:`static_metrics` excludes any metric with
@@ -106,10 +110,11 @@ class Metric(ABC):
     def runnable(self, setup: MeasureSetup) -> bool:
         """True when ``setup`` can run this metric: the environment half of :meth:`available`.
 
-        The declared dependency (if any) must be importable. A family whose tool
-        or dependency comes from elsewhere overrides it (``ruff_violations``
-        needs ``setup.tool_paths["ruff"]``). A measuring pass promises exactly
-        the metrics that are runnable
+        The declared dependency (if any) must be importable, and the declared
+        :attr:`tool` (if any) must have a path in ``setup.tool_paths``
+        (``ruff_violations`` needs ``tool_paths["ruff"]``). A family whose
+        dependency comes from elsewhere overrides it. A measuring pass promises
+        exactly the metrics that are runnable
         (:func:`~coding_agent_playbook.grading.measuring.measured_metrics`).
 
         Example::
@@ -117,6 +122,8 @@ class Metric(ABC):
             >>> get_metric("cyclomatic_complexity").runnable(MeasureSetup())
             True
         """
+        if self.tool is not None and not setup.tool_paths.get(self.tool):
+            return False
         return self.requires is None or find_spec(self.requires) is not None
 
     def available(self, ctx: EvalContext) -> bool:

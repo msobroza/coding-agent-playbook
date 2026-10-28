@@ -10,7 +10,8 @@ metrics gate, the commit-message convention, `playbook ci`, `playbook forge` and
 `playbook metrics` is a standalone code-quality gate, and it is opt-in. It measures
 Python code with deterministic static metrics: cyclomatic complexity, weighted methods
 per class (WMC), LCOM4, depth of inheritance and an approximate coupling between
-objects. With the optional extra, it also measures the maintainability index.
+objects. With the optional extra, it also measures the maintainability index. With
+complexipy installed, you can also select cognitive complexity.
 
 The gate grades the result in one of two ways. It compares each metric with an
 absolute threshold, or it runs a non-regression check, which fails when the code gets
@@ -60,6 +61,7 @@ The table lists every metric, the families it belongs to and how it gets selecte
 | Metric | Families | Selected | Measures |
 | --- | --- | --- | --- |
 | `cyclomatic_complexity` | `quality` | by default | 1 + the decision points of each function |
+| `cognitive_complexity` | `quality` | opt-in, by name (needs `complexipy` 8.2 or later) | SonarSource's cognitive complexity of each function: breaks in the linear flow, weighted by nesting; fails a function over 15 by default |
 | `wmc` | `quality` | by default | the summed complexity of a class's methods |
 | `lcom4` | `quality` | by default | class cohesion: groups of methods sharing no attribute |
 | `dit` | `quality` | by default | depth of inheritance |
@@ -95,7 +97,7 @@ ruff configuration:
 ```toml
 # .coding-agent-playbook.toml
 [metrics]
-extend_select = ["ruff_violations", "file_sloc", "docstring_example"]   # opt-in, by name
+extend_select = ["ruff_violations", "cognitive_complexity", "file_sloc", "docstring_example"]   # opt-in, by name
 
 [metrics.ruff_violations]   # --config for the gate's and the post-edit feedback's ruff calls only
 config = { "lint.mccabe.max-complexity" = 10, "lint.pylint.max-args" = 5, "lint.pylint.max-statements" = 20 }
@@ -107,6 +109,46 @@ fail = 0.6                       # fail above 500 lines
 
 Under the default non-regression mode, existing code that already breaks a budget
 stays quiet. Only a change that makes a file worse fails.
+
+`cognitive_complexity` keeps the standard limit of 15 per function without any
+threshold table. It needs `complexipy` 8.2 or later in your environment (for example
+`uv add --dev complexipy`).
+
+### Cognitive complexity (`complexipy`)
+
+`cognitive_complexity` is SonarSource's cognitive complexity of each function. It
+counts the breaks in a function's linear flow (`if`, loops, `except`, boolean operator
+sequences, recursion) and weights each one by how deeply it is nested. A nested
+function counts toward the function around it. Ruff has no rule for it, so the metric
+wraps [complexipy](https://pypi.org/project/complexipy/), the way `ruff_violations`
+wraps ruff.
+
+- **Default limit.** The default is the standard limit of 15 per function. It is the
+  default of SonarSource's rule S3776 and complexipy's own `max-complexity-allowed`.
+  The score stays 1.0 up to 15 and drops by 0.01 per point above it. So under the
+  default non-regression mode, a new function over 15 fails, and so does a function
+  that grows past 15 or grows while it is already over. Growth up to 15 is fine.
+- **Another limit.** Set `fail` below 1.0. For example, `fail = 0.9` fails a function
+  over 25, and `warn = 1.0` with `fail = 0.9` warns from 16 to 25:
+
+  ```toml
+  [metrics.thresholds.cognitive_complexity]
+  warn = 1.0   # warn above 15
+  fail = 0.9   # fail above 25
+  ```
+
+- **Where complexipy comes from.** `playbook metrics`, its pre-commit hook and
+  `playbook ci` find `complexipy` on `PATH`. The `clean-code-metrics-nonregression`
+  Stop stage runs the copy that `playbook sync` pinned, from the project's `.venv`
+  first, then from `PATH`. Run `playbook sync` again after you install it.
+- **When it is missing.** A selected `cognitive_complexity` without complexipy
+  measures nothing and never fails. The CLI prints
+  `note: cognitive_complexity not measured: complexipy not found on PATH`, and the
+  Stop stage prints a line that says to run `playbook sync`. A complexipy older than
+  8.2 lacks the flags the metric passes, so it measures nothing either.
+- **Your complexipy settings.** The metric ignores your `[tool.complexipy]` table, so
+  the limit comes from `[metrics]` alone. Your `# noqa: complexipy` comments still
+  apply: an ignored function is not measured.
 
 ### Running tests and coverage (`--run-tests`)
 

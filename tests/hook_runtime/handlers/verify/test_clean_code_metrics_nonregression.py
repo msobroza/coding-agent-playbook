@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Final
 import pytest
 
 from coding_agent_playbook.hook_runtime.config.guard_config import GuardConfig, parse_guard_config
+from coding_agent_playbook.hook_runtime.config.pin import write_machine_pins
 from coding_agent_playbook.hook_runtime.config.schema import GUARD_CONFIG_REL
 from coding_agent_playbook.hook_runtime.dispatch.decision import Decision
 from coding_agent_playbook.hook_runtime.dispatch.escape import EscapeHatches
@@ -28,7 +29,8 @@ from coding_agent_playbook.hook_runtime.handlers.verify.docstring_nonregression 
 )
 from coding_agent_playbook.hook_runtime.state.session import SessionState
 from coding_agent_playbook.hook_runtime.stop.stages import StopPlan
-from tests.hook_runtime.fakes import FakeClock, FakeProc, FakeRuff, ruff_row
+from tests.engine_version import ENGINE_VERSION
+from tests.hook_runtime.fakes import FakeClock, FakeComplexipy, FakeProc, FakeRuff, ruff_row
 from tests.hook_runtime.guard_repo import SESSION_ID
 from tests.hook_runtime.handlers.pack_repo import engine_hook
 from tests.hook_runtime.handlers.ruff_kit import pin_ruff, value_of
@@ -250,6 +252,77 @@ def test_ruff_findings_deny_only_when_consumer_selects_ruff_violations(
         assert reason_lines(report)[1:] == [f"[quality-metrics] {PLR_LINE}"]
     else:
         assert f"[quality-metrics] {PLR_LINE}" in report.trace.combined.user_notes
+
+
+# --- cognitive_complexity through the complexipy pin -----------------------------------------
+
+COGNITIVE: Final = 'select = ["cognitive_complexity"]\n'
+COGNITIVE_LINE: Final = '"src/x.py"::parse cognitive_complexity 1 -> 20 (regression)'
+
+
+def _pin_complexipy(repo: PackRepo, tmp_path: Path) -> None:
+    """Pin a stub file as this worktree's complexipy, as a write-mode sync would."""
+    program = tmp_path / "tools" / "complexipy"
+    program.parent.mkdir(parents=True, exist_ok=True)
+    program.write_bytes(b"#!/bin/sh\n")
+    tools = {"complexipy": [str(program)]}
+    write_machine_pins(tools=tools, engine_version=ENGINE_VERSION, git_dir=str(repo.root / ".git"))
+
+
+def _cognitive_stop(
+    repo: PackRepo, deps: Callable[..., RuntimeDeps], tmp_path: Path
+) -> tuple[SimulateReport, FakeComplexipy]:
+    complexipy = FakeComplexipy(by_source={BASE: {"parse": 1}, GROWN: {"parse": 20}})
+    payload = stop_payload(repo, message="Done.")
+    report = stop(repo, deps, payload, git=_touched(SRC), state=tmp_path, proc=complexipy)
+    return report, complexipy
+
+
+@pytest.mark.parametrize(("precommit", "decision"), [(True, "deny"), (False, "none")])
+def test_cognitive_growth_past_15_follows_the_metrics_hook(
+    repo: PackRepo,
+    deps: Callable[..., RuntimeDeps],
+    tmp_path: Path,
+    precommit: bool,
+    decision: str,
+) -> None:
+    _install(repo, precommit=precommit, metrics=COGNITIVE)
+    _pin_complexipy(repo, tmp_path)
+
+    report, complexipy = _cognitive_stop(repo, deps, tmp_path)
+
+    assert report.trace.combined.decision.value == decision
+    if precommit:
+        assert reason_lines(report)[1:] == [f"[quality-metrics] {COGNITIVE_LINE}"]
+    else:
+        assert f"[quality-metrics] {COGNITIVE_LINE}" in report.trace.combined.user_notes
+    assert len(complexipy.calls) == 2  # the candidate and its HEAD blob
+    assert {call.argv[1] for call in complexipy.calls} == {"measured.py"}
+
+
+def test_cognitive_without_a_complexipy_pin_is_a_context_line(
+    repo: PackRepo, deps: Callable[..., RuntimeDeps], tmp_path: Path
+) -> None:
+    _install(repo, precommit=True, metrics=COGNITIVE)
+
+    report, complexipy = _cognitive_stop(repo, deps, tmp_path)
+
+    assert report.trace.combined.decision is Decision.NONE
+    note = "cognitive_complexity not measured: complexipy pin missing (run playbook sync)"
+    assert f"[quality-metrics] {note}" in report.trace.combined.user_notes
+    assert complexipy.calls == []
+
+
+def test_cognitive_unselected_runs_no_complexipy(
+    repo: PackRepo, deps: Callable[..., RuntimeDeps], tmp_path: Path
+) -> None:
+    _install(repo, precommit=True, metrics='select = ["wmc"]\n')
+    _pin_complexipy(repo, tmp_path)
+
+    report, complexipy = _cognitive_stop(repo, deps, tmp_path)
+
+    assert report.trace.combined.decision is Decision.NONE
+    assert complexipy.calls == []
 
 
 def test_quality_and_docstrings_share_one_gate_pass_per_fingerprint(repo: PackRepo) -> None:
