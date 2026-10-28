@@ -133,8 +133,9 @@ def test_dogfood_config_sets_only_the_commit_cutover_and_the_release_targets() -
     assert set(data) == IDENTITY_KEYS | {"hooks", "evals"}, sorted(data)
     assert set(data["hooks"]) == {"commit_convention"}, data["hooks"]
     assert set(data["hooks"]["commit_convention"]) == {"cutover_date"}
-    # No `default`: a plain `playbook eval --run` here keeps the built-in target.
-    assert set(data["evals"]) == {"release", "targets", "judge"}, sorted(data["evals"])
+    # No `default`: a plain `playbook eval --run` here keeps the built-in target. The
+    # endpoints are the release target's (OpenRouter) and the judge's (OpenAI).
+    assert set(data["evals"]) == {"release", "targets", "judge", "endpoints"}, sorted(data["evals"])
 
 
 def test_dogfood_release_targets_are_recordable() -> None:
