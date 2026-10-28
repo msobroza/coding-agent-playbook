@@ -56,13 +56,19 @@ def repo(pack_repo: PackRepo, ruff_program: Path) -> PackRepo:
 
 
 def _install(
-    repo: PackRepo, *, precommit: bool = False, metrics: str = "", hooks: tuple[str, ...] = ()
+    repo: PackRepo,
+    *,
+    precommit: bool = False,
+    metrics: str = "",
+    hooks: tuple[str, ...] = (),
+    block: str | None = None,
 ) -> None:
     if precommit:
         repo.write(".pre-commit-config.yaml", METRICS_PRECOMMIT)
     if metrics:
         repo.write(".coding-agent-playbook.toml", metrics)
-    repo.install_pack([GATE_ID, HOOK_ID, *hooks], rules=engine_rules())
+    per_hook = None if block is None else {HOOK_ID: {"block": block}}
+    repo.install_pack([GATE_ID, HOOK_ID, *hooks], rules=engine_rules(), per_hook=per_hook)
 
 
 def _touched(rel: str = SRC, head: str = BASE) -> FakeGit:
@@ -128,6 +134,23 @@ def test_removed_docstring_deny_when_metrics_precommit_and_ruff_violations_selec
     assert reason_lines(report)[1:] == [
         '[docstrings] "src/x.py" ruff:docstrings 0 -> 1 (D103 load; passes at <= 0)'
     ]
+
+
+@pytest.mark.parametrize(("block", "decision"), [(None, "none"), ("always", "deny")])
+def test_removed_docstring_without_a_precommit_hook_blocks_only_under_block_always(
+    repo: PackRepo,
+    deps: Callable[..., RuntimeDeps],
+    tmp_path: Path,
+    block: str | None,
+    decision: str,
+) -> None:
+    repo.write(SRC, REMOVED)
+    _install(repo, metrics='[metrics]\nextend_select = ["ruff_violations"]\n', block=block)
+    ruff = FakeRuff(by_stdin={REMOVED.encode(): [D103_LOAD]})
+
+    report = _stop(repo, deps, ruff, tmp_path)
+
+    assert report.trace.combined.decision.value == decision
 
 
 def test_removed_docstring_context_without_selection(

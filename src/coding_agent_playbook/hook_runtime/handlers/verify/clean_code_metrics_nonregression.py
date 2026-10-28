@@ -9,12 +9,14 @@ shares with the ``docstrings`` stage (``_metrics_pass``), so nothing is
 measured twice per Stop.
 
 - **severity** mirrors the repo's gate: a fail-level finding blocks only when
-  ``.pre-commit-config.yaml`` declares ``playbook-metrics`` or
-  ``coding-agent-playbook-metrics``, ``[metrics] fail_on_breach`` is true and
-  the consumer's own selection includes the metric (so ``ruff_violations``
-  blocks only for a consumer who selected it); otherwise each is a context
-  line. A file that cannot be measured, a bad ``[metrics]`` table or any gate
-  error is a context line too, never a crash;
+  ``[metrics] fail_on_breach`` is true and the consumer's own selection
+  includes the metric (so ``ruff_violations`` blocks only for a consumer who
+  selected it), and, under the default ``[hooks.clean-code-metrics-nonregression]
+  block = "auto"``, ``.pre-commit-config.yaml`` declares ``playbook-metrics`` or
+  ``coding-agent-playbook-metrics``; ``block = "always"`` drops that last
+  condition. Otherwise each is a context line. A file that cannot be measured,
+  a bad ``[metrics]`` table or any gate error is a context line too, never a
+  crash;
 - each line ends with the fix note: the value that passes and how to get
   there (``passes at <= 5: split branches into helpers``);
 - at most :data:`MAX_LINES` lines, then ``+N more (playbook metrics ...)``.
@@ -37,9 +39,12 @@ from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.dispatch.caps import quote_data
 from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.handlers.verify._metrics_pass import (
+    BLOCK_AUTO,
+    BLOCK_KEY,
     MAX_FILES,
     METRICS_HOOK_IDS,
     PortBaselineGit,
+    block_policy,
     capped,
     finding_line,
     ruff_detail,
@@ -63,6 +68,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "CONFIG_SCHEMA",
+    "HOOK_ID",
     "MAX_FILES",
     "MAX_LINES",
     "METRICS_HOOK_IDS",
@@ -76,10 +82,13 @@ __all__ = [
 ]
 
 STAGE_NAME: Final = "quality-metrics"
+#: The shipped hook whose ``[hooks.<id>] block`` this stage reads (``block_policy``).
+HOOK_ID: Final = "clean-code-metrics-nonregression"
 FAMILY: Final = "quality"
 MAX_LINES: Final = 6
 CONFIG_SCHEMA: Final[Mapping[str, ConfigKey]] = {
     "stage": ConfigKey("string", "replace", (STAGE_NAME,)),
+    "block": BLOCK_KEY,
 }
 #: ``lint_codes`` / ``ruff_config`` / ``ruff_preview`` are rendered at sync from
 #: ``[metrics.ruff_violations]``, the one source shared with the Stop stage.
@@ -108,6 +117,7 @@ class QualityMetricsStage:
     cost: StageCost = StageCost.DETERMINISTIC
     needs_diff: bool = True
     mode: str = "block"
+    block: str = BLOCK_AUTO
     _targets: list[str] | None = field(default=None, repr=False)
 
     def applies(self, plan: StopPlan) -> bool:
@@ -133,7 +143,7 @@ class QualityMetricsStage:
         mine = [f for f in found.fails() if _in_quality(f)]
         lines = capped([self._line(found, f) for f in mine], MAX_LINES)
         notes = _notes(found, len(targets))
-        if any(found.deny_eligible(f.evaluator) for f in mine):
+        if any(found.deny_eligible(f.evaluator, self.block) for f in mine):
             return StageResult(STAGE_NAME, "red", lines=(*lines, *notes))
         return _warn([*lines, *notes]) if lines or notes else StageResult(STAGE_NAME, "green")
 
@@ -173,7 +183,12 @@ def quality_metrics_stage(ev: CanonicalEvent, ctx: HandlerContext) -> QualityMet
     """
     if ev.repo is None:
         return None
-    return QualityMetricsStage(ctx=ctx, root=ev.repo.worktree_root, git_dir=ev.repo.git_dir)
+    return QualityMetricsStage(
+        ctx=ctx,
+        root=ev.repo.worktree_root,
+        git_dir=ev.repo.git_dir,
+        block=block_policy(ctx, HOOK_ID),
+    )
 
 
 @register_hook_handler(

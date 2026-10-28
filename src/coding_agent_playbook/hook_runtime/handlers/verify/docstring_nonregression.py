@@ -7,9 +7,11 @@ symbol to a touched file, raises the file's count over ``HEAD``; legacy
 undocumented code stays silent (the count is unchanged). With the opt-in
 ``docstring_example`` selected, a public function whose docstring lacks a
 usage example is named too. Test modules and eval fixtures are never in scope.
-Severity is the shared rule: deny-eligible only when the repo gates metrics in
-pre-commit with ``fail_on_breach`` **and** selects the metric itself; else a
-context line. At most :data:`MAX_LINES` lines, then ``+N more``.
+Severity is the shared rule: deny-eligible only with ``fail_on_breach`` **and**
+the metric in the consumer's own selection, and, under the default
+``[hooks.docstring-nonregression] block = "auto"``, a playbook metrics hook in
+pre-commit (``block = "always"`` drops that condition); else a context line.
+At most :data:`MAX_LINES` lines, then ``+N more``.
 
 **Post-edit** adds no logic: through the linked ``python-docstrings`` rule's
 ``lint_codes`` it contributes D100-D107 to the single §E.3 D1 ruff call, on the
@@ -25,6 +27,9 @@ from typing import TYPE_CHECKING, Any, Final
 from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, clip, quote_data
 from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey, register_hook_handler
 from coding_agent_playbook.hook_runtime.handlers.verify._metrics_pass import (
+    BLOCK_AUTO,
+    BLOCK_KEY,
+    block_policy,
     capped,
     is_test_path,
     ruff_detail,
@@ -48,6 +53,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "CONFIG_SCHEMA",
+    "HOOK_ID",
     "MAX_LINES",
     "POST_EDIT_CONFIG_SCHEMA",
     "STAGE_NAME",
@@ -63,8 +69,11 @@ FAMILY: Final = "docstrings"
 MAX_LINES: Final = 5
 #: What strict mode (``docstring_example``) asks of a public function (§F.3.1).
 STRICT_HINT: Final = "needs an intent line + one usage example (>>>, Example:, or Usage::)"
+#: The shipped hook whose ``[hooks.<id>] block`` this stage reads (``block_policy``).
+HOOK_ID: Final = "docstring-nonregression"
 CONFIG_SCHEMA: Final[Mapping[str, ConfigKey]] = {
     "stage": ConfigKey("string", "replace", (STAGE_NAME,)),
+    "block": BLOCK_KEY,
 }
 #: ``lint_codes`` comes from the linked ``python-docstrings`` rule (resolved at sync).
 POST_EDIT_CONFIG_SCHEMA: Final[Mapping[str, ConfigKey]] = {
@@ -92,6 +101,7 @@ class DocstringsStage:
     cost: StageCost = StageCost.DETERMINISTIC
     needs_diff: bool = True
     mode: str = "block"
+    block: str = BLOCK_AUTO
     _targets: list[str] | None = field(default=None, repr=False)
 
     def applies(self, plan: StopPlan) -> bool:
@@ -119,7 +129,7 @@ class DocstringsStage:
         if not mine:
             return StageResult(STAGE_NAME, "green")
         lines = tuple(capped([self._line(found, f) for f in mine], MAX_LINES))
-        red = any(found.deny_eligible(f.evaluator) for f in mine)
+        red = any(found.deny_eligible(f.evaluator, self.block) for f in mine)
         return StageResult(STAGE_NAME, "red" if red else "warn", lines=lines)
 
     def _line(self, found: MetricsPass, finding: ScopeDetail) -> str:
@@ -150,7 +160,12 @@ def docstrings_stage(ev: CanonicalEvent, ctx: HandlerContext) -> DocstringsStage
     """
     if ev.repo is None:
         return None
-    return DocstringsStage(ctx=ctx, root=ev.repo.worktree_root, git_dir=ev.repo.git_dir)
+    return DocstringsStage(
+        ctx=ctx,
+        root=ev.repo.worktree_root,
+        git_dir=ev.repo.git_dir,
+        block=block_policy(ctx, HOOK_ID),
+    )
 
 
 @register_hook_handler(
