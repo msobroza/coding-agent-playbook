@@ -264,6 +264,15 @@ _SET_LEVEL: list[tuple[str, Callable[[Path, HookFactory, PackageFactory], tuple[
         ),
     ),
     (
+        "H21-block",
+        _h21(
+            "\n[hooks]\nenabled = true\n\n[hooks.clean-code-metrics-nonregression]\n"
+            'block = "sometimes"\n',
+            "[hooks.clean-code-metrics-nonregression] block: expected a string one of "
+            "['auto', 'always'], got 'sometimes'",
+        ),
+    ),
+    (
         "H21-redos-extra-pattern",
         _h21(
             "\n[hooks]\nenabled = true\n\n[hooks.secret-content-guard]\n"
@@ -298,6 +307,21 @@ def test_set_level_rule(
     assert _run(repo) == 1
 
     assert expected in _fail_lines(capsys.readouterr().out)
+
+
+@pytest.mark.parametrize("hook_id", ["clean-code-metrics-nonregression", "docstring-nonregression"])
+def test_block_always_is_a_valid_stage_hook_key(
+    hook_id: str,
+    tmp_path: Path,
+    make_synthetic_repo: SyntheticRepoFactory,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo = make_synthetic_repo(tmp_path)
+    extra = f'\n[hooks]\nenabled = true\n\n[hooks.{hook_id}]\nblock = "always"\n'
+    (repo / ".coding-agent-playbook.toml").write_text(_config(extra=extra), encoding="utf-8")
+
+    assert _run(repo) == 0
+    assert "block" not in capsys.readouterr().out
 
 
 def test_local_toml_hooks_table_is_validate_error(

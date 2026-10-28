@@ -21,6 +21,7 @@ from coding_agent_playbook.hook_runtime.dispatch.escape import EscapeHatches
 from coding_agent_playbook.hook_runtime.dispatch.event import CanonicalEvent, EventName, Harness
 from coding_agent_playbook.hook_runtime.dispatch.registry import HandlerContext, load_builtin
 from coding_agent_playbook.hook_runtime.git.parse import AddedLine
+from coding_agent_playbook.hook_runtime.handlers.verify._metrics_pass import block_policy
 from coding_agent_playbook.hook_runtime.handlers.verify.clean_code_metrics_nonregression import (
     QualityMetricsStage,
 )
@@ -75,12 +76,15 @@ def repo(pack_repo: PackRepo) -> PackRepo:
     return pack_repo
 
 
-def _install(repo: PackRepo, *, precommit: bool = False, metrics: str = "") -> None:
+def _install(
+    repo: PackRepo, *, precommit: bool = False, metrics: str = "", block: str | None = None
+) -> None:
     if precommit:
         repo.write(".pre-commit-config.yaml", METRICS_PRECOMMIT)
     if metrics:
         repo.write(".coding-agent-playbook.toml", f"[metrics]\n{metrics}")
-    repo.install_pack([GATE_ID, HOOK_ID])
+    per_hook = None if block is None else {HOOK_ID: {"block": block}}
+    repo.install_pack([GATE_ID, HOOK_ID], per_hook=per_hook)
 
 
 def _touched(*paths: str, head: dict[str, bytes] | None = None) -> FakeGit:
@@ -125,6 +129,62 @@ def test_fail_on_breach_false_is_context_line(
 
     assert report.trace.combined.decision is Decision.NONE
     assert f"[quality-metrics] {CC_LINE}" in report.trace.combined.user_notes
+
+
+# --- [hooks.clean-code-metrics-nonregression] block -----------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("metrics", "decision"),
+    [("", "deny"), ("fail_on_breach = false\n", "none"), ('select = ["wmc"]\n', "none")],
+    ids=["blocks-without-a-precommit-hook", "fail-on-breach-off", "metric-not-selected"],
+)
+def test_block_always_drops_only_the_precommit_condition(
+    repo: PackRepo,
+    deps: Callable[..., RuntimeDeps],
+    tmp_path: Path,
+    metrics: str,
+    decision: str,
+) -> None:
+    _install(repo, metrics=metrics, block="always")
+
+    report = _stop(repo, deps, _touched(SRC), tmp_path)
+
+    assert report.trace.combined.decision.value == decision
+    if decision == "deny":
+        assert reason_lines(report)[1:] == [f"[quality-metrics] {CC_LINE}"]
+
+
+def test_block_auto_is_the_default_and_keeps_the_precommit_condition(
+    repo: PackRepo, deps: Callable[..., RuntimeDeps], tmp_path: Path
+) -> None:
+    _install(repo, block="auto")
+
+    report = _stop(repo, deps, _touched(SRC), tmp_path)
+
+    assert report.trace.combined.decision is Decision.NONE
+    assert f"[quality-metrics] {CC_LINE}" in report.trace.combined.user_notes
+
+
+def test_block_always_also_blocks_without_the_coordinator(
+    repo: PackRepo, deps: Callable[..., RuntimeDeps], tmp_path: Path
+) -> None:
+    repo.install_pack([HOOK_ID], per_hook={HOOK_ID: {"block": "always"}})
+
+    report = _stop(repo, deps, _touched(SRC), tmp_path)
+
+    assert report.trace.combined.decision is Decision.DENY
+
+
+@pytest.mark.parametrize(("block", "expected"), [(None, "auto"), ("always", "always")])
+def test_block_policy_reads_the_stage_hooks_own_record(
+    repo: PackRepo, block: str | None, expected: str
+) -> None:
+    _install(repo, block=block)
+    ctx = _ctx(repo, _touched(SRC))
+
+    assert block_policy(ctx, HOOK_ID) == expected
+    assert block_policy(ctx, "no-such-hook") == "auto"
 
 
 def test_run_tests_true_config_never_runs_suite(repo: PackRepo) -> None:

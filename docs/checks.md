@@ -41,7 +41,9 @@ playbook metrics --baseline git:origin/main --changed   # only the files a branc
 Defaults and per-metric thresholds live in a `[metrics]` table in
 `.coding-agent-playbook.toml`. The same `[metrics]` policy drives the pre-commit hook,
 the `metrics` step of [`playbook ci`](#playbook-ci) and the quality Stop stages of the
-lifecycle hooks. It is read from the committed config only.
+lifecycle hooks. It is read from the committed config only. By default a Stop stage
+blocks only where pre-commit runs this gate. `block = "always"` lets it block without
+pre-commit; see [Verify before done](hooks.md#verify-before-done).
 
 Internally, each metric is wrapped in a check, which is a threshold grader or a
 non-regression grader. The checks are then folded into one rubric report. This is the

@@ -17,9 +17,12 @@ Stop whichever stage asks first:
   a usable pin its metric measures nothing, and a consumer who selected the
   metric gets a line saying so;
 - **severity** (:meth:`MetricsPass.deny_eligible`): a fail-level finding may
-  block only when ``.pre-commit-config.yaml`` declares a playbook metrics hook,
-  ``[metrics] fail_on_breach`` is true **and** the consumer's own selection
-  includes the metric, so a stage is never stricter than its twin.
+  block only when ``[metrics] fail_on_breach`` is true **and** the consumer's
+  own selection includes the metric. Under the stage hook's default
+  ``block = "auto"``, ``.pre-commit-config.yaml`` must also declare a playbook
+  metrics hook, so a stage is never stricter than its twin; ``block =
+  "always"`` (:func:`block_policy`) drops that condition, for repos whose
+  commits and CI may not run the gate.
 
 A private module: it registers no handler.
 """
@@ -35,8 +38,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.artifacts.path_globs import fold_key
+from coding_agent_playbook.hook_runtime.config.hook_config import HookConfig
 from coding_agent_playbook.hook_runtime.dispatch.caps import clean_text, clip, quote_data
+from coding_agent_playbook.hook_runtime.dispatch.event import EventName
 from coding_agent_playbook.hook_runtime.dispatch.proc import ProcTimeout
+from coding_agent_playbook.hook_runtime.dispatch.registry import ConfigKey
 from coding_agent_playbook.hook_runtime.stop.tools import edited_py
 
 if TYPE_CHECKING:
@@ -54,12 +60,16 @@ if TYPE_CHECKING:
     type Gate = Callable[[Any, Any], Any]  # (MetricsGateRequest, MetricsGateDeps) -> result
 
 __all__ = [
+    "BLOCK_ALWAYS",
+    "BLOCK_AUTO",
+    "BLOCK_KEY",
     "MAX_FILES",
     "METRICS_HOOK_IDS",
     "MORE_HINT",
     "MetricsPass",
     "PortBaselineGit",
     "ProcToolRunner",
+    "block_policy",
     "capped",
     "finding_line",
     "is_test_path",
@@ -72,6 +82,11 @@ __all__ = [
 
 #: The pre-commit ids that make a metrics regression fail the commit (§E.2).
 METRICS_HOOK_IDS: Final = frozenset({"playbook-metrics", "coding-agent-playbook-metrics"})
+#: ``[hooks.<stage hook>] block``: ``auto`` blocks only where pre-commit gates metrics,
+#: ``always`` also without it. ``strictest``: an overlay's ``always`` is never loosened.
+BLOCK_AUTO: Final = "auto"
+BLOCK_ALWAYS: Final = "always"
+BLOCK_KEY: Final = ConfigKey("string", "strictest", (BLOCK_AUTO, BLOCK_ALWAYS))
 MAX_FILES: Final = 50
 #: Where the full list is, once a stage has shown its lines (§F.2.2).
 MORE_HINT: Final = "playbook metrics --changed --baseline git:HEAD"
@@ -126,20 +141,23 @@ def is_test_path(rel: str, ctx: HandlerContext) -> bool:
 class MetricsPass:
     """One Stop's shared gate pass: the graded result, or the line saying why there is none.
 
-    ``own`` is the consumer's ``[metrics]`` selection; ``gated`` says the repo
-    gates metrics in pre-commit with ``fail_on_breach``; ``setup`` and
-    ``tool_paths`` re-ask the pass's ruff memo for a finding's details;
-    ``tools_missing`` says which selected metrics had no usable tool pin.
+    ``own`` is the consumer's ``[metrics]`` selection; ``fail_on_breach`` is
+    its ``[metrics]`` key; ``gated`` says ``.pre-commit-config.yaml`` declares a
+    playbook metrics hook; ``setup`` and ``tool_paths`` re-ask the pass's ruff
+    memo for a finding's details; ``tools_missing`` says which selected metrics
+    had no usable tool pin.
 
     Example::
 
-        >>> shared_pass(plan, ctx, root, deadline).deny_eligible("wmc")  # doctest: +SKIP
+        >>> shared_pass(plan, ctx, root, deadline).deny_eligible("wmc", BLOCK_AUTO)
+        ... # doctest: +SKIP
         True
     """
 
     result: Any | None = None
     error: str = ""
     own: frozenset[str] = frozenset()
+    fail_on_breach: bool = False
     gated: bool = False
     tool_paths: Mapping[str, str] = field(default_factory=dict)
     setup: ToolSetup | None = None
@@ -150,9 +168,16 @@ class MetricsPass:
         findings = [] if self.result is None else self.result.report.findings
         return [finding for finding in findings if finding.level == "fail"]
 
-    def deny_eligible(self, evaluator: str) -> bool:
-        """Whether a fail of ``evaluator`` may block: the repo gates metrics and selects it."""
-        return self.gated and evaluator in self.own
+    def deny_eligible(self, evaluator: str, block: str) -> bool:
+        """Whether a fail of ``evaluator`` may block under the stage's ``block`` policy.
+
+        Never without ``fail_on_breach`` or for a metric the consumer does not
+        select; under :data:`BLOCK_AUTO` the repo must also gate metrics in
+        pre-commit, under :data:`BLOCK_ALWAYS` not.
+        """
+        if not self.fail_on_breach or evaluator not in self.own:
+            return False
+        return block == BLOCK_ALWAYS or self.gated
 
 
 def shared_pass(
@@ -223,7 +248,8 @@ def _run_pass(
     return MetricsPass(
         result=result,
         own=own,
-        gated=bool(result.config.fail_on_breach) and metrics_gated(ctx, root),
+        fail_on_breach=bool(result.config.fail_on_breach),
+        gated=metrics_gated(ctx, root),
         tool_paths=tool_paths,
         setup=gates.tool_setup(request, deps),
         tools_missing=tuple(line for metric, line in missing if metric in own),
@@ -354,6 +380,21 @@ class PortBaselineGit:
 
 
 # --- severity --------------------------------------------------------------------------------------
+
+
+def block_policy(ctx: HandlerContext, hook_id: str) -> str:
+    """``hook_id``'s own ``block`` key (:data:`BLOCK_AUTO` or :data:`BLOCK_ALWAYS`), from its record.
+
+    Read from the hook's ``guard_config`` record, not ``ctx.config``: the
+    coordinator, subagent-stop-verify and the stage run alone then agree. A
+    missing record or value reads as :data:`BLOCK_AUTO`.
+    Example: ``block_policy(ctx, "clean-code-metrics-nonregression") == "always"``.
+    """
+    record = ctx.cfg.hooks.get(hook_id)
+    handler = None if record is None else record.handlers.get(EventName.STOP)
+    if handler is None:
+        return BLOCK_AUTO
+    return HookConfig(handler.config, {"block": BLOCK_KEY}).choice("block", BLOCK_AUTO)
 
 
 def metrics_gated(ctx: HandlerContext, root: str) -> bool:

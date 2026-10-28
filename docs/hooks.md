@@ -290,6 +290,30 @@ tree. A red tree gets one combined reason, at most `max_blocks` times per stop c
 | `subagent-stop-verify` | `opt-in` | Claude Code | Run the scoped Stop stages on an editing subagent's files before it may stop. |
 | `prompt-output-contract-on-stop` | `opt-in` | Claude Code | Stage `output-contract`: the final answer must match the active playbook prompt's output contract. |
 
+The `quality-metrics` and `docstrings` stages block the Stop only when all of these
+hold. Otherwise each finding is a context line for the assistant:
+
+- `[metrics] fail_on_breach` is `true`, which is the default.
+- Your own `[metrics]` selection includes the metric that got worse.
+- `.pre-commit-config.yaml` declares `playbook-metrics` or
+  `coding-agent-playbook-metrics`. The stage is then never stricter than the commit
+  gate a person runs.
+
+When your commits or your CI may not run that gate, set `block = "always"`. It drops
+only the pre-commit condition, so the stage can enforce on its own:
+
+```toml
+[hooks.clean-code-metrics-nonregression]
+block = "always"   # default "auto": block only where pre-commit gates metrics
+
+[hooks.docstring-nonregression]
+block = "always"
+```
+
+The `max_blocks` limit still applies. OpenCode cannot block a Stop, so there the
+findings stay context lines. An overlay's `block = "always"` cannot be loosened back
+to `"auto"`.
+
 #### Edit feedback
 
 | Hook | Tier | Enforced on | What it does |
