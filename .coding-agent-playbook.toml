@@ -41,7 +41,7 @@ cutover_date = "2026-10-15"
 # Models are pinned ids, never moving aliases: `--record` refuses those.
 release = ["opencode-qwen"]
 
-# Qwen3.6 27B through OpenRouter's OpenAI-compatible API, driven by OpenCode.
+# Qwen3.8 27B through OpenRouter's OpenAI-compatible API, driven by OpenCode.
 [evals.endpoints.openrouter]
 api = "openai-chat"
 base_url = "https://openrouter.ai/api/v1"
@@ -57,7 +57,7 @@ token_env = "OPENAI_API_KEY"
 [evals.targets.opencode-qwen]
 harness = "opencode"
 endpoint = "openrouter"
-model = "qwen/qwen3.6-27b"
+model = "qwen/qwen3.8-27b"
 runs = 3
 
 # Measured v0.1.0 and v0.2.0; kept for comparisons, no longer a release target.
@@ -68,5 +68,5 @@ runs = 3
 
 [evals.judge]
 endpoint = "openai"
-model = "gpt-6.1-terra"
+model = "gpt-6-luna"
 samples = 3
