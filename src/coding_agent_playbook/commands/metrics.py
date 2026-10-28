@@ -137,8 +137,9 @@ def _build_request(
     """Load ``[metrics]`` and fold the flags in.
 
     ``--run-tests`` / ``--no-run-tests`` override ``[metrics] run_tests``; each
-    selection flag replaces its ``[metrics]`` key. ``ruff`` comes from ``PATH``
-    (``deps.which``), for the opt-in ``ruff_violations``.
+    selection flag replaces its ``[metrics]`` key. The metrics' tools come from
+    ``PATH`` (``deps.which``): ``ruff`` for the opt-in ``ruff_violations``,
+    ``complexipy`` for the opt-in ``cognitive_complexity``.
     """
     config = load_metrics_config(repo_root)
     run_tests = getattr(args, "run_tests", None)
@@ -223,6 +224,7 @@ def _format_text(
     skipped: Sequence[tuple[str, str]],
     note: str | None,
     measured_count: int,
+    missing_tools: Sequence[tuple[str, str]] = (),
 ) -> str:
     """Human-readable findings grouped by file then scope, plus a summary.
 
@@ -235,6 +237,8 @@ def _format_text(
     lines: list[str] = ["=== Metrics ==="]
     if note:
         lines.append(f"  note: {note}")
+    for metric, tool in missing_tools:
+        lines.append(f"  note: {metric} not measured: {tool} not found on PATH")
 
     by_file: dict[str, list[ScopeDetail]] = {}
     for finding in _leaf_findings(report):
@@ -298,6 +302,7 @@ def _render(result: MetricsGateResult, fmt: str) -> str:
         skipped=result.skipped,
         note=result.note,
         measured_count=result.measured_count,
+        missing_tools=result.missing_tools,
     )
 
 

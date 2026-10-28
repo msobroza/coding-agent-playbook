@@ -19,7 +19,9 @@ calls (the interpreter pin and ``machine.json`` under the git dir).
 ``FakeCiStepRunner`` stands in for :class:`coding_agent_playbook.commands.twins.ci.SubprocessCiStepRunner`
 so ``playbook ci`` tests see each step's argv without spawning a child.
 ``FakeRuffRunner`` stands in for the metrics gate's ``ToolRunner`` (a ruff
-subprocess), so ``ruff_violations`` tests script ruff's JSON per source text.
+subprocess), so ``ruff_violations`` tests script ruff's JSON per source text;
+``FakeComplexipyRunner`` does the same for complexipy's ``--plain`` rows, so
+``cognitive_complexity`` tests script each function's value per source text.
 :func:`record_opens` spies on every ``open`` so a scan test can prove a file was never read.
 """
 
@@ -400,6 +402,51 @@ class FakeRuffRunner:
         if self.timeout:
             raise ToolRunError(f"{argv[0]} timed out after {timeout_s:g}s")
         return self.returncode, json.dumps(self.answers.get(source, [])).encode()
+
+
+def complexipy_plain(scores: Mapping[str, int], *, notes: bool = False) -> bytes:
+    """complexipy's ``--plain`` stdout for ``scores`` (``{"Box::run": 4}``), over ``measured.py``.
+
+    ``notes`` appends the trailer complexipy prints about an unneeded ignore comment.
+    Example: ``complexipy_plain({"parse": 3}) == b"measured.py parse 3\\n"``.
+    """
+    rows = "".join(f"measured.py {name} {value}\n" for name, value in scores.items())
+    if notes:
+        rows += (
+            "\nThe following ignore comment(s) are no longer necessary (complexity is within "
+            "the allowed limit) and can be removed:\n"
+            "measured.py:3  function=load complexity=1  # noqa: complexipy\n"
+        )
+    return rows.encode()
+
+
+@dataclass
+class FakeComplexipyRunner:
+    """In-memory ``ToolRunner`` for ``complexipy measured.py --plain ...``: answers by that file.
+
+    It reads ``<cwd>/<argv[1]>``, the source the metric wrote, while the call
+    runs. ``answers`` maps a source text to complexipy's ``{function: value}``
+    (``Box::run`` style; unlisted sources: no row); ``returncode`` is every
+    call's exit, ``notes`` appends complexipy's trailer, and ``timeout`` makes
+    every call raise :class:`ToolRunError`. ``calls`` records ``(argv, source
+    read, cwd, timeout_s)``.
+    """
+
+    answers: dict[str, dict[str, int]] = field(default_factory=dict)
+    returncode: int = 0
+    notes: bool = False
+    timeout: bool = False
+    calls: list[tuple[tuple[str, ...], str, Path | None, float]] = field(default_factory=list)
+
+    def __call__(
+        self, argv: Sequence[str], stdin: bytes, cwd: Path | None, timeout_s: float
+    ) -> tuple[int, bytes]:
+        assert cwd is not None and len(argv) > 1, f"complexipy needs a cwd and a path: {argv}"
+        source = (cwd / argv[1]).read_text(encoding="utf-8")
+        self.calls.append((tuple(argv), source, cwd, timeout_s))
+        if self.timeout:
+            raise ToolRunError(f"{argv[0]} timed out after {timeout_s:g}s")
+        return self.returncode, complexipy_plain(self.answers.get(source, {}), notes=self.notes)
 
 
 def record_opens(monkeypatch: pytest.MonkeyPatch) -> list[Path]:

@@ -2,8 +2,9 @@
 
 The repo's own ``playbook metrics`` gate, static only, over the Python files
 this work touched, with ``--baseline git:HEAD``: the ``quality`` family of the
-consumer's ``[metrics]`` selection plus ``ruff_violations``' ``ruff:quality``
-counts (C901, PLR0911, PLR0912, PLR0913, PLR0915). It reads the one pass it
+consumer's ``[metrics]`` selection (``cognitive_complexity`` too when selected,
+through the complexipy pin) plus ``ruff_violations``' ``ruff:quality`` counts
+(C901, PLR0911, PLR0912, PLR0913, PLR0915). It reads the one pass it
 shares with the ``docstrings`` stage (``_metrics_pass``), so nothing is
 measured twice per Stop.
 
@@ -152,13 +153,12 @@ def _in_quality(finding: ScopeDetail) -> bool:
 
 
 def _notes(found: MetricsPass, touched: int) -> list[str]:
-    """Files not measured and why; the cap; a selected ``ruff_violations`` without ruff."""
+    """Files not measured and why; the cap; a selected metric without its tool's pin."""
     skipped = [] if found.result is None else found.result.skipped
     notes = [f"{quote_data(label)} not measured: {why}" for label, why in skipped]
     if touched > MAX_FILES:
         notes.append(f"(+{touched - MAX_FILES} touched files not measured)")
-    if found.ruff_missing:
-        notes.append(found.ruff_missing)
+    notes.extend(found.tools_missing)
     return notes
 
 

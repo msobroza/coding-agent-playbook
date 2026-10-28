@@ -39,7 +39,7 @@ from coding_agent_playbook.grading.types import Measurement
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
 
-    from coding_agent_playbook.grading.types import EvalContext, MeasureSetup, RuffSettings
+    from coding_agent_playbook.grading.types import EvalContext, RuffSettings
 
 __all__ = [
     "METRIC_NAME",
@@ -195,20 +195,7 @@ class RuffViolationsMetric(Metric):
     name = METRIC_NAME
     scope = Scope.FILE
     normalizer = RampNormalizer(good=0, bad=5)
-
-    def runnable(self, setup: MeasureSetup) -> bool:
-        """Only with a ruff to run (``setup.tool_paths["ruff"]``).
-
-        Example::
-
-            >>> RuffViolationsMetric().runnable(MeasureSetup())
-            False
-        """
-        return bool(setup.tool_paths.get("ruff"))
-
-    def available(self, ctx: EvalContext) -> bool:
-        """Only with a parsed module and a ruff to run (``tool_paths["ruff"]``)."""
-        return ctx.module is not None and self.runnable(ctx.measure_setup)
+    tool = "ruff"  # runnable only with setup.tool_paths["ruff"]
 
     def measure(self, ctx: EvalContext) -> list[Measurement]:
         return _measure(ctx)

@@ -263,6 +263,20 @@ def test_extend_select_ruff_violations_with_stub_ruff(
     assert {(argv[0], cwd) for argv, _, cwd, _ in runner.calls} == {(_STUB_RUFF, repo)}
 
 
+def test_selected_metric_without_its_tool_prints_a_not_measured_note(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    deps = MetricsGateDeps(which=lambda name: None, tool_runner=FakeRuffRunner())
+
+    selected = ("--select", "cognitive_complexity,ruff_violations")
+    rc = _cli(str(repo / "a.py"), *selected, "--repo-root", str(repo), deps=deps)
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "  note: cognitive_complexity not measured: complexipy not found on PATH" in out
+    assert "  note: ruff_violations not measured: ruff not found on PATH" in out
+
+
 def test_ruff_violations_absent_from_default_output(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

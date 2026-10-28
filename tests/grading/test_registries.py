@@ -5,7 +5,8 @@ package no longer fires the ``@register_metric`` / ``@register_check`` decorator
 of its modules: ``grading/metric.py`` and ``grading/check_registry.py`` import their
 in-tree modules by explicit list instead. The baselines below are what the
 kernel registered before the rename, when each package ``__init__`` imported its
-modules, read from a fresh interpreter (specs/prT-package-layout.md 7.4 N25).
+modules, read from a fresh interpreter (specs/prT-package-layout.md 7.4 N25), plus
+``cognitive_complexity``, added since in ``static_metrics/cognitive.py``.
 """
 
 from __future__ import annotations
@@ -22,9 +23,10 @@ from coding_agent_playbook.grading.static_metrics import ruff_violations
 from tests.engine_modules import engine_module
 from tests.import_probe import run_python_probe
 
-#: The 12 in-tree metrics: 9 static, then test_pass_rate, coverage and diff_coverage.
+#: The 13 in-tree metrics: 10 static, then test_pass_rate, coverage and diff_coverage.
 _BASELINE_METRIC_NAMES: Final = [
     "cbo",
+    "cognitive_complexity",
     "coverage",
     "cyclomatic_complexity",
     "diff_coverage",
@@ -44,6 +46,7 @@ _BASELINE_CHECK_IDS: Final = ["coverage", "non_regression", "tests_pass", "thres
 #: imported all of its modules in this order.
 _BASELINE_STATIC_ORDER: Final = [
     "cbo",
+    "cognitive_complexity",
     "cyclomatic_complexity",
     "dit",
     "docstring_example",

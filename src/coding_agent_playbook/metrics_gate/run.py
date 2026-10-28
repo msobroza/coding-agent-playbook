@@ -103,6 +103,7 @@ __all__ = [
     "build_rubric",
     "cli_tool_paths",
     "load_metrics_config",
+    "missing_tools",
     "run_metrics_gate",
     "tool_setup",
 ]
@@ -162,7 +163,10 @@ class MetricsGateResult:
 
     ``config`` is the effective policy (request overrides applied, mode degraded
     to ``absolute`` without a baseline, which ``note`` explains). ``skipped``
-    lists ``(label, reason)`` for each candidate that was not measured.
+    lists ``(label, reason)`` for each candidate that was not measured, and
+    ``missing_tools`` ``(metric, tool)`` for each selected metric whose
+    :attr:`~coding_agent_playbook.grading.metric.Metric.tool` had no path, so
+    it measured nothing.
 
     Example::
 
@@ -176,6 +180,7 @@ class MetricsGateResult:
     note: str | None
     skipped: tuple[tuple[str, str], ...]
     measured_count: int
+    missing_tools: tuple[tuple[str, str], ...] = ()
 
     @property
     def breached(self) -> bool:
@@ -194,7 +199,8 @@ class MetricsGateDeps:
     reader ``changed_only`` lists files with (a hook passes its ``SafeGit``).
     ``tool_runner`` runs a subprocess-backed metric's tool (a hook passes one
     over its ``ProcPort``); the gate memoizes it per run. ``which`` is how the
-    CLI finds ``ruff`` for :attr:`MetricsGateRequest.tool_paths`.
+    CLI finds the metrics' tools (``ruff``, ``complexipy``) for
+    :attr:`MetricsGateRequest.tool_paths`.
     ``changed_lines`` lists the lines changed since a diff base for
     ``diff_coverage`` instead of a git read (``None``: git through
     ``git_runner_factory``); the coverage Stop stage passes its own listing.
@@ -271,6 +277,24 @@ def run_metrics_gate(
         note=note,
         skipped=tuple(measured.skipped),
         measured_count=measured.measured_count,
+        missing_tools=missing_tools(measured.static, request.tool_paths),
+    )
+
+
+def missing_tools(
+    metrics: Sequence[Metric], tool_paths: Mapping[str, str]
+) -> tuple[tuple[str, str], ...]:
+    """``(metric, tool)`` for each of ``metrics`` whose ``tool`` has no path in ``tool_paths``.
+
+    Example::
+
+        >>> missing_tools([get_metric("cognitive_complexity")], {})
+        (('cognitive_complexity', 'complexipy'),)
+    """
+    return tuple(
+        (metric.name, metric.tool)
+        for metric in metrics
+        if metric.tool is not None and not tool_paths.get(metric.tool)
     )
 
 
@@ -336,15 +360,18 @@ def tool_setup(request: MetricsGateRequest, deps: MetricsGateDeps) -> ToolSetup:
 
 
 def cli_tool_paths(which: Callable[[str], str | None]) -> dict[str, str]:
-    """The consumer-toolchain binaries ``which`` finds on ``PATH`` (``ruff``), for the CLI.
+    """The metrics' consumer-toolchain binaries ``which`` finds on ``PATH``, for the CLI.
+
+    One lookup per distinct :attr:`~coding_agent_playbook.grading.metric.Metric.tool`
+    of the static metrics (``ruff``, ``complexipy``).
 
     Example::
 
         >>> cli_tool_paths(lambda name: None)
         {}
     """
-    found = which("ruff")
-    return {} if found is None else {"ruff": found}
+    tools = dict.fromkeys(metric.tool for metric in static_metrics() if metric.tool is not None)
+    return {name: path for name in tools if (path := which(name)) is not None}
 
 
 def _selected_metrics(

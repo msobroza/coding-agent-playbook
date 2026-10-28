@@ -61,6 +61,9 @@ METRIC_DEFAULTS: dict[str, tuple[float | None, float | None, float]] = {
     "ruff_violations": (None, None, 0.0),
     "file_sloc": (None, None, 1.0),
     "docstring_example": (None, None, 0.0),
+    # The standard limit, 15 per function (SonarSource S3776, complexipy's own
+    # default): the score is 1.0 up to 15, so fail=1.0 fails a function over it.
+    "cognitive_complexity": (None, 1.0, 0.0),
 }
 
 
@@ -130,6 +133,7 @@ METRIC_FAMILIES: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
     {
         "quality": (
             "cyclomatic_complexity",
+            "cognitive_complexity",
             "wmc",
             "lcom4",
             "dit",
@@ -144,10 +148,12 @@ METRIC_FAMILIES: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
 )
 
 #: Metrics enabled only **by name** (prK §F.2.1): never by default and never
-#: through a family. ``ruff_violations`` is available wherever ruff is on PATH,
-#: so default-selecting it would change every consumer's pre-commit results on
-#: upgrade.
-OPT_IN_METRICS: Final = frozenset({"ruff_violations", "file_sloc", "docstring_example"})
+#: through a family. ``ruff_violations`` is available wherever ruff is on PATH
+#: (``cognitive_complexity`` wherever complexipy is), so default-selecting it
+#: would change every consumer's pre-commit results on upgrade.
+OPT_IN_METRICS: Final = frozenset(
+    {"ruff_violations", "cognitive_complexity", "file_sloc", "docstring_example"}
+)
 
 
 def resolve_metric_selection(

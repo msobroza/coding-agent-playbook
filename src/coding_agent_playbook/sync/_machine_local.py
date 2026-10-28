@@ -74,11 +74,13 @@ __all__ = [
 ]
 
 #: Logical tools the builtins run, pinned per worktree; Stop stage tools join them.
-PINNED_TOOLS: Final = ("ruff", "cz")
+#: ``complexipy`` is the opt-in ``cognitive_complexity`` metric's tool; it is
+#: pinned only where it is installed.
+PINNED_TOOLS: Final = ("ruff", "cz", "complexipy")
 #: The project's own interpreter (the execution stages' tool), not a program on PATH.
 PROJECT_PYTHON: Final = "project_python"
 #: Tools taken from the project's own ``.venv`` before ``PATH`` (§E.3: version parity).
-VENV_FIRST_TOOLS: Final = frozenset({"ruff", "cz"})
+VENV_FIRST_TOOLS: Final = frozenset({"ruff", "cz", "complexipy"})
 _PROMPT: Final = "Approve it? [y/N]: "
 _YES: Final = frozenset({"y", "yes"})
 

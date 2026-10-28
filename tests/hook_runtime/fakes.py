@@ -16,6 +16,8 @@ never patches a module:
 - ``FakeRuff`` for the pinned ruff behind ``RuntimeDeps.proc`` (and the
   sync-time rule probe): scripted D1 JSON, M1/M2 rewrites of the file, the
   HEAD format verdict and ``ruff rule`` answers; any other program fails.
+- ``FakeComplexipy`` for the pinned complexipy behind ``RuntimeDeps.proc``:
+  scripted ``--plain`` rows per measured source text; any other program fails.
 - ``FakeTimer`` for ``deps.thread_timer`` (fires only when told, or on start)
   and ``FakeExit`` / ``fake_exit`` for ``os._exit``: the watchdog runs
   in-process and its exit surfaces as an exception.
@@ -441,6 +443,43 @@ class FakeTimers:
 def ruff_row(code: str | None, row: int, message: str = "finding") -> dict[str, object]:
     """One D1 diagnostic as ``ruff check --output-format json`` prints it (the parts read)."""
     return {"code": code, "location": {"row": row, "column": 1}, "message": message}
+
+
+@dataclass
+class FakeComplexipy:
+    """In-memory ``ProcPort`` for the pinned complexipy: answers by the file it measures.
+
+    A call reads ``<cwd>/<argv[1]>`` (the source the ``cognitive_complexity``
+    metric wrote) and prints ``by_source[<that text>]`` as complexipy's
+    ``--plain`` rows (none for any other text). Any program other than
+    ``complexipy`` fails the test, like ``FakeProc``.
+    """
+
+    by_source: dict[str, dict[str, int]] = field(default_factory=dict)
+    calls: list[FakeCall] = field(default_factory=list)
+
+    def run(
+        self,
+        argv: Sequence[str],
+        *,
+        timeout: float,
+        env: Mapping[str, str] | None = None,
+        input: bytes | None = None,
+        cwd: str | None = None,
+    ) -> ProcResult:
+        from tests.fakes import complexipy_plain
+
+        command = tuple(argv)
+        self.calls.append(
+            FakeCall(command, timeout, None if env is None else dict(env), input, cwd)
+        )
+        if not command or os.path.basename(command[0]) != "complexipy" or cwd is None:
+            raise AssertionError(f"unexpected subprocess: {command[0] if command else '<empty>'}")
+        source = Path(cwd, command[1]).read_text(encoding="utf-8")
+        return ProcResult(command, 0, complexipy_plain(self.by_source.get(source, {})))
+
+    def which(self, name: str, *, path: str | None = None) -> str | None:
+        return None
 
 
 @dataclass

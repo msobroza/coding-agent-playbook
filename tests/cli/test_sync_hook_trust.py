@@ -95,6 +95,24 @@ def test_machine_json_pins_cz_and_project_python_when_present(repo: Path, tmp_pa
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="a POSIX venv layout")
+def test_machine_json_pins_complexipy_from_the_project_venv_first(
+    repo: Path, tmp_path: Path
+) -> None:
+    """cognitive_complexity's Stop stage runs complexipy only through this pin."""
+    venv_complexipy = repo / ".venv" / "bin" / "complexipy"
+    venv_complexipy.parent.mkdir(parents=True)
+    venv_complexipy.write_bytes(b"#!/bin/sh\n")
+    venv_complexipy.chmod(0o755)
+    pins = FakePinWriter()
+    which = {"complexipy": "/usr/local/bin/complexipy"}.get
+    deps = hook_deps(tmp_path / "state", pins=pins, which=which)
+
+    write_pins(repo, deps, engine_version="9.9.9")
+
+    assert pins.tools == {"complexipy": [str(venv_complexipy)]}
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="a POSIX venv layout")
 def test_project_python_prefers_the_repo_venv_unresolved(repo: Path) -> None:
     venv_python = repo / ".venv" / "bin" / "python"
     venv_python.parent.mkdir(parents=True)

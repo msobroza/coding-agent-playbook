@@ -12,8 +12,10 @@ Stop whichever stage asks first:
 - **which metrics**: ``[metrics]`` (read live, like the pre-commit twin)
   restricted to the ``quality`` and ``docstrings`` families, plus
   ``ruff_violations`` by name (``policy.stop_stage_selection``);
-- **ruff**: the ``machine.json`` pin through ``ctx.proc``, bounded by the stage
-  deadline; without a usable pin ``ruff_violations`` measures nothing;
+- **tools**: each picked metric's tool (ruff, complexipy) runs through its
+  ``machine.json`` pin and ``ctx.proc``, bounded by the stage deadline; without
+  a usable pin its metric measures nothing, and a consumer who selected the
+  metric gets a line saying so;
 - **severity** (:meth:`MetricsPass.deny_eligible`): a fail-level finding may
   block only when ``.pre-commit-config.yaml`` declares a playbook metrics hook,
   ``[metrics] fail_on_breach`` is true **and** the consumer's own selection
@@ -40,6 +42,7 @@ from coding_agent_playbook.hook_runtime.stop.tools import edited_py
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping, Sequence
 
+    from coding_agent_playbook.grading.metric import Metric
     from coding_agent_playbook.grading.static_metrics.ruff_violations import RuffHit
     from coding_agent_playbook.grading.tool_runner import ToolRunner
     from coding_agent_playbook.grading.types import ScopeDetail, ToolSetup
@@ -125,7 +128,8 @@ class MetricsPass:
 
     ``own`` is the consumer's ``[metrics]`` selection; ``gated`` says the repo
     gates metrics in pre-commit with ``fail_on_breach``; ``setup`` and
-    ``tool_paths`` re-ask the pass's ruff memo for a finding's details.
+    ``tool_paths`` re-ask the pass's ruff memo for a finding's details;
+    ``tools_missing`` says which selected metrics had no usable tool pin.
 
     Example::
 
@@ -139,7 +143,7 @@ class MetricsPass:
     gated: bool = False
     tool_paths: Mapping[str, str] = field(default_factory=dict)
     setup: ToolSetup | None = None
-    ruff_missing: str = ""
+    tools_missing: tuple[str, ...] = ()
 
     def fails(self) -> list[ScopeDetail]:
         """The fail-level findings, in report order."""
@@ -191,7 +195,7 @@ def _run_pass(
         picked, own = stop_stage_selection(static_metrics(), config)
     except (gates.MetricsGateUsageError, ValueError) as exc:
         return MetricsPass(error=f"metrics not measured: {clip(clean_text(str(exc)), 120)}")
-    tool_paths, runner, missing = _ruff_tools(ctx, git_dir, deadline)
+    tool_paths, runner, missing = _pinned_tools(ctx, git_dir, deadline, picked)
     request = gates.MetricsGateRequest(
         repo_root=Path(root),
         config=config,
@@ -222,29 +226,31 @@ def _run_pass(
         gated=bool(result.config.fail_on_breach) and metrics_gated(ctx, root),
         tool_paths=tool_paths,
         setup=gates.tool_setup(request, deps),
-        ruff_missing=missing if "ruff_violations" in own else "",
+        tools_missing=tuple(line for metric, line in missing if metric in own),
     )
 
 
-# --- ruff through the pin ------------------------------------------------------------------------
+# --- the metrics' tools through their pins -----------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
 class ProcToolRunner:
-    """An evaluator ``ToolRunner`` over the dispatch's ``ProcPort``, running the pinned ruff argv.
+    """An evaluator ``ToolRunner`` over the dispatch's ``ProcPort`` that runs only pinned programs.
 
-    The metric's own program name is replaced by the pin, and no call outlives
-    ``deadline`` (the stage's, on ``clock.monotonic()``).
+    ``pins`` maps each ``tool_paths`` value to its pin's argv, which replaces
+    the metric's program name; any other program is never run. No call
+    outlives ``deadline`` (the stage's, on ``clock.monotonic()``).
 
     Example::
 
-        >>> ProcToolRunner(ctx.proc, ("/v/bin/ruff",), ctx.clock, deadline)(argv, b"", None, 10.0)
+        >>> pins = {"/v/bin/ruff": ("/v/bin/ruff",)}
+        >>> ProcToolRunner(ctx.proc, pins, ctx.clock, deadline)(argv, b"", None, 10.0)
         ... # doctest: +SKIP
         (0, b'[]')
     """
 
     proc: ProcPort
-    argv: tuple[str, ...]
+    pins: Mapping[str, tuple[str, ...]]
     clock: Clock
     deadline: float
 
@@ -253,34 +259,71 @@ class ProcToolRunner:
     ) -> tuple[int, bytes]:
         from coding_agent_playbook.grading.tool_runner import ToolRunError
 
+        program = argv[0] if argv else ""
+        name = os.path.basename(program)
+        pinned = self.pins.get(program)
+        if pinned is None:
+            raise ToolRunError(f"{name}: not pinned")
         left = self.deadline - self.clock.monotonic()
         if left <= 0:
-            raise ToolRunError("ruff: no time left in the Stop stage")
-        command = [*self.argv, *argv[1:]]
+            raise ToolRunError(f"{name}: no time left in the Stop stage")
         try:
             done = self.proc.run(
-                command,
+                [*pinned, *argv[1:]],
                 timeout=min(timeout_s, left),
                 input=stdin,
                 cwd=None if cwd is None else str(cwd),
             )
         except (ProcTimeout, OSError) as exc:
-            raise ToolRunError(f"ruff: {exc}") from None
+            raise ToolRunError(f"{name}: {exc}") from None
         return done.returncode, done.stdout
 
 
-def _ruff_tools(
-    ctx: HandlerContext, git_dir: str | None, deadline: float
-) -> tuple[dict[str, str], ToolRunner | None, str]:
-    """``(tool_paths, memoized runner, problem)`` from the worktree's ruff pin."""
+def _pinned_tools(
+    ctx: HandlerContext, git_dir: str | None, deadline: float, picked: Sequence[Metric]
+) -> tuple[dict[str, str], ToolRunner | None, list[tuple[str, str]]]:
+    """``(tool_paths, memoized runner, [(metric, why not measured)])`` from the picked pins."""
     from coding_agent_playbook.grading.tool_runner import MemoToolRunner
+
+    tool_paths: dict[str, str] = {}
+    pins: dict[str, tuple[str, ...]] = {}
+    missing: list[tuple[str, str]] = []
+    for metric in picked:
+        if metric.tool is None:
+            continue
+        pin = _tool_pin(ctx, git_dir, metric.tool)
+        if isinstance(pin, str):
+            why = f"{metric.name} not measured: {metric.tool} pin {pin} (run playbook sync)"
+            missing.append((metric.name, why))
+            continue
+        tool_paths[metric.tool] = pin[0]
+        pins[pin[0]] = pin
+    if not pins:
+        return {}, None, missing
+    runner = MemoToolRunner(ProcToolRunner(ctx.proc, pins, ctx.clock, deadline))
+    return tool_paths, runner, missing
+
+
+def _tool_pin(ctx: HandlerContext, git_dir: str | None, tool: str) -> tuple[str, ...] | str:
+    """``tool``'s pinned argv, or ``"missing"`` / ``"changed"``; ruff shares the post-edit memo."""
+    from coding_agent_playbook.hook_runtime.config.pin import read_machine_pins
     from coding_agent_playbook.hook_runtime.handlers._shared.ruff_pipeline import event_ruff_pin
 
-    pin = "missing" if git_dir is None else event_ruff_pin(ctx, git_dir)
-    if isinstance(pin, str):
-        return {}, None, f"ruff_violations not measured: ruff pin {pin} (run playbook sync)"
-    runner = MemoToolRunner(ProcToolRunner(ctx.proc, pin.argv, ctx.clock, deadline))
-    return {"ruff": pin.argv[0]}, runner, ""
+    if git_dir is None:
+        return "missing"
+    if tool == "ruff":
+        ruff = event_ruff_pin(ctx, git_dir)
+        return ruff if isinstance(ruff, str) else ruff.argv
+
+    def load() -> tuple[str, ...] | str:
+        found = read_machine_pins(git_dir=git_dir)
+        pin = None if found is None else found.tool(tool)
+        if pin is None:
+            return "missing"
+        return pin.argv if pin.unchanged() else "changed"
+
+    argv: tuple[str, ...] | str = ctx.memo.get_or_compute(("tool-pin", tool, git_dir), load)
+    return argv
 
 
 class PortBaselineGit:
