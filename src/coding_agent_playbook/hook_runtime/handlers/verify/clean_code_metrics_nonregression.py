@@ -15,6 +15,8 @@ measured twice per Stop.
   blocks only for a consumer who selected it); otherwise each is a context
   line. A file that cannot be measured, a bad ``[metrics]`` table or any gate
   error is a context line too, never a crash;
+- each line ends with the fix note: the value that passes and how to get
+  there (``passes at <= 5: split branches into helpers``);
 - at most :data:`MAX_LINES` lines, then ``+N more (playbook metrics ...)``.
 
 The **post-edit companion** (on by default; ``[hooks.clean-code-metrics-nonregression]
@@ -136,10 +138,12 @@ class QualityMetricsStage:
         return _warn([*lines, *notes]) if lines or notes else StageResult(STAGE_NAME, "green")
 
     def _line(self, found: MetricsPass, finding: ScopeDetail) -> str:
+        note = found.fix_note(finding)
         if finding.evaluator != "ruff_violations":
-            return finding_line(finding)
+            return finding_line(finding, note)
         rel = str(finding.scope_key).partition("::")[0]
-        return ruff_line(finding, FAMILY, ruff_detail(found, self.ctx, self.root, rel, FAMILY))
+        detail = ruff_detail(found, self.ctx, self.root, rel, FAMILY)
+        return ruff_line(finding, FAMILY, detail, note)
 
 
 def _in_quality(finding: ScopeDetail) -> bool:

@@ -62,7 +62,11 @@ GROWN: Final = (
     + "".join(f"    if x == {i}:\n        return {i}\n" for i in range(8))
     + "    return x\n"
 )
-CC_LINE: Final = '"src/x.py"::parse cyclomatic_complexity 1 -> 9 (regression)'
+#: The fix note says where CC passes again: back to 5, the free budget (``RampNormalizer(good=5)``).
+CC_LINE: Final = (
+    '"src/x.py"::parse cyclomatic_complexity 1 -> 9 '
+    "(regression; passes at <= 5: split branches into helpers)"
+)
 METRICS_PRECOMMIT: Final = (
     "repos:\n  - repo: local\n    hooks:\n      - id: playbook-metrics\n"
     "        name: metrics\n        entry: playbook metrics --baseline git:HEAD\n"
@@ -201,7 +205,7 @@ def test_without_the_coordinator_the_stage_notes_alone(
 #: A new function over the configured statement budget, its def on line 5.
 LONG: Final = BASE + "\n\ndef build():\n    return 1\n"
 PLR0915: Final = ruff_row("PLR0915", 5, "Too many statements (60 > 50)")
-PLR_LINE: Final = '"src/x.py" ruff:quality 0 -> 1 (PLR0915 build)'
+PLR_LINE: Final = '"src/x.py" ruff:quality 0 -> 1 (PLR0915 build; passes at <= 0)'
 
 
 def _ruff_stop(
@@ -257,7 +261,10 @@ def test_ruff_findings_deny_only_when_consumer_selects_ruff_violations(
 # --- cognitive_complexity through the complexipy pin -----------------------------------------
 
 COGNITIVE: Final = 'select = ["cognitive_complexity"]\n'
-COGNITIVE_LINE: Final = '"src/x.py"::parse cognitive_complexity 1 -> 20 (regression)'
+COGNITIVE_LINE: Final = (
+    '"src/x.py"::parse cognitive_complexity 1 -> 20 '
+    "(regression; passes at <= 15: flatten nesting, extract nested blocks)"
+)
 
 
 def _pin_complexipy(repo: PackRepo, tmp_path: Path) -> None:

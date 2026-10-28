@@ -1,4 +1,4 @@
 === Metrics ===
   mod.py:
-    [fail] cyclomatic_complexity @ classify = 8 (regression; baseline=2)
+    [fail] cyclomatic_complexity @ classify = 8 (regression; baseline=2; passes at <= 5: split branches into helpers)
   summary: FAIL — 1 fail, 0 warn, composite=n/a

@@ -22,7 +22,7 @@ carries only measurement descriptors.
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Final, NamedTuple
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
@@ -67,6 +67,38 @@ METRIC_DEFAULTS: dict[str, tuple[float | None, float | None, float]] = {
 }
 
 
+class MetricPolicy(NamedTuple):
+    """One metric's effective grading policy: ``0-1`` warn/fail cutoffs and regression tolerance.
+
+    Example::
+
+        >>> metric_policy("cyclomatic_complexity", MetricConfig())
+        MetricPolicy(warn=0.5, fail=0.25, max_worsening=0.0)
+    """
+
+    warn: float | None
+    fail: float | None
+    max_worsening: float
+
+
+def metric_policy(name: str, config: MetricConfig) -> MetricPolicy:
+    """``name``'s policy under ``config``: its per-metric overrides, else :data:`METRIC_DEFAULTS`.
+
+    Example::
+
+        >>> metric_policy("cognitive_complexity", MetricConfig()).fail
+        1.0
+    """
+    default_warn, default_fail, default_worsening = METRIC_DEFAULTS.get(name, (None, None, 0.0))
+    absolute = config.thresholds.get(name)
+    regression = config.regression.get(name)
+    return MetricPolicy(
+        warn=absolute.warn if absolute is not None else default_warn,
+        fail=absolute.fail if absolute is not None else default_fail,
+        max_worsening=regression.max_worsening if regression is not None else default_worsening,
+    )
+
+
 def metric_check(name: str, config: MetricConfig) -> Check | None:
     """Build the metric-backed :class:`Check` for ``name`` under ``config``.
 
@@ -96,12 +128,7 @@ def metric_check(name: str, config: MetricConfig) -> Check | None:
         # never raises on an otherwise-loadable sample.
         return None
 
-    default_warn, default_fail, default_worsening = METRIC_DEFAULTS.get(name, (None, None, 0.0))
-    absolute = config.thresholds.get(name)
-    warn = absolute.warn if absolute is not None else default_warn
-    fail = absolute.fail if absolute is not None else default_fail
-    regression = config.regression.get(name)
-    max_worsening = regression.max_worsening if regression is not None else default_worsening
+    warn, fail, max_worsening = metric_policy(name, config)
     weight = config.weights.get(name, 0.0)
 
     if config.mode == "regression":
@@ -269,7 +296,9 @@ __all__ = [
     "METRIC_DEFAULTS",
     "METRIC_FAMILIES",
     "OPT_IN_METRICS",
+    "MetricPolicy",
     "metric_check",
+    "metric_policy",
     "resolve_metric_selection",
     "stop_stage_selection",
 ]

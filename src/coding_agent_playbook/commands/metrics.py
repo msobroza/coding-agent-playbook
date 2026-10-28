@@ -93,6 +93,7 @@ from coding_agent_playbook.metrics_gate.run import (
     load_metrics_config,
     run_metrics_gate,
 )
+from coding_agent_playbook.metrics_gate.targets import fix_note
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -225,6 +226,7 @@ def _format_text(
     note: str | None,
     measured_count: int,
     missing_tools: Sequence[tuple[str, str]] = (),
+    config: MetricConfig | None = None,
 ) -> str:
     """Human-readable findings grouped by file then scope, plus a summary.
 
@@ -256,7 +258,7 @@ def _format_text(
                 scope = (
                     finding.scope_key.split("::", 1)[1] if "::" in finding.scope_key else "(file)"
                 )
-                detail = _finding_detail(finding)
+                detail = _finding_detail(finding, config)
                 lines.append(
                     f"    [{finding.level}] {finding.evaluator} @ {scope} "
                     f"= {finding.value:g} ({finding.kind}{detail})"
@@ -284,13 +286,20 @@ def _leaf_findings(report: EvaluationReport) -> list[ScopeDetail]:
     return [f for f in report.findings if isinstance(f, ScopeDetail)]
 
 
-def _finding_detail(finding: ScopeDetail) -> str:
-    """A short suffix describing the comparison that decided the finding."""
+def _finding_detail(finding: ScopeDetail, config: MetricConfig | None) -> str:
+    """A short suffix: the comparison that decided the finding, then its fix note.
+
+    The fix note (``metrics_gate.targets.fix_note``) is the raw value the scope
+    passes at and how to get there; it needs the effective ``config``.
+    """
     if finding.kind == "regression" and finding.baseline is not None:
-        return f"; baseline={finding.baseline:g}"
-    if finding.bound is not None:
-        return f"; bound={finding.bound:g}"
-    return ""
+        compared = f"; baseline={finding.baseline:g}"
+    elif finding.bound is not None:
+        compared = f"; bound={finding.bound:g}"
+    else:
+        compared = ""
+    note = "" if config is None else fix_note(finding, config)
+    return f"{compared}; {note}" if note else compared
 
 
 def _render(result: MetricsGateResult, fmt: str) -> str:
@@ -303,6 +312,7 @@ def _render(result: MetricsGateResult, fmt: str) -> str:
         note=result.note,
         measured_count=result.measured_count,
         missing_tools=result.missing_tools,
+        config=result.config,
     )
 
 

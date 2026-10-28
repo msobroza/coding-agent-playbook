@@ -97,7 +97,9 @@ def test_new_public_def_without_docstring_context_line(
     report = _stop(repo, deps, ruff, tmp_path)
 
     assert report.trace.combined.decision is Decision.NONE
-    assert _notes(report) == ['[docstrings] "src/x.py" ruff:docstrings 0 -> 1 (D103 save)']
+    assert _notes(report) == [
+        '[docstrings] "src/x.py" ruff:docstrings 0 -> 1 (D103 save; passes at <= 0)'
+    ]
     assert ruff.kinds() == ["metrics", "metrics"]  # one call per side; the details reuse them
     assert {call.input for call in ruff.calls} == {NEW_DEF.encode(), BASE.encode()}
 
@@ -124,7 +126,7 @@ def test_removed_docstring_deny_when_metrics_precommit_and_ruff_violations_selec
 
     assert report.trace.combined.decision is Decision.DENY
     assert reason_lines(report)[1:] == [
-        '[docstrings] "src/x.py" ruff:docstrings 0 -> 1 (D103 load)'
+        '[docstrings] "src/x.py" ruff:docstrings 0 -> 1 (D103 load; passes at <= 0)'
     ]
 
 
@@ -138,7 +140,9 @@ def test_removed_docstring_context_without_selection(
     report = _stop(repo, deps, ruff, tmp_path)
 
     assert report.trace.combined.decision is Decision.NONE
-    assert _notes(report) == ['[docstrings] "src/x.py" ruff:docstrings 0 -> 1 (D103 load)']
+    assert _notes(report) == [
+        '[docstrings] "src/x.py" ruff:docstrings 0 -> 1 (D103 load; passes at <= 0)'
+    ]
 
 
 def test_body_only_edit_of_legacy_def_silent_stop_and_post_edit(

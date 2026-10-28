@@ -1,4 +1,4 @@
 === Metrics ===
   tangled.py:
-    [fail] cyclomatic_complexity @ tangled = 23 (new; bound=0.25)
+    [fail] cyclomatic_complexity @ tangled = 23 (new; bound=0.25; passes at <= 16: split branches into helpers)
   summary: FAIL — 1 fail, 0 warn, composite=n/a
