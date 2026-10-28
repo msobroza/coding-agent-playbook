@@ -89,7 +89,6 @@ LEGACY_SAMPLES_WITHOUT_SOLUTION = frozenset(
         "find-injected-vulnerability/pydash-massassign",
         "find-injected-vulnerability/pytorch-deserial",
         "generate-tests/async-code",
-        "generate-tests/edge-cases",
         "generate-tests/happy-path",
         "refactor/extract-helper",
         "refactor/rename-for-clarity",
