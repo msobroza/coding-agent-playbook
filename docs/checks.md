@@ -87,6 +87,15 @@ table measures.
 `--changed` limits a run with a `git:` baseline to the Python files changed against
 that baseline.
 
+Each finding ends with a fix note: the value at which the scope passes, and one way
+to get there. The value comes from the metric's threshold for a new function or
+class, and from its baseline for a regression. The metrics Stop stages print the
+same note, so the assistant knows how far to refactor:
+
+```text
+[fail] cyclomatic_complexity @ classify = 8 (regression; baseline=2; passes at <= 5: split branches into helpers)
+```
+
 ### Clean Code for AI Agents preset
 
 Code that an agent edits stays legible when it keeps to a few budgets. Functions stay

@@ -168,6 +168,18 @@ class MetricsPass:
         findings = [] if self.result is None else self.result.report.findings
         return [finding for finding in findings if finding.level == "fail"]
 
+    def fix_note(self, finding: ScopeDetail) -> str:
+        """What ``finding`` needs to pass and how (``metrics_gate.targets.fix_note``); ``""`` unknown.
+
+        Example: ``found.fix_note(cc_regression) == "passes at <= 5: split branches into helpers"``.
+        """
+        if self.result is None:
+            return ""
+        from coding_agent_playbook.metrics_gate.targets import fix_note
+
+        note: str = fix_note(finding, self.result.config)
+        return note
+
     def deny_eligible(self, evaluator: str, block: str) -> bool:
         """Whether a fail of ``evaluator`` may block under the stage's ``block`` policy.
 
@@ -423,23 +435,30 @@ def _live_precommit_ids(root: str) -> Iterable[str]:
 # --- lines -----------------------------------------------------------------------------------------
 
 
-def finding_line(finding: ScopeDetail) -> str:
-    """``"src/x.py"::parse cyclomatic_complexity 6 -> 9 (regression)``.
+def finding_line(finding: ScopeDetail, note: str = "") -> str:
+    """``"src/x.py"::parse cyclomatic_complexity 6 -> 9 (regression; <note>)``.
 
-    Example: ``finding_line(detail)`` for a CC regression of ``parse``.
+    ``note`` is the fix note (:meth:`MetricsPass.fix_note`): what the scope
+    needs to pass and how, so the agent knows how far to refactor.
+    Example: ``finding_line(detail, "passes at <= 6: split branches into helpers")``.
     """
     path, _, scope = str(finding.scope_key).partition("::")
     where = f"{quote_data(path)}::{clip(clean_text(scope), 60)}" if scope else quote_data(path)
-    return f"{where} {finding.evaluator} {_change(finding)} ({finding.kind})"
+    return f"{where} {finding.evaluator} {_change(finding)} ({_joined(finding.kind, note)})"
 
 
-def ruff_line(finding: ScopeDetail, family: str, detail: str) -> str:
-    """``"src/x.py" ruff:quality 1 -> 2 (C901 parse)``; ``detail`` empty: the kind instead.
+def ruff_line(finding: ScopeDetail, family: str, detail: str, note: str = "") -> str:
+    """``"src/x.py" ruff:quality 1 -> 2 (C901 parse; passes at <= 1)``; no ``detail``: the kind.
 
-    Example: ``ruff_line(detail, "docstrings", "D103 load")``.
+    Example: ``ruff_line(detail, "docstrings", "D103 load", "passes at <= 0")``.
     """
     path = str(finding.scope_key).partition("::")[0]
-    return f"{quote_data(path)} ruff:{family} {_change(finding)} ({detail or finding.kind})"
+    why = _joined(detail or finding.kind, note)
+    return f"{quote_data(path)} ruff:{family} {_change(finding)} ({why})"
+
+
+def _joined(head: str, note: str) -> str:
+    return f"{head}; {note}" if note else head
 
 
 def _change(finding: ScopeDetail) -> str:

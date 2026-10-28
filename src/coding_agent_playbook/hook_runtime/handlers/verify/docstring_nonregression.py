@@ -135,7 +135,7 @@ class DocstringsStage:
     def _line(self, found: MetricsPass, finding: ScopeDetail) -> str:
         if finding.evaluator == "ruff_violations":
             detail = ruff_detail(found, self.ctx, self.root, _file_of(finding), FAMILY)
-            return ruff_line(finding, FAMILY, detail)
+            return ruff_line(finding, FAMILY, detail, found.fix_note(finding))
         path, _, scope = str(finding.scope_key).partition("::")
         return f"{quote_data(path)}::{clip(clean_text(scope), 60)} {STRICT_HINT}"
 
