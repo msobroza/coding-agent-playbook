@@ -32,10 +32,13 @@ import pytest
 from coding_agent_playbook.evals.prompting import render_prompt
 from coding_agent_playbook.evals.run.fake_runner import FakeRunner, write_files
 from coding_agent_playbook.evals.run.harness_runner import (
+    TIMED_OUT_RETURNCODE,
+    AgentRun,
     Baseline,
     Candidate,
     capture,
     materialize,
+    timed_out_run,
 )
 from coding_agent_playbook.evals.run.scoring import score
 from coding_agent_playbook.evals.sample import EvalSample, SampleInvocation
@@ -1108,3 +1111,58 @@ def test_uv_sync_raises_clear_error_when_sync_fails(
 
     with pytest.raises(RuntimeError, match=r"uv sync failed.*lockfile out of sync"):
         materialize(sample, tmp_path / "scratch")
+
+
+# --------------------------------------------------------------------------- #
+# An agent stopped at its timeout
+# --------------------------------------------------------------------------- #
+
+
+class _TimingOutRunner(FakeRunner):
+    """A fake agent that applies its mutation, then outlives its timeout with partial output."""
+
+    def _invoke_agent(self, prompt: str, scratch_dir: Path) -> AgentRun:
+        super()._invoke_agent(prompt, scratch_dir)
+        raise subprocess.TimeoutExpired(["agent"], 600, output=b"half an answer SECRET-0")
+
+    def _redact(self, text: str) -> str:
+        return text.replace("SECRET-0", "[redacted]")
+
+
+def _helper_gate() -> dict[str, Any]:
+    return {"expr": "made", "bind": {"made": {"check": "file_exists", "path": "helper.py"}}}
+
+
+@pytest.mark.parametrize(("files", "passed"), [({"helper.py": "x = 1\n"}, True), ({}, False)])
+def test_an_agent_stopped_at_its_timeout_is_a_scored_trial(
+    tmp_path: Path, files: dict[str, str], passed: bool
+) -> None:
+    """Regression: one run past the timeout raised out of ``--record`` and lost every metric."""
+    sample_dir = tmp_path / "sample"
+    _make_setup(sample_dir)
+    sample = _make_sample(sample_dir, gate=_helper_gate())
+
+    result = _TimingOutRunner(write_files(files)).run_sample(sample, tmp_path / "scratch")
+
+    assert result.passed is passed  # graded on the tree the agent left
+    assert "[the agent was stopped at its 600 s timeout]" in result.transcript
+    assert "half an answer [redacted]" in result.transcript
+    assert "SECRET-0" not in result.transcript
+
+
+@pytest.mark.parametrize(
+    ("stdout", "stderr", "transcript"),
+    [
+        (None, None, "[the agent was stopped at its 1.5 s timeout]"),
+        ("out", "err", "outerr\n[the agent was stopped at its 1.5 s timeout]"),
+        (b"\xffbytes", None, "�bytes\n[the agent was stopped at its 1.5 s timeout]"),
+    ],
+)
+def test_timed_out_run_keeps_the_partial_output(
+    stdout: bytes | str | None, stderr: bytes | str | None, transcript: str
+) -> None:
+    exc = subprocess.TimeoutExpired(["agent"], 1.5, output=stdout, stderr=stderr)
+
+    run = timed_out_run(exc, str)
+
+    assert (run.returncode, run.transcript) == (TIMED_OUT_RETURNCODE, transcript)
