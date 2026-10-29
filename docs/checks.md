@@ -1006,8 +1006,11 @@ Per sample:
   is a `regression` (the same rule as `--compare`); the mirror is an `improvement`;
 - a sample whose `sample_digest` changed is `not_comparable`, never a regression;
 - a sample the baseline lacks is `new`; one the new file lacks is noted;
-- a carried entry (one with `measured_in`, copied by `--carry-from`) is `carried`:
-  its `vs_previous` holds the previous mean and a delta of 0, and it never blocks;
+- a carried entry (one with `measured_in`, copied by `--carry-from`) is `carried`
+  when the previous file's entry has the same `inputs_digest`: its `vs_previous`
+  holds the previous mean and a delta of 0, and it never blocks. One carried from
+  an older release whose `inputs_digest` differs from the previous file's entry is
+  compared like a rerun, with the reason `measured in <release>`, so it can block;
 - a cost per run rise above 25%, or a token rise when either cost is `null`, is a
   warning only.
 
@@ -1044,15 +1047,18 @@ without a previous file is recorded without a comparison.
 
 It runs in one of two modes per target:
 
-- **changed-only** (the default): when the previous release has a file for the
-  target, `catalog/releases/<previous>/metrics/<name>.json` is passed as
-  `--carry-from`. Only new samples, samples whose `inputs_digest` changed and the
-  edition controls rerun; every other entry is carried from that file, with
-  `measured_in`, and its regression status is `carried`, which never blocks. A
-  `setup` part that differs, or a baseline without the digests, reruns everything.
+- **changed-only** (the default): the releases directory, `catalog/releases`, is
+  passed as `--carry-from`, so the run reuses results from every committed
+  release whose file has the target's setup, not only the previous release's.
+  Only new samples, samples whose `inputs_digest` changed and the edition
+  controls rerun; every other entry is carried from the newest release that
+  measured it, with `measured_in`. Its regression status is `carried`, which
+  never blocks, when the previous release's entry has the same `inputs_digest`;
+  otherwise it is compared like a rerun and can block. When no committed file
+  has the target's setup (the first release among them), every sample reruns.
 - **full run**: `--full` omits the baseline and reruns every sample, still
-  compared with the previous file. A target without a previous file always runs
-  in full. `--full` without `--eval` is a usage error (exit 2).
+  compared with the previous file. `--full` without `--eval` is a usage error
+  (exit 2).
 
 ```bash
 uv run scripts/release.py prepare --eval          # changed-only per target
@@ -1073,7 +1079,8 @@ Each record run's carry plan (why samples rerun, or which `setup` part made ever
 sample rerun) is printed per target. The pull request body adds a `Release
 metrics` section to the notes, with one line per target and its notes; each line
 names the mode: "changed-only: N rerun, M carried" (with the reason when every
-sample reran) or "full run". A reused file is changed-only when it holds carried
+sample reran, and "(K from older releases)" when K carried entries were measured
+in a release older than the previous one) or "full run". A reused file is changed-only when it holds carried
 entries or its summary counts `carried`. These runs are paid and only the maintainer starts them;
 CI never does.
 

@@ -8,20 +8,22 @@ checkout's own engine, in a subprocess::
     python -m coding_agent_playbook.cli eval --run --all --repo-root <checkout> \\
         --target <name> --record catalog/releases/<version>/metrics/<name>.json \\
         [--judge llm]      # when [evals.judge] names a model
-        [--carry-from catalog/releases/<previous>/metrics/<name>.json]
+        [--carry-from catalog/releases]
 
 so every sample grades the release's current text, and pinned samples also run
 on their edition as a control (``controls`` in the file). The run is
-changed-only by default (#329 ticket 07): when the previous release has a file
-for the target, it is the ``--carry-from`` baseline, so only the samples whose
-inputs changed rerun and the others are carried; ``--full`` (``EvalRequest.full``)
-omits it and reruns everything. Each file's
+changed-only by default (#329 ticket 07): the releases directory is the
+``--carry-from`` baseline (spec D3), so the engine reuses results from every
+committed release with the target's setup, only the samples whose inputs changed
+rerun and the others are carried; ``--full`` (``EvalRequest.full``) omits it and
+reruns everything. Each file's
 ``release`` is set to the version being prepared, then it is compared with the
 previous release's file for the same target (``check_regressions``), and the
 comparison is stored in it. ``--accept SAMPLE=REASON`` (repeatable) accepts that
 sample's regression on every target where it regressed; one that regressed on
 no target is refused. An unaccepted regression refuses the release pull request,
-whose body says per target "changed-only: N rerun, M carried" or "full run";
+whose body says per target "changed-only: N rerun, M carried (K from older
+releases)" or "full run";
 the engine's carry plan (why samples rerun) is passed on to the output.
 
 Recording is paid and slow, so on any refusal after it the recorded files are
@@ -64,6 +66,7 @@ from coding_agent_playbook.evals.release_regression_format import format_regress
 from coding_agent_playbook.evals.target_config import load_eval_settings
 from coding_agent_playbook.exit_two import ExitTwoError
 from coding_agent_playbook.release.manifest import release_dir
+from release_eval_mode import carried_count, changed_only_mode, recorded_changed_only
 from release_tools import ReleaseError
 
 if TYPE_CHECKING:
@@ -109,7 +112,7 @@ class EvalRequest:
 
     accepted: Mapping[str, str] = field(default_factory=dict)
     reuse: Path | None = None
-    #: ``--full``: record without the previous release's file as ``--carry-from``.
+    #: ``--full``: record without the releases directory as ``--carry-from``.
     full: bool = False
     make_kept_dir: Callable[[], Path] = _make_kept_dir
     #: ``--jobs``: samples each recording runs at the same time.
@@ -133,10 +136,12 @@ class TargetMetrics:
     name: str
     metrics: Mapping[str, object]
     check: RegressionCheck | None
-    #: Recorded with a ``--carry-from`` baseline; a reused file: recorded so (``_reused_mode``).
+    #: Recorded with a ``--carry-from`` baseline; a reused file: recorded so (``recorded_changed_only``).
     changed_only: bool = False
     #: The engine's reason when a changed-only recording reran every sample.
     full_rerun_reason: str | None = None
+    #: The release being compared with; carried entries measured in another are older.
+    previous: str | None = None
 
 
 def release_targets(checkout: Path) -> ReleaseTargets:
@@ -173,15 +178,16 @@ def record_release_metrics(
     On a refusal the recorded files are copied to a kept directory, named in the error.
     """
     out_dir = release_dir(tools.cwd / _CATALOG, version) / METRICS_DIRNAME
+    carry_from = None if request.full else tools.cwd / _CATALOG / "releases"
     with metrics_kept_on_refusal(tools.cwd, version, request):
         results: dict[str, _RecordResult] = {}
         for name in targets.names:
-            carry_from = None if request.full else _previous_file(tools.cwd, previous, name)
             recording = _Recording(name, out_dir / f"{name}.json", targets.judged, carry_from)
             results[name] = _recorded(tools, recording, request, base)
         # The recording names the installed engine's version; the file is this release's.
         recorded = {name: {**r.metrics, "release": version} for name, r in results.items()}
-        checked = _with_modes(_checked(tools.cwd, recorded, previous, request.accepted), results)
+        outcomes = _checked(tools.cwd, recorded, previous, request.accepted)
+        checked = _with_modes(outcomes, results, previous)
         for outcome in checked:
             _write(out_dir / f"{outcome.name}.json", outcome.metrics)
         _refuse_blocked(checked)
@@ -235,49 +241,30 @@ def _summary_line(outcome: TargetMetrics) -> str:
 
 
 def _with_modes(
-    outcomes: Sequence[TargetMetrics], results: Mapping[str, _RecordResult]
+    outcomes: Sequence[TargetMetrics], results: Mapping[str, _RecordResult], previous: str | None
 ) -> tuple[TargetMetrics, ...]:
     """Each outcome with the mode its file was recorded in (#329 ticket 07).
 
     A file reused with ``--reuse-metrics`` was recorded by an earlier run, so its
-    mode comes from the file (``_reused_mode``), not from this run's flags.
+    mode comes from the file (``recorded_changed_only``), not from this run's flags.
     """
     return tuple(
         dataclasses.replace(
             o,
             changed_only=results[o.name].changed_only,
             full_rerun_reason=results[o.name].full_rerun_reason,
+            previous=previous,
         )
         for o in outcomes
     )
 
 
-def _carried(metrics: Mapping[str, object]) -> int:
-    """The number of carried entries (those with ``measured_in``) in ``metrics``."""
-    samples = metrics.get("samples")
-    entries = samples.values() if isinstance(samples, dict) else ()
-    return sum(1 for entry in entries if isinstance(entry, dict) and "measured_in" in entry)
-
-
 def _mode(outcome: TargetMetrics) -> str:
-    """``changed-only: N rerun, M carried`` or ``full run``, as the pull request says it."""
+    """``changed-only: N rerun, M carried (K from older releases)`` or ``full run``."""
     if not outcome.changed_only:
         return "full run"
-    carried = _carried(outcome.metrics)
-    samples = outcome.metrics.get("samples")
-    total = len(samples) if isinstance(samples, dict) else 0
-    why = "" if outcome.full_rerun_reason is None else f" ({outcome.full_rerun_reason})"
-    return f"changed-only: {total - carried} rerun{why}, {carried} carried"
-
-
-def _reused_mode(metrics: Mapping[str, object]) -> bool:
-    """Whether a kept file was recorded changed-only: it carries entries, or counts them.
-
-    Only a ``--carry-from`` recording writes ``carried`` in the summary, so a
-    changed-only file whose every sample changed (0 carried) still reads so.
-    """
-    summary = metrics.get("summary")
-    return _carried(metrics) > 0 or (isinstance(summary, dict) and "carried" in summary)
+    reason, previous = outcome.full_rerun_reason, outcome.previous
+    return changed_only_mode(outcome.metrics, full_rerun_reason=reason, previous=previous)
 
 
 @dataclass(frozen=True)
@@ -318,13 +305,13 @@ def _reused(kept: Path, name: str, base: str, *, full: bool) -> _RecordResult:
             f"{kept} was recorded on commit {metrics.get('commit')}, not on the base {base}: "
             "drop --reuse-metrics or remove that file to record the target again"
         )
-    if full and _carried(metrics) > 0:
+    if full and carried_count(metrics) > 0:
         raise ReleaseError(
-            f"{kept} carries {_carried(metrics)} entries from a baseline, but --full reruns "
+            f"{kept} carries {carried_count(metrics)} entries from a baseline, but --full reruns "
             "every sample: drop --reuse-metrics or remove that file to record the target again"
         )
     print(f"release: reused the metrics of target {name!r} from {kept}")
-    return _RecordResult(metrics, changed_only=_reused_mode(metrics))
+    return _RecordResult(metrics, changed_only=recorded_changed_only(metrics))
 
 
 def _fresh(tools: Tools, recording: _Recording, checkpoint: Path, jobs: int) -> _RecordResult:
