@@ -97,3 +97,27 @@ def test_capturing_judge_records_calls_and_returns_the_inner_score() -> None:
 
     assert score == 0.7
     assert judge.calls == [("is correct", "['a', 'diff']", 0.7, 3)]
+
+
+def _corrupt_deflate(text: str) -> bytes:
+    # gzip.compress writes a 10-byte header (no file name), so byte 10 starts the
+    # deflate data; flipping it makes zlib raise zlib.error, not an OSError.
+    data = bytearray(gzip.compress(text.encode("utf-8")))
+    data[10] ^= 0xFF
+    return bytes(data)
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        pytest.param(_corrupt_deflate('{"sample": "s-a"}\n' * 50), id="corrupt-deflate"),
+        pytest.param(b'{"sample": "s-a"}\n', id="not-gzip"),
+        pytest.param(gzip.compress(b'{"sample": "s-a"}\n' * 50)[:-12], id="truncated"),
+    ],
+)
+def test_an_unreadable_file_names_the_path(tmp_path: Path, content: bytes) -> None:
+    path = tmp_path / "answers.jsonl.gz"
+    path.write_bytes(content)
+
+    with pytest.raises(AnswersError, match=r"answers\.jsonl\.gz"):
+        read_answers(path)

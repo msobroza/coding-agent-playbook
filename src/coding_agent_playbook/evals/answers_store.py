@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import zlib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
@@ -134,7 +135,7 @@ def read_answers(path: Path) -> list[StoredRun]:
     try:
         with gzip.open(path, "rt", encoding="utf-8") as handle:
             lines = handle.read().splitlines()
-    except (OSError, EOFError, UnicodeDecodeError) as error:
+    except (OSError, EOFError, UnicodeDecodeError, zlib.error) as error:
         raise AnswersError(f"cannot read the answers file {path}: {error}") from error
     return [_parsed_line(path, number, line) for number, line in enumerate(lines, start=1)]
 
