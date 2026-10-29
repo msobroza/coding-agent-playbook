@@ -261,7 +261,7 @@ file (gzip):
 | Key | Content |
 |---|---|
 | `sample`, `inputs_digest`, `run` | the sample id, its inputs digest, the run index |
-| `artifact` | what the judge grades: the transcript or the diff, after the runner's token redaction |
+| `artifact` | what the judge graded: the transcript or the diff, after the runner's token redaction. `null` when fail-fast skipped the judge (D9 never re-grades such a run), and for a re-judged run, whose `artifact_ref: {release, target}` names the answers file that holds it |
 | `checks` | each judge-free check's result by check id: file checks, answer patterns, the test pass rate |
 | `criteria` | each rubric criterion with its weight and the judge's mean score, `null` when fail-fast skipped the judge |
 | `judge` | the judge parts this run was graded with |
