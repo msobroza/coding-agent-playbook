@@ -97,9 +97,13 @@ release-report:
     reports:
       dotenv: release.env
 
-# Creates the GitLab Release with one asset link per bundle file, or, on a
-# rerun, updates the existing release's notes through the Releases API.
-# release-cli gets no --ref, so a missing tag fails instead of being created.
+# Creates the GitLab Release with one asset link per bundle file. On a rerun it
+# updates the existing release instead: the notes through the Releases API, then
+# the asset links through the Release Links API (the old report job's links are
+# deleted, one per current bundle file is posted). release-cli's --ref defaults
+# to $CI_COMMIT_SHA and would create a missing tag on the default branch's HEAD;
+# --ref "$RELEASE_TAG" cannot resolve when the tag is missing, so create fails.
+# Link ids are read with grep, so the job needs only curl (from apk if missing).
 release:
   extends: .release-rules
   image: $RELEASE_CLI_IMAGE
@@ -111,16 +115,26 @@ release:
     - |
       set -eu
       command -v curl >/dev/null || apk add --no-cache curl
-      status=$(curl --silent --output /dev/null --write-out '%{http_code}' --header "JOB-TOKEN: $CI_JOB_TOKEN" \
-        "$CI_API_V4_URL/projects/$CI_PROJECT_ID/releases/$RELEASE_TAG")
+      RELEASE_API="$CI_API_V4_URL/projects/$CI_PROJECT_ID/releases/$RELEASE_TAG"
+      ASSET_BASE="$CI_PROJECT_URL/-/jobs/$REPORT_JOB_ID/artifacts/file/release-report"
+      status=$(curl --silent --output /dev/null --write-out '%{http_code}' --header "JOB-TOKEN: $CI_JOB_TOKEN" "$RELEASE_API")
       if [ "$status" = "200" ]; then
         curl --fail --silent --show-error --request PUT --header "JOB-TOKEN: $CI_JOB_TOKEN" \
-          --data-urlencode "description@release-report/report.md" "$CI_API_V4_URL/projects/$CI_PROJECT_ID/releases/$RELEASE_TAG"
+          --data-urlencode "description@release-report/report.md" "$RELEASE_API" >/dev/null
+        links=$(curl --fail --silent --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" "$RELEASE_API/assets/links?per_page=100")
+        for link_id in $(printf '%s' "$links" | grep -o '"id":[0-9]*' | cut -d: -f2 || true); do
+          curl --fail --silent --show-error --request DELETE --header "JOB-TOKEN: $CI_JOB_TOKEN" "$RELEASE_API/assets/links/$link_id" >/dev/null
+        done
+        for f in release-report/*; do
+          name="${f#release-report/}"
+          curl --fail --silent --show-error --request POST --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+            --data-urlencode "name=$name" --data-urlencode "url=$ASSET_BASE/$name" "$RELEASE_API/assets/links" >/dev/null
+        done
         exit 0
       fi
       set --
       for f in release-report/*; do
         name="${f#release-report/}"
-        set -- "$@" --assets-link "{\"name\":\"$name\",\"url\":\"$CI_PROJECT_URL/-/jobs/$REPORT_JOB_ID/artifacts/file/release-report/$name\"}"
+        set -- "$@" --assets-link "{\"name\":\"$name\",\"url\":\"$ASSET_BASE/$name\"}"
       done
-      release-cli create --name "$RELEASE_TAG" --tag-name "$RELEASE_TAG" --description release-report/report.md "$@"
+      release-cli create --name "$RELEASE_TAG" --tag-name "$RELEASE_TAG" --ref "$RELEASE_TAG" --description release-report/report.md "$@"
