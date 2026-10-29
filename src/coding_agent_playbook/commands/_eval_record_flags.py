@@ -2,7 +2,7 @@
 
 Kept apart from the record run itself so each module stays one read: this one
 declares ``--all``, ``--runs``, ``--record``, ``--carry-from``, ``--jobs``,
-``--checkpoint`` and ``--resume``, and refuses their misuse before any paid run.
+``--checkpoint``, ``--resume`` and ``--answers``, and refuses their misuse before any paid run.
 """
 
 from __future__ import annotations
@@ -67,6 +67,12 @@ def configure_record(parser: argparse.ArgumentParser) -> None:
         help="--record: reuse the checkpoint's samples measured on the same setup and "
         "inputs instead of running them again",
     )
+    parser.add_argument(
+        "--answers",
+        metavar="PATH",
+        help="--record: write each fresh run's graded answer, checks and criterion scores "
+        "to PATH (gzip JSON Lines; default: the record path + .answers.jsonl.gz)",
+    )
 
 
 def wants_record(args: argparse.Namespace) -> bool:
@@ -77,6 +83,7 @@ def wants_record(args: argparse.Namespace) -> bool:
         getattr(args, "carry_from", None),
         getattr(args, "jobs", None),
         getattr(args, "checkpoint", None),
+        getattr(args, "answers", None),
     )
     switches = (getattr(args, "all_samples", False), getattr(args, "resume", False))
     return any(switches) or any(flag is not None for flag in flags)
@@ -86,7 +93,7 @@ def record_path(args: argparse.Namespace) -> Path:
     record = getattr(args, "record", None)
     if record is None:
         raise RecordRefusedError(
-            "--all, --runs, --carry-from, --jobs, --checkpoint and --resume belong to "
+            "--all, --runs, --carry-from, --jobs, --checkpoint, --resume and --answers belong to "
             "--record <path>; pass --record too"
         )
     return Path(record)

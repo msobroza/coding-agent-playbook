@@ -29,7 +29,8 @@ file is written whatever the scores are: exit ``0`` once it is written, ``2`` on
 a refusal or an unscorable sample. Each finished sample is saved to a
 checkpoint as it ends (``--checkpoint``, ``evals.record_checkpoint``), which
 ``--resume`` reuses; ``--jobs N`` runs N samples at a time
-(``commands._eval_record_runs``).
+(``commands._eval_record_runs``). Each fresh run's answers are written beside the
+file or to ``--answers`` (spec D8, ``commands._eval_record_answers``).
 """
 
 from __future__ import annotations
@@ -50,6 +51,13 @@ from coding_agent_playbook.commands._eval_options import (
     build_target_runner,
     judge_sample_count,
     select_target,
+)
+from coding_agent_playbook.commands._eval_record_answers import (
+    answers_out_path,
+    capturing,
+    judge_parts,
+    stored_run,
+    write_record_answers,
 )
 from coding_agent_playbook.commands._eval_record_carry import (
     Baseline,
@@ -96,6 +104,7 @@ if TYPE_CHECKING:
     import argparse
     from collections.abc import Callable, Mapping
 
+    from coding_agent_playbook.evals.answers_store import CapturingJudge
     from coding_agent_playbook.evals.endpoints import Endpoint
     from coding_agent_playbook.evals.judge import Judge
     from coding_agent_playbook.evals.run.harness_runner import HarnessRunner, SampleResult
@@ -135,7 +144,7 @@ def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings
     recorded = plan.recorded_target(target, judge_model=judge_model, isolated=isolated)
     carry = _plan_carry(baseline, recorded, inputs, controls)
     checkpoint = _open_checkpoint(args, out_path, recorded)
-    work = _RecordWork(plan, recorded, jobs, checkpoint)
+    work = _RecordWork(plan, recorded, jobs, checkpoint, answers_out_path(args, out_path))
     metrics = _record_metrics(work, samples, inputs, controls, carry, repo_root)
     validate_release_metrics(metrics)
     _write(out_path, metrics)
@@ -170,12 +179,13 @@ def _plan_carry(
 
 @dataclass(frozen=True)
 class _RecordWork:
-    """What runs each unit: the plan, the target block, ``--jobs`` and the checkpoint."""
+    """What runs each unit: the plan, the target block, ``--jobs``, the checkpoint, the answers."""
 
     plan: _RecordPlan
     recorded: RecordedTarget
     jobs: int
     checkpoint: RecordCheckpoint
+    answers: Path
 
 
 def _open_checkpoint(
@@ -214,11 +224,13 @@ def _record_metrics(
     records = record_units(
         units, jobs=work.jobs, run=_unit_runner(work, len(samples)), checkpoint=work.checkpoint
     )
+    fresh = [records[unit.key] for unit in units if unit.kind == "sample"]
+    write_record_answers(work.answers, fresh)
     metrics = build_release_metrics_from_records(
         release=coding_agent_playbook.__version__,
         commit=_head_commit(repo_root),
         recorded=work.recorded,
-        samples=[records[unit.key] for unit in units if unit.kind == "sample"],
+        samples=fresh,
         controls=[records[unit.key] for unit in units if unit.kind == "control"],
     )
     return metrics if carry is None else merge_carried(metrics, carry)
@@ -227,10 +239,11 @@ def _record_metrics(
 def _unit_runner(work: _RecordWork, total: int) -> Callable[[RecordUnit], SampleRecord]:
     """Run one unit's ``runs`` and fold them into its record."""
     price = work.recorded.target.price
+    parts = judge_parts(work.recorded.setup)
 
     def run(unit: RecordUnit) -> SampleRecord:
         runs = work.plan.run(
-            unit.sample, unit.index, total, unit.inputs_digest, edition=unit.edition
+            unit.sample, unit.index, total, unit.inputs_digest, edition=unit.edition, parts=parts
         )
         return sample_record(runs, price)
 
@@ -404,17 +417,19 @@ class _RecordPlan:
         inputs: str,
         *,
         edition: Edition | None = None,
+        parts: Mapping[str, object] | None = None,
     ) -> SampleRuns:
         """``sample``'s runs and digests on the current text, or on ``edition`` as a control.
 
         ``inputs`` is the inputs digest of the render checked before the first run.
+        A run on the current text keeps its answers, naming the judge ``parts``.
 
         Each run is reported on stderr as it ends.
         """
         label = sample.id if edition is None else f"{sample.id} (control, edition {edition.tag})"
-        results = []
+        results, answers = [], []
         for run_index in range(self.runs):
-            result = self._run_once(sample, edition)
+            result, judge = self._run_once(sample, edition)
             verdict = "PASS" if result.passed else "FAIL"
             print(
                 f"[{index + 1}/{total}] {label} run {run_index + 1}/{self.runs}: "
@@ -422,6 +437,8 @@ class _RecordPlan:
                 file=sys.stderr,
             )
             results.append(result)
+            if edition is None:  # an edition control keeps no answers (spec D8)
+                answers.append(stored_run(sample, inputs, run_index, result, judge, parts or {}))
         return SampleRuns(
             sample_id=sample.id,
             prompt_id=sample.prompt_id,
@@ -430,15 +447,20 @@ class _RecordPlan:
             sample_digest=sample_digest(sample),
             results=results,
             inputs_digest=inputs,
+            answers=tuple(answers),
         )
 
-    def _run_once(self, sample: EvalSample, edition: Edition | None) -> SampleResult:
+    def _run_once(
+        self, sample: EvalSample, edition: Edition | None
+    ) -> tuple[SampleResult, CapturingJudge | None]:
+        """One run, graded by its own capturing judge (never ``self.judge``, whose ``cli`` is read)."""
+        judge = capturing(self.judge)
         try:
             with tempfile.TemporaryDirectory(prefix="playbook-record-") as tmp:
-                return self.runner.run_sample(
+                result = self.runner.run_sample(
                     sample,
                     Path(tmp) / "scratch",
-                    judge=self.judge,
+                    judge=judge,
                     judge_samples=self.judge_samples,
                     fail_fast=self.fail_fast,
                     edition=edition,
@@ -447,6 +469,7 @@ class _RecordPlan:
             raise RecordRefusedError(
                 f"sample {sample.id!r} could not be scored, so nothing was recorded: {exc}"
             ) from exc
+        return result, judge
 
 
 def _cli_versions(*clis: str | None) -> dict[str | None, str | None]:

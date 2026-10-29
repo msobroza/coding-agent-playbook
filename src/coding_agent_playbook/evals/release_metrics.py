@@ -28,6 +28,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
+from coding_agent_playbook.evals.answers_store import run_to_json
 from coding_agent_playbook.evals.release_metrics_schema import (
     CONTROLS_KEY,
     INPUTS_DIGEST_KEY,
@@ -41,6 +42,7 @@ from coding_agent_playbook.grading.types import CheckResult
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping, Sequence
 
+    from coding_agent_playbook.evals.answers_store import StoredRun
     from coding_agent_playbook.evals.run.harness_runner import SampleResult
     from coding_agent_playbook.evals.setup_digest import SetupParts
     from coding_agent_playbook.evals.targets import EvalTarget
@@ -58,7 +60,8 @@ class SampleRuns:
 
     ``graded`` is :data:`GRADED_HEAD` or an edition tag. ``inputs_digest``
     (``evals.sample_digest.inputs_digest``, #329 ticket 03) covers what the agent
-    received; ``None`` leaves the key out of the entry.
+    received; ``None`` leaves the key out of the entry. ``answers`` holds each
+    run's answers line (spec D8), empty for an edition control.
 
     Example::
 
@@ -73,6 +76,7 @@ class SampleRuns:
     sample_digest: str
     results: Sequence[SampleResult]
     inputs_digest: str | None = None
+    answers: tuple[StoredRun, ...] = ()
 
     @property
     def runs(self) -> int:
@@ -171,6 +175,8 @@ class SampleRecord:
     JSON-ready, so a checkpoint can store it and fold it later as if it had just
     run: ``run_tokens`` and ``run_costs`` (``None``: unknown) feed the summary's
     ``tokens`` and ``cost_usd``, ``reported_models`` the target's ``reported_model``.
+    ``answers`` are the runs' answers lines in their JSON form
+    (``evals.answers_store.run_to_json``), so a resumed record still writes them.
 
     Example::
 
@@ -183,6 +189,7 @@ class SampleRecord:
     run_tokens: tuple[int | None, ...]
     run_costs: tuple[float | None, ...]
     reported_models: tuple[str, ...]
+    answers: tuple[Mapping[str, object], ...] = ()
 
 
 def sample_record(runs: SampleRuns, price: TokenPrice | None) -> SampleRecord:
@@ -200,6 +207,7 @@ def sample_record(runs: SampleRuns, price: TokenPrice | None) -> SampleRecord:
         run_tokens=tuple(_run_tokens(results)),
         run_costs=tuple(_run_costs(results, price)),
         reported_models=tuple(r.reported_model for r in results if r.reported_model is not None),
+        answers=tuple(run_to_json(stored) for stored in runs.answers),
     )
 
 

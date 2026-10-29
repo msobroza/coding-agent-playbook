@@ -121,7 +121,7 @@ def write_answers(path: Path, runs: Iterable[StoredRun]) -> None:
     ordered = sorted(runs, key=lambda stored: (stored.sample, stored.run))
     with gzip.open(path, "wt", encoding="utf-8") as handle:
         for stored in ordered:
-            handle.write(json.dumps(_to_line(stored), sort_keys=True) + "\n")
+            handle.write(json.dumps(run_to_json(stored), sort_keys=True) + "\n")
 
 
 def read_answers(path: Path) -> list[StoredRun]:
@@ -142,14 +142,23 @@ def read_answers(path: Path) -> list[StoredRun]:
 
 def _parsed_line(path: Path, number: int, line: str) -> StoredRun:
     try:
-        return _from_line(json.loads(line))
+        return run_from_json(json.loads(line))
     except (ValueError, KeyError, TypeError, AttributeError) as error:
         raise AnswersError(
             f"{path}:{number}: not an answers line ({error!r}): {line[:80]!r}"
         ) from error
 
 
-def _to_line(stored: StoredRun) -> dict[str, object]:
+def run_to_json(stored: StoredRun) -> dict[str, object]:
+    """``stored`` as one answers line's JSON object; :func:`run_from_json` reads it back.
+
+    A record's checkpoint keeps its runs in this form too, so the format has one owner.
+
+    Example::
+
+        >>> run_to_json(run)["sample"]  # doctest: +SKIP
+        's-a'
+    """
     line: dict[str, object] = {
         "sample": stored.sample,
         "inputs_digest": stored.inputs_digest,
@@ -164,7 +173,14 @@ def _to_line(stored: StoredRun) -> dict[str, object]:
     return line
 
 
-def _from_line(line: Mapping[str, Any]) -> StoredRun:
+def run_from_json(line: Mapping[str, Any]) -> StoredRun:
+    """The run one answers line's JSON object stores; raises ``KeyError``/``TypeError``/``ValueError``.
+
+    Example::
+
+        >>> run_from_json(run_to_json(run)) == run  # doctest: +SKIP
+        True
+    """
     ref = line.get("artifact_ref")
     return StoredRun(
         sample=str(line["sample"]),

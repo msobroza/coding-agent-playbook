@@ -127,6 +127,7 @@ def _line(kind: UnitKind, record: SampleRecord) -> str:
         "run_tokens": list(record.run_tokens),
         "run_costs": list(record.run_costs),
         "reported_models": list(record.reported_models),
+        "answers": list(record.answers),
     }
     return json.dumps(data, sort_keys=True) + "\n"
 
@@ -169,6 +170,8 @@ def _record(row: Mapping[str, Any]) -> tuple[CheckpointKey, SampleRecord] | None
             run_tokens=tuple(row["run_tokens"]),
             run_costs=tuple(row["run_costs"]),
             reported_models=tuple(row["reported_models"]),
+            # A line written before answers were kept (spec D8) has none.
+            answers=tuple(dict(answer) for answer in row.get("answers", ())),
         )
     except (KeyError, TypeError, ValueError):
         return None

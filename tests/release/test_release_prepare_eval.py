@@ -158,6 +158,8 @@ def test_every_release_target_is_recorded_by_the_checkouts_engine(
         _OPUS,
         "--record",
         str(out),
+        "--answers",
+        str(checkout / "catalog" / "releases" / _NEW / "answers" / f"{_OPUS}.jsonl.gz"),
         "--judge",
         "llm",
         "--carry-from",
@@ -667,6 +669,18 @@ def test_prepare_passes_jobs_on_to_the_checkout(tmp_path: Path) -> None:
 
     inner = next(c for c in host.commands if "prepare-checkout" in c)
     assert inner[-3:] == ["--eval", "--jobs", "4"]
+
+
+def test_prepare_passes_answers_into_the_release_dir(tmp_path: Path) -> None:
+    checkout = _checkout(tmp_path)
+    host = _host(claude_opus=_recorded(_OPUS, 0.9), coder=_recorded(_CODER, 0.9))
+
+    assert _run(checkout, host) == 0
+
+    records = [c for c in host.commands if "--record" in c]
+    answers = [c[c.index("--answers") + 1] for c in records]
+    root = checkout / "catalog" / "releases" / _NEW / "answers"
+    assert answers == [str(root / f"{name}.jsonl.gz") for name in (_OPUS, _CODER)]
 
 
 def test_jobs_reach_every_recording(tmp_path: Path, _temp_in_tmp_path: Path) -> None:

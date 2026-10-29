@@ -53,6 +53,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.config.files import CONFIG_FILENAME
+from coding_agent_playbook.evals.answers_store import answers_path
 from coding_agent_playbook.evals.release_metrics_schema import (
     ReleaseMetricsError,
     validate_release_metrics,
@@ -65,7 +66,7 @@ from coding_agent_playbook.evals.release_regression import (
 from coding_agent_playbook.evals.release_regression_format import format_regression_table
 from coding_agent_playbook.evals.target_config import load_eval_settings
 from coding_agent_playbook.exit_two import ExitTwoError
-from coding_agent_playbook.release.manifest import release_dir
+from coding_agent_playbook.release.manifest import RELEASES_DIRNAME, release_dir
 from release_eval_mode import carried_count, changed_only_mode, recorded_changed_only
 from release_tools import ReleaseError
 
@@ -180,7 +181,10 @@ def record_release_metrics(
     with metrics_kept_on_refusal(tools.cwd, version, request):
         results: dict[str, _RecordResult] = {}
         for name in targets.names:
-            recording = _Recording(name, out_dir / f"{name}.json", targets.judged, carry_from)
+            answers = answers_path(tools.cwd / _CATALOG / RELEASES_DIRNAME, version, name)
+            recording = _Recording(
+                name, out_dir / f"{name}.json", answers, targets.judged, carry_from
+            )
             results[name] = _recorded(tools, recording, request, base)
         # The recording names the installed engine's version; the file is this release's.
         recorded = {name: {**r.metrics, "release": version} for name, r in results.items()}
@@ -265,10 +269,14 @@ def _mode(outcome: TargetMetrics) -> str:
 
 @dataclass(frozen=True)
 class _Recording:
-    """One target's record command: where it writes, with a judge, from which baseline."""
+    """One target's record command: where it writes, with a judge, from which baseline.
+
+    ``answers`` is the target's answers file in the release directory (spec D8).
+    """
 
     name: str
     path: Path
+    answers: Path
     judged: bool
     carry_from: Path | None
 
@@ -376,7 +384,8 @@ def _record_argv(checkout: Path, recording: _Recording) -> list[str]:
     carry = [] if recording.carry_from is None else ["--carry-from", str(recording.carry_from)]
     cli = [sys.executable, "-m", "coding_agent_playbook.cli", "eval", "--run", "--all"]
     where = ["--repo-root", str(checkout), "--target", recording.name]
-    return [*cli, *where, "--record", str(recording.path), *judge, *carry]
+    out = ["--record", str(recording.path), "--answers", str(recording.answers)]
+    return [*cli, *where, *out, *judge, *carry]
 
 
 def _checked(
