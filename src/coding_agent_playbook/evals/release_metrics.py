@@ -40,7 +40,7 @@ from coding_agent_playbook.evals.release_metrics_schema import (
 from coding_agent_playbook.grading.types import CheckResult
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping, Sequence
+    from collections.abc import Iterable, Iterator, Mapping, Sequence
 
     from coding_agent_playbook.evals.answers_store import StoredRun
     from coding_agent_playbook.evals.run.harness_runner import SampleResult
@@ -345,8 +345,19 @@ def run_check_scores(result: SampleResult) -> dict[str, float]:
         >>> run_check_scores(result)  # doctest: +SKIP
         {'file-exists': 1.0, 'tests': 0.5}
     """
+    return report_check_scores(result.report.checks)
+
+
+def report_check_scores(layers: Iterable[CheckResult]) -> dict[str, float]:
+    """:func:`run_check_scores` over a report's layer results, for a report with no run.
+
+    Example::
+
+        >>> report_check_scores(report.checks)  # doctest: +SKIP
+        {'gate': 1.0, 'file-exists': 1.0}
+    """
     scores: dict[str, float] = {}
-    for layer in result.report.checks:
+    for layer in layers:
         for check in (layer, *_leaves(layer)):
             if check.status == "run" and check.check_id not in scores:
                 scores[check.check_id] = (

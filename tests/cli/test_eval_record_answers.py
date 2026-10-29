@@ -16,10 +16,11 @@ import pytest
 
 from coding_agent_playbook.cli import main
 from coding_agent_playbook.commands import _eval_record
-from coding_agent_playbook.commands._eval_record_answers import judge_free_checks, rubric_criteria
+from coding_agent_playbook.commands._eval_record_answers import judge_free_checks
 from coding_agent_playbook.config.files import CONFIG_FILENAME
 from coding_agent_playbook.evals.answers_store import read_answers
 from coding_agent_playbook.evals.judge import Judge, JudgeError
+from coding_agent_playbook.evals.rejudge import rubric_criteria
 from coding_agent_playbook.evals.run.fake_runner import FakeRunner
 from coding_agent_playbook.evals.run.harness_runner import SampleResult
 from coding_agent_playbook.evals.targets import TARGET_ENV_VAR

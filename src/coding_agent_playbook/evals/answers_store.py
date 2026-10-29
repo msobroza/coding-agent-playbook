@@ -130,8 +130,18 @@ def judge_parts(setup: SetupParts | None) -> dict[str, object]:
         >>> judge_parts(None)["judge_model"] is None
         True
     """
-    parts = setup.as_dict() if setup is not None else {}
-    return {key: parts.get(key) for key in JUDGE_PART_KEYS}
+    return judge_parts_of(setup.as_dict() if setup is not None else {})
+
+
+def judge_parts_of(setup: Mapping[str, object]) -> dict[str, object]:
+    """The judge parts of a metrics file's ``setup`` dict, by name; ``None`` when absent.
+
+    Example::
+
+        >>> judge_parts_of({"judge_model": "m", "harness": "fake"})["judge_model"]
+        'm'
+    """
+    return {key: setup.get(key) for key in JUDGE_PART_KEYS}
 
 
 def write_answers(path: Path, runs: Iterable[StoredRun]) -> None:

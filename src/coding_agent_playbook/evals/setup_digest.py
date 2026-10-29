@@ -49,6 +49,7 @@ SCORING_TOP_LEVEL: Final = ("evals",)
 SCORING_MODULES_OUTSIDE_PACKAGES: Final = (
     "evals.api_judge",
     "evals.judge",
+    "evals.rejudge",
     "evals.release_metrics",
     "evals.sample",
 )
@@ -121,7 +122,7 @@ SCORING_MODULES: Final = (
     # Score-deciding modules outside SCORING_PACKAGES: the LLM judge on the CLI and
     # over an OpenAI API (prompt, answer parsing, sample averaging, retries), the sample
     # model (default verdict) and the release metrics fold (each entry's passes, mean
-    # score and stdev).
+    # score and stdev), and the re-judge of a stored run (D9).
     *SCORING_MODULES_OUTSIDE_PACKAGES,
 )
 

@@ -23,11 +23,8 @@ from coding_agent_playbook.evals.answers_store import (
     run_from_json,
     write_answers,
 )
+from coding_agent_playbook.evals.rejudge import rubric_criteria
 from coding_agent_playbook.evals.release_metrics import run_check_scores
-from coding_agent_playbook.evals.sample import compile_eval_sample
-from coding_agent_playbook.grading.judged import JudgeCheck
-from coding_agent_playbook.grading.measuring import referenced_metrics
-from coding_agent_playbook.grading.rubric import Rubric
 from coding_agent_playbook.grading.scope import Determinism
 from coding_agent_playbook.grading.types import CheckResult
 
@@ -95,26 +92,6 @@ def stored_run(
         checks=judge_free_checks(result),
         criteria=tuple(_criterion(text, weight, calls) for text, weight in rubric_criteria(sample)),
         judge=dict(parts),
-    )
-
-
-def rubric_criteria(sample: EvalSample) -> tuple[tuple[str, float], ...]:
-    """Each judged rubric criterion of ``sample`` with its weight, in rubric order.
-
-    Read off the compiled check tree, as grading sees it (named rubrics included).
-
-    Example::
-
-        >>> rubric_criteria(sample)[0]  # doctest: +SKIP
-        ('The extracted helper has a name ...', 0.3)
-    """
-    checks = compile_eval_sample(sample).per_trial.checks
-    rubrics = [m for m in referenced_metrics(checks, nested=True) if isinstance(m, Rubric)]
-    return tuple(
-        (check.criterion, check.weight)
-        for rubric in rubrics
-        for check in rubric.checks
-        if isinstance(check, JudgeCheck)
     )
 
 
