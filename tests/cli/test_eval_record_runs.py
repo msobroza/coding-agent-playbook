@@ -71,6 +71,7 @@ def test_resumed_units_are_not_run_again(tmp_path: Path) -> None:
 
 
 def test_a_failure_saves_the_running_units_and_starts_no_queued_one(tmp_path: Path) -> None:
+    b_running = threading.Event()
     failed = threading.Event()
     release = threading.Event()
     ran: list[str] = []
@@ -81,9 +82,12 @@ def test_a_failure_saves_the_running_units_and_starts_no_queued_one(tmp_path: Pa
         with lock:
             ran.append(sample_id)
         if sample_id == "review/a":
+            # Fail only once review/b runs, or the pool may cancel it before it starts.
+            assert b_running.wait(_WAIT)
             failed.set()
             raise RuntimeError("judge refused review/a")
         if sample_id == "review/b":
+            b_running.set()
             assert failed.wait(_WAIT)  # still running when review/a fails
         else:
             assert release.wait(_WAIT)
