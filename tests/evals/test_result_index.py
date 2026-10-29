@@ -43,7 +43,7 @@ def _write(
     setup: dict[str, object] | None = _SETUP,
     reported_model: str = "claude-opus-5-5",
 ) -> Path:
-    data = metrics_file(release, samples, target=target, commit=f"c{release.split('.')[1]}")
+    data = metrics_file(release, samples, target=target, commit=f"c{release.split('.')[2]}")
     data["target"]["reported_model"] = reported_model
     if setup is not None:
         data |= {"setup_digest": "d1", "setup": dict(setup)}
@@ -58,40 +58,40 @@ def _plan(root: Path, inputs: dict[str, str], *, setup: dict[str, object] = _SET
 
 
 def test_a_sample_found_in_an_older_release_is_carried_from_it(tmp_path: Path) -> None:
-    _write(tmp_path, "0.2.0", {"t/a": sample_entry(0.5, inputs="in-a")})
-    _write(tmp_path, "0.3.0", {"t/a": sample_entry(0.9, inputs="in-a-old")})
+    _write(tmp_path, "9.9.2", {"t/a": sample_entry(0.5, inputs="in-a")})
+    _write(tmp_path, "9.9.3", {"t/a": sample_entry(0.9, inputs="in-a-old")})
     plan = _plan(tmp_path, {"t/a": "in-a"})
-    assert plan.carried["t/a"]["measured_in"] == {"release": "0.2.0", "commit": "c2"}
-    assert plan.sources["t/a"] == "0.2.0 (opus)"
+    assert plan.carried["t/a"]["measured_in"] == {"release": "9.9.2", "commit": "c2"}
+    assert plan.sources["t/a"] == "9.9.2 (opus)"
     assert plan.rerun == {}
 
 
 def test_the_newest_release_wins(tmp_path: Path) -> None:
-    _write(tmp_path, "0.10.0", {"t/a": sample_entry(0.9, inputs="in-a")})
-    _write(tmp_path, "0.3.0", {"t/a": sample_entry(0.5, inputs="in-a")})
+    _write(tmp_path, "9.9.10", {"t/a": sample_entry(0.9, inputs="in-a")})
+    _write(tmp_path, "9.9.3", {"t/a": sample_entry(0.5, inputs="in-a")})
     plan = _plan(tmp_path, {"t/a": "in-a"})
-    assert plan.sources["t/a"] == "0.10.0 (opus)"
+    assert plan.sources["t/a"] == "9.9.10 (opus)"
     assert plan.carried["t/a"]["mean_score"] == 0.9
 
 
 def test_the_targets_own_file_wins_within_a_release(tmp_path: Path) -> None:
-    _write(tmp_path, "0.3.0", {"t/a": sample_entry(0.1, inputs="in-a")}, target="alpha")
-    _write(tmp_path, "0.3.0", {"t/a": sample_entry(0.9, inputs="in-a")}, target="opus")
+    _write(tmp_path, "9.9.3", {"t/a": sample_entry(0.1, inputs="in-a")}, target="alpha")
+    _write(tmp_path, "9.9.3", {"t/a": sample_entry(0.9, inputs="in-a")}, target="opus")
     plan = _plan(tmp_path, {"t/a": "in-a"})
-    assert plan.sources["t/a"] == "0.3.0 (opus)"
+    assert plan.sources["t/a"] == "9.9.3 (opus)"
     assert plan.carried["t/a"]["mean_score"] == 0.9
 
 
 def test_another_target_name_with_the_same_setup_is_reused(tmp_path: Path) -> None:
-    _write(tmp_path, "0.3.0", {"t/a": sample_entry(0.4, inputs="in-a")}, target="alpha")
+    _write(tmp_path, "9.9.3", {"t/a": sample_entry(0.4, inputs="in-a")}, target="alpha")
     plan = _plan(tmp_path, {"t/a": "in-a"})
-    assert plan.sources["t/a"] == "0.3.0 (alpha)"
+    assert plan.sources["t/a"] == "9.9.3 (alpha)"
     assert plan.carried["t/a"]["mean_score"] == 0.4
 
 
 def test_a_file_with_another_setup_is_skipped(tmp_path: Path) -> None:
     other = _SETUP | {"harness_version": "2.1.299"}
-    _write(tmp_path, "0.3.0", {"t/a": sample_entry(0.4, inputs="in-a")}, setup=other)
+    _write(tmp_path, "9.9.3", {"t/a": sample_entry(0.4, inputs="in-a")}, setup=other)
     plan = _plan(tmp_path, {"t/a": "in-a"})
     assert plan.full_rerun_reason is not None
     assert "harness_version" in plan.full_rerun_reason
@@ -100,11 +100,11 @@ def test_a_file_with_another_setup_is_skipped(tmp_path: Path) -> None:
 
 
 def test_files_without_digests_or_invalid_are_skipped_and_named(tmp_path: Path) -> None:
-    no_setup = _write(tmp_path, "0.2.0", {"t/a": sample_entry(0.4, inputs="in-a")}, setup=None)
-    invalid = tmp_path / "0.3.0" / "metrics" / "opus.json"
+    no_setup = _write(tmp_path, "9.9.2", {"t/a": sample_entry(0.4, inputs="in-a")}, setup=None)
+    invalid = tmp_path / "9.9.3" / "metrics" / "opus.json"
     invalid.parent.mkdir(parents=True)
     invalid.write_text(json.dumps({"schema_version": 1}), encoding="utf-8")
-    broken = tmp_path / "0.3.0" / "metrics" / "zeta.json"
+    broken = tmp_path / "9.9.3" / "metrics" / "zeta.json"
     broken.write_text("{not json", encoding="utf-8")
     index = ReleaseIndex.load(tmp_path)
     assert index.files == ()
@@ -117,17 +117,17 @@ def test_files_without_digests_or_invalid_are_skipped_and_named(tmp_path: Path) 
 
 def test_entries_without_an_inputs_digest_are_left_out_not_their_file(tmp_path: Path) -> None:
     samples = {"t/old": sample_entry(0.4), "t/b": sample_entry(0.8, inputs="in-b")}
-    path = _write(tmp_path, "0.3.0", samples)
+    path = _write(tmp_path, "9.9.3", samples)
     index = ReleaseIndex.load(tmp_path)
     assert [indexed.path for indexed in index.files] == [path]
     assert index.skipped == ()
     plan = index.plan(target_name="opus", setup=_SETUP, inputs={"t/old": "x", "t/b": "in-b"})
     assert "new sample" in plan.rerun["t/old"]
-    assert plan.sources == {"t/b": "0.3.0 (opus)"}
+    assert plan.sources == {"t/b": "9.9.3 (opus)"}
 
 
 def test_a_file_whose_entries_all_lack_an_inputs_digest_holds_nothing(tmp_path: Path) -> None:
-    _write(tmp_path, "0.3.0", {"t/a": sample_entry(0.4)})
+    _write(tmp_path, "9.9.3", {"t/a": sample_entry(0.4)})
     index = ReleaseIndex.load(tmp_path)
     assert index.skipped == ()
     plan = index.plan(target_name="opus", setup=_SETUP, inputs={"t/a": "in-a"})
@@ -138,7 +138,7 @@ def test_a_file_whose_entries_all_lack_an_inputs_digest_holds_nothing(tmp_path: 
 
 def test_the_full_rerun_reason_lists_three_skips_then_counts_the_rest(tmp_path: Path) -> None:
     for minor in range(5):
-        _write(tmp_path, f"0.{minor}.0", {"t/a": sample_entry(0.4, inputs="in-a")}, setup=None)
+        _write(tmp_path, f"9.9.{minor}", {"t/a": sample_entry(0.4, inputs="in-a")}, setup=None)
     plan = _plan(tmp_path, {"t/a": "in-a"})
     assert plan.full_rerun_reason is not None
     assert plan.full_rerun_reason.count("setup digest") == 3
@@ -147,29 +147,29 @@ def test_the_full_rerun_reason_lists_three_skips_then_counts_the_rest(tmp_path: 
 
 def test_unknown_version_never_matches(tmp_path: Path) -> None:
     unknown = _SETUP | {"harness_version": UNKNOWN_VERSION}
-    _write(tmp_path, "0.3.0", {"t/a": sample_entry(0.4, inputs="in-a")}, setup=unknown)
+    _write(tmp_path, "9.9.3", {"t/a": sample_entry(0.4, inputs="in-a")}, setup=unknown)
     plan = _plan(tmp_path, {"t/a": "in-a"}, setup=unknown)
     assert plan.carried == {}
     assert plan.reruns("t/a")
 
 
 def test_measured_in_survives_a_second_carry(tmp_path: Path) -> None:
-    first = carried_entry(sample_entry(0.4, inputs="in-a"), release="0.1.0", commit="c1")
-    _write(tmp_path, "0.3.0", {"t/a": first})
+    first = carried_entry(sample_entry(0.4, inputs="in-a"), release="9.9.1", commit="c1")
+    _write(tmp_path, "9.9.3", {"t/a": first})
     plan = _plan(tmp_path, {"t/a": "in-a"})
-    assert plan.carried["t/a"]["measured_in"] == {"release": "0.1.0", "commit": "c1"}
-    assert plan.sources["t/a"] == "0.3.0 (opus)"
+    assert plan.carried["t/a"]["measured_in"] == {"release": "9.9.1", "commit": "c1"}
+    assert plan.sources["t/a"] == "9.9.3 (opus)"
 
 
 def test_exclude_leaves_out_the_record_output(tmp_path: Path) -> None:
-    out = _write(tmp_path, "0.4.0", {"t/a": sample_entry(0.4, inputs="in-a")})
+    out = _write(tmp_path, "9.9.4", {"t/a": sample_entry(0.4, inputs="in-a")})
     index = ReleaseIndex.load(tmp_path, exclude=out)
     assert index.files == ()
     assert index.skipped == ()
 
 
 def test_a_new_sample_and_a_changed_digest_have_their_reasons(tmp_path: Path) -> None:
-    _write(tmp_path, "0.3.0", {"t/a": sample_entry(0.4, inputs="in-a")})
+    _write(tmp_path, "9.9.3", {"t/a": sample_entry(0.4, inputs="in-a")})
     plan = _plan(tmp_path, {"t/a": "in-a-2", "t/new": "in-n"})
     assert "inputs digest changed" in plan.rerun["t/a"]
     assert "new sample" in plan.rerun["t/new"]
@@ -177,9 +177,9 @@ def test_a_new_sample_and_a_changed_digest_have_their_reasons(tmp_path: Path) ->
 
 
 def test_reported_model_comes_from_the_newest_source(tmp_path: Path) -> None:
-    _write(tmp_path, "0.2.0", {"t/a": sample_entry(0.4, inputs="in-a")}, reported_model="old")
-    _write(tmp_path, "0.3.0", {"t/b": sample_entry(0.4, inputs="in-b")}, reported_model="new")
-    _write(tmp_path, "0.4.0", {"t/c": sample_entry(0.4, inputs="x")}, reported_model="unused")
+    _write(tmp_path, "9.9.2", {"t/a": sample_entry(0.4, inputs="in-a")}, reported_model="old")
+    _write(tmp_path, "9.9.3", {"t/b": sample_entry(0.4, inputs="in-b")}, reported_model="new")
+    _write(tmp_path, "9.9.4", {"t/c": sample_entry(0.4, inputs="x")}, reported_model="unused")
     plan = _plan(tmp_path, {"t/a": "in-a", "t/b": "in-b", "t/c": "in-c"})
     assert set(plan.carried) == {"t/a", "t/b"}
     assert plan.reported_model == "new"
