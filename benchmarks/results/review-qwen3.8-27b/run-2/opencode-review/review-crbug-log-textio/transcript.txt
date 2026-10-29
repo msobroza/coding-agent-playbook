@@ -1,0 +1,48 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+Verified independently (Python 3.13 via `uv run`) — all findings confirmed. Final review of the `Service.stop()` change:
+
+## Blocker: file-based logs are never closed — the `TextIO` branch is dead code
+
+`src/service.py:37` — `isinstance(self.log_output, TextIO)` is **always `False`** for a real file. `typing.TextIO` is a hint-only marker class; actual files are `io.TextIOWrapper`/`io.BufferedWriter` instances, which subclass `io.IOBase`, not `typing.TextIO` (same trap applies to `typing.IO`). Confirmed:
+
+```
+open("/dev/null","a+") isinstance TextIO → False
+open("/dev/null","a+") isinstance io.IOBase → True
+```
+
+Consequence: `close()` never runs for any file object, so after `stop()` the log file stays open in both cases the change is meant to fix:
+- `log_output="/path"` → `open(path, "a+")` at `src/service.py:21` (the documented primary case)
+- `log_output=None` (default) → `open(os.devnull, "wb")` at `src/service.py:23`
+
+I ran it: `log_output.closed == False` after `stop()` in both cases. Only the fd path (`isinstance(..., int)`, `src/service.py:39`) works. Fix:
+
+```python
+elif isinstance(self.log_output, io.IOBase):   # or hasattr(self.log_output, "close")
+    self.log_output.close()
+```
+
+The `typing.TextIO` import at `src/service.py:8` then becomes unused.
+
+## Low: double `stop()` on an fd log now raises `OSError`
+
+The old code wrapped close in `try/except Exception: pass`; the new code doesn't, and `stop()` never resets `self.log_output` after closing. A second `stop()` calls `os.close(fd)` again → `OSError: [Errno 9] Bad file descriptor` (reproduced). Only bites when `stop()` is called more than once (e.g., explicit `stop()` plus a shutdown/`finally` handler); file-object `close()` is idempotent so only the fd path is affected. Guard with a sentinel if idempotent `stop()` is desired.
+
+## Test gap
+
+`tests/test_service.py:22` only covers the fd path — the one case that works — which is why the suite passes green while the file case is broken. A test asserting a path-based or default log is closed after `stop()` would have caught the blocker.
+
+(Pre-existing, unchanged: `PIPE` is the literal int `1`, so `self.log_output != PIPE` at `src/service.py:36` also skips a real `fd=1` log — true of the old code too, not a regression.)
+
+Net: the fd half of the change is correct; the file half — the headline of the commit message — does nothing.

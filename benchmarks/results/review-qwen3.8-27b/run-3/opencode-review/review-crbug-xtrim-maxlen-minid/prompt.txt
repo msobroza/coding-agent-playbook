@@ -1,0 +1,1 @@
+review my change in CHANGE.diff (it is already applied to the working tree). It adds the MINID trimming strategy and the LIMIT option to xtrim, following Redis 6.2's syntax: XTRIM key <MAXLEN | MINID> [= | ~] threshold [LIMIT count].

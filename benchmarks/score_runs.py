@@ -3,17 +3,18 @@
 For each run ``run_agents.py`` saved, this rebuilds the engine's ``Baseline`` and
 ``Candidate`` from the kept working tree and transcript, then calls the engine's
 own :func:`score` with full scoring (no fail-fast: the judge grades every run,
-even one whose deterministic gate failed). The default judge is the engine's
-``LLMJudge`` running Opus 5.5 at medium effort through the ``claude`` CLI in
-``--bare`` mode (no hooks, plugins, CLAUDE.md or tools), with ``ANT_API_KEY`` or
-the ``ANTHROPIC_API_KEY`` from ``.env``. ``--judge config`` grades with the
-repo's ``[evals.judge]`` instead (its endpoint, model and reasoning effort), the
-judge ``playbook eval --record`` uses, so a benchmark run compares with a record.
+even one whose deterministic gate failed). The default judge is the repo's
+``[evals.judge]`` (its endpoint, model and reasoning effort) with 3 samples per
+criterion, the judge ``playbook eval --record`` uses, so a benchmark run compares
+with a release record. ``--judge opus`` grades with the engine's ``LLMJudge``
+running Opus 5.5 at medium effort through the ``claude`` CLI in ``--bare`` mode
+(no hooks, plugins, CLAUDE.md or tools), with ``ANT_API_KEY`` or the
+``ANTHROPIC_API_KEY`` from ``.env``.
 
 Usage::
 
     python benchmarks/score_runs.py
-    python benchmarks/score_runs.py --judge config --judge-samples 3
+    python benchmarks/score_runs.py --judge opus --judge-samples 1
     python benchmarks/score_runs.py --stub-judge   # free fixed 0.5 judge, a dry run
 """
 
@@ -299,11 +300,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--judge",
-        choices=("opus", "config"),
-        default="opus",
+        choices=("config", "opus"),
+        default="config",
         help="opus: Opus 5.5 through the claude CLI; config: the repo's [evals.judge]",
     )
-    parser.add_argument("--judge-samples", type=int, default=1)
+    parser.add_argument("--judge-samples", type=int, default=3)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--force", action="store_true", help="re-score scored runs")
     return parser.parse_args(argv)

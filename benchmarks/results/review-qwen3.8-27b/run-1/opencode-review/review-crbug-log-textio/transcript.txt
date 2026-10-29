@@ -1,0 +1,83 @@
+
+
+
+
+
+
+
+
+
+
+
+The review's central finding needs empirical verification before I act. Let me confirm the `typing.TextIO` isinstance bug on the project's own Python.
+
+
+
+
+Confirmed: `isinstance(..., typing.TextIO)` is always `False`. Now let me reproduce the actual fd leak against the patched tree to confirm the bug's real-world effect.
+
+
+
+
+Both leaks confirmed against the patched tree:
+- **str path log** (`TextIOWrapper`): NOT closed after `stop()` — LEAK
+- **default devnull log** (`BufferedWriter`): NOT closed after `stop()` — LEAK
+- **int fd log**: closed correctly
+
+The review is right. `isinstance(x, typing.TextIO)` is always `False`, so the `TextIO` branch is dead code and every file-based log leaks its fd. Let me check the project config before fixing.
+
+
+
+
+No lint/mypy, just pytest. Now I'll fix the bug: switch from `typing.TextIO` to `io.IOBase`, and restore a guard so a close failure can't abort driver termination (matching the original's defensive intent).
+
+
+
+
+
+
+
+Now add regression tests for the file cases (the ones that were leaking), so the fix is locked in.
+
+
+
+
+Now run the full test suite to verify the fix and the new regression tests.
+
+
+
+
+The fix works — `handle.closed` is now `True`. My `fileno() == -1` assertion was wrong: Python raises `ValueError` on `fileno()` of a closed text/binary wrapper rather than returning `-1`. The correct regression signal is `.closed`. Let me fix the tests.
+
+
+
+
+
+
+
+Tests look good. Running the suite now:
+
+
+
+
+All 6 tests pass. Re-running the leak reproduction to confirm every log type is now closed:
+
+
+
+
+All cases verified. Final check of the fixed file:
+
+
+
+
+Done. Summary of the review and what I did:
+
+**Review findings (verified empirically on the project's Python 3.13):**
+- **High:** `isinstance(self.log_output, TextIO)` used `typing.TextIO`, which is unrelated to `io.TextIOBase` — it's always `False` for real streams. The file-log branch was dead code: str-path logs and the default `/dev/null` log both stayed open after `stop()` (fd leak). Only the `int` fd case worked.
+- **Low:** the close ran unguarded *before* `process.terminate()`; a close failure (e.g. double `stop()` on an fd) would abort driver termination.
+
+**Fixes applied:**
+- `src/service.py:39-43` — check `io.IOBase` instead of `typing.TextIO` (covers `TextIOWrapper`, `BufferedWriter`, etc.), with a `try/except (OSError, ValueError)` guard so termination always proceeds.
+- `tests/test_service.py:30-51` — added regression tests: path log, passed open file, and default devnull log are all closed after `stop()`.
+
+**Verification:** all 6 tests pass; direct repro confirms every log type now closes, double-stop is harmless, and a real `start()`/`stop()` cycle terminates the process cleanly.

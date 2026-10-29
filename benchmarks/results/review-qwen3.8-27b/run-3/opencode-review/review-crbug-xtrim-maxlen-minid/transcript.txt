@@ -1,0 +1,77 @@
+
+
+
+
+
+
+The review found two bugs in the `xtrim` change:
+
+1. **No validation when both `maxlen` and `minid` are `None`** — produces malformed commands like `XTRIM events ~` or `XTRIM events` (syntax error on server).
+2. **`maxlen` and `minid` are not mutually exclusive** — passing both generates `XTRIM events MAXLEN MINID ~ 100 1700000000000-0`, which Redis rejects.
+
+Let me fix both.
+
+
+
+
+
+Now I'll fix both bugs. I'll add validation requiring exactly one of `maxlen`/`minid`:
+
+
+
+
+Now I'll add tests for the new validation:
+
+
+
+
+
+
+
+The tests were added but I need to add the `pytest` import:
+
+
+
+
+Let me verify the changes and run the tests:
+
+
+
+
+There's a pre-existing Python 3.8 compatibility issue with `collections.abc.Callable`. Let me fix it so tests can run:
+
+
+
+
+Let me verify both files are correct now and run the tests:
+
+
+
+
+
+Both files look good. Now let me run the tests:
+
+
+
+
+Python 3.8 doesn't support `int | None` syntax. Let me add the future import to fix this pre-existing compatibility issue:
+
+
+
+
+
+
+
+All 6 tests pass. Let me confirm the final state of the source file is clean:
+
+
+
+
+Все исправления применены и проверены:
+
+1. **Без стратегии** — `xtrim("events")` теперь бросает `ValueError` вместо того, чтобы собирать `XTRIM events ~` (src/streams.py:38-39).
+2. **Две стратегии сразу** — `xtrim("events", 100, minid=...)` теперь бросает `ValueError` вместо `XTRIM events MAXLEN MINID ...` (src/streams.py:40-41).
+3. Добавлены два теста на новую валидацию (`test_xtrim_requires_a_strategy`, `test_xtrim_rejects_both_strategies`) + импорт `pytest`.
+4. Попутно устранены две проблемы совместимости с Python 3.8, из-за которых тесты не запускались: `from __future__ import annotations` (для синтаксиса `int | None`) и `typing.Callable` вместо `collections.abc.Callable`.
+
+Все 6 тестов проходят.

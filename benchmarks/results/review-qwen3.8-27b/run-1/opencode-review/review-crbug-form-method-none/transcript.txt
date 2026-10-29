@@ -1,0 +1,38 @@
+The subagent's review found a bug. Let me verify its findings myself before reporting.
+
+
+Both findings confirmed. Let me check the test file and run the test suite.
+
+
+## Review of CHANGE.diff
+
+The subagent's review is accurate; I verified all findings against the working tree. 6/6 tests pass, but:
+
+**Bug (medium) — `method=None` crashes with `AttributeError`** · `src/forms.py:43`
+
+```python
+method = kwargs.pop("method", form.method).upper()
+```
+
+`.upper()` now runs before `Request.__post_init__`, so a `None` method raises `AttributeError: 'NoneType' object has no attribute 'upper'`. Verified:
+
+```
+FormRequest.from_form(Form(action='/search', method=None))  -> AttributeError
+FormRequest.from_form(Form(...), method=None)               -> AttributeError
+```
+
+This is a realistic input, not hypothetical: a `<form>` without a `method` attribute is common HTML (spec default is GET), and a parser would naturally produce `method=None`. It's also a regression — the old line passed `None` into `__post_init__`, which handled it via `self.method = (self.method or "GET").upper()` (src/forms.py:27). A missing method is exactly the "GET for anything else" case the change intends.
+
+Fix — same idiom already used at src/forms.py:27:
+
+```python
+method = (kwargs.pop("method", form.method) or "GET").upper()
+```
+
+**Behavior change (minor, confirm intent)** · `src/forms.py:44-45`
+
+The whitelist also clamps the explicit keyword override, not just the parsed form's method. Verified: `from_form(LOGIN, method="PUT")` used to yield PUT, now silently yields GET. The docstring says the keyword "override[s] the form's" — a caller explicitly requesting a non-form method gets a different method than asked, with no warning. If sanitizing the override is intentional, it deserves a docstring note and a test; if only browser semantics on the parsed form, the check should apply to `form.method` only.
+
+**Minor**
+- New tests cover the happy path and misspelled method well, but neither the `None` case (the bug) nor override clamping is covered.
+- `valid_form_methods` is a mutable class-level list (src/forms.py:33); a `tuple` would be the conventional immutable choice. Not blocking.

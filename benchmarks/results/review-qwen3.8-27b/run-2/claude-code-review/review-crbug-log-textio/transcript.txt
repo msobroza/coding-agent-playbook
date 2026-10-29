@@ -1,0 +1,52 @@
+All hypotheses verified empirically. Now I have enough to complete the 8 angles. Let me run through them concisely:
+
+**Angle A (line-by-line):** `subprocess.DEVNULL` is the int sentinel `-3` (verified: `PIPE=-1, DEVNULL=-3`); `isinstance(-3, int)` is True, so `Service(log_output=DEVNULL).stop()` reaches `os.close(-3)` → `OSError: [Errno 9] Bad file descriptor` (verified `os.close(-3)` raises). The diff's `!= PIPE` check doesn't protect against it. Also `open(os.devnull, "wb")` returns `BufferedWriter` — verified not a `TextIO`/`TextIOBase` instance, so the default-case log is never closed.
+
+**Angle B (removed behavior):** (1) removed `not (self.log_output == DEVNULL)` guard → the F1 crash; (2) removed `try/except Exception: pass` → verified double `os.close` on same fd raises EBADF, so `stop()` is no longer idempotent; (3) `hasattr(close)` narrowed to `isinstance(TextIO)` → binary streams leak. Note the old `self.log_file.close()` was itself a bug (undefined attribute, swallowed), so the old code never actually closed anything — the new code genuinely closes, just with gaps.
+
+**Angle C (cross-file):** No callers besides tests; `start()` passes `log_output` straight to `Popen`, which accepts the `-3` DEVNULL sentinel — so DEVNULL is a valid end-to-end input and only `stop()` breaks. All three tests pass under the new code; `test_stop_without_start_is_harmless` still fine (PIPE skipped).
+
+**Reuse/Simplification/Efficiency:** no codebase helpers to reuse (2-file fixture); no wasted work; `bool`-is-`int` edge is unrealistic — nothing beyond the above.
+
+**Altitude:** fix is at close-time with per-representation `isinstance` dispatch instead of normalizing `log_output` in `__init__` — every representation that doesn't match a branch (DEVNULL sentinel, binary IO, wrapper streams) silently skips or crashes.
+
+**Conventions:** no CLAUDE.md in the repo (glob returned nothing; user-level dir inaccessible), so nothing.
+
+Final findings:
+
+```json
+[
+  {
+    "file": "src/service.py",
+    "line": 40,
+    "summary": "stop() crashes with OSError for log_output=subprocess.DEVNULL because the sentinel is the int -3 and os.close(-3) is called on it",
+    "failure_scenario": "subprocess.DEVNULL == -3 (int), PIPE == -1. Service('chromedriver', log_output=DEVNULL) stores -3; start() works (Popen accepts -3), but stop() passes the `!= PIPE` check and `isinstance(-3, int)`, then calls os.close(-3), which raises OSError [Errno 9] Bad file descriptor (verified). The deleted `not (self.log_output == DEVNULL)` guard existed for exactly this case; every devnull-logging caller's cleanup path now crashes."
+  },
+  {
+    "file": "src/service.py",
+    "line": 37,
+    "summary": "Binary file objects are never closed by stop(), including the default devnull log opened in 'wb' mode, leaking one fd per stop()",
+    "failure_scenario": "The default constructor does open(os.devnull, 'wb'), which returns io.BufferedWriter, not TextIO; callers can also pass any binary stream (log_output is typed IO[Any]). isinstance(log_output, TextIO) is False and it is not an int, so stop() closes nothing: every Service('chromedriver').stop() leaks an fd, and a driver restart loop (start/stop cycles) accumulates leaked fds until the process hits its descriptor limit and open() fails with EMFILE. The old hasattr(log_output, 'close') check closed these."
+  },
+  {
+    "file": "src/service.py",
+    "line": 40,
+    "summary": "Removing try/except Exception makes stop() no longer idempotent: a second stop() on an fd log raises OSError (EBADF)",
+    "failure_scenario": "With log_output an int fd, the first stop() succeeds via os.close(fd); a second stop() (e.g. a shutdown handler plus an explicit stop, or a retry after process.wait(timeout=10) raised TimeoutExpired while self.process is still set and the log is already closed) calls os.close(fd) again and raises OSError [Errno 9] Bad file descriptor (verified). The old code swallowed close errors, so repeated or externally-interfered closes were harmless; now the exception propagates to the caller."
+  },
+  {
+    "file": "src/service.py",
+    "line": 36,
+    "summary": "Fix is at the wrong depth: stop() dispatches on each representation via isinstance instead of normalizing log_output in __init__, so unhandled representations silently skip or crash",
+    "failure_scenario": "The heterogeneous int | IO[Any] | PIPE | DEVNULL union is checked ad hoc at close time: the DEVNULL sentinel (-3) crashes, binary IO is skipped, and any future representation (e.g. an os.PathLike path passed around, a wrapper stream, a NamedTemporaryFile in binary mode) would be silently not closed without a new isinstance branch. Normalizing in __init__ — store one owned closable resource (file object or a small holder for an owned fd) and reject/convert PIPE/DEVNULL sentinels upfront — makes stop() a single unconditional close, removes the sentinel comparisons, and lets the int | IO[Any] union collapse."
+  },
+  {
+    "file": "tests/test_service.py",
+    "line": 54,
+    "summary": "New test covers only the fd case; the three regressions introduced by this change (DEVNULL crash, binary/default log leak, double-stop OSError) are untested",
+    "failure_scenario": "test_stop_closes_a_file_descriptor_log passes, but there is no test for Service(log_output=DEVNULL).stop() (which now raises OSError), no test asserting the default log_output=None (devnull 'wb' BufferedWriter) is closed after stop() (it is not), and no test that stop() is safe to call twice on an fd log. The fix therefore ships with its two crash/leak paths undetected; each would need a new test to be caught."
+  }
+]
+```
+
+Notes on verification (all run against the system Python where semantics match; the project targets 3.13 per `pyproject.toml`/venv): `subprocess.DEVNULL == -3` and `PIPE == -1`; `os.close(-3)` and double `os.close` on a closed pipe fd both raise `OSError [Errno 9]`; `open(os.devnull, 'wb')` is `io.BufferedWriter` and is not an instance of `TextIOBase`/`TextIO`. No CLAUDE.md applies (none in the repo), so the conventions angle produced no findings.

@@ -1,0 +1,34 @@
+All 8 angles are complete. Summary of the review process:
+
+**Angle A (line-by-line diff scan):** Every added line in `format_csv` and `main` was checked — the `--csv` implementation is correct (header row, two-decimal totals, trailing newline consistent with the table path's `print`). The `main()` function only registers the `ledger` positional and `--csv`; the second requested flag, `--since`, is never registered.
+
+**Angle B (removed-behavior):** The replaced one-liner `print(format_table(monthly_totals(read_ledger(args.ledger))))` is fully preserved in the new `else` branch — nothing regressed. The only missing behavior is the never-added `--since` filtering.
+
+**Angle C (cross-file tracer):** `main` and `format_csv` callers (`__main__`, tests) are consistent. Grep for `since|cutoff|after|before|filter` across `src/` and `tests/` returns nothing — no date-filtering logic exists anywhere in the codebase, and no test references `--since`.
+
+**Reuse:** The two-decimal cents expression `f"{cents / 100:.2f}"` is duplicated between unchanged `format_table` (line 30) and new `format_csv` (line 39).
+
+**Simplification / Efficiency:** No issues — the refactor to compute `totals` once is actually a small improvement; single pass over data.
+
+**Altitude:** No bandaid; the gap is a missing feature, and the right place to implement it is filtering entries by `day >= since` between `read_ledger` and `monthly_totals`.
+
+**Conventions:** No CLAUDE.md exists in the repo (verified); nothing to check against.
+
+The implemented `--csv` half is correct; the change simply drops the `--since YYYY-MM-DD` half of the request. I will not pad the list with invented issues.
+
+```json
+[
+  {
+    "file": "src/report.py",
+    "line": 46,
+    "summary": "The requested --since YYYY-MM-DD option was never implemented: main() only registers --csv, and no date-filtering exists in read_ledger, monthly_totals, or format_csv, so half of the user's request is dropped.",
+    "failure_scenario": "User runs `report.py ledger.csv --since 2024-02-01` as requested: argparse exits with code 2 and \"unrecognized arguments: --since 2024-02-01\" instead of printing a report with entries dated before 2024-02-01 excluded. No test covers it because it doesn't exist. Fix: add `parser.add_argument(\"--since\", type=date.fromisoformat, ...)` and filter entries with `day >= since` between read_ledger and monthly_totals."
+  },
+  {
+    "file": "src/report.py",
+    "line": 39,
+    "summary": "format_csv duplicates the cents-to-decimal formatting `f\"{cents / 100:.2f}\"` already used in format_table (line 30); a shared format_cents() helper should be used by both.",
+    "failure_scenario": "If the money formatting ever changes (e.g. locale-aware decimals, a currency prefix, or different rounding), the table and CSV outputs drift apart because the expression is maintained in two places; the two renderings of the same report can silently disagree."
+  }
+]
+```

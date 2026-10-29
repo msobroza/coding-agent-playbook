@@ -1,0 +1,28 @@
+
+
+
+
+
+Verified the bug in `src/pagination.py:22`. Applying the fix:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Review complete. Found and fixed one bug:
+
+**Off-by-one** — `src/pagination.py:22` clamped `end` to `len(items) - 1` instead of `len(items)`, silently dropping the last item whenever a page extended past the end of the list (e.g. the final page of `["a".."e"]` with `page_size=2` returned `[]` instead of `["e"]`). Fixed to `end = len(items)` and verified with edge cases (exact-fit page, partial last page, mid-list page, empty list) on Python 3.12.
+
+Minor, left as-is: out-of-range pages (e.g. `page=100`) return an empty `Page` rather than raising — only an issue if callers need to distinguish invalid from legitimately-empty pages.

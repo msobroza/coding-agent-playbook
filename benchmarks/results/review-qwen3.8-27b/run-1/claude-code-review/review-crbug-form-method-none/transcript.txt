@@ -1,0 +1,44 @@
+Both suspected crash paths confirmed at runtime, and the full suite (6 tests) passes despite the regression. All 8 finder angles completed:
+
+- **A (line-by-line):** line 43 `.upper()` derefs `None`; line 33 mutable class list; line 41 `url or form.action` is pre-existing, not re-exposed.
+- **B (removed behavior):** old code relied on `Request.__post_init__`'s `(self.method or "GET")` None-tolerance; the diff uppercases before the constructor and drops that tolerance — same defect as A, deduped into finding 1.
+- **C (cross-file):** only `tests/test_forms.py` calls `from_form`; no other call sites break.
+- **Reuse / Efficiency:** nothing.
+- **Simplification:** duplicated "missing/invalid ⇒ GET" normalization (finding 5); mutable list (finding 4).
+- **Altitude:** `Form.method` models an optional HTML attribute as required `str` (finding 3).
+- **Conventions:** no CLAUDE.md exists at repo root or in any ancestor directory — nothing.
+
+```json
+[
+  {
+    "file": "src/forms.py",
+    "line": 43,
+    "summary": "from_form crashes with AttributeError when the method is None instead of falling back to GET as browsers do",
+    "failure_scenario": "FormRequest.from_form(Form(action='/search', method=None)) — a <form> with no method attribute, which HTML parsers represent as None — raises AttributeError: 'NoneType' object has no attribute 'upper' on line 43, before the 'not in valid_form_methods' guard can run; FormRequest.from_form(LOGIN, method=None) crashes the same way. Pre-change, Request.__post_init__ handled this via '(self.method or \"GET\").upper()' (documented: 'a missing method means GET'), so this is a regression on exactly the most common real-world case the change claims to normalize to GET. Fix: method = (kwargs.pop('method', form.method) or 'GET').upper()."
+  },
+  {
+    "file": "tests/test_forms.py",
+    "line": 23,
+    "summary": "New tests never exercise method=None, so the suite passes while the shipped code crashes on a form without a method attribute",
+    "failure_scenario": "test_valid_form_methods_are_kept only covers lowercase GET/POST and test_an_unknown_form_method_falls_back_to_get only covers the string 'UNKNOWN'; a form lacking the method attribute (None) is untested, so all 6 tests pass green while from_form raises AttributeError on the exact case the change description says becomes GET. A test like FormRequest.from_form(Form(action='/s', method=None)).method == 'GET' would have caught it."
+  },
+  {
+    "file": "src/forms.py",
+    "line": 14,
+    "summary": "Form models the HTML method attribute (optional, browser-defaults to GET) as a required str, so the crash is rooted in the data model, not just from_form",
+    "failure_scenario": "A parser of a <form> without a method attribute must violate the declared 'method: str' type to record the reality (passing None), so every consumer that trusts the annotation (or mypy/type checkers) sees a contract that doesn't match HTML. The deeper fix is 'method: str | None = None' (or default 'GET') on Form plus normalizing None in one place, rather than patching the symptom in from_form while leaving the model wrong."
+  },
+  {
+    "file": "src/forms.py",
+    "line": 33,
+    "summary": "valid_form_methods is a mutable class-level list, a shared-mutable-state anti-pattern for a fixed vocabulary",
+    "failure_scenario": "Any code (or a subclass) doing FormRequest.valid_form_methods.append('PUT') silently mutates the validation set for every FormRequest process-wide; the test file also parametrizes over this live list, so a mutation at runtime changes what gets tested. A class-level tuple ('GET', 'POST') — or frozenset for the membership check — makes the vocabulary immutable at zero cost."
+  },
+  {
+    "file": "src/forms.py",
+    "line": 43,
+    "summary": "'Missing/invalid method means GET' normalization now lives in two places that can diverge (from_form lines 43-45 and Request.__post_init__ line 27)",
+    "failure_scenario": "from_form uppercases and coerces invalid methods to GET, then Request.__post_init__ independently re-applies 'or GET' + upper(); today both agree, but if the fallback in from_form is changed (e.g. to a different default or to raise) the identical silent-coercion rule in __post_init__ still applies to direct Request()/FormRequest() construction, giving the same input different behavior depending on construction path. Naming one normalization point (or documenting why both exist) removes the duplicated source of truth."
+  }
+]
+```

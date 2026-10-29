@@ -1,0 +1,26 @@
+
+
+
+
+
+
+
+
+
+
+The sub-agent's findings check out against the code. Let me verify the bug empirically before finalizing the review.
+
+
+
+
+
+
+
+
+
+
+Verified the review: high-severity bug at `src/netrc_auth.py:17` — `NETRC` is treated like a filename under `~/`, so `NETRC=/abs/path` resolves to `~/abs/path` and silently returns `None`; I reproduced this.
+
+The test at `tests/test_netrc_auth.py:34` only checks a bare filename, masking the issue; add an absolute-path `NETRC` test.
+
+Fix: when `NETRC` is set, use it as a path directly with `os.path.expanduser(netrc_file)`, and guard against empty strings.

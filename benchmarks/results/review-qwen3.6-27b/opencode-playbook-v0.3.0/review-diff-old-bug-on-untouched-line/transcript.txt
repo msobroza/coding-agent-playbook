@@ -1,1 +1,0 @@
-! permission requested: external_directory (~/. cache/playbook-bench/review-qwen3.6-27b/opencode-playbook/review-diff-old-bug-on-untouched-line/scratch/*); auto-rejecting

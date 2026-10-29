@@ -1,0 +1,40 @@
+I've gathered everything needed: the review target is `CHANGE.diff` (already applied; the working tree is clean, and the single `setup baseline` commit contains both the fixture and the applied change). I read the full current `src/report.py` and `tests/test_report.py`, verified the applied state matches the diff, checked `pyproject.toml`, and checked the governing conventions (`~/.claude/CLAUDE.md` + `RTK.md`; no repo- or directory-level CLAUDE.md exists).
+
+Findings from the 8 angles:
+
+- **Angle A (line-by-line):** The diff adds only `--csv`. The user's request had two parts — `--csv` **and** `--since YYYY-MM-DD` (drop entries dated before that day). No `--since` argument, no date filtering in `read_ledger`/`monthly_totals`/`main`, no tests. That's the dominant finding. The rest of the new code is correct: `format_csv` output matches the tests byte-for-byte, `lineterminator="\n"` avoids CRLF, the CSV path ends with a newline via `sys.stdout.write` (consistent with `print` on the table path), and `cents/100` with `.2f` rounds correctly for all realistic cent values (float error only matters past ~$45 trillion/month, noted as a low-severity correctness note since integer arithmetic is available and the same pattern is duplicated).
+- **Angle B (removed behavior):** The old `print(format_table(monthly_totals(read_ledger(...))))` line is fully preserved in the `else` branch; nothing else removed.
+- **Angle C (cross-file):** `main`'s signature is unchanged; the `__main__` guard and the new test call it correctly; no broken callers/callees.
+- **Reuse:** `format_csv` (line 39) re-implements the cents→dollars string conversion that `format_table` (line 30) already does — the global CLAUDE.md has an explicit DRY rule about this.
+- **Simplification / Efficiency:** Nothing material (the `if/else` computes `totals` once; `io.StringIO` + `csv.writer` is the standard in-memory CSV idiom).
+- **Altitude:** No bandaid; the only altitude failure is scope — one of two requested features is absent entirely.
+- **Conventions:** `~/.claude/CLAUDE.md` says "Docstring public functions with intent + one usage example." — the new public function `format_csv` has intent but no usage example. (Other rules — type hints, function length, every-new-function-tested — are satisfied.)
+
+```json
+[
+  {
+    "file": "src/report.py",
+    "line": 46,
+    "summary": "The --since YYYY-MM-DD option the user requested is completely missing — the diff only implements --csv, dropping half of the request.",
+    "failure_scenario": "Running `python src/report.py ledger.csv --since 2024-02-01` exits with argparse error \"unrecognized arguments: --since 2024-02-01\"; no date filtering exists anywhere (read_ledger, monthly_totals, main all process every entry), and no test covers date-based exclusion, so the feature does not exist at all."
+  },
+  {
+    "file": "src/report.py",
+    "line": 39,
+    "summary": "format_csv formats money via float division (cents / 100), which loses sub-cent precision for very large totals and can mis-round the printed value.",
+    "failure_scenario": "A monthly total with |cents| >= ~4.5e15 (a ~$45 trillion month) makes cents/100 land within float epsilon of a .005 rounding boundary, so f\"{cents/100:.2f}\" prints the wrong two-decimal value; exact integer arithmetic (cents // 100 and abs(cents) % 100) or Decimal would be exact."
+  },
+  {
+    "file": "src/report.py",
+    "line": 39,
+    "summary": "The cents-to-two-decimal-string conversion is duplicated between format_csv (line 39) and format_table (line 30) instead of a shared helper.",
+    "failure_scenario": "Concrete cost per ~/.claude/CLAUDE.md (\"DRY: extract duplicated logic to a single source of truth (an agent may fix one copy and miss the rest)\"): fixing a formatting defect such as the float-division issue above requires editing both f-strings; an agent that patches only format_csv leaves format_table wrong."
+  },
+  {
+    "file": "src/report.py",
+    "line": 34,
+    "summary": "format_csv's docstring has intent but no usage example, violating the global CLAUDE.md docstring rule.",
+    "failure_scenario": "~/.claude/CLAUDE.md states \"Docstring public functions with intent + one usage example.\"; the new public function format_csv (line 34) documents intent only (\"The report as CSV with a ``month,total`` header...\") and no call example, so the stated convention is broken for new code in this diff."
+  }
+]
+```

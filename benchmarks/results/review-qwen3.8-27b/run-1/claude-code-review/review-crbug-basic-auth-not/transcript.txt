@@ -1,0 +1,43 @@
+All 8 finder angles are complete (A: line-by-line, B: removed-behavior, C: cross-file/callers, Reuse, Simplification, Efficiency, Altitude, Conventions). Key confirmations from the working tree:
+
+- `python3 -m py_compile src/auth.py` fails: `SyntaxError: invalid syntax` at line 16 — `!` is not a Python operator (the code needs `not`). The module is unimportable, so all three tests in `tests/test_auth.py` die at collection and the auth check never runs.
+- `hmac.compare_digest('adémin', 'admin')` raises `TypeError: comparing strings with non-ASCII characters is not supported` (verified on this 3.12-era interpreter) — a non-ASCII Basic-auth request raises instead of returning `False`.
+- `or` short-circuits the password comparison when the username is wrong (1 vs 2 constant-time calls), and `compare_digest` itself returns early on length mismatch — both are residual timing channels against the PR's stated goal.
+- Only caller is the test file; no CLAUDE.md exists in the repo (no conventions findings). Reuse/Simplification/Efficiency angles produced nothing beyond the above.
+
+```json
+[
+  {
+    "file": "src/auth.py",
+    "line": 16,
+    "summary": "SyntaxError: `!` is not a Python negation operator (should be `not`), so the module no longer parses or imports at all.",
+    "failure_scenario": "Verified with py_compile: `SyntaxError: invalid syntax` at line 16 (line 17 is the same defect). Every import of src.auth fails — all three tests in tests/test_auth.py error at collection and the admin endpoint crashes on startup, so the 'constant-time' fix is dead code and the endpoint is completely broken, not just timing-leaky."
+  },
+  {
+    "file": "src/auth.py",
+    "line": 16,
+    "summary": "hmac.compare_digest on str arguments raises TypeError for non-ASCII credentials instead of returning False, breaking the mismatch→False contract the old `!=` code guaranteed.",
+    "failure_scenario": "An HTTP Basic request with a non-ASCII username or password (e.g. 'pässword', verified: hmac.compare_digest('adémin','admin') → TypeError: comparing strings with non-ASCII characters is not supported) raises an uncaught exception → 500 instead of 401, and the error response distinguishes non-ASCII input from ASCII wrong input. This path is attacker-controlled since `given` comes from the request."
+  },
+  {
+    "file": "src/auth.py",
+    "line": 16,
+    "summary": "The `or` short-circuits: when the username is wrong the password comparison is never executed, so total response time (one vs two compare_digest calls) still reveals whether the username matched exactly.",
+    "failure_scenario": "An attacker submitting candidate usernames measures response time: wrong username → 1 constant-time call; exact username → 2 calls. To remove the leak, bind each result (u_ok = hmac.compare_digest(...); p_ok = hmac.compare_digest(...)) so both comparisons always run, then return u_ok and p_ok."
+  },
+  {
+    "file": "src/auth.py",
+    "line": 16,
+    "summary": "hmac.compare_digest returns immediately when the two inputs have different lengths, so timing still leaks whether the given username/password length equals the configured length — a residual leak the PR claims to have eliminated.",
+    "failure_scenario": "compare_digest's implementation checks `alen != blen` and returns False before XORing any bytes, so an attacker binary-searches the exact length of the admin username/password from response times; the stated goal ('no longer leaks how much matched') is only partially met. Mitigations (e.g., comparing against a per-length dummy value or a hashed combined credential) would close it, though this is the accepted standard idiom and severity is low."
+  },
+  {
+    "file": "tests/test_auth.py",
+    "line": 6,
+    "summary": "No test covers non-ASCII credentials, which is why the compare_digest TypeError path went uncaught by the suite.",
+    "failure_scenario": "The three existing tests use only ASCII strings, so adding `assert is_authorized(Credentials(\"admin\", \"pässword\"), ADMIN) is False`-style coverage would have failed and surfaced the TypeError raised for non-ASCII input instead of letting it reach production."
+  }
+]
+```
+
+Top-line takeaway: the change as applied is a hard regression — `src/auth.py` doesn't even compile (`!` must be `not`). After fixing that, the two secondary issues to address are the non-ASCII `TypeError` (encode to bytes first, e.g., compare `given.username.encode('utf-8')` against `expected.username.encode('utf-8')`) and, if the constant-time goal is to be airtight, always running both comparisons.

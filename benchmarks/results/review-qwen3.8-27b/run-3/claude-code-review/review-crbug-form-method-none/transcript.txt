@@ -1,0 +1,45 @@
+Diff and files gathered. The change is `src/forms.py` (`FormRequest.from_form` now uppercases the method and whitelists GET/POST) plus new tests; confirmed via reproduction that the new line crashes on a `None` method. I ran the 8 finder angles in sequence over the diff, the enclosing function, and callers/tests (there are no CLAUDE.md files in scope — nothing to flag under the conventions angle, and there's no I/O or duplication-heavy work for the efficiency angle).
+
+Key confirmations:
+- `FormRequest.from_form(Form(action="/x", method=None))` → `AttributeError: 'NoneType' object has no attribute 'upper'` (reproduced).
+- `FormRequest.from_form(LOGIN, method=None)` → same crash (reproduced).
+- Old code passed `None` through to `Request.__post_init__`, whose `(self.method or "GET").upper()` made both cases resolve to GET ("a missing method means GET").
+
+Findings:
+
+```json
+[
+  {
+    "file": "src/forms.py",
+    "line": 43,
+    "summary": "Calling .upper() on the resolved method crashes when form.method is None — the natural representation of a <form> without a method attribute (HTML's default is GET).",
+    "failure_scenario": "A parser builds Form(action=\"/search\", method=None) for a form lacking the method attribute (very common in real HTML); FormRequest.from_form(form) raises AttributeError: 'NoneType' object has no attribute 'upper'. Before the change, Request.__post_init__ normalized None to \"GET\", so such a form submitted as GET; now any method-less form crashes the crawler. (Reproduced.)"
+  },
+  {
+    "file": "src/forms.py",
+    "line": 43,
+    "summary": "Explicitly passing method=None to from_form now crashes, even though the docstring says the method keyword overrides the form's.",
+    "failure_scenario": "FormRequest.from_form(LOGIN, method=None) (e.g. a caller passing a possibly-None method through **kwargs) raises AttributeError; previously None flowed into Request.__post_init__ and yielded \"GET\". (Reproduced.) The type annotation method: str on Form is not enforced, so both paths are reachable from ordinary data."
+  },
+  {
+    "file": "src/forms.py",
+    "line": 27,
+    "summary": "The removed invariant \"a missing method means GET\" (guaranteed by Request.__post_init__ for from_form input) is no longer re-established anywhere, and the new tests do not pin it.",
+    "failure_scenario": "The diff moves normalization out of from_form without preserving the None→GET fallback, and the added tests (tests/test_forms.py:23-31) only exercise non-empty string methods — so the regression on None/missing methods shipped with a green test suite; any future input that lacks a string method (None, or a parser returning None for absent attributes) crashes instead of falling back to GET."
+  },
+  {
+    "file": "src/forms.py",
+    "line": 43,
+    "summary": "The new .upper() call re-implements the normalization Request.__post_init__ already performs, in a None-unsafe variant of the same idiom.",
+    "failure_scenario": "Two normalization sites now exist: from_form does `x.upper()` while __post_init__ does `(x or \"GET\").upper()`. The cheaper and safer form reuses the existing guarded idiom — `method = (kwargs.pop(\"method\", form.method) or \"GET\").upper()` — which fixes both None crashes in one edit; as written, the codebase now has a second copy of the fallback/uppercasing logic that a future \"missing method\" change must update twice."
+  },
+  {
+    "file": "src/forms.py",
+    "line": 14,
+    "summary": "Form.method: str with no default makes the crash unavoidable at the dataclass level; the root cause is that Form cannot represent an absent method attribute without a type violation.",
+    "failure_scenario": "The natural parser output for <form action=\"/s\"> (no method attribute) is Form(action=\"/s\", method=None), which violates the declared str annotation but is accepted silently by dataclasses, deferring the failure to every from_form call site. The deeper fix is Form(method: str | None = None) (or a __post_init__ that normalizes), so the missing-attribute case is modeled rather than producing an AttributeError downstream."
+  }
+]
+```
+
+Notes on scope decisions: the PUT/DELETE→GET whitelist behavior matches the stated intent ("GET for anything else such as a misspelled method attribute"), so it is not flagged; lowercase handling (`"post"` → `"POST"`) works because `.upper()` runs before the membership check; the whitespace-padded method edge case (`" POST "` → GET fallback) was considered but excluded as speculative, since standard HTML parsers trim attribute values. No CLAUDE.md applies to the changed files, so the conventions angle yielded nothing; the efficiency angle found no meaningful waste (two-item list membership, no I/O).

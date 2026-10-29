@@ -1,0 +1,23 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+The review identified three critical issues with the current `replace` implementation:
+1.  **Incomplete Deduplication:** It only removes `new_m` from the current list level, missing duplicates in sibling or child groups.
+2.  **Mutation on Failure:** It removes `new_m` before verifying `old_m` exists, corrupting the scene if `replace` fails.
+3.  **`replace(x, x)` Regression:** It deletes `x` and then raises an error because the index becomes invalid after removal.
+
+I will refactor `replace` to first locate `old_m`, handle the `x == x` case as a no-op, and then remove all instances of `new_m` scene-wide before placing it at the correct (index-adjusted) position.
+
+
+error: UnknownError: Failed to execute statement

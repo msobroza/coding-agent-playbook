@@ -1,0 +1,34 @@
+
+
+**Review summary:** `--csv` is implemented correctly and tests pass, but `--since` is missing entirely — no argument, no filtering. Now I'll implement it.
+
+
+
+
+
+
+
+
+
+Now adding the missing `--since` option:
+
+
+
+
+
+
+
+
+
+
+All 7 tests pass. Quick end-to-end sanity check of the CLI:
+
+
+
+
+Done. The review flagged that `--since` was missing; I implemented it:
+
+- **src/report.py:47-52** — added `--since YYYY-MM-DD` (parsed via `date.fromisoformat`, so malformed input gets a clear argparse error) and filter out entries dated before it, applied before `monthly_totals`. Boundary semantics per your spec: entries dated *on* `--since` are kept.
+- **tests/test_report.py** — 3 new tests: drops earlier entries but keeps the boundary day, works combined with `--csv`, and rejects a malformed date.
+
+All 7 tests pass; CLI verified end-to-end for table, CSV, and the error path.

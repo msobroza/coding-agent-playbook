@@ -1,0 +1,32 @@
+All eight angles are complete. I read the full diff (CHANGE.diff, which exactly matches the working tree), the entire `src/report.py` (57 lines) and `tests/test_report.py`, and grep-confirmed the review target. Findings:
+
+**Angle A (line-by-line):** The added code (`format_csv`, `--csv` flag, `main` refactor) is clean — `csv.writer` with `lineterminator="\n"` correctly avoids `\r\n`, the CSV ends with a newline, `f"{cents / 100:.2f}"` is safe for integer cents (float error ~1e-13 can't change 2-decimal rounding), no off-by-one or branching errors.
+
+**Angle B (removed behavior):** The diff drops nothing from the prior code (default table output preserved), but it drops the **second half of the user's request**: `--since YYYY-MM-DD` does not exist anywhere. Grep for `since` (case-insensitive) across the whole repo returns zero matches — no option, no filtering, no test.
+
+**Angle C (cross-file):** Only caller of `main` is the `__main__` guard and the new test; no call-site breakage. No parallel changes.
+
+**Reuse / Simplification / Efficiency:** Nothing to flag — single-module codebase, no existing CSV helper to reuse, no redundant work, minimal implementation.
+
+**Altitude:** `--csv` sits at the right depth; the `--since` gap is an entire missing feature, not a shallow patch.
+
+**Conventions:** No CLAUDE.md exists in the repo or any ancestor directory (Glob found none), so no violations.
+
+**Secondary (test coverage):** The diff refactored `main` into two branches but added an end-to-end test only for the `--csv` branch; the default table branch of the refactored `main` is now untested.
+
+```json
+[
+  {
+    "file": "src/report.py",
+    "line": 46,
+    "summary": "The requested --since YYYY-MM-DD option was never implemented — the diff only adds --csv, dropping half of the request.",
+    "failure_scenario": "Running `python -m src.report ledger.csv --since 2024-02-01` exits with 'argparse: unrecognized arguments: --since 2024-02-01'; no code anywhere filters out ledger entries dated before the given day, so the second requested feature is entirely missing (confirmed by zero matches for 'since' in src/ and tests/)."
+  },
+  {
+    "file": "src/report.py",
+    "line": 51,
+    "summary": "The refactored main() gained two branches but the diff adds an end-to-end test only for the --csv branch, leaving the default table path of main() untested.",
+    "failure_scenario": "A future change breaks the default `print(format_table(totals))` path (e.g., wrong variable or dropped print) while the existing tests all still pass, because no test invokes main() without --csv."
+  }
+]
+```

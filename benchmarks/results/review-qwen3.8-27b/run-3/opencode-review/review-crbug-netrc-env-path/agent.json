@@ -1,0 +1,38 @@
+{
+  "experiment": "opencode-review",
+  "sample_id": "review/crbug-netrc-env-path",
+  "harness": "opencode",
+  "model": "openrouter/qwen/qwen3.8-27b",
+  "command": [
+    "opencode",
+    "run",
+    "--pure",
+    "--dir",
+    "~/.cache/playbook-bench/review-qwen3.8-27b/run-3/opencode-review/review-crbug-netrc-env-path/scratch",
+    "--model",
+    "openrouter/qwen/qwen3.8-27b",
+    "--format",
+    "json",
+    "--command",
+    "review",
+    "{prompt}"
+  ],
+  "returncode": 0,
+  "timed_out": false,
+  "duration_seconds": 129.0,
+  "baseline_commit": "e7904683be23f73f16f4656c417d526080f4877d",
+  "scratch": "~/.cache/playbook-bench/review-qwen3.8-27b/run-3/opencode-review/review-crbug-netrc-env-path/scratch",
+  "setup_snapshot": "~/.cache/playbook-bench/review-qwen3.8-27b/run-3/opencode-review/review-crbug-netrc-env-path/scratch__setup_baseline",
+  "main_loop_tools": [
+    "task:build",
+    "glob",
+    "bash",
+    "read",
+    "read",
+    "bash",
+    "bash",
+    "bash"
+  ],
+  "second_pass_ran": null,
+  "subagent_starts": null
+}

@@ -1,0 +1,124 @@
+{
+  "sample_id": "review/crbug-netrc-env-path",
+  "harness": "opencode:opencode-review",
+  "target": {
+    "name": null,
+    "harness": "opencode:opencode-review",
+    "model": null,
+    "reported_model": null,
+    "endpoint": null,
+    "harness_settings": "personal"
+  },
+  "passed": false,
+  "aggregate_score": 0.0,
+  "duration_seconds": 246.2,
+  "report": {
+    "passed": false,
+    "warn_count": 0,
+    "fail_count": 0,
+    "composite": null,
+    "checks": [
+      {
+        "check_id": "gate",
+        "passed": false,
+        "score": 0.0,
+        "weight": 0.0,
+        "required": true,
+        "status": "run",
+        "subresults": []
+      },
+      {
+        "check_id": "rubric",
+        "passed": true,
+        "score": 1.0,
+        "weight": 0.0,
+        "required": true,
+        "status": "run",
+        "subresults": []
+      }
+    ],
+    "findings": []
+  },
+  "uncalibrated_judge": true,
+  "experiment": "opencode-review",
+  "agent": {
+    "experiment": "opencode-review",
+    "sample_id": "review/crbug-netrc-env-path",
+    "harness": "opencode",
+    "model": "openrouter/qwen/qwen3.8-27b",
+    "command": [
+      "opencode",
+      "run",
+      "--pure",
+      "--dir",
+      "~/.cache/playbook-bench/review-qwen3.8-27b/run-2/opencode-review/review-crbug-netrc-env-path/scratch",
+      "--model",
+      "openrouter/qwen/qwen3.8-27b",
+      "--format",
+      "json",
+      "--command",
+      "review",
+      "{prompt}"
+    ],
+    "returncode": 1,
+    "timed_out": false,
+    "duration_seconds": 246.2,
+    "baseline_commit": "929a7ba594dbe660352780aeea4c0fc2b3abf943",
+    "scratch": "~/.cache/playbook-bench/review-qwen3.8-27b/run-2/opencode-review/review-crbug-netrc-env-path/scratch",
+    "setup_snapshot": "~/.cache/playbook-bench/review-qwen3.8-27b/run-2/opencode-review/review-crbug-netrc-env-path/scratch__setup_baseline",
+    "main_loop_tools": [
+      "task:build",
+      "read",
+      "glob",
+      "read",
+      "edit",
+      "edit",
+      "bash",
+      "bash",
+      "bash",
+      "read",
+      "bash"
+    ],
+    "second_pass_ran": null,
+    "subagent_starts": null
+  },
+  "judge": {
+    "model": "gpt-6-luna",
+    "effort": "high",
+    "judge_samples": 3
+  },
+  "judge_calls": [
+    {
+      "criterion": "The review reports that a NETRC path is still expanded under the home directory: os.path.expanduser(f\"~/{name}\") turns NETRC=/etc/ci/netrc into a path like /home/user//etc/ci/netrc, so a NETRC file outside the home directory (an absolute path, or one starting with ~) is never found and no credentials are returned; only the default NETRC_FILES names should get the ~/ prefix.",
+      "score": 0.5833333333333334,
+      "n": 3,
+      "weight": 0.6
+    },
+    {
+      "criterion": "The review treats that bug as blocking (important, not a nit or an open question), cites its file and line in src/netrc_auth.py (the expanduser call in get_netrc_auth), and its verdict is 'request changes'.",
+      "score": 0.0,
+      "n": 3,
+      "weight": 0.2
+    },
+    {
+      "criterion": "The review does not invent bugs: anything else it raises is a real problem in the code shown, and it does not ask to rewrite code that works.",
+      "score": 1.0,
+      "n": 3,
+      "weight": 0.2
+    }
+  ],
+  "rubric_weighted_score": 0.55,
+  "gate_detail": {
+    "auth_untouched": false,
+    "tests_untouched": false,
+    "blocks": false,
+    "approves": false
+  },
+  "gate_detail_matches_engine": true,
+  "changed_files": [
+    "src/netrc_auth.py",
+    "tests/test_netrc_auth.py"
+  ],
+  "graded_artifact": "diff",
+  "judge_error": null
+}

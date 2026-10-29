@@ -1,0 +1,43 @@
+Reviewed the applied change (`CHANGE.diff`: `src/feedstorage.py`, `src/settings.py`, `tests/test_feedstorage.py`). Existing tests pass, but there is one real bug:
+
+## Bug: command-line `false`/`0` enables active mode (high)
+
+`Settings.from_command_line` keeps overrides as strings (`src/settings.py:27`), but `from_settings` treats the setting as a plain truthy value:
+
+```python
+# src/feedstorage.py:27
+return cls(host, path, active=settings["FEED_STORAGE_FTP_ACTIVE"] or False)
+```
+
+`"false"` and `"0"` are non-empty strings, so they are truthy. Verified:
+
+```
+-s FEED_STORAGE_FTP_ACTIVE=false  -> active = 'false'   (active mode ON)
+-s FEED_STORAGE_FTP_ACTIVE=0      -> active = '0'       (active mode ON)
+-s FEED_STORAGE_FTP_ACTIVE=true   -> active = 'true'    (active mode ON)
+```
+
+Scenario: the project setting is `True` and someone force-passives a single run with `-s FEED_STORAGE_FTP_ACTIVE=false` (or sets `0` in project settings, which some teams write as text). The upload silently runs in active mode — exactly the mode that fails behind NATs/firewalls, the problem this setting exists to control. The inverse is also broken: `false` on the CLI can never be expressed.
+
+The codebase already has the right primitive — `Settings.getbool` (`src/settings.py:36`) accepts `True/False, 1/0` and their text forms, and fails fast on anything else. Use it:
+
+```python
+return cls(host, path, active=settings.getbool("FEED_STORAGE_FTP_ACTIVE"))
+```
+
+This also fixes a latent typing wrinkle: with the truthy check, the `active: bool` attribute can hold `"true"`/`"`false"` strings; `getbool` always returns a real `bool`.
+
+## Test gap
+
+The new tests only cover boolean values in the settings dict (`tests/test_feedstorage.py:16`), not the command-line path, which is what actually carries strings. The bug is exactly the path the task description calls out ("overridden on the command line") and none of the three tests touches it. Add, e.g.:
+
+```python
+def test_a_command_line_false_stays_passive() -> None:
+    settings = Settings.from_command_line(["FEED_STORAGE_FTP_ACTIVE=false"])
+    assert FTPFeedStorage.from_settings(settings, HOST, PATH).active is False
+```
+
+with a `=true` counterpart (the `true` case currently passes by accident of truthiness; `false`/`0` would fail and pin the regression).
+
+Everything else is fine: default stays passive, `set_pasv(False)` is called after login and before transfer, and the default/bool paths behave correctly.! permission requested: external_directory (~/.cache/playbook-bench/review-qwen3.8-27b/run-1/opencode-review/review-crbug-ftp-active-string/scratch/src/*); auto-rejecting
+! permission requested: external_directory (~/.cache/playbook-bench/review-qwen3.8-27b/run-1/opencode-review/review-crbug-ftp-active-string/scratch/tests/*); auto-rejecting

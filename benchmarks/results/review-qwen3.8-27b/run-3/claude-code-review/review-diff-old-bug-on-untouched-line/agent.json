@@ -1,0 +1,38 @@
+{
+  "experiment": "claude-code-review",
+  "sample_id": "review/diff-old-bug-on-untouched-line",
+  "harness": "claude",
+  "model": "qwen/qwen3.8-27b",
+  "command": [
+    "claude",
+    "-p",
+    "--setting-sources",
+    "",
+    "--strict-mcp-config",
+    "--settings",
+    "{\"autoMemoryEnabled\": false}",
+    "--model",
+    "qwen/qwen3.8-27b",
+    "--no-session-persistence",
+    "--permission-mode",
+    "acceptEdits",
+    "--allowedTools",
+    "Read,Grep,Glob,Task,Skill,Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--",
+    "{prompt}"
+  ],
+  "returncode": 0,
+  "timed_out": false,
+  "duration_seconds": 153.6,
+  "baseline_commit": "6f1de18e4e0ad98dea7ae1a9e99909be20bfd8fe",
+  "scratch": "~/.cache/playbook-bench/review-qwen3.8-27b/run-3/claude-code-review/review-diff-old-bug-on-untouched-line/scratch",
+  "setup_snapshot": "~/.cache/playbook-bench/review-qwen3.8-27b/run-3/claude-code-review/review-diff-old-bug-on-untouched-line/scratch__setup_baseline",
+  "main_loop_tools": [],
+  "second_pass_ran": null,
+  "subagent_starts": {
+    "foreground": 1
+  }
+}

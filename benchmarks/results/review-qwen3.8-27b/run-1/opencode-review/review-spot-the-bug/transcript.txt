@@ -1,0 +1,17 @@
+
+
+Review of `src/pagination.py` found one high-severity bug:
+
+**Off-by-one in the `end` clamp** (`src/pagination.py:21-22`): when a slice extends past the end of the list, `end` is set to `len(items) - 1` instead of `len(items)`, so the final item is silently dropped. Python slicing already clamps `end`, making this clamp both unnecessary and wrong.
+
+Repro:
+```python
+paginate(['a', 'b', 'c'], 1, 2)  # returns Page(items=[]) — expected items=['c']
+```
+
+**Fix:**
+```python
+end = min(start + page_size, len(items))
+```
+
+No other issues: input validation and `has_more` logic are correct.

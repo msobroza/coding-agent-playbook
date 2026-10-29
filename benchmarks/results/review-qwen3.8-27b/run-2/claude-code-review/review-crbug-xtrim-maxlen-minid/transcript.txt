@@ -1,0 +1,43 @@
+All context gathered. The diff is applied to a clean tree (single baseline commit); I reviewed `src/streams.py` and `tests/test_streams.py` against the stated Redis 6.2 syntax `XTRIM key <MAXLEN | MINID> [= | ~] threshold [LIMIT count]`, ran the tests (they pass by construction since `FakeRedis` just records args — which is exactly why the bugs survive: no real-server semantics), and traced callers (none exist besides the tests). No CLAUDE.md governs this code. The 8 finder angles (line-by-line, removed-behavior, cross-file, reuse, simplification, efficiency, altitude, conventions) surfaced the following candidates, deduped:
+
+**Key analysis notes:**
+- Redis 6.2 parses `~` only in the MAXLEN branch (`if !strcasecmp(argv[2],"maxlen") ... if !strcasecmp(argv[3],"~")`). For MINID, `argv[3]` is parsed as the stream ID — so `XTRIM key MINID ~ id` fails with `ERR Invalid stream ID specified as minId`. MINID trimming is exact-only per the Redis docs.
+- Old signature made `maxlen` required; the new one makes both strategies optional with no "at least one" guard.
+- Both strategies can be emitted simultaneously with no mutual-exclusion check.
+- `LIMIT 0`/negative is rejected server-side; no validation.
+- `maxlen=0` is handled correctly (`is not None`), and the MAXLEN wire order (`MAXLEN ~ 100 LIMIT 10`) is valid — no false positives there.
+
+```json
+[
+  {
+    "file": "src/streams.py",
+    "line": 39,
+    "summary": "approximate=True (the default) inserts b\"~\" into MINID trims, producing the invalid command XTRIM key MINID ~ <id> that Redis rejects",
+    "failure_scenario": "xtrim('events', minid='1700000000000-0') emits [XTRIM, events, MINID, ~, 1700000000000-0]; Redis 6.2 only accepts ~ under MAXLEN and parses '~' as the stream ID for MINID, returning 'ERR Invalid stream ID specified as minId' — every MINID trim (the headline new feature) fails by default unless the caller knows to pass approximate=False, and test_xtrim_by_minid asserts this invalid wire format as the expected output, so the test suite certifies the bug"
+  },
+  {
+    "file": "src/streams.py",
+    "line": 34,
+    "summary": "No check that at least one of maxlen/minid is supplied, so xtrim can emit a strategy-less XTRIM that always errors",
+    "failure_scenario": "The old signature required maxlen; now xtrim('events') emits [XTRIM, events, ~] and xtrim('events', limit=5) emits [XTRIM, events, LIMIT, 5] — both are guaranteed server errors ('ERR syntax error' / 'ERR wrong number of arguments'). The conversion of maxlen from required to optional-with-None silently widened the API to inputs that can only fail"
+  },
+  {
+    "file": "src/streams.py",
+    "line": 35,
+    "summary": "maxlen and minid are not mutually exclusive, so both strategy keywords can be emitted in one command",
+    "failure_scenario": "xtrim('events', 100, minid='1700000000000-0') emits [XTRIM, events, MAXLEN, MINID, ~, 100, 1700000000000-0]; Redis accepts exactly one of <MAXLEN | MINID> per call and returns 'ERR syntax error'. A client-side ValueError (like redis-py's 'MAXLEN or MINID must be specified' style guard) would turn this server round-trip failure into a clear programmer error"
+  },
+  {
+    "file": "src/streams.py",
+    "line": 45,
+    "summary": "limit is appended without validation, so limit=0 or a negative limit emits a LIMIT count the server rejects",
+    "failure_scenario": "xtrim('events', 100, limit=0) emits [XTRIM, events, MAXLEN, ~, 100, LIMIT, 0]; Redis requires a positive integer for LIMIT count and replies 'ERR syntax error'. Same for limit=-5; an empty-string minid ('') also slips through the `is not None` check and produces 'Invalid stream ID specified as minId'"
+  },
+  {
+    "file": "src/streams.py",
+    "line": 34,
+    "summary": "Two-pass scattered piece-building duplicates every `is not None` check and separates each strategy keyword from its threshold, inviting keyword/value desync",
+    "failure_scenario": "The maxlen keyword is appended at lines 35-36 and its value at 41-42, minid keyword at 37-38 and value at 43-44 — four parallel `if x is not None` blocks where the b\"~\" insertion (line 39-40) is positioned between keyword and value only by construction coincidence; building each strategy as one contiguous chunk (e.g. [b\"MAXLEN\", b\"~\"?, threshold] or [b\"MINID\", threshold]) plus the LIMIT chunk would make the invalid MINID-tilde case unrepresentable and shrink the function"
+  }
+]
+```

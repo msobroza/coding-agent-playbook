@@ -1,0 +1,12 @@
+
+
+The subagent's review came back clean: the change is correct.
+
+- **Backward compat**: `unit="kg"` default is bit-identical to old behavior (`weight * 1.0` is exact in IEEE 754).
+- **Rounding**: probed `math.ceil` boundary risk around 31 kg; no realistic input misprices.
+- **Errors**: unknown unit raises `ValueError` listing valid units; `weight <= 0` checked first.
+- **Tests**: 8 passed, covering conversion, started-kg charging, and unknown-unit rejection.
+
+One optional note (not a defect): units are case-sensitive (`"LB"` rejected) — the error message already lists valid values, so it's fine as-is.
+
+No issues found; the change is good to keep.

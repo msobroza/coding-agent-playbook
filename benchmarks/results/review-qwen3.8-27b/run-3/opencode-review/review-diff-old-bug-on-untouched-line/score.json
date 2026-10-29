@@ -1,0 +1,118 @@
+{
+  "sample_id": "review/diff-old-bug-on-untouched-line",
+  "harness": "opencode:opencode-review",
+  "target": {
+    "name": null,
+    "harness": "opencode:opencode-review",
+    "model": null,
+    "reported_model": null,
+    "endpoint": null,
+    "harness_settings": "personal"
+  },
+  "passed": false,
+  "aggregate_score": 0.0,
+  "duration_seconds": 89.4,
+  "report": {
+    "passed": false,
+    "warn_count": 0,
+    "fail_count": 0,
+    "composite": null,
+    "checks": [
+      {
+        "check_id": "gate",
+        "passed": false,
+        "score": 0.0,
+        "weight": 0.0,
+        "required": true,
+        "status": "run",
+        "subresults": []
+      },
+      {
+        "check_id": "rubric",
+        "passed": true,
+        "score": 1.0,
+        "weight": 0.0,
+        "required": true,
+        "status": "run",
+        "subresults": []
+      }
+    ],
+    "findings": []
+  },
+  "uncalibrated_judge": true,
+  "experiment": "opencode-review",
+  "agent": {
+    "experiment": "opencode-review",
+    "sample_id": "review/diff-old-bug-on-untouched-line",
+    "harness": "opencode",
+    "model": "openrouter/qwen/qwen3.8-27b",
+    "command": [
+      "opencode",
+      "run",
+      "--pure",
+      "--dir",
+      "~/.cache/playbook-bench/review-qwen3.8-27b/run-3/opencode-review/review-diff-old-bug-on-untouched-line/scratch",
+      "--model",
+      "openrouter/qwen/qwen3.8-27b",
+      "--format",
+      "json",
+      "--command",
+      "review",
+      "{prompt}"
+    ],
+    "returncode": 0,
+    "timed_out": false,
+    "duration_seconds": 89.4,
+    "baseline_commit": "1ec5d9e8d34bcbbcc75d5a642504a572619a898d",
+    "scratch": "~/.cache/playbook-bench/review-qwen3.8-27b/run-3/opencode-review/review-diff-old-bug-on-untouched-line/scratch",
+    "setup_snapshot": "~/.cache/playbook-bench/review-qwen3.8-27b/run-3/opencode-review/review-diff-old-bug-on-untouched-line/scratch__setup_baseline",
+    "main_loop_tools": [
+      "task:build"
+    ],
+    "second_pass_ran": null,
+    "subagent_starts": null
+  },
+  "judge": {
+    "model": "gpt-6-luna",
+    "effort": "high",
+    "judge_samples": 3
+  },
+  "judge_calls": [
+    {
+      "criterion": "The review's verdict is 'approve' or 'approve with comments': the new restock() function and its tests are correct, and nothing in the change needs fixing before merge.",
+      "score": 1.0,
+      "n": 3,
+      "weight": 0.4
+    },
+    {
+      "criterion": "If the review mentions the `<` in items_to_reorder (the docstring says 'to or below', so an item exactly at its reorder level is missed), it presents it as an existing problem on a line the change does not touch, not as a defect of this change.",
+      "score": 1.0,
+      "n": 3,
+      "weight": 0.3
+    },
+    {
+      "criterion": "The review does not invent a bug in restock() or its tests (for example claiming it mutates the wrong item, accepts zero units, or swallows a missing SKU).",
+      "score": 1.0,
+      "n": 3,
+      "weight": 0.2
+    },
+    {
+      "criterion": "The review cites file and line for each comment and proposes no edits of its own to the files.",
+      "score": 0.06666666666666667,
+      "n": 3,
+      "weight": 0.1
+    }
+  ],
+  "rubric_weighted_score": 0.9066666666666667,
+  "gate_detail": {
+    "inventory_untouched": true,
+    "tests_untouched": true,
+    "approves": false,
+    "blocks": false,
+    "counts_important": false
+  },
+  "gate_detail_matches_engine": true,
+  "changed_files": [],
+  "graded_artifact": "transcript",
+  "judge_error": null
+}

@@ -1,0 +1,1 @@
+/code-review review my change in CHANGE.diff (it is already applied to the working tree). Audio detection used to force the RTSP audio-only preset; now it uses the camera's own ffmpeg input arguments: the audio input's input_args if set, else the camera-wide ffmpeg input_args. As everywhere in the config, each can be a preset name or ordinary ffmpeg arguments.

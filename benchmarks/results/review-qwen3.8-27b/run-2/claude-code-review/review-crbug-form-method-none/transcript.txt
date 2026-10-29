@@ -1,0 +1,58 @@
+All angles complete and verified. Here is the review.
+
+## Review of CHANGE.diff (`FormRequest.from_form` method whitelisting)
+
+**Scope:** `src/forms.py` — `from_form` now uppercases the method and falls back to `"GET"` when it's not in `["GET", "POST"]`; `tests/test_forms.py` — three new tests.
+
+**Method:** All 8 finder angles run in-context; every behavioral claim runtime-verified against the working tree (probe script run and removed; suite: 6/6 passed). No CLAUDE.md exists anywhere in the repo, so the conventions angle yields nothing.
+
+**Key context that makes the bugs real:**
+- `Request` (line 20) documents "a missing method means GET"; its field is `method: str | None` and `__post_init__` (line 27) does `self.method = (self.method or "GET").upper()`. So **None is a first-class state in this codebase**, and the pre-change line `method = kwargs.pop("method", form.method)` safely delegated None to `__post_init__`. The diff's new `.upper()` removed that safe path.
+- `Form.method` is annotated `str` but unenforced; a parser mirroring a `<form>` with no `method` attribute (valid HTML — GET is the default) yields `None`.
+- `from_form`'s docstring promises the `method` keyword "overrides the form's".
+
+**Verified behaviors:**
+- `FormRequest.from_form(Form(action="/x", method=None, fields={"a":"b"}))` → `AttributeError: 'NoneType' object has no attribute 'upper'`
+- `FormRequest.from_form(Form(action="/x", method="post"), method=None)` → same `AttributeError`
+- `FormRequest.from_form(..., method="PATCH")` → `method='GET'`, form data still attached
+- `method="pOsT"` → `"POST"`, `""` → `"GET"`, `"DELETE"` → `"GET"`, `"post"` → `"POST"` (all correct)
+- No test exercises the None path, so the suite is green despite the crash.
+
+**Findings (deduplicated, most severe first):**
+
+```json
+[
+  {
+    "file": "src/forms.py",
+    "line": 43,
+    "summary": "from_form crashes with AttributeError when the method resolves to None, because .upper() is called before any None handling.",
+    "failure_scenario": "A <form> with no method attribute (valid HTML; browsers default to GET) parses to Form(method=None); FormRequest.from_form(form) then raises AttributeError: 'NoneType' object has no attribute 'upper' (verified by running it). Same crash for the caller-side form: from_form(LOGIN, method=None) — legal per Request.method's own 'str | None' type and __post_init__'s documented 'a missing method means GET'. Pre-change code passed None through and Request.__post_init__ normalized it to 'GET'; the diff removed that safe path."
+  },
+  {
+    "file": "src/forms.py",
+    "line": 44,
+    "summary": "An explicit non-GET/POST method= keyword override is silently coerced to GET instead of being honored or rejected.",
+    "failure_scenario": "from_form(LOGIN, method='PATCH') returns method='GET' with the form fields still attached to the request (verified: PATCH -> GET). The docstring promises the method keyword 'overrides the form's', and the old code passed the value through verbatim; a caller intentionally crafting a non-form PUT/PATCH request via this factory now silently gets a GET whose body data may be dropped or mangled into the query string — a data-corruption failure mode that is very hard to debug."
+  },
+  {
+    "file": "tests/test_forms.py",
+    "line": 23,
+    "summary": "The new tests cover valid lowercased methods and a misspelled 'UNKNOWN', but not the None case, so the None crash ships with a green suite.",
+    "failure_scenario": "pytest runs 6/6 passing (verified) even though from_form(Form(action=..., method=None)) raises AttributeError — the exact input a real HTML parser produces for <form> elements without a method attribute. A test like from_form(Form(action='/s', method=None)).method == 'GET' would have caught the planted bug in CI."
+  },
+  {
+    "file": "src/forms.py",
+    "line": 43,
+    "summary": "Method normalization is now split across two places with divergent rules: from_form uppercases but crashes on None, while Request.__post_init__ already owns None->GET and uppercasing.",
+    "failure_scenario": "Maintenance cost: __post_init__ documents '(self.method or \"GET\").upper()' as the canonical normalization, yet from_form reimplements only the upper half, so the same input ('none' vs None vs 'post') is handled by different rules depending on which layer sees it. Root-cause fix is to normalize once before the whitelist — method = (kwargs.pop('method', form.method) or 'GET').upper() — reusing the existing idiom, which fixes the crash and keeps a single source of truth."
+  },
+  {
+    "file": "src/forms.py",
+    "line": 33,
+    "summary": "valid_form_methods is a mutable class-level list, so any code that appends to it silently mutates shared state for all instances and subclasses.",
+    "failure_scenario": "FormRequest.valid_form_methods.append('PUT') (a plausible test or extension) permanently widens the allowlist for every FormRequest in the process with no error; a later loop 'for m in valid_form_methods: valid_form_methods.remove(m)' corrupts the list mid-iteration. Use the immutable tuple ('GET', 'POST')."
+  }
+]
+```
+
+The single most important item: **line 43 needs a None guard** — `(kwargs.pop("method", form.method) or "GET").upper()` — which simultaneously fixes finding 1, resolves finding 4, and is exactly the idiom `Request.__post_init__` already uses. Findings 2 and 3 are distinct bugs the same line introduces (silent override coercion) and the test suite's blind spot, respectively.

@@ -1,0 +1,294 @@
+{
+ "model": "text-embedding-3-small",
+ "projection": "t-SNE seed 7",
+ "points": [
+  {
+   "sample": "spot-the-bug",
+   "criterion": "The correctness comment appears BEFORE any style or naming comments \u2014 priority order is respected",
+   "x": 9.629128456115723,
+   "y": -0.8822556734085083
+  },
+  {
+   "sample": "spot-the-bug",
+   "criterion": "The review does not propose unrelated changes (no rewriting of working code)",
+   "x": 11.05201530456543,
+   "y": 5.385865211486816
+  },
+  {
+   "sample": "spot-the-bug",
+   "criterion": "The review identifies the off-by-one bug in `paginate` (the last item on the final page is dropped when total_items is not a multiple of page_size)",
+   "x": 4.987340450286865,
+   "y": 7.87725830078125
+  },
+  {
+   "sample": "spot-the-bug",
+   "criterion": "The review quotes the offending line or expression rather than describing it abstractly",
+   "x": 1.5568417310714722,
+   "y": -2.2997426986694336
+  },
+  {
+   "sample": "change-drops-part-of-request",
+   "criterion": "The review cites file and line (for example the argument parser in src/report.py's main) and proposes no edits of its own to the files.",
+   "x": 3.40386700630188,
+   "y": -3.706355094909668
+  },
+  {
+   "sample": "change-drops-part-of-request",
+   "criterion": "The review does not invent bugs in the --csv part (format_csv and its tests are correct).",
+   "x": 11.319134712219238,
+   "y": 10.484909057617188
+  },
+  {
+   "sample": "change-drops-part-of-request",
+   "criterion": "The review reports that the change leaves out the requested --since YYYY-MM-DD option: no argument is added and no ledger entry is filtered by date, so half of the user's request is undone.",
+   "x": 3.12408185005188,
+   "y": 2.8909125328063965
+  },
+  {
+   "sample": "change-drops-part-of-request",
+   "criterion": "The review treats the missing --since option as blocking and its verdict is 'request changes'.",
+   "x": 2.8666584491729736,
+   "y": 2.187105417251587
+  },
+  {
+   "sample": "rereview-earlier-findings",
+   "criterion": "The review cites file and line for the still-open finding (total_cents in src/cart.py) and proposes no edits of its own to the files.",
+   "x": 3.930335760116577,
+   "y": -2.943598985671997
+  },
+  {
+   "sample": "rereview-earlier-findings",
+   "criterion": "The review does not raise the fixed remove() or add() findings again as new findings, and does not invent new bugs in the fix commit.",
+   "x": 8.708187103271484,
+   "y": 10.415900230407715
+  },
+  {
+   "sample": "rereview-earlier-findings",
+   "criterion": "The review gives each of the three earlier findings one status: remove() going negative is fixed, add() accepting a non-positive quantity is fixed, and total_cents() accepting any discount_percent is still open.",
+   "x": 5.162233352661133,
+   "y": -0.11981846392154694
+  },
+  {
+   "sample": "rereview-earlier-findings",
+   "criterion": "The review keeps the still-open discount finding important (blocking) and its verdict is 'request changes'.",
+   "x": 3.0321130752563477,
+   "y": 1.3561803102493286
+  },
+  {
+   "sample": "diff-old-bug-on-untouched-line",
+   "criterion": "If the review mentions the `<` in items_to_reorder (the docstring says 'to or below', so an item exactly at its reorder level is missed), it presents it as an existing problem on a line the change does not touch, not as a defect of this change.",
+   "x": 5.867719650268555,
+   "y": 7.35259485244751
+  },
+  {
+   "sample": "diff-old-bug-on-untouched-line",
+   "criterion": "The review cites file and line for each comment and proposes no edits of its own to the files.",
+   "x": 4.2894415855407715,
+   "y": -3.9178977012634277
+  },
+  {
+   "sample": "diff-old-bug-on-untouched-line",
+   "criterion": "The review does not invent a bug in restock() or its tests (for example claiming it mutates the wrong item, accepts zero units, or swallows a missing SKU).",
+   "x": 7.434957981109619,
+   "y": 7.32642126083374
+  },
+  {
+   "sample": "diff-old-bug-on-untouched-line",
+   "criterion": "The review's verdict is 'approve' or 'approve with comments': the new restock() function and its tests are correct, and nothing in the change needs fixing before merge.",
+   "x": 7.7464985847473145,
+   "y": -0.26040738821029663
+  },
+  {
+   "sample": "clean-multi-file-change",
+   "criterion": "The review cites file and line for each comment and proposes no edits of its own to the files.",
+   "x": 4.289735794067383,
+   "y": -3.916987419128418
+  },
+  {
+   "sample": "clean-multi-file-change",
+   "criterion": "The review does not invent a defect in the change (for example a wrong pound factor, a broken existing call to quote_cents(weight), an inverted conversion, or untested unknown units).",
+   "x": 7.794355392456055,
+   "y": 6.16151237487793
+  },
+  {
+   "sample": "clean-multi-file-change",
+   "criterion": "The review reads every file the change touches (src/units.py, src/shipping.py and both test files), not only the first one.",
+   "x": 2.380429744720459,
+   "y": -4.497841835021973
+  },
+  {
+   "sample": "clean-multi-file-change",
+   "criterion": "The review's verdict is 'approve' or 'approve with comments': the new to_kilograms() helper, its use in quote_cents() and the tests are correct, and nothing in the change needs fixing before merge.",
+   "x": 7.309205532073975,
+   "y": -0.2618557810783386
+  },
+  {
+   "sample": "style-only-no-changes-needed",
+   "criterion": "Any suggestions are framed as preferences, not as required changes",
+   "x": 10.035687446594238,
+   "y": 1.0743764638900757
+  },
+  {
+   "sample": "style-only-no-changes-needed",
+   "criterion": "No correctness, security, or failure-mode bugs are claimed \u2014 because none exist",
+   "x": 12.783555030822754,
+   "y": 8.273296356201172
+  },
+  {
+   "sample": "style-only-no-changes-needed",
+   "criterion": "The review does not propose to rewrite the function or change its signature",
+   "x": 11.773273468017578,
+   "y": 4.85455846786499
+  },
+  {
+   "sample": "style-only-no-changes-needed",
+   "criterion": "The review's verdict is 'approve' (with no comments) or 'approve with comments' (style-only, framed as suggestions)",
+   "x": 8.649086952209473,
+   "y": -0.2924724817276001
+  },
+  {
+   "sample": "crbug-audio-input-args",
+   "criterion": "The review does not invent bugs: anything else it raises is a real problem in the code shown, and it does not ask to rewrite code that works.",
+   "x": 9.52284049987793,
+   "y": 7.529688358306885
+  },
+  {
+   "sample": "crbug-audio-input-args",
+   "criterion": "The review reports that input_args given as ordinary ffmpeg arguments in a string rather than a preset name (for example '-rtsp_transport tcp') are concatenated as a str onto the argument list: get_ffmpeg_arg_list(...) + '-rtsp_transport tcp' raises TypeError (can only concatenate list to list), so audio detection fails to start; the fallbacks need get_ffmpeg_arg_list(...) like the global args.",
+   "x": -4.002197265625,
+   "y": 0.23360863327980042
+  },
+  {
+   "sample": "crbug-audio-input-args",
+   "criterion": "The review treats that bug as blocking (important, not a nit or an open question), cites its file and line in src/audio.py (get_ffmpeg_command), and its verdict is 'request changes'.",
+   "x": -2.959418773651123,
+   "y": 1.2318819761276245
+  },
+  {
+   "sample": "crbug-basic-auth-not",
+   "criterion": "The review does not invent bugs: anything else it raises is a real problem in the code shown, and it does not ask to rewrite code that works.",
+   "x": 10.891621589660645,
+   "y": 7.777638912200928
+  },
+  {
+   "sample": "crbug-basic-auth-not",
+   "criterion": "The review reports that the new condition is not valid Python: `!` is not a negation operator (it should be `not hmac.compare_digest(...)`), so src/auth.py raises SyntaxError on import and every caller and test of is_authorized breaks.",
+   "x": -2.583488702774048,
+   "y": 5.353809833526611
+  },
+  {
+   "sample": "crbug-basic-auth-not",
+   "criterion": "The review treats that bug as blocking (important, not a nit or an open question), cites its file and line in src/auth.py (the if condition in is_authorized), and its verdict is 'request changes'.",
+   "x": -2.3992249965667725,
+   "y": 3.7767465114593506
+  },
+  {
+   "sample": "crbug-form-method-none",
+   "criterion": "The review does not invent bugs: anything else it raises is a real problem in the code shown, and it does not ask to rewrite code that works.",
+   "x": 9.51623249053955,
+   "y": 8.906241416931152
+  },
+  {
+   "sample": "crbug-form-method-none",
+   "criterion": "The review reports the backward-incompatible crash: kwargs.pop('method', form.method).upper() raises AttributeError when a caller passes method=None explicitly, which used to work (Request turns a None method into GET); the change should treat None like a missing method.",
+   "x": -0.8133721947669983,
+   "y": 4.740646839141846
+  },
+  {
+   "sample": "crbug-form-method-none",
+   "criterion": "The review treats that bug as blocking (important, not a nit or an open question), cites its file and line in src/forms.py (from_form), and its verdict is 'request changes'.",
+   "x": -1.539729356765747,
+   "y": 3.140784978866577
+  },
+  {
+   "sample": "crbug-ftp-active-string",
+   "criterion": "The review does not invent bugs: anything else it raises is a real problem in the code shown, and it does not ask to rewrite code that works.",
+   "x": 9.156987190246582,
+   "y": 8.254191398620605
+  },
+  {
+   "sample": "crbug-ftp-active-string",
+   "criterion": "The review reports that the setting is read as settings['FEED_STORAGE_FTP_ACTIVE'] or False instead of settings.getbool(...): command-line overrides arrive as text, so -s FEED_STORAGE_FTP_ACTIVE=False (or =0) gives the non-empty string 'False', which is truthy and turns active mode on.",
+   "x": -4.687341690063477,
+   "y": 2.080504894256592
+  },
+  {
+   "sample": "crbug-ftp-active-string",
+   "criterion": "The review treats that bug as blocking (important, not a nit or an open question), cites its file and line in src/feedstorage.py (from_settings), and its verdict is 'request changes'.",
+   "x": -2.878085136413574,
+   "y": 2.266308069229126
+  },
+  {
+   "sample": "crbug-log-textio",
+   "criterion": "The review does not invent bugs: anything else it raises is a real problem in the code shown, and it does not ask to rewrite code that works.",
+   "x": 10.884978294372559,
+   "y": 8.57579517364502
+  },
+  {
+   "sample": "crbug-log-textio",
+   "criterion": "The review reports that isinstance(self.log_output, TextIO) never matches a real file: typing.TextIO is not a base class of what open() returns (io.TextIOWrapper, or the io.BufferedWriter of the default os.devnull log), so stop() still leaves every file log open, as before; it should test io.IOBase (or for a close method).",
+   "x": -0.41942328214645386,
+   "y": 0.011851179413497448
+  },
+  {
+   "sample": "crbug-log-textio",
+   "criterion": "The review treats that bug as blocking (important, not a nit or an open question), cites its file and line in src/service.py (stop), and its verdict is 'request changes'.",
+   "x": -1.8204048871994019,
+   "y": 2.3319480419158936
+  },
+  {
+   "sample": "crbug-netrc-env-path",
+   "criterion": "The review does not invent bugs: anything else it raises is a real problem in the code shown, and it does not ask to rewrite code that works.",
+   "x": 10.27048110961914,
+   "y": 9.069860458374023
+  },
+  {
+   "sample": "crbug-netrc-env-path",
+   "criterion": "The review reports that a NETRC path is still expanded under the home directory: os.path.expanduser(f\"~/{name}\") turns NETRC=/etc/ci/netrc into a path like /home/user//etc/ci/netrc, so a NETRC file outside the home directory (an absolute path, or one starting with ~) is never found and no credentials are returned; only the default NETRC_FILES names should get the ~/ prefix.",
+   "x": -4.69436502456665,
+   "y": 4.123548984527588
+  },
+  {
+   "sample": "crbug-netrc-env-path",
+   "criterion": "The review treats that bug as blocking (important, not a nit or an open question), cites its file and line in src/netrc_auth.py (the expanduser call in get_netrc_auth), and its verdict is 'request changes'.",
+   "x": -3.348569869995117,
+   "y": 3.425114631652832
+  },
+  {
+   "sample": "crbug-replace-same-object",
+   "criterion": "The review does not invent bugs: anything else it raises is a real problem in the code shown, and it does not ask to rewrite code that works.",
+   "x": 10.08625602722168,
+   "y": 8.195446968078613
+  },
+  {
+   "sample": "crbug-replace-same-object",
+   "criterion": "The review reports the edge case where new_mobject is old_mobject: the new deduplication removes the object from the list before searching, so scene.replace(a, a) no longer finds a, raises ValueError and leaves a removed from the scene; the deduplication must skip the case new_m is old_m (or run only after the replacement).",
+   "x": 0.5284780859947205,
+   "y": 3.04180645942688
+  },
+  {
+   "sample": "crbug-replace-same-object",
+   "criterion": "The review treats that bug as blocking (important, not a nit or an open question), cites its file and line in src/scene.py (the deduplication at the top of replace_in_list), and its verdict is 'request changes'.",
+   "x": -0.6059446334838867,
+   "y": 2.3916878700256348
+  },
+  {
+   "sample": "crbug-xtrim-maxlen-minid",
+   "criterion": "The review does not invent bugs: anything else it raises is a real problem in the code shown, and it does not ask to rewrite code that works.",
+   "x": 10.25181770324707,
+   "y": 7.308734893798828
+  },
+  {
+   "sample": "crbug-xtrim-maxlen-minid",
+   "criterion": "The review reports that xtrim does not enforce that MAXLEN and MINID are mutually exclusive and that one of them is given: xtrim('s', maxlen=10, minid='1-0') sends XTRIM s MAXLEN MINID ~ 10 1-0 and xtrim('s') sends XTRIM s ~, both invalid commands, where xtrim should raise an error (for example a DataError) before sending anything.",
+   "x": -2.0453994274139404,
+   "y": -0.739982545375824
+  },
+  {
+   "sample": "crbug-xtrim-maxlen-minid",
+   "criterion": "The review treats that bug as blocking (important, not a nit or an open question), cites its file and line in src/streams.py (xtrim), and its verdict is 'request changes'.",
+   "x": -1.6202815771102905,
+   "y": 1.0065683126449585
+  }
+ ]
+}

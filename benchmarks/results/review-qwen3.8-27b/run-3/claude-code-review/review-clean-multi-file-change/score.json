@@ -1,0 +1,132 @@
+{
+  "sample_id": "review/clean-multi-file-change",
+  "harness": "claude:claude-code-review",
+  "target": {
+    "name": null,
+    "harness": "claude:claude-code-review",
+    "model": null,
+    "reported_model": null,
+    "endpoint": null,
+    "harness_settings": "personal"
+  },
+  "passed": false,
+  "aggregate_score": 0.0,
+  "duration_seconds": 480.5,
+  "report": {
+    "passed": false,
+    "warn_count": 0,
+    "fail_count": 0,
+    "composite": null,
+    "checks": [
+      {
+        "check_id": "gate",
+        "passed": false,
+        "score": 0.0,
+        "weight": 0.0,
+        "required": true,
+        "status": "run",
+        "subresults": []
+      },
+      {
+        "check_id": "rubric",
+        "passed": false,
+        "score": 0.0,
+        "weight": 0.0,
+        "required": true,
+        "status": "run",
+        "subresults": []
+      }
+    ],
+    "findings": []
+  },
+  "uncalibrated_judge": true,
+  "experiment": "claude-code-review",
+  "agent": {
+    "experiment": "claude-code-review",
+    "sample_id": "review/clean-multi-file-change",
+    "harness": "claude",
+    "model": "qwen/qwen3.8-27b",
+    "command": [
+      "claude",
+      "-p",
+      "--setting-sources",
+      "",
+      "--strict-mcp-config",
+      "--settings",
+      "{\"autoMemoryEnabled\": false}",
+      "--model",
+      "qwen/qwen3.8-27b",
+      "--no-session-persistence",
+      "--permission-mode",
+      "acceptEdits",
+      "--allowedTools",
+      "Read,Grep,Glob,Task,Skill,Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--",
+      "{prompt}"
+    ],
+    "returncode": 0,
+    "timed_out": false,
+    "duration_seconds": 480.5,
+    "baseline_commit": "a9b4a5dd16726b984b90737e1ab7d7153ceb65e5",
+    "scratch": "~/.cache/playbook-bench/review-qwen3.8-27b/run-3/claude-code-review/review-clean-multi-file-change/scratch",
+    "setup_snapshot": "~/.cache/playbook-bench/review-qwen3.8-27b/run-3/claude-code-review/review-clean-multi-file-change/scratch__setup_baseline",
+    "main_loop_tools": [],
+    "second_pass_ran": null,
+    "subagent_starts": {
+      "foreground": 1
+    }
+  },
+  "judge": {
+    "model": "gpt-6-luna",
+    "effort": "high",
+    "judge_samples": 3
+  },
+  "judge_calls": [
+    {
+      "criterion": "The review's verdict is 'approve' or 'approve with comments': the new to_kilograms() helper, its use in quote_cents() and the tests are correct, and nothing in the change needs fixing before merge.",
+      "score": 0.0,
+      "n": 3,
+      "weight": 0.4
+    },
+    {
+      "criterion": "The review does not invent a defect in the change (for example a wrong pound factor, a broken existing call to quote_cents(weight), an inverted conversion, or untested unknown units).",
+      "score": 0.7333333333333334,
+      "n": 3,
+      "weight": 0.3
+    },
+    {
+      "criterion": "The review reads every file the change touches (src/units.py, src/shipping.py and both test files), not only the first one.",
+      "score": 0.10000000000000002,
+      "n": 3,
+      "weight": 0.2
+    },
+    {
+      "criterion": "The review cites file and line for each comment and proposes no edits of its own to the files.",
+      "score": 0.0,
+      "n": 3,
+      "weight": 0.1
+    }
+  ],
+  "rubric_weighted_score": 0.24,
+  "gate_detail": {
+    "shipping_untouched": true,
+    "units_untouched": true,
+    "shipping_tests_untouched": true,
+    "units_tests_untouched": true,
+    "approves": false,
+    "blocks": false,
+    "counts_important": false
+  },
+  "gate_detail_matches_engine": true,
+  "changed_files": [
+    "check_boundary.py",
+    "check_boundary2.py",
+    "check_tests.py",
+    "repro.py"
+  ],
+  "graded_artifact": "diff",
+  "judge_error": null
+}

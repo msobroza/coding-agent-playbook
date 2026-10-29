@@ -1,0 +1,12 @@
+
+
+**Review complete: no bugs found — clean change, no fixes needed.**
+
+- **Correctness:** lb→kg factor `0.45359237` is the exact international avoirdupois pound; convert-then-`ceil` correctly charges every started kilogram; kg path is bit-for-bit backward compatible. Tests: 8 passed (Python 3.13 venv).
+- **Structure:** Extracting conversion into `src/units.py` is the right call; `quote_cents` stays focused.
+
+Non-blocking observations:
+1. `quote_cents(0, "oz")` raises "weight must be positive" before "unknown weight unit" — the `weight <= 0` guard runs first. Harmless.
+2. Float-boundary edge: an overcharge of 1 kg is only possible if a pound input lands exactly on an integer-kg boundary and FP rounding pushes it over — implausible input, inherent to ceiling-on-float, not a defect.
+
+Environment note: system Python 3.8 can't parse `dict[str, float]` annotations; use the project's `.venv` (3.13).

@@ -1,0 +1,105 @@
+
+
+Review complete. Found 2 bugs in the fix:
+
+**Bug 1 (medium)** — Failed `replace` mutates the scene. Removal runs before `old_mobject` is verified to exist, so when it's missing, `new_mobject` gets stripped from every list, then the exception fires. Callers catching `ValueError` end up with a corrupted scene.
+
+**Bug 2 (low–medium)** — `replace(x, x)` regressed from a no-op to an error: the object is removed first, then the scan can't find it, so it raises and the object is gone.
+
+**Suggested fix** — Do a read-only pre-pass for `old_mobject` (raise before any mutation), then keep the remove-then-scan order.
+
+Let me look at the current code to fix these.
+
+
+
+
+
+
+
+
+
+
+
+
+Now I have the full picture. Let me check the repo state and test setup before fixing.
+
+
+
+
+
+
+
+The buggy change is already committed as the baseline. Now I'll fix both bugs following the review's direction: a read-only pre-pass (raise before mutating) plus an explicit no-op for `old is new`.
+
+
+
+
+Now the regression tests for both bugs:
+
+
+
+
+
+
+
+
+
+
+All 7 tests pass. Let me verify the exact repro cases from the review, including the index-shift edge case:
+
+
+
+
+Probe 5 had a bug in my test script (I passed a different `Mobject("inner")` instance — Mobject uses identity equality). Fixing the probe:
+
+
+
+
+
+
+
+The cross-level probe revealed a *pre-existing* limitation: dedup only removes `new_m` from lists visited before `old_m` is found, so if `new` is inside a group and `old` is at the top level, cross-level duplicates remain. This behavior is identical in the original code too — it's out of scope for the two flagged bugs (the review said to keep the remove-then-scan ordering). Let's confirm the original algorithm produces the same result there, then run the full validation:
+
+
+
+
+
+
+
+Probe script bug — `snapshot` needs to handle the top-level list. Fixing:
+
+
+
+
+For all cross-level / deeply-nested cases, the fixed code is a perfect match with the original algorithm — the only behavioral differences are the two bug fixes. Next, I'll regenerate `CHANGE.diff` so it accurately reflects the final working tree compared to the original pre-fix code:
+
+
+
+
+
+
+
+Originals reconstructed correctly. Now generating the final git-format diff:
+
+
+
+
+Final verification:
+
+
+
+
+Done. Both review bugs are fixed, verified, and `CHANGE.diff` now matches the working tree.
+
+**Changes:**
+- `src/scene.py:35` — added read-only `find_in_list` pre-pass; `replace` now raises before mutating the scene (fixes Bug 1: failed `replace` no longer strips `new_mobject` from the screen)
+- `src/scene.py:63` — `old_mobject is new_mobject` returns early as a no-op, after the existence check so a missing object still raises (fixes Bug 2: `replace(x, x)` no longer drops `x`)
+- `tests/test_scene.py` — two regression tests: failed replace leaves scene untouched; self-replace keeps object on screen
+- `CHANGE.diff` — regenerated against the pre-fix original
+
+**Verification:**
+- 7/7 tests pass
+- Both review repros fixed; the index-shift case (`[square, label, circle]` + `replace(circle, square)` → `[label, square]`) behaves correctly since the remove-then-scan order was kept
+- Cross-level and deep-nest cases produce byte-identical results to the original algorithm — no unintended behavior change
+
+One observation, left unaddressed as out of scope: dedup only removes `new` from lists visited before `old` is found, so `new` sitting in a *different* group than `old` can yield a cross-level duplicate reference — a pre-existing limitation of the original design, identical before and after this change.

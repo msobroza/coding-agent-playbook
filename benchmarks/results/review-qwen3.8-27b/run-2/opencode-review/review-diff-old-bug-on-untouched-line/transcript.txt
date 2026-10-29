@@ -1,0 +1,12 @@
+
+
+
+
+
+**Review of `CHANGE.diff`: no bugs in the changed code.**
+
+- `restock()` (src/inventory.py:23) is correct: rejects `units <= 0` with `ValueError`, adds to the matching `sku`, returns the item, raises `KeyError` when no match.
+- Tests cover the happy path, both `ValueError` cases (0, -2), and the unknown-SKU `KeyError`; all 5 pass.
+- The only existing-line touch is the import line — fine.
+
+**One pre-existing issue, not part of this diff** (src/inventory.py:15): `items_to_reorder` uses `quantity < reorder_level`, but its docstring says "to or **below**" — an item exactly at its reorder level is wrongly excluded; should be `<=`. Not a defect of your change, so no action required here, but worth a follow-up.

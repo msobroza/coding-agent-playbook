@@ -1,0 +1,44 @@
+All suspected bugs confirmed by direct execution. The diff is small (a 3-line guard in `replace_in_list` in `src/scene.py` plus two tests), and the working tree matches it (clean tree, diff already applied). I ran all 8 finder angles; angles B (no lines deleted), C (only callers are the tests), Reuse/Simplification/Efficiency (no helper re-implementation, no wasted work of note), and Conventions (no repo/user CLAUDE.md rules this diff violates — the user-level CLAUDE.md's git-authorship and model rules don't apply to this diff) surfaced nothing beyond what's below.
+
+Verified failure scenarios (each run against the applied tree):
+
+1. **Failed `replace` mutates the scene** — `scene.add(square); scene.replace(Mobject("circle"), square)` raises `ValueError` *and* leaves `scene.mobjects == []`. The guard removes `new_m` from the top-level list before the search ever validates that `old_m` exists. Sharper instance: `replace(inner, grp)` where `inner` is inside `grp` — the guard removes `grp` from the scene first, so the search never even visits `grp`'s children; exception raised and `grp` vanishes from the scene.
+2. **Self-replace regression** — `scene.add(square); scene.replace(square, square)` previously was a no-op success; now the guard removes `square` before the search, so it raises `ValueError` and `square` is gone from the scene.
+3. **Nested duplicates still occur** — the guard only checks the list currently being scanned. `g = Mobject("g", square); scene.add(circle, g); scene.replace(circle, square)` → `scene.mobjects == [square, g]` with `g.submobjects == [square]`: the object is referenced twice in the scene tree (drawn twice). Same shape when `new` lives in two groups: it ends up in both.
+4. **Altitude** — remove-before-find is a per-list band-aid; locating `old` first, then moving `new`, would fix 1–3 at once.
+5. **Test gap** — the only "not found" test uses an off-screen `new_mobject`; the mutation-on-failure and self-replace regressions have no regression test (user CLAUDE.md: "every bug fix gets a regression test" — the fix's own tests don't guard the code paths it newly introduces).
+
+```json
+[
+  {
+    "file": "src/scene.py",
+    "line": 37,
+    "summary": "replace() removes new_mobject from the scene before validating old_mobject exists, so a failed replace mutates scene state before raising ValueError.",
+    "failure_scenario": "scene.add(square); scene.replace(Mobject('circle'), square) -> 'Could not find' is raised, but square has already been removed: scene.mobjects == []. A caller catching the ValueError (e.g. a transform fallback) silently loses the on-screen object. Sharper instance: replace(inner, grp) where inner is inside grp -> the guard removes grp from the top level so the search never visits grp's children; exception raised AND grp vanishes from the scene."
+  },
+  {
+    "file": "src/scene.py",
+    "line": 37,
+    "summary": "Replacing an object with itself is now an error that deletes the object, regressing from a no-op success.",
+    "failure_scenario": "scene.add(square); scene.replace(square, square) -> the guard removes square from the scene before the search runs, so the object is never found: ValueError('Could not find Mobject(\\'square\\') in the scene') is raised and square is gone from scene.mobjects. Before this change the call found square at its own index, assigned it to itself, and returned successfully."
+  },
+  {
+    "file": "src/scene.py",
+    "line": 37,
+    "summary": "The dedup guard only checks the list currently being scanned, so a new_mobject nested inside a group is not removed and duplicate references remain when old_mobject is found before that group is visited.",
+    "failure_scenario": "g = Mobject('g', square); scene.add(circle, g); scene.replace(circle, square) -> scene.mobjects == [square, g] with g.submobjects == [square]: square is now referenced twice in the scene tree and drawn twice. Same outcome when square lives in two groups (replace puts it in both). The change's stated goal of no duplicate references is not achieved for the nested case that its own comment ('some groups nest deeply') acknowledges."
+  },
+  {
+    "file": "src/scene.py",
+    "line": 36,
+    "summary": "Altitude: the fix patches the symptom with a per-list remove-before-scan guard instead of locating old_mobject first and then moving new_mobject from wherever it is.",
+    "failure_scenario": "Because mutation happens before search/validation, three distinct broken behaviors fall out of one guard (failed replace mutates the scene, self-replace deletes the object, nested duplicates survive); any further scenario (new_mobject inside old_mobject's own group, new_mobject in multiple groups) requires yet another special case. A find-then-move design — locate old's position, remove new from every list containing it, insert — fixes all of them at the root in the same function."
+  },
+  {
+    "file": "tests/test_scene.py",
+    "line": 26,
+    "summary": "No test covers the failure path where new_mobject is already on screen but old_mobject is not found, nor replace(x, x).",
+    "failure_scenario": "test_replace_rejects_an_object_not_in_the_scene uses an off-screen new_mobject, so it cannot catch the scene-mutation-on-failure regression introduced by the new guard (and nothing covers replace(square, square) deleting the object). The diff's new tests only assert the success path; per the user's ~/.claude/CLAUDE.md rule 'every bug fix gets a regression test', the code paths this change newly introduces have no regression coverage."
+  }
+]
+```

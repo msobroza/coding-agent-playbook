@@ -1,0 +1,17 @@
+
+
+
+
+
+Review complete — verified against the source. The review found one bug:
+
+**Off-by-one in `paginate` — src/pagination.py:22** (high severity)
+
+```python
+if end > len(items):
+    end = len(items) - 1   # drops the last item
+```
+
+When the final page is partial (`len(items) % page_size != 0`), `items[start:end]` excludes the last element: `paginate(['a','b','c'], 0, 10)` → `['a','b']`. It stays hidden when the list length is an exact multiple of `page_size`, since the guard never fires. Fix: `end = len(items)`.
+
+Everything else (`has_more` math, `ValueError` guards) checks out. Want me to apply the fix?

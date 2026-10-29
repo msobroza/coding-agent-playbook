@@ -1,0 +1,24 @@
+I've completed all 8 finder angles plus verification. Here's my assessment.
+
+The change is small and mostly clean:
+- **Angle A (line-by-line):** `to_kilograms` and the `quote_cents` edit are correct in the common case; the one real defect is `math.ceil` on a float product (below). The conversion direction is correct (`lb × 0.45359237 kg/lb`), the factor is the exact international-pound value, and the default `unit="kg"` is backward-compatible.
+- **Angle B (removed behavior):** The old `math.ceil(weight)` line is replaced; for `unit="kg"`, `weight * 1.0 == weight` exactly, so the existing kg path is bit-identical and no guard/validation was dropped. Nothing lost.
+- **Angle C (cross-file):** `quote_cents` is called only by tests; `to_kilograms` is new and called by `shipping` + its own tests. The added optional param breaks no call site.
+- **Reuse / Simplification / Efficiency:** No re-implementation, no redundancy, no waste. `units.py` is a reasonable, well-separated module. Nothing to flag.
+- **Altitude:** The unit conversion is properly isolated in its own module; the fragile point is the `ceil`-on-float in the billing path (same root cause as finding #1, not a separate issue).
+- **Conventions:** No `CLAUDE.md` exists at the repo root, in `src/`, `tests/`, or the scratch dir (verified with `find`), so no convention rules apply. No findings.
+
+All existing test assertions pass (reproduced manually). The one genuine, confirmed bug is a floating-point boundary overcharge, which the new pound test (5 lb → 2.27 kg) is too far from any integer-kg boundary to catch.
+
+```json
+[
+  {
+    "file": "src/shipping.py",
+    "line": 15,
+    "summary": "math.ceil on the float pound->kilogram product overshoots when the conversion lands 1 ulp above an integer kilogram, so a parcel is charged for one extra started kilogram.",
+    "failure_scenario": "quote_cents(68.34330127731205, \"lb\"): 68.34330127731205 * 0.45359237 = 31.000000000000004 (the parcel is exactly 31 kg), so math.ceil returns 32 and the quote is 4290 cents instead of the correct 4170 (a 120-cent / 1-kg overcharge). Any parcel whose weight-in-pounds converts to exactly an integer kilogram — e.g. a kg value round-tripped through pounds, or a high-precision lb reading — is overcharged by one started kg. The new test only checks 5 lb (2.27 kg), far from a boundary, so it does not catch this. A rounding guard (e.g. math.ceil(round(to_kilograms(weight, unit), 9)) or Decimal arithmetic) fixes it."
+  }
+]
+```
+
+Note: this is the only confirmed defect I found; the change is otherwise correct and clean. I did not pad the list to hit the 5-finding target, per the "do not invent" instruction.

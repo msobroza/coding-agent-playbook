@@ -1,0 +1,5 @@
+
+
+The review of the applied CHANGE.diff (a `restock` change in `src/inventory.py`) is complete: no issues found — validation precedes mutation, exception ordering and the `KeyError` contract are correct, and the new tests adequately cover the happy path, `ValueError` (0/negative), and unknown-SKU `KeyError`. All 5 tests pass under the project venv (Python 3.13).
+
+One pre-existing, out-of-scope observation was noted: `items_to_reorder` (src/inventory.py:13-15) has a docstring saying "fallen to or below their reorder level" but the code uses strict `<`, so an item exactly at its reorder level is excluded. It's untouched by this diff, so it's not a finding, just flagged for awareness.

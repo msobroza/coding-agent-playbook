@@ -1,0 +1,29 @@
+
+
+Review complete — it found a real bug. Let me check the tests before fixing.
+
+
+
+
+Applying the fix suggested by the review:
+
+
+
+
+Adding regression tests for the invalid combinations:
+
+
+
+
+Running the tests:
+
+
+
+
+**Review summary:** The change adds `MINID` and `LIMIT` support to `xtrim`, matching Redis 6.2 syntax. The valid single-strategy and limit paths are correct, but the review found one high-severity bug: `xtrim` builds `MAXLEN`/`MINID` independently, so passing both, neither, or just `limit` produces malformed commands that Redis only rejects at runtime.
+
+**Fix applied:**
+- `src/streams.py:34` — added a guard raising `ValueError("exactly one of maxlen or minid must be provided")` when both or neither strategy is given (this also makes the `limit`-only case unreachable).
+- `tests/test_streams.py` — added two regression tests asserting `ValueError` for both and neither cases, and that no command is emitted.
+
+All 6 tests pass.

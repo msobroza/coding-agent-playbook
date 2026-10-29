@@ -1,0 +1,9 @@
+
+
+Reviewed `src/temperature.py`. **Nothing to change.**
+
+- Math is correct: `F = C·9/5 + 32`, `C = (F−32)·5/9`, `K = C + 273.15`.
+- The `ValueError` below absolute zero in `celsius_to_kelvin` is intentional and documented in the docstring — a design choice, not a bug. The other two functions lacking the same guard is consistent with that documented decision.
+- Type annotations, float arithmetic, and docstrings are fine. No lint/style config in the repo to violate.
+
+No bugs, no breaking edge cases, no convention violations.

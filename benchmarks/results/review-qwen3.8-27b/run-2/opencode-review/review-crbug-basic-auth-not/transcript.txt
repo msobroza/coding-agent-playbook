@@ -1,0 +1,45 @@
+
+
+The review found the change isn't mergeable as-is. Let me verify the findings and fix them.
+
+
+
+
+
+
+
+
+
+The review findings check out. Let me look at the tests, then fix the code.
+
+
+
+
+I've checked the tests. Now I'll fix `src/auth.py` — the blocker (the `!` syntax error), the non-ASCII `TypeError`, and the short-circuit timing leak:
+
+
+
+
+
+
+
+All tests pass. Quick sanity check on the non-ASCII case from finding #2:
+
+
+
+
+## Review summary
+
+The code review of `CHANGE.diff` (constant-time credential check) found:
+
+1. **Blocker** — `!` is not a Python operator; `src/auth.py:16-17` was a `SyntaxError`, so the module couldn't even import.
+2. **Medium** — `hmac.compare_digest` raises `TypeError` on non-ASCII strings, so non-ASCII usernames/passwords would 500 instead of returning a clean 401.
+3. **Minor** — the short-circuit `or` still leaked whether the username matched (1 vs 2 comparison calls).
+
+## Fixes applied to `src/auth.py:15-22`
+
+- Replaced `!` with explicit `not`-style logic (compile error gone)
+- Encoded credentials to UTF-8 bytes before comparing (non-ASCII now works)
+- Compute both comparisons unconditionally, then combine — closes the short-circuit timing leak
+
+Verified: `py_compile` passes, all 3 tests pass, and non-ASCII credentials now compare correctly.

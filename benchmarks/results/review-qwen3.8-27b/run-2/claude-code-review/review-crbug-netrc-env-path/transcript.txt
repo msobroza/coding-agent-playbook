@@ -1,0 +1,48 @@
+No CLAUDE.md exists in the repo or accessible user locations, so the conventions angle yields nothing. All empirical verification is complete; probes cleaned up.
+
+**Summary of the review**
+
+The change reads `NETRC` (line 11) and feeds its value into the pre-existing bare-filename loop as `f"~/{name}"` (line 17). I verified by execution: the only `NETRC` form that works is a bare filename living inside `$HOME` — exactly what the new test covers. Absolute paths, tilde-prefixed paths, and CWD-relative paths all silently return `None`; `NETRC=""` makes the code treat `$HOME` itself as the netrc file.
+
+```json
+[
+  {
+    "file": "src/netrc_auth.py",
+    "line": 17,
+    "summary": "NETRC value is joined under '~/' as if it were a bare filename, so absolute and tilde-prefixed paths never resolve and get_netrc_auth silently returns None.",
+    "failure_scenario": "NETRC=/home/u/ci/.netrc (the documented 'path to that file' usage) becomes os.path.expanduser('~//home/u/ci/.netrc') = $HOME//home/u/ci/.netrc, which does not exist -> returns None with no error; likewise NETRC=~/ci/.netrc becomes '~/~/ci/.netrc' -> None. Verified by execution: both forms return None while the file exists and is readable. Absolute paths additionally require $HOME to be set: with HOME unset, expanduser raises KeyError -> None even though no home directory is involved."
+  },
+  {
+    "file": "src/netrc_auth.py",
+    "line": 17,
+    "summary": "Relative NETRC paths resolve against $HOME instead of the current working directory, contrary to how path env vars (and Python's netrc.netrc(), curl, etc.) behave.",
+    "failure_scenario": "CWD=/repo with NETRC=build/netrc: the code checks $HOME/build/netrc, not /repo/build/netrc -> returns None even though the file exists relative to CWD. Verified: with CWD set to the directory containing 'elsewhere/ci-netrc', NETRC='elsewhere/ci-netrc' returns None. Only a single-segment name that happens to exist in $HOME works, which is coincidental, not intended."
+  },
+  {
+    "file": "src/netrc_auth.py",
+    "line": 12,
+    "summary": "Empty NETRC (\"\" ) is treated as set because the check is 'is not None', so f\"~/{''}\" yields the $HOME directory itself, which then gets opened as the netrc file.",
+    "failure_scenario": "export NETRC= (common in shell profiles) -> netrc_locations = (\"\",) -> loc = expanduser('~/') = '$HOME/' which exists -> netrc('$HOME/') raises IsADirectoryError. With raise_errors=False this is silently swallowed and returns None (credentials vanish); with raise_errors=True it raises IsADirectoryError — a filesystem error about the home directory, not a netrc error. An empty value should be treated as unset (falsy check), as stdlib netrc.netrc_file() does with 'if not os.environ.get(\"NETRC\")'. Verified: raise_errors=True raised IsADirectoryError: [Errno 21] Is a directory: '.../home/'."
+  },
+  {
+    "file": "tests/test_netrc_auth.py",
+    "line": 34,
+    "summary": "The only NETRC test exercises the single accidentally-working form (bare filename written into $HOME), pinning the buggy '~/'+name join and leaving absolute, relative, and tilde paths untested.",
+    "failure_scenario": "monkeypatch.setenv('NETRC', '.netrc-ci') with the file written under $HOME passes against the current join, but would fail against a correct path-based implementation (which resolves '.netrc-ci' against CWD) and, more importantly, passes while NETRC=/abs/path, NETRC=rel/sub/path, and NETRC=~/name all silently return None. CI stays green while the advertised feature is broken for every real-world path form."
+  },
+  {
+    "file": "src/netrc_auth.py",
+    "line": 12,
+    "summary": "The fix patches the shared bare-filename loop with a one-element tuple rather than handling NETRC at its proper altitude: as a path.",
+    "failure_scenario": "Forcing an env var documented as a path through the filename-join loop is what causes all three path-resolution bugs; the special case (netrc_locations = (netrc_file,)) layers onto shared infrastructure instead of changing it. The general form is: if NETRC is set, use os.path.expanduser(netrc_file) (or the raw value) directly as the candidate path; only when unset, loop over NETRC_FILES. That single change fixes the absolute, tilde, relative, and empty-string cases at once."
+  },
+  {
+    "file": "src/netrc_auth.py",
+    "line": 11,
+    "summary": "The change re-implements stdlib netrc.netrc_file()'s NETRC convention and diverges from it; the existing helper defines the semantics the feature should match.",
+    "failure_scenario": "Python's netrc module already resolves the NETRC env var (value used as-is as a path; empty/unset falls back to ~/.netrc). Re-implementing it ad hoc in a loop yields the wrong resolution rules (home-join instead of as-is path) for no benefit; calling netrc(netrc_file) with the env value directly — or mirroring netrc_file()'s logic — reuses the established convention and removes the custom candidate loop for the env-var case."
+  }
+]
+```
+
+Key files: `~/.cache/playbook-bench/review-qwen3.8-27b/run-2/claude-code-review/review-crbug-netrc-env-path/scratch/src/netrc_auth.py` (bug site, lines 11–17) and `.../tests/test_netrc_auth.py` (new test at lines 29–35). All four behavioral claims were confirmed by executing the code with python3 (venv python was sandbox-blocked, so I exec'd the module source after stripping the PEP 604 annotation for 3.8).

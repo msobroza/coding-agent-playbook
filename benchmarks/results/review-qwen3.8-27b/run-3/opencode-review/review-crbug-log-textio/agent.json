@@ -1,0 +1,31 @@
+{
+  "experiment": "opencode-review",
+  "sample_id": "review/crbug-log-textio",
+  "harness": "opencode",
+  "model": "openrouter/qwen/qwen3.8-27b",
+  "command": [
+    "opencode",
+    "run",
+    "--pure",
+    "--dir",
+    "~/.cache/playbook-bench/review-qwen3.8-27b/run-3/opencode-review/review-crbug-log-textio/scratch",
+    "--model",
+    "openrouter/qwen/qwen3.8-27b",
+    "--format",
+    "json",
+    "--command",
+    "review",
+    "{prompt}"
+  ],
+  "returncode": 0,
+  "timed_out": false,
+  "duration_seconds": 277.8,
+  "baseline_commit": "f3b240bc08a965fcf2708325e2683af4a1d669c8",
+  "scratch": "~/.cache/playbook-bench/review-qwen3.8-27b/run-3/opencode-review/review-crbug-log-textio/scratch",
+  "setup_snapshot": "~/.cache/playbook-bench/review-qwen3.8-27b/run-3/opencode-review/review-crbug-log-textio/scratch__setup_baseline",
+  "main_loop_tools": [
+    "task:build"
+  ],
+  "second_pass_ran": null,
+  "subagent_starts": null
+}

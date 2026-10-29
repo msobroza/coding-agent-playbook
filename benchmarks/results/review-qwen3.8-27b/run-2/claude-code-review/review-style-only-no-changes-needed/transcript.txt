@@ -1,0 +1,14 @@
+I've completed the review. Scope: `src/temperature.py` (the only source file; working tree is clean and there is no upstream, so the baseline commit's file contents are the review target). I ran all 8 finder angles in sequence over the whole file:
+
+- **A (line-by-line):** `F = C·9/5 + 32` (line 10), `C = (F−32)·5/9` (line 15), and `K = C + 273.15` (line 24) are all textbook-correct. Edge cases verified: `celsius_to_kelvin(-273.15)` yields exactly `0.0` (comparing `0.0 < 0.0` → no false raise at absolute zero), and the adjacent float below −273.15 is genuinely below absolute zero, so the `kelvin < 0.0` guard neither false-positives nor false-negatives at the boundary. No inverted conditions, no off-by-one, no swallowed errors.
+- **B (removed behavior):** Nothing deleted; no invariants lost.
+- **C (cross-file):** `Grep` confirms zero callers of these functions anywhere in the repo (`src/` contains only `temperature.py`); no call site can break.
+- **Reuse / Simplification / Efficiency:** Each function is a single documented expression; no duplication of anything in the codebase, no redundant state, no I/O, no closures. Nothing to flag.
+- **Altitude:** The `ValueError` in `celsius_to_kelvin` is a documented domain guard, applied at the right layer. The asymmetry (only this function validates against absolute zero) is deliberate and documented, not a bug.
+- **Conventions:** No `CLAUDE.md` or `CLAUDE.local.md` exists anywhere in the repo (Glob verified), so this angle returns nothing.
+
+**Honest assessment: there is nothing to change.** The code is correct, documented, and complete for what it promises. I am not manufacturing findings to hit a floor.
+
+```json
+[]
+```

@@ -1,0 +1,37 @@
+I've completed the review. The working tree is clean and the only commit is the baseline, so the scope is exactly the hunk contents of `CHANGE.diff` (added `restock()` in `src/inventory.py` plus new tests). I ran all 8 finder angles over the diff, its context, and the enclosing module.
+
+Key context for the findings:
+- No CLAUDE.md exists at the repo root or in any ancestor of the changed files (verified via `ls`/`find`), so the conventions angle returns nothing.
+- The diff is purely additive in `inventory.py` (only the test import line was replaced, no removed behavior), so Angles B and C found no broken call sites or dropped invariants.
+- The one real correctness bug lives in a function the diff does not touch — `items_to_reorder` in the same file — but it's squarely in the file the PR modifies and is exactly the kind of bug the PR's new test suite should have caught.
+
+```json
+[
+  {
+    "file": "src/inventory.py",
+    "line": 15,
+    "summary": "items_to_reorder uses `<` but its docstring promises items 'fallen to or below' the reorder level, so an item exactly at its reorder level is never flagged; the comparison should be `<=`.",
+    "failure_scenario": "Item(\"pen\", 3, 3) has quantity == reorder_level; items_to_reorder([item]) returns [] instead of [item], so a fully-reorderable SKU is silently omitted from reorder reports. No test in the new test suite covers items_to_reorder at all, so this passes CI."
+  },
+  {
+    "file": "src/inventory.py",
+    "line": 30,
+    "summary": "restock returns after mutating only the first item matching the SKU, silently ignoring any further items with the same SKU.",
+    "failure_scenario": "items = [Item(\"pen\", 3, 1), Item(\"pen\", 2, 1)]; restock(items, \"pen\", 5) adds 5 only to items[0] and leaves items[1] at 2 with no error, because the docstring treats SKU as an identifier without stating or enforcing a uniqueness precondition."
+  },
+  {
+    "file": "src/inventory.py",
+    "line": 28,
+    "summary": "restock validates only `units <= 0` and never validates the type, so non-int units pass the guard and corrupt the dataclass's int `quantity` field.",
+    "failure_scenario": "restock(items, \"pen\", 2.5) passes the `<= 0` check and sets quantity to 5.5 (a float), violating Item's declared int type and breaking downstream comparisons like `quantity < reorder_level`; restock(items, \"pen\", True) is also accepted and adds 1 unit, since True is an int in Python."
+  },
+  {
+    "file": "tests/test_inventory.py",
+    "line": 6,
+    "summary": "The PR adds tests only for the new restock function and leaves items_to_reorder with zero test coverage, which is why the `<` vs `<=` threshold bug in the same file went unnoticed.",
+    "failure_scenario": "A regression at the exact boundary (quantity == reorder_level) would pass CI because no test calls items_to_reorder; the fix (line 15) would be unverifiable by the suite the PR introduced."
+  }
+]
+```
+
+Notes: Reuse, simplification, efficiency, and altitude angles found nothing beyond the above — the codebase is three small functions with no shared helpers to reuse, the new loop is already the simplest form, and the changes introduce no wasted work. Angle B (removed behavior) and Angle C (cross-file tracer) confirmed the test-file import change dropped no invariants and `restock` has no pre-existing callers whose behavior could break.
