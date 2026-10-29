@@ -151,6 +151,7 @@ SCORING_EXEMPT: Final[Mapping[str, str]] = {
     "evals.release_regression": _AFTER_SCORING,
     "evals.release_regression_format": _AFTER_SCORING,
     "evals.report_format": "renders a report for people, never a recorded score",
+    "evals.result_index": "finds committed entries to carry; decides no score",
     "evals.sample_digest": "the sample and inputs digests, recorded per entry",
     "evals.setup_digest": "this module: the digest itself, never a score",
     "evals.target_config": _CONFIG,

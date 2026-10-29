@@ -20,7 +20,7 @@ runs' own. Nothing here runs an agent.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
 
 from coding_agent_playbook.evals.release_metrics import entries_summary
@@ -61,7 +61,9 @@ class CarryPlan:
     """What a ``--carry-from`` record reruns (by sample id, with the reason) and carries.
 
     ``full_rerun_reason`` is set when every sample reruns. ``reported_model`` is
-    the baseline's, kept when no fresh run reports one.
+    the baseline's, kept when no fresh run reports one. ``sources`` names, by
+    sample id, the file each carried entry came from as ``"<release> (<target>)"``
+    (``evals.result_index``); a ``--carry-from`` plan leaves it empty.
 
     Example::
 
@@ -73,6 +75,7 @@ class CarryPlan:
     rerun: Mapping[str, str]
     carried: Mapping[str, Mapping[str, object]]
     reported_model: str | None = None
+    sources: Mapping[str, str] = field(default_factory=dict)
 
     def reruns(self, sample_id: str) -> bool:
         """Whether ``sample_id`` runs fresh in this record."""
