@@ -127,6 +127,11 @@ def test_a_carried_entry_drops_the_comparison_and_records_where_it_was_measured(
     assert "measured_in" not in entry  # the baseline entry itself is left as it was
 
 
+def test_a_carried_entry_records_the_source_target_when_given() -> None:
+    carried = carried_entry(sample_entry(0.5), release="9.9.1", commit="c1", target="alpha")
+    assert carried["measured_in"] == {"release": "9.9.1", "commit": "c1", "target": "alpha"}
+
+
 def test_an_entry_carried_again_keeps_its_original_measured_in() -> None:
     first = carried_entry(sample_entry(0.5, inputs="i"), release="9.9.1", commit="c1")
     second = carried_entry(first, release="9.9.2", commit="c2")
@@ -176,6 +181,16 @@ def test_merge_adds_the_carried_entries_and_rebuilds_the_summary_from_all_entrie
     assert merged["target"]["reported_model"] == "claude-opus-5-5"
 
 
+def test_validation_accepts_a_measured_in_target_and_rejects_a_mistyped_one() -> None:
+    measured = {"release": "9.9.1", "commit": None, "target": "alpha"}
+    validate_release_metrics(
+        metrics_file("9.9.2", {"a": sample_entry(0.5) | {"measured_in": measured}})
+    )
+    mistyped = sample_entry(0.5) | {"measured_in": measured | {"target": 3}}
+    with pytest.raises(ReleaseMetricsError, match=r"samples\.a\.measured_in\.target"):
+        validate_release_metrics(metrics_file("9.9.2", {"a": mistyped}))
+
+
 def test_validation_rejects_a_mistyped_measured_in_and_carry_counts() -> None:
     entry = sample_entry(0.5) | {"measured_in": {"release": 9, "commit": None}}
     data = metrics_file("9.9.2", {"a": entry})
@@ -206,11 +221,11 @@ def test_plan_lines_of_a_full_rerun_give_the_reason() -> None:
 
 def test_plan_lines_count_the_carried_entries_of_each_source_sorted_by_source() -> None:
     carried: dict[str, Mapping[str, object]] = {"a": {}, "b": {}, "c": {}}
-    sources = {"a": "0.3.0 (opus)", "b": "0.2.0 (opus)", "c": "0.3.0 (opus)"}
+    sources = {"a": "9.9.3 (opus)", "b": "9.9.2 (opus)", "c": "9.9.3 (opus)"}
     plan = CarryPlan(None, {"d": "new sample"}, carried, sources=sources)
     lines = carry_plan_lines(plan, controls=[])
     assert lines[0] == "carry plan: 1 rerun, 3 carried"
-    assert lines[-2:] == ["  carried from 0.2.0 (opus): 1", "  carried from 0.3.0 (opus): 2"]
+    assert lines[-2:] == ["  carried from 9.9.2 (opus): 1", "  carried from 9.9.3 (opus): 2"]
 
 
 def _write(path: Path, data: object) -> Path:

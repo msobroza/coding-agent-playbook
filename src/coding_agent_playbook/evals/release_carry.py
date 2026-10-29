@@ -165,12 +165,14 @@ def _rerun_reason(entry: Mapping[str, Any] | None, digest: str) -> str | None:
 
 
 def carried_entry(
-    entry: Mapping[str, object], *, release: str, commit: str | None
+    entry: Mapping[str, object], *, release: str, commit: str | None, target: str | None = None
 ) -> dict[str, object]:
     """``entry`` as carried from the baseline ``release`` at ``commit``.
 
     Its comparison with its own previous release is dropped, and ``measured_in``
-    names where it was measured: kept when the entry was already carried.
+    names where it was measured: kept when the entry was already carried. The
+    result index passes the source file's ``target`` (later tasks find the
+    entry's answers file by it); a ``--carry-from FILE`` record leaves it out.
 
     Example::
 
@@ -178,7 +180,10 @@ def carried_entry(
         {'runs': 3, 'measured_in': {'release': '9.9.9', 'commit': None}}
     """
     copied = {key: value for key, value in entry.items() if key not in _COMPARISON_KEYS}
-    copied.setdefault(MEASURED_IN_KEY, {"release": release, "commit": commit})
+    measured: dict[str, object] = {"release": release, "commit": commit}
+    if target is not None:
+        measured["target"] = target
+    copied.setdefault(MEASURED_IN_KEY, measured)
     return copied
 
 

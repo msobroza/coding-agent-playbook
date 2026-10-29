@@ -65,7 +65,11 @@ def test_carry_from_a_directory_carries_from_any_release(
     assert rc == 0
     data = _load(out)
     assert data["summary"]["carried"] == 1
-    assert data["samples"][keep]["measured_in"]["release"] == "9.9.2"
+    assert data["samples"][keep]["measured_in"] == {
+        "release": "9.9.2",
+        "commit": data["commit"],
+        "target": "opus",
+    }
     assert keep not in log.heads()
     assert "  carried from 9.9.2 (opus): 1" in capsys.readouterr().out
 

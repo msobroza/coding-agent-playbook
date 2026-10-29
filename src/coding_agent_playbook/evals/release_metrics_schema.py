@@ -15,7 +15,7 @@ One file holds one release's scores on one Eval target
       "samples": {"<sample id>": {"prompt_id", "graded", "prompt_digest", "sample_digest",
                   "passes", "runs", "mean_score", "stdev", "checks": {"<check id>": score},
                   "duration_seconds_mean", "tokens_mean", "cost_usd_mean",
-                  "inputs_digest"?, "measured_in"?: {"release", "commit"}}},
+                  "inputs_digest"?, "measured_in"?: {"release", "commit", "target"?}}},
       "controls": {"<sample id>": {the same keys, "graded": "<edition tag>"}},
       "setup_digest"?: "<sha256>",
       "setup"?: {"harness", "harness_version", "model", "endpoint_fingerprint",
@@ -48,7 +48,8 @@ present, the digest is a string and every part is present and typed.
 ``measured_in`` and the summary's ``rerun`` and ``carried`` counts (#329 ticket
 05, ``evals.release_carry``) come with ``playbook eval --record --carry-from``:
 a carried entry is copied from the baseline file, and its ``measured_in`` names
-the release and commit that measured it; ``rerun`` counts the entries this
+the release and commit that measured it, plus the source file's ``target`` when
+it was carried through the result index (``evals.result_index``); ``rerun`` counts the entries this
 record measured and ``carried`` the copied ones. The regression check
 (``evals.release_regression``) also writes both counts on every file it
 annotates; in a full record every entry counts as rerun and ``carried`` is 0.
@@ -170,6 +171,8 @@ _SAMPLE: Final[_Fields] = {
 #: Entry keys added under version 1: absent in older files, typed when present.
 _OPTIONAL_SAMPLE: Final[_Fields] = {INPUTS_DIGEST_KEY: _STR, MEASURED_IN_KEY: (dict,)}
 _MEASURED_IN: Final[_Fields] = {"release": _STR, "commit": _OPT_STR}
+#: The source file's target, recorded by an entry carried through ``evals.result_index``.
+_OPTIONAL_MEASURED_IN: Final[_Fields] = {"target": _STR}
 
 
 class ReleaseMetricsError(ExitTwoError):
@@ -235,6 +238,11 @@ def _sample_problems(label: str, entry: object) -> list[str]:
     problems = _check_fields(entry, _SAMPLE, f"{label}.")
     problems += _check_fields(entry, _OPTIONAL_SAMPLE, f"{label}.", optional=True)
     problems += _nested(entry, MEASURED_IN_KEY, _MEASURED_IN, prefix=f"{label}.")
+    measured = entry.get(MEASURED_IN_KEY)
+    if isinstance(measured, dict):
+        problems += _check_fields(
+            measured, _OPTIONAL_MEASURED_IN, f"{label}.{MEASURED_IN_KEY}.", optional=True
+        )
     checks = entry.get("checks")
     if isinstance(checks, dict):
         problems += [

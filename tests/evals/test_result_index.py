@@ -61,7 +61,8 @@ def test_a_sample_found_in_an_older_release_is_carried_from_it(tmp_path: Path) -
     _write(tmp_path, "9.9.2", {"t/a": sample_entry(0.5, inputs="in-a")})
     _write(tmp_path, "9.9.3", {"t/a": sample_entry(0.9, inputs="in-a-old")})
     plan = _plan(tmp_path, {"t/a": "in-a"})
-    assert plan.carried["t/a"]["measured_in"] == {"release": "9.9.2", "commit": "c2"}
+    measured = {"release": "9.9.2", "commit": "c2", "target": "opus"}
+    assert plan.carried["t/a"]["measured_in"] == measured
     assert plan.sources["t/a"] == "9.9.2 (opus)"
     assert plan.rerun == {}
 
@@ -87,6 +88,7 @@ def test_another_target_name_with_the_same_setup_is_reused(tmp_path: Path) -> No
     plan = _plan(tmp_path, {"t/a": "in-a"})
     assert plan.sources["t/a"] == "9.9.3 (alpha)"
     assert plan.carried["t/a"]["mean_score"] == 0.4
+    assert plan.carried["t/a"]["measured_in"]["target"] == "alpha"
 
 
 def test_a_file_with_another_setup_is_skipped(tmp_path: Path) -> None:

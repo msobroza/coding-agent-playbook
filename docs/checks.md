@@ -972,7 +972,8 @@ directory, such as `catalog/releases`: the record then indexes every
 `<release>/metrics/*.json` there whose `setup` matches this run's, whatever its
 target, leaving out the record's own output. A sample whose `inputs_digest` a
 file records is carried from the newest release that measured it (the target's
-own file first within a release); the rest rerun. A file that cannot be read,
+own file first within a release), and its `measured_in` adds that file's
+`target`; the rest rerun. A file that cannot be read,
 fails the schema or lacks a setup digest is skipped, and when no file matches
 the setup every sample reruns, naming the first files skipped. The plan then
 ends with one `carried from <release> (<target>): <n>` line per source file.

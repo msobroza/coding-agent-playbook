@@ -93,9 +93,10 @@ For each sample of the run:
 
 - **Edition control**: always reruns, as today.
 - **Key found**: a *carried entry*, built with `carried_entry`. Its `measured_in`
-  is the entry's own when it was already carried, else the source file's release
-  and commit. The plan line names the source, for example
-  `review/x: carried from 0.3.0 (opencode-qwen)`.
+  is the entry's own when it was already carried, else the source file's release,
+  commit and `target` name (`measured_in.target`, which finds the entry's
+  answers file). The plan ends with one count line per source file, sorted by
+  source, for example `  carried from 0.3.0 (opencode-qwen): 12`.
 - **Key not found**: reruns. The reason is `new sample` when no indexed file has
   the sample id, else `inputs digest changed`.
 - **No usable file at all**: every sample reruns, and the reason lists why each

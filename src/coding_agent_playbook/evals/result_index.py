@@ -185,7 +185,7 @@ def _carry_plan(ordered: Sequence[IndexedFile], inputs: Mapping[str, str]) -> Ca
             continue
         entry = source.data["samples"][sample_id]
         carried[sample_id] = carried_entry(
-            entry, release=source.release, commit=source.data["commit"]
+            entry, release=source.release, commit=source.data["commit"], target=source.target
         )
         sources[sample_id] = source
     labels = {sample_id: source.label for sample_id, source in sources.items()}
