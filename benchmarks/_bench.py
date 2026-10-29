@@ -28,16 +28,19 @@ WORK_ROOT: Final = Path(
     os.environ.get("BENCH_WORK_ROOT", Path.home() / ".cache" / "playbook-bench")
 )
 
-#: The agent under test: Qwen3.6 27B through OpenRouter, driven by OpenCode or Claude Code.
+#: The agent under test, an OpenRouter model id driven by OpenCode or Claude Code.
+#: ``BENCH_MODEL`` swaps it for a run (``qwen/qwen3.8-27b``) without an edit here;
+#: the committed results were recorded on the default.
+BENCH_MODEL: Final = os.environ.get("BENCH_MODEL", "qwen/qwen3.6-27b")
 OPENCODE_BIN: Final = os.environ.get("OPENCODE_BIN", "opencode")
-AGENT_MODEL: Final = "openrouter/qwen/qwen3.6-27b"
+AGENT_MODEL: Final = f"openrouter/{BENCH_MODEL}"
 AGENT_TIMEOUT_S: Final = 900.0
 
 #: Claude Code reaches the same model through OpenRouter's Anthropic-compatible
 #: API. Every model alias (subagents, the small background model) maps to it, so
 #: no Anthropic model is ever called.
 CLAUDE_BIN: Final = os.environ.get("CLAUDE_BIN", "claude")
-CLAUDE_AGENT_MODEL: Final = "qwen/qwen3.6-27b"
+CLAUDE_AGENT_MODEL: Final = BENCH_MODEL
 OPENROUTER_ANTHROPIC_BASE_URL: Final = "https://openrouter.ai/api"
 #: Tools a reviewer needs: read the tree, run git, Python and the tests. Edits in
 #: the scratch tree are allowed (as in OpenCode) and caught by the gate.
@@ -211,8 +214,8 @@ def claude_agent_env(openrouter_key: str, config_dir: Path) -> dict[str, str]:
         "ANTHROPIC_DEFAULT_HAIKU_MODEL": model,
         "CLAUDE_CODE_SUBAGENT_MODEL": model,
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-        # Qwen3.6 27B's real window; Claude Code does not know the model and would
-        # otherwise assume 200k and print a notice on every run.
+        # Qwen3.6/3.8 27B's real window; Claude Code does not know the model and
+        # would otherwise assume 200k and print a notice on every run.
         "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "262144",
         # An empty config dir per run: no user CLAUDE.md, settings, plugins or hooks.
         "CLAUDE_CONFIG_DIR": str(config_dir),

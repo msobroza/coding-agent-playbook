@@ -3,14 +3,17 @@
 For each run ``run_agents.py`` saved, this rebuilds the engine's ``Baseline`` and
 ``Candidate`` from the kept working tree and transcript, then calls the engine's
 own :func:`score` with full scoring (no fail-fast: the judge grades every run,
-even one whose deterministic gate failed). The judge is the engine's
+even one whose deterministic gate failed). The default judge is the engine's
 ``LLMJudge`` running Opus 5.5 at medium effort through the ``claude`` CLI in
 ``--bare`` mode (no hooks, plugins, CLAUDE.md or tools), with ``ANT_API_KEY`` or
-the ``ANTHROPIC_API_KEY`` from ``.env``.
+the ``ANTHROPIC_API_KEY`` from ``.env``. ``--judge config`` grades with the
+repo's ``[evals.judge]`` instead (its endpoint, model and reasoning effort), the
+judge ``playbook eval --record`` uses, so a benchmark run compares with a record.
 
 Usage::
 
     python benchmarks/score_runs.py
+    python benchmarks/score_runs.py --judge config --judge-samples 3
     python benchmarks/score_runs.py --stub-judge   # free fixed 0.5 judge, a dry run
 """
 
@@ -30,6 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import _bench
 
+from coding_agent_playbook.evals.api_judge import build_api_judge
 from coding_agent_playbook.evals.judge import Judge, JudgeError, LLMJudge, StubJudge
 from coding_agent_playbook.evals.report_format import sample_result_to_dict
 from coding_agent_playbook.evals.run.harness_runner import (
@@ -38,6 +42,7 @@ from coding_agent_playbook.evals.run.harness_runner import (
     capture,
 )
 from coding_agent_playbook.evals.run.scoring import score
+from coding_agent_playbook.evals.target_config import load_eval_settings
 from coding_agent_playbook.grading.types import TrialResult
 
 if TYPE_CHECKING:
@@ -155,11 +160,42 @@ def rubric_weighted(sample: EvalSample, calls: list[dict[str, object]]) -> float
 _STUB_MODEL = "stub-0.5"
 
 
-def build_judge(stub: bool) -> Judge:
-    """The Opus 5.5 judge, or with ``stub`` a free fixed 0.5 for dry runs."""
+def build_judge(stub: bool, judge_kind: str = "opus") -> Judge:
+    """The Opus 5.5 judge, the repo's ``[evals.judge]`` one, or with ``stub`` a free fixed 0.5."""
     if stub:
         return StubJudge(default=0.5)
+    if judge_kind == "config":
+        return config_judge()
     return LLMJudge(command=judge_command(), timeout=_bench.JUDGE_TIMEOUT_S)
+
+
+def config_judge() -> Judge:
+    """The API judge ``[evals.judge]`` in the repo's config names, as ``playbook eval --record`` builds it.
+
+    Example::
+
+        config_judge().model  # "gpt-6-luna"
+    """
+    settings = load_eval_settings(_bench.REPO_ROOT).judge
+    if settings.endpoint is None or settings.model is None:
+        raise RuntimeError(
+            f"--judge config needs [evals.judge] endpoint and model; got {settings!r}"
+        )
+    return build_api_judge(
+        settings.endpoint, settings.model, os.environ, reasoning_effort=settings.reasoning_effort
+    )
+
+
+def judge_label(args: argparse.Namespace) -> dict[str, object]:
+    """What ``score.json`` records as the judge: its model, effort and judge samples."""
+    if args.stub_judge:
+        model, effort = _STUB_MODEL, None
+    elif args.judge == "config":
+        settings = load_eval_settings(_bench.REPO_ROOT).judge
+        model, effort = settings.model, settings.reasoning_effort
+    else:
+        model, effort = _bench.JUDGE_MODEL, _bench.JUDGE_EFFORT
+    return {"model": model, "effort": effort, "judge_samples": args.judge_samples}
 
 
 def _has_judge_score(out: Path) -> bool:
@@ -216,8 +252,7 @@ def score_one(sample: EvalSample, out: Path, judge: Judge, args: argparse.Namesp
     payload.update(
         experiment=meta["experiment"],
         agent=meta,
-        judge={"model": _STUB_MODEL if args.stub_judge else _bench.JUDGE_MODEL,
-               "effort": _bench.JUDGE_EFFORT, "judge_samples": args.judge_samples},
+        judge=judge_label(args),
         judge_calls=recorder.calls,
         rubric_weighted_score=rubric_weighted(sample, recorder.calls),
         gate_detail=detail,
@@ -262,6 +297,12 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "--stub-judge", action="store_true", help="a free fixed 0.5 judge, to dry-run the pipeline"
     )
+    parser.add_argument(
+        "--judge",
+        choices=("opus", "config"),
+        default="opus",
+        help="opus: Opus 5.5 through the claude CLI; config: the repo's [evals.judge]",
+    )
     parser.add_argument("--judge-samples", type=int, default=1)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--force", action="store_true", help="re-score scored runs")
@@ -271,9 +312,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     _bench.load_env_file()
-    if not args.stub_judge:
+    if not args.stub_judge and args.judge == "opus":
         prepare_judge_env()
-    judge = build_judge(args.stub_judge)
+    judge = build_judge(args.stub_judge, args.judge)
     runs = _saved_runs(args.run_name)
     failures = 0
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
