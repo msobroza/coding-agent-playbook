@@ -235,7 +235,7 @@ def test_a_carried_entry_is_carried_with_the_previous_mean_and_no_delta() -> Non
 
 
 def test_a_carried_entry_never_blocks_even_when_its_scores_would_regress() -> None:
-    # Checked against another baseline than the one it was carried from.
+    # Its inputs digest equals the baseline entry's (both absent here), so it is not compared.
     old = {"s": sample_entry(0.9, cost=0.1)}
     check = _check(old, {"s": _carried(0.5, passes=0, cost=0.5)})
     verdict = check.samples[0]
@@ -248,9 +248,68 @@ def test_a_carried_entry_never_blocks_even_when_its_scores_would_regress() -> No
     assert not check.blocked
 
 
-def test_a_carried_entry_the_baseline_lacks_keeps_its_own_mean_as_the_previous() -> None:
-    verdict = _check({}, {"s": _carried(0.8)}).samples[0]
-    assert (verdict.status, verdict.previous_mean, verdict.delta) == ("carried", 0.8, 0.0)
+# Spec D2: a carried entry from an older release is compared unless its inputs
+# digest equals the previous release's entry.
+_OLDER = "9.9.2"
+
+
+def _carried_from_older(mean: float, **extra: Any) -> dict[str, Any]:
+    """An entry carried through the result index from a release before the baseline."""
+    measured_in = {"release": _OLDER, "commit": None, "target": "claude-opus"}
+    return sample_entry(mean, **extra) | {"measured_in": measured_in}
+
+
+def test_a_carried_entry_with_another_inputs_digest_is_compared() -> None:
+    old = {"s": sample_entry(0.9, inputs="inputs-b")}
+    check = _check(old, {"s": _carried_from_older(0.6, inputs="inputs-a")})
+    verdict = check.samples[0]
+    assert (verdict.status, verdict.previous_mean, verdict.delta) == ("regression", 0.9, -0.3)
+    assert verdict.blocks
+    assert any(f"measured in {_OLDER}" in reason for reason in verdict.reasons)
+    assert check.blocked
+
+
+def test_a_compared_carried_improvement_and_ok_are_noted_where_measured() -> None:
+    old = {"up": sample_entry(0.5, inputs="b"), "same": sample_entry(0.9, inputs="b")}
+    new = {"up": _carried_from_older(0.9, inputs="a"), "same": _carried_from_older(0.9, inputs="a")}
+    check = _check(old, new)
+    assert (_status(check, "up"), _status(check, "same")) == ("improvement", "ok")
+    assert all(v.reasons[-1] == f"measured in {_OLDER}" for v in check.samples)
+
+
+def test_a_carried_entry_with_the_same_digest_stays_carried() -> None:
+    old = {"s": sample_entry(0.9, inputs="inputs-a")}
+    check = _check(old, {"s": _carried_from_older(0.6, inputs="inputs-a")})
+    verdict = check.samples[0]
+    assert (verdict.status, verdict.previous_mean, verdict.delta) == ("carried", 0.9, 0.0)
+    assert verdict.reasons == ()
+    assert not check.blocked
+
+
+def test_a_carried_entry_without_a_previous_entry_is_new() -> None:
+    verdict = _check({}, {"s": _carried_from_older(0.8, inputs="inputs-a")}).samples[0]
+    assert (verdict.status, verdict.previous_mean, verdict.delta) == ("new", None, None)
+
+
+def test_a_compared_carried_regression_can_be_accepted() -> None:
+    old = {"s": sample_entry(0.9, inputs="inputs-b")}
+    new_file = metrics_file(_NEW, {"s": _carried_from_older(0.6, inputs="inputs-a")})
+    check = check_regressions(new_file, metrics_file(_OLD, old), accepted={"s": "revert"})
+    assert (check.samples[0].accepted, check.blocked) == ("revert", False)
+    annotated: Any = annotate_release_metrics(new_file, check)
+    validate_release_metrics(annotated)
+    assert annotated["samples"]["s"]["vs_previous"]["accepted"] == "revert"
+    assert annotated["summary"]["regressions"] == 1
+
+
+def test_the_summary_counts_a_compared_carried_entry_as_carried() -> None:
+    # The summary counts how each entry was measured (as the record run wrote it),
+    # not its verdict: a compared carried entry was still not rerun.
+    old = {"s": sample_entry(0.9, inputs="inputs-b")}
+    new_file = metrics_file(_NEW, {"s": _carried_from_older(0.6, inputs="inputs-a")})
+    check = check_regressions(new_file, metrics_file(_OLD, old), accepted={"s": "revert"})
+    summary: Any = annotate_release_metrics(new_file, check)["summary"]
+    assert (summary["rerun"], summary["carried"]) == (0, 1)
 
 
 def test_accepting_a_carried_sample_is_refused_as_did_not_regress() -> None:

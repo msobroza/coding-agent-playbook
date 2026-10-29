@@ -15,11 +15,15 @@ on the same edition is noted, because its text did not change and the model or
 harness must have.
 
 A *carried entry* (``measured_in``, copied by ``eval --record --carry-from``,
-#329 ticket 06) is ``carried``: its inputs and setup did not change, so it was
-not measured again. Its ``vs_previous`` holds the previous mean and a delta of
-0, it never blocks, and an ``--accept`` naming it is refused like any sample
-that did not regress. The annotated summary counts the ``rerun`` and
-``carried`` samples.
+#329 ticket 06) is ``carried`` when its inputs digest equals the baseline
+entry's: it was not measured again. Its ``vs_previous`` holds the previous mean
+and a delta of 0, it never blocks, and an ``--accept`` naming it is refused like
+any sample that did not regress. One whose digest differs (carried from an
+older release, e.g. after a revert, release-metric-artifacts D2) is compared
+like a rerun, with ``measured in <release>`` among its reasons, so a regression
+blocks; one the baseline lacks is ``new``. The annotated summary counts the
+``rerun`` and ``carried`` entries by ``measured_in``, as the record run wrote
+them, not by verdict.
 
 A regression is *accepted* with a reason; :func:`annotate_release_metrics`
 stores it in the new file (``samples.<id>.vs_previous.accepted``), so a rerun
@@ -39,7 +43,11 @@ from coding_agent_playbook.evals.comparison import (
     improvement_reasons,
     regression_reasons,
 )
-from coding_agent_playbook.evals.release_metrics_schema import CONTROLS_KEY, MEASURED_IN_KEY
+from coding_agent_playbook.evals.release_metrics_schema import (
+    CONTROLS_KEY,
+    INPUTS_DIGEST_KEY,
+    MEASURED_IN_KEY,
+)
 from coding_agent_playbook.exit_two import ExitTwoError
 
 if TYPE_CHECKING:
@@ -200,8 +208,8 @@ def annotate_release_metrics(
     summary["accepted_regressions"] = check.accepted_regressions
     summary["improvements"] = check.count("improvement")
     summary["not_comparable"] = check.count("not_comparable")
-    carried = check.count("carried")
-    summary["rerun"] = len(check.samples) - carried
+    carried = sum(1 for entry in samples.values() if MEASURED_IN_KEY in entry)
+    summary["rerun"] = len(samples) - carried
     summary["carried"] = carried
     return annotated
 
@@ -231,10 +239,19 @@ def _same_target(new: Mapping[str, object], baseline: Mapping[str, object]) -> s
 
 def _verdict(sample_id: str, entry: _Entry, old: _Entry | None, release: str) -> SampleVerdict:
     mean = _num(entry["mean_score"])
-    if MEASURED_IN_KEY in entry:
-        return _carried_verdict(sample_id, mean, old)
     if old is None:
         return SampleVerdict(sample_id, "new", None, mean)
+    if MEASURED_IN_KEY not in entry:
+        return _compared_verdict(sample_id, entry, old, release)
+    if entry.get(INPUTS_DIGEST_KEY) == old.get(INPUTS_DIGEST_KEY):
+        return SampleVerdict(sample_id, "carried", _num(old["mean_score"]), mean)
+    verdict = _compared_verdict(sample_id, entry, old, release)
+    return replace(verdict, reasons=(*verdict.reasons, f"measured in {_measured_in(entry)}"))
+
+
+def _compared_verdict(sample_id: str, entry: _Entry, old: _Entry, release: str) -> SampleVerdict:
+    """``entry`` against the baseline's ``old`` by ``--compare``'s rule."""
+    mean = _num(entry["mean_score"])
     previous_mean = _num(old["mean_score"])
     if entry["sample_digest"] != old["sample_digest"]:
         reason = ("sample digest changed: the sample itself was edited",)
@@ -249,13 +266,10 @@ def _verdict(sample_id: str, entry: _Entry, old: _Entry | None, release: str) ->
     return SampleVerdict(sample_id, status, previous_mean, mean, improved, warnings)
 
 
-def _carried_verdict(sample_id: str, mean: float, old: _Entry | None) -> SampleVerdict:
-    """A carried entry's verdict: the baseline's mean as the previous one (its own without one).
-
-    Its scores are not compared: they were measured in an earlier release.
-    """
-    previous_mean = mean if old is None else _num(old["mean_score"])
-    return SampleVerdict(sample_id, "carried", previous_mean, mean)
+def _measured_in(entry: _Entry) -> str:
+    """The release a carried entry was measured in (``measured_in.release``)."""
+    measured_in = entry[MEASURED_IN_KEY]
+    return str(measured_in.get("release")) if isinstance(measured_in, dict) else str(measured_in)
 
 
 def _accept(
