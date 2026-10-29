@@ -1,0 +1,2903 @@
+# Written by `scripts/release.py prepare`. Never edit it by hand.
+
+schema_version = 1
+version = "0.4.0"
+base = "8a26e1a308e6512b27fec2eb6a21dc6a72929b5c"
+
+[[graded]]
+layer = "coding_agent_playbook"
+kind = "prompt"
+id = "characterize"
+path = "catalog/core/prompts/characterize.md.j2"
+digest = "af055e8026353504fe542e533361605e4706c78a75c0370ed15110d939a5135f"
+
+[[graded]]
+layer = "coding_agent_playbook"
+kind = "prompt"
+id = "explain"
+path = "catalog/core/prompts/explain.md.j2"
+digest = "4d9b25845c0d9fa5c1a40da0e7cdb0d8fa2516c9da59a0d953a641b79495021c"
+
+[[graded]]
+layer = "coding_agent_playbook"
+kind = "prompt"
+id = "find-injected-vulnerability"
+path = "catalog/core/prompts/find-injected-vulnerability.md.j2"
+digest = "9916396bd980ad6faed177b07926f8266cd8934bd1346e52877abef216bddb78"
+
+[[graded]]
+layer = "coding_agent_playbook"
+kind = "prompt"
+id = "generate-tests"
+path = "catalog/core/prompts/generate-tests.md.j2"
+digest = "67aaa106de35d519332fa87e4dc36e2d901d84eaeb0f59e9fd22ccebcf6af9c0"
+
+[[graded]]
+layer = "coding_agent_playbook"
+kind = "prompt"
+id = "make-testable"
+path = "catalog/core/prompts/make-testable.md.j2"
+digest = "a78a581b42f50e6604abf2afeabc80add262cdae51e68d53697d5be552ea0bdc"
+
+[[graded]]
+layer = "coding_agent_playbook"
+kind = "prompt"
+id = "refactor"
+path = "catalog/core/prompts/refactor.md.j2"
+digest = "09cc0be588667d8fba410b183f59ccc9af6399bf62747719c061f7b3b0814f88"
+
+[[graded]]
+layer = "coding_agent_playbook"
+kind = "prompt"
+id = "review"
+path = "catalog/core/prompts/review.md.j2"
+digest = "d23b624f51d60cc235e1a63ef77ebd8eaa7dbe3a2829468e89248382e5caf7ca"
+
+[[graded]]
+layer = "coding_agent_playbook"
+kind = "prompt"
+id = "review-architecture"
+path = "catalog/core/prompts/review-architecture.md.j2"
+digest = "83014168c54646d1797da5ebd19d6b79f664f3843acc3f87e84f3a9321009d8d"
+
+[[graded]]
+layer = "coding_agent_playbook"
+kind = "prompt"
+id = "security-review"
+path = "catalog/core/prompts/security-review.md.j2"
+digest = "d6dcff1f9ef3cb699e4d44fed219900bca4d8148e84fd5615363ffc05839bece"
+
+[[graded]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "ml-serialization-security"
+path = "catalog/core/skills/ml-data/rules/ml-serialization-security.md.j2"
+digest = "f242f65db91d90fa4d6e3bd0ef756396088c67ad9849a12762c69dcdd0db3d8b"
+
+[[graded]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "pytest"
+path = "catalog/core/skills/python-testing/rules/pytest.md.j2"
+digest = "4c66d958563177dde4d510f7b2d297631cb3eea424a855374a02c81c3f57bcec"
+
+[[graded]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-dependency-injection"
+path = "catalog/core/skills/python-coding/rules/python-dependency-injection.md"
+digest = "114a0a8fbe36d142f6710d24c1f74dab964df05ab6dfa324648ea5fef8816e50"
+
+[[graded]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-error-handling"
+path = "catalog/core/skills/python-coding/rules/python-error-handling.md"
+digest = "f2dccd74fee3ddb5ad785517c505d4608fb11c42ae3bb7720cd10da2d3dd9459"
+
+[[graded]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-pure-core"
+path = "catalog/core/skills/python-coding/rules/python-pure-core.md"
+digest = "5549da7c97d47f7437c4d86fceee5fef59d94ee83f11f11a781811685e52d663"
+
+[[graded]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-typing"
+path = "catalog/core/skills/python-coding/rules/python-typing.md.j2"
+digest = "63a0f78976de08d55470dfe8cca4e4dc4372a0e355dd70d591ebd5342f18dd20"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "block-precommit-bypass"
+path = "catalog/core/hooks/verify/block-precommit-bypass"
+digest = "51e84ac37a89a5bba73e30639f0ed08b4c166ca1473f905075391dd079ca3e9f"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "clean-code-metrics-nonregression"
+path = "catalog/core/hooks/verify/clean-code-metrics-nonregression"
+digest = "a8e6b81e775da53251443450b495db85df77dfd612464cbb4f0be4db9192eca0"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "command-convention-guard"
+path = "catalog/core/hooks/safety/command-convention-guard"
+digest = "b433e30310f4405607c1b9c3ddbcee20d3b47da3c6bfc7269d7fdf8d447c5abb"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "commit-message-convention"
+path = "catalog/core/hooks/safety/commit-message-convention"
+digest = "1c9877098e10d69aab0dc688aa1676be0ac2bd36f3bbac006abee61e1399891c"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "control-plane-guard"
+path = "catalog/core/hooks/protect/control-plane-guard"
+digest = "d4a6582ed94f0ea366eda5e69fa3c2eb2c2b723bfdc87f7b68fa5895a479d410"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "coverage-diff-gate"
+path = "catalog/core/hooks/verify/coverage-diff-gate"
+digest = "b71fc803738269b1457e7f1e95b3f6a29aaf898725e5db181cfb978e5fb2f52e"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "dependency-allowlist-guard"
+path = "catalog/core/hooks/safety/dependency-allowlist-guard"
+digest = "997f9f810f24197ae073ed2d66925ddf716eeb36f78f9e2a066fbeedc764f299"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "destructive-command-guard"
+path = "catalog/core/hooks/safety/destructive-command-guard"
+digest = "ce272e58607d6e0de802dd6a4ee27e3b5a1196868150357de891c6fc07a99074"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "docstring-nonregression"
+path = "catalog/core/hooks/verify/docstring-nonregression"
+digest = "955779041eb81807be3cc3021a16ad9f7d537860d4c785d334d44e0f4ad07171"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "document-layout-guard"
+path = "catalog/core/hooks/protect/document-layout-guard"
+digest = "764fab5f8a2d2589b993c26ae224562801ba28f7ac3cba8e7e824c4e01d5943a"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "error-handling-lint-feedback"
+path = "catalog/core/hooks/feedback/error-handling-lint-feedback"
+digest = "3464e924ba7bfc7ebd3477d6eb7d7bbde5219b5e85e1d08f7f1717cce885e70b"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "eval-sample-authoring-lint"
+path = "catalog/core/hooks/protect/eval-sample-authoring-lint"
+digest = "f76d8083fdd1600ed74e1a004429141f4eb964fe4d9d64fceb90c955df9fb6d7"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "exfil-channel-guard"
+path = "catalog/core/hooks/safety/exfil-channel-guard"
+digest = "6118cad83f6ca7fb42c59d9fa89f9c3c470da6e5851cf1123103316cf1f9155b"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "gate-weakening-guard"
+path = "catalog/core/hooks/verify/gate-weakening-guard"
+digest = "fcfb8b0e5d0a2edd82cdfafb2c16c1e52be9291f14ac3e22611b0dfd879b2823"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "git-commit-push-policy-guard"
+path = "catalog/core/hooks/safety/git-commit-push-policy-guard"
+digest = "ccde8a1c20ceebc516b8ca100a349a7499bdacd928b0ba1d19e6ee51df3e3890"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "guard-decision-log"
+path = "catalog/core/hooks/audit/guard-decision-log"
+digest = "a039c35b3592a6f7b810f55f53bec0c1c301347a68cce96880a5583fa95d7ec4"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "guard-eval-fixtures"
+path = "catalog/core/hooks/protect/guard-eval-fixtures"
+digest = "0ad3ddc03cfb4ca782ed4f46a1717bbceb0acaf8f8a933c40268fd335daddabc"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "guard-generated-outputs"
+path = "catalog/core/hooks/protect/guard-generated-outputs"
+digest = "44dbb6e1e267e775a6bca0c7248d1088e527c2efb0d9cbd4c184dc00013dbc19"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "local-audit-log"
+path = "catalog/core/hooks/audit/local-audit-log"
+digest = "cde38d5d6b34337eb9f213f001a4917adfd8ab05f6049e5573c485b5a355be07"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "ml-unsafe-deserialization-guard"
+path = "catalog/core/hooks/feedback/ml-unsafe-deserialization-guard"
+digest = "a03d7dc8b069b712ef3125f03df413c07e47421dc50181a4e0b6af97440ed6d1"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "network-egress-guard"
+path = "catalog/core/hooks/safety/network-egress-guard"
+digest = "4d1a9ca9cdae9ec14cc3c5fe7f927c8576c58e45b40fb4ffba579df58eefc263"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "notebook-output-hygiene"
+path = "catalog/core/hooks/feedback/notebook-output-hygiene"
+digest = "1064efac6ae5e1a657df1f5525123f45a3e44fd0abe2a7c3bb65be776a37a274"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "pii-prompt-guard"
+path = "catalog/core/hooks/safety/pii-prompt-guard"
+digest = "a878e42fa3b2b8f2e9baccd889902bd1d189c9908e573f4afec8b71093850648"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "post-edit-ruff-format"
+path = "catalog/core/hooks/feedback/post-edit-ruff-format"
+digest = "2e921ce34e710591ca9cf22e4c889a7b0484004ed937b7f68d3af21766e95df7"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "precompact-checkpoint"
+path = "catalog/core/hooks/audit/precompact-checkpoint"
+digest = "18370d88e80e70ca0cc85e512732d729f1e96ae7dd13277b25f94055f8512d5c"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "prompt-output-contract-on-stop"
+path = "catalog/core/hooks/verify/prompt-output-contract-on-stop"
+digest = "2354df1a9e6474076a29ec85919fa965ce654b76931afedce1e43235ab3d090a"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "prompt-write-scope-guard"
+path = "catalog/core/hooks/feedback/prompt-write-scope-guard"
+digest = "0cc08ae83397de832aa0845ab8a58d87479e284fd8d2f009e92f620d13674ab0"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "pytest-conventions-feedback"
+path = "catalog/core/hooks/feedback/pytest-conventions-feedback"
+digest = "ecaf09492dbc36efe07afd5bcf16a1c45e8bab81e5a22a0a6431457eb5f31e99"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "resync-on-detector-input-change"
+path = "catalog/core/hooks/protect/resync-on-detector-input-change"
+digest = "cfad41735823bb676c0cdfc6779fabbf830f3134f38aaaa6f678bb416d533fdf"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "secret-content-guard"
+path = "catalog/core/hooks/safety/secret-content-guard"
+digest = "56815cc4fd84c1c98f66bfdecd9ce3d2391872b01e6214e6b17fb9df9c71d8df"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "secrets-path-guard"
+path = "catalog/core/hooks/safety/secrets-path-guard"
+digest = "f702cc7e0cc804064e1fd6c4a78dc460fdbfc12d6424f6473f0b465058667441"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "sensitive-data-read-guard"
+path = "catalog/core/hooks/safety/sensitive-data-read-guard"
+digest = "d486c3d5b287eeba0f15df624f53f8c9b77601dc4c7a85b146799826a4f426b4"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "session-start-playbook-briefing"
+path = "catalog/core/hooks/protect/session-start-playbook-briefing"
+digest = "2a557783223189b3798801112a0ed4e059e3e769300460b5f907cbe2c3ef6526"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "skill-nudge"
+path = "catalog/core/hooks/feedback/skill-nudge"
+digest = "b86b9ca8f355732786aecb636cd2472c0865b7b7e039cc22583b7b3c10751eee"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "stop-ci-parity-gate"
+path = "catalog/core/hooks/verify/stop-ci-parity-gate"
+digest = "b1452d4c2e30aedf332d32e72a672949eaca82e270c51e7a98063a295dbd1702"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "stop-diff-sweep"
+path = "catalog/core/hooks/safety/stop-diff-sweep"
+digest = "05a5190a65748ca46356b4fbff1fd34e24b3a52ea42946eda0f0c48d1b3d1e36"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "stop-drift-and-orphan-gate"
+path = "catalog/core/hooks/protect/stop-drift-and-orphan-gate"
+digest = "09a91b35c2e9544cf39ec9e921ce175ccd59d997a64e7019418e54a7dec29eac"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "subagent-stop-verify"
+path = "catalog/core/hooks/verify/subagent-stop-verify"
+digest = "066f086e5f11708f017f8f426442592e927dbf04c910f723e422e86cbcc8c8eb"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "taint-escalation"
+path = "catalog/core/hooks/safety/taint-escalation"
+digest = "8c26fe1d6331276c99eae9f01636be6a78205cc23edd1d5cf67b04a4ec9a842f"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "tests-with-source-nudge"
+path = "catalog/core/hooks/verify/tests-with-source-nudge"
+digest = "a9e67d816b2459b37e881db5d55350bfec4414e7d941adf9ea147ed572676ed2"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "toolchain-missing-hint"
+path = "catalog/core/hooks/feedback/toolchain-missing-hint"
+digest = "321c0d03245fd2bc45c30526338ee18365967425cdcd8427fa295f534d11df15"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "typing-lint-feedback"
+path = "catalog/core/hooks/feedback/typing-lint-feedback"
+digest = "e6646ed9788b25389875fe05ace285d0a25283f61fb1e34bb173be3d8d82d599"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "hook"
+id = "validate-then-sync-on-canonical-edit"
+path = "catalog/core/hooks/protect/validate-then-sync-on-canonical-edit"
+digest = "f0a86b4c09ecb2eeb30646773f5c55de7689f3c509163796b9c18750c7bcc20b"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "prompt"
+id = "characterize"
+path = "catalog/core/prompts/characterize.md.j2"
+digest = "af055e8026353504fe542e533361605e4706c78a75c0370ed15110d939a5135f"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "prompt"
+id = "explain"
+path = "catalog/core/prompts/explain.md.j2"
+digest = "4d9b25845c0d9fa5c1a40da0e7cdb0d8fa2516c9da59a0d953a641b79495021c"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "prompt"
+id = "find-injected-vulnerability"
+path = "catalog/core/prompts/find-injected-vulnerability.md.j2"
+digest = "9916396bd980ad6faed177b07926f8266cd8934bd1346e52877abef216bddb78"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "prompt"
+id = "generate-tests"
+path = "catalog/core/prompts/generate-tests.md.j2"
+digest = "67aaa106de35d519332fa87e4dc36e2d901d84eaeb0f59e9fd22ccebcf6af9c0"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "prompt"
+id = "make-testable"
+path = "catalog/core/prompts/make-testable.md.j2"
+digest = "a78a581b42f50e6604abf2afeabc80add262cdae51e68d53697d5be552ea0bdc"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "prompt"
+id = "refactor"
+path = "catalog/core/prompts/refactor.md.j2"
+digest = "09cc0be588667d8fba410b183f59ccc9af6399bf62747719c061f7b3b0814f88"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "prompt"
+id = "review"
+path = "catalog/core/prompts/review.md.j2"
+digest = "d23b624f51d60cc235e1a63ef77ebd8eaa7dbe3a2829468e89248382e5caf7ca"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "prompt"
+id = "review-architecture"
+path = "catalog/core/prompts/review-architecture.md.j2"
+digest = "83014168c54646d1797da5ebd19d6b79f664f3843acc3f87e84f3a9321009d8d"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "prompt"
+id = "security-review"
+path = "catalog/core/prompts/security-review.md.j2"
+digest = "d6dcff1f9ef3cb699e4d44fed219900bca4d8148e84fd5615363ffc05839bece"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "a2a-agent-card"
+path = "catalog/core/skills/domino-agents/rules/a2a-agent-card.md"
+digest = "fbb077446ac6b238923c0a2ab43d5cc39cbdf66c8be044ba47f573192e96096b"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "a2a-client-deadlines"
+path = "catalog/core/skills/domino-agents/rules/a2a-client-deadlines.md"
+digest = "a4c18bb1cd2564da07ce21c5e90d90654c7e2d5feeacaf67e2ad0500a5a0c6ef"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "a2a-mount-lifespan"
+path = "catalog/core/skills/domino-agents/rules/a2a-mount-lifespan.md"
+digest = "164efe2d962dda076e0d7f69e52cfcc2de59778c02f3c00d5d4f5ac8d8f0cd8e"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "alembic-migrations"
+path = "catalog/core/skills/web-application/rules/alembic-migrations.md"
+digest = "af8579aa281b5aa385426dad022ba8e674db932fc9f0ac69db057057f4e17cd0"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "arch-break-import-cycles"
+path = "catalog/core/skills/python-architecture/rules/arch-break-import-cycles.md"
+digest = "ac966e794ff0286458ebe7da167f194382d412c1f6ddaf487f0098ee3642b7bf"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "arch-composition-root"
+path = "catalog/core/skills/python-architecture/rules/arch-composition-root.md.j2"
+digest = "8dfa579857751633babc7b63f20bc2096f345e3aab19daa7fe3573e2e558107e"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "arch-contract-tests-for-fakes"
+path = "catalog/core/skills/python-architecture/rules/arch-contract-tests-for-fakes.md.j2"
+digest = "c9ff42a4ae0341a7ce0fe3f678f54415385b621c165684bc2420dcd8f8df12be"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "arch-cqrs"
+path = "catalog/core/skills/python-architecture/rules/arch-cqrs.md"
+digest = "348b863511f8e3487f0cfd3872ad0be88d2790a9eb3ad8079c5108c4183d2a07"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "arch-dependency-direction"
+path = "catalog/core/skills/python-architecture/rules/arch-dependency-direction.md.j2"
+digest = "951932d2c0f983129bd8a2b8564b2b49c820bc9ad3271d5adf93881b588441b6"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "arch-effects-after-commit"
+path = "catalog/core/skills/python-architecture/rules/arch-effects-after-commit.md"
+digest = "0380a1a39b838bb2e6ba26fe4f6abf6019c2963ff3240b077eae30c3ccb03ccb"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "arch-event-sourcing"
+path = "catalog/core/skills/python-architecture/rules/arch-event-sourcing.md"
+digest = "0c97ce6a00fbaedec8f6f4d433aba624af4c01a3817be4b3fc5b07dab37ee3d8"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "arch-event-store"
+path = "catalog/core/skills/python-architecture/rules/arch-event-store.md"
+digest = "52104a93f655b0f118e16cde7ea326290453611421f5c0890cb8fcd1abe7332d"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "arch-make-legacy-testable"
+path = "catalog/core/skills/python-architecture/rules/arch-make-legacy-testable.md"
+digest = "287b478f795e093dc715ffa6b3627d2609d7ca4c3918ab2afbab097feb2a25db"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "arch-no-junk-drawer-packages"
+path = "catalog/core/skills/python-architecture/rules/arch-no-junk-drawer-packages.md"
+digest = "981d345189a7516bef07b4a79511abfff91cc981388c2c7fc79e1c0e7e787eb7"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "arch-one-layout-axis"
+path = "catalog/core/skills/python-architecture/rules/arch-one-layout-axis.md"
+digest = "6b076c47b99fa3d558dc907258e8c83e04d9c04928be857f31afb7913f236be2"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "arch-persistence-steps"
+path = "catalog/core/skills/python-architecture/rules/arch-persistence-steps.md.j2"
+digest = "4ed7f05a26a32ab92e052f8978e99cf558abd53b5b3dd22c7c5b9130c866a458"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "arch-ports"
+path = "catalog/core/skills/python-architecture/rules/arch-ports.md.j2"
+digest = "a54a46c62b251162a36e96d371e92f1b77493259d67e4e265978bc54e982915c"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "arch-predictable-project-tree"
+path = "catalog/core/skills/python-architecture/rules/arch-predictable-project-tree.md"
+digest = "2897ba0957f6561627354d4bdb38afd67ae1f307a721f211a93037704f0aec1c"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "arch-read-model-projections"
+path = "catalog/core/skills/python-architecture/rules/arch-read-model-projections.md"
+digest = "c49b664092b57693e39531479f2bff7d06d67b5c108a28d3aff42650e24a11dc"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "arch-repository-port"
+path = "catalog/core/skills/python-architecture/rules/arch-repository-port.md.j2"
+digest = "8bc37c96930c8f8bab54c119886aef6b88a7b1147c612d209ffdc9965e7fab24"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "arch-rich-domain-model"
+path = "catalog/core/skills/python-architecture/rules/arch-rich-domain-model.md.j2"
+digest = "b2fd12c293b826d1362ca5e8e5990fca2630b8b136cd4018f7d3434cad88a56b"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "arch-test-use-cases-with-fakes"
+path = "catalog/core/skills/python-architecture/rules/arch-test-use-cases-with-fakes.md.j2"
+digest = "5cefedbb99d0588ece20599ad062c0c243fa54f18598b7c99e1d60cbeb395d5c"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "arch-tests-by-layer"
+path = "catalog/core/skills/python-architecture/rules/arch-tests-by-layer.md.j2"
+digest = "c19f2cc286496fa3ca628f6b0ad70a57f4c3e87540a1a4e1795afb750fbaa741"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "arch-typed-records-across-layers"
+path = "catalog/core/skills/python-architecture/rules/arch-typed-records-across-layers.md.j2"
+digest = "055df67efecad0ef9bb6e5c4d22db71b8178aa00fbc4b37ea4d7b6a06b328592"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "arch-ubiquitous-language"
+path = "catalog/core/skills/python-architecture/rules/arch-ubiquitous-language.md"
+digest = "47665e0e195902c5d8840c2ee05450d4be12b299e3cef27d19dda9ccce0f074c"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "arch-unit-of-work"
+path = "catalog/core/skills/python-architecture/rules/arch-unit-of-work.md.j2"
+digest = "645f10dcdb5034c55515a5430d5f0aa3eb27f9562f2ad5179e2caccffb9636f4"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "arch-use-case-functions"
+path = "catalog/core/skills/python-architecture/rules/arch-use-case-functions.md.j2"
+digest = "668d8768b659b070ebb21d60fb42aeabf70dcc1c8d958fb2e535706a56ca37d9"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "code-legibility"
+path = "catalog/core/rules/always/05-code-legibility.md.j2"
+digest = "9d79d183ac5ee6fb3345508cbee36a51b031710ff9c418598eab1189249c1635"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-abstract-factory"
+path = "catalog/core/skills/design-patterns/rules/design-abstract-factory.md"
+digest = "51483090d5586f024533eabe388e3bcfcf7b1f36968fe7fc9719517e335ae05d"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-adapter"
+path = "catalog/core/skills/design-patterns/rules/design-adapter.md"
+digest = "1daddc511fd8aba0cc8d982fe173752ab6b96520d5f04290419b41101b29ef92"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-bridge"
+path = "catalog/core/skills/design-patterns/rules/design-bridge.md"
+digest = "8537dc9ed3432d6f1a812798d565f2b9cd84f9c502056e307b0d46863dabeb15"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-builder"
+path = "catalog/core/skills/design-patterns/rules/design-builder.md"
+digest = "b65ed282d0013ee149cb370a1afe4c3d14ab54d51da48934513c2508dc063e6a"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-callback"
+path = "catalog/core/skills/design-patterns/rules/design-callback.md"
+digest = "fad3f1a434568bfa0403310dc6a83371ce707159a8ecfae80337ea6ec0440dd1"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-command"
+path = "catalog/core/skills/design-patterns/rules/design-command.md"
+digest = "758aacf7bf05a752a7ab8065234c56024db9195e4e8ca6394e064a9837fd9afe"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-complete-construction"
+path = "catalog/core/skills/design-patterns/rules/design-complete-construction.md"
+digest = "89e03f4d78dcefca724580d356ab3473a6f50ba29cc93e4f6eed8f3be8cf297e"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-composition-over-inheritance"
+path = "catalog/core/skills/design-patterns/rules/design-composition-over-inheritance.md"
+digest = "a68350d6eeaae3ba8dff8b0877cf0eb02d492a7fe02395e21ede0ab0cdcd9403"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-dependency-inversion"
+path = "catalog/core/skills/design-patterns/rules/design-dependency-inversion.md"
+digest = "3cdc478759239e0dac197b4cdd37fc7b56d93e4b3bcd54524196b04674234cc9"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-dispatch-table"
+path = "catalog/core/skills/design-patterns/rules/design-dispatch-table.md"
+digest = "cfc1b04d8f3ca203f2195d39eb3aaa5606ad7ad053825a120b3f208ea56589ee"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-domain-events"
+path = "catalog/core/skills/design-patterns/rules/design-domain-events.md"
+digest = "7a7bf0086930874b7bc8429b199fcc8a90d69ea1b8f7ea28039f61ecf1acf3b1"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-dry-yagni-kiss"
+path = "catalog/core/skills/design-patterns/rules/design-dry-yagni-kiss.md"
+digest = "9884800f02e23289494e535713a08a4a857fdae0fe27c5700871fd546b27bb91"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-facade"
+path = "catalog/core/skills/design-patterns/rules/design-facade.md"
+digest = "2642a3e7bc519529bbfdbf39bed2ba4428e15f6512d54f01ca929715e9939cf8"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-fluent-interface"
+path = "catalog/core/skills/design-patterns/rules/design-fluent-interface.md"
+digest = "c4155046c8ab93a9a30a142d7669d8d6a0bda5454458e009e948938bf0947056"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-function-builder"
+path = "catalog/core/skills/design-patterns/rules/design-function-builder.md"
+digest = "1e3f22c0ed8ef9f2ea4a19165b9fac3c48c1e9c021326adbfa175771537cda07"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-function-wrapper"
+path = "catalog/core/skills/design-patterns/rules/design-function-wrapper.md"
+digest = "487d810a4f84f2634d72fe83e79e3db720071d25a2296e62ab0801e814b8ee01"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-grasp-responsibilities"
+path = "catalog/core/skills/design-patterns/rules/design-grasp-responsibilities.md"
+digest = "4f22ffbfb2e61f34f4c91ad242cb52da2f6539d0e3de4bdd76ae5937b104c230"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-interface-segregation"
+path = "catalog/core/skills/design-patterns/rules/design-interface-segregation.md"
+digest = "309b61cc787209f33d97c62a4854babfe01196a2a7247210e1eb686d7c8c69c9"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-lazy-loading"
+path = "catalog/core/skills/design-patterns/rules/design-lazy-loading.md"
+digest = "5b5cff73de71a775c9b887d99331ba723733786049dd448ef0b56d36a7864200"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-lightest-construct"
+path = "catalog/core/skills/design-patterns/rules/design-lightest-construct.md"
+digest = "3f844d46d4bf1e6adafeb1c2a18a2b7ddf11be557ee868f14d0a320e70051afb"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-liskov-substitution"
+path = "catalog/core/skills/design-patterns/rules/design-liskov-substitution.md"
+digest = "d0f7edec38cf98e079ab917bec4441a9428669cb06c8147075b815fc7a50a74f"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-low-coupling"
+path = "catalog/core/skills/design-patterns/rules/design-low-coupling.md"
+digest = "b8db712aaa16f4f53d23dd714994e8167c56678f3a68866fd37ad013b5c56590"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-name-for-intent"
+path = "catalog/core/skills/design-patterns/rules/design-name-for-intent.md"
+digest = "93da570a9ee2f18dde959a6c29adb81544cb1076473a6ba4c1a2dfac21bb93b3"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-open-closed"
+path = "catalog/core/skills/design-patterns/rules/design-open-closed.md"
+digest = "ab9fadff631d03970d9159a46c4c29b465ab27022e29b1376bb06bf160bc32a9"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-pattern-from-smell"
+path = "catalog/core/skills/design-patterns/rules/design-pattern-from-smell.md"
+digest = "93c566fb92a0d454d632de02767023f1b20aa1fedda008e6d5412cf0b8cb9cfd"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-pipeline"
+path = "catalog/core/skills/design-patterns/rules/design-pipeline.md"
+digest = "7c0c16628480eb6bf5fe55619adf76efd76d49a7c8d1111fb8366a9e2a7ee16c"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-plugin-loading"
+path = "catalog/core/skills/design-patterns/rules/design-plugin-loading.md"
+digest = "a52815ca1160ca204710b63c861a1bacaaf1c427c909273e4856fb05ca9b3552"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-review-by-severity"
+path = "catalog/core/skills/design-patterns/rules/design-review-by-severity.md"
+digest = "d6f8f666b9e07fd8578b614308812e64843f9aa814e1f415531ba5d558ae3fa2"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-single-responsibility"
+path = "catalog/core/skills/design-patterns/rules/design-single-responsibility.md"
+digest = "f603e61e040ab825ccb180d719458a8c43df6bfb0b9c587cfedf53234f8293bf"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-singleton"
+path = "catalog/core/skills/design-patterns/rules/design-singleton.md"
+digest = "4de588bfeaf02999f2674e9ac18235c6bd03f639c7386c02f6f57147e807e376"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-split-god-class"
+path = "catalog/core/skills/design-patterns/rules/design-split-god-class.md"
+digest = "8399c1b376cedffe1a7602a05aa5e28aa9d9416e566bb90f9dbc17b7fd86bde4"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-start-with-the-data"
+path = "catalog/core/skills/design-patterns/rules/design-start-with-the-data.md"
+digest = "b59099edfac1986bb2f0b72a45f8e92318f85daed686487d5379bcaad79292a6"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-state"
+path = "catalog/core/skills/design-patterns/rules/design-state.md"
+digest = "dfa2f772c7b158daaa46da419ab189977ac79a51dcfd28803d532ac061f907e1"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-strategy"
+path = "catalog/core/skills/design-patterns/rules/design-strategy.md"
+digest = "74692058758a1b9bc0bcedcdb497517038df5c4720c0603c19ba7eca5b5f37ba"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-tell-dont-ask"
+path = "catalog/core/skills/design-patterns/rules/design-tell-dont-ask.md"
+digest = "bffb2a12d9ddd1efaf700ff1c46af82b05f8a4c3e55be118e008f7be150fe619"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-template-method"
+path = "catalog/core/skills/design-patterns/rules/design-template-method.md"
+digest = "7eba039bc74ef0a2cc70077741b89a41bffb7b060f31dce16f9288d229b54e08"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "design-value-objects"
+path = "catalog/core/skills/design-patterns/rules/design-value-objects.md"
+digest = "35a911d16b28ecc349c5ae149f2ef4a44127a749dc597792af028eae19cf3198"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "docs-architecture-overview"
+path = "catalog/core/skills/python-documentation/rules/docs-architecture-overview.md"
+digest = "8938f2edec67b3489ae8b905559f48024264649a64a0d42ecced2608c831e2bd"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "docs-changelog"
+path = "catalog/core/skills/python-documentation/rules/docs-changelog.md"
+digest = "2cbb1ea58e22f0ab61b4ba509b4afc12cff72eb28bc16b081276c7fade9462dc"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "docs-check-in-ci"
+path = "catalog/core/skills/python-documentation/rules/docs-check-in-ci.md"
+digest = "586356bb0331888afb87ee198d8af815ed594e242f26e595e818e52241e83c19"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "docs-citation-file"
+path = "catalog/core/skills/python-documentation/rules/docs-citation-file.md"
+digest = "9c4cccc30c348a0962cc09eb4dc752bbd49e58123a0738c435aa10b807aea0ad"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "docs-contributing-guide"
+path = "catalog/core/skills/python-documentation/rules/docs-contributing-guide.md"
+digest = "1c7b2bf2fd0527d9ac944c0a76de2cd0f31b64ea0365fcf1ad73e59e8ccc313a"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "docs-document-layout"
+path = "catalog/core/skills/python-documentation/rules/docs-document-layout.md"
+digest = "257722ade3a2abeb0d2eb2ef5d953b1743a7e765d08fa596e0e37cd24e083c8c"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "docs-page-kinds"
+path = "catalog/core/skills/python-documentation/rules/docs-page-kinds.md"
+digest = "8838b62fa1c235bbedbeff93f029ef60a11c2b58b48f5cddfb7830c43096705c"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "docs-readme-essentials"
+path = "catalog/core/skills/python-documentation/rules/docs-readme-essentials.md"
+digest = "363881a800b7d8ebb29b453f939c2579afcf2e58a6321e83ab72a8f795d18e10"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "docs-record-why"
+path = "catalog/core/skills/python-documentation/rules/docs-record-why.md"
+digest = "47c3846999369f3116449dee3675f8b38e8f3d0ad0933f7bf7ea421e54b8f97d"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "docs-runnable-examples"
+path = "catalog/core/skills/python-documentation/rules/docs-runnable-examples.md"
+digest = "d3c9f75385454ceeba6a12177071ee68016a720c0b5d4354fc21a0f20a867fbf"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "docs-same-change"
+path = "catalog/core/skills/python-documentation/rules/docs-same-change.md"
+digest = "0e4cbf76b241d4ee3af7b2ea3877b12ce7da472087e1f5f4f4b1e4565eb39e1f"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "document-layout"
+path = "catalog/core/rules/always/15-document-layout.md.j2"
+digest = "4beadf562357f4ba2b8168f303c01aa1dae7ba2d2130d34f43d94ac5885254b2"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-agent-access-token"
+path = "catalog/core/skills/domino-agents/rules/domino-agent-access-token.md"
+digest = "de3f975bbf46977a28974e537a300d9dc4507ce13ab6ff922e9fbc999ffbf3f6"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-agent-app-factory"
+path = "catalog/core/skills/domino-agents/rules/domino-agent-app-factory.md"
+digest = "12dacf68f4f72761a201da96aa5a32a2137e2e46043b51046ff7cfdd9272e45a"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-agent-chat-endpoint"
+path = "catalog/core/skills/domino-agents/rules/domino-agent-chat-endpoint.md"
+digest = "3e0f254f1bf793296f2deb470515b08bb8be3a87993c51768f4df9358d49f882"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-agent-config-file"
+path = "catalog/core/skills/domino-agents/rules/domino-agent-config-file.md"
+digest = "c8b5baf525c6a11325a72a4db744b3dc37533d627c04ada19ca3fb75293f2a90"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-agent-conversation-state"
+path = "catalog/core/skills/domino-agents/rules/domino-agent-conversation-state.md"
+digest = "cfc0954288b03c27769cfd266fdb7b1fa10f81e8d81961f9ad344ec379b16ee1"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-agent-dev-eval-job"
+path = "catalog/core/skills/domino-agents/rules/domino-agent-dev-eval-job.md"
+digest = "8e366af8d2ac229e7b84e5a27b9802e88ca22cf7abf03b703f808d29080fb559"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-agent-endpoint-auth"
+path = "catalog/core/skills/domino-agents/rules/domino-agent-endpoint-auth.md"
+digest = "9eaae1013a3bc295f0de27d27141c6ad5ae552128c2c60f122b3c05d99fe7ab8"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-agent-eval-out-of-band"
+path = "catalog/core/skills/domino-agents/rules/domino-agent-eval-out-of-band.md"
+digest = "65da36bec17c064f42ca37e4a7a9a5838988262a360c4a52ad789bcb671c484c"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-agent-evaluators"
+path = "catalog/core/skills/domino-agents/rules/domino-agent-evaluators.md"
+digest = "c55a37ecddc7197d977730b85d1201471050cc882a0133f1908c5d703aa66b4c"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-agent-fake-domino-tests"
+path = "catalog/core/skills/domino-agents/rules/domino-agent-fake-domino-tests.md"
+digest = "5ce19314b3a54f44e3ce3e231f63f748d3e9afbfe109657a5f60a8347c466df1"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-agent-fake-llm-tests"
+path = "catalog/core/skills/domino-agents/rules/domino-agent-fake-llm-tests.md"
+digest = "8e4d6356a006eae8ac0bf1d72ce504abf37e8c3f4204b17d834404cf14af524d"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-agent-llm-keys"
+path = "catalog/core/skills/domino-agents/rules/domino-agent-llm-keys.md"
+digest = "e7bf2f8cc2aaf7a14b9d881ba649fd0f919237f23b69930724c8962687cb5b02"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-agent-logging"
+path = "catalog/core/skills/domino-agents/rules/domino-agent-logging.md"
+digest = "9313e4d73c34e30ffa84b66e7b1ad609b161cd68abe85163dbc74aa2a1e541dd"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-agent-manual-spans"
+path = "catalog/core/skills/domino-agents/rules/domino-agent-manual-spans.md"
+digest = "6d96985a006fa71120e0448218e0e9a220aa6f85244dc19c65055905a5063a26"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-agent-prod-eval-watermark"
+path = "catalog/core/skills/domino-agents/rules/domino-agent-prod-eval-watermark.md"
+digest = "e6cc408ba4ad637baf69e8ea38f8171de72a8f123a0c78d203dd07e93d6a89b2"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-agent-redact-traces"
+path = "catalog/core/skills/domino-agents/rules/domino-agent-redact-traces.md"
+digest = "2e6610e993a712db47b7f65a660041d57157fe53ac581bce38fce2ce1b413c46"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-agent-run-limits"
+path = "catalog/core/skills/domino-agents/rules/domino-agent-run-limits.md"
+digest = "313de3518498e20c954812502df263e837118d453b067ad477c8430a19d75bf5"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-agent-sdk-names"
+path = "catalog/core/skills/domino-agents/rules/domino-agent-sdk-names.md"
+digest = "834850c356e12f7f1d802cd801df2243a31634e8215c996de7c5290a1443f378"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-agent-settings"
+path = "catalog/core/skills/domino-agents/rules/domino-agent-settings.md"
+digest = "1988cae95a0457b68eb026cebfc235616251566b2e5e584a95c8532059f31152"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-agent-trace-entrypoint"
+path = "catalog/core/skills/domino-agents/rules/domino-agent-trace-entrypoint.md"
+digest = "3f24bb03e6f754fdfcae40cd74ec4c0abc825eb7019f1fdfda21a80e6507ec0f"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-api-proxy-auth"
+path = "catalog/core/skills/domino-jobs/rules/domino-api-proxy-auth.md"
+digest = "5a41972bb21c5f4b1196e670869945830e1cc72a0cacbed70481c994db5ad4ac"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-app-bind-host-port"
+path = "catalog/core/skills/domino-apps/rules/domino-app-bind-host-port.md"
+digest = "da72b9a14cf536983f17976c7ca8f073c53d127a5f09eed1e99bb658a68f5c8f"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-app-concurrent-writes"
+path = "catalog/core/skills/domino-apps/rules/domino-app-concurrent-writes.md"
+digest = "c86145b8fbefdc515686fda138a129e789c07dd8b09c0ef7b96f5a100982fc92"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-app-dash"
+path = "catalog/core/skills/domino-apps/rules/domino-app-dash.md"
+digest = "a26a569bdd72c7bf1c5451bd2fc62fafdc24b48054419da29ca57c4bc6f39601"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-app-deployment-record"
+path = "catalog/core/skills/domino-apps/rules/domino-app-deployment-record.md"
+digest = "1f1cd1c5a41a8edc12c982b93e5f2bd23c50d27a60a0390a4e4c7af8f1ca948a"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-app-endpoint-auth"
+path = "catalog/core/skills/domino-apps/rules/domino-app-endpoint-auth.md"
+digest = "b45d4b6527319f10a28c168dff38595c3fca9fa6788ffb78c1c52a1877a7321f"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-app-external-persistence"
+path = "catalog/core/skills/domino-apps/rules/domino-app-external-persistence.md"
+digest = "4d90744ad603301ea19eb286dfcc233f669951b5a61c447c667aebf73839f5db"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-app-external-resources"
+path = "catalog/core/skills/domino-apps/rules/domino-app-external-resources.md"
+digest = "36091443e8ee3f312813ba758cc1fb31142ffdf62abe39428cdcec49a20bc5dc"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-app-flask"
+path = "catalog/core/skills/domino-apps/rules/domino-app-flask.md"
+digest = "36b790699aa7d702bc2d798e898fc21d1fe2e26e0f21758a59e33572e9df3683"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-app-launch-script"
+path = "catalog/core/skills/domino-apps/rules/domino-app-launch-script.md"
+digest = "6d3de74f280e7dd5a13a91ea7d9a65e26e86812d1ce737d6b7c93df8fcf8b126"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-app-logging"
+path = "catalog/core/skills/domino-apps/rules/domino-app-logging.md"
+digest = "e3d7aa52ea8c5167b3d04fd79865a6008019820f7a1b6247c586ab17c0083cb8"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-app-production-server"
+path = "catalog/core/skills/domino-apps/rules/domino-app-production-server.md"
+digest = "c2a6e9e04b0ff2bdb77f7d3a969cf95b85ca3e68726ecc11e178eb71529fc8b4"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-app-proxy-limits"
+path = "catalog/core/skills/domino-apps/rules/domino-app-proxy-limits.md"
+digest = "b02fe706caa2022ad3a4fdf3b4db92984139b53d607572e4f51696975fc6f33a"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-app-publish-from-commit"
+path = "catalog/core/skills/domino-apps/rules/domino-app-publish-from-commit.md"
+digest = "292245a1ff309ef28e0d0d1a870e76aaf1577e71edfff6341fe27989e643ff25"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-app-publisher-data-rights"
+path = "catalog/core/skills/domino-apps/rules/domino-app-publisher-data-rights.md"
+digest = "f5367688e7348bd03f291260aa645351ee795b94844716e2f58e0fafa935e7ff"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-app-relative-urls"
+path = "catalog/core/skills/domino-apps/rules/domino-app-relative-urls.md"
+digest = "a7b213481c41c31fb8b40675a7aaf12360594baa617f3d4cc6b2cca433bc5b5d"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-app-replica-state"
+path = "catalog/core/skills/domino-apps/rules/domino-app-replica-state.md"
+digest = "ed85de20621a3aa14afbb0bbacf3307b5054bc93f9e35d445a33772e080a5feb"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-app-sharing-mode"
+path = "catalog/core/skills/domino-apps/rules/domino-app-sharing-mode.md"
+digest = "e5579c5742d139002315b2d15be8c8948159fb78c8c99d7f2a3df7afe95ebe70"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-app-shiny"
+path = "catalog/core/skills/domino-apps/rules/domino-app-shiny.md"
+digest = "b38d16ddc602df78bec7c2847a3212139b62917cfdf74c5d1c1f6ef70d1c856b"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-app-starter-settings"
+path = "catalog/core/skills/domino-apps/rules/domino-app-starter-settings.md"
+digest = "f47591806c8756af54fb72eb6ab311267313b38aea3658309120210f402d182a"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-app-static-site"
+path = "catalog/core/skills/domino-apps/rules/domino-app-static-site.md"
+digest = "17136238e039ad845e4398c023dcb4d705c855bfe2751600a2b4b3c0878c24ec"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-app-streamlit"
+path = "catalog/core/skills/domino-apps/rules/domino-app-streamlit.md"
+digest = "2f0680bb5ffd2a65d1dc20b880b86b2ff1730cf1a019e8dcc157ccb57a7a4f56"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-app-url-prefix"
+path = "catalog/core/skills/domino-apps/rules/domino-app-url-prefix.md"
+digest = "ab824a4f1c3896689a1cf496ccf71b5c6e7684df4b7eca9385eca89c160b6c1a"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-app-verify-viewer-jwt"
+path = "catalog/core/skills/domino-apps/rules/domino-app-verify-viewer-jwt.md"
+digest = "129e91fc32e65db6aa9063da115b3c404fff9ce82db5a5223d9a46849f17c0b8"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-app-viewer-identity"
+path = "catalog/core/skills/domino-apps/rules/domino-app-viewer-identity.md"
+digest = "109d51b0ca6d3eba44df3e6fdc6a65af67fb14ab7b939c3b45622bcafdca1979"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-app-viewer-token"
+path = "catalog/core/skills/domino-apps/rules/domino-app-viewer-token.md"
+digest = "b011d7672f6415d83c1dab07f5247980574bf6d5e5762bf8f1c0c15ed46e2402"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-app-workspace-preview"
+path = "catalog/core/skills/domino-apps/rules/domino-app-workspace-preview.md"
+digest = "634d1b7c1d1c1b75876d0491388e95fb84751b2a912f1d3b072fec263c64a0e0"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-dataset-snapshots"
+path = "catalog/core/skills/domino-jobs/rules/domino-dataset-snapshots.md"
+digest = "aff7fb5f5d1d959ddd2de1f51054c3dfc80c357f2324471b3d96d22b36f77c93"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-datasets-for-large-data"
+path = "catalog/core/skills/domino-jobs/rules/domino-datasets-for-large-data.md"
+digest = "edc76b4be30979a58b22a8112cf92d173dc8bbe8151c1bc9d273a73b67e8b5b7"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-env-var-names"
+path = "catalog/core/skills/domino-jobs/rules/domino-env-var-names.md"
+digest = "9e204b5ea6f56d756ee3e0d4809eeea1c9a565c154ce588190646fede6515675"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-environment-revisions"
+path = "catalog/core/skills/domino-jobs/rules/domino-environment-revisions.md"
+digest = "821c0c230368165f5f22b50d8899f641e7c9ac77b01c66a1fe506a5468a30080"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-flow-task-io"
+path = "catalog/core/skills/domino-jobs/rules/domino-flow-task-io.md"
+digest = "fad0e244c3f5315d0f46835a299ce4042e118a2b798ed8fd94e4c45a60e4e133"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-flow-task-purity"
+path = "catalog/core/skills/domino-jobs/rules/domino-flow-task-purity.md"
+digest = "11a279989218927ea90c4340bf063fc5145b0f030b84d07cc8f339bcb7fef1b4"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-idempotent-jobs"
+path = "catalog/core/skills/domino-jobs/rules/domino-idempotent-jobs.md"
+digest = "9a0f005d75a34c97fe2bf35c61c8872a65c40ea1be809aac6da26cd51493d867"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-job-email-report"
+path = "catalog/core/skills/domino-jobs/rules/domino-job-email-report.md"
+digest = "ccda5e08be281521ed3b466ea75351edab9f733f93ee1193d16f8b874680c108"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-job-entry-point"
+path = "catalog/core/skills/domino-jobs/rules/domino-job-entry-point.md"
+digest = "3a02d3f8c05914bf02325e07d57a6767b2a7444cca5281dcf42f042d700c3349"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-job-exit-codes"
+path = "catalog/core/skills/domino-jobs/rules/domino-job-exit-codes.md"
+digest = "1f55fc241dbfdaaba8a4959ac0557684b03a00edc084462ae72802dc1fa23bda"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-job-logging"
+path = "catalog/core/skills/domino-jobs/rules/domino-job-logging.md"
+digest = "e6a7c15dcf874eb6509f9e5026f7cf75444829ab89b2ba12b730d60a15ffe3b5"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-job-results"
+path = "catalog/core/skills/domino-jobs/rules/domino-job-results.md"
+digest = "508428bececd13ceb76dd2a66e1c8012e0fecf9eb40ca93db824e48e080b5f8d"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-job-schedules"
+path = "catalog/core/skills/domino-jobs/rules/domino-job-schedules.md"
+digest = "8c37250c43c7305022c7f8021dde868cccf0ee68c9fcb510b6d35575fa070bf4"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-job-stats-file"
+path = "catalog/core/skills/domino-jobs/rules/domino-job-stats-file.md"
+digest = "f11cd47ef8f9401b7ce14c07aadd9bf356bb97c5412f4143ce9b990c12cda851"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-launch-jobs-from-code"
+path = "catalog/core/skills/domino-jobs/rules/domino-launch-jobs-from-code.md"
+digest = "19ab10348cbe60c28714f3e9b13b613c7441415ba79595985679a8da1a955f79"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-launcher-arguments"
+path = "catalog/core/skills/domino-jobs/rules/domino-launcher-arguments.md"
+digest = "d675508a1b2848708dc9fc5f2cf7db2ef4a5a2328511334b9e582ca3f66aa2f9"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-launcher-uploads"
+path = "catalog/core/skills/domino-jobs/rules/domino-launcher-uploads.md"
+digest = "fabf2cbc860a295b041a1c36a3dd14df82b44cfb32c335ce31b2c23f94a7befd"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-materialize-external-data"
+path = "catalog/core/skills/domino-jobs/rules/domino-materialize-external-data.md"
+digest = "1a09219f2520178c379f91afc03f5c9714b36e18251d81a0ca12dc48be16a053"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-mlflow-tracking"
+path = "catalog/core/skills/domino-jobs/rules/domino-mlflow-tracking.md"
+digest = "ff82d26243fe56b760cadaf31ca689ad76847a3fa1438b91833328196b5e7bb0"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-paths-from-env"
+path = "catalog/core/skills/domino-jobs/rules/domino-paths-from-env.md"
+digest = "07a70e347a3967c68d28e7348a6607693848d0db4afd001e4cd0798a0db90aa9"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-pinned-environments"
+path = "catalog/core/skills/domino-jobs/rules/domino-pinned-environments.md"
+digest = "512684a48e544b059a195934f72a0f3b87fbbeb3e511690af767b9693a2d3b73"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-project-types"
+path = "catalog/core/skills/domino-jobs/rules/domino-project-types.md"
+digest = "58df991b1755f8243a884f25d0ea9a565f474bee027722ee77e64fb126ebcf01"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-run-manifest"
+path = "catalog/core/skills/domino-jobs/rules/domino-run-manifest.md"
+digest = "ea8b9d6d7656790fbe81b1a7f0172d745bd0fb44f8e91634c7a634f619862e09"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-run-scoped-writes"
+path = "catalog/core/skills/domino-jobs/rules/domino-run-scoped-writes.md"
+digest = "982f26d1ab9dd5be2520b59e2a062ce2e97384631a27962439617250d7dda95c"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-secrets-in-env-vars"
+path = "catalog/core/skills/domino-jobs/rules/domino-secrets-in-env-vars.md"
+digest = "49340d6628436708e4ae30735034ed00f447508cbde64d3fa74cdfe890dba3cf"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "domino-spot-checkpoints"
+path = "catalog/core/skills/domino-jobs/rules/domino-spot-checkpoints.md"
+digest = "e2a78d1da589a371cc7981fe3625f2f008583108e86ec143a71932c95d9fb76f"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "fastapi-app-wiring"
+path = "catalog/core/skills/web-application/rules/fastapi-app-wiring.md"
+digest = "6f51acabf9d39ddd9ed7a02e541e368f7f253185bc17f3ca7537891a6a57c0ac"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "fastapi-dependency-overrides"
+path = "catalog/core/skills/web-application/rules/fastapi-dependency-overrides.md.j2"
+digest = "af7b5a281aca9974a24f08f157b1a6363a4458abbfd2cb3132f838aab15b9d16"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "fastapi-dependency-providers"
+path = "catalog/core/skills/web-application/rules/fastapi-dependency-providers.md"
+digest = "2f4a4b9a259b1d4bff7027055d732c4da3eba3f36f5c79a60485ca6e1d0a709c"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "fastapi-error-boundaries"
+path = "catalog/core/skills/web-application/rules/fastapi-error-boundaries.md"
+digest = "319dd67f20d04059756e1bed07673f98447f6c1a15a4a4d016510e2f677c1c23"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "fastapi-no-blocking-calls"
+path = "catalog/core/skills/web-application/rules/fastapi-no-blocking-calls.md"
+digest = "f2fc4a9a9b6d1b9c1599065353a5f054a87067e904c4ffbf68495bb88fd62c70"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "fastapi-openapi-metadata"
+path = "catalog/core/skills/web-application/rules/fastapi-openapi-metadata.md"
+digest = "c245fa4e90923a1d21d741f92de15911c5eedb9973e91265f270d3b3e4c0739a"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "fastapi-query-parameters"
+path = "catalog/core/skills/web-application/rules/fastapi-query-parameters.md"
+digest = "d00d2dae6652bbb7db788f89a54dda8f94f6e659852ab2ee7f7bec9b2494a4e4"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "fastapi-request-id-logging"
+path = "catalog/core/skills/web-application/rules/fastapi-request-id-logging.md"
+digest = "6305b55ebce20417ec2091046c42565039dd266866bf09d60b0501f7734599ac"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "fastapi-thin-routes"
+path = "catalog/core/skills/web-application/rules/fastapi-thin-routes.md"
+digest = "30233d9f42f0a692c3145a4950cf51d559d3e42e5e4792bde494d573ebcf5c17"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "httpx-shared-client"
+path = "catalog/core/skills/web-application/rules/httpx-shared-client.md"
+digest = "852a2e58b25aa4727b47088b178853cf48960bdbbc1989d0ec273374c5f5b4c8"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "mkdocs-api-reference"
+path = "catalog/core/skills/python-documentation/rules/mkdocs-api-reference.md"
+digest = "ecafca77f6b68410cb2c434092c4954e6ff39f6c11143c6f58bfa2cde7d044f8"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "mkdocs-docs-build"
+path = "catalog/core/skills/python-documentation/rules/mkdocs-docs-build.md"
+digest = "3c6258ef20f9624a2ade23a0580ba373ebb7acf99da8b921c7731aaf46297473"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "ml-array-typing"
+path = "catalog/core/skills/ml-data/rules/ml-array-typing.md.j2"
+digest = "96a209e7c5098e970ca836b3ae92339e66a3eab4c45a0c2acf499d9629fe9ed1"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "ml-build-once"
+path = "catalog/core/skills/ml-data/rules/ml-build-once.md.j2"
+digest = "205898a938d16c50f411516f44d5462fddc78d618d7fefa068b00b1e822a41d0"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "ml-categorical-labels"
+path = "catalog/core/skills/ml-data/rules/ml-categorical-labels.md.j2"
+digest = "e0b8de3b763a27ed846fc35950a331ff90bc27319b1178d4ec01559015bbb285"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "ml-check-after-load"
+path = "catalog/core/skills/ml-data/rules/ml-check-after-load.md.j2"
+digest = "eeb6d5b958131f7af576908ac543f3736b13b67e102a016a2d8d3efcf3749cfd"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "ml-data-transforms"
+path = "catalog/core/skills/ml-data/rules/ml-data-transforms.md.j2"
+digest = "4554e36470c2f12b9884375f9f5f7f9581fc9606e3421b9513ce156d603a842f"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "ml-dtypes-at-load"
+path = "catalog/core/skills/ml-data/rules/ml-dtypes-at-load.md.j2"
+digest = "6ad9d9502b273b1bf1959c6423f85ebc1e3777fe2b2897ba81e9234078e68978"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "ml-frame-validation"
+path = "catalog/core/skills/ml-data/rules/ml-frame-validation.md.j2"
+digest = "c1f5714a79bb5d0e33c737c14c385273b6f8ca78171e399ea1e25646c7ba382d"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "ml-loc-assignment"
+path = "catalog/core/skills/ml-data/rules/ml-loc-assignment.md"
+digest = "f3a6fb6fbc7bcb4ff1fb54c20c3505ce70742bc542e522f457354cdfbb58b81e"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "ml-method-chaining"
+path = "catalog/core/skills/ml-data/rules/ml-method-chaining.md.j2"
+digest = "de261bf4832540323e2b82585e296d0592a13a1ee2c29c641ed0b3d0692ee3c0"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "ml-named-aggregation"
+path = "catalog/core/skills/ml-data/rules/ml-named-aggregation.md.j2"
+digest = "85023013c51c5f1b81f57a343159356c595c8b53adb65dad531e23869f508d7b"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "ml-numeric-assertions"
+path = "catalog/core/skills/ml-data/rules/ml-numeric-assertions.md.j2"
+digest = "5b149f14daa310d516ae927159f166f07ac77e46b8edeb3eecae519e7f5caaf5"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "ml-numpy-dtypes"
+path = "catalog/core/skills/ml-data/rules/ml-numpy-dtypes.md"
+digest = "0813340c4c3cc69367dbd599fb26a3ba3454c0ab8833fd820fc5e887d814860d"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "ml-seeded-randomness"
+path = "catalog/core/skills/ml-data/rules/ml-seeded-randomness.md.j2"
+digest = "f488c847d18b74ba7b21e23a75a7fe2da00331dec88a73f9f6ac8d6cd9821e30"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "ml-serialization-security"
+path = "catalog/core/skills/ml-data/rules/ml-serialization-security.md.j2"
+digest = "f242f65db91d90fa4d6e3bd0ef756396088c67ad9849a12762c69dcdd0db3d8b"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "ml-vectorization"
+path = "catalog/core/skills/ml-data/rules/ml-vectorization.md.j2"
+digest = "6a2fb1af71a06bb5acf3cb7bb1e79457eb7cc9fa57110f997e6ffe078b88c8d3"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "mypy-type-checking"
+path = "catalog/core/skills/python-tooling/rules/mypy-type-checking.md"
+digest = "ed71789e016952e8eabff8cbdf1dacab06fd2b5ae56f7c5d5a08550861ecebca"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "playbook-ask-for-missing-inputs"
+path = "catalog/core/skills/playbook-creator/rules/playbook-ask-for-missing-inputs.md.j2"
+digest = "5e4b1b7cb8bf2eb1e2f3c732da0f443dc31719a9fb5780e57042e879bb713873"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "playbook-engine-catalog-gate"
+path = "catalog/core/skills/playbook-creator/rules/playbook-engine-catalog-gate.md"
+digest = "bef0715094e3380a8c5dd6c5e3670b15c4cc53c9bac6d727addc58e81c4d7ec5"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "playbook-eval-samples"
+path = "catalog/core/skills/playbook-creator/rules/playbook-eval-samples.md"
+digest = "91e8c8a121c77325f6527658cd9f9251e642f2486da76f0fe984de314ceb3c92"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "playbook-hook-definition"
+path = "catalog/core/skills/playbook-creator/rules/playbook-hook-definition.md"
+digest = "7180842489c822aeae43d21e85d0bb4c3cb4496c8b37a4cc1ee53a038bf3fe39"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "playbook-hook-guardrails"
+path = "catalog/core/skills/playbook-creator/rules/playbook-hook-guardrails.md"
+digest = "1c6345a272b68931b24356d512bbd58a73fb401a2c18c67c13c087b06663c793"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "playbook-layer-placement"
+path = "catalog/core/skills/playbook-creator/rules/playbook-layer-placement.md"
+digest = "944418f632f00634f1324ec45ccba61d85cbbd3462d251455030c7ec6988a055"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "playbook-override-by-id"
+path = "catalog/core/skills/playbook-creator/rules/playbook-override-by-id.md"
+digest = "ed32ed7c098a4109427e03dbfb3c5d3e431953f3dcd35f17b173137cbb0f100f"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "playbook-plugin-layout"
+path = "catalog/core/skills/playbook-creator/rules/playbook-plugin-layout.md"
+digest = "2ae632fc7b9dafe26ca935c4d415f4a8d2256a5fc5a50ff32ee27c5ccd7f156e"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "playbook-prompt-frontmatter"
+path = "catalog/core/skills/playbook-creator/rules/playbook-prompt-frontmatter.md"
+digest = "2d0645c6eb5d6ff50f154acbb8817d00ad66ee55b64132d2856ea29271f9d90b"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "playbook-rule-body"
+path = "catalog/core/skills/playbook-creator/rules/playbook-rule-body.md"
+digest = "3fd3fc82b5c1914b1988245db551d12d197e06a2d0b103db7947b3af2e646618"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "playbook-rule-frontmatter"
+path = "catalog/core/skills/playbook-creator/rules/playbook-rule-frontmatter.md"
+digest = "31850eae53b707724f31bd9043a370f78a328e5a151aaeeff2a72f1e59a09a2e"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "playbook-rule-gates"
+path = "catalog/core/skills/playbook-creator/rules/playbook-rule-gates.md"
+digest = "7dabc627dea5fac16205e32f2783d5afd0ac82c5fcf432c38aa955895a41c998"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "playbook-rule-ids"
+path = "catalog/core/skills/playbook-creator/rules/playbook-rule-ids.md"
+digest = "d8b72eaeb5e553e3b655f2e6eebe07a1440b63a8162d5be3b28d4bffff0b2ee7"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "playbook-rule-templates"
+path = "catalog/core/skills/playbook-creator/rules/playbook-rule-templates.md"
+digest = "29335db958034bbe10af5a774611e6853211ee2a93da9418d14cdd99d103b0a3"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "playbook-skill-files"
+path = "catalog/core/skills/playbook-creator/rules/playbook-skill-files.md"
+digest = "f650543b54b7461a7d04711ba0d6465107e51c41f71e075f03fe58ec66ce0dc4"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "playbook-skill-md"
+path = "catalog/core/skills/playbook-creator/rules/playbook-skill-md.md"
+digest = "5f18b91e3a17a970aa60b55bc1dacf68f1416dd98e8ec1ae08aa1f721ec72236"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "playbook-skill-sections"
+path = "catalog/core/skills/playbook-creator/rules/playbook-skill-sections.md"
+digest = "ddbb13b378cc9ff884385ce814e7c009087d876917fbbe30860973b31c74b961"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "playbook-third-party-content"
+path = "catalog/core/skills/playbook-creator/rules/playbook-third-party-content.md"
+digest = "1f91e01f1b7f3f44a7ae740a2634f18b2386d7ae23583c998acd8f795d5f038c"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "playbook-validate-and-sync"
+path = "catalog/core/skills/playbook-creator/rules/playbook-validate-and-sync.md"
+digest = "ff9bfbf93e2b6b59c96bf4290893f1b391e01016846dc9f59f2113c8ad1a1d94"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "project-context"
+path = "catalog/core/rules/always/00-project-context.md.j2"
+digest = "997ad0e2c213617efd8ffe0284e86c377fd7e9268fe2d22ab74d32c4f6eb27f5"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "pydantic-boundaries"
+path = "catalog/core/skills/python-coding/rules/pydantic-boundaries.md"
+digest = "379ac45818dc3c71e037de286057d15cb727487ae74777ca2db8052b09d2cd70"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "pydantic-field-constraints"
+path = "catalog/core/skills/python-coding/rules/pydantic-field-constraints.md"
+digest = "5c69531da86093b0d4424254364b70716db4db24b3f8470cbab8a4da1a15ec34"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "pydantic-model-validators"
+path = "catalog/core/skills/python-coding/rules/pydantic-model-validators.md"
+digest = "6a08da0168c35533e9cebee5343731f61830e03a7b673d792cfb0ecbe1dae647"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "pydantic-serializers"
+path = "catalog/core/skills/python-coding/rules/pydantic-serializers.md"
+digest = "4843b4a5ee5bd7564f33d6fbcf5e6a860e874ab66cfc72d0f8716d9051c58060"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "pydantic-special-types"
+path = "catalog/core/skills/python-coding/rules/pydantic-special-types.md"
+digest = "a9ae1adb49593dd38e184d76a55ae2203dca2c886ea108aac096499bc8d3f426"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "pydantic-typed-settings"
+path = "catalog/core/skills/python-coding/rules/pydantic-typed-settings.md"
+digest = "54ad74b50876ebb00daba8546bf316f465ab8430af8884f838a4dae35bda4e0f"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "pytest"
+path = "catalog/core/skills/python-testing/rules/pytest.md.j2"
+digest = "4c66d958563177dde4d510f7b2d297631cb3eea424a855374a02c81c3f57bcec"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "pytest-arrange-act-assert"
+path = "catalog/core/skills/python-testing/rules/pytest-arrange-act-assert.md"
+digest = "97eaef84c51ac6bd60238912daa37047f51966611c9ad86b5649b1872d8c530d"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "pytest-assertions"
+path = "catalog/core/skills/python-testing/rules/pytest-assertions.md"
+digest = "594491943896ecf4b27dbaf928d0cdd24c49da4507155edb6ca14b5e93b6d9ce"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "pytest-autospec"
+path = "catalog/core/skills/python-testing/rules/pytest-autospec.md.j2"
+digest = "475077d964cdb2d7793f8ffe6e8c3cb263a7a547e32419651ca697dfbab52326"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "pytest-branch-coverage"
+path = "catalog/core/skills/python-testing/rules/pytest-branch-coverage.md"
+digest = "1be1f25ba863d98f1720300da48318009561fc76da2cb90e40b13343e4a11eab"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "pytest-configuration"
+path = "catalog/core/skills/python-tooling/rules/pytest-configuration.md"
+digest = "c8be2b5774831993d618737611eb05a749a6124c62b9e77e0d734bbf54c27bb4"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "pytest-conftest"
+path = "catalog/core/skills/python-testing/rules/pytest-conftest.md.j2"
+digest = "a8fc4054cf79d1cb428fbce5b549c454018475916f5289ab5d3d0ef364251585"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "pytest-deterministic-tests"
+path = "catalog/core/skills/python-testing/rules/pytest-deterministic-tests.md"
+digest = "b2d9b36e7d32b6cf051c171668fc6bf2309b809e1c505a15640e8a5d8331a256"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "pytest-edge-cases"
+path = "catalog/core/skills/python-testing/rules/pytest-edge-cases.md"
+digest = "b407abe5e55b014b83cd93c196bbd53f309ef9d09f3f90cd09fa266bf68b14a6"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "pytest-factory-fixtures"
+path = "catalog/core/skills/python-testing/rules/pytest-factory-fixtures.md"
+digest = "be87b5c1e8f1c5cf720e0b8574dd2091c816bbfff920d944577e1bb34f11f1a5"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "pytest-first-properties"
+path = "catalog/core/skills/python-testing/rules/pytest-first-properties.md"
+digest = "ede91739b03de29fcdb622abd54152dbcb79ca6f1b5d0e0392d45c4df1c66808"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "pytest-fixtures"
+path = "catalog/core/skills/python-testing/rules/pytest-fixtures.md.j2"
+digest = "3e44089376dea80666f56427c99ab551a149eee0169ecdbe5e728148973e6ed8"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "pytest-hypothesis-properties"
+path = "catalog/core/skills/python-testing/rules/pytest-hypothesis-properties.md"
+digest = "525ea22308e6c55b8a4d18d42cf2213ab5325adec508485c61a7c6d82453d1e5"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "pytest-hypothesis-stateful"
+path = "catalog/core/skills/python-testing/rules/pytest-hypothesis-stateful.md"
+digest = "da319d2390d2206ac3b982bc69492a6d21a187f0e5cef5cc70e9401fabdc5094"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "pytest-monkeypatch"
+path = "catalog/core/skills/python-testing/rules/pytest-monkeypatch.md"
+digest = "ba0c3dc8c56ce6f92428f0c4b2fe8f871ec80ebef99ef667f11f7eb3d79dd170"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "pytest-no-test-logic"
+path = "catalog/core/skills/python-testing/rules/pytest-no-test-logic.md"
+digest = "fe8f00e74d8d053076423e60f63d4e0e8e665794a617e4cb0b0efa20f39f9054"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "pytest-one-behavior"
+path = "catalog/core/skills/python-testing/rules/pytest-one-behavior.md"
+digest = "c73c6a2e2c795e78290e9bf4e342190a307e470b466eb11538c2a0eb07b2f41e"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "pytest-parametrize"
+path = "catalog/core/skills/python-testing/rules/pytest-parametrize.md"
+digest = "2f23973625443b63927e52403df5c7310dcce87ecd742a681b4b3fa138b8718f"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "pytest-parametrize-ids"
+path = "catalog/core/skills/python-testing/rules/pytest-parametrize-ids.md"
+digest = "80169dd9a7eb6794262b4cfb42b0b2510fae1ae25b3b5550ca67e83d8504579c"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "pytest-test-doubles"
+path = "catalog/core/skills/python-testing/rules/pytest-test-doubles.md.j2"
+digest = "e93910d901b6b258749b0c96065f14f53e3b8b30aaf42b7f5bb685953f97f2e7"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-abstract-inputs"
+path = "catalog/core/skills/python-coding/rules/python-abstract-inputs.md"
+digest = "857167bacffc46e111ec35587a27c29bdeaa0b45ff96561c16ee9d55451ad7b4"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-async"
+path = "catalog/core/skills/python-coding/rules/python-async.md.j2"
+digest = "56e16d8d0441286eb66c5418676514f09899602fa45d3c5f7dffacbc0d794df4"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-async-fanout"
+path = "catalog/core/skills/python-coding/rules/python-async-fanout.md.j2"
+digest = "2dd000bb962d8595287cd01ebfca046739a25957c14b05bb9537664062117ef2"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-async-generators"
+path = "catalog/core/skills/python-coding/rules/python-async-generators.md"
+digest = "f3c65d015c35485be2c10c90e693c4890d0535bee6789b719e102a335c4a8417"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-async-tasks"
+path = "catalog/core/skills/python-coding/rules/python-async-tasks.md.j2"
+digest = "08c2e41e3cee7c163bda618a9164dd843877bcb1280132584739e517a714a6e6"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-closures-and-partial"
+path = "catalog/core/skills/python-coding/rules/python-closures-and-partial.md"
+digest = "a110c842abc65e862da2c6a454ac4175cca0304e424d5216db113ee5960cd670"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-collection-choice"
+path = "catalog/core/skills/python-coding/rules/python-collection-choice.md"
+digest = "425a70b3cf6400045c039f0fe8bd2246d90e4ce967011ca26369290345754bc5"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-comments-why"
+path = "catalog/core/skills/python-coding/rules/python-comments-why.md"
+digest = "3800a1f329ab9ba41bad7ea7166875dea20539fa334ff30baf8793c60ce32f8f"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-comprehensions"
+path = "catalog/core/skills/python-coding/rules/python-comprehensions.md"
+digest = "a3a71c42a35a38cbe5964378e5bb36603953d14f680758d1c5be0604859506cd"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-context-managers"
+path = "catalog/core/skills/python-coding/rules/python-context-managers.md"
+digest = "1187ff26ed1916c8371144e0a4fc53841464c4e914f1e79112cae57427d5aee3"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-custom-context-managers"
+path = "catalog/core/skills/python-coding/rules/python-custom-context-managers.md"
+digest = "a48d906538f74b9841845b9a20a367c3341047b01228c56acbc02e54449adb65"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-custom-exceptions"
+path = "catalog/core/skills/python-coding/rules/python-custom-exceptions.md"
+digest = "b011bd1ad18704839625090d619338486ce37fa6000efcced70ded5e48f72b9d"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-data-shapes"
+path = "catalog/core/skills/python-coding/rules/python-data-shapes.md"
+digest = "266e72c66f5b0fa80c6c78d1e35e21e3eb808c67a05f5b12761e6c8e3f7d9022"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-dataclass-post-init"
+path = "catalog/core/skills/python-coding/rules/python-dataclass-post-init.md"
+digest = "ea422af5b7827f4cc3faa3262bb3b4c52a27ae3d30740ea32a8e86d8b2b243d4"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-decorators"
+path = "catalog/core/skills/python-coding/rules/python-decorators.md"
+digest = "dab70ea9a3bd864c2765d318bf8ad318e76d6fad6cb850053ddc41630e3f23a3"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-dependency-injection"
+path = "catalog/core/skills/python-coding/rules/python-dependency-injection.md"
+digest = "114a0a8fbe36d142f6710d24c1f74dab964df05ab6dfa324648ea5fef8816e50"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-docstrings"
+path = "catalog/core/skills/python-coding/rules/python-docstrings.md"
+digest = "2f30d45f63831e3adb6ef9b723b6b31403b46968a78cb5a26e7a93b81cc9a72a"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-early-return"
+path = "catalog/core/skills/python-coding/rules/python-early-return.md"
+digest = "51462bf0638926207bb66a5c168c876d60c50342d830f1c81e7d1357ca3c01bb"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-enums"
+path = "catalog/core/skills/python-coding/rules/python-enums.md"
+digest = "00af9a4e7c97dcfa1883f7d2e6842d5d6427d20fba8c7cb6656b4924c6feb6a5"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-error-boundaries"
+path = "catalog/core/skills/python-coding/rules/python-error-boundaries.md"
+digest = "2c79f5dfd33b7098f3e3860ecb3ecf98e85045624744af81a35edf9889f738ee"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-error-handling"
+path = "catalog/core/skills/python-coding/rules/python-error-handling.md"
+digest = "f2dccd74fee3ddb5ad785517c505d4608fb11c42ae3bb7720cd10da2d3dd9459"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-error-messages-with-context"
+path = "catalog/core/skills/python-coding/rules/python-error-messages-with-context.md"
+digest = "5f412f0bb30321d1862a19b3f52ada7a97a35a403ab8755472d843c1352f42cb"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-frozen-dataclasses"
+path = "catalog/core/skills/python-coding/rules/python-frozen-dataclasses.md"
+digest = "e56a81eba7f0f8367798d17d682b1d3a3ad6f18caf5c20c1fefbe81d70e9d22b"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-function-signatures"
+path = "catalog/core/skills/python-coding/rules/python-function-signatures.md"
+digest = "8b2b9a5df078da1189e58acfb9c9598af08ea7d0d8f0489ea0f0e951f2d4a38b"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-generators"
+path = "catalog/core/skills/python-coding/rules/python-generators.md"
+digest = "805eff81206c2c1227b43d878ae8c7154f282cccef8da5b9502b8aa1aa17b474"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-hide-internal-state"
+path = "catalog/core/skills/python-coding/rules/python-hide-internal-state.md"
+digest = "a2647a30946bd7c3a7af598bd81a71f7faea583a74737dd0f9b2a8b3ad7f3a15"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-house-style"
+path = "catalog/core/rules/always/10-python-house-style.md"
+digest = "3c0d0d7ce8c0decfa4e8df9e821c0dbed0b98778195ce68794e17666dec1e6c2"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-idioms"
+path = "catalog/core/skills/python-coding/rules/python-idioms.md"
+digest = "6322482f34db0aa3510d36ea26f1b008f1509d6e1c1457770cbc83538d84f64a"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-imports"
+path = "catalog/core/skills/python-coding/rules/python-imports.md"
+digest = "11f17ad805ded7154afef0370be4170e35fff6e608a7a7f30fd8e89df7597ae6"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-match-destructuring"
+path = "catalog/core/skills/python-coding/rules/python-match-destructuring.md"
+digest = "01eed1cac174b47c7e6d52fc33346f5bfe6b60dbc0df3cc71728085fb843cccb"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-match-fallback"
+path = "catalog/core/skills/python-coding/rules/python-match-fallback.md"
+digest = "fe74cc0a8b97468a6dca3d3e3aa47309c6fc5ee83dcd24a369b1b58bc70c811d"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-meaningful-names"
+path = "catalog/core/skills/python-coding/rules/python-meaningful-names.md"
+digest = "af1829a513415c8a398f763e28325f6676ae1da8100402bdc0170395b76e2075"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-no-global-singletons"
+path = "catalog/core/skills/python-coding/rules/python-no-global-singletons.md"
+digest = "85c6a5d375ffde4757781e30f3da2fd00db702ba08737280b7a00fa336f1591f"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-optional-keys"
+path = "catalog/core/skills/python-coding/rules/python-optional-keys.md"
+digest = "0dafab9da5100666fdd326ab484e2028877751bd9ec0dc9f3fd91ee2c2d188ce"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-parameterized-queries"
+path = "catalog/core/skills/python-coding/rules/python-parameterized-queries.md"
+digest = "d19f0461b0c68c0d74bbd47517f08ecdc6bc506f5d31d21ec6f50dbbede8c0be"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-properties"
+path = "catalog/core/skills/python-coding/rules/python-properties.md"
+digest = "25297d29ff400648d7fbf1e40728d1d4feb1877b6c1a2c84b9858f2cc7d95b0a"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-protocols"
+path = "catalog/core/skills/python-coding/rules/python-protocols.md"
+digest = "ba00eae7f88f55b18b7eb455879907c29f3106a044d56a0854a04004a99bd56f"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-pure-core"
+path = "catalog/core/skills/python-coding/rules/python-pure-core.md"
+digest = "5549da7c97d47f7437c4d86fceee5fef59d94ee83f11f11a781811685e52d663"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-pyproject-dependencies"
+path = "catalog/core/skills/python-tooling/rules/python-pyproject-dependencies.md"
+digest = "75e70da2400b37fc8e9e88537e81f72461a211074853cd8651a635106152b309"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-retries-and-timeouts"
+path = "catalog/core/skills/python-coding/rules/python-retries-and-timeouts.md"
+digest = "ea6489f8023563f8500a8f9ec51e343897c2f2e78b5fcb1d0142261eb3cefaa9"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-small-units"
+path = "catalog/core/skills/python-coding/rules/python-small-units.md"
+digest = "9b8f74ef1da07a3f46fc91e0da2e68ae5a4f93cb77e74109809c323d9a129b5c"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-static-checks"
+path = "catalog/core/skills/python-tooling/rules/python-static-checks.md"
+digest = "245e7ed90c33a2f61e3306b4bc5f096fe4a02867165b1af74b6c4115f8a58876"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-str-join"
+path = "catalog/core/skills/python-coding/rules/python-str-join.md"
+digest = "e133d8354bc154ce81e671c641eec34a2aa84bdb01ee27515d1d6ab877da9e7c"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-type-aliases"
+path = "catalog/core/skills/python-coding/rules/python-type-aliases.md"
+digest = "f4e96ad1af53b9bb39e0b038d0b1a6144a9a80ef794aa01cbe389af479a860b7"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-typing"
+path = "catalog/core/skills/python-coding/rules/python-typing.md.j2"
+digest = "63a0f78976de08d55470dfe8cca4e4dc4372a0e355dd70d591ebd5342f18dd20"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "python-uv-workflow"
+path = "catalog/core/skills/python-tooling/rules/python-uv-workflow.md"
+digest = "054e97dcf3c58d27c4997609f04790cd4ad2671d4f9555ebfa406b491381c9f1"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "ruff-format"
+path = "catalog/core/skills/python-tooling/rules/ruff-format.md"
+digest = "da2658d216ec191bba4f8d201aa88bb135b878b2c50a60eb1e599586c9a848e3"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "ruff-lint"
+path = "catalog/core/skills/python-tooling/rules/ruff-lint.md"
+digest = "aefc4b8aa7bd3b2ddf9877f4fd626904185a1f4ba146271270174ea69987b0f4"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "sphinx-api-reference"
+path = "catalog/core/skills/python-documentation/rules/sphinx-api-reference.md"
+digest = "a2b82248da4bbee10fb63ee58228c1cc103b8d7b03635ca2aa5401d1420f13bf"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "sphinx-docs-build"
+path = "catalog/core/skills/python-documentation/rules/sphinx-docs-build.md"
+digest = "1e8cf19dd12bd076315774c99bdb38f25ce35967307735594343091b3406771e"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "sqlalchemy-2-style"
+path = "catalog/core/skills/web-application/rules/sqlalchemy-2-style.md.j2"
+digest = "0f86169bd3ff993b424931191c0cd4630382d512200e4b611f4b6ded35e60b66"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "sqlalchemy-bound-parameters"
+path = "catalog/core/skills/web-application/rules/sqlalchemy-bound-parameters.md"
+digest = "d4bdff08883e4aa730e8aa747a94af3c24920b0a92d61f352169a099f47266d8"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "sqlalchemy-eager-loading"
+path = "catalog/core/skills/web-application/rules/sqlalchemy-eager-loading.md"
+digest = "024f60c5274e16a62c9dc9821669198c1a877f46398c721890e9610dd0942d8e"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "sqlalchemy-engine-and-session-scope"
+path = "catalog/core/skills/python-architecture/rules/sqlalchemy-engine-and-session-scope.md"
+digest = "3c574c4aaadbe7ca2cb9bbfc78f0bd15c2d9abfa1018360d34a1f2b9f52272e1"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "sqlalchemy-repositories"
+path = "catalog/core/skills/python-architecture/rules/sqlalchemy-repositories.md.j2"
+digest = "1f6a1e2bb4f7a4b6e6df8f91b9c0edbb13895b31f993108397e06aa7f4a775c4"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "sqlalchemy-session-per-request"
+path = "catalog/core/skills/web-application/rules/sqlalchemy-session-per-request.md"
+digest = "e8187f004927ab2fd52d6c93f7376bb4ff57a50c091b5a9176c84eb3f32e98a5"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "sqlalchemy-test-rollback"
+path = "catalog/core/skills/web-application/rules/sqlalchemy-test-rollback.md.j2"
+digest = "6c1a934ac62114be2706ba1b7bdceadb440fdb810b84e83718e697932cdf3b23"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "sqlalchemy-transaction-boundary"
+path = "catalog/core/skills/web-application/rules/sqlalchemy-transaction-boundary.md.j2"
+digest = "f82803ef7067e4c98f9c3c2e2b356b94148cded431f05013dab0b22003a7ff23"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "web-api-pagination"
+path = "catalog/core/skills/web-application/rules/web-api-pagination.md"
+digest = "832afe3b95378e9df64d3f2c333607464817943efc4232371562cea44d2f5eda"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "web-api-resource-naming"
+path = "catalog/core/skills/web-application/rules/web-api-resource-naming.md"
+digest = "200f801d6a32132df884a599e3e77d992261a31dfb5df8a457f199e547f39572"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "web-api-schemas"
+path = "catalog/core/skills/web-application/rules/web-api-schemas.md.j2"
+digest = "50befee99d6083acfae86f99f7075438ab719e8dbefc65dbba086fa359ffbb66"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "web-cors-origins"
+path = "catalog/core/skills/web-application/rules/web-cors-origins.md"
+digest = "801febfa7e7227e353c76bfeb1e6b7e9dd2604ff6cc0720bad2163547cd6c5fe"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "web-http-methods"
+path = "catalog/core/skills/web-application/rules/web-http-methods.md"
+digest = "2597ccc1fff5d62c3317ed992f8909329b59ab934509723296bc3a9adc3d2057"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "web-jwt-validation"
+path = "catalog/core/skills/web-application/rules/web-jwt-validation.md"
+digest = "ecfd303d10aafd1f149831c2432c4aa80f7304632666b08df40cdb19569e3852"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "web-object-authorization"
+path = "catalog/core/skills/web-application/rules/web-object-authorization.md"
+digest = "6a7cbebb26280fc7718b3d71772edb169c2c81fe5121a90f05e31cf28795c84c"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "web-password-hashing"
+path = "catalog/core/skills/web-application/rules/web-password-hashing.md"
+digest = "0c2c615ab96efaf8fc4bc2133f3ac2b49217e7035cb2f29979b900fb30c3529e"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "rule"
+id = "web-secure-tokens"
+path = "catalog/core/skills/web-application/rules/web-secure-tokens.md"
+digest = "995a273fb34716d6fc4a1bc192b6bafd1ed12d37a56a45052b805e30e75718a5"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "skill"
+id = "design-patterns"
+path = "catalog/core/skills/design-patterns"
+digest = "ed219e5defeb30e66250b9dd7b9229970b413781ed5a99ec30cd8a81a4eda6a7"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "skill"
+id = "domino-agents"
+path = "catalog/core/skills/domino-agents"
+digest = "36cf4781ef388bba9789b4c4529812a6ce043f794b0e1aaded51026ad1492833"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "skill"
+id = "domino-apps"
+path = "catalog/core/skills/domino-apps"
+digest = "21b578ab4bb3de20b6c6061c0f25e895d937911ead31a07cb644164365443a1d"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "skill"
+id = "domino-jobs"
+path = "catalog/core/skills/domino-jobs"
+digest = "4fe9e617c3479d8bfb9c0e7209184c00ca045594addf1420e22d33461fbbbc45"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "skill"
+id = "forge"
+path = "catalog/core/skills/forge"
+digest = "e8921d3087e1271b630834fae72034095786b5ec02d8654b52572909fb761a10"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "skill"
+id = "ml-data"
+path = "catalog/core/skills/ml-data"
+digest = "2f73456e12c55fd65b1e3979c632447c1f460931e51de605f8f76a9cc1a3a417"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "skill"
+id = "playbook-creator"
+path = "catalog/core/skills/playbook-creator"
+digest = "7e33c22cf749c6f00e44d798d188474837fa6dd2e31773298f23117d207d9cb1"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "skill"
+id = "playbook-guardrails"
+path = "catalog/core/skills/playbook-guardrails"
+digest = "ebffd00917b6a2dc15cb932136b0cf9c284b189f8ffcd9536c4358953c7a9d11"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "skill"
+id = "python-architecture"
+path = "catalog/core/skills/python-architecture"
+digest = "bc13c1aa039ad08069f67571ea4bc3c15cd51e8eb1eb868b944910ed9a1cb641"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "skill"
+id = "python-coding"
+path = "catalog/core/skills/python-coding"
+digest = "3c5f85fb797fac2de8feffdd77b4d69f8b07e84a8772e9ab44ee97394e36e16f"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "skill"
+id = "python-documentation"
+path = "catalog/core/skills/python-documentation"
+digest = "2ba575df67c81f61889de8f42e71789db48e5a4295a60c1219a89126d9fbb5d4"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "skill"
+id = "python-testing"
+path = "catalog/core/skills/python-testing"
+digest = "ca8948f16dbcc2e8cf9f4e2fd2c9d46ecd5c1c1f507b9c0fe0a7b0cba84acaeb"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "skill"
+id = "python-tooling"
+path = "catalog/core/skills/python-tooling"
+digest = "eb945d0c580d61b239efaf71d32cee1b690afbc8c83933c14ed199f3901ad646"
+
+[[artifacts]]
+layer = "coding_agent_playbook"
+kind = "skill"
+id = "web-application"
+path = "catalog/core/skills/web-application"
+digest = "79225230268ee68d741e90b4c2de94056a2ff39d4884cc4befec8463c3a5604e"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.mattpocock_skills"
+kind = "rule"
+id = "mattpocock-skills-tracker"
+path = "catalog/plugins/mattpocock_skills/rules/mattpocock-skills-tracker.md"
+digest = "fc1c1596057e9d2459a110fedda9805cbc177a3dcc871dc83cd62daf935b71fc"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.mattpocock_skills"
+kind = "skill"
+id = "ask-matt"
+path = "catalog/plugins/mattpocock_skills/skills/ask-matt"
+digest = "d65a38f64d4e11d3806781ca2a8d748d7a9f2177736f5a88eaf7e35ee47dccfc"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.mattpocock_skills"
+kind = "skill"
+id = "codebase-design"
+path = "catalog/plugins/mattpocock_skills/skills/codebase-design"
+digest = "776332aeacf165124ee07123fe1e33ac60f3163c641669b004feb0e0bcb6f4f7"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.mattpocock_skills"
+kind = "skill"
+id = "diagnosing-bugs"
+path = "catalog/plugins/mattpocock_skills/skills/diagnosing-bugs"
+digest = "934267ab2946bbfc9e3c47fb11552b6d215e136e5582a72aaa864a4e26d1e89d"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.mattpocock_skills"
+kind = "skill"
+id = "domain-modeling"
+path = "catalog/plugins/mattpocock_skills/skills/domain-modeling"
+digest = "40f42b0ef0950903a1563ffbee1334372716f4f4802c94243c40d192b8327c06"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.mattpocock_skills"
+kind = "skill"
+id = "grill-me"
+path = "catalog/plugins/mattpocock_skills/skills/grill-me"
+digest = "ddedf7b8020d0e6e4abfa7a531f1011a0241c97e75de8d41a9e64c92d644f10a"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.mattpocock_skills"
+kind = "skill"
+id = "grill-with-docs"
+path = "catalog/plugins/mattpocock_skills/skills/grill-with-docs"
+digest = "8b597b1676c4dbf185da9c2073031e2cbcf9f564ac574e4ad904e5e7de620e94"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.mattpocock_skills"
+kind = "skill"
+id = "grilling"
+path = "catalog/plugins/mattpocock_skills/skills/grilling"
+digest = "e6d403037485839661de9532eff2cc9466cc1afe2f7d35f1884ee2a70605f8c9"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.mattpocock_skills"
+kind = "skill"
+id = "handoff"
+path = "catalog/plugins/mattpocock_skills/skills/handoff"
+digest = "c411519bc929f8a0c54dc7d54a1bd04c40228fcbc821cbd5abcdd01d7ff4eae8"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.mattpocock_skills"
+kind = "skill"
+id = "implement"
+path = "catalog/plugins/mattpocock_skills/skills/implement"
+digest = "3a8bc6ff1c3798e928903d9b22e3bc24074f409fc8dd8e3f57723ac0cd2ec5d7"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.mattpocock_skills"
+kind = "skill"
+id = "implement-spec"
+path = "catalog/plugins/mattpocock_skills/skills/implement-spec"
+digest = "fa7b193ae0d33a57e1863826ad6e4d2982adcfb10f5a38c0eb8d2f2f530702b5"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.mattpocock_skills"
+kind = "skill"
+id = "improve-codebase-architecture"
+path = "catalog/plugins/mattpocock_skills/skills/improve-codebase-architecture"
+digest = "5ec92d537bb5ea31c7587dabaa1f914e2419770fe3a9564bbe682051f5df3450"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.mattpocock_skills"
+kind = "skill"
+id = "pr-body"
+path = "catalog/plugins/mattpocock_skills/skills/pr-body"
+digest = "88a1aa816ea10ab8b186757d41727a1a1d0d93cffa366a9f192578cb9a13f42a"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.mattpocock_skills"
+kind = "skill"
+id = "research"
+path = "catalog/plugins/mattpocock_skills/skills/research"
+digest = "f68125299d454afbafa2477f4e7eeb8a8c762dcc6f1f023555715ae3bf8cdc1d"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.mattpocock_skills"
+kind = "skill"
+id = "retro"
+path = "catalog/plugins/mattpocock_skills/skills/retro"
+digest = "8c2cf6968bab43fd0fb280edee68210a7b22797c7195c10cdc1aa603534861c2"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.mattpocock_skills"
+kind = "skill"
+id = "setup-matt-pocock-skills"
+path = "catalog/plugins/mattpocock_skills/skills/setup-matt-pocock-skills"
+digest = "4d9c0977390e08b81c2be248c8334f78db55ef4fe68c303b17ab98aa175fe698"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.mattpocock_skills"
+kind = "skill"
+id = "tdd"
+path = "catalog/plugins/mattpocock_skills/skills/tdd"
+digest = "25f622605e7f9aadeab785397bdf29b1db7df20dbc8546533e68a55d5ea2a791"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.mattpocock_skills"
+kind = "skill"
+id = "teach"
+path = "catalog/plugins/mattpocock_skills/skills/teach"
+digest = "f91b29d279f44422bc4c60907f6f3f0278e732e7b71d7b5abad8c47322094292"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.mattpocock_skills"
+kind = "skill"
+id = "throwaway-prototype"
+path = "catalog/plugins/mattpocock_skills/skills/throwaway-prototype"
+digest = "faa62def35061d3081aa014862c50d00d5675eee664afc77669aca59b008529d"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.mattpocock_skills"
+kind = "skill"
+id = "to-questionnaire"
+path = "catalog/plugins/mattpocock_skills/skills/to-questionnaire"
+digest = "e41fc81875874fe5e59e9e2ef2314790d515a14d714a388d6093cc8289293a64"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.mattpocock_skills"
+kind = "skill"
+id = "to-spec"
+path = "catalog/plugins/mattpocock_skills/skills/to-spec"
+digest = "d960b8f0b36cac471d9b20368db632bfcd9596184b756b4ee527812bebab94c7"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.mattpocock_skills"
+kind = "skill"
+id = "to-tickets"
+path = "catalog/plugins/mattpocock_skills/skills/to-tickets"
+digest = "952d4c2cb1c84a15b2da19cedf92360568c3b0da7b5c2323409ca98c263aa9d4"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.mattpocock_skills"
+kind = "skill"
+id = "two-axis-review"
+path = "catalog/plugins/mattpocock_skills/skills/two-axis-review"
+digest = "30b340a6b39496540d6e276fb538b42e0457eef27f96581fc66ea10b8d640558"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.mattpocock_skills"
+kind = "skill"
+id = "wait-what"
+path = "catalog/plugins/mattpocock_skills/skills/wait-what"
+digest = "137720308c79a41801a1b395976c7593a81b6be41d26504ff2513db54889549d"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.mattpocock_skills"
+kind = "skill"
+id = "wayfinder"
+path = "catalog/plugins/mattpocock_skills/skills/wayfinder"
+digest = "6018f41ada4dbf3cbb300bc6950aff566c144e156d694991a9503be8e6ce0ea9"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.mattpocock_skills"
+kind = "skill"
+id = "wizard"
+path = "catalog/plugins/mattpocock_skills/skills/wizard"
+digest = "770b8b2bb3854c03d60e0a003ffae096cebb3cc9642076038b984e474c240197"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.mattpocock_skills"
+kind = "skill"
+id = "writing-for-agents"
+path = "catalog/plugins/mattpocock_skills/skills/writing-for-agents"
+digest = "de47e9241b8486dff98a4be0a096cbaaa76b9944b5702cbc1b1362912dd023a3"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.superpowers"
+kind = "skill"
+id = "brainstorming"
+path = "catalog/plugins/superpowers/skills/brainstorming"
+digest = "f3a0e00b93ebe2852912f933c5a57afdb1b356d9a0ce9d174459e2b7a8f23e22"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.superpowers"
+kind = "skill"
+id = "diagnosing-superpowers"
+path = "catalog/plugins/superpowers/skills/diagnosing-superpowers"
+digest = "5f34857a90be9ec6f36299555012f1e5a14a451a613901650b30a135c596faed"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.superpowers"
+kind = "skill"
+id = "dispatching-parallel-agents"
+path = "catalog/plugins/superpowers/skills/dispatching-parallel-agents"
+digest = "b5b6bda5a21131fecfe805e6528581b4e2a4cf1f56999fb8cf2a7b306853b8ec"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.superpowers"
+kind = "skill"
+id = "executing-plans"
+path = "catalog/plugins/superpowers/skills/executing-plans"
+digest = "d8fc4a0ee5b9184fceff7f3360da2b3c7ae7ac091329a42325109a078cd65d6a"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.superpowers"
+kind = "skill"
+id = "finishing-a-development-branch"
+path = "catalog/plugins/superpowers/skills/finishing-a-development-branch"
+digest = "04f84cc8610b8bd892b77277ab279262174704640db71d6f4579b59ff186477c"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.superpowers"
+kind = "skill"
+id = "receiving-code-review"
+path = "catalog/plugins/superpowers/skills/receiving-code-review"
+digest = "077c4c5ddb601d9934db9d8aa0a7713fb3de86626b2221ff9376aa6866367365"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.superpowers"
+kind = "skill"
+id = "requesting-code-review"
+path = "catalog/plugins/superpowers/skills/requesting-code-review"
+digest = "246610e9817250a42d89988343e9578e3fcbe5760d8b873e1f8753ec8faf9821"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.superpowers"
+kind = "skill"
+id = "subagent-driven-development"
+path = "catalog/plugins/superpowers/skills/subagent-driven-development"
+digest = "fd7eee3bb04339be3670176358457348722fdf3641b954fc1059685a3956d510"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.superpowers"
+kind = "skill"
+id = "systematic-debugging"
+path = "catalog/plugins/superpowers/skills/systematic-debugging"
+digest = "25126ff8cfce273807627f7e35ecfd243a86c6cbaf7e90b6a6d707cf8420a16a"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.superpowers"
+kind = "skill"
+id = "test-driven-development"
+path = "catalog/plugins/superpowers/skills/test-driven-development"
+digest = "2aca27a132720daee5bd409ee0838ffeb5293afa9363f7e721d5d517f465bb67"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.superpowers"
+kind = "skill"
+id = "using-git-worktrees"
+path = "catalog/plugins/superpowers/skills/using-git-worktrees"
+digest = "f5d10472de2955ddaa8ffeff8090ef0074a45f3490c0c9c8eae894710ac1ce85"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.superpowers"
+kind = "skill"
+id = "using-superpowers"
+path = "catalog/plugins/superpowers/skills/using-superpowers"
+digest = "e369c9d6abe6796d98208948f905a9f3ac06303f1044570288e2efe55a2ef729"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.superpowers"
+kind = "skill"
+id = "verification-before-completion"
+path = "catalog/plugins/superpowers/skills/verification-before-completion"
+digest = "99fd260d95f4187f613590651c11f2649b84eb61c844150421c7aabf42f35ce8"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.superpowers"
+kind = "skill"
+id = "writing-plans"
+path = "catalog/plugins/superpowers/skills/writing-plans"
+digest = "fb59dd9e9ba446daaf78484161f925ad22332a0205f2ee5d04a2cc2ad761c889"
+
+[[artifacts]]
+layer = "coding_agent_playbook.plugins.superpowers"
+kind = "skill"
+id = "writing-skills"
+path = "catalog/plugins/superpowers/skills/writing-skills"
+digest = "487dc80d27e1aa5a231b58b27da302d62ecf457a7c7e4b69d1316d421cc107c5"
