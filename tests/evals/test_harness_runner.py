@@ -1154,7 +1154,7 @@ def test_an_agent_stopped_at_its_timeout_is_a_scored_trial(
     ("stdout", "stderr", "transcript"),
     [
         (None, None, "[the agent was stopped at its 1.5 s timeout]"),
-        ("out", "err", "outerr\n[the agent was stopped at its 1.5 s timeout]"),
+        ("out", "err", "out\nerr\n[the agent was stopped at its 1.5 s timeout]"),
         (b"\xffbytes", None, "�bytes\n[the agent was stopped at its 1.5 s timeout]"),
     ],
 )

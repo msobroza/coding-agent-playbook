@@ -386,6 +386,18 @@ def _printing(stdout: str, exit_code: int = 0) -> list[str]:
     return [sys.executable, "-c", program]
 
 
+def test_a_cli_warning_lands_after_the_answer_on_its_own_line(tmp_path: Path) -> None:
+    # Claude Code warns on stderr for a non-Anthropic model; glued onto a final
+    # "approve" it failed every review verdict gate (Qwen record, 2026-10-29).
+    result = json.dumps({"type": "result", "is_error": False, "result": "approve"})
+    warning = '[claude-code:unrecognized_model] {"model":"qwen/qwen3.8-27b"}\n'
+    program = f"import sys; sys.stdout.write({result!r}); sys.stderr.write({warning!r})"
+
+    run = ClaudeCodeRunner(command=[sys.executable, "-c", program])._invoke_agent("p", tmp_path)
+
+    assert run.transcript == f"approve\n{warning}"
+
+
 def test_json_result_gives_the_answer_tokens_and_model(tmp_path: Path) -> None:
     runner = ClaudeCodeRunner(command=_printing(_RESULT_JSON % "false"), model="claude-opus-5-5")
 

@@ -97,10 +97,33 @@ def timed_out_run(exc: subprocess.TimeoutExpired, redact: Callable[[str], str]) 
         >>> run.returncode, run.transcript
         (124, 'half an answer\\n[the agent was stopped at its 600 s timeout]')
     """
-    partial = _decoded(exc.stdout) + _decoded(exc.stderr)
+    partial = with_stderr(_decoded(exc.stdout), _decoded(exc.stderr))
     note = f"[the agent was stopped at its {exc.timeout:g} s timeout]"
     transcript = f"{partial}\n{note}" if partial else note
     return AgentRun(transcript=redact(transcript), returncode=TIMED_OUT_RETURNCODE)
+
+
+def with_stderr(answer: str, stderr: str) -> str:
+    """``answer`` then the CLI's ``stderr`` on a line of its own, when there is any.
+
+    Why the line break: the answer's last line is often a verdict that a sample's
+    ``answer_matches`` regex anchors with ``$``. Claude Code prints a warning to
+    stderr on every run with a non-Anthropic model
+    (``[claude-code:unrecognized_model] {...}``), and glued onto ``approve`` it
+    failed every review sample's gate on the Qwen record of 2026-10-29.
+
+    Example::
+
+        >>> with_stderr("approve", "[warning]\\n")
+        'approve\\n[warning]\\n'
+        >>> with_stderr("", "boom"), with_stderr("done\\n", "boom")
+        ('boom', 'done\\nboom')
+    """
+    if not stderr:
+        return answer
+    if not answer:
+        return stderr
+    return answer + stderr if answer.endswith("\n") else f"{answer}\n{stderr}"
 
 
 def _decoded(stream: bytes | str | None) -> str:
