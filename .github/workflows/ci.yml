@@ -16,7 +16,7 @@ on:
     branches: [main]
     types: [opened, synchronize, reopened, labeled]
   # Backfills the GitHub Release of an already tagged version (ADR 0014): runs
-  # publish-release only; the test, tag and pull-request jobs skip a dispatch.
+  # publish-release only; every other job skips a dispatch.
   workflow_dispatch:
     inputs:
       version:
@@ -158,9 +158,12 @@ jobs:
   # Publishes the release's metric bundle (ADR 0014) as the GitHub Release
   # v<version>: after tag-release tagged a release, or on a workflow_dispatch
   # that backfills one. always() because a dispatch skips tag-release, and a
-  # skipped need would skip this job too. A release that already exists gets
-  # its assets replaced and its notes rewritten. contents: write is only for
-  # the release; the version reaches the shell only through env:.
+  # skipped need would skip this job too. The bundle code runs from this
+  # workflow's own commit (older tags predate release_report.py); the release
+  # data comes from a second checkout of the tag in tag-tree/. A release that
+  # already exists gets its assets replaced and its notes rewritten.
+  # contents: write is only for the release; the version reaches the shell
+  # only through env:.
   publish-release:
     needs: tag-release
     if: always() && (needs.tag-release.outputs.version != '' || github.event_name == 'workflow_dispatch')
@@ -171,8 +174,12 @@ jobs:
       V: ${{ needs.tag-release.outputs.version || inputs.version }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check out the release tag's tree
+        uses: actions/checkout@v4
         with:
-          ref: v${{ env.V }}
+          ref: refs/tags/v${{ env.V }}
+          path: tag-tree
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
@@ -183,8 +190,10 @@ jobs:
         run: python -m pip install -e . matplotlib
 
       - name: Build the release metric bundle
-        run: python scripts/release_report.py --version "$V" --out release-report
+        run: python scripts/release_report.py --version "$V" --checkout tag-tree --out release-report
 
+      # The bundle is flat (report.md and metrics-<target>.json, no
+      # subdirectory), so release-report/* names every asset and only files.
       - name: Create or update the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -193,7 +202,7 @@ jobs:
             gh release upload "v$V" release-report/* --clobber
             gh release edit "v$V" --notes-file release-report/report.md
           else
-            gh release create "v$V" --title "v$V" --notes-file release-report/report.md release-report/*
+            gh release create "v$V" --verify-tag --title "v$V" --notes-file release-report/report.md release-report/*
           fi
 
   # Dogfoods the commit convention (specs/prK-lifecycle-hooks.md §K OQ-6): only the
@@ -242,6 +251,7 @@ jobs:
   # example code (pytest's testpaths is tests/). UV_PYTHON picks the matrix
   # Python, which uv downloads when the runner lacks it.
   core-examples:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     # Examples run in consumer repos from Python 3.10 on (prU D40, D48).
     strategy:
@@ -280,6 +290,7 @@ jobs:
   # drops would otherwise go unnoticed: the editable install in `test` never
   # reads the packaged copy.
   wheel-smoke:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     defaults:
       run:

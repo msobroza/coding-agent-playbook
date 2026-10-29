@@ -25,7 +25,9 @@ TAG_JOB = "tag-release"
 WRITE_JOBS = {TAG_JOB, PUBLISH_JOB}
 NOT_ON_DISPATCH = "github.event_name != 'workflow_dispatch'"
 VERSION_EXPR = "${{ needs.tag-release.outputs.version || inputs.version }}"
-REPORT_CALL = 'python scripts/release_report.py --version "$V" --out release-report'
+REPORT_CALL = (
+    'python scripts/release_report.py --version "$V" --checkout tag-tree --out release-report'
+)
 
 
 def _workflow() -> dict[Any, Any]:
@@ -79,18 +81,35 @@ def test_publish_runs_on_dispatch_even_when_tag_release_is_skipped() -> None:
     assert "github.event_name == 'workflow_dispatch'" in condition
 
 
+def _skips_dispatch(condition: str) -> bool:
+    # A job that runs on one other event only already skips a dispatch.
+    only_other_event = ("github.event_name == 'push'", "github.event_name == 'pull_request'")
+    return NOT_ON_DISPATCH in condition or condition.startswith(only_other_event)
+
+
 def test_dispatch_skips_the_test_and_tag_jobs() -> None:
     assert NOT_ON_DISPATCH in _job("test")["if"]
-    # These two already run on one other event only, so a dispatch skips them.
     assert _job(TAG_JOB)["if"].startswith("github.event_name == 'push' &&")
     assert _job("playbook-ci")["if"] == "github.event_name == 'pull_request'"
 
 
-def test_publish_checks_out_the_tag_and_builds_the_bundle() -> None:
-    checkout = next(s for s in _job(PUBLISH_JOB)["steps"] if "uses" in s)
+def test_dispatch_runs_publish_release_alone() -> None:
+    jobs = _workflow()["jobs"]
+    running = {name for name, job in jobs.items() if not _skips_dispatch(str(job.get("if", "")))}
+
+    assert running == {PUBLISH_JOB}
+
+
+def test_publish_runs_its_own_code_on_the_tag_tree() -> None:
+    # Older tags lack scripts/release_report.py: the code comes from the
+    # workflow's own commit, the release data from a second checkout of the tag.
+    steps = _job(PUBLISH_JOB)["steps"]
+    checkouts = [s for s in steps if str(s.get("uses", "")).startswith("actions/checkout@")]
     script = _publish_script()
 
-    assert checkout["with"]["ref"] == "v${{ env.V }}"
+    assert len(checkouts) == 2, checkouts
+    assert "ref" not in checkouts[0].get("with", {})
+    assert checkouts[1]["with"] == {"ref": "refs/tags/v${{ env.V }}", "path": "tag-tree"}
     assert "python -m pip install -e . matplotlib" in script
     assert REPORT_CALL in script
     assert "${{" not in script  # the dispatch input reaches the shell only through env:
@@ -103,7 +122,17 @@ def test_publish_updates_an_existing_release() -> None:
     assert "--clobber" in script
     assert "gh release edit" in script
     assert "gh release create" in script
+    assert "--verify-tag" in script
     assert step["env"]["GH_TOKEN"] == "${{ github.token }}"
+
+
+def test_the_bundle_is_flat() -> None:
+    # gh uploads files only: release_report.py writes metrics-<target>.json
+    # beside report.md, never a subdirectory, so release-report/* is every asset.
+    script = _publish_script()
+
+    assert script.count("release-report/*") == 2
+    assert "release-report/*/" not in script and "release-report/**" not in script
 
 
 def test_only_first_party_actions() -> None:
