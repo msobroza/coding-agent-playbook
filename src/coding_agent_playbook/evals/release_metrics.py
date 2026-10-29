@@ -321,16 +321,21 @@ def _check_means(results: Sequence[SampleResult]) -> dict[str, float]:
     """The mean score of each check over the runs it ran in, by check id."""
     scores: dict[str, list[float]] = {}
     for result in results:
-        for check_id, score in _run_check_scores(result).items():
+        for check_id, score in run_check_scores(result).items():
             scores.setdefault(check_id, []).append(score)
     return {check_id: _round(_mean(values)) for check_id, values in sorted(scores.items())}
 
 
-def _run_check_scores(result: SampleResult) -> dict[str, float]:
+def run_check_scores(result: SampleResult) -> dict[str, float]:
     """One run's score per check: its layers and their leaf checks, skipped ones left out.
 
     A check without a score counts as its verdict (``1.0`` passed, ``0.0`` failed).
     A composed check between a layer and its leaves repeats the layer, so it is skipped.
+
+    Example::
+
+        >>> run_check_scores(result)  # doctest: +SKIP
+        {'file-exists': 1.0, 'tests': 0.5}
     """
     scores: dict[str, float] = {}
     for layer in result.report.checks:

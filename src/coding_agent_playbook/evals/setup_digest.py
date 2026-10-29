@@ -133,6 +133,7 @@ _AFTER_SCORING: Final = "reads or checks recorded files after their scores are d
 #: that decide no score, with the reason.
 SCORING_EXEMPT: Final[Mapping[str, str]] = {
     "evals.__init__": _DOCSTRING_ONLY,
+    "evals.answers_store": "stores answers; evals.rejudge decides the scores",
     "evals.comparison": "summarizes `eval --compare` runs and flags regressions, never a score",
     "evals.config_shapes": _CONFIG,
     "evals.edition_checks": "offline pin and edition checks, never a run",
