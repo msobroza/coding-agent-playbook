@@ -106,7 +106,8 @@ from coding_agent_playbook.commands._eval_options import (
     removed_flag_error,
     select_target,
 )
-from coding_agent_playbook.commands._eval_record import configure_record, run_record, wants_record
+from coding_agent_playbook.commands._eval_record import run_record
+from coding_agent_playbook.commands._eval_record_flags import configure_record, wants_record
 from coding_agent_playbook.commands._eval_regressions import (
     configure_regressions,
     run_regressions,

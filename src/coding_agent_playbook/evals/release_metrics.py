@@ -122,19 +122,89 @@ def build_release_metrics(
         {'samples': 0, 'runs': 0, 'pass_rate': 0.0, 'mean_score': None, 'tokens': 0, 'cost_usd': ...}
     """
     price = recorded.target.price
-    entries = dict(sorted({runs.sample_id: _sample_entry(runs, price) for runs in samples}.items()))
-    control_entries = {runs.sample_id: _sample_entry(runs, price) for runs in controls}
+    return build_release_metrics_from_records(
+        release=release,
+        commit=commit,
+        recorded=recorded,
+        samples=[sample_record(runs, price) for runs in samples],
+        controls=[sample_record(runs, price) for runs in controls],
+    )
+
+
+def build_release_metrics_from_records(
+    *,
+    release: str,
+    commit: str | None,
+    recorded: RecordedTarget,
+    samples: Sequence[SampleRecord],
+    controls: Sequence[SampleRecord] = (),
+) -> dict[str, object]:
+    """The release metrics file of already-folded sample records (see :func:`sample_record`).
+
+    A record read back from a checkpoint (``evals.record_checkpoint``) folds
+    exactly as the runs it came from, so a resumed record writes the same file.
+
+    Example::
+
+        >>> build_release_metrics_from_records(release="9.9.9", commit=None, recorded=r, samples=[])  # doctest: +SKIP
+    """
+    ordered = sorted(samples, key=_record_id)
+    entries = {record.sample_id: dict(record.entry) for record in ordered}
+    control_entries = {record.sample_id: dict(record.entry) for record in controls}
     return _setup_keys(recorded.setup) | {
         "schema_version": SCHEMA_VERSION,
         "release": release,
         "previous": None,
         "commit": commit,
-        "target": _target_block(recorded, samples),
+        "target": _target_block(recorded, ordered),
         # One fold for fresh and carried records, so carrying an entry never moves the summary.
-        "summary": entries_summary(entries) | _fresh_totals(samples, price),
+        "summary": entries_summary(entries) | _fresh_totals(ordered, recorded.target.price),
         "samples": entries,
         CONTROLS_KEY: dict(sorted(control_entries.items())),
     }
+
+
+@dataclass(frozen=True)
+class SampleRecord:
+    """One sample's file entry and the per-run facts the file's totals fold over.
+
+    JSON-ready, so a checkpoint can store it and fold it later as if it had just
+    run: ``run_tokens`` and ``run_costs`` (``None``: unknown) feed the summary's
+    ``tokens`` and ``cost_usd``, ``reported_models`` the target's ``reported_model``.
+
+    Example::
+
+        >>> SampleRecord("review/x", {"runs": 0}, (), (), ()).sample_id
+        'review/x'
+    """
+
+    sample_id: str
+    entry: Mapping[str, object]
+    run_tokens: tuple[int | None, ...]
+    run_costs: tuple[float | None, ...]
+    reported_models: tuple[str, ...]
+
+
+def sample_record(runs: SampleRuns, price: TokenPrice | None) -> SampleRecord:
+    """``runs`` folded into its file entry and the per-run facts the totals need.
+
+    Example::
+
+        >>> sample_record(SampleRuns("review/x", "review", "head", None, "ab12", []), None).run_tokens
+        ()
+    """
+    results = runs.results
+    return SampleRecord(
+        sample_id=runs.sample_id,
+        entry=_sample_entry(runs, price),
+        run_tokens=tuple(_run_tokens(results)),
+        run_costs=tuple(_run_costs(results, price)),
+        reported_models=tuple(r.reported_model for r in results if r.reported_model is not None),
+    )
+
+
+def _record_id(record: SampleRecord) -> str:
+    return record.sample_id
 
 
 def _setup_keys(setup: SetupParts | None) -> dict[str, object]:
@@ -144,7 +214,7 @@ def _setup_keys(setup: SetupParts | None) -> dict[str, object]:
     return {SETUP_DIGEST_KEY: setup.digest, SETUP_KEY: setup.as_dict()}
 
 
-def _target_block(recorded: RecordedTarget, samples: Sequence[SampleRuns]) -> dict[str, object]:
+def _target_block(recorded: RecordedTarget, samples: Sequence[SampleRecord]) -> dict[str, object]:
     target = recorded.target
     price = target.price
     isolation = {} if recorded.isolated is None else {ISOLATED_KEY: recorded.isolated}
@@ -171,14 +241,9 @@ def _target_block(recorded: RecordedTarget, samples: Sequence[SampleRuns]) -> di
     }
 
 
-def _most_reported_model(samples: Sequence[SampleRuns]) -> str | None:
+def _most_reported_model(samples: Sequence[SampleRecord]) -> str | None:
     """The model the harness reported most often over every run (``None``: it reported none)."""
-    reported = Counter(
-        result.reported_model
-        for runs in samples
-        for result in runs.results
-        if result.reported_model is not None
-    )
+    reported = Counter(model for record in samples for model in record.reported_models)
     return reported.most_common(1)[0][0] if reported else None
 
 
@@ -202,15 +267,15 @@ def _sample_entry(runs: SampleRuns, price: TokenPrice | None) -> dict[str, objec
     }
 
 
-def _fresh_totals(samples: Sequence[SampleRuns], price: TokenPrice | None) -> dict[str, object]:
+def _fresh_totals(samples: Sequence[SampleRecord], price: TokenPrice | None) -> dict[str, object]:
     """The summary's ``tokens`` and ``cost_usd`` over every fresh run.
 
     ``cost_usd`` stays ``null`` without a price even when nothing ran: an
     unpriced target's cost is unknown, not zero.
     """
-    results = [result for runs in samples for result in runs.results]
-    tokens = _total_or_none(_run_tokens(results))
-    cost = _total_or_none(_run_costs(results, price)) if price is not None else None
+    tokens = _total_or_none([value for record in samples for value in record.run_tokens])
+    costs = [value for record in samples for value in record.run_costs]
+    cost = _total_or_none(costs) if price is not None else None
     return {
         "tokens": int(tokens) if tokens is not None else None,
         "cost_usd": _round_or_none(cost),

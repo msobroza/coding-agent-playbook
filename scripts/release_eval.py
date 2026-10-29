@@ -29,6 +29,12 @@ copied to a kept directory outside the checkout, and ``--reuse-metrics DIR``
 reads a target's file from there instead of recording it again (only when it
 was recorded on the same base commit). A reused file's mode comes from the file,
 not from this run's flags, and ``--full`` refuses one that holds carried entries.
+
+Every recording also saves each finished sample to a checkpoint outside the
+checkout (``checkpoint_path``: one per base commit and target) and resumes from
+it, so a crash, a timeout or a sleep loses no finished sample: rerunning
+``prepare --eval`` on the same base reruns only the rest. ``--jobs N`` runs N
+samples at a time. ``tail -f`` the checkpoint to watch the run.
 """
 
 from __future__ import annotations
@@ -80,6 +86,23 @@ def _make_kept_dir() -> Path:
     return Path(tempfile.mkdtemp(prefix="playbook-release-metrics-"))
 
 
+def _default_checkpoint_root() -> Path:
+    return Path(tempfile.gettempdir()) / "playbook-release-checkpoints"
+
+
+def checkpoint_path(root: Path, base: str, name: str) -> Path:
+    """Where target ``name``'s recording on ``base`` saves each finished sample.
+
+    Outside the throwaway checkout, so a failed run's samples outlive it.
+
+    Example::
+
+        >>> checkpoint_path(Path("/tmp/c"), "8a26e1a3", "opencode-qwen").as_posix()
+        '/tmp/c/8a26e1a3/opencode-qwen.partial.jsonl'
+    """
+    return root / base / f"{name}.partial.jsonl"
+
+
 @dataclass(frozen=True)
 class EvalRequest:
     """What ``prepare --eval`` was asked: accepted regressions, a directory to reuse, full runs."""
@@ -89,6 +112,10 @@ class EvalRequest:
     #: ``--full``: record without the previous release's file as ``--carry-from``.
     full: bool = False
     make_kept_dir: Callable[[], Path] = _make_kept_dir
+    #: ``--jobs``: samples each recording runs at the same time.
+    jobs: int = 1
+    #: Where recordings save their checkpoints (``checkpoint_path``).
+    checkpoint_root: Path = field(default_factory=_default_checkpoint_root)
 
 
 @dataclass(frozen=True)
@@ -279,7 +306,8 @@ def _recorded(
     kept = None if request.reuse is None else request.reuse / f"{recording.name}.json"
     if kept is not None and kept.is_file():
         return _reused(kept, recording.name, base, full=request.full)
-    return _fresh(tools, recording)
+    checkpoint = checkpoint_path(request.checkpoint_root, base, recording.name)
+    return _fresh(tools, recording, checkpoint, request.jobs)
 
 
 def _reused(kept: Path, name: str, base: str, *, full: bool) -> _RecordResult:
@@ -299,11 +327,12 @@ def _reused(kept: Path, name: str, base: str, *, full: bool) -> _RecordResult:
     return _RecordResult(metrics, changed_only=_reused_mode(metrics))
 
 
-def _fresh(tools: Tools, recording: _Recording) -> _RecordResult:
-    """Record the target in a subprocess; pass its carry plan on to the output."""
+def _fresh(tools: Tools, recording: _Recording, checkpoint: Path, jobs: int) -> _RecordResult:
+    """Record the target in a subprocess, resuming ``checkpoint``; pass its carry plan on."""
     name, path = recording.name, recording.path
     path.parent.mkdir(parents=True, exist_ok=True)
-    argv = _record_argv(tools.cwd, recording)
+    print(f"release: recording target {name!r}; each finished sample is saved to {checkpoint}")
+    argv = [*_record_argv(tools.cwd, recording), *_resume_flags(checkpoint, jobs)]
     done = tools.runner(argv, cwd=tools.cwd, timeout=RECORD_TIMEOUT_SECONDS)
     if done.returncode != 0:
         detail = (done.stderr or done.stdout).strip().splitlines()[-5:]
@@ -352,6 +381,11 @@ def full_rerun_reason(plan: Sequence[str]) -> str | None:
     prefix = "carry plan: every sample reruns, "
     first = next((line for line in plan if line.startswith(prefix)), None)
     return None if first is None else first.removeprefix("carry plan: ").rpartition(": ")[0]
+
+
+def _resume_flags(checkpoint: Path, jobs: int) -> list[str]:
+    """Save and resume each finished sample at ``checkpoint``; run ``jobs`` samples at a time."""
+    return ["--checkpoint", str(checkpoint), "--resume", "--jobs", str(jobs)]
 
 
 def _record_argv(checkout: Path, recording: _Recording) -> list[str]:

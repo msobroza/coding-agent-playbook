@@ -37,6 +37,8 @@ the pull request on a regression no ``--accept SAMPLE=REASON`` accepted;
 ``--reuse-metrics DIR`` reuses the files a refused run kept. The recording is
 changed-only by default: a target's previous file is its ``--carry-from``
 baseline, so only the samples whose inputs changed rerun; ``--full`` reruns all.
+Each finished sample is saved outside the checkout and reused by a rerun on the
+same base, and ``--jobs N`` runs N samples at a time.
 
 Merging that pull request is the release; the ``tag-release`` CI job then tags
 it, and ``tag`` does the same checks by hand (``release_tag``: the release
@@ -559,6 +561,13 @@ def _add_eval_flags(parser: argparse.ArgumentParser) -> None:
         help="--eval: rerun every sample, instead of only those whose inputs changed since "
         "the previous release's metrics",
     )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=1,
+        help="--eval: samples each recording runs at the same time (default 1); bounded by "
+        "the harness and judge rate limits",
+    )
 
 
 def _eval_request(args: argparse.Namespace) -> EvalRequest | None:
@@ -572,7 +581,9 @@ def _eval_request(args: argparse.Namespace) -> EvalRequest | None:
     except RegressionCheckError as exc:
         raise ReleaseError(str(exc)) from exc
     reuse = None if args.reuse_metrics is None else args.reuse_metrics.resolve()
-    return EvalRequest(accepted=accepted, reuse=reuse, full=args.full)
+    if args.jobs < 1:
+        raise ReleaseError(f"--jobs must be >= 1, got {args.jobs}")
+    return EvalRequest(accepted=accepted, reuse=reuse, full=args.full, jobs=args.jobs)
 
 
 def _eval_flags(request: EvalRequest | None) -> list[str]:
@@ -580,6 +591,7 @@ def _eval_flags(request: EvalRequest | None) -> list[str]:
     if request is None:
         return []
     flags = ["--eval", *(["--full"] if request.full else [])]
+    flags += ["--jobs", str(request.jobs)] if request.jobs != 1 else []
     for sample_id, reason in request.accepted.items():
         flags += ["--accept", f"{sample_id}={reason}"]
     return flags if request.reuse is None else [*flags, "--reuse-metrics", str(request.reuse)]
@@ -603,6 +615,8 @@ def main(
     args = parser.parse_args(argv)
     if getattr(args, "full", False) and not args.record_metrics:
         parser.error("--full belongs to --eval; pass --eval too")
+    if getattr(args, "jobs", 1) != 1 and not args.record_metrics:
+        parser.error("--jobs belongs to --eval; pass --eval too")
     here = Path.cwd() if cwd is None else cwd
     try:
         return _dispatch(args, Tools(runner, here), snapshot, engine_guard)

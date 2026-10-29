@@ -27,6 +27,8 @@ if TYPE_CHECKING:
 API_ANTHROPIC: Final = "anthropic"
 API_OPENAI_CHAT: Final = "openai-chat"
 API_OPENAI_RESPONSES: Final = "openai-responses"
+#: The reasoning efforts ``[evals.judge] reasoning_effort`` accepts (OpenAI's names).
+REASONING_EFFORTS: Final = ("none", "minimal", "low", "medium", "high", "xhigh")
 ENDPOINT_APIS: Final = (API_ANTHROPIC, API_OPENAI_CHAT, API_OPENAI_RESPONSES)
 
 #: How an ``anthropic`` endpoint takes its token: ``Authorization: Bearer`` or ``x-api-key``.

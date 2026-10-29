@@ -110,6 +110,8 @@ class JudgeSettings:
     model: str | None = None
     samples: int | None = None
     endpoint: Endpoint | None = None
+    #: The judge model's reasoning effort, sent by the API judge only (``evals.api_judge``).
+    reasoning_effort: str | None = None
 
 
 @dataclass(frozen=True)

@@ -65,6 +65,7 @@ _CHANGES: Mapping[str, object] = {
     "fail_fast": False,
     "isolated": False,
     "scoring_digest": "b" * 64,
+    "judge_reasoning_effort": "high",
 }
 
 
@@ -89,7 +90,15 @@ def test_equal_parts_give_the_same_digest_and_no_difference() -> None:
 
 def test_a_baseline_without_parts_differs_in_every_part() -> None:
     # A file recorded before #329 ticket 04 has no setup parts to compare with.
-    assert differing_setup_parts({}, _BASE.as_dict()) == tuple(sorted(_CHANGES))
+    assert differing_setup_parts({}, _BASE.as_dict()) == tuple(sorted(_BASE.as_dict()))
+
+
+def test_an_unset_reasoning_effort_is_left_out_and_keeps_the_digest() -> None:
+    # Files recorded before the part existed carry the same digest as a setup without it.
+    assert "judge_reasoning_effort" not in _BASE.as_dict()
+    high = dataclasses.replace(_BASE, judge_reasoning_effort="high")
+    assert high.as_dict()["judge_reasoning_effort"] == "high"
+    assert differing_setup_parts(_BASE.as_dict(), high.as_dict()) == ("judge_reasoning_effort",)
 
 
 @pytest.mark.parametrize("part", ["harness_version", "judge_version"])
@@ -112,7 +121,9 @@ def test_parts_are_json_ready_and_keep_their_names() -> None:
     parts = _BASE.as_dict()
     assert parts["judge_samples"] == 1
     assert parts["isolated"] is True
-    assert list(parts) == [field.name for field in dataclasses.fields(SetupParts)]
+    names = [field.name for field in dataclasses.fields(SetupParts)]
+    assert list(parts) == [name for name in names if name != "judge_reasoning_effort"]
+    assert list(dataclasses.replace(_BASE, judge_reasoning_effort="low").as_dict()) == names
 
 
 def _package(root: Path, files: Mapping[str, str]) -> Path:

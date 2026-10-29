@@ -124,6 +124,9 @@ SETUP_PART_TYPES: Final[_Fields] = {
     "isolated": _OPT_BOOL,
     "scoring_digest": _STR,
 }
+#: A setup part recorded only when set, so files recorded before it existed stay valid.
+JUDGE_REASONING_EFFORT_PART: Final = "judge_reasoning_effort"
+OPTIONAL_SETUP_PART_TYPES: Final[_Fields] = {JUDGE_REASONING_EFFORT_PART: _OPT_STR}
 _TARGET: Final[_Fields] = {
     "name": _STR,
     "harness": _STR,
@@ -208,6 +211,9 @@ def _problems(data: object) -> list[str]:
         problems += _check_fields(summary, _OPTIONAL_SUMMARY, "summary.", optional=True)
     problems += _check_fields(data, _OPTIONAL_TOP, "", optional=True)
     problems += _nested(data, SETUP_KEY, SETUP_PART_TYPES)
+    setup = data.get(SETUP_KEY)
+    if isinstance(setup, dict):
+        problems += _check_fields(setup, OPTIONAL_SETUP_PART_TYPES, f"{SETUP_KEY}.", optional=True)
     target = data.get("target")
     if isinstance(target, dict):
         problems += _check_fields(target, _OPTIONAL_TARGET, "target.", optional=True)

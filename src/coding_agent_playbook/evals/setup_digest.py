@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.evals.judge import GRADING_PROMPT
+from coding_agent_playbook.evals.release_metrics_schema import JUDGE_REASONING_EFFORT_PART
 from coding_agent_playbook.lockfile.canonical_json import canonical_json
 
 if TYPE_CHECKING:
@@ -143,6 +144,7 @@ SCORING_EXEMPT: Final[Mapping[str, str]] = {
     "evals.model_pins": "refuses a moving model before a run; the model parts record it",
     "evals.prompting": "rendering: the inputs digest hashes the rendered text",
     "evals.record_isolation": "refuses a missing credential; the isolated part records isolation",
+    "evals.record_checkpoint": "saves finished entries; reuses one only on the same setup digest",
     "evals.registry": "looks runners and judges up; the harness part names the runner",
     "evals.release_carry": "picks the samples that rerun and copies recorded entries as they are",
     "evals.release_metrics_schema": _AFTER_SCORING,
@@ -198,10 +200,16 @@ class SetupParts:
     fail_fast: bool
     isolated: bool | None
     scoring_digest: str
+    #: ``[evals.judge] reasoning_effort``; ``None`` leaves the part out, so a setup
+    #: without one keeps the digest it had before the part existed.
+    judge_reasoning_effort: str | None = None
 
     def as_dict(self) -> dict[str, object]:
         """The parts by name, in field order, as the metrics file records them."""
-        return dataclasses.asdict(self)
+        parts = dataclasses.asdict(self)
+        if parts[JUDGE_REASONING_EFFORT_PART] is None:
+            del parts[JUDGE_REASONING_EFFORT_PART]
+        return parts
 
     @property
     def digest(self) -> str:

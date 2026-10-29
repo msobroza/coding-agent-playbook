@@ -904,6 +904,51 @@
         {
           "action": "_StoreAction",
           "option_strings": [
+            "--jobs"
+          ],
+          "dest": "jobs",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": "int",
+          "choices": null,
+          "required": false,
+          "help": "--record: samples run at the same time (default 1); bounded by the harness and judge rate limits",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--checkpoint"
+          ],
+          "dest": "checkpoint",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "--record: save each finished sample to PATH as it ends (default: the record path + .partial.jsonl); removed once the metrics file is written",
+          "metavar": "PATH"
+        },
+        {
+          "action": "_StoreTrueAction",
+          "option_strings": [
+            "--resume"
+          ],
+          "dest": "resume",
+          "nargs": 0,
+          "const": true,
+          "default": false,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "--record: reuse the checkpoint's samples measured on the same setup and inputs instead of running them again",
+          "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
             "--check-regressions"
           ],
           "dest": "check_regressions",

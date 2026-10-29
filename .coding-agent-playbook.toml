@@ -60,6 +60,19 @@ endpoint = "openrouter"
 model = "qwen/qwen3.8-27b"
 runs = 3
 
+# The same model driven by Claude Code, through OpenRouter's Anthropic-compatible
+# API, so the two harnesses can be compared on one model.
+[evals.endpoints.openrouter-anthropic]
+api = "anthropic"
+base_url = "https://openrouter.ai/api"
+token_env = "OPENROUTER_API_KEY"
+
+[evals.targets.claude-code-qwen]
+harness = "claude_code"
+endpoint = "openrouter-anthropic"
+model = "qwen/qwen3.8-27b"
+runs = 3
+
 # Measured v0.1.0 and v0.2.0; kept for comparisons, no longer a release target.
 [evals.targets.claude-opus]
 harness = "claude_code"
@@ -70,3 +83,4 @@ runs = 3
 endpoint = "openai"
 model = "gpt-6-luna"
 samples = 3
+reasoning_effort = "high"
