@@ -967,7 +967,15 @@ changed and every edition control rerun; every other entry is carried: copied
 from the baseline without `vs_previous` or `accepted`, with `measured_in` naming
 the release and commit that measured it (kept when it was already carried).
 Before the first paid run the command prints the plan: each rerun with its
-reason, and the carried count.
+reason, and the carried count. `--carry-from` also takes the releases
+directory, such as `catalog/releases`: the record then indexes every
+`<release>/metrics/*.json` there whose `setup` matches this run's, whatever its
+target, leaving out the record's own output. A sample whose `inputs_digest` a
+file records is carried from the newest release that measured it (the target's
+own file first within a release); the rest rerun. A file that cannot be read,
+fails the schema or lacks a setup digest is skipped, and when no file matches
+the setup every sample reruns, naming the first files skipped. The plan then
+ends with one `carried from <release> (<target>): <n>` line per source file.
 
 Cost comes only from the target's `price`. Without one it is `null`, and so are
 tokens and cost when a run's harness reported no tokens. The harness's own cost

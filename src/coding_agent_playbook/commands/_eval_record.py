@@ -20,8 +20,9 @@ records its setup digest and parts (#329 ticket 04, ``evals.setup_digest``),
 with the judge CLI's version probed once like the harness's.
 ``--carry-from PREVIOUS`` (with ``--all`` only, #329 ticket 05,
 ``evals.release_carry``) loads that baseline before any run, refusing one of
-another target, prints the plan (each rerun with its reason, the carried count)
-before the first paid run, runs only new samples, samples whose inputs digest
+another target, or indexes the releases directory PREVIOUS
+(``commands._eval_record_carry``), prints the plan (each rerun with its reason,
+the carried count) before the first paid run, runs only new samples, samples whose inputs digest
 changed and every edition control (every sample when the setup differs or the
 baseline lacks the digests), and carries the other entries. The
 file is written whatever the scores are: exit ``0`` once it is written, ``2`` on
@@ -41,7 +42,7 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Final
 
 import coding_agent_playbook
 from coding_agent_playbook.commands._eval_options import (
@@ -49,6 +50,11 @@ from coding_agent_playbook.commands._eval_options import (
     build_target_runner,
     judge_sample_count,
     select_target,
+)
+from coding_agent_playbook.commands._eval_record_carry import (
+    Baseline,
+    load_carry_baseline,
+    plan_from_baseline,
 )
 from coding_agent_playbook.commands._eval_record_flags import (
     carry_from_path,
@@ -68,13 +74,7 @@ from coding_agent_playbook.evals.record_checkpoint import (
     default_checkpoint_path,
 )
 from coding_agent_playbook.evals.record_isolation import check_record_credentials
-from coding_agent_playbook.evals.release_carry import (
-    CarryPlan,
-    carry_plan_lines,
-    load_baseline,
-    merge_carried,
-    plan_carry,
-)
+from coding_agent_playbook.evals.release_carry import CarryPlan, carry_plan_lines, merge_carried
 from coding_agent_playbook.evals.release_metrics import (
     GRADED_HEAD,
     RecordedTarget,
@@ -119,7 +119,7 @@ def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings
     refuse_format(args)
     carry_from = carry_from_path(args)
     target = select_target(args, settings)
-    baseline = load_baseline(carry_from, target.name) if carry_from is not None else None
+    baseline = load_carry_baseline(carry_from, target_name=target.name, out_path=out_path)
     runs = run_count(getattr(args, "runs", None), target.runs)
     jobs = job_count(getattr(args, "jobs", None))
     uses_judge = getattr(args, "judge", None) is not None
@@ -151,7 +151,7 @@ def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings
 
 
 def _plan_carry(
-    baseline: Mapping[str, Any] | None,
+    baseline: Baseline | None,
     recorded: RecordedTarget,
     inputs: Mapping[str, str],
     controls: Mapping[str, _Control],
@@ -160,7 +160,9 @@ def _plan_carry(
     if baseline is None:
         return None
     assert recorded.setup is not None  # a record always computes its setup parts
-    carry = plan_carry(baseline, setup=recorded.setup.as_dict(), inputs=inputs)
+    setup = recorded.setup.as_dict()
+    name = recorded.target.name
+    carry = plan_from_baseline(baseline, target_name=name, setup=setup, inputs=inputs)
     for line in carry_plan_lines(carry, controls=sorted(controls)):
         print(line)
     return carry

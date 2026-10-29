@@ -46,7 +46,8 @@ def configure_record(parser: argparse.ArgumentParser) -> None:
         dest="carry_from",
         help="--record --all: rerun only new samples, samples whose inputs changed and "
         "edition controls, copying the other entries from the metrics file PREVIOUS of "
-        "the same target; a different setup reruns everything",
+        "the same target, or from any metrics file of this setup under the releases "
+        "directory PREVIOUS (<release>/metrics/*.json); a different setup reruns everything",
     )
     parser.add_argument(
         "--jobs",
@@ -92,7 +93,7 @@ def record_path(args: argparse.Namespace) -> Path:
 
 
 def carry_from_path(args: argparse.Namespace) -> Path | None:
-    """The ``--carry-from`` baseline path; refused unless the record runs ``--all`` samples."""
+    """The ``--carry-from`` metrics file or releases directory; refused without ``--all``."""
     carry_from = getattr(args, "carry_from", None)
     if carry_from is None:
         return None

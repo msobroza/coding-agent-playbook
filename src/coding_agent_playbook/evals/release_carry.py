@@ -20,6 +20,7 @@ runs' own. Nothing here runs an agent.
 from __future__ import annotations
 
 import json
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
 
@@ -210,6 +211,8 @@ def carry_plan_lines(plan: CarryPlan, *, controls: Sequence[str]) -> list[str]:
     """The plan printed before the first paid run: a headline, then each rerun with its reason.
 
     ``controls`` are the ids of the pinned samples, whose edition controls rerun.
+    A plan with ``sources`` (``evals.result_index``) ends with one
+    ``carried from <source>: <n>`` line per source, sorted by source.
 
     Example::
 
@@ -223,4 +226,6 @@ def carry_plan_lines(plan: CarryPlan, *, controls: Sequence[str]) -> list[str]:
     lines = [f"carry plan: {counts}"]
     lines += [f"  {sample_id}: {why}" for sample_id, why in plan.rerun.items()]
     lines += [f"  {sample_id} (edition control): {_CONTROL}" for sample_id in controls]
+    counts_by_source = Counter(plan.sources.values())
+    lines += [f"  carried from {src}: {n}" for src, n in sorted(counts_by_source.items())]
     return lines

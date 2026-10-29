@@ -13,6 +13,7 @@ import pytest
 
 from coding_agent_playbook.evals.release_carry import (
     CarryFromError,
+    CarryPlan,
     carried_entry,
     carry_plan_lines,
     load_baseline,
@@ -28,6 +29,7 @@ from coding_agent_playbook.evals.setup_digest import SetupParts
 from tests.evals.release_metrics_files import metrics_file, sample_entry
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from pathlib import Path
 
 _SETUP: dict[str, object] = SetupParts(
@@ -200,6 +202,15 @@ def test_plan_lines_of_a_full_rerun_give_the_reason() -> None:
     lines = carry_plan_lines(plan, controls=[])
     assert "every sample reruns" in lines[0]
     assert "runs" in lines[0]
+
+
+def test_plan_lines_count_the_carried_entries_of_each_source_sorted_by_source() -> None:
+    carried: dict[str, Mapping[str, object]] = {"a": {}, "b": {}, "c": {}}
+    sources = {"a": "0.3.0 (opus)", "b": "0.2.0 (opus)", "c": "0.3.0 (opus)"}
+    plan = CarryPlan(None, {"d": "new sample"}, carried, sources=sources)
+    lines = carry_plan_lines(plan, controls=[])
+    assert lines[0] == "carry plan: 1 rerun, 3 carried"
+    assert lines[-2:] == ["  carried from 0.2.0 (opus): 1", "  carried from 0.3.0 (opus): 2"]
 
 
 def _write(path: Path, data: object) -> Path:
