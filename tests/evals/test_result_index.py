@@ -101,7 +101,6 @@ def test_a_file_with_another_setup_is_skipped(tmp_path: Path) -> None:
 
 def test_files_without_digests_or_invalid_are_skipped_and_named(tmp_path: Path) -> None:
     no_setup = _write(tmp_path, "0.2.0", {"t/a": sample_entry(0.4, inputs="in-a")}, setup=None)
-    no_inputs = _write(tmp_path, "0.2.0", {"t/a": sample_entry(0.4)}, target="beta")
     invalid = tmp_path / "0.3.0" / "metrics" / "opus.json"
     invalid.parent.mkdir(parents=True)
     invalid.write_text(json.dumps({"schema_version": 1}), encoding="utf-8")
@@ -110,10 +109,31 @@ def test_files_without_digests_or_invalid_are_skipped_and_named(tmp_path: Path) 
     index = ReleaseIndex.load(tmp_path)
     assert index.files == ()
     by_path = {line.split(": ", 1)[0]: line.split(": ", 1)[1] for line in index.skipped}
+    assert set(by_path) == {str(no_setup), str(invalid), str(broken)}
     assert "setup digest" in by_path[str(no_setup)]
-    assert "inputs digest" in by_path[str(no_inputs)]
     assert "release: missing" in by_path[str(invalid)]
     assert "cannot read" in by_path[str(broken)]
+
+
+def test_entries_without_an_inputs_digest_are_left_out_not_their_file(tmp_path: Path) -> None:
+    samples = {"t/old": sample_entry(0.4), "t/b": sample_entry(0.8, inputs="in-b")}
+    path = _write(tmp_path, "0.3.0", samples)
+    index = ReleaseIndex.load(tmp_path)
+    assert [indexed.path for indexed in index.files] == [path]
+    assert index.skipped == ()
+    plan = index.plan(target_name="opus", setup=_SETUP, inputs={"t/old": "x", "t/b": "in-b"})
+    assert "new sample" in plan.rerun["t/old"]
+    assert plan.sources == {"t/b": "0.3.0 (opus)"}
+
+
+def test_a_file_whose_entries_all_lack_an_inputs_digest_holds_nothing(tmp_path: Path) -> None:
+    _write(tmp_path, "0.3.0", {"t/a": sample_entry(0.4)})
+    index = ReleaseIndex.load(tmp_path)
+    assert index.skipped == ()
+    plan = index.plan(target_name="opus", setup=_SETUP, inputs={"t/a": "in-a"})
+    assert plan.full_rerun_reason is None
+    assert "new sample" in plan.rerun["t/a"]
+    assert plan.carried == {}
 
 
 def test_the_full_rerun_reason_lists_three_skips_then_counts_the_rest(tmp_path: Path) -> None:

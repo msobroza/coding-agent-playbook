@@ -4,12 +4,13 @@
 release's file of the same target (ADR 0013 carried from that one file).
 :meth:`ReleaseIndex.load` reads ``<root>/*/metrics/*.json`` and skips, naming
 the reason, each file that cannot be read, fails the schema, records no setup
-digest or an entry without an inputs digest, or names a release that is not a
-version. :meth:`ReleaseIndex.plan` keeps the files whose setup matches this
-run's (``evals.setup_digest.setups_match``) and, for each sample, carries the
-first entry at the same inputs digest, newest release first and, within a
-release, the target's own file before the others by name. Nothing here runs an
-agent or decides a score.
+digest, or names a release that is not a version. :meth:`ReleaseIndex.plan`
+keeps the files whose setup matches this run's
+(``evals.setup_digest.setups_match``) and indexes their entries that record an
+inputs digest; an entry without one is never carried. Each sample carries the
+first entry at its inputs digest, newest release first and, within a release,
+the target's own file before the others by name. Nothing here runs an agent or
+decides a score.
 """
 
 from __future__ import annotations
@@ -150,11 +151,6 @@ def _unusable_reason(data: Mapping[str, Any]) -> str | None:
     """Why a valid file cannot be carried from; ``None`` when it can."""
     if SETUP_DIGEST_KEY not in data or SETUP_KEY not in data:
         return "records no setup digest"
-    keyless = sorted(
-        key for key, entry in data["samples"].items() if INPUTS_DIGEST_KEY not in entry
-    )
-    if keyless:
-        return f"records no inputs digest for {len(keyless)} sample(s), e.g. {keyless[0]!r}"
     try:
         Version(data["release"])
     except InvalidVersion:
@@ -198,11 +194,22 @@ def _carry_plan(ordered: Sequence[IndexedFile], inputs: Mapping[str, str]) -> Ca
 
 def _source(ordered: Sequence[IndexedFile], sample_id: str, digest: str) -> IndexedFile | str:
     """The first file holding ``sample_id`` at ``digest``, or why the sample reruns."""
-    holders = [indexed for indexed in ordered if sample_id in indexed.data["samples"]]
+    holders = [indexed for indexed in ordered if _inputs_digest(indexed, sample_id) is not None]
     for indexed in holders:
-        if indexed.data["samples"][sample_id][INPUTS_DIGEST_KEY] == digest:
+        if _inputs_digest(indexed, sample_id) == digest:
             return indexed
     return _INPUTS_CHANGED if holders else _NEW_SAMPLE
+
+
+def _inputs_digest(indexed: IndexedFile, sample_id: str) -> str | None:
+    """The inputs digest ``indexed`` records for ``sample_id``; ``None`` when it holds none.
+
+    An entry written before inputs digests existed is not indexed (spec D1), so
+    it never carries and never makes a sample's reason "inputs digest changed".
+    """
+    entry: Mapping[str, Any] = indexed.data["samples"].get(sample_id, {})
+    digest: str | None = entry.get(INPUTS_DIGEST_KEY)
+    return digest
 
 
 def _reported_model(ordered: Sequence[IndexedFile], used: Iterable[IndexedFile]) -> str | None:
