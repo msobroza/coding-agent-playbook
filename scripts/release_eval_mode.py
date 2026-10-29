@@ -2,15 +2,22 @@
 
 A changed-only recording (``--carry-from``) marks each carried entry with
 ``measured_in``; ``scripts/release_eval.py`` counts them here for the pull
-request's "changed-only: N rerun, M carried (K from older releases)" line.
+request's "changed-only: N rerun, M carried (K compared with <previous>)" line.
+K counts the carried entries the regression check compared like a rerun: carried
+from an older release, with inputs that differ from the previous release's entry.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+    from coding_agent_playbook.evals.release_regression import RegressionCheck
+
+#: Verdicts of a carried entry that the check did not compare with a previous entry.
+_NOT_COMPARED: Final = frozenset({"carried", "new"})
 
 
 def carried_count(metrics: Mapping[str, object]) -> int:
@@ -21,39 +28,42 @@ def carried_count(metrics: Mapping[str, object]) -> int:
         >>> carried_count({"samples": {"a": {"measured_in": {"release": "9.9.8"}}, "b": {}}})
         1
     """
-    return len(_measured_in(metrics))
+    return len(_carried_ids(metrics))
 
 
-def carried_from_older(metrics: Mapping[str, object], previous: str | None) -> int:
-    """The carried entries of ``metrics`` measured in a release other than ``previous``.
+def carried_compared(metrics: Mapping[str, object], check: RegressionCheck) -> int:
+    """The carried entries of ``metrics`` that ``check`` compared like a rerun.
+
+    A ``carried`` verdict (same inputs as the previous entry) and a ``new`` one
+    (no previous entry) were not compared; any other verdict was, and can block.
 
     Example::
 
-        >>> carried_from_older({"samples": {"a": {"measured_in": {"release": "9.9.7"}}}}, "9.9.8")
+        >>> carried_compared(metrics, check)  # doctest: +SKIP
         1
     """
-    releases = [
-        where.get("release") if isinstance(where, dict) else None for where in _measured_in(metrics)
-    ]
-    return sum(1 for release in releases if release != previous)
+    compared = {v.sample_id for v in check.samples if v.status not in _NOT_COMPARED}
+    return len(compared & _carried_ids(metrics))
 
 
 def changed_only_mode(
-    metrics: Mapping[str, object], *, full_rerun_reason: str | None, previous: str | None
+    metrics: Mapping[str, object], *, full_rerun_reason: str | None, check: RegressionCheck | None
 ) -> str:
-    """``changed-only: N rerun, M carried``, with the full-rerun reason and the older count.
+    """``changed-only: N rerun, M carried``, with the full-rerun reason and the compared count.
+
+    Without a ``check`` (no previous file) nothing was compared, so no count is added.
 
     Example::
 
-        >>> changed_only_mode({"samples": {"a": {}}}, full_rerun_reason=None, previous=None)
+        >>> changed_only_mode({"samples": {"a": {}}}, full_rerun_reason=None, check=None)
         'changed-only: 1 rerun, 0 carried'
     """
     carried = carried_count(metrics)
     samples = metrics.get("samples")
     total = len(samples) if isinstance(samples, dict) else 0
     why = "" if full_rerun_reason is None else f" ({full_rerun_reason})"
-    older = carried_from_older(metrics, previous)
-    where = f" ({older} from older releases)" if older else ""
+    compared = 0 if check is None else carried_compared(metrics, check)
+    where = f" ({compared} compared with {check.previous})" if check and compared else ""
     return f"changed-only: {total - carried} rerun{why}, {carried} carried{where}"
 
 
@@ -72,8 +82,8 @@ def recorded_changed_only(metrics: Mapping[str, object]) -> bool:
     return carried_count(metrics) > 0 or (isinstance(summary, dict) and "carried" in summary)
 
 
-def _measured_in(metrics: Mapping[str, object]) -> list[object]:
-    """The ``measured_in`` of every carried entry in ``metrics``."""
+def _carried_ids(metrics: Mapping[str, object]) -> set[str]:
+    """The sample ids of every carried entry (one with ``measured_in``) in ``metrics``."""
     samples = metrics.get("samples")
-    entries = samples.values() if isinstance(samples, dict) else ()
-    return [e["measured_in"] for e in entries if isinstance(e, dict) and "measured_in" in e]
+    entries = samples.items() if isinstance(samples, dict) else ()
+    return {sid for sid, e in entries if isinstance(e, dict) and "measured_in" in e}

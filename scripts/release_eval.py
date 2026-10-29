@@ -22,8 +22,8 @@ previous release's file for the same target (``check_regressions``), and the
 comparison is stored in it. ``--accept SAMPLE=REASON`` (repeatable) accepts that
 sample's regression on every target where it regressed; one that regressed on
 no target is refused. An unaccepted regression refuses the release pull request,
-whose body says per target "changed-only: N rerun, M carried (K from older
-releases)" or "full run";
+whose body says per target "changed-only: N rerun, M carried (K compared with
+<previous>)" or "full run";
 the engine's carry plan (why samples rerun) is passed on to the output.
 
 Recording is paid and slow, so on any refusal after it the recorded files are
@@ -140,8 +140,6 @@ class TargetMetrics:
     changed_only: bool = False
     #: The engine's reason when a changed-only recording reran every sample.
     full_rerun_reason: str | None = None
-    #: The release being compared with; carried entries measured in another are older.
-    previous: str | None = None
 
 
 def release_targets(checkout: Path) -> ReleaseTargets:
@@ -186,8 +184,7 @@ def record_release_metrics(
             results[name] = _recorded(tools, recording, request, base)
         # The recording names the installed engine's version; the file is this release's.
         recorded = {name: {**r.metrics, "release": version} for name, r in results.items()}
-        outcomes = _checked(tools.cwd, recorded, previous, request.accepted)
-        checked = _with_modes(outcomes, results, previous)
+        checked = _with_modes(_checked(tools.cwd, recorded, previous, request.accepted), results)
         for outcome in checked:
             _write(out_dir / f"{outcome.name}.json", outcome.metrics)
         _refuse_blocked(checked)
@@ -241,7 +238,7 @@ def _summary_line(outcome: TargetMetrics) -> str:
 
 
 def _with_modes(
-    outcomes: Sequence[TargetMetrics], results: Mapping[str, _RecordResult], previous: str | None
+    outcomes: Sequence[TargetMetrics], results: Mapping[str, _RecordResult]
 ) -> tuple[TargetMetrics, ...]:
     """Each outcome with the mode its file was recorded in (#329 ticket 07).
 
@@ -253,18 +250,17 @@ def _with_modes(
             o,
             changed_only=results[o.name].changed_only,
             full_rerun_reason=results[o.name].full_rerun_reason,
-            previous=previous,
         )
         for o in outcomes
     )
 
 
 def _mode(outcome: TargetMetrics) -> str:
-    """``changed-only: N rerun, M carried (K from older releases)`` or ``full run``."""
+    """``changed-only: N rerun, M carried (K compared with <previous>)`` or ``full run``."""
     if not outcome.changed_only:
         return "full run"
-    reason, previous = outcome.full_rerun_reason, outcome.previous
-    return changed_only_mode(outcome.metrics, full_rerun_reason=reason, previous=previous)
+    reason = outcome.full_rerun_reason
+    return changed_only_mode(outcome.metrics, full_rerun_reason=reason, check=outcome.check)
 
 
 @dataclass(frozen=True)

@@ -262,19 +262,29 @@ def test_every_target_records_changed_only_from_the_releases_directory(tmp_path:
     assert (_carry_from(host, _OPUS), _carry_from(host, _CODER)) == (releases, releases)
 
 
-def test_the_mode_line_counts_entries_carried_from_older_releases(tmp_path: Path) -> None:
+def test_the_mode_line_counts_carried_entries_compared_with_the_previous_release(
+    tmp_path: Path,
+) -> None:
+    # Review fix: an entry carried along from the previous file keeps an older
+    # `measured_in` but is `carried`; only one whose inputs differ is compared.
     recorded = _recorded(_OPUS, 0.9)
-    recorded["samples"]["review/b"] |= {"measured_in": {"release": _OLD, "commit": "0ld"}}
+    along = {"release": "9.9.6", "commit": "0ldest"}
+    recorded["samples"]["review/b"] = sample_entry(0.9, inputs="i1") | {"measured_in": along}
     older = {"release": "9.9.7", "commit": "0lder", "target": _CODER}
-    recorded["samples"]["review/c"] = sample_entry(0.9) | {"measured_in": older}
+    recorded["samples"]["review/c"] = sample_entry(0.9, inputs="i0") | {"measured_in": older}
     recorded["summary"] |= {"samples": 3, "rerun": 1, "carried": 2}
-    checkout = _checkout(tmp_path, previous={_OPUS: _previous(_OPUS)})
+    previous = _previous(_OPUS)
+    previous["samples"] |= {
+        "review/b": sample_entry(0.9, inputs="i1"),
+        "review/c": sample_entry(0.9, inputs="i1"),
+    }
+    checkout = _checkout(tmp_path, previous={_OPUS: previous})
     host = _host(claude_opus=recorded, coder=_recorded(_CODER, 0.9))
 
     assert _run(checkout, host) == 0
 
     (body,) = host.bodies
-    assert "changed-only: 1 rerun, 2 carried (1 from older releases)" in body
+    assert f"changed-only: 1 rerun, 2 carried (1 compared with {_OLD})" in body
 
 
 def test_full_records_every_target_without_a_baseline(tmp_path: Path) -> None:

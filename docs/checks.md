@@ -1079,8 +1079,11 @@ Each record run's carry plan (why samples rerun, or which `setup` part made ever
 sample rerun) is printed per target. The pull request body adds a `Release
 metrics` section to the notes, with one line per target and its notes; each line
 names the mode: "changed-only: N rerun, M carried" (with the reason when every
-sample reran, and "(K from older releases)" when K carried entries were measured
-in a release older than the previous one) or "full run". A reused file is changed-only when it holds carried
+sample reran) or "full run". "(K compared with <previous>)" follows when K > 0
+carried entries were compared like a rerun: carried from an older release with
+inputs that differ from the previous release's entry, so they can block. An
+entry carried along unchanged from the previous release's file is `carried` and
+not counted; without a previous file nothing is compared and no count is shown. A reused file is changed-only when it holds carried
 entries or its summary counts `carried`. These runs are paid and only the maintainer starts them;
 CI never does.
 
