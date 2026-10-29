@@ -104,6 +104,10 @@ class FakeReleaseHost:
         path = Path(command[command.index("--record") + 1])
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(metrics), encoding="utf-8")
+        if "--answers" in command:  # stands for the gzip answers file (spec D8)
+            answers = Path(command[command.index("--answers") + 1])
+            answers.parent.mkdir(parents=True, exist_ok=True)
+            answers.write_bytes(f"answers of {target}".encode())
         printed = self.record_stdout.get(target, "")
         return Completed(0, f"{printed}recorded target {target!r} to {path}\n")
 

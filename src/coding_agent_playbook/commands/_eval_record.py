@@ -55,14 +55,12 @@ from coding_agent_playbook.commands._eval_options import (
 from coding_agent_playbook.commands._eval_record_answers import (
     answers_out_path,
     capturing,
-    judge_parts,
     stored_run,
     write_record_answers,
 )
 from coding_agent_playbook.commands._eval_record_carry import (
-    Baseline,
     load_carry_baseline,
-    plan_from_baseline,
+    print_carry_plan,
 )
 from coding_agent_playbook.commands._eval_record_flags import (
     carry_from_path,
@@ -70,19 +68,21 @@ from coding_agent_playbook.commands._eval_record_flags import (
     record_path,
     refuse_format,
     run_count,
+    selected_samples,
 )
-from coding_agent_playbook.commands._eval_record_runs import RecordUnit, record_units
+from coding_agent_playbook.commands._eval_record_runs import (
+    RecordUnit,
+    open_checkpoint,
+    record_units,
+)
 from coding_agent_playbook.evals import registry
+from coding_agent_playbook.evals.answers_store import judge_parts
 from coding_agent_playbook.evals.graded_source import graded_source
 from coding_agent_playbook.evals.judge import JudgeError
 from coding_agent_playbook.evals.model_pins import RecordRefusedError, check_recordable
 from coding_agent_playbook.evals.prompting import PromptResolutionError, render_prompt
-from coding_agent_playbook.evals.record_checkpoint import (
-    RecordCheckpoint,
-    default_checkpoint_path,
-)
 from coding_agent_playbook.evals.record_isolation import check_record_credentials
-from coding_agent_playbook.evals.release_carry import CarryPlan, carry_plan_lines, merge_carried
+from coding_agent_playbook.evals.release_carry import CarryPlan, merge_carried
 from coding_agent_playbook.evals.release_metrics import (
     GRADED_HEAD,
     RecordedTarget,
@@ -96,9 +96,7 @@ from coding_agent_playbook.evals.run.git_env import without_repo_location
 from coding_agent_playbook.evals.run.harness_version import harness_cli_version
 from coding_agent_playbook.evals.sample_digest import inputs_digest, prompt_digest, sample_digest
 from coding_agent_playbook.evals.setup_digest import UNKNOWN_VERSION, SetupParts, scoring_digest
-from coding_agent_playbook.evals.task_registry import TaskRegistry, TaskRegistryError
 from coding_agent_playbook.release.edition import EditionError
-from coding_agent_playbook.validation.context import SyncContext
 
 if TYPE_CHECKING:
     import argparse
@@ -107,6 +105,9 @@ if TYPE_CHECKING:
     from coding_agent_playbook.evals.answers_store import CapturingJudge
     from coding_agent_playbook.evals.endpoints import Endpoint
     from coding_agent_playbook.evals.judge import Judge
+    from coding_agent_playbook.evals.record_checkpoint import (
+        RecordCheckpoint,
+    )
     from coding_agent_playbook.evals.run.harness_runner import HarnessRunner, SampleResult
     from coding_agent_playbook.evals.sample import EvalSample
     from coding_agent_playbook.evals.targets import EvalSettings, EvalTarget
@@ -134,7 +135,7 @@ def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings
     uses_judge = getattr(args, "judge", None) is not None
     check_recordable(target, judge_model=settings.judge.model, uses_judge=uses_judge)
     isolated = _check_credentials(target, settings, getattr(args, "judge", None))
-    samples = _selected_samples(args, repo_root)
+    samples = selected_samples(args, repo_root)
     plan = _build_plan(args, settings, target, runs)
     if plan is None:
         return 2
@@ -142,8 +143,8 @@ def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings
     controls = plan.control_editions(samples)
     judge_model = settings.judge.model if uses_judge else None
     recorded = plan.recorded_target(target, judge_model=judge_model, isolated=isolated)
-    carry = _plan_carry(baseline, recorded, inputs, controls)
-    checkpoint = _open_checkpoint(args, out_path, recorded)
+    carry = print_carry_plan(baseline, recorded, inputs, controls)
+    checkpoint = open_checkpoint(args, out_path, recorded)
     work = _RecordWork(plan, recorded, jobs, checkpoint, answers_out_path(args, out_path))
     metrics = _record_metrics(work, samples, inputs, controls, carry, repo_root)
     validate_release_metrics(metrics)
@@ -159,24 +160,6 @@ def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings
     return 0
 
 
-def _plan_carry(
-    baseline: Baseline | None,
-    recorded: RecordedTarget,
-    inputs: Mapping[str, str],
-    controls: Mapping[str, _Control],
-) -> CarryPlan | None:
-    """The ``--carry-from`` plan, printed before the first paid run; ``None`` without a baseline."""
-    if baseline is None:
-        return None
-    assert recorded.setup is not None  # a record always computes its setup parts
-    setup = recorded.setup.as_dict()
-    name = recorded.target.name
-    carry = plan_from_baseline(baseline, target_name=name, setup=setup, inputs=inputs)
-    for line in carry_plan_lines(carry, controls=sorted(controls)):
-        print(line)
-    return carry
-
-
 @dataclass(frozen=True)
 class _RecordWork:
     """What runs each unit: the plan, the target block, ``--jobs``, the checkpoint, the answers."""
@@ -186,20 +169,6 @@ class _RecordWork:
     jobs: int
     checkpoint: RecordCheckpoint
     answers: Path
-
-
-def _open_checkpoint(
-    args: argparse.Namespace, out_path: Path, recorded: RecordedTarget
-) -> RecordCheckpoint:
-    """The run's checkpoint; with ``--resume``, say how many samples it may reuse."""
-    flag = getattr(args, "checkpoint", None)
-    path = Path(flag) if flag is not None else default_checkpoint_path(out_path)
-    assert recorded.setup is not None  # a record always computes its setup parts
-    resume = getattr(args, "resume", False)
-    checkpoint = RecordCheckpoint.open(path, setup_digest=recorded.setup.digest, resume=resume)
-    if resume:
-        print(f"checkpoint: {checkpoint.resumable} finished sample(s) to reuse from {path}")
-    return checkpoint
 
 
 def _record_metrics(
@@ -497,31 +466,6 @@ def _setup_version(cli: str | None, version: str | None) -> str | None:
 def _fingerprint(endpoint: Endpoint | None) -> str | None:
     """The endpoint's URL fingerprint, or ``None`` without an endpoint."""
     return endpoint.fingerprint if endpoint is not None else None
-
-
-def _selected_samples(args: argparse.Namespace, repo_root: Path) -> list[EvalSample]:
-    """Every sample (``--all``) or those ``<task>`` or ``<task>/<name>`` selects, sorted by id."""
-    sample_id = getattr(args, "id", None)
-    every = getattr(args, "all_samples", False)
-    if every == (sample_id is not None):
-        raise RecordRefusedError(
-            "--record runs either --all samples or one sample or task (<task>/<name> or <task>), "
-            f"got --all={every} and id={sample_id!r}"
-        )
-    ctx = SyncContext.from_repo(repo_root)
-    try:
-        registry = TaskRegistry.from_catalog(ctx.artifact_source, ctx.prompts_resolved)
-        if every:
-            chosen = [sample for task in registry.tasks() for sample in task.samples]
-        else:
-            chosen = list(registry.select(str(sample_id)))
-    except TaskRegistryError as exc:
-        raise RecordRefusedError(str(exc)) from exc
-    return sorted(chosen, key=_id)
-
-
-def _id(sample: EvalSample) -> str:
-    return sample.id
 
 
 def _head_commit(repo_root: Path) -> str | None:

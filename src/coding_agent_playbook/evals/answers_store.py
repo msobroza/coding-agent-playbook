@@ -29,8 +29,20 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
     from pathlib import Path
 
+    from coding_agent_playbook.evals.setup_digest import SetupParts
+
 #: The answers file name's suffix after the target name.
 ANSWERS_SUFFIX: Final = ".jsonl.gz"
+#: The release directory's subdirectory that holds its answers files.
+ANSWERS_DIRNAME: Final = "answers"
+#: The setup parts that name the judge, copied onto every answers line.
+JUDGE_PART_KEYS: Final = (
+    "judge_model",
+    "judge_endpoint_fingerprint",
+    "judge_samples",
+    "judge_version",
+    "judge_reasoning_effort",
+)
 
 
 class AnswersError(ExitTwoError):
@@ -107,7 +119,19 @@ def answers_path(releases_root: Path, release: str, target: str) -> Path:
         >>> answers_path(Path("catalog/releases"), "9.9.2", "opencode-qwen").as_posix()
         'catalog/releases/9.9.2/answers/opencode-qwen.jsonl.gz'
     """
-    return releases_root / release / "answers" / f"{target}{ANSWERS_SUFFIX}"
+    return releases_root / release / ANSWERS_DIRNAME / f"{target}{ANSWERS_SUFFIX}"
+
+
+def judge_parts(setup: SetupParts | None) -> dict[str, object]:
+    """The judge's setup parts, by name; each ``None`` without setup parts.
+
+    Example::
+
+        >>> judge_parts(None)["judge_model"] is None
+        True
+    """
+    parts = setup.as_dict() if setup is not None else {}
+    return {key: parts.get(key) for key in JUDGE_PART_KEYS}
 
 
 def write_answers(path: Path, runs: Iterable[StoredRun]) -> None:

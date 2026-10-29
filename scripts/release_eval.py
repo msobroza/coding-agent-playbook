@@ -53,7 +53,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.config.files import CONFIG_FILENAME
-from coding_agent_playbook.evals.answers_store import answers_path
+from coding_agent_playbook.evals.answers_store import ANSWERS_DIRNAME, answers_path
 from coding_agent_playbook.evals.release_metrics_schema import (
     ReleaseMetricsError,
     validate_release_metrics,
@@ -67,6 +67,7 @@ from coding_agent_playbook.evals.release_regression_format import format_regress
 from coding_agent_playbook.evals.target_config import load_eval_settings
 from coding_agent_playbook.exit_two import ExitTwoError
 from coding_agent_playbook.release.manifest import RELEASES_DIRNAME, release_dir
+from release_eval_answers import keep_answers, restore_answers
 from release_eval_mode import carried_count, changed_only_mode, recorded_changed_only
 from release_tools import ReleaseError
 
@@ -296,13 +297,15 @@ def _recorded(
     """The target's metrics: reused from ``request.reuse`` when kept there, else recorded."""
     kept = None if request.reuse is None else request.reuse / f"{recording.name}.json"
     if kept is not None and kept.is_file():
-        return _reused(kept, recording.name, base, full=request.full)
+        return _reused(kept, recording, base, full=request.full)
     checkpoint = checkpoint_path(request.checkpoint_root, base, recording.name)
     return _fresh(tools, recording, checkpoint, request.jobs)
 
 
-def _reused(kept: Path, name: str, base: str, *, full: bool) -> _RecordResult:
-    """The kept file of target ``name``; refuses another base, or carried entries under --full."""
+def _reused(kept: Path, recording: _Recording, base: str, *, full: bool) -> _RecordResult:
+    """The kept file of the target, its answers restored; refuses another base, or carried
+    entries under --full."""
+    name = recording.name
     metrics = _load(kept)
     if metrics.get("commit") != base:
         raise ReleaseError(
@@ -315,6 +318,7 @@ def _reused(kept: Path, name: str, base: str, *, full: bool) -> _RecordResult:
             "every sample: drop --reuse-metrics or remove that file to record the target again"
         )
     print(f"release: reused the metrics of target {name!r} from {kept}")
+    restore_answers(kept.parent, name, recording.answers)
     return _RecordResult(metrics, changed_only=recorded_changed_only(metrics))
 
 
@@ -462,6 +466,7 @@ def _kept_note(out_dir: Path, request: EvalRequest) -> str:
     kept = request.make_kept_dir()
     for path in sorted(out_dir.glob("*.json")):
         shutil.copy2(path, kept / path.name)
+    keep_answers(out_dir.parent / ANSWERS_DIRNAME, kept)
     full = " --full" if request.full else ""
     return (
         f"the recorded metrics are kept in {kept}: pass --reuse-metrics {kept}{full} to reuse them"

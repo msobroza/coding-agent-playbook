@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import sys
 import tempfile
 from typing import TYPE_CHECKING, Any
@@ -470,6 +471,39 @@ def test_reuse_metrics_skips_recording_a_target_kept_on_the_same_base(tmp_path: 
     assert _stored(checkout, _OPUS)["samples"]["review/a"]["vs_previous"]["accepted"] == (
         "stricter rubric"
     )
+
+
+def test_a_refused_then_reused_target_keeps_its_answers_in_the_release(
+    tmp_path: Path, _temp_in_tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Spec D8: the refused checkout is discarded, so the paid answers travel with the metrics.
+    checkout = _checkout(tmp_path, previous={_OPUS: _previous(_OPUS)})
+    host = _host(claude_opus=_recorded(_OPUS, 0.5), coder=_recorded(_CODER, 0.9))
+    assert _run(checkout, host) == 1
+    kept = _kept(_temp_in_tmp_path)[0].parent
+    assert (kept / f"{_OPUS}.jsonl.gz").read_bytes() == f"answers of {_OPUS}".encode()
+
+    answers = checkout / "catalog" / "releases" / _NEW / "answers"
+    shutil.rmtree(answers)  # as the discarded release checkout would be
+    flags = ("--reuse-metrics", str(kept), "--accept", "review/a=stricter rubric")
+    assert _run(checkout, _host(), *flags) == 0
+    assert (answers / f"{_OPUS}.jsonl.gz").read_bytes() == f"answers of {_OPUS}".encode()
+    assert "no answers kept" not in capsys.readouterr().out
+
+
+def test_a_kept_dir_without_answers_says_the_release_stores_none(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    checkout = _checkout(tmp_path)
+    kept = _kept_dir(tmp_path, claude_opus=_recorded(_OPUS, 0.9))
+
+    assert _run(checkout, _host(coder=_recorded(_CODER, 0.9)), "--reuse-metrics", str(kept)) == 0
+
+    assert (
+        f"release: {_OPUS}: no answers kept; this release stores none for that target"
+        in capsys.readouterr().out
+    )
+    assert not (checkout / "catalog" / "releases" / _NEW / "answers" / f"{_OPUS}.jsonl.gz").exists()
 
 
 def test_a_reused_file_with_carried_entries_says_changed_only(tmp_path: Path) -> None:

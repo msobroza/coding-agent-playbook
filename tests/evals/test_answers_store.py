@@ -9,12 +9,14 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.evals.answers_store import (
+    JUDGE_PART_KEYS,
     AnswersError,
     ArtifactRef,
     CapturingJudge,
     StoredCriterion,
     StoredRun,
     answers_path,
+    judge_parts,
     read_answers,
     write_answers,
 )
@@ -121,3 +123,8 @@ def test_an_unreadable_file_names_the_path(tmp_path: Path, content: bytes) -> No
 
     with pytest.raises(AnswersError, match=r"answers\.jsonl\.gz"):
         read_answers(path)
+
+
+def test_judge_parts_are_the_five_judge_keys_none_without_a_setup() -> None:
+    assert judge_parts(None) == dict.fromkeys(JUDGE_PART_KEYS)
+    assert len(JUDGE_PART_KEYS) == 5

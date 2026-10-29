@@ -2,7 +2,8 @@
 
 Kept apart from the record run itself so each module stays one read: this one
 declares ``--all``, ``--runs``, ``--record``, ``--carry-from``, ``--jobs``,
-``--checkpoint``, ``--resume`` and ``--answers``, and refuses their misuse before any paid run.
+``--checkpoint``, ``--resume`` and ``--answers``, refuses their misuse before any paid run,
+and selects the samples ``--all`` or the id names.
 """
 
 from __future__ import annotations
@@ -11,9 +12,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.evals.model_pins import RecordRefusedError
+from coding_agent_playbook.evals.task_registry import TaskRegistry, TaskRegistryError
+from coding_agent_playbook.validation.context import SyncContext
 
 if TYPE_CHECKING:
     import argparse
+
+    from coding_agent_playbook.evals.sample import EvalSample
 
 
 def configure_record(parser: argparse.ArgumentParser) -> None:
@@ -134,3 +139,34 @@ def run_count(flag: int | None, target_runs: int | None) -> int:
     if runs < 1:
         raise RecordRefusedError(f"--runs must be >= 1, got {runs}")
     return runs
+
+
+def selected_samples(args: argparse.Namespace, repo_root: Path) -> list[EvalSample]:
+    """Every sample (``--all``) or those ``<task>`` or ``<task>/<name>`` selects, sorted by id.
+
+    Example::
+
+        >>> [s.id for s in selected_samples(args, Path("."))][:1]  # doctest: +SKIP
+        ['characterize/legacy-pricing']
+    """
+    sample_id = getattr(args, "id", None)
+    every = getattr(args, "all_samples", False)
+    if every == (sample_id is not None):
+        raise RecordRefusedError(
+            "--record runs either --all samples or one sample or task (<task>/<name> or <task>), "
+            f"got --all={every} and id={sample_id!r}"
+        )
+    ctx = SyncContext.from_repo(repo_root)
+    try:
+        tasks = TaskRegistry.from_catalog(ctx.artifact_source, ctx.prompts_resolved)
+        if every:
+            chosen = [sample for task in tasks.tasks() for sample in task.samples]
+        else:
+            chosen = list(tasks.select(str(sample_id)))
+    except TaskRegistryError as exc:
+        raise RecordRefusedError(str(exc)) from exc
+    return sorted(chosen, key=_id)
+
+
+def _id(sample: EvalSample) -> str:
+    return sample.id

@@ -39,19 +39,10 @@ if TYPE_CHECKING:
     from coding_agent_playbook.evals.release_metrics import SampleRecord
     from coding_agent_playbook.evals.run.harness_runner import SampleResult
     from coding_agent_playbook.evals.sample import EvalSample
-    from coding_agent_playbook.evals.setup_digest import SetupParts
     from coding_agent_playbook.grading.types import ScopeDetail
 
 #: Appended to the metrics file's name for the default answers path.
 ANSWERS_FILE_SUFFIX: Final = ".answers.jsonl.gz"
-#: The setup parts that name the judge, copied onto every answers line.
-JUDGE_PART_KEYS: Final = (
-    "judge_model",
-    "judge_endpoint_fingerprint",
-    "judge_samples",
-    "judge_version",
-    "judge_reasoning_effort",
-)
 
 
 def answers_out_path(args: argparse.Namespace, out_path: Path) -> Path:
@@ -64,18 +55,6 @@ def answers_out_path(args: argparse.Namespace, out_path: Path) -> Path:
     """
     flag = getattr(args, "answers", None)
     return Path(flag) if flag is not None else Path(f"{out_path}{ANSWERS_FILE_SUFFIX}")
-
-
-def judge_parts(setup: SetupParts | None) -> dict[str, object]:
-    """The judge's setup parts, by name; each ``None`` without setup parts.
-
-    Example::
-
-        >>> judge_parts(None)["judge_model"] is None
-        True
-    """
-    parts = setup.as_dict() if setup is not None else {}
-    return {key: parts.get(key) for key in JUDGE_PART_KEYS}
 
 
 def capturing(judge: Judge | None) -> CapturingJudge | None:

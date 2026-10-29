@@ -12,13 +12,15 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
-from coding_agent_playbook.evals.release_carry import load_baseline, plan_carry
+from coding_agent_playbook.evals.release_carry import carry_plan_lines, load_baseline, plan_carry
 from coding_agent_playbook.evals.result_index import ReleaseIndex
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
     from pathlib import Path
 
     from coding_agent_playbook.evals.release_carry import CarryPlan
+    from coding_agent_playbook.evals.release_metrics import RecordedTarget
 
 #: A ``--carry-from`` baseline: one metrics file's data, or the releases directory's index.
 Baseline = Mapping[str, Any] | ReleaseIndex
@@ -55,3 +57,29 @@ def plan_from_baseline(
     if isinstance(baseline, ReleaseIndex):
         return baseline.plan(target_name=target_name, setup=setup, inputs=inputs)
     return plan_carry(baseline, setup=setup, inputs=inputs)
+
+
+def print_carry_plan(
+    baseline: Baseline | None,
+    recorded: RecordedTarget,
+    inputs: Mapping[str, str],
+    controls: Collection[str],
+) -> CarryPlan | None:
+    """The ``--carry-from`` plan, printed before the first paid run; ``None`` without a baseline.
+
+    ``controls`` are the ids of the pinned samples whose edition controls always rerun.
+
+    Example::
+
+        >>> print_carry_plan(None, recorded, {}, ()) is None  # doctest: +SKIP
+        True
+    """
+    if baseline is None:
+        return None
+    assert recorded.setup is not None  # a record always computes its setup parts
+    setup = recorded.setup.as_dict()
+    name = recorded.target.name
+    carry = plan_from_baseline(baseline, target_name=name, setup=setup, inputs=inputs)
+    for line in carry_plan_lines(carry, controls=sorted(controls)):
+        print(line)
+    return carry

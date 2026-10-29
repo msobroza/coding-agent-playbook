@@ -14,19 +14,21 @@ from __future__ import annotations
 
 from concurrent.futures import CancelledError, Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.evals.record_checkpoint import (
+    RecordCheckpoint,
+    default_checkpoint_path,
+)
 from coding_agent_playbook.evals.release_metrics import GRADED_HEAD
 
 if TYPE_CHECKING:
+    import argparse
     from collections.abc import Callable, Sequence
 
-    from coding_agent_playbook.evals.record_checkpoint import (
-        CheckpointKey,
-        RecordCheckpoint,
-        UnitKind,
-    )
-    from coding_agent_playbook.evals.release_metrics import SampleRecord
+    from coding_agent_playbook.evals.record_checkpoint import CheckpointKey, UnitKind
+    from coding_agent_playbook.evals.release_metrics import RecordedTarget, SampleRecord
     from coding_agent_playbook.evals.sample import EvalSample
     from coding_agent_playbook.release.edition import Edition
 
@@ -57,6 +59,27 @@ class RecordUnit:
     def graded(self) -> str:
         """The graded source the unit's entry records: ``head`` or the edition tag."""
         return GRADED_HEAD if self.edition is None else self.edition.tag
+
+
+def open_checkpoint(
+    args: argparse.Namespace, out_path: Path, recorded: RecordedTarget
+) -> RecordCheckpoint:
+    """The run's checkpoint (``--checkpoint``, else beside ``out_path``); with ``--resume``,
+    say how many samples it may reuse.
+
+    Example::
+
+        >>> open_checkpoint(args, Path("m/opus.json"), recorded).path.name  # doctest: +SKIP
+        'opus.json.partial.jsonl'
+    """
+    flag = getattr(args, "checkpoint", None)
+    path = Path(flag) if flag is not None else default_checkpoint_path(out_path)
+    assert recorded.setup is not None  # a record always computes its setup parts
+    resume = getattr(args, "resume", False)
+    checkpoint = RecordCheckpoint.open(path, setup_digest=recorded.setup.digest, resume=resume)
+    if resume:
+        print(f"checkpoint: {checkpoint.resumable} finished sample(s) to reuse from {path}")
+    return checkpoint
 
 
 def record_units(
