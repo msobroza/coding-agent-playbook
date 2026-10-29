@@ -526,6 +526,12 @@ def _parser() -> argparse.ArgumentParser:
         metavar="SHA",
         help="the CI tag job's commit, whose tests passed: tag only it, skip the CI lookup",
     )
+    tag.add_argument(
+        "--github-output",
+        metavar="PATH",
+        type=Path,
+        help="append version=<v> to this file ($GITHUB_OUTPUT) when this run tagged",
+    )
     for name, what in ((FREEZE, "freeze edition TAG"), (UNFREEZE, "unfreeze edition TAG")):
         commands.add_parser(name, help=f"open a PR to {what}").add_argument("tag", metavar="TAG")
         hidden = commands.add_parser(f"{name}-checkout", help=argparse.SUPPRESS)
@@ -627,6 +633,16 @@ def main(
         return FAILED_EXIT
 
 
+def _tag(tools: Tools, *, tested_commit: str | None, github_output: Path | None) -> int:
+    """Run ``tag``; a version this run tagged goes to ``$GITHUB_OUTPUT`` for the publish job."""
+    result = tag_release(tools, tested_commit=tested_commit)
+    print(f"release: {result.message}")
+    if github_output is not None and result.tagged is not None:
+        with github_output.open("a", encoding="utf-8") as output:
+            output.write(f"version={result.tagged}\n")
+    return 0
+
+
 def _dispatch(
     args: argparse.Namespace,
     tools: Tools,
@@ -640,8 +656,7 @@ def _dispatch(
     if command in (FREEZE, UNFREEZE):
         return edition_command(tools.cwd, command, args.tag, runner=tools.runner)
     if command == "tag":
-        print(f"release: {tag_release(tools, tested_commit=args.tested_commit)}")
-        return 0
+        return _tag(tools, tested_commit=args.tested_commit, github_output=args.github_output)
     if command == "check-editions":
         return _report_editions(check_editions(tools))
     if command == "prepare-checkout":

@@ -195,3 +195,64 @@ def test_the_ci_job_leaves_a_release_commit_it_did_not_test_to_that_commits_run(
     assert f"not this run's commit {LATER}" in capsys.readouterr().out
     assert not _tagged(host)
     assert not _pushed(host)
+
+
+# --------------------------------------------------------------------------- #
+# --github-output: the version this run tagged, for the CI publish job
+# --------------------------------------------------------------------------- #
+
+EARLIER_STEP = "earlier=kept\n"
+
+
+def _output(tmp_path: Path) -> Path:
+    """A ``$GITHUB_OUTPUT`` file another step already wrote to: the tag job appends."""
+    path = tmp_path / "github_output"
+    path.write_text(EARLIER_STEP, encoding="utf-8")
+    return path
+
+
+def test_a_created_tag_writes_the_version_output(tmp_path: Path) -> None:
+    host = _host()
+    host.history.pop(0)
+    output = _output(tmp_path)
+
+    assert _tag(host, tmp_path, "--tested-commit", RELEASE, "--github-output", str(output)) == 0
+
+    assert output.read_text(encoding="utf-8") == f"{EARLIER_STEP}version={VERSION}\n"
+
+
+def test_a_pushed_local_tag_writes_the_version_output(tmp_path: Path) -> None:
+    host = _host(local_tags={TAG: RELEASE}, jobs=GREEN)
+    output = _output(tmp_path)
+
+    assert _tag(host, tmp_path, "--github-output", str(output)) == 0
+
+    assert not _tagged(host)
+    assert output.read_text(encoding="utf-8") == f"{EARLIER_STEP}version={VERSION}\n"
+
+
+def test_an_existing_tag_at_the_commit_writes_nothing(tmp_path: Path) -> None:
+    host = _host(remote_tags={TAG: RELEASE}, local_tags={TAG: RELEASE})
+    output = _output(tmp_path)
+
+    assert _tag(host, tmp_path, "--github-output", str(output)) == 0
+
+    assert output.read_text(encoding="utf-8") == EARLIER_STEP
+
+
+def test_nothing_to_tag_writes_nothing(tmp_path: Path) -> None:
+    host = _host(version="9.9.9a0")
+    output = _output(tmp_path)
+
+    assert _tag(host, tmp_path, "--github-output", str(output)) == 0
+
+    assert output.read_text(encoding="utf-8") == EARLIER_STEP
+
+
+def test_a_release_commit_of_another_run_writes_nothing(tmp_path: Path) -> None:
+    host = _host()
+    output = _output(tmp_path)
+
+    assert _tag(host, tmp_path, "--tested-commit", LATER, "--github-output", str(output)) == 0
+
+    assert output.read_text(encoding="utf-8") == EARLIER_STEP
