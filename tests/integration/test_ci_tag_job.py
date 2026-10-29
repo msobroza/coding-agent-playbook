@@ -22,7 +22,16 @@ from release_tag import CI_WORKFLOW
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW_PATH = ROOT / ".github" / "workflows" / CI_WORKFLOW
 TAG_JOB = "tag-release"
-TAG_ARGV = ["python", "scripts/release.py", "tag", "--tested-commit", "$TESTED_COMMIT"]
+PUBLISH_JOB = "publish-release"  # tests/integration/test_ci_publish_job.py pins its token
+TAG_ARGV = [
+    "python",
+    "scripts/release.py",
+    "tag",
+    "--tested-commit",
+    "$TESTED_COMMIT",
+    "--github-output",
+    "$GITHUB_OUTPUT",
+]
 
 
 def _workflow() -> dict[Any, Any]:
@@ -47,7 +56,7 @@ def _tag_step() -> dict[str, Any]:
 def test_the_workflow_token_is_read_only_unless_a_job_asks_for_more() -> None:
     assert _workflow()["permissions"] == {"contents": "read"}
     for name, job in _workflow()["jobs"].items():
-        if name != TAG_JOB:
+        if name not in {TAG_JOB, PUBLISH_JOB}:
             assert "permissions" not in job, f"{name} widens the token: {job['permissions']!r}"
 
 

@@ -15,13 +15,22 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, labeled]
+  # Backfills the GitHub Release of an already tagged version (ADR 0014): runs
+  # publish-release only; the test, tag and pull-request jobs skip a dispatch.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version to publish, without the v (e.g. 0.4.0)"
+        required: true
+        type: string
 
-# Read-only by default; only the tag-release job asks for more.
+# Read-only by default; only the tag-release and publish-release jobs ask for more.
 permissions:
   contents: read
 
 jobs:
   test:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -112,12 +121,16 @@ jobs:
   # never moved. The decisions live in coding_agent_playbook.release.tagging;
   # `scripts/release.py tag` is the manual fallback. contents: write is only
   # for the tag push; a tag pushed with GITHUB_TOKEN starts no other workflow.
+  # outputs.version is set only when this run created or pushed the tag, and
+  # starts publish-release.
   tag-release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
     concurrency:
       group: tag-release
       cancel-in-progress: false
@@ -135,11 +148,53 @@ jobs:
         run: python -m pip install -e .
 
       - name: Tag the release commit
+        id: tag
         env:
           TESTED_COMMIT: ${{ github.sha }}
           GIT_COMMITTER_NAME: github-actions[bot]
           GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
-        run: python scripts/release.py tag --tested-commit "$TESTED_COMMIT"
+        run: python scripts/release.py tag --tested-commit "$TESTED_COMMIT" --github-output "$GITHUB_OUTPUT"
+
+  # Publishes the release's metric bundle (ADR 0014) as the GitHub Release
+  # v<version>: after tag-release tagged a release, or on a workflow_dispatch
+  # that backfills one. always() because a dispatch skips tag-release, and a
+  # skipped need would skip this job too. A release that already exists gets
+  # its assets replaced and its notes rewritten. contents: write is only for
+  # the release; the version reaches the shell only through env:.
+  publish-release:
+    needs: tag-release
+    if: always() && (needs.tag-release.outputs.version != '' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      V: ${{ needs.tag-release.outputs.version || inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v${{ env.V }}
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the engine and matplotlib
+        run: python -m pip install -e . matplotlib
+
+      - name: Build the release metric bundle
+        run: python scripts/release_report.py --version "$V" --out release-report
+
+      - name: Create or update the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "v$V" >/dev/null 2>&1; then
+            gh release upload "v$V" release-report/* --clobber
+            gh release edit "v$V" --notes-file release-report/report.md
+          else
+            gh release create "v$V" --title "v$V" --notes-file release-report/report.md release-report/*
+          fi
 
   # Dogfoods the commit convention (specs/prK-lifecycle-hooks.md §K OQ-6): only the
   # `commit-convention` step of `playbook ci` runs here, on pull requests. It checks
