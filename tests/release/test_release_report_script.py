@@ -12,6 +12,7 @@ import csv
 from pathlib import Path
 
 import pytest
+from packaging.version import Version
 
 from coding_agent_playbook.evals.release_report_rows import AGREEMENT_COLUMNS, CSV_COLUMNS
 from release_report import build_bundle, main
@@ -110,11 +111,26 @@ def test_main_writes_the_bundle(checkout: Path, tmp_path: Path) -> None:
     assert (out / "report.md").is_file()
 
 
+def _newest_release_with_metrics() -> tuple[str, list[str]]:
+    """The newest committed release that has metrics files, and its targets.
+
+    Not the package version: a release may ship without metrics (0.3.0 did),
+    and a literal version here would trip the version-literal guard.
+    """
+    releases = REPO_ROOT / "catalog" / "releases"
+    measured = [d for d in releases.iterdir() if any(d.glob("metrics/*.json"))]
+    assert measured, f"no release under {releases} has metrics/*.json"
+    newest = max(measured, key=lambda d: Version(d.name))
+    return newest.name, sorted(p.stem for p in newest.glob("metrics/*.json"))
+
+
 def test_bundle_builds_on_the_committed_catalog(tmp_path: Path) -> None:
-    """The publish jobs run on today's catalog: 0.4.0's real files must bundle."""
-    build_bundle(REPO_ROOT, "0.4.0", tmp_path, charts=False)
-    for name in ("report.md", "metrics-history.csv", "metrics-opencode-qwen.json"):
-        assert (tmp_path / name).is_file()
+    """The publish jobs run on today's catalog: the newest measured release must bundle."""
+    version, targets = _newest_release_with_metrics()
+    build_bundle(REPO_ROOT, version, tmp_path, charts=False)
+    expected = ["report.md", "metrics-history.csv", *(f"metrics-{t}.json" for t in targets)]
+    for name in expected:
+        assert (tmp_path / name).is_file(), f"{version}: {name} missing"
 
 
 def test_charts_are_written(checkout: Path, tmp_path: Path) -> None:
