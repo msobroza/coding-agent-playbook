@@ -129,6 +129,7 @@ SCORING_MODULES: Final = (
 _DOCSTRING_ONLY: Final = "a docstring only: the package is deliberately empty"
 _CONFIG: Final = "reads config; the target and judge settings it yields are setup parts"
 _AFTER_SCORING: Final = "reads or checks recorded files after their scores are decided"
+_RENDERS_METRICS: Final = "renders committed metrics; decides no score"
 
 #: Modules under :data:`SCORING_PACKAGES` or directly in :data:`SCORING_TOP_LEVEL`
 #: that decide no score, with the reason.
@@ -153,6 +154,9 @@ SCORING_EXEMPT: Final[Mapping[str, str]] = {
     "evals.release_metrics_schema": _AFTER_SCORING,
     "evals.release_regression": _AFTER_SCORING,
     "evals.release_regression_format": _AFTER_SCORING,
+    "evals.release_report": _RENDERS_METRICS,
+    "evals.release_report_markdown": _RENDERS_METRICS,
+    "evals.release_report_rows": _RENDERS_METRICS,
     "evals.report_format": "renders a report for people, never a recorded score",
     "evals.result_index": "finds committed entries to carry; decides no score",
     "evals.sample_digest": "the sample and inputs digests, recorded per entry",
