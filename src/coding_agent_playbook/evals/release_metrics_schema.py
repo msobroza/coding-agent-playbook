@@ -16,7 +16,8 @@ One file holds one release's scores on one Eval target
                   "passes", "runs", "mean_score", "stdev", "checks": {"<check id>": score},
                   "duration_seconds_mean", "tokens_mean", "cost_usd_mean",
                   "inputs_digest"?, "measured_in"?: {"release", "commit", "target"?},
-                  "rejudged_from"?: {"release", "commit", "judge": {<judge part>: value}}}},
+                  "rejudged_from"?: {"release", "commit", "judge": {<judge part>: value}},
+                  "judged_in"?: {"release", "commit", "target"?}}},
       "controls": {"<sample id>": {the same keys, "graded": "<edition tag>"}},
       "setup_digest"?: "<sha256>",
       "setup"?: {"harness", "harness_version", "model", "endpoint_fingerprint",
@@ -57,7 +58,9 @@ annotates; in a full record every entry counts as rerun and ``carried`` is 0.
 All are optional, so a file written without them still validates; when present
 they are typed. A re-judged entry (spec D9) adds ``rejudged_from``: the file whose
 stored answers this record's judge re-graded, with that file's judge parts; the
-summary's ``rejudged`` counts those entries. Both are optional too.
+summary's ``rejudged`` counts those entries. A re-judged entry carried on
+records ``judged_in``: the release (and target) whose answers file holds the
+lines its current judge graded. All three are optional too.
 
 ``previous`` is ``null`` until the regression check compares the file with the
 previous release; that check may add comparison keys (``vs_previous`` per
@@ -91,6 +94,8 @@ SETUP_KEY: Final = "setup"
 MEASURED_IN_KEY: Final = "measured_in"
 #: The optional per-entry key of a re-judged entry (spec D9): the re-graded file and its judge.
 REJUDGED_FROM_KEY: Final = "rejudged_from"
+#: The optional per-entry key naming whose answers file holds the current judge's lines (D9).
+JUDGED_IN_KEY: Final = "judged_in"
 
 _STR: Final = (str,)
 _OPT_STR: Final = (str, type(None))
@@ -178,6 +183,7 @@ _OPTIONAL_SAMPLE: Final[_Fields] = {
     INPUTS_DIGEST_KEY: _STR,
     MEASURED_IN_KEY: (dict,),
     REJUDGED_FROM_KEY: (dict,),
+    JUDGED_IN_KEY: (dict,),
 }
 _MEASURED_IN: Final[_Fields] = {"release": _STR, "commit": _OPT_STR}
 #: The source file's target, recorded by an entry carried through ``evals.result_index``.
@@ -247,13 +253,9 @@ def _sample_problems(label: str, entry: object) -> list[str]:
         return [f"{label}: expected an object, got {type(entry).__name__}"]
     problems = _check_fields(entry, _SAMPLE, f"{label}.")
     problems += _check_fields(entry, _OPTIONAL_SAMPLE, f"{label}.", optional=True)
-    problems += _nested(entry, MEASURED_IN_KEY, _MEASURED_IN, prefix=f"{label}.")
     problems += _nested(entry, REJUDGED_FROM_KEY, _REJUDGED_FROM, prefix=f"{label}.")
-    measured = entry.get(MEASURED_IN_KEY)
-    if isinstance(measured, dict):
-        problems += _check_fields(
-            measured, _OPTIONAL_MEASURED_IN, f"{label}.{MEASURED_IN_KEY}.", optional=True
-        )
+    for key in (MEASURED_IN_KEY, JUDGED_IN_KEY):
+        problems += _place_problems(f"{label}.", key, entry.get(key))
     checks = entry.get("checks")
     if isinstance(checks, dict):
         problems += [
@@ -262,6 +264,14 @@ def _sample_problems(label: str, entry: object) -> list[str]:
             if not _fits(score, _NUM)
         ]
     return problems
+
+
+def _place_problems(prefix: str, key: str, place: object) -> list[str]:
+    """The problems of a ``measured_in`` or ``judged_in`` object: release, commit, target?."""
+    if not isinstance(place, dict):
+        return []
+    problems = _check_fields(place, _MEASURED_IN, f"{prefix}{key}.")
+    return problems + _check_fields(place, _OPTIONAL_MEASURED_IN, f"{prefix}{key}.", optional=True)
 
 
 def _nested(parent: Mapping[str, object], key: str, fields: _Fields, prefix: str = "") -> list[str]:

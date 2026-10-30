@@ -29,7 +29,9 @@ from coding_agent_playbook.evals.answers_store import ArtifactRef
 from coding_agent_playbook.evals.release_metrics import entries_summary
 from coding_agent_playbook.evals.release_metrics_schema import (
     INPUTS_DIGEST_KEY,
+    JUDGED_IN_KEY,
     MEASURED_IN_KEY,
+    REJUDGED_FROM_KEY,
     SETUP_DIGEST_KEY,
     SETUP_KEY,
     ReleaseMetricsError,
@@ -98,9 +100,20 @@ class RejudgeSource:
 
     @property
     def answers_at(self) -> ArtifactRef:
-        """The release and target whose answers file holds the measured runs (spec D8)."""
-        measured = self.measured_in
-        return ArtifactRef(str(measured["release"]), str(measured.get("target") or self.target))
+        """The answers file holding the lines the entry's current judge graded (spec D9).
+
+        In order: the entry's ``judged_in``; this file, when the entry was
+        re-judged here (``rejudged_from``); its ``measured_in`` when carried;
+        else this file. Their criterion scores are the latest judge's, and a
+        re-judged line's ``artifact_ref`` leads to the artifact.
+        """
+        place = self.entry.get(JUDGED_IN_KEY)
+        if not isinstance(place, dict):
+            rejudged_here = REJUDGED_FROM_KEY in self.entry
+            place = self.entry.get(MEASURED_IN_KEY) if not rejudged_here else None
+        if not isinstance(place, dict):
+            return ArtifactRef(self.release, self.target)
+        return ArtifactRef(str(place["release"]), str(place.get("target") or self.target))
 
     @property
     def rejudged_from(self) -> dict[str, object]:
@@ -226,6 +239,9 @@ def carried_entry(
     names where it was measured: kept when the entry was already carried. The
     result index passes the source file's ``target`` (later tasks find the
     entry's answers file by it); a ``--carry-from FILE`` record leaves it out.
+    An entry re-judged in the baseline (``rejudged_from``) also gets
+    ``judged_in``, the same place, unless it already names one: that release's
+    answers file holds its current judge's lines (spec D9).
 
     Example::
 
@@ -236,6 +252,8 @@ def carried_entry(
     measured: dict[str, object] = {"release": release, "commit": commit}
     if target is not None:
         measured["target"] = target
+    if REJUDGED_FROM_KEY in copied:
+        copied.setdefault(JUDGED_IN_KEY, dict(measured))
     copied.setdefault(MEASURED_IN_KEY, measured)
     return copied
 

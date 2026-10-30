@@ -312,3 +312,44 @@ def test_validation_accepts_rejudged_from_and_rejects_a_mistyped_one() -> None:
         validate_release_metrics(data)
     assert "samples.a.rejudged_from.judge" in str(excinfo.value)
     assert "summary.rejudged" in str(excinfo.value)
+
+
+def test_answers_are_looked_up_where_the_latest_judge_graded() -> None:
+    judged_in = {"release": "9.9.2", "commit": "c2", "target": "beta"}
+    measured = {"release": "9.9.0", "commit": "c0", "target": "alpha"}
+    rejudged = {"release": "9.9.0", "commit": "c0", "judge": {}}
+
+    def at(entry: dict[str, Any]) -> tuple[str, str]:
+        ref = _rejudge_source(entry).answers_at
+        return ref.release, ref.target
+
+    both = {"measured_in": measured, "rejudged_from": rejudged}
+    assert at(both | {"judged_in": judged_in}) == ("9.9.2", "beta")
+    assert at(both) == ("9.9.1", "opus")  # re-judged in the source file itself
+    assert at({"measured_in": measured}) == ("9.9.0", "alpha")
+    assert at({"measured_in": {"release": "9.9.0", "commit": None}}) == ("9.9.0", "opus")
+    assert at({}) == ("9.9.1", "opus")
+
+
+def test_carrying_a_rejudged_entry_records_where_it_was_judged() -> None:
+    rejudged = {"release": "9.9.1", "commit": "c1", "judge": {}}
+    entry = {"runs": 3, "measured_in": {"release": "9.9.0", "commit": "c0"}}
+    plain = carried_entry(entry, release="9.9.2", commit="c2", target="opus")
+    assert "judged_in" not in plain
+    first = carried_entry(entry | {"rejudged_from": rejudged}, release="9.9.2", commit="c2")
+    assert first["judged_in"] == {"release": "9.9.2", "commit": "c2"}
+    assert first["measured_in"] == entry["measured_in"]
+    again = carried_entry(first, release="9.9.3", commit="c3", target="opus")
+    assert again["judged_in"] == {"release": "9.9.2", "commit": "c2"}
+
+
+def test_validation_accepts_judged_in_and_rejects_a_mistyped_one() -> None:
+    judged_in = {"release": "9.9.1", "commit": None, "target": "opus"}
+    validate_release_metrics(
+        metrics_file("9.9.2", {"a": sample_entry(0.5) | {"judged_in": judged_in}})
+    )
+    mistyped = sample_entry(0.5) | {"judged_in": judged_in | {"target": 3, "release": None}}
+    with pytest.raises(ReleaseMetricsError) as excinfo:
+        validate_release_metrics(metrics_file("9.9.2", {"a": mistyped}))
+    assert "samples.a.judged_in.target" in str(excinfo.value)
+    assert "samples.a.judged_in.release" in str(excinfo.value)
