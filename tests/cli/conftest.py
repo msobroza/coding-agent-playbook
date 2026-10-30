@@ -17,12 +17,13 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import pytest
 
 from coding_agent_playbook.catalog import roots as catalog_roots
 from tests._catalog import REPO_ROOT
+from tests._uv_stub import stub_uv_sync
 from tests.cli.forge_fakes import ForgeEnv, make_forge_env
 from tests.edition_fixtures import TAG, freeze_fixture_edition, write_sample
 
@@ -33,29 +34,11 @@ if TYPE_CHECKING:
 
 @pytest.fixture(autouse=True)
 def _stub_uv_sync_for_cli(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Autouse: short-circuit any ``uv`` call from the runner to a success.
+    """Autouse: short-circuit any ``uv`` call from the runner to a success (``tests._uv_stub``).
 
-    Stubs ``subprocess.run`` (only when the first arg is ``"uv"``; git and other
-    calls pass through) and ``shutil.which`` (pretends ``uv`` is on PATH so the
-    runner does not raise the missing-binary error; every other lookup, e.g.
-    ``SafeGit``'s ``which("git", path=...)``, passes through). Both attributes
-    live on the shared modules, so the stubs must stay transparent for every
-    other caller. Function-scoped so each test gets a clean stub.
+    Function-scoped so each test gets a clean stub.
     """
-    real_run = subprocess.run
-    real_which = shutil.which
-
-    def _stub_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
-        if args and args[0] == "uv":
-            return subprocess.CompletedProcess(args, 0, "", "")
-        return real_run(args, **kwargs)
-
-    monkeypatch.setattr("coding_agent_playbook.evals.run.harness_runner.subprocess.run", _stub_run)
-
-    def _stub_which(binary: str, *args: Any, **kwargs: Any) -> str | None:
-        return "/fake/uv" if binary == "uv" else real_which(binary, *args, **kwargs)
-
-    monkeypatch.setattr("coding_agent_playbook.evals.run.harness_runner.shutil.which", _stub_which)
+    stub_uv_sync(monkeypatch)
 
 
 @pytest.fixture

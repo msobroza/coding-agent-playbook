@@ -33,6 +33,7 @@ from coding_agent_playbook.evals.sample import EvalSample
 from coding_agent_playbook.evals.task_registry import load_task_sample
 from coding_agent_playbook.exit_two import ExitTwoError
 from tests._catalog import CORE_ROOT
+from tests._uv_stub import stub_uv_sync
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -60,6 +61,12 @@ _RUNNERS = {
         write_files({"tests/__init__.py": "", "tests/test_pricing.py": _PRICING_TEST})
     ),
 }
+
+
+@pytest.fixture(autouse=True)
+def _stub_uv_sync(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The anchor test runs shipped samples, whose ``uv sync`` CI cannot run in pytest."""
+    stub_uv_sync(monkeypatch)
 
 
 def _sample(sample_id: str) -> EvalSample:
