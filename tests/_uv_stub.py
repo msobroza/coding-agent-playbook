@@ -13,10 +13,12 @@ import shutil
 import subprocess
 from typing import TYPE_CHECKING, Any
 
+from tests.engine_modules import engine_module
+
 if TYPE_CHECKING:
     import pytest
 
-_RUNNER = "coding_agent_playbook.evals.run.harness_runner"
+_RUNNER = engine_module("coding_agent_playbook.evals.run.harness_runner")
 
 
 def stub_uv_sync(monkeypatch: pytest.MonkeyPatch) -> None:
