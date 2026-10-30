@@ -13,7 +13,7 @@ series. A release with no baseline gets no delta chart.
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, cast
 
 import matplotlib
 
@@ -72,7 +72,9 @@ def write_charts(report: ReleaseReport, out: Path) -> list[Path]:
         >>> [p.name for p in write_charts(report, Path("bundle"))]  # doctest: +SKIP
         ['task-deltas.png', 'sample-deltas.png', 'task-trend.png']
     """
-    with plt.rc_context(_STYLE):
+    # matplotlib's stubs key rc_context by a Literal of rc names, which a plain
+    # dict never matches; Any type-checks with and without matplotlib installed.
+    with plt.rc_context(cast("Any", _STYLE)):
         written = [
             _task_deltas(report, out / TASK_DELTAS),
             _sample_deltas(report, out / SAMPLE_DELTAS),
