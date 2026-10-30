@@ -7,6 +7,7 @@ checkout's own engine, in a subprocess::
 
     python -m coding_agent_playbook.cli eval --run --all --repo-root <checkout> \\
         --target <name> --record catalog/releases/<version>/metrics/<name>.json \\
+        --answers catalog/releases/<version>/answers/<name>.jsonl.gz \\
         [--judge llm]      # when [evals.judge] names a model
         [--carry-from catalog/releases]
 
@@ -179,7 +180,9 @@ def record_release_metrics(
     On a refusal the recorded files are copied to a kept directory, named in the error.
     """
     out_dir = release_dir(tools.cwd / _CATALOG, version) / METRICS_DIRNAME
-    carry_from = None if request.full else tools.cwd / _CATALOG / "releases"
+    # Relative: the record runs with cwd = the checkout, and the reasons it prints
+    # (e.g. a skipped file) then read catalog/releases/..., not a scratch path.
+    carry_from = None if request.full else Path(_CATALOG, RELEASES_DIRNAME)
     with metrics_kept_on_refusal(tools.cwd, version, request):
         results: dict[str, _RecordResult] = {}
         for name in targets.names:

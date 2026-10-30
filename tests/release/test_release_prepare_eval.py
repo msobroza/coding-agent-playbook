@@ -163,8 +163,10 @@ def test_every_release_target_is_recorded_by_the_checkouts_engine(
         str(checkout / "catalog" / "releases" / _NEW / "answers" / f"{_OPUS}.jsonl.gz"),
         "--judge",
         "llm",
+        # Relative to the subprocess's cwd (the checkout), so reasons that name a
+        # skipped file read catalog/releases/<v>/metrics/<t>.json, not a temp path.
         "--carry-from",
-        str(checkout / "catalog" / "releases"),
+        "catalog/releases",
         # Each finished sample is saved outside the checkout, per base and target.
         "--checkpoint",
         str(_temp_in_tmp_path / "playbook-release-checkpoints" / BASE / f"{_OPUS}.partial.jsonl"),
@@ -275,7 +277,7 @@ def test_every_target_records_changed_only_from_the_releases_directory(tmp_path:
 
     assert _run(checkout, host) == 0
 
-    releases = str(checkout / "catalog" / "releases")
+    releases = "catalog/releases"
     assert (_carry_from(host, _OPUS), _carry_from(host, _CODER)) == (releases, releases)
 
 
@@ -367,7 +369,7 @@ def test_the_first_release_records_from_the_releases_directory(tmp_path: Path) -
     argv = ["prepare-checkout", "--base", BASE, "--version", _NEW, "--eval"]
     assert main(argv, cwd=checkout, runner=host, snapshot=lambda b: _manifest("0", b, "o2")) == 0
 
-    releases = str(checkout / "catalog" / "releases")
+    releases = "catalog/releases"
     assert (_carry_from(host, _OPUS), _carry_from(host, _CODER)) == (releases, releases)
 
 
