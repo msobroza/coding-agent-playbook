@@ -24,6 +24,7 @@ from coding_agent_playbook.evals.release_carry import (
 from coding_agent_playbook.evals.release_metrics import entries_summary
 from coding_agent_playbook.evals.release_metrics_schema import (
     ReleaseMetricsError,
+    rejudged_here,
     validate_release_metrics,
 )
 from coding_agent_playbook.evals.setup_digest import SetupParts
@@ -353,3 +354,11 @@ def test_validation_accepts_judged_in_and_rejects_a_mistyped_one() -> None:
         validate_release_metrics(metrics_file("9.9.2", {"a": mistyped}))
     assert "samples.a.judged_in.target" in str(excinfo.value)
     assert "samples.a.judged_in.release" in str(excinfo.value)
+
+
+def test_rejudged_here_is_rejudged_from_without_judged_in() -> None:
+    rejudged = {"release": "9.9.1", "commit": "c1", "judge": {}}
+    entry = {"runs": 3, "rejudged_from": rejudged, "measured_in": {"release": "9.9.0"}}
+    assert rejudged_here(entry)
+    assert not rejudged_here(carried_entry(entry, release="9.9.2", commit="c2"))
+    assert not rejudged_here({"runs": 3})

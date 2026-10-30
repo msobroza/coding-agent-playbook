@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.evals.release_metrics_schema import rejudged_here
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
@@ -37,7 +39,9 @@ def carried_compared(metrics: Mapping[str, object], check: RegressionCheck) -> i
 
     A ``carried`` verdict (same inputs as the previous entry), a ``new`` one
     (no previous entry) and a ``rejudged`` one (same answers, new judge) were not
-    compared; any other verdict was, and can block.
+    compared; any other verdict was, and can block. An entry re-judged in this
+    file (``rejudged_here``) is not a carried one, even when the check compared
+    it; one carried after a re-judge (``judged_in``) is.
 
     Example::
 
@@ -45,7 +49,10 @@ def carried_compared(metrics: Mapping[str, object], check: RegressionCheck) -> i
         1
     """
     compared = {v.sample_id for v in check.samples if v.status not in _NOT_COMPARED}
-    return len(compared & _carried_ids(metrics))
+    samples = metrics.get("samples")
+    entries = samples if isinstance(samples, dict) else {}
+    carried = {sid for sid in _carried_ids(metrics) if not rejudged_here(entries[sid])}
+    return len(compared & carried)
 
 
 def changed_only_mode(

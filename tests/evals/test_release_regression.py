@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 
+from coding_agent_playbook.evals.release_carry import CarryPlan, carried_entry, merge_carried
 from coding_agent_playbook.evals.release_metrics_schema import validate_release_metrics
 from coding_agent_playbook.evals.release_regression import (
     RegressionCheck,
@@ -452,3 +453,69 @@ def test_the_tally_counts_rejudged() -> None:
         "0 regressions (0 accepted), 0 improvements, 0 not comparable, 0 carried, 1 rejudged: ok"
     )
     assert regression_check_to_dict(check)["rejudged"] == 1
+
+
+# Review fix round 1: an entry carried after a re-judge is a carried entry, and a
+# fresh re-judge on other inputs than the previous entry's is compared (D2, D11).
+
+
+def _rejudged_in(release: str, mean: float, inputs: str) -> dict[str, Any]:
+    """An entry re-judged in ``release``'s file from the answers measured in 9.9.1."""
+    rejudged_from = {"release": "9.9.1", "commit": None, "judge": {"judge_model": "old-judge"}}
+    measured_in = {"release": "9.9.1", "commit": None}
+    entry = sample_entry(mean, inputs=inputs)
+    return entry | {"rejudged_from": rejudged_from, "measured_in": measured_in}
+
+
+def test_an_entry_carried_after_a_rejudge_is_carried() -> None:
+    baseline_entry = _rejudged_in("9.9.2", 0.9, "i")
+    baseline = metrics_file("9.9.2", {"s": baseline_entry})
+    carried = carried_entry(baseline_entry, release="9.9.2", commit="c2")
+    plan = CarryPlan(None, {}, {"s": carried})
+    fresh = metrics_file("9.9.3", {})
+    fresh["summary"] |= {"tokens": None, "cost_usd": None}
+    record = merge_carried(fresh, plan)
+
+    check = check_regressions(record, baseline)
+
+    verdict = check.samples[0]
+    assert (verdict.status, verdict.delta, verdict.blocks) == ("carried", 0.0, False)
+    assert format_regression_table(check).splitlines()[-1].endswith("1 carried, 0 rejudged: ok")
+    summary = annotate_release_metrics(record, check)["summary"]
+    assert isinstance(summary, dict)
+    counts = ("rerun", "carried", "rejudged")
+    assert [summary[k] for k in counts] == [record["summary"][k] for k in counts] == [0, 1, 0]
+
+
+def test_a_reverted_entry_carried_after_a_rejudge_regresses_and_blocks() -> None:
+    rejudged = _rejudged_in("9.9.2", 0.45, "text-a")
+    baseline = metrics_file("9.9.3", {"s": sample_entry(0.9, inputs="text-b")})
+    reverted = carried_entry(rejudged, release="9.9.2", commit="c2")
+    new = metrics_file("9.9.4", {"s": reverted})
+
+    check = check_regressions(new, baseline)
+
+    verdict = check.samples[0]
+    assert (verdict.status, verdict.delta) == ("regression", -0.45)
+    assert verdict.blocks
+    assert verdict.reasons[-1] == "measured in 9.9.1"
+
+
+def test_a_rejudge_on_other_inputs_than_the_previous_entry_is_compared() -> None:
+    # Text A @9.9.1 (judge J1), text B @9.9.2 (J1), revert to A @9.9.3 (J2): the
+    # re-judge reads 9.9.1's answers, so its delta mixes text and judge change.
+    baseline = metrics_file("9.9.2", {"s": sample_entry(0.9, inputs="text-b")})
+    new = metrics_file("9.9.3", {"s": _rejudged_in("9.9.3", 0.5, "text-a")})
+    new["judge_change"] = _JUDGE_CHANGE
+
+    check = check_regressions(new, baseline)
+
+    verdict = check.samples[0]
+    assert (verdict.status, verdict.delta) == ("regression", -0.4)
+    assert verdict.blocks
+    assert verdict.reasons[-2:] == (
+        "rejudged from 9.9.1",
+        "judge changed since 9.9.2: pass agreement 90%",
+    )
+    summary: Any = annotate_release_metrics(new, check)["summary"]
+    assert (summary["rerun"], summary["carried"], summary["rejudged"]) == (0, 0, 1)

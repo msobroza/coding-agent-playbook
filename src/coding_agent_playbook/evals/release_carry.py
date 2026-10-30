@@ -35,6 +35,7 @@ from coding_agent_playbook.evals.release_metrics_schema import (
     SETUP_DIGEST_KEY,
     SETUP_KEY,
     ReleaseMetricsError,
+    rejudged_here,
     validate_release_metrics,
 )
 from coding_agent_playbook.evals.setup_digest import differing_setup_parts
@@ -109,8 +110,7 @@ class RejudgeSource:
         """
         place = self.entry.get(JUDGED_IN_KEY)
         if not isinstance(place, dict):
-            rejudged_here = REJUDGED_FROM_KEY in self.entry
-            place = self.entry.get(MEASURED_IN_KEY) if not rejudged_here else None
+            place = None if rejudged_here(self.entry) else self.entry.get(MEASURED_IN_KEY)
         if not isinstance(place, dict):
             return ArtifactRef(self.release, self.target)
         return ArtifactRef(str(place["release"]), str(place.get("target") or self.target))

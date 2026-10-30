@@ -82,3 +82,14 @@ def test_a_rejudged_entry_is_not_counted_as_compared() -> None:
     check = check_regressions(new, _previous_file())
 
     assert carried_compared(new, check) == 0
+
+
+def test_an_entry_carried_after_a_rejudge_counts_as_compared() -> None:
+    # It has judged_in: a carried entry, compared because its inputs differ (D2).
+    new = _new_file()
+    rejudged_from = {"release": _PREVIOUS, "commit": "c", "judge": {"judge_model": "j"}}
+    judged_in = {"release": "9.9.7", "commit": "c"}
+    new["samples"]["c"] |= {"rejudged_from": rejudged_from, "judged_in": judged_in}
+    check = check_regressions(new, _previous_file())
+
+    assert carried_compared(new, check) == 1

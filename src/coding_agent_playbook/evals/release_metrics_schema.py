@@ -63,7 +63,9 @@ they are typed. A re-judged entry (spec D9) adds ``rejudged_from``: the file who
 stored answers this record's judge re-graded, with that file's judge parts; the
 summary's ``rejudged`` counts those entries. A re-judged entry carried on
 records ``judged_in``: the release (and target) whose answers file holds the
-lines its current judge graded. All three are optional too.
+lines its current judge graded. All three are optional too. An entry is
+*re-judged in this file* (:func:`rejudged_here`) when it has ``rejudged_from``
+and no ``judged_in``; one carried after a re-judge is a carried entry.
 
 ``judge_change`` (spec D10, ``evals.judge_agreement``) is written only by a
 record that re-judged runs: how closely the new judge (``to``) agrees with the
@@ -229,6 +231,20 @@ def validate_release_metrics(data: object) -> None:
     problems = _problems(data)
     if problems:
         raise ReleaseMetricsError("release metrics file: " + "; ".join(problems))
+
+
+def rejudged_here(entry: Mapping[str, object]) -> bool:
+    """Whether ``entry`` was re-judged in its own file: ``rejudged_from`` without ``judged_in``.
+
+    An entry carried after a re-judge keeps ``rejudged_from`` and gains
+    ``judged_in`` (``evals.release_carry.carried_entry``): it is a carried entry.
+
+    Example::
+
+        >>> rejudged_here({"rejudged_from": {}, "judged_in": {"release": "9.9.2"}})
+        False
+    """
+    return REJUDGED_FROM_KEY in entry and JUDGED_IN_KEY not in entry
 
 
 def _problems(data: object) -> list[str]:
