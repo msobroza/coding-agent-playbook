@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 def break_catalog(monkeypatch: pytest.MonkeyPatch, root: Path) -> str:
     """Point the engine at an empty ``<root>/src/coding_agent_playbook``.
 
-    Neither catalog home exists then, as in a wheel whose force-include was
+    Neither catalog home exists then, as in a wheel whose catalog mapping was
     lost. Returns the exact stderr ``main`` must print: the packaged candidate
     first, then the checkout one (the spec's missing-catalog error line).
 

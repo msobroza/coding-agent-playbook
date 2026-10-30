@@ -2,9 +2,8 @@
 
 Each pin guards a mistake that would otherwise pass silently:
 
-* a tracked file matching ``.gitignore``: hatch's force-include of ``catalog/``
-  ignores ``.gitignore``, so a wheel built from the tree ships the file while
-  one built from the sdist drops it;
+* a tracked file matching ``.gitignore``: hatch honours ``.gitignore`` when it
+  builds the sdist and the wheel, so the tracked file silently never ships;
 * a bundled plugin directory that breaks the leaf rule (:func:`bundled_plugins`
   skips it, so the plugin silently vanishes) or ships no kind directory (it is
   listed and passes the preflight, but contributes nothing);
