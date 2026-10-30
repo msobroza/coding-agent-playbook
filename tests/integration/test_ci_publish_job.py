@@ -109,7 +109,8 @@ def test_publish_runs_its_own_code_on_the_tag_tree() -> None:
 
     assert len(checkouts) == 2, checkouts
     assert "ref" not in checkouts[0].get("with", {})
-    assert checkouts[1]["with"] == {"ref": "refs/tags/v${{ env.V }}", "path": "tag-tree"}
+    tag_tree = {"ref": "refs/tags/v${{ env.V }}", "path": "tag-tree", "persist-credentials": False}
+    assert checkouts[1]["with"] == tag_tree
     assert "python -m pip install -e . matplotlib" in script
     assert REPORT_CALL in script
     assert "${{" not in script  # the dispatch input reaches the shell only through env:
@@ -124,6 +125,15 @@ def test_publish_updates_an_existing_release() -> None:
     assert "gh release create" in script
     assert "--verify-tag" in script
     assert step["env"]["GH_TOKEN"] == "${{ github.token }}"
+
+
+def test_no_checkout_keeps_the_write_token() -> None:
+    # The job pip-installs packages; a persisted contents:write token in
+    # .git/config would be readable by their install code. gh gets GH_TOKEN.
+    steps = _job(PUBLISH_JOB)["steps"]
+    checkouts = [s for s in steps if str(s.get("uses", "")).startswith("actions/checkout@")]
+
+    assert checkouts and all(s["with"]["persist-credentials"] is False for s in checkouts)
 
 
 def test_the_bundle_is_flat() -> None:

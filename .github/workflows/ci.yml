@@ -173,13 +173,18 @@ jobs:
     env:
       V: ${{ needs.tag-release.outputs.version || inputs.version }}
     steps:
+      # persist-credentials: false keeps the contents:write token out of
+      # .git/config while pip installs run; gh gets GH_TOKEN on its own step.
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Check out the release tag's tree
         uses: actions/checkout@v4
         with:
           ref: refs/tags/v${{ env.V }}
           path: tag-tree
+          persist-credentials: false
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
