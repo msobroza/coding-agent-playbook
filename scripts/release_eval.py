@@ -22,9 +22,10 @@ previous release's file for the same target (``check_regressions``), and the
 comparison is stored in it. ``--accept SAMPLE=REASON`` (repeatable) accepts that
 sample's regression on every target where it regressed; one that regressed on
 no target is refused. An unaccepted regression refuses the release pull request,
-whose body says per target "changed-only: N rerun, M carried (K compared with
-<previous>)" or "full run";
-the engine's carry plan (why samples rerun) is passed on to the output.
+whose body says per target "changed-only: N rerun, M carried, R rejudged (K
+compared with <previous>)" or "full run", then holds the release report
+(``scripts/release_eval_body.py``); the engine's carry plan (why samples rerun)
+is passed on to the output.
 
 Recording is paid and slow, so on any refusal after it the recorded files are
 copied to a kept directory outside the checkout, and ``--reuse-metrics DIR``
@@ -68,7 +69,7 @@ from coding_agent_playbook.evals.target_config import load_eval_settings
 from coding_agent_playbook.exit_two import ExitTwoError
 from coding_agent_playbook.release.manifest import RELEASES_DIRNAME, release_dir
 from release_eval_answers import keep_answers, restore_answers
-from release_eval_mode import carried_count, changed_only_mode, recorded_changed_only
+from release_eval_mode import carried_count, recorded_changed_only
 from release_tools import ReleaseError
 
 if TYPE_CHECKING:
@@ -215,33 +216,6 @@ def metrics_kept_on_refusal(checkout: Path, version: str, request: EvalRequest) 
         raise ReleaseError(f"{exc}\n{_kept_note(out_dir, request)}") from exc
 
 
-def metrics_body(outcomes: Sequence[TargetMetrics]) -> str:
-    """The pull request body's ``Release metrics`` section: one line per target, and notes."""
-    lines = ["## Release metrics", ""]
-    for outcome in outcomes:
-        lines.append(f"- `{outcome.name}`: {_summary_line(outcome)}")
-        if outcome.check is not None:
-            lines += [f"  - note: {note}" for note in outcome.check.notes]
-    return "\n".join(lines) + "\n"
-
-
-def _summary_line(outcome: TargetMetrics) -> str:
-    summary = outcome.metrics.get("summary")
-    facts = summary if isinstance(summary, dict) else {}
-    line = (
-        f"{facts.get('samples')} samples ({_mode(outcome)}), "
-        f"pass rate {facts.get('pass_rate')}, mean score {facts.get('mean_score')}"
-    )
-    check = outcome.check
-    if check is None:
-        return f"{line}; no previous release metrics to compare with"
-    return (
-        f"{line}; vs {check.previous}: {check.count('regression')} regressions "
-        f"({check.accepted_regressions} accepted), {check.count('improvement')} improvements, "
-        f"{check.count('not_comparable')} not comparable"
-    )
-
-
 def _with_modes(
     outcomes: Sequence[TargetMetrics], results: Mapping[str, _RecordResult]
 ) -> tuple[TargetMetrics, ...]:
@@ -258,14 +232,6 @@ def _with_modes(
         )
         for o in outcomes
     )
-
-
-def _mode(outcome: TargetMetrics) -> str:
-    """``changed-only: N rerun, M carried (K compared with <previous>)`` or ``full run``."""
-    if not outcome.changed_only:
-        return "full run"
-    reason = outcome.full_rerun_reason
-    return changed_only_mode(outcome.metrics, full_rerun_reason=reason, check=outcome.check)
 
 
 @dataclass(frozen=True)

@@ -102,11 +102,11 @@ from release_edition import (
 from release_eval import (
     EvalRequest,
     ReleaseTargets,
-    metrics_body,
     metrics_kept_on_refusal,
     record_release_metrics,
     release_targets,
 )
+from release_eval_body import metrics_body
 from release_tag import superseded, tag_release
 from release_tools import COMMITIZEN_REQUIREMENT as COMMITIZEN_REQUIREMENT
 from release_tools import (
@@ -452,7 +452,8 @@ def _bump_and_open(tools: Tools, plan: Plan, metrics: Sequence[TargetMetrics] | 
     with tempfile.TemporaryDirectory(prefix="playbook-release-body-") as scratch:
         body = Path(scratch) / "body.md"
         notes_text = notes.read_text(encoding="utf-8")
-        body.write_text(f"{notes_text}\n{metrics_body(metrics)}", encoding="utf-8")
+        section = metrics_body(metrics, checkout=tools.cwd, version=plan.version)
+        body.write_text(f"{notes_text}\n{section}", encoding="utf-8")
         return commit_push_open(tools, plan.branch, plan.title, paths, body)
 
 

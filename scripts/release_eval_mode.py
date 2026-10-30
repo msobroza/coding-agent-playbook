@@ -2,7 +2,8 @@
 
 A changed-only recording (``--carry-from``) marks each carried entry with
 ``measured_in``; ``scripts/release_eval.py`` counts them here for the pull
-request's "changed-only: N rerun, M carried (K compared with <previous>)" line.
+request's "changed-only: N rerun, M carried, R rejudged (K compared with <previous>)"
+line ("R rejudged" only when R > 0).
 K counts the carried entries the regression check compared like a rerun: carried
 from an older release, with inputs that differ from the previous release's entry.
 """
@@ -58,8 +59,10 @@ def carried_compared(metrics: Mapping[str, object], check: RegressionCheck) -> i
 def changed_only_mode(
     metrics: Mapping[str, object], *, full_rerun_reason: str | None, check: RegressionCheck | None
 ) -> str:
-    """``changed-only: N rerun, M carried``, with the full-rerun reason and the compared count.
+    """``changed-only: N rerun, M carried[, R rejudged]``, the full-rerun reason, the compared count.
 
+    M counts carried entries only; R, shown when not 0, the entries re-judged in
+    this file (``rejudged_here``), which have ``measured_in`` too; N is the rest.
     Without a ``check`` (no previous file) nothing was compared, so no count is added.
 
     Example::
@@ -67,13 +70,16 @@ def changed_only_mode(
         >>> changed_only_mode({"samples": {"a": {}}}, full_rerun_reason=None, check=None)
         'changed-only: 1 rerun, 0 carried'
     """
-    carried = carried_count(metrics)
     samples = metrics.get("samples")
-    total = len(samples) if isinstance(samples, dict) else 0
+    entries = samples if isinstance(samples, dict) else {}
+    rejudged = len({sid for sid in _carried_ids(metrics) if rejudged_here(entries[sid])})
+    carried = carried_count(metrics) - rejudged
     why = "" if full_rerun_reason is None else f" ({full_rerun_reason})"
+    also = f", {rejudged} rejudged" if rejudged else ""
     compared = 0 if check is None else carried_compared(metrics, check)
     where = f" ({compared} compared with {check.previous})" if check and compared else ""
-    return f"changed-only: {total - carried} rerun{why}, {carried} carried{where}"
+    rerun = len(entries) - carried - rejudged
+    return f"changed-only: {rerun} rerun{why}, {carried} carried{also}{where}"
 
 
 def recorded_changed_only(metrics: Mapping[str, object]) -> bool:

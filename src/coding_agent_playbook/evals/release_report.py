@@ -148,8 +148,8 @@ class TrendPoint:
 class TargetReport:
     """One target's file in a release, its ``baseline`` file and the regression ``check``.
 
-    ``baseline`` and ``check`` are ``None`` when no earlier release has a file
-    for the target.
+    ``baseline`` and ``check`` are ``None`` when the file records no ``previous``
+    (the gate compared it with nothing) or that release has no file for the target.
     """
 
     target: str

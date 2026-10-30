@@ -1077,9 +1077,14 @@ uv run scripts/release.py prepare --eval --full   # every sample on every target
 
 Each record run's carry plan (why samples rerun, or which `setup` part made every
 sample rerun) is printed per target. The pull request body adds a `Release
-metrics` section to the notes, with one line per target and its notes; each line
-names the mode: "changed-only: N rerun, M carried" (with the reason when every
-sample reran) or "full run". "(K compared with <previous>)" follows when K > 0
+metrics` section to the notes, with one line per target and its notes, then the
+release report as Markdown (per-target headline, per-task table, changed
+samples, controls, judge change and trend), cut at a section boundary at 60,000
+characters to stay under GitHub's body limit. Each
+line names the mode: "changed-only: N rerun, M carried, R rejudged" (with the
+reason when every sample reran) or "full run". M counts carried entries only;
+"R rejudged" (entries re-judged in this file) shows only when R > 0, and N is
+the rest. "(K compared with <previous>)" follows when K > 0
 carried entries were compared like a rerun: carried from an older release with
 inputs that differ from the previous release's entry, so they can block. An
 entry carried along unchanged from the previous release's file is `carried` and

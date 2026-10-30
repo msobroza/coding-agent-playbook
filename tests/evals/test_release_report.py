@@ -126,6 +126,7 @@ def test_a_skipped_release_without_a_recorded_previous_has_no_baseline(root: Pat
     section = report.target("codex-gpt")
     assert (section.baseline, section.check) == (None, None)
     assert "codex-gpt: no baseline" in report.markdown()
+    assert "the gate recorded no previous release for this target" in report.markdown()
     task = next(t for t in report.tasks if t.target == "codex-gpt")
     assert task.previous_pass_rate is None
     assert set(task.counts.values()) == {0}

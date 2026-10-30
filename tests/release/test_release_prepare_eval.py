@@ -247,6 +247,20 @@ def test_the_pull_request_says_how_many_samples_were_rerun_and_carried(tmp_path:
     assert f"- `{_CODER}`: 2 samples (changed-only: 2 rerun, 0 carried), pass rate" in body
 
 
+def test_the_pull_request_body_holds_the_change_report(tmp_path: Path) -> None:
+    # Spec D3/D4: under the mode lines, the body is the release report itself.
+    checkout = _checkout(tmp_path, previous={_OPUS: _previous(_OPUS, mean=0.7)})
+    host = _host(claude_opus=_recorded(_OPUS, 0.9), coder=_recorded(_CODER, 0.9))
+
+    assert _run(checkout, host) == 0
+
+    (body,) = host.bodies
+    section = body[body.index("## Release metrics") :]
+    assert "| task | previous pass rate | pass rate |" in section
+    assert section.index(f"- `{_OPUS}`: 2 samples") < section.index(f"# Release metrics: {_NEW}")
+    assert f"## {_CODER}" in section
+
+
 def _carry_from(host: FakeReleaseHost, target: str) -> str | None:
     """The ``--carry-from`` path the record command of ``target`` received, if any."""
     command = next(c for c in host.commands if "--record" in c and target in c)

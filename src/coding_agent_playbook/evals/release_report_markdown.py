@@ -92,7 +92,7 @@ def _scores(section: TargetReport) -> str:
     if section.baseline is None:
         return (
             f"Pass rate {_num(rate)}, mean score {_num(mean)}. {section.target}: no baseline; "
-            "no earlier release has a file for this target, so nothing is compared."
+            "the gate recorded no previous release for this target, so nothing is compared."
         )
     old_rate, old_mean = _summary(section.baseline)
     return (

@@ -93,3 +93,15 @@ def test_an_entry_carried_after_a_rejudge_counts_as_compared() -> None:
     check = check_regressions(new, _previous_file())
 
     assert carried_compared(new, check) == 1
+
+
+def test_the_mode_line_counts_entries_rejudged_here_apart() -> None:
+    # An entry re-judged in this file has measured_in too, but it is neither
+    # rerun nor carried: it gets its own count, shown only when there is one.
+    new = _new_file()
+    rejudged_from = {"release": _PREVIOUS, "commit": "c", "judge": {"judge_model": "j"}}
+    new["samples"]["d"] = new["samples"]["d"] | {"rejudged_from": rejudged_from}
+
+    assert changed_only_mode(new, full_rerun_reason=None, check=None) == (
+        "changed-only: 1 rerun, 2 carried, 1 rejudged"
+    )
