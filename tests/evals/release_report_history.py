@@ -112,12 +112,16 @@ def _qwen_994() -> dict[str, Any]:
     """9.9.4 of ``opencode-qwen``: ``review/a`` regressed, accepted by an earlier check."""
     data = _qwen("9.9.4", (0.6, 2), (0.6, 2))
     data["samples"]["review/a"]["vs_previous"] = {"accepted": "the rubric is stricter"}
-    return data | {"previous": "9.9.3"}
+    return data
 
 
 def history_files() -> list[dict[str, Any]]:
-    """Every file of the fixture history, oldest release first."""
-    return [
+    """Every file of the fixture history, oldest release first.
+
+    Each file after a target's first records the release before it as
+    ``previous``, as the release gate's regression check writes it.
+    """
+    files = [
         _opus_992(),
         _qwen("9.9.2", (0.6, 2), (0.5, 1)),
         _opus_993(),
@@ -125,6 +129,12 @@ def history_files() -> list[dict[str, Any]]:
         _opus_994(),
         _qwen_994(),
     ]
+    last: dict[str, str] = {}
+    for data in files:
+        name = data["target"]["name"]
+        data["previous"] = last.get(name)
+        last[name] = data["release"]
+    return files
 
 
 def write_history(root: Path) -> Path:

@@ -113,6 +113,43 @@ def test_a_target_without_a_baseline_says_so(root: Path) -> None:
     assert task.previous_mean is None
 
 
+def _skipped_release(root: Path, previous: str | None) -> None:
+    """``codex-gpt`` at 9.9.2 and 9.9.4, none at 9.9.3; 9.9.4 records ``previous``."""
+    write_file(root, file_of("9.9.2", "codex-gpt", {"review/a": entry("review", 0.9, 3)}))
+    later = file_of("9.9.4", "codex-gpt", {"review/a": entry("review", 0.5, 1)})
+    write_file(root, later | {"previous": previous})
+
+
+def test_a_skipped_release_without_a_recorded_previous_has_no_baseline(root: Path) -> None:
+    _skipped_release(root, None)
+    report = release_report(load_history(root), "9.9.4")
+    section = report.target("codex-gpt")
+    assert (section.baseline, section.check) == (None, None)
+    assert "codex-gpt: no baseline" in report.markdown()
+    task = next(t for t in report.tasks if t.target == "codex-gpt")
+    assert task.previous_pass_rate is None
+    assert set(task.counts.values()) == {0}
+    row = next(
+        r for r in report.csv_rows() if r["release"] == "9.9.4" and r["target"] == "codex-gpt"
+    )
+    assert (row["verdict"], row["delta_mean"]) == ("", "")
+    trend = [p.release for p in report.trend if p.target == "codex-gpt"]
+    assert trend == ["9.9.2", "9.9.4"]
+
+
+def test_a_skipped_release_compares_with_the_recorded_previous(root: Path) -> None:
+    _skipped_release(root, "9.9.2")
+    report = release_report(load_history(root), "9.9.4")
+    section = report.target("codex-gpt")
+    assert section.previous == "9.9.2"
+    assert section.check is not None
+    assert [v.status for v in section.check.samples] == ["regression"]
+    row = next(
+        r for r in report.csv_rows() if r["release"] == "9.9.4" and r["target"] == "codex-gpt"
+    )
+    assert row["verdict"] == "regression"
+
+
 def test_a_dropped_target_is_ignored(root: Path) -> None:
     write_file(root, file_of("9.9.3", "codex-gpt", {"review/a": entry("review", 0.9, 3)}))
     report = release_report(load_history(root), "9.9.4")

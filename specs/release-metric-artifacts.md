@@ -152,8 +152,8 @@ index code also goes in `evals`, as `evals.result_index`, and joins the same lis
   validated, in SemVer order, per target name.
 - `release_report(history, version) -> ReleaseReport`. For each target of
   `version`:
-  - **Baseline**: the latest earlier release with a file for that target, or
-    `None`.
+  - **Baseline**: the release the gate compared with, recorded as the file's
+    `previous`; None (no baseline) when the file records none.
   - **Per-sample verdicts**: `check_regressions`, so the report and the release
     gate always agree. The accepted reasons are stored.
   - **Per task**:

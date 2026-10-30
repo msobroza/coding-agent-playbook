@@ -4,10 +4,14 @@ A pure module: it reads the committed release metrics files
 (``<releases>/<version>/metrics/<target>.json``) and returns data; it plots
 nothing and decides no score. :func:`load_history` validates every file, in
 SemVer order. :func:`release_report` compares each target of one release with
-its *baseline*, the latest earlier release with a file for that target, through
-``evals.release_regression.check_regressions``, so the report and the release
-gate always agree. A target the release no longer has is ignored; one without
-a baseline is reported without deltas or verdicts.
+its *baseline*: the release the gate compared it with, which the regression
+check recorded as the file's ``previous`` (``annotate_release_metrics``), looked
+up for the same target. Verdicts come from
+``evals.release_regression.check_regressions`` against that file, so the report
+and the release gate always agree. A target the release no longer has is
+ignored; one whose file records no ``previous``, or names a release without a
+file for the target, has no baseline and is reported without deltas or
+verdicts, like a first release. The trend still covers every release.
 
 Per task it pools passes over runs (``evals.release_metrics.entries_summary``)
 and counts the verdicts; the trend holds each task's numbers in every release
@@ -102,9 +106,13 @@ class MetricsHistory:
         return tuple(r for r in self.releases if Version(r) <= Version(version))
 
     def baseline(self, version: str, target: str) -> MetricsFile | None:
-        """The file of ``target`` in the latest release before ``version``, else ``None``."""
-        earlier = [r for r in self.up_to(version) if r != version and target in self.files[r]]
-        return self.files[earlier[-1]][target] if earlier else None
+        """The file of ``target`` in the release its ``version`` file records as ``previous``.
+
+        ``None`` when the file records no ``previous`` (the gate compared it with
+        nothing) or that release has no file for ``target``.
+        """
+        previous = self.files[version][target].get("previous")
+        return self.files.get(str(previous), {}).get(target) if previous else None
 
 
 @dataclass(frozen=True)
