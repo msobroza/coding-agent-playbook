@@ -122,6 +122,7 @@ def test_without_stored_answers_the_sample_reruns(
     assert _EXTRACT in runs.ran
     assert "rejudged_from" not in _load(out)["samples"][_EXTRACT]
     assert _load(out)["summary"]["rejudged"] == 0
+    assert "judge_change" not in _load(out)
 
 
 def test_rejudge_calls_the_judge_but_never_the_runner(
@@ -253,3 +254,31 @@ def test_a_judge_error_while_regrading_refuses_the_record(
     assert runs.ran == []
     assert set(judge.artifacts) == {f"diff of {_RENAME}"}
     assert _load(out)["summary"]["rejudged"] == 2
+    # The checkpoint's re-judged record counts toward the agreement too (D10).
+    assert _load(out)["judge_change"]["runs"] == 4
+
+
+def test_a_rejudged_record_writes_judge_change_and_prints_it(
+    repo: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The old judge scored every criterion 0.25 (extract) and 0.75 (rename): the
+    # new judge's 0.9 flips extract's rubric verdict only (spec D10).
+    releases = _release(_base(repo, monkeypatch), keep=[_EXTRACT, _RENAME])
+    JudgedRuns(monkeypatch)
+    capsys.readouterr()
+
+    rc, out = _rerecord(repo, releases, monkeypatch, ScoringJudge(0.9))
+
+    assert rc == 0
+    change = _load(out)["judge_change"]
+    assert [part["judge_model"] for part in change["from"]] == [_OLD_JUDGE]
+    assert change["to"]["judge_model"] == "gpt-6-luna"
+    assert (change["runs"], change["pass_agreement"]) == (4, 0.5)
+    assert change["mean_abs_score_diff"] == 0.4
+    assert change["tasks"] == {
+        "refactor": {"runs": 4, "pass_agreement": 0.5, "mean_abs_score_diff": 0.4}
+    }
+    expected = (
+        f"judge change: {_OLD_JUDGE} -> gpt-6-luna: pass agreement 50% over 4 runs, mean |Δ| 0.40"
+    )
+    assert expected in capsys.readouterr().out

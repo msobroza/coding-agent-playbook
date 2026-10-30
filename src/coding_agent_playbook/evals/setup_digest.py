@@ -142,6 +142,7 @@ SCORING_EXEMPT: Final[Mapping[str, str]] = {
     "evals.endpoint_config": _CONFIG,
     "evals.endpoints": "reaches an endpoint; the endpoint fingerprint parts name its server",
     "evals.graded_source": "picks the graded text: the inputs digest hashes its render",
+    "evals.judge_agreement": "compares two judges' scores of the same answers; decides no score",
     "evals.loader": "reads sample.toml into evals.sample, which is listed",
     "evals.model_pins": "refuses a moving model before a run; the model parts record it",
     "evals.prompting": "rendering: the inputs digest hashes the rendered text",

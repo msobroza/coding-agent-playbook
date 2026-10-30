@@ -26,7 +26,8 @@ the carried count) before the first paid run, runs only new samples, samples who
 changed and every edition control (every sample when the setup differs or the
 baseline lacks the digests), and carries the other entries. A sample that only a
 file of another judge holds is re-graded from its stored answers instead of
-rerun (spec D9, ``commands._eval_record_rejudge``). The
+rerun (spec D9, ``commands._eval_record_rejudge``), and the new judge's agreement
+with the old one is recorded (spec D10, ``commands._eval_record_agreement``). The
 file is written whatever the scores are: exit ``0`` once it is written, ``2`` on
 a refusal or an unscorable sample. Each finished sample is saved to a
 checkpoint as it ends (``--checkpoint``, ``evals.record_checkpoint``), which
@@ -52,6 +53,7 @@ from coding_agent_playbook.commands._eval_options import (
     judge_sample_count,
     select_target,
 )
+from coding_agent_playbook.commands._eval_record_agreement import with_judge_change
 from coding_agent_playbook.commands._eval_record_answers import (
     answers_out_path,
     capturing,
@@ -208,7 +210,8 @@ def _record_metrics(
     )
     if carry is None:
         return metrics
-    return merge_carried(metrics, carry, {record.sample_id: record.entry for record in rejudged})
+    merged = merge_carried(metrics, carry, {record.sample_id: record.entry for record in rejudged})
+    return with_judge_change(merged, carry, rejudged, samples, judge_parts(work.recorded.setup))
 
 
 def _unit_runner(

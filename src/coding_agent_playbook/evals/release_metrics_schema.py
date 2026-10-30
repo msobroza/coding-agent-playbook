@@ -23,7 +23,10 @@ One file holds one release's scores on one Eval target
       "setup"?: {"harness", "harness_version", "model", "endpoint_fingerprint",
                  "small_model", "runs", "judge_model", "judge_endpoint_fingerprint",
                  "judge_samples", "judge_version", "fail_fast", "isolated",
-                 "scoring_digest"}
+                 "scoring_digest"},
+      "judge_change"?: {"from": [{<judge part>: value}, ...], "to": {<judge part>: value},
+                        "runs", "pass_agreement", "mean_abs_score_diff",
+                        "tasks": {"<task>": {"runs", "pass_agreement", "mean_abs_score_diff"}}}
     }
 
 ``controls`` (#281 ticket 15) holds the pinned samples' runs on their frozen
@@ -62,6 +65,11 @@ summary's ``rejudged`` counts those entries. A re-judged entry carried on
 records ``judged_in``: the release (and target) whose answers file holds the
 lines its current judge graded. All three are optional too.
 
+``judge_change`` (spec D10, ``evals.judge_agreement``) is written only by a
+record that re-judged runs: how closely the new judge (``to``) agrees with the
+old ones (``from``, each distinct judge's parts) on the same answers, overall and
+per task. It is optional; when present, every key is present and typed.
+
 ``previous`` is ``null`` until the regression check compares the file with the
 previous release; that check may add comparison keys (``vs_previous`` per
 sample, regression counts in the summary) without a new version, because a
@@ -96,6 +104,8 @@ MEASURED_IN_KEY: Final = "measured_in"
 REJUDGED_FROM_KEY: Final = "rejudged_from"
 #: The optional per-entry key naming whose answers file holds the current judge's lines (D9).
 JUDGED_IN_KEY: Final = "judged_in"
+#: The optional top-level key of the old and new judges' agreement (spec D10).
+JUDGE_CHANGE_KEY: Final = "judge_change"
 
 _STR: Final = (str,)
 _OPT_STR: Final = (str, type(None))
@@ -118,7 +128,11 @@ _TOP: Final[_Fields] = {
     "samples": (dict,),
 }
 #: Top-level keys added under version 1: absent in older files, typed when present.
-_OPTIONAL_TOP: Final[_Fields] = {SETUP_DIGEST_KEY: _STR, SETUP_KEY: (dict,)}
+_OPTIONAL_TOP: Final[_Fields] = {
+    SETUP_DIGEST_KEY: _STR,
+    SETUP_KEY: (dict,),
+    JUDGE_CHANGE_KEY: (dict,),
+}
 #: The setup digest's parts (``evals.setup_digest.SetupParts``), all present when ``setup`` is.
 SETUP_PART_TYPES: Final[_Fields] = {
     "harness": _STR,
@@ -189,6 +203,8 @@ _MEASURED_IN: Final[_Fields] = {"release": _STR, "commit": _OPT_STR}
 #: The source file's target, recorded by an entry carried through ``evals.result_index``.
 _OPTIONAL_MEASURED_IN: Final[_Fields] = {"target": _STR}
 _REJUDGED_FROM: Final[_Fields] = {"release": _STR, "commit": _OPT_STR, "judge": (dict,)}
+_AGREEMENT: Final[_Fields] = {"runs": _INT, "pass_agreement": _NUM, "mean_abs_score_diff": _NUM}
+_JUDGE_CHANGE: Final[_Fields] = {"from": (list,), "to": (dict,), **_AGREEMENT, "tasks": (dict,)}
 
 
 class ReleaseMetricsError(ExitTwoError):
@@ -230,6 +246,7 @@ def _problems(data: object) -> list[str]:
         problems += _check_fields(summary, _OPTIONAL_SUMMARY, "summary.", optional=True)
     problems += _check_fields(data, _OPTIONAL_TOP, "", optional=True)
     problems += _nested(data, SETUP_KEY, SETUP_PART_TYPES)
+    problems += _judge_change_problems(data.get(JUDGE_CHANGE_KEY))
     setup = data.get(SETUP_KEY)
     if isinstance(setup, dict):
         problems += _check_fields(setup, OPTIONAL_SETUP_PART_TYPES, f"{SETUP_KEY}.", optional=True)
@@ -263,6 +280,28 @@ def _sample_problems(label: str, entry: object) -> list[str]:
             for name, score in checks.items()
             if not _fits(score, _NUM)
         ]
+    return problems
+
+
+def _judge_change_problems(change: object) -> list[str]:
+    """The problems of a ``judge_change`` object: its keys, each old judge, each task."""
+    if not isinstance(change, dict):
+        return []
+    prefix = f"{JUDGE_CHANGE_KEY}."
+    problems = _check_fields(change, _JUDGE_CHANGE, prefix)
+    olds = change.get("from")
+    if isinstance(olds, list):
+        problems += [
+            f"{prefix}from[{index}]: expected dict, got {parts!r}"
+            for index, parts in enumerate(olds)
+            if not isinstance(parts, dict)
+        ]
+    tasks = change.get("tasks")
+    if isinstance(tasks, dict):
+        for task, agreement in tasks.items():
+            problems += _nested(tasks, task, _AGREEMENT, prefix=f"{prefix}tasks.")
+            if not isinstance(agreement, dict):
+                problems.append(f"{prefix}tasks.{task}: expected dict, got {agreement!r}")
     return problems
 
 
