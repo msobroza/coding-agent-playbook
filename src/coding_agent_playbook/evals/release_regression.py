@@ -224,7 +224,9 @@ def annotate_release_metrics(
     summary["improvements"] = check.count("improvement")
     summary["not_comparable"] = check.count("not_comparable")
     rejudged = sum(1 for entry in samples.values() if REJUDGED_FROM_KEY in entry)
-    carried = sum(1 for entry in samples.values() if MEASURED_IN_KEY in entry) - rejudged
+    carried = sum(
+        1 for e in samples.values() if MEASURED_IN_KEY in e and REJUDGED_FROM_KEY not in e
+    )
     summary["rerun"] = len(samples) - carried - rejudged
     summary["carried"] = carried
     summary["rejudged"] = rejudged
