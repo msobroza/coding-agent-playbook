@@ -20,7 +20,13 @@ from coding_agent_playbook.evals.answers_store import (
     judge_parts_of,
 )
 from coding_agent_playbook.evals.judge import StubJudge
-from coding_agent_playbook.evals.rejudge import RejudgeError, rescore_run, rubric_criteria
+from coding_agent_playbook.evals.rejudge import (
+    RejudgeError,
+    rejudge_refusal,
+    rescore_run,
+    rescore_unjudged_run,
+    rubric_criteria,
+)
 from coding_agent_playbook.evals.release_metrics import run_check_scores
 from coding_agent_playbook.evals.run.fake_runner import FakeRunner, write_files
 from coding_agent_playbook.evals.sample import EvalSample
@@ -214,3 +220,41 @@ def test_judge_parts_picks_the_five_judge_keys() -> None:
 
     assert judge_parts_of(setup) == {key: f"v-{key}" for key in JUDGE_PART_KEYS}
     assert judge_parts_of({}) == dict.fromkeys(JUDGE_PART_KEYS)
+
+
+def test_a_non_float_criterion_score_is_refused_before_any_layer_runs() -> None:
+    sample = _sample(_SPOT)
+    scores: dict[str, object] = dict(_all(sample, 0.9))
+    text = next(iter(scores))
+    scores[text] = None
+
+    with pytest.raises(RejudgeError, match="no criterion score") as caught:
+        rescore_run(sample, _stored_gate(passed=True), scores)  # type: ignore[arg-type]
+    assert text in str(caught.value)
+    assert "None" in str(caught.value)
+
+
+def test_an_unjudged_run_whose_gate_was_lost_stays_failed() -> None:
+    sample = _sample(_SPOT)
+
+    rescored = rescore_unjudged_run(sample, _stored_gate(passed=False))
+
+    assert (rescored.gate_passed, rescored.passed) == (False, False)
+    assert rescored.rubric_passed is None
+    assert rescored.rubric_score is None
+    assert rescored.aggregate_score == 0.0
+
+
+def test_an_unjudged_run_whose_gate_held_needs_a_criterion_score() -> None:
+    sample = _sample(_SPOT)
+
+    with pytest.raises(RejudgeError, match="no criterion score"):
+        rescore_unjudged_run(sample, _stored_gate(passed=True))
+
+
+def test_rejudge_refusal_names_why_a_sample_cannot_be_rescored(tmp_path: Path) -> None:
+    verdict = {"weights": {"gate": 0.5, "rubric": 0.5}, "fail": 0.5}
+    weighted = _synthetic(tmp_path, verdict=verdict, gate=_MADE_GATE, rubric=_MIXED_RUBRIC)
+
+    assert rejudge_refusal(_sample(_SPOT)) is None
+    assert "weighted" in (rejudge_refusal(weighted) or "")

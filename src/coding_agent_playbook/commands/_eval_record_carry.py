@@ -4,7 +4,9 @@
 (ADR 0013, ``evals.release_carry``) or the releases directory, whose committed
 metrics files of this run's setup are indexed whatever their target (ADR 0014,
 ``evals.result_index``). This module loads the one or the other before any
-paid run and dispatches the carry plan on which it is.
+paid run and dispatches the carry plan on which it is. A directory's plan then
+finds the stored answers of each sample to re-judge (spec D9,
+``commands._eval_record_rejudge``) before the plan is printed.
 """
 
 from __future__ import annotations
@@ -12,15 +14,17 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
+from coding_agent_playbook.commands._eval_record_rejudge import resolve_rejudges
 from coding_agent_playbook.evals.release_carry import carry_plan_lines, load_baseline, plan_carry
 from coding_agent_playbook.evals.result_index import ReleaseIndex
 
 if TYPE_CHECKING:
-    from collections.abc import Collection
+    from collections.abc import Collection, Sequence
     from pathlib import Path
 
     from coding_agent_playbook.evals.release_carry import CarryPlan
     from coding_agent_playbook.evals.release_metrics import RecordedTarget
+    from coding_agent_playbook.evals.sample import EvalSample
 
 #: A ``--carry-from`` baseline: one metrics file's data, or the releases directory's index.
 Baseline = Mapping[str, Any] | ReleaseIndex
@@ -64,14 +68,16 @@ def print_carry_plan(
     recorded: RecordedTarget,
     inputs: Mapping[str, str],
     controls: Collection[str],
+    samples: Sequence[EvalSample],
 ) -> CarryPlan | None:
     """The ``--carry-from`` plan, printed before the first paid run; ``None`` without a baseline.
 
     ``controls`` are the ids of the pinned samples whose edition controls always rerun.
+    ``samples`` are the record's samples, which a re-judge re-scores (spec D9).
 
     Example::
 
-        >>> print_carry_plan(None, recorded, {}, ()) is None  # doctest: +SKIP
+        >>> print_carry_plan(None, recorded, {}, (), []) is None  # doctest: +SKIP
         True
     """
     if baseline is None:
@@ -80,6 +86,9 @@ def print_carry_plan(
     setup = recorded.setup.as_dict()
     name = recorded.target.name
     carry = plan_from_baseline(baseline, target_name=name, setup=setup, inputs=inputs)
+    if isinstance(baseline, ReleaseIndex):
+        by_id = {sample.id: sample for sample in samples}
+        carry = resolve_rejudges(carry, releases_root=baseline.root, samples=by_id)
     for line in carry_plan_lines(carry, controls=sorted(controls)):
         print(line)
     return carry

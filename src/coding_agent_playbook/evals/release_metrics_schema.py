@@ -11,11 +11,12 @@ One file holds one release's scores on one Eval target
                  "price": {"input", "output"} | null, "judge_model", "runs",
                  "isolated"?},
       "summary": {"samples", "runs", "pass_rate", "mean_score", "tokens", "cost_usd",
-                  "rerun"?, "carried"?},
+                  "rerun"?, "carried"?, "rejudged"?},
       "samples": {"<sample id>": {"prompt_id", "graded", "prompt_digest", "sample_digest",
                   "passes", "runs", "mean_score", "stdev", "checks": {"<check id>": score},
                   "duration_seconds_mean", "tokens_mean", "cost_usd_mean",
-                  "inputs_digest"?, "measured_in"?: {"release", "commit", "target"?}}},
+                  "inputs_digest"?, "measured_in"?: {"release", "commit", "target"?},
+                  "rejudged_from"?: {"release", "commit", "judge": {<judge part>: value}}}},
       "controls": {"<sample id>": {the same keys, "graded": "<edition tag>"}},
       "setup_digest"?: "<sha256>",
       "setup"?: {"harness", "harness_version", "model", "endpoint_fingerprint",
@@ -54,7 +55,9 @@ record measured and ``carried`` the copied ones. The regression check
 (``evals.release_regression``) also writes both counts on every file it
 annotates; in a full record every entry counts as rerun and ``carried`` is 0.
 All are optional, so a file written without them still validates; when present
-they are typed.
+they are typed. A re-judged entry (spec D9) adds ``rejudged_from``: the file whose
+stored answers this record's judge re-graded, with that file's judge parts; the
+summary's ``rejudged`` counts those entries. Both are optional too.
 
 ``previous`` is ``null`` until the regression check compares the file with the
 previous release; that check may add comparison keys (``vs_previous`` per
@@ -86,6 +89,8 @@ SETUP_DIGEST_KEY: Final = "setup_digest"
 SETUP_KEY: Final = "setup"
 #: The optional per-entry key naming the release and commit that measured a carried entry.
 MEASURED_IN_KEY: Final = "measured_in"
+#: The optional per-entry key of a re-judged entry (spec D9): the re-graded file and its judge.
+REJUDGED_FROM_KEY: Final = "rejudged_from"
 
 _STR: Final = (str,)
 _OPT_STR: Final = (str, type(None))
@@ -153,7 +158,7 @@ _SUMMARY: Final[_Fields] = {
     "cost_usd": _OPT_NUM,
 }
 #: Summary keys added under version 1 (#329 ticket 05): absent in older files, typed when present.
-_OPTIONAL_SUMMARY: Final[_Fields] = {"rerun": _INT, "carried": _INT}
+_OPTIONAL_SUMMARY: Final[_Fields] = {"rerun": _INT, "carried": _INT, "rejudged": _INT}
 _SAMPLE: Final[_Fields] = {
     "prompt_id": _STR,
     "graded": _STR,
@@ -169,10 +174,15 @@ _SAMPLE: Final[_Fields] = {
     "cost_usd_mean": _OPT_NUM,
 }
 #: Entry keys added under version 1: absent in older files, typed when present.
-_OPTIONAL_SAMPLE: Final[_Fields] = {INPUTS_DIGEST_KEY: _STR, MEASURED_IN_KEY: (dict,)}
+_OPTIONAL_SAMPLE: Final[_Fields] = {
+    INPUTS_DIGEST_KEY: _STR,
+    MEASURED_IN_KEY: (dict,),
+    REJUDGED_FROM_KEY: (dict,),
+}
 _MEASURED_IN: Final[_Fields] = {"release": _STR, "commit": _OPT_STR}
 #: The source file's target, recorded by an entry carried through ``evals.result_index``.
 _OPTIONAL_MEASURED_IN: Final[_Fields] = {"target": _STR}
+_REJUDGED_FROM: Final[_Fields] = {"release": _STR, "commit": _OPT_STR, "judge": (dict,)}
 
 
 class ReleaseMetricsError(ExitTwoError):
@@ -238,6 +248,7 @@ def _sample_problems(label: str, entry: object) -> list[str]:
     problems = _check_fields(entry, _SAMPLE, f"{label}.")
     problems += _check_fields(entry, _OPTIONAL_SAMPLE, f"{label}.", optional=True)
     problems += _nested(entry, MEASURED_IN_KEY, _MEASURED_IN, prefix=f"{label}.")
+    problems += _nested(entry, REJUDGED_FROM_KEY, _REJUDGED_FROM, prefix=f"{label}.")
     measured = entry.get(MEASURED_IN_KEY)
     if isinstance(measured, dict):
         problems += _check_fields(

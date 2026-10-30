@@ -24,7 +24,9 @@ another target, or indexes the releases directory PREVIOUS
 (``commands._eval_record_carry``), prints the plan (each rerun with its reason,
 the carried count) before the first paid run, runs only new samples, samples whose inputs digest
 changed and every edition control (every sample when the setup differs or the
-baseline lacks the digests), and carries the other entries. The
+baseline lacks the digests), and carries the other entries. A sample that only a
+file of another judge holds is re-graded from its stored answers instead of
+rerun (spec D9, ``commands._eval_record_rejudge``). The
 file is written whatever the scores are: exit ``0`` once it is written, ``2`` on
 a refusal or an unscorable sample. Each finished sample is saved to a
 checkpoint as it ends (``--checkpoint``, ``evals.record_checkpoint``), which
@@ -36,14 +38,12 @@ file or to ``--answers`` (spec D8, ``commands._eval_record_answers``).
 from __future__ import annotations
 
 import dataclasses
-import json
 import os
-import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING
 
 import coding_agent_playbook
 from coding_agent_playbook.commands._eval_options import (
@@ -70,6 +70,11 @@ from coding_agent_playbook.commands._eval_record_flags import (
     run_count,
     selected_samples,
 )
+
+# Bound as ``_head_commit``: tests stub the commit stamp on this module.
+from coding_agent_playbook.commands._eval_record_output import head_commit as _head_commit
+from coding_agent_playbook.commands._eval_record_output import write_metrics
+from coding_agent_playbook.commands._eval_record_rejudge import rejudge_units, rejudger
 from coding_agent_playbook.commands._eval_record_runs import (
     RecordUnit,
     open_checkpoint,
@@ -92,7 +97,6 @@ from coding_agent_playbook.evals.release_metrics import (
     sample_record,
 )
 from coding_agent_playbook.evals.release_metrics_schema import validate_release_metrics
-from coding_agent_playbook.evals.run.git_env import without_repo_location
 from coding_agent_playbook.evals.run.harness_version import harness_cli_version
 from coding_agent_playbook.evals.sample_digest import inputs_digest, prompt_digest, sample_digest
 from coding_agent_playbook.evals.setup_digest import UNKNOWN_VERSION, SetupParts, scoring_digest
@@ -112,9 +116,6 @@ if TYPE_CHECKING:
     from coding_agent_playbook.evals.sample import EvalSample
     from coding_agent_playbook.evals.targets import EvalSettings, EvalTarget
     from coding_agent_playbook.release.edition import Edition
-
-#: Wall-clock bound (seconds) of the ``git rev-parse HEAD`` that names the commit.
-_GIT_TIMEOUT: Final = 30.0
 
 
 def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings) -> int:
@@ -143,16 +144,18 @@ def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings
     controls = plan.control_editions(samples)
     judge_model = settings.judge.model if uses_judge else None
     recorded = plan.recorded_target(target, judge_model=judge_model, isolated=isolated)
-    carry = print_carry_plan(baseline, recorded, inputs, controls)
+    carry = print_carry_plan(baseline, recorded, inputs, controls, samples)
     checkpoint = open_checkpoint(args, out_path, recorded)
     work = _RecordWork(plan, recorded, jobs, checkpoint, answers_out_path(args, out_path))
     metrics = _record_metrics(work, samples, inputs, controls, carry, repo_root)
     validate_release_metrics(metrics)
-    _write(out_path, metrics)
+    write_metrics(out_path, metrics)
     checkpoint.remove()
     extra = f" (+{len(controls)} edition controls)" if controls else ""
     jobs_note = f" on {jobs} jobs" if jobs > 1 else ""
-    carried = "" if carry is None else f" ({len(carry.rerun)} rerun, {len(carry.carried)} carried)"
+    rejudged = f", {len(carry.rejudge)} rejudged" if carry is not None and carry.rejudge else ""
+    counts = "" if carry is None else f"{len(carry.rerun)} rerun, {len(carry.carried)} carried"
+    carried = f" ({counts}{rejudged})" if counts else ""
     print(
         f"recorded {len(samples)} samples{carried}{extra} x {runs} runs on target "
         f"{target.name!r}{jobs_note} to {out_path}"
@@ -190,11 +193,12 @@ def _record_metrics(
         for index, sample in enumerate(samples)
         if (control := controls.get(sample.id)) is not None
     ]
-    records = record_units(
-        units, jobs=work.jobs, run=_unit_runner(work, len(samples)), checkpoint=work.checkpoint
-    )
+    units += rejudge_units(samples, inputs, carry)
+    run = _unit_runner(work, len(samples), carry)
+    records = record_units(units, jobs=work.jobs, run=run, checkpoint=work.checkpoint)
     fresh = [records[unit.key] for unit in units if unit.kind == "sample"]
-    write_record_answers(work.answers, fresh)
+    rejudged = [records[unit.key] for unit in units if unit.kind == "rejudge"]
+    write_record_answers(work.answers, [*fresh, *rejudged])
     metrics = build_release_metrics_from_records(
         release=coding_agent_playbook.__version__,
         commit=_head_commit(repo_root),
@@ -202,15 +206,23 @@ def _record_metrics(
         samples=fresh,
         controls=[records[unit.key] for unit in units if unit.kind == "control"],
     )
-    return metrics if carry is None else merge_carried(metrics, carry)
+    if carry is None:
+        return metrics
+    return merge_carried(metrics, carry, {record.sample_id: record.entry for record in rejudged})
 
 
-def _unit_runner(work: _RecordWork, total: int) -> Callable[[RecordUnit], SampleRecord]:
-    """Run one unit's ``runs`` and fold them into its record."""
+def _unit_runner(
+    work: _RecordWork, total: int, carry: CarryPlan | None
+) -> Callable[[RecordUnit], SampleRecord]:
+    """Run one unit's ``runs`` and fold them into its record; re-grade a ``rejudge`` unit."""
     price = work.recorded.target.price
     parts = judge_parts(work.recorded.setup)
+    plan = work.plan
+    regrade = rejudger(plan.judge, judge_samples=plan.judge_samples, parts=parts, carry=carry)
 
     def run(unit: RecordUnit) -> SampleRecord:
+        if regrade is not None and unit.kind == "rejudge":
+            return regrade(unit)
         runs = work.plan.run(
             unit.sample, unit.index, total, unit.inputs_digest, edition=unit.edition, parts=parts
         )
@@ -466,26 +478,3 @@ def _setup_version(cli: str | None, version: str | None) -> str | None:
 def _fingerprint(endpoint: Endpoint | None) -> str | None:
     """The endpoint's URL fingerprint, or ``None`` without an endpoint."""
     return endpoint.fingerprint if endpoint is not None else None
-
-
-def _head_commit(repo_root: Path) -> str | None:
-    """The commit ``repo_root`` has checked out, or ``None`` outside a git checkout."""
-    try:
-        completed = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            cwd=repo_root,
-            env=without_repo_location(os.environ),
-            capture_output=True,
-            text=True,
-            timeout=_GIT_TIMEOUT,
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    commit = completed.stdout.strip()
-    return commit if completed.returncode == 0 and commit else None
-
-
-def _write(path: Path, metrics: dict[str, object]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(metrics, indent=2, sort_keys=True) + "\n", encoding="utf-8")

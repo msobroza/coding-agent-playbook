@@ -90,9 +90,25 @@ def stored_run(
         run=run,
         artifact=calls[0][1] if calls else None,
         checks=judge_free_checks(result),
-        criteria=tuple(_criterion(text, weight, calls) for text, weight in rubric_criteria(sample)),
+        criteria=captured_criteria(sample, judge),
         judge=dict(parts),
     )
+
+
+def captured_criteria(
+    sample: EvalSample, judge: CapturingJudge | None
+) -> tuple[StoredCriterion, ...]:
+    """Each rubric criterion of ``sample`` with the mean score ``judge`` captured for it.
+
+    A criterion without a call (or without a judge) has score ``None`` and ``n`` 0.
+
+    Example::
+
+        >>> captured_criteria(sample, None)[0].score is None  # doctest: +SKIP
+        True
+    """
+    calls = judge.calls if judge is not None else []
+    return tuple(_criterion(text, weight, calls) for text, weight in rubric_criteria(sample))
 
 
 def judge_free_checks(result: SampleResult) -> dict[str, float]:

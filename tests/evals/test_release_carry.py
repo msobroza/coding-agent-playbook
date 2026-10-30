@@ -14,6 +14,7 @@ import pytest
 from coding_agent_playbook.evals.release_carry import (
     CarryFromError,
     CarryPlan,
+    RejudgeSource,
     carried_entry,
     carry_plan_lines,
     load_baseline,
@@ -259,3 +260,55 @@ def test_load_baseline_refuses_an_invalid_file(tmp_path: Path) -> None:
     path = _write(tmp_path / "base.json", {"schema_version": 1})
     with pytest.raises(CarryFromError, match=r"--carry-from .*base\.json: release metrics file: "):
         load_baseline(path, "claude-opus")
+
+
+def _rejudge_source(entry: dict[str, Any]) -> RejudgeSource:
+    return RejudgeSource("9.9.1", "c1", "opus", entry, {"judge_model": "old"})
+
+
+def test_merge_counts_the_rejudged_entries_without_their_tokens() -> None:
+    plan = CarryPlan(None, {}, {}, "claude-opus-5-5", rejudge={"b/two": _rejudge_source({})})
+    fresh = _fresh_file({"a/one": sample_entry(0.0, passes=0, runs=3, inputs="in-a")})
+    rejudged = {"b/two": sample_entry(1.0, passes=3, runs=3, inputs="in-b")}
+    merged = merge_carried(fresh, plan, rejudged)
+    validate_release_metrics(merged)
+    summary = merged["summary"]
+    assert (summary["rerun"], summary["carried"], summary["rejudged"]) == (1, 0, 1)
+    assert (summary["samples"], summary["pass_rate"]) == (2, 0.5)
+    assert (summary["tokens"], summary["cost_usd"]) == (1200, 0.5)
+    assert merged["target"]["reported_model"] == "claude-opus-5-5"
+
+
+def test_a_rejudge_source_measured_in_is_the_entrys_own_when_carried() -> None:
+    measured = {"release": "9.9.0", "commit": "c0", "target": "alpha"}
+    carried = _rejudge_source({"measured_in": measured})
+    assert carried.measured_in == measured
+    assert (carried.answers_at.release, carried.answers_at.target) == ("9.9.0", "alpha")
+    fresh = _rejudge_source({})
+    assert fresh.measured_in == {"release": "9.9.1", "commit": "c1", "target": "opus"}
+    assert fresh.rejudged_from == {
+        "release": "9.9.1",
+        "commit": "c1",
+        "judge": {"judge_model": "old"},
+    }
+
+
+def test_plan_lines_count_the_rejudges_by_source() -> None:
+    plan = CarryPlan(None, {}, {}, rejudge={"a": _rejudge_source({}), "b": _rejudge_source({})})
+    assert carry_plan_lines(plan, controls=[]) == [
+        "carry plan: 0 rerun, 0 carried, 2 rejudged",
+        "  rejudged from 9.9.1 (opus): 2",
+    ]
+
+
+def test_validation_accepts_rejudged_from_and_rejects_a_mistyped_one() -> None:
+    rejudged_from = {"release": "9.9.1", "commit": None, "judge": {"judge_model": "old"}}
+    data = metrics_file("9.9.2", {"a": sample_entry(0.5) | {"rejudged_from": rejudged_from}})
+    data["summary"] |= {"rejudged": 1}
+    validate_release_metrics(data)
+    data["samples"]["a"]["rejudged_from"] = rejudged_from | {"judge": "old"}
+    data["summary"]["rejudged"] = "1"
+    with pytest.raises(ReleaseMetricsError) as excinfo:
+        validate_release_metrics(data)
+    assert "samples.a.rejudged_from.judge" in str(excinfo.value)
+    assert "summary.rejudged" in str(excinfo.value)

@@ -18,10 +18,13 @@ from coding_agent_playbook.evals.release_carry import merge_carried, plan_carry
 from coding_agent_playbook.evals.release_metrics import (
     GRADED_HEAD,
     RecordedTarget,
+    RunOutcome,
     SampleRuns,
     build_release_metrics,
     build_release_metrics_from_records,
     entries_summary,
+    fold_outcomes,
+    rejudged_record,
     sample_record,
 )
 from coding_agent_playbook.evals.release_metrics_schema import (
@@ -439,3 +442,26 @@ def test_records_saved_to_a_checkpoint_fold_into_the_same_file(tmp_path: Path) -
         samples=[record for record in records if record is not None],
     )
     assert folded == direct
+
+
+def test_a_rejudged_record_folds_like_a_fresh_one_and_keeps_the_agent_runs_means() -> None:
+    outcomes = [RunOutcome(True, 1.0, {"gate": 1.0}), RunOutcome(False, 0.0, {"gate": 0.0})]
+    runs = SampleRuns("t/a", "review", "head", "p1", "s1", results=(), inputs_digest="in-a")
+    source = {"duration_seconds_mean": 12.0, "tokens_mean": 900.0, "cost_usd_mean": 0.3}
+    record = rejudged_record(runs, outcomes, source, {"measured_in": {"release": "9.9.1"}})
+    assert record.entry == {
+        "inputs_digest": "in-a",
+        "prompt_id": "review",
+        "graded": "head",
+        "prompt_digest": "p1",
+        "sample_digest": "s1",
+        **fold_outcomes(outcomes),
+        **source,
+        "measured_in": {"release": "9.9.1"},
+    }
+    assert (record.entry["passes"], record.entry["mean_score"], record.entry["stdev"]) == (
+        1,
+        0.5,
+        0.5,
+    )
+    assert (record.run_tokens, record.run_costs, record.reported_models) == ((), (), ())

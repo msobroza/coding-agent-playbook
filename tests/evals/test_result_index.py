@@ -185,3 +185,54 @@ def test_reported_model_comes_from_the_newest_source(tmp_path: Path) -> None:
     plan = _plan(tmp_path, {"t/a": "in-a", "t/b": "in-b", "t/c": "in-c"})
     assert set(plan.carried) == {"t/a", "t/b"}
     assert plan.reported_model == "new"
+
+
+#: This record's setup when it has a judge; the stored files differ from it in the judge only.
+_JUDGED: dict[str, object] = _SETUP | {"judge_model": "judge-new", "judge_samples": 2}
+_OLD_JUDGE: dict[str, object] = _JUDGED | {"judge_model": "judge-old"}
+
+
+def test_a_judge_only_difference_plans_a_rejudge(tmp_path: Path) -> None:
+    _write(tmp_path, "9.9.2", {"t/a": sample_entry(0.5, inputs="in-a")}, setup=_OLD_JUDGE)
+    plan = _plan(tmp_path, {"t/a": "in-a"}, setup=_JUDGED)
+    assert plan.full_rerun_reason is None
+    assert (plan.rerun, plan.carried) == ({}, {})
+    source = plan.rejudge["t/a"]
+    assert (source.release, source.commit, source.target) == ("9.9.2", "c2", "opus")
+    assert source.entry["mean_score"] == 0.5
+    assert source.judge["judge_model"] == "judge-old"
+    assert source.measured_in == {"release": "9.9.2", "commit": "c2", "target": "opus"}
+
+
+def test_a_full_match_wins_over_a_rejudge(tmp_path: Path) -> None:
+    _write(tmp_path, "9.9.3", {"t/a": sample_entry(0.9, inputs="in-a")}, setup=_OLD_JUDGE)
+    _write(tmp_path, "9.9.2", {"t/a": sample_entry(0.5, inputs="in-a")}, setup=_JUDGED)
+    plan = _plan(tmp_path, {"t/a": "in-a"}, setup=_JUDGED)
+    assert plan.rejudge == {}
+    assert plan.sources["t/a"] == "9.9.2 (opus)"
+    assert plan.carried["t/a"]["mean_score"] == 0.5
+
+
+def test_a_non_judge_difference_still_reruns(tmp_path: Path) -> None:
+    other = _OLD_JUDGE | {"harness_version": "2.1.299"}
+    _write(tmp_path, "9.9.2", {"t/a": sample_entry(0.5, inputs="in-a")}, setup=other)
+    plan = _plan(tmp_path, {"t/a": "in-a"}, setup=_JUDGED)
+    assert plan.full_rerun_reason is not None
+    assert plan.reruns("t/a")
+    assert plan.rejudge == {}
+
+
+def test_a_record_without_a_judge_never_rejudges(tmp_path: Path) -> None:
+    _write(tmp_path, "9.9.2", {"t/a": sample_entry(0.5, inputs="in-a")}, setup=_OLD_JUDGE)
+    plan = _plan(tmp_path, {"t/a": "in-a"}, setup=_JUDGED | {"judge_model": None})
+    assert plan.full_rerun_reason is not None
+    assert plan.rejudge == {}
+
+
+def test_a_rejudge_of_a_carried_entry_keeps_where_it_was_measured(tmp_path: Path) -> None:
+    measured = {"release": "9.9.1", "commit": "c1", "target": "alpha"}
+    entry = sample_entry(0.5, inputs="in-a") | {"measured_in": measured}
+    _write(tmp_path, "9.9.2", {"t/a": entry}, setup=_OLD_JUDGE)
+    plan = _plan(tmp_path, {"t/a": "in-a", "t/b": "in-b"}, setup=_JUDGED)
+    assert plan.rejudge["t/a"].measured_in == measured
+    assert "new sample" in plan.rerun["t/b"]

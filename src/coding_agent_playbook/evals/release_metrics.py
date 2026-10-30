@@ -19,6 +19,8 @@ Fresh and ``--carry-from`` records (#329 ticket 05, ``evals.release_carry``)
 both fold the summary's sample, run, pass-rate and mean-score keys from the
 recorded entries (:func:`entries_summary`), so a carried entry counts exactly as
 it did when it was measured; ``tokens`` and ``cost_usd`` count fresh runs only.
+A re-judged sample (spec D9) folds its re-scored runs through the same
+:func:`fold_outcomes` as a fresh one (:func:`rejudged_record`).
 """
 
 from __future__ import annotations
@@ -52,6 +54,8 @@ if TYPE_CHECKING:
 GRADED_HEAD: Final = "head"
 #: Digits kept in recorded means, so files diff cleanly across machines.
 _DIGITS: Final = 6
+#: Entry keys that describe the agent's runs, which a re-judged entry keeps from its source.
+_AGENT_RUN_KEYS: Final = ("duration_seconds_mean", "tokens_mean", "cost_usd_mean")
 
 
 @dataclass(frozen=True)
@@ -211,6 +215,63 @@ def sample_record(runs: SampleRuns, price: TokenPrice | None) -> SampleRecord:
     )
 
 
+@dataclass(frozen=True)
+class RunOutcome:
+    """One run's verdict, sample score and check scores: what an entry folds per run.
+
+    Example::
+
+        >>> RunOutcome(True, 1.0, {"gate": 1.0}).passed
+        True
+    """
+
+    passed: bool
+    score: float
+    checks: Mapping[str, float]
+
+
+def rejudged_record(
+    runs: SampleRuns,
+    outcomes: Sequence[RunOutcome],
+    source_entry: Mapping[str, Any],
+    provenance: Mapping[str, object],
+) -> SampleRecord:
+    """A re-judged sample's record (spec D9), folded like a fresh one from its ``outcomes``.
+
+    ``runs`` gives the entry's identity and the new answers lines (its
+    ``results`` are empty). No agent ran, so the duration, tokens and cost means
+    are ``source_entry``'s and the record adds no tokens or cost to the summary.
+    ``provenance`` adds ``rejudged_from`` and ``measured_in``.
+
+    Example::
+
+        >>> rejudged_record(runs, outcomes, entry, {"measured_in": {}}).run_tokens  # doctest: +SKIP
+        ()
+    """
+    kept = {key: source_entry[key] for key in _AGENT_RUN_KEYS}
+    entry = _entry_identity(runs) | fold_outcomes(outcomes) | kept | dict(provenance)
+    answers = tuple(run_to_json(stored) for stored in runs.answers)
+    return SampleRecord(runs.sample_id, entry, (), (), (), answers)
+
+
+def fold_outcomes(outcomes: Sequence[RunOutcome]) -> dict[str, object]:
+    """An entry's passes, runs, mean score, score stdev and check means over ``outcomes``.
+
+    Example::
+
+        >>> fold_outcomes([RunOutcome(True, 1.0, {"gate": 1.0})])["passes"]
+        1
+    """
+    scores = [outcome.score for outcome in outcomes]
+    return {
+        "passes": sum(1 for outcome in outcomes if outcome.passed),
+        "runs": len(outcomes),
+        "mean_score": _round(_mean(scores)),
+        "stdev": _round(statistics.pstdev(scores)) if scores else 0.0,
+        "checks": _check_means([outcome.checks for outcome in outcomes]),
+    }
+
+
 def _record_id(record: SampleRecord) -> str:
     return record.sample_id
 
@@ -257,21 +318,29 @@ def _most_reported_model(samples: Sequence[SampleRecord]) -> str | None:
 
 def _sample_entry(runs: SampleRuns, price: TokenPrice | None) -> dict[str, object]:
     results = runs.results
-    scores = [result.aggregate_score for result in results]
+    outcomes = [
+        RunOutcome(result.passed, result.aggregate_score, run_check_scores(result))
+        for result in results
+    ]
+    return (
+        _entry_identity(runs)
+        | fold_outcomes(outcomes)
+        | {
+            "duration_seconds_mean": _round(_mean([r.duration_seconds for r in results])),
+            "tokens_mean": _round_or_none(_mean_or_none(_run_tokens(results))),
+            "cost_usd_mean": _round_or_none(_mean_or_none(_run_costs(results, price))),
+        }
+    )
+
+
+def _entry_identity(runs: SampleRuns) -> dict[str, object]:
+    """The entry's prompt, graded source and digests."""
     inputs = {} if runs.inputs_digest is None else {INPUTS_DIGEST_KEY: runs.inputs_digest}
     return inputs | {
         "prompt_id": runs.prompt_id,
         "graded": runs.graded,
         "prompt_digest": runs.prompt_digest,
         "sample_digest": runs.sample_digest,
-        "passes": sum(1 for result in results if result.passed),
-        "runs": len(results),
-        "mean_score": _round(_mean(scores)),
-        "stdev": _round(statistics.pstdev(scores)) if scores else 0.0,
-        "checks": _check_means(results),
-        "duration_seconds_mean": _round(_mean([r.duration_seconds for r in results])),
-        "tokens_mean": _round_or_none(_mean_or_none(_run_tokens(results))),
-        "cost_usd_mean": _round_or_none(_mean_or_none(_run_costs(results, price))),
     }
 
 
@@ -325,11 +394,11 @@ def _run_costs(results: Sequence[SampleResult], price: TokenPrice | None) -> lis
     return [price.cost_usd(r.usage) if r.usage is not None else None for r in results]
 
 
-def _check_means(results: Sequence[SampleResult]) -> dict[str, float]:
+def _check_means(runs: Sequence[Mapping[str, float]]) -> dict[str, float]:
     """The mean score of each check over the runs it ran in, by check id."""
     scores: dict[str, list[float]] = {}
-    for result in results:
-        for check_id, score in run_check_scores(result).items():
+    for checks in runs:
+        for check_id, score in checks.items():
             scores.setdefault(check_id, []).append(score)
     return {check_id: _round(_mean(values)) for check_id, values in sorted(scores.items())}
 

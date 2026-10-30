@@ -14,7 +14,8 @@ score per rubric criterion into the run's verdict and scores, exactly as
 - The ``[verdict]`` is derived by ``scoring.apply_verdict``, shared with ``score``.
 
 A run whose judge fail-fast skipped is never re-graded (D9), so every criterion
-needs a score. Samples whose stored checks cannot reproduce them are refused
+needs a score; :func:`rescore_unjudged_run` re-derives such a run's scores
+without one. Samples whose stored checks cannot reproduce them are refused
 with :class:`RejudgeError`: an ``[aggregate]`` block (it folds several trials),
 a weighted ``[verdict]`` (it scores the gate from its leaves, not its stored
 verdict), and a judged layer whose deterministic leaf stored a partial score
@@ -72,28 +73,87 @@ def rescore_run(
 ) -> RunScore:
     """Re-score one stored run of ``sample`` with new ``criterion_scores`` (text to 0-1 mean).
 
+    Every rubric criterion needs a float score, checked before any layer runs.
+
     Example::
 
         >>> rescore_run(sample, stored.checks, {"The review names the bug": 0.9}).passed
         ... # doctest: +SKIP
         True
     """
+    criteria = rubric_criteria(sample)
+    _require_scores(sample.id, criteria, criterion_scores)
+    score = _weighted_score(criteria, criterion_scores)
+    return _rescore(sample, stored_checks, criterion_scores, score, fail_fast=False)
+
+
+def rescore_unjudged_run(sample: EvalSample, stored_checks: Mapping[str, float]) -> RunScore:
+    """Re-derive a stored run that no judge graded: fail-fast skipped it, or no criterion asked.
+
+    Graded fail-fast, as the record ran it: a lost gate skips the judged layers.
+    :class:`RejudgeError` when a criterion would still need a score (the gate
+    held, so the judge had been due).
+
+    Example::
+
+        >>> rescore_unjudged_run(sample, {"gate": 0.0}).passed  # doctest: +SKIP
+        False
+    """
+    return _rescore(sample, stored_checks, {}, None, fail_fast=True)
+
+
+def rejudge_refusal(sample: EvalSample) -> str | None:
+    """Why ``sample``'s stored runs cannot be re-scored; ``None`` when they can.
+
+    Example::
+
+        >>> rejudge_refusal(sample)  # doctest: +SKIP
+    """
+    try:
+        _compiled(sample)
+    except RejudgeError as error:
+        return str(error)
+    return None
+
+
+def _rescore(
+    sample: EvalSample,
+    stored_checks: Mapping[str, float],
+    criterion_scores: Mapping[str, float],
+    rubric_score: float | None,
+    *,
+    fail_fast: bool,
+) -> RunScore:
+    """The run's report replayed from ``stored_checks`` and ``criterion_scores``, folded."""
     compiled = _compiled(sample)
     layers = [_replay_layer(layer, stored_checks) for layer in compiled.per_trial.checks]
     ctx = EvalContext(
         module=None, source="", label="rubric", judge=_GivenScores(sample.id, criterion_scores)
     )
-    report = Rubric(layers, name=sample.id).evaluate(ctx, MeasurementSet([], None))
+    rubric = Rubric(layers, name=sample.id)
+    report = rubric.evaluate(ctx, MeasurementSet([], None), fail_fast=fail_fast)
     apply_verdict(report, compiled.verdict_spec)
     return RunScore(
         gate_passed=_layer_passed(report, "gate") is not False,
         rubric_passed=_layer_passed(report, "rubric"),
-        rubric_score=_weighted_score(rubric_criteria(sample), criterion_scores),
+        rubric_score=rubric_score,
         passed=report.passed,
         # As the runner's single-trial ``_assemble``: the composite, else the verdict.
         aggregate_score=report.composite if report.composite is not None else float(report.passed),
         checks={**stored_checks, **report_check_scores(report.checks)},
     )
+
+
+def _require_scores(
+    sample_id: str, criteria: tuple[tuple[str, float], ...], scores: Mapping[str, object]
+) -> None:
+    """Refuse unless every criterion of ``criteria`` has a float score in ``scores``."""
+    for text, _weight in criteria:
+        score = scores.get(text)
+        if not isinstance(score, float):
+            raise RejudgeError(
+                f"no criterion score for {sample_id}: {text!r} (expected a float, got {score!r})"
+            )
 
 
 def rubric_criteria(sample: EvalSample) -> tuple[tuple[str, float], ...]:
@@ -214,4 +274,11 @@ def _weighted_score(
     return sum(weight * scores[text] for text, weight in criteria) / total
 
 
-__all__ = ["RejudgeError", "RunScore", "rescore_run", "rubric_criteria"]
+__all__ = [
+    "RejudgeError",
+    "RunScore",
+    "rejudge_refusal",
+    "rescore_run",
+    "rescore_unjudged_run",
+    "rubric_criteria",
+]

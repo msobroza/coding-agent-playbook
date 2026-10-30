@@ -9,8 +9,11 @@ keeps the files whose setup matches this run's
 (``evals.setup_digest.setups_match``) and indexes their entries that record an
 inputs digest; an entry without one is never carried. Each sample carries the
 first entry at its inputs digest, newest release first and, within a release,
-the target's own file before the others by name. Nothing here runs an agent or
-decides a score.
+the target's own file before the others by name. A sample that no such file
+holds but an *agent-compatible* file does (its setup differs in judge parts
+only, ``evals.answers_store.JUDGE_PART_KEYS``) is planned for a re-judge (spec
+D9, ``evals.release_carry.RejudgeSource``), when this record has a judge.
+Nothing here runs an agent or decides a score.
 """
 
 from __future__ import annotations
@@ -21,7 +24,8 @@ from typing import TYPE_CHECKING, Any, Final
 
 from packaging.version import InvalidVersion, Version
 
-from coding_agent_playbook.evals.release_carry import CarryPlan, carried_entry
+from coding_agent_playbook.evals.answers_store import JUDGE_PART_KEYS, judge_parts_of
+from coding_agent_playbook.evals.release_carry import CarryPlan, RejudgeSource, carried_entry
 from coding_agent_playbook.evals.release_metrics_schema import (
     INPUTS_DIGEST_KEY,
     SETUP_DIGEST_KEY,
@@ -79,6 +83,8 @@ class ReleaseIndex:
 
     files: tuple[IndexedFile, ...]
     skipped: tuple[str, ...]
+    #: The releases directory indexed, whose answers files a re-judge reads (spec D9).
+    root: Path | None = None
 
     @classmethod
     def load(cls, root: Path, *, exclude: Path | None = None) -> ReleaseIndex:
@@ -101,7 +107,7 @@ class ReleaseIndex:
                 continue
             files.append(indexed)
         files.sort(key=lambda indexed: Version(indexed.release), reverse=True)
-        return cls(tuple(files), tuple(skipped))
+        return cls(tuple(files), tuple(skipped), root)
 
     def plan(
         self, *, target_name: str, setup: Mapping[str, object], inputs: Mapping[str, str]
@@ -109,8 +115,8 @@ class ReleaseIndex:
         """Which of ``inputs`` (sample id to inputs digest) rerun, and where the rest come from.
 
         ``setup`` is this run's setup parts (``SetupParts.as_dict``). With no
-        file of this setup every sample reruns, and the reason names the first
-        skipped files.
+        file of this setup, nor an agent-compatible one, every sample reruns, and
+        the reason names the first skipped files.
 
         Example::
 
@@ -118,10 +124,12 @@ class ReleaseIndex:
             {}
         """
         usable = [indexed for indexed in self.files if setups_match(indexed.data[SETUP_KEY], setup)]
-        if not usable:
+        compatible = [indexed for indexed in self.files if _judge_only_difference(indexed, setup)]
+        if not usable and not compatible:
             reason = _no_usable_reason([*self.skipped, *self._setup_skips(setup)])
             return CarryPlan(reason, dict.fromkeys(sorted(inputs), reason), {})
-        return _carry_plan(_in_priority(usable, target_name), inputs)
+        ordered = _Sources(_in_priority(usable, target_name), _in_priority(compatible, target_name))
+        return _carry_plan(ordered, inputs)
 
     def _setup_skips(self, setup: Mapping[str, object]) -> list[str]:
         """``"<path>: <reason>"`` for each indexed file whose setup differs from ``setup``."""
@@ -173,23 +181,68 @@ def _in_priority(files: Sequence[IndexedFile], target_name: str) -> list[Indexed
     return sorted(by_target, key=lambda indexed: Version(indexed.release), reverse=True)
 
 
-def _carry_plan(ordered: Sequence[IndexedFile], inputs: Mapping[str, str]) -> CarryPlan:
-    """Each sample carried from the first file in ``ordered`` holding it at its inputs digest."""
+def _judge_only_difference(indexed: IndexedFile, setup: Mapping[str, object]) -> bool:
+    """Whether ``indexed``'s setup differs from ``setup`` in judge parts only (spec D9).
+
+    A record without a judge (``judge_model`` unset) re-grades nothing.
+    """
+    if setup.get("judge_model") is None:
+        return False
+    parts = differing_setup_parts(indexed.data[SETUP_KEY], setup)
+    return bool(parts) and set(parts) <= set(JUDGE_PART_KEYS)
+
+
+@dataclass(frozen=True)
+class _Sources:
+    """The fully matching files and the agent-compatible ones, each in priority order."""
+
+    matching: Sequence[IndexedFile]
+    compatible: Sequence[IndexedFile]
+
+
+def _carry_plan(ordered: _Sources, inputs: Mapping[str, str]) -> CarryPlan:
+    """Each sample carried from the first matching file holding it at its inputs digest,
+    else re-judged from the first agent-compatible one, else rerun."""
     rerun: dict[str, str] = {}
     carried: dict[str, Mapping[str, object]] = {}
     sources: dict[str, IndexedFile] = {}
+    rejudge: dict[str, IndexedFile] = {}
     for sample_id, digest in sorted(inputs.items()):
-        source = _source(ordered, sample_id, digest)
-        if isinstance(source, str):
-            rerun[sample_id] = source
+        source = _source(ordered.matching, sample_id, digest)
+        if isinstance(source, IndexedFile):
+            carried[sample_id] = _carried(source, sample_id)
+            sources[sample_id] = source
             continue
-        entry = source.data["samples"][sample_id]
-        carried[sample_id] = carried_entry(
-            entry, release=source.release, commit=source.data["commit"], target=source.target
-        )
-        sources[sample_id] = source
+        older = _source([*ordered.matching, *ordered.compatible], sample_id, digest)
+        if isinstance(older, str):
+            rerun[sample_id] = older
+            continue
+        rejudge[sample_id] = older
     labels = {sample_id: source.label for sample_id, source in sources.items()}
-    return CarryPlan(None, rerun, carried, _reported_model(ordered, sources.values()), labels)
+    used = [*sources.values(), *rejudge.values()]
+    reported = _reported_model([*ordered.matching, *ordered.compatible], used)
+    rejudged = {
+        sample_id: _rejudge_source(indexed, sample_id) for sample_id, indexed in rejudge.items()
+    }
+    return CarryPlan(None, rerun, carried, reported, labels, rejudged)
+
+
+def _carried(source: IndexedFile, sample_id: str) -> dict[str, object]:
+    """``sample_id``'s entry of ``source`` as carried, ``measured_in`` naming the file."""
+    entry = source.data["samples"][sample_id]
+    commit = source.data["commit"]
+    return carried_entry(entry, release=source.release, commit=commit, target=source.target)
+
+
+def _rejudge_source(indexed: IndexedFile, sample_id: str) -> RejudgeSource:
+    """``sample_id``'s entry of the agent-compatible ``indexed``, with its judge parts."""
+    return RejudgeSource(
+        release=indexed.release,
+        commit=indexed.data["commit"],
+        target=indexed.target,
+        entry=indexed.data["samples"][sample_id],
+        judge=judge_parts_of(indexed.data[SETUP_KEY]),
+    )
 
 
 def _source(ordered: Sequence[IndexedFile], sample_id: str, digest: str) -> IndexedFile | str:

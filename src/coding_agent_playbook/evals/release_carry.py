@@ -13,8 +13,9 @@ decides, before any paid run:
 
 :func:`merge_carried` then adds the carried entries to the fresh record and folds
 the summary from every entry (``evals.release_metrics.entries_summary``), with
-``rerun`` and ``carried`` counts; ``tokens`` and ``cost_usd`` stay the fresh
-runs' own. Nothing here runs an agent.
+``rerun``, ``carried`` and ``rejudged`` counts; ``tokens`` and ``cost_usd`` stay
+the fresh runs' own, since a re-judged entry (spec D9, :class:`RejudgeSource`)
+ran no agent. Nothing here runs an agent.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
 
+from coding_agent_playbook.evals.answers_store import ArtifactRef
 from coding_agent_playbook.evals.release_metrics import entries_summary
 from coding_agent_playbook.evals.release_metrics_schema import (
     INPUTS_DIGEST_KEY,
@@ -39,6 +41,8 @@ from coding_agent_playbook.exit_two import ExitTwoError
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from pathlib import Path
+
+    from coding_agent_playbook.evals.answers_store import StoredRun
 
 #: Keys of a baseline entry that compare it with its own previous release, dropped on carry.
 _COMPARISON_KEYS: Final = ("vs_previous", "accepted")
@@ -58,13 +62,61 @@ class CarryFromError(ExitTwoError):
 
 
 @dataclass(frozen=True)
+class RejudgeSource:
+    """A sample's entry in a file whose setup differs in judge parts only (spec D9).
+
+    ``release``, ``commit`` and ``target`` name that file, ``judge`` its judge
+    parts (``evals.answers_store.judge_parts_of``). ``runs`` are the entry's
+    stored answers once the record has found them, each naming in
+    ``artifact_ref`` the answers file its artifact came from.
+
+    Example::
+
+        >>> RejudgeSource("9.9.2", None, "opus", {"runs": 3}, {}).label
+        '9.9.2 (opus)'
+    """
+
+    release: str
+    commit: str | None
+    target: str
+    entry: Mapping[str, Any]
+    judge: Mapping[str, object]
+    runs: tuple[StoredRun, ...] = ()
+
+    @property
+    def label(self) -> str:
+        """The source as a carry plan names it: ``"<release> (<target>)"``."""
+        return f"{self.release} ({self.target})"
+
+    @property
+    def measured_in(self) -> dict[str, object]:
+        """Where the entry's agent runs were measured: its own ``measured_in``, else this file."""
+        own = self.entry.get(MEASURED_IN_KEY)
+        if isinstance(own, dict):
+            return dict(own)
+        return {"release": self.release, "commit": self.commit, "target": self.target}
+
+    @property
+    def answers_at(self) -> ArtifactRef:
+        """The release and target whose answers file holds the measured runs (spec D8)."""
+        measured = self.measured_in
+        return ArtifactRef(str(measured["release"]), str(measured.get("target") or self.target))
+
+    @property
+    def rejudged_from(self) -> dict[str, object]:
+        """The entry's ``rejudged_from``: the re-graded file's release, commit and judge parts."""
+        return {"release": self.release, "commit": self.commit, "judge": dict(self.judge)}
+
+
+@dataclass(frozen=True)
 class CarryPlan:
     """What a ``--carry-from`` record reruns (by sample id, with the reason) and carries.
 
     ``full_rerun_reason`` is set when every sample reruns. ``reported_model`` is
     the baseline's, kept when no fresh run reports one. ``sources`` names, by
     sample id, the file each carried entry came from as ``"<release> (<target>)"``
-    (``evals.result_index``); a ``--carry-from`` plan leaves it empty.
+    (``evals.result_index``); a ``--carry-from`` plan leaves it empty, as it
+    leaves ``rejudge``: the samples to re-grade with this record's judge (D9).
 
     Example::
 
@@ -77,6 +129,7 @@ class CarryPlan:
     carried: Mapping[str, Mapping[str, object]]
     reported_model: str | None = None
     sources: Mapping[str, str] = field(default_factory=dict)
+    rejudge: Mapping[str, RejudgeSource] = field(default_factory=dict)
 
     def reruns(self, sample_id: str) -> bool:
         """Whether ``sample_id`` runs fresh in this record."""
@@ -187,11 +240,16 @@ def carried_entry(
     return copied
 
 
-def merge_carried(metrics: Mapping[str, Any], plan: CarryPlan) -> dict[str, Any]:
-    """The fresh record ``metrics`` completed with ``plan``'s carried entries.
+def merge_carried(
+    metrics: Mapping[str, Any],
+    plan: CarryPlan,
+    rejudged: Mapping[str, Mapping[str, object]] | None = None,
+) -> dict[str, Any]:
+    """The fresh record ``metrics`` completed with ``plan``'s carried and the ``rejudged`` entries.
 
-    The summary is folded from every entry, with ``rerun`` and ``carried``
-    counts; ``tokens`` and ``cost_usd`` stay the fresh runs' own.
+    The summary is folded from every entry, with ``rerun``, ``carried`` and
+    ``rejudged`` counts; ``tokens`` and ``cost_usd`` stay the fresh runs' own
+    (a re-judged entry ran no agent, spec D9).
 
     Example::
 
@@ -199,15 +257,17 @@ def merge_carried(metrics: Mapping[str, Any], plan: CarryPlan) -> dict[str, Any]
         97
     """
     fresh: Mapping[str, Any] = metrics["samples"]
-    samples = dict(sorted({**fresh, **plan.carried}.items()))
+    regraded = rejudged or {}
+    samples = dict(sorted({**fresh, **regraded, **plan.carried}.items()))
     summary = entries_summary(samples) | {
         "tokens": metrics["summary"]["tokens"],
         "cost_usd": metrics["summary"]["cost_usd"],
         "rerun": len(fresh),
         "carried": len(plan.carried),
+        "rejudged": len(regraded),
     }
     target = dict(metrics["target"])
-    if target["reported_model"] is None and plan.carried:
+    if target["reported_model"] is None and (plan.carried or regraded):
         target["reported_model"] = plan.reported_model
     return {**metrics, "target": target, "summary": summary, "samples": samples}
 
@@ -217,7 +277,8 @@ def carry_plan_lines(plan: CarryPlan, *, controls: Sequence[str]) -> list[str]:
 
     ``controls`` are the ids of the pinned samples, whose edition controls rerun.
     A plan with ``sources`` (``evals.result_index``) ends with one
-    ``carried from <source>: <n>`` line per source, sorted by source.
+    ``carried from <source>: <n>`` line per source, then one
+    ``rejudged from <source>: <n>`` line per source of ``rejudge``, each sorted.
 
     Example::
 
@@ -225,7 +286,8 @@ def carry_plan_lines(plan: CarryPlan, *, controls: Sequence[str]) -> list[str]:
         ['carry plan: 1 rerun, 0 carried', '  a: new sample']
     """
     extra = f" (+{len(controls)} edition controls rerun)" if controls else ""
-    counts = f"{len(plan.rerun)} rerun, {len(plan.carried)} carried{extra}"
+    rejudged = f", {len(plan.rejudge)} rejudged" if plan.rejudge else ""
+    counts = f"{len(plan.rerun)} rerun, {len(plan.carried)} carried{rejudged}{extra}"
     if plan.full_rerun_reason is not None:
         return [f"carry plan: every sample reruns, {plan.full_rerun_reason}: {counts}"]
     lines = [f"carry plan: {counts}"]
@@ -233,4 +295,6 @@ def carry_plan_lines(plan: CarryPlan, *, controls: Sequence[str]) -> list[str]:
     lines += [f"  {sample_id} (edition control): {_CONTROL}" for sample_id in controls]
     counts_by_source = Counter(plan.sources.values())
     lines += [f"  carried from {src}: {n}" for src, n in sorted(counts_by_source.items())]
+    rejudged_by_source = Counter(source.label for source in plan.rejudge.values())
+    lines += [f"  rejudged from {src}: {n}" for src, n in sorted(rejudged_by_source.items())]
     return lines
