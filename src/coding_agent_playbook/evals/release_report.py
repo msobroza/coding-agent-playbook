@@ -15,7 +15,10 @@ verdicts, like a first release. The trend still covers every release.
 
 Per task it pools passes over runs (``evals.release_metrics.entries_summary``)
 and counts the verdicts; the trend holds each task's numbers in every release
-up to this one, marking a release whose file records ``judge_change``. The
+up to this one, marking a release whose judge changed: its file records
+``judge_change`` (it re-judged), or its judge parts differ from the target's
+file in the release before it (no answers to re-judge, e.g. the first change
+after v0.4.0). The
 Markdown (``evals.release_report_markdown``), CSV and agreement rows render
 these for the release PR and its assets.
 """
@@ -28,6 +31,7 @@ from typing import TYPE_CHECKING, Any, Final, get_args
 
 from packaging.version import InvalidVersion, Version
 
+from coding_agent_playbook.evals.answers_store import judge_parts_of
 from coding_agent_playbook.evals.release_metrics import entries_summary
 from coding_agent_playbook.evals.release_metrics_schema import (
     JUDGE_CHANGE_KEY,
@@ -296,15 +300,36 @@ def _counts(statuses: Sequence[str]) -> dict[str, int]:
 
 def _trend(history: MetricsHistory, version: str, target: str) -> list[TrendPoint]:
     points = []
+    earlier: MetricsFile | None = None
     for release in history.up_to(version):
         data = history.files[release].get(target)
         if data is None:
             continue
-        changed = isinstance(data.get(JUDGE_CHANGE_KEY), dict)
+        changed = _judge_changed(earlier, data)
         for task, entries in by_task(data).items():
             rate, mean = pooled(entries)
             points.append(TrendPoint(release, target, task, rate, mean, changed))
+        earlier = data
     return points
+
+
+def _judge_changed(earlier: MetricsFile | None, data: MetricsFile) -> bool:
+    """Whether ``data`` re-judged, or its judge parts differ from ``earlier``'s (spec D4/D5)."""
+    if isinstance(data.get(JUDGE_CHANGE_KEY), dict):
+        return True
+    if earlier is None:
+        return False
+    before, now = _judge_parts(earlier), _judge_parts(data)
+    # A file without ``setup`` knows its judge model only: compare the parts both know.
+    return any(before[key] != now[key] for key in before.keys() & now.keys())
+
+
+def _judge_parts(data: MetricsFile) -> dict[str, object]:
+    """The file's judge parts: from ``setup``, else ``target.judge_model`` alone."""
+    setup = data.get("setup")
+    if isinstance(setup, dict):
+        return judge_parts_of(setup)
+    return {"judge_model": data["target"].get("judge_model")}
 
 
 def _release_of(path: Path) -> str:

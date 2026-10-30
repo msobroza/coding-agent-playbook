@@ -21,6 +21,7 @@ from coding_agent_playbook.evals.release_report import (
     load_history,
     release_report,
 )
+from coding_agent_playbook.evals.setup_digest import SetupParts
 from tests.evals.release_report_history import (
     NEW_JUDGE,
     OPUS,
@@ -174,6 +175,39 @@ def test_the_trend_marks_the_judge_change(root: Path) -> None:
     assert [p.release for p in opus] == ["9.9.2", "9.9.3", "9.9.4"]
     assert [p.judge_changed for p in opus] == [False, False, True]
     assert not any(p.judge_changed for p in report.trend if p.target == QWEN)
+
+
+def _qwen_judges(root: Path, *judges: str) -> list[bool]:
+    """Rewrite ``opencode-qwen`` with one judge per release; return its review trend marks."""
+    for release, judge in zip(("9.9.2", "9.9.3", "9.9.4"), judges, strict=True):
+        data = file_of(release, QWEN, {"review/a": entry("review", 0.6, 2)}, judge=judge)
+        write_file(root, data)
+    report = release_report(load_history(root), "9.9.4")
+    return [p.judge_changed for p in report.trend if p.target == QWEN and p.task == "review"]
+
+
+def test_the_trend_marks_a_judge_change_without_rejudging(root: Path) -> None:
+    # No answers to re-grade (e.g. the first change after v0.4.0): no judge_change key.
+    assert _qwen_judges(root, "judge-a", "judge-a", "judge-b") == [False, False, True]
+
+
+def test_the_trend_marks_no_change_when_the_judge_stays(root: Path) -> None:
+    assert _qwen_judges(root, "judge-a", "judge-a", "judge-a") == [False, False, False]
+
+
+def _with_setup(root: Path, release: str, fingerprint: str) -> None:
+    data = file_of(release, QWEN, {"review/a": entry("review", 0.6, 2)})
+    parts = SetupParts("fake", None, "m", None, None, 3, "judge-a", None, 3, None, True, True, "d")
+    setup = parts.as_dict() | {"judge_endpoint_fingerprint": fingerprint}
+    write_file(root, data | {"setup": setup})
+
+
+def test_the_trend_compares_the_setup_judge_parts(root: Path) -> None:
+    for release, fingerprint in (("9.9.2", "fp-1"), ("9.9.3", "fp-1"), ("9.9.4", "fp-2")):
+        _with_setup(root, release, fingerprint)
+    report = release_report(load_history(root), "9.9.4")
+    marks = [p.judge_changed for p in report.trend if p.target == QWEN and p.task == "review"]
+    assert marks == [False, False, True]
 
 
 def test_csv_has_the_d4_columns_and_one_row_per_release_target_sample(root: Path) -> None:
