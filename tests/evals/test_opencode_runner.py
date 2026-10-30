@@ -389,7 +389,7 @@ def test_json_events_give_the_transcript_and_the_step_totals(tmp_path: Path) -> 
     run = runner._invoke_agent("p", tmp_path)
 
     assert isinstance(run, OpenCodeRun)
-    assert run.transcript == "edited mod.pya warning\n"
+    assert run.transcript == "edited mod.py\na warning\n"
     assert run.output is not None
     assert (run.output.input_tokens, run.output.output_tokens, run.output.steps) == (12, 3, 1)
 
@@ -446,7 +446,7 @@ def test_routed_run_spawns_with_the_isolated_env_and_redacts_the_token(
 
     run = runner._invoke_agent("p", tmp_path)
 
-    assert run.transcript == "playbook-target False 401 for [redacted]"
+    assert run.transcript == "playbook-target False\n 401 for [redacted]"
 
 
 def test_opencode_runner_accepts_an_endpoint() -> None:

@@ -45,7 +45,11 @@ from coding_agent_playbook.evals.run.claude_code_output import (
 )
 from coding_agent_playbook.evals.run.claude_code_route import routed_argv, routed_env
 from coding_agent_playbook.evals.run.cli_argv import PROMPT_TOKEN, build_cli_argv
-from coding_agent_playbook.evals.run.harness_runner import AgentRun, HarnessRunner
+from coding_agent_playbook.evals.run.harness_runner import (
+    AgentRun,
+    HarnessRunner,
+    with_stderr,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -168,13 +172,13 @@ class ClaudeCodeRunner(HarnessRunner):
         parsed = parse_claude_code_output(completed.stdout, self.model)
         if parsed is None:
             return AgentRun(
-                _with_stderr(self._redact(completed.stdout), stderr), completed.returncode
+                with_stderr(self._redact(completed.stdout), stderr), completed.returncode
             )
         # A failed run says so in is_error; never count it as completed.
         returncode = completed.returncode or (1 if parsed.is_error else 0)
         reported_model = parsed.reported_model
         return AgentRun(
-            transcript=_with_stderr(self._redact(parsed.transcript), stderr),
+            transcript=with_stderr(self._redact(parsed.transcript), stderr),
             returncode=returncode,
             reported_model=None if reported_model is None else self._redact(reported_model),
             usage=parsed.usage,
@@ -183,10 +187,3 @@ class ClaudeCodeRunner(HarnessRunner):
     def _redact(self, text: str) -> str:
         """``text`` with the endpoint token removed; unchanged without a route."""
         return text if self.route is None else self.route.redact(text)
-
-
-def _with_stderr(transcript: str, stderr: str) -> str:
-    """``transcript`` followed by ``stderr`` (the CLI's warnings), when there is any."""
-    if not stderr:
-        return transcript
-    return f"{transcript}{stderr}" if transcript else stderr

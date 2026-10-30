@@ -43,7 +43,7 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook.evals.run.agent_env import agent_env
 from coding_agent_playbook.evals.run.cli_argv import PROMPT_TOKEN, build_cli_argv
-from coding_agent_playbook.evals.run.harness_runner import AgentRun, HarnessRunner
+from coding_agent_playbook.evals.run.harness_runner import AgentRun, HarnessRunner, with_stderr
 from coding_agent_playbook.evals.run.opencode_output import OpenCodeOutput, parse_opencode_output
 from coding_agent_playbook.evals.run.opencode_route import routed_opencode_env
 from coding_agent_playbook.evals.token_usage import TokenUsage
@@ -149,8 +149,7 @@ class OpenCodeRunner(HarnessRunner):
             )
         output = parse_opencode_output(completed.stdout)
         transcript = completed.stdout if output is None else output.text
-        if completed.stderr:
-            transcript = f"{transcript}{completed.stderr}" if transcript else completed.stderr
+        transcript = with_stderr(transcript, completed.stderr)
         return OpenCodeRun(
             transcript=self._redact(transcript),
             returncode=completed.returncode,
