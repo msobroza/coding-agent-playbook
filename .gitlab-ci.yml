@@ -1,5 +1,7 @@
 # GitLab CI for a GitLab copy of this repository; the public repository runs
-# .github/workflows/ instead. It builds the documentation site (docs/, ADR 0009)
+# .github/workflows/ instead. It publishes each release's metric bundle as a
+# GitLab Release (ADR 0014, jobs release-report and release below) and builds
+# the documentation site (docs/, ADR 0009)
 # with scripts/build_docs.py, the same strict build as the GitHub docs workflow:
 # merge requests only build it, and the default branch also publishes it with
 # GitLab Pages (Deploy > Pages shows the address). Source links on the site point
@@ -7,13 +9,16 @@
 #
 # Behind a company proxy, set these as CI/CD variables: PYTHON_IMAGE to a Python
 # 3.12 image from your registry, and PIP_INDEX_URL to your package mirror (pip
-# reads it from the environment).
+# reads it from the environment), and RELEASE_CLI_IMAGE to a mirror of GitLab's
+# release-cli image.
 
 variables:
   PYTHON_IMAGE: "python:3.12-slim"
+  RELEASE_CLI_IMAGE: "registry.gitlab.com/gitlab-org/release-cli:latest"
 
 stages:
   - test
+  - build
   - deploy
 
 .docs-site:
@@ -41,3 +46,95 @@ pages:
   artifacts:
     paths:
       - public
+
+# The release jobs run on a version tag's pipeline, or on a manual pipeline of
+# the default branch (Build > Pipelines > Run pipeline, or the API) with a
+# RELEASE_VERSION variable such as 1.2.3: an older tag's own .gitlab-ci.yml has
+# no release jobs, so this is how its release is backfilled. The release is
+# always for the existing tag v<version>; no job creates a tag.
+.release-rules:
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+    - if: $CI_PIPELINE_SOURCE =~ /^(web|api)$/ && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $RELEASE_VERSION
+
+# Builds the flat bundle (report.md, metrics-history.csv, metrics-<target>.json,
+# PNG charts, judge-agreement.csv when present) with this pipeline's own code.
+# A backfill reads the release data from a checkout of the tag (git must be in
+# PYTHON_IMAGE; a Debian image without it gets it from apt). The artifacts never
+# expire: the release's asset links point at them.
+release-report:
+  extends: .release-rules
+  image: $PYTHON_IMAGE
+  stage: build
+  script:
+    - |
+      set -eu
+      python -m pip install -e . matplotlib
+      if [ -n "${CI_COMMIT_TAG:-}" ]; then
+        V="${CI_COMMIT_TAG#v}"
+        python scripts/release_report.py --version "$V" --checkout . --out release-report
+      else
+        V="$RELEASE_VERSION"
+        if ! printf '%s\n' "$V" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+          echo "RELEASE_VERSION must look like 1.2.3, got '$V'" >&2
+          exit 1
+        fi
+        command -v git >/dev/null || { apt-get update && apt-get install -y --no-install-recommends git; }
+        if ! git ls-remote --exit-code --tags origin "refs/tags/v$V" >/dev/null; then
+          echo "tag v$V does not exist; push it first (no job creates a tag)" >&2
+          exit 1
+        fi
+        git fetch --force origin "refs/tags/v$V:refs/tags/v$V"
+        git worktree add --detach tag-tree "v$V"
+        python scripts/release_report.py --version "$V" --checkout tag-tree --out release-report
+      fi
+      printf 'RELEASE_TAG=v%s\nREPORT_JOB_ID=%s\n' "$V" "$CI_JOB_ID" > release.env
+      echo "REPORT_JOB_ID=$CI_JOB_ID written to release.env"
+  artifacts:
+    paths:
+      - release-report/
+    expire_in: never
+    reports:
+      dotenv: release.env
+
+# Creates the GitLab Release with one asset link per bundle file. On a rerun it
+# updates the existing release instead: the notes through the Releases API, then
+# the asset links through the Release Links API (the old report job's links are
+# deleted, one per current bundle file is posted). release-cli's --ref defaults
+# to $CI_COMMIT_SHA and would create a missing tag on the default branch's HEAD;
+# --ref "$RELEASE_TAG" cannot resolve when the tag is missing, so create fails.
+# Link ids are read with grep, so the job needs only curl (from apk if missing).
+release:
+  extends: .release-rules
+  image: $RELEASE_CLI_IMAGE
+  stage: deploy
+  needs: [release-report]
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - |
+      set -eu
+      command -v curl >/dev/null || apk add --no-cache curl
+      RELEASE_API="$CI_API_V4_URL/projects/$CI_PROJECT_ID/releases/$RELEASE_TAG"
+      ASSET_BASE="$CI_PROJECT_URL/-/jobs/$REPORT_JOB_ID/artifacts/file/release-report"
+      status=$(curl --silent --output /dev/null --write-out '%{http_code}' --header "JOB-TOKEN: $CI_JOB_TOKEN" "$RELEASE_API")
+      if [ "$status" = "200" ]; then
+        curl --fail --silent --show-error --request PUT --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+          --data-urlencode "description@release-report/report.md" "$RELEASE_API" >/dev/null
+        links=$(curl --fail --silent --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" "$RELEASE_API/assets/links?per_page=100")
+        for link_id in $(printf '%s' "$links" | grep -o '"id":[0-9]*' | cut -d: -f2 || true); do
+          curl --fail --silent --show-error --request DELETE --header "JOB-TOKEN: $CI_JOB_TOKEN" "$RELEASE_API/assets/links/$link_id" >/dev/null
+        done
+        for f in release-report/*; do
+          name="${f#release-report/}"
+          curl --fail --silent --show-error --request POST --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+            --data-urlencode "name=$name" --data-urlencode "url=$ASSET_BASE/$name" "$RELEASE_API/assets/links" >/dev/null
+        done
+        exit 0
+      fi
+      set --
+      for f in release-report/*; do
+        name="${f#release-report/}"
+        set -- "$@" --assets-link "{\"name\":\"$name\",\"url\":\"$ASSET_BASE/$name\"}"
+      done
+      release-cli create --name "$RELEASE_TAG" --tag-name "$RELEASE_TAG" --ref "$RELEASE_TAG" --description release-report/report.md "$@"

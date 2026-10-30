@@ -49,6 +49,7 @@ SCORING_TOP_LEVEL: Final = ("evals",)
 SCORING_MODULES_OUTSIDE_PACKAGES: Final = (
     "evals.api_judge",
     "evals.judge",
+    "evals.rejudge",
     "evals.release_metrics",
     "evals.sample",
 )
@@ -121,18 +122,20 @@ SCORING_MODULES: Final = (
     # Score-deciding modules outside SCORING_PACKAGES: the LLM judge on the CLI and
     # over an OpenAI API (prompt, answer parsing, sample averaging, retries), the sample
     # model (default verdict) and the release metrics fold (each entry's passes, mean
-    # score and stdev).
+    # score and stdev), and the re-judge of a stored run (D9).
     *SCORING_MODULES_OUTSIDE_PACKAGES,
 )
 
 _DOCSTRING_ONLY: Final = "a docstring only: the package is deliberately empty"
 _CONFIG: Final = "reads config; the target and judge settings it yields are setup parts"
 _AFTER_SCORING: Final = "reads or checks recorded files after their scores are decided"
+_RENDERS_METRICS: Final = "renders committed metrics; decides no score"
 
 #: Modules under :data:`SCORING_PACKAGES` or directly in :data:`SCORING_TOP_LEVEL`
 #: that decide no score, with the reason.
 SCORING_EXEMPT: Final[Mapping[str, str]] = {
     "evals.__init__": _DOCSTRING_ONLY,
+    "evals.answers_store": "stores answers; evals.rejudge decides the scores",
     "evals.comparison": "summarizes `eval --compare` runs and flags regressions, never a score",
     "evals.config_shapes": _CONFIG,
     "evals.edition_checks": "offline pin and edition checks, never a run",
@@ -140,6 +143,7 @@ SCORING_EXEMPT: Final[Mapping[str, str]] = {
     "evals.endpoint_config": _CONFIG,
     "evals.endpoints": "reaches an endpoint; the endpoint fingerprint parts name its server",
     "evals.graded_source": "picks the graded text: the inputs digest hashes its render",
+    "evals.judge_agreement": "compares two judges' scores of the same answers; decides no score",
     "evals.loader": "reads sample.toml into evals.sample, which is listed",
     "evals.model_pins": "refuses a moving model before a run; the model parts record it",
     "evals.prompting": "rendering: the inputs digest hashes the rendered text",
@@ -150,7 +154,11 @@ SCORING_EXEMPT: Final[Mapping[str, str]] = {
     "evals.release_metrics_schema": _AFTER_SCORING,
     "evals.release_regression": _AFTER_SCORING,
     "evals.release_regression_format": _AFTER_SCORING,
+    "evals.release_report": _RENDERS_METRICS,
+    "evals.release_report_markdown": _RENDERS_METRICS,
+    "evals.release_report_rows": _RENDERS_METRICS,
     "evals.report_format": "renders a report for people, never a recorded score",
+    "evals.result_index": "finds committed entries to carry; decides no score",
     "evals.sample_digest": "the sample and inputs digests, recorded per entry",
     "evals.setup_digest": "this module: the digest itself, never a score",
     "evals.target_config": _CONFIG,

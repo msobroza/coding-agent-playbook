@@ -22,7 +22,7 @@ def format_regression_table(check: RegressionCheck) -> str:
     Example::
 
         >>> format_regression_table(check).splitlines()[-1]  # doctest: +SKIP
-        '0 regressions (0 accepted), 1 improvement, 0 not comparable, 0 carried: ok'
+        '0 regressions (0 accepted), 1 improvement, 0 not comparable, 0 carried, 0 rejudged: ok'
     """
     rows = [_HEADER, *(_cells(verdict) for verdict in check.samples)]
     widths = [max(len(row[i]) for row in rows) for i in range(len(_HEADER) - 1)]
@@ -59,6 +59,7 @@ def regression_check_to_dict(check: RegressionCheck) -> dict[str, object]:
         "improvements": check.count("improvement"),
         "not_comparable": check.count("not_comparable"),
         "carried": check.count("carried"),
+        "rejudged": check.count("rejudged"),
         "notes": list(check.notes),
         "samples": [verdict_to_dict(verdict) for verdict in check.samples],
     }
@@ -86,6 +87,7 @@ def _tally(check: RegressionCheck) -> str:
         f"({check.accepted_regressions} accepted), "
         f"{improvements} improvement{'' if improvements == 1 else 's'}, "
         f"{check.count('not_comparable')} not comparable, "
-        f"{check.count('carried')} carried"
+        f"{check.count('carried')} carried, "
+        f"{check.count('rejudged')} rejudged"
     )
     return f"{counts}: {'BLOCKED' if check.blocked else 'ok'}"

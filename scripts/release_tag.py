@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import tomllib
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, Protocol
+from typing import TYPE_CHECKING, Final, NamedTuple, Protocol
 
 from coding_agent_playbook.release.manifest import (
     MANIFEST_FILENAME,
@@ -75,24 +75,41 @@ class TagTools(Protocol):
     def git(self, *args: str) -> str: ...
 
 
-def tag_release(tools: TagTools, *, tested_commit: str | None) -> str:
+class TagResult(NamedTuple):
+    """What :func:`tag_release` did: a line for the log, and the version this run tagged.
+
+    ``tagged`` is set only when this run created or pushed the tag, so the CI
+    publish job runs once per release, never on a no-op push to ``main``.
+    """
+
+    message: str
+    tagged: str | None = None
+
+
+def tag_release(tools: TagTools, *, tested_commit: str | None) -> TagResult:
     """Tag the release on ``origin/main`` (or ``tested_commit``); returns what it did.
 
     Raises :class:`TagRefusal` when the tag must not be created.
+
+    Example::
+
+        result = tag_release(tools, tested_commit=sha)  # TagResult("tagged v1.2.0 at …", "1.2.0")
     """
     tools.git("fetch", "--tags", REMOTE)
     tip = tested_commit or tools.git("rev-parse", "--verify", f"{REMOTE}/{MAIN_BRANCH}^{{commit}}")
     tip = tip.strip()
     version = _version_at(tools, tip)
     if version is None or not taggable(version):
-        return f"nothing to tag: [project] version {version} at {tip} is not a final release"
+        return TagResult(
+            f"nothing to tag: [project] version {version} at {tip} is not a final release"
+        )
     tag = release_tag(version)
     commit = find_release_commit(version, _revisions(tools, tip))
     action = tag_action(version, commit, _tag_state(tools, tag))
     if action is TagAction.NONE:
-        return f"{tag} already points at {commit}: nothing to do"
+        return TagResult(f"{tag} already points at {commit}: nothing to do")
     if tested_commit is not None and commit != tip:
-        return (
+        return TagResult(
             f"release commit {commit} of {tag} is not this run's commit {tip}: "
             "its own CI run tags it (or run `scripts/release.py tag`)"
         )
@@ -102,7 +119,7 @@ def tag_release(tools: TagTools, *, tested_commit: str | None) -> str:
     if action is TagAction.CREATE:
         tools.git("tag", "--annotate", "--message", f"Release {tag}", tag, commit)
     tools.git("push", REMOTE, f"refs/tags/{tag}:refs/tags/{tag}")
-    return f"tagged {tag} at {commit}"
+    return TagResult(f"tagged {tag} at {commit}", version)
 
 
 def superseded(tools: TagTools, version: str, tip: str) -> str | None:

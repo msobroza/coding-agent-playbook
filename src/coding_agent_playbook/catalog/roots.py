@@ -3,7 +3,7 @@
 The catalog is the engine's own content: its rules, prompts, eval samples, hooks
 and bundled plugins, in one root with two homes:
 
-- installed wheel: ``<package>/_catalog`` (hatch force-includes ``catalog/``);
+- installed wheel: ``<package>/_catalog`` (hatch maps ``catalog/`` there, less release answers files);
 - source checkout: ``<repo>/catalog`` (an editable install finds it next to ``src/``).
 
 This module is the only code that knows those homes. ``config/model.py`` and
@@ -74,7 +74,7 @@ def catalog_root(package_dir: Path | None = None) -> Path:
     """Return the catalog root: the wheel's ``_catalog`` first, then the checkout's ``catalog``.
 
     ``package_dir`` defaults to ``_PACKAGE_DIR``. Each candidate must hold a
-    ``core/`` directory: a wheel whose force-include was mis-scoped would
+    ``core/`` directory: a wheel whose catalog mapping was mis-scoped would
     otherwise load zero engine artifacts silently. The checkout candidate counts
     only when the package sits directly under ``src/``.
 

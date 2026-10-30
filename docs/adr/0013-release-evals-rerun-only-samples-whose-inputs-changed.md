@@ -10,6 +10,8 @@ This record amends ADR 0012's release-metrics paragraph. A sample reruns only wh
 
 The engine does the selection: `playbook eval --run --all --record OUT --carry-from PREVIOUS.json` computes the digests, runs only what changed, copies the rest and writes one complete file, so it is testable without a release and usable outside one. `prepare --eval` is changed-only by default and passes the previous release's file for each target when there is one; `--full` reruns everything. A record run isolates the agent runner and the judge from personal settings with an empty temporary config directory, as routed runs already do; credentials come from `ANTHROPIC_API_KEY` or the target endpoint's `token_env`, the run is refused before the first paid call without either, and the file records the run as isolated.
 
+Amended by ADR 0014: `--carry-from` also takes the releases directory, so a sample is carried from the newest committed metrics file with the same setup, whatever its release or target; a setup that differs only in the judge re-grades the stored answers instead of rerunning the agents.
+
 ## Considered Options
 
 - **Select from the release manifest diff.** The manifest lists the graded set's digests, so it misses samples outside it, setup changes and rendering changes; the inputs digest decides per sample from what the agent actually receives, and the manifest diff stays for the notes.

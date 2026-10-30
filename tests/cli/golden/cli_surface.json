@@ -898,7 +898,7 @@
           "type": null,
           "choices": null,
           "required": false,
-          "help": "--record --all: rerun only new samples, samples whose inputs changed and edition controls, copying the other entries from the metrics file PREVIOUS of the same target; a different setup reruns everything",
+          "help": "--record --all: rerun only new samples, samples whose inputs changed and edition controls, copying the other entries from the metrics file PREVIOUS of the same target, or from any metrics file of this setup under the releases directory PREVIOUS (<release>/metrics/*.json); a different setup reruns everything",
           "metavar": "PREVIOUS"
         },
         {
@@ -945,6 +945,21 @@
           "required": false,
           "help": "--record: reuse the checkpoint's samples measured on the same setup and inputs instead of running them again",
           "metavar": null
+        },
+        {
+          "action": "_StoreAction",
+          "option_strings": [
+            "--answers"
+          ],
+          "dest": "answers",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "type": null,
+          "choices": null,
+          "required": false,
+          "help": "--record: write each fresh run's graded answer, checks and criterion scores to PATH (gzip JSON Lines; default: the record path + .answers.jsonl.gz)",
+          "metavar": "PATH"
         },
         {
           "action": "_StoreAction",

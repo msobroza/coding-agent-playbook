@@ -15,11 +15,30 @@ on the same edition is noted, because its text did not change and the model or
 harness must have.
 
 A *carried entry* (``measured_in``, copied by ``eval --record --carry-from``,
-#329 ticket 06) is ``carried``: its inputs and setup did not change, so it was
-not measured again. Its ``vs_previous`` holds the previous mean and a delta of
-0, it never blocks, and an ``--accept`` naming it is refused like any sample
-that did not regress. The annotated summary counts the ``rerun`` and
-``carried`` samples.
+#329 ticket 06) is ``carried`` when its inputs digest equals the baseline
+entry's: it was not measured again. Its ``vs_previous`` holds the previous mean
+and a delta of 0, it never blocks, and an ``--accept`` naming it is refused like
+any sample that did not regress. One whose digest differs (carried from an
+older release, e.g. after a revert, release-metric-artifacts D2) is compared
+like a rerun, with ``measured in <release>`` among its reasons, so a regression
+blocks; one the baseline lacks is ``new``. The annotated summary counts the
+``rerun`` and ``carried`` entries by ``measured_in``, as the record run wrote
+them, not by verdict.
+
+An entry *re-judged in this file* (``evals.release_metrics_schema.rejudged_here``:
+``rejudged_from`` without ``judged_in``, release-metric-artifacts D9) is read
+before ``measured_in``, which it also has. With the previous entry's inputs
+digest, or no previous entry, it is ``rejudged``: it never blocks, and its delta
+is the new judge's mean minus the previous entry's, the judge effect alone
+(D11); ``--accept`` refuses it like ``carried``. With another inputs digest (it
+was re-judged from a release older than the baseline, e.g. after a revert) it
+is compared like a rerun, with ``rejudged from <release>`` among its reasons,
+and can block. An entry carried after a re-judge (it has ``judged_in``) is a
+carried entry under the rules above. When the new file records
+``judge_change``, every compared sample notes ``judge changed since <previous>:
+pass agreement <x>%``. The annotated summary counts ``rejudged`` entries by
+:func:`~coding_agent_playbook.evals.release_metrics_schema.rejudged_here`,
+apart from the ``carried`` ones.
 
 A regression is *accepted* with a reason; :func:`annotate_release_metrics`
 stores it in the new file (``samples.<id>.vs_previous.accepted``), so a rerun
@@ -39,18 +58,29 @@ from coding_agent_playbook.evals.comparison import (
     improvement_reasons,
     regression_reasons,
 )
-from coding_agent_playbook.evals.release_metrics_schema import CONTROLS_KEY, MEASURED_IN_KEY
+from coding_agent_playbook.evals.release_metrics_schema import (
+    CONTROLS_KEY,
+    INPUTS_DIGEST_KEY,
+    JUDGE_CHANGE_KEY,
+    MEASURED_IN_KEY,
+    REJUDGED_FROM_KEY,
+    rejudged_here,
+)
 from coding_agent_playbook.exit_two import ExitTwoError
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-type SampleStatus = Literal["ok", "improvement", "regression", "not_comparable", "new", "carried"]
+type SampleStatus = Literal[
+    "ok", "improvement", "regression", "not_comparable", "new", "carried", "rejudged"
+]
 type _Entry = Mapping[str, object]
 
 #: A cost (or token) rise above this fraction of the previous release's is a warning.
 MAX_COST_RISE: Final = 0.25
 _DIGITS: Final = 6
+#: Verdicts compared with the previous entry, which a judge change note qualifies (D11).
+_COMPARED: Final = frozenset({"ok", "improvement", "regression", "not_comparable"})
 
 
 class RegressionCheckError(ExitTwoError):
@@ -67,9 +97,11 @@ class RegressionCheckError(ExitTwoError):
 class SampleVerdict:
     """One sample's verdict against the previous release.
 
-    ``previous_mean`` and ``delta`` are ``None`` for a ``new`` sample, and
-    ``delta`` is 0 for a ``carried`` one; ``accepted`` is the reason a
-    regression was accepted, else ``None``.
+    ``previous_mean`` and ``delta`` are ``None`` for a ``new`` sample (and a
+    ``rejudged`` one without a previous entry), and ``delta`` is 0 for a
+    ``carried`` one. A ``rejudged`` sample was re-judged in this file
+    (``rejudged_here``) on the previous entry's inputs, so its delta is the judge
+    effect. ``accepted`` is the reason a regression was accepted, else ``None``.
     """
 
     sample_id: str
@@ -152,6 +184,7 @@ def check_regressions(
         _verdict(sample_id, entry, old_samples.get(sample_id), str(new["release"]))
         for sample_id, entry in sorted(new_samples.items())
     )
+    verdicts = _note_judge_change(verdicts, new, previous)
     verdicts = _accept(verdicts, reasons, accepted or {})
     notes = (
         _harness_notes(new, baseline)
@@ -200,9 +233,11 @@ def annotate_release_metrics(
     summary["accepted_regressions"] = check.accepted_regressions
     summary["improvements"] = check.count("improvement")
     summary["not_comparable"] = check.count("not_comparable")
-    carried = check.count("carried")
-    summary["rerun"] = len(check.samples) - carried
+    rejudged = sum(1 for entry in samples.values() if rejudged_here(entry))
+    carried = sum(1 for e in samples.values() if MEASURED_IN_KEY in e and not rejudged_here(e))
+    summary["rerun"] = len(samples) - carried - rejudged
     summary["carried"] = carried
+    summary["rejudged"] = rejudged
     return annotated
 
 
@@ -230,11 +265,30 @@ def _same_target(new: Mapping[str, object], baseline: Mapping[str, object]) -> s
 
 
 def _verdict(sample_id: str, entry: _Entry, old: _Entry | None, release: str) -> SampleVerdict:
+    if rejudged_here(entry):
+        return _rejudged_verdict(sample_id, entry, old, release)
     mean = _num(entry["mean_score"])
-    if MEASURED_IN_KEY in entry:
-        return _carried_verdict(sample_id, mean, old)
     if old is None:
         return SampleVerdict(sample_id, "new", None, mean)
+    if MEASURED_IN_KEY not in entry:
+        return _compared_verdict(sample_id, entry, old, release)
+    if _same_inputs(entry, old):
+        return SampleVerdict(sample_id, "carried", _num(old["mean_score"]), mean)
+    verdict = _compared_verdict(sample_id, entry, old, release)
+    return _add_reason(verdict, f"measured in {_measured_in(entry)}")
+
+
+def _same_inputs(entry: _Entry, old: _Entry) -> bool:
+    return entry.get(INPUTS_DIGEST_KEY) == old.get(INPUTS_DIGEST_KEY)
+
+
+def _add_reason(verdict: SampleVerdict, reason: str) -> SampleVerdict:
+    return replace(verdict, reasons=(*verdict.reasons, reason))
+
+
+def _compared_verdict(sample_id: str, entry: _Entry, old: _Entry, release: str) -> SampleVerdict:
+    """``entry`` against the baseline's ``old`` by ``--compare``'s rule."""
+    mean = _num(entry["mean_score"])
     previous_mean = _num(old["mean_score"])
     if entry["sample_digest"] != old["sample_digest"]:
         reason = ("sample digest changed: the sample itself was edited",)
@@ -249,13 +303,37 @@ def _verdict(sample_id: str, entry: _Entry, old: _Entry | None, release: str) ->
     return SampleVerdict(sample_id, status, previous_mean, mean, improved, warnings)
 
 
-def _carried_verdict(sample_id: str, mean: float, old: _Entry | None) -> SampleVerdict:
-    """A carried entry's verdict: the baseline's mean as the previous one (its own without one).
+def _rejudged_verdict(
+    sample_id: str, entry: _Entry, old: _Entry | None, release: str
+) -> SampleVerdict:
+    """``rejudged`` on the previous entry's inputs (delta = judge effect), else compared (D11)."""
+    rejudged_from = entry[REJUDGED_FROM_KEY]
+    source = rejudged_from.get("release") if isinstance(rejudged_from, dict) else rejudged_from
+    reason = f"rejudged from {source}"
+    mean = _num(entry["mean_score"])
+    if old is None:
+        return SampleVerdict(sample_id, "rejudged", None, mean, (reason,))
+    if _same_inputs(entry, old):
+        return SampleVerdict(sample_id, "rejudged", _num(old["mean_score"]), mean, (reason,))
+    return _add_reason(_compared_verdict(sample_id, entry, old, release), reason)
 
-    Its scores are not compared: they were measured in an earlier release.
-    """
-    previous_mean = mean if old is None else _num(old["mean_score"])
-    return SampleVerdict(sample_id, "carried", previous_mean, mean)
+
+def _note_judge_change(
+    verdicts: tuple[SampleVerdict, ...], new: Mapping[str, object], previous: str
+) -> tuple[SampleVerdict, ...]:
+    """Each compared verdict with the judge change note, when ``new`` records ``judge_change``."""
+    change = new.get(JUDGE_CHANGE_KEY)
+    if not isinstance(change, dict):
+        return verdicts
+    agreement = round(_num(change["pass_agreement"]) * 100)
+    note = f"judge changed since {previous}: pass agreement {agreement}%"
+    return tuple(_add_reason(v, note) if v.status in _COMPARED else v for v in verdicts)
+
+
+def _measured_in(entry: _Entry) -> str:
+    """The release a carried entry was measured in (``measured_in.release``)."""
+    measured_in = entry[MEASURED_IN_KEY]
+    return str(measured_in.get("release")) if isinstance(measured_in, dict) else str(measured_in)
 
 
 def _accept(

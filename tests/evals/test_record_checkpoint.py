@@ -89,3 +89,25 @@ def test_a_missing_file_resumes_nothing_and_remove_deletes_it(tmp_path: Path) ->
     assert path.is_file()
     checkpoint.remove()
     assert not path.exists()
+
+
+def test_a_sample_keeps_its_answers_through_the_checkpoint(tmp_path: Path) -> None:
+    path = tmp_path / "run.partial.jsonl"
+    answer = {"sample": "review/a", "run": 0, "artifact": None, "criteria": []}
+    record = SampleRecord("review/a", _record("review/a").entry, (1,), (None,), (), (answer,))
+    _open(path, resume=False).append("sample", record)
+    kept = _open(path).resumed("sample", "review/a", inputs_digest=_INPUTS, graded="head")
+    assert kept is not None
+    assert kept.answers == (answer,)
+
+
+def test_a_line_written_before_answers_reads_as_none(tmp_path: Path) -> None:
+    path = tmp_path / "run.partial.jsonl"
+    _open(path, resume=False).append("sample", _record("review/a"))
+    line = json.loads(path.read_text(encoding="utf-8").splitlines()[1])
+    del line["answers"]
+    header = json.dumps({"checkpoint": 1, "setup_digest": _SETUP})
+    path.write_text(f"{header}\n{json.dumps(line)}\n", encoding="utf-8")
+    kept = _open(path).resumed("sample", "review/a", inputs_digest=_INPUTS, graded="head")
+    assert kept is not None
+    assert kept.answers == ()

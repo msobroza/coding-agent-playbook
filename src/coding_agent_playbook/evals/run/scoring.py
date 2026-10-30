@@ -64,6 +64,7 @@ from coding_agent_playbook.grading.measuring import (
 from coding_agent_playbook.grading.types import EvalContext, EvaluationReport, MeasureSetup
 
 if TYPE_CHECKING:
+    from coding_agent_playbook.evals.compile.compiler import VerdictSpec
     from coding_agent_playbook.evals.run.harness_runner import Baseline, Candidate
     from coding_agent_playbook.evals.sample import EvalSample
     from coding_agent_playbook.grading.metric import Metric
@@ -108,7 +109,6 @@ def score(
     verdict, a weighted verdict, an aggregate over a skippable layer — see
     :attr:`~coding_agent_playbook.evals.compile.compiler.CompiledSample.short_circuit_safe`).
     """
-    from coding_agent_playbook.evals.compile.compiler import verdict_passed, weighted_verdict
     from coding_agent_playbook.evals.sample import compile_eval_sample
 
     compiled = compile_eval_sample(sample)
@@ -139,23 +139,32 @@ def score(
         ms = MeasurementSet(measured.candidate, measured.baseline or None)
         report = rubric.evaluate(ctx, ms, strict=False, fail_fast=fail_fast)
 
-    # Derive the trial verdict and make it the report's pass/fail. The
-    # gate/rubric CheckResults stay in report.checks for reporting (and the
-    # aggregate ``over`` selector).
-    #
-    # Two modes (C10): boolean (the legacy ``[verdict].trial`` expression,
-    # skipped-neutral over the layers' ``passed`` results) or weighted (a
-    # composite over the layers' 0-1 scores with renormalization for skipped
-    # layers). The boolean path is byte-identical to today.
-    spec = compiled.verdict_spec
+    apply_verdict(report, compiled.verdict_spec)
+    return report
+
+
+def apply_verdict(report: EvaluationReport, spec: VerdictSpec) -> None:
+    """Derive the trial verdict from ``report``'s layers and make it the report's pass/fail.
+
+    The gate/rubric CheckResults stay in ``report.checks`` for reporting (and the
+    aggregate ``over`` selector). Two modes (C10): boolean (the ``[verdict].trial``
+    expression, skipped-neutral over the layers' ``passed`` results) or weighted
+    (a composite over the layers' 0-1 scores with renormalization for skipped
+    layers). Shared with ``evals.rejudge``, which re-derives a stored run's verdict.
+
+    Example::
+
+        >>> apply_verdict(report, compile_eval_sample(sample).verdict_spec)  # doctest: +SKIP
+    """
+    from coding_agent_playbook.evals.compile.compiler import verdict_passed, weighted_verdict
+
     if spec.mode == "boolean":
         report.passed = verdict_passed(report, spec.ast)
         report.verdict_score = None
-    else:
-        verdict_score, passed = weighted_verdict(report, spec)
-        report.verdict_score = verdict_score
-        report.passed = passed
-    return report
+        return
+    verdict_score, passed = weighted_verdict(report, spec)
+    report.verdict_score = verdict_score
+    report.passed = passed
 
 
 def _graded_artifact(candidate: Candidate) -> str:

@@ -19,6 +19,8 @@ Fresh and ``--carry-from`` records (#329 ticket 05, ``evals.release_carry``)
 both fold the summary's sample, run, pass-rate and mean-score keys from the
 recorded entries (:func:`entries_summary`), so a carried entry counts exactly as
 it did when it was measured; ``tokens`` and ``cost_usd`` count fresh runs only.
+A re-judged sample (spec D9) folds its re-scored runs through the same
+:func:`fold_outcomes` as a fresh one (:func:`rejudged_record`).
 """
 
 from __future__ import annotations
@@ -28,6 +30,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final
 
+from coding_agent_playbook.evals.answers_store import run_to_json
 from coding_agent_playbook.evals.release_metrics_schema import (
     CONTROLS_KEY,
     INPUTS_DIGEST_KEY,
@@ -39,8 +42,9 @@ from coding_agent_playbook.evals.release_metrics_schema import (
 from coding_agent_playbook.grading.types import CheckResult
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator, Mapping, Sequence
+    from collections.abc import Iterable, Iterator, Mapping, Sequence
 
+    from coding_agent_playbook.evals.answers_store import StoredRun
     from coding_agent_playbook.evals.run.harness_runner import SampleResult
     from coding_agent_playbook.evals.setup_digest import SetupParts
     from coding_agent_playbook.evals.targets import EvalTarget
@@ -50,6 +54,8 @@ if TYPE_CHECKING:
 GRADED_HEAD: Final = "head"
 #: Digits kept in recorded means, so files diff cleanly across machines.
 _DIGITS: Final = 6
+#: Entry keys that describe the agent's runs, which a re-judged entry keeps from its source.
+_AGENT_RUN_KEYS: Final = ("duration_seconds_mean", "tokens_mean", "cost_usd_mean")
 
 
 @dataclass(frozen=True)
@@ -58,7 +64,8 @@ class SampleRuns:
 
     ``graded`` is :data:`GRADED_HEAD` or an edition tag. ``inputs_digest``
     (``evals.sample_digest.inputs_digest``, #329 ticket 03) covers what the agent
-    received; ``None`` leaves the key out of the entry.
+    received; ``None`` leaves the key out of the entry. ``answers`` holds each
+    run's answers line (spec D8), empty for an edition control.
 
     Example::
 
@@ -73,6 +80,7 @@ class SampleRuns:
     sample_digest: str
     results: Sequence[SampleResult]
     inputs_digest: str | None = None
+    answers: tuple[StoredRun, ...] = ()
 
     @property
     def runs(self) -> int:
@@ -171,6 +179,8 @@ class SampleRecord:
     JSON-ready, so a checkpoint can store it and fold it later as if it had just
     run: ``run_tokens`` and ``run_costs`` (``None``: unknown) feed the summary's
     ``tokens`` and ``cost_usd``, ``reported_models`` the target's ``reported_model``.
+    ``answers`` are the runs' answers lines in their JSON form
+    (``evals.answers_store.run_to_json``), so a resumed record still writes them.
 
     Example::
 
@@ -183,6 +193,7 @@ class SampleRecord:
     run_tokens: tuple[int | None, ...]
     run_costs: tuple[float | None, ...]
     reported_models: tuple[str, ...]
+    answers: tuple[Mapping[str, object], ...] = ()
 
 
 def sample_record(runs: SampleRuns, price: TokenPrice | None) -> SampleRecord:
@@ -200,7 +211,65 @@ def sample_record(runs: SampleRuns, price: TokenPrice | None) -> SampleRecord:
         run_tokens=tuple(_run_tokens(results)),
         run_costs=tuple(_run_costs(results, price)),
         reported_models=tuple(r.reported_model for r in results if r.reported_model is not None),
+        answers=tuple(run_to_json(stored) for stored in runs.answers),
     )
+
+
+@dataclass(frozen=True)
+class RunOutcome:
+    """One run's verdict, sample score and check scores: what an entry folds per run.
+
+    Example::
+
+        >>> RunOutcome(True, 1.0, {"gate": 1.0}).passed
+        True
+    """
+
+    passed: bool
+    score: float
+    checks: Mapping[str, float]
+
+
+def rejudged_record(
+    runs: SampleRuns,
+    outcomes: Sequence[RunOutcome],
+    source_entry: Mapping[str, Any],
+    provenance: Mapping[str, object],
+) -> SampleRecord:
+    """A re-judged sample's record (spec D9), folded like a fresh one from its ``outcomes``.
+
+    ``runs`` gives the entry's identity and the new answers lines (its
+    ``results`` are empty). No agent ran, so the duration, tokens and cost means
+    are ``source_entry``'s and the record adds no tokens or cost to the summary.
+    ``provenance`` adds ``rejudged_from`` and ``measured_in``.
+
+    Example::
+
+        >>> rejudged_record(runs, outcomes, entry, {"measured_in": {}}).run_tokens  # doctest: +SKIP
+        ()
+    """
+    kept = {key: source_entry[key] for key in _AGENT_RUN_KEYS}
+    entry = _entry_identity(runs) | fold_outcomes(outcomes) | kept | dict(provenance)
+    answers = tuple(run_to_json(stored) for stored in runs.answers)
+    return SampleRecord(runs.sample_id, entry, (), (), (), answers)
+
+
+def fold_outcomes(outcomes: Sequence[RunOutcome]) -> dict[str, object]:
+    """An entry's passes, runs, mean score, score stdev and check means over ``outcomes``.
+
+    Example::
+
+        >>> fold_outcomes([RunOutcome(True, 1.0, {"gate": 1.0})])["passes"]
+        1
+    """
+    scores = [outcome.score for outcome in outcomes]
+    return {
+        "passes": sum(1 for outcome in outcomes if outcome.passed),
+        "runs": len(outcomes),
+        "mean_score": _round(_mean(scores)),
+        "stdev": _round(statistics.pstdev(scores)) if scores else 0.0,
+        "checks": _check_means([outcome.checks for outcome in outcomes]),
+    }
 
 
 def _record_id(record: SampleRecord) -> str:
@@ -249,21 +318,29 @@ def _most_reported_model(samples: Sequence[SampleRecord]) -> str | None:
 
 def _sample_entry(runs: SampleRuns, price: TokenPrice | None) -> dict[str, object]:
     results = runs.results
-    scores = [result.aggregate_score for result in results]
+    outcomes = [
+        RunOutcome(result.passed, result.aggregate_score, run_check_scores(result))
+        for result in results
+    ]
+    return (
+        _entry_identity(runs)
+        | fold_outcomes(outcomes)
+        | {
+            "duration_seconds_mean": _round(_mean([r.duration_seconds for r in results])),
+            "tokens_mean": _round_or_none(_mean_or_none(_run_tokens(results))),
+            "cost_usd_mean": _round_or_none(_mean_or_none(_run_costs(results, price))),
+        }
+    )
+
+
+def _entry_identity(runs: SampleRuns) -> dict[str, object]:
+    """The entry's prompt, graded source and digests."""
     inputs = {} if runs.inputs_digest is None else {INPUTS_DIGEST_KEY: runs.inputs_digest}
     return inputs | {
         "prompt_id": runs.prompt_id,
         "graded": runs.graded,
         "prompt_digest": runs.prompt_digest,
         "sample_digest": runs.sample_digest,
-        "passes": sum(1 for result in results if result.passed),
-        "runs": len(results),
-        "mean_score": _round(_mean(scores)),
-        "stdev": _round(statistics.pstdev(scores)) if scores else 0.0,
-        "checks": _check_means(results),
-        "duration_seconds_mean": _round(_mean([r.duration_seconds for r in results])),
-        "tokens_mean": _round_or_none(_mean_or_none(_run_tokens(results))),
-        "cost_usd_mean": _round_or_none(_mean_or_none(_run_costs(results, price))),
     }
 
 
@@ -317,23 +394,39 @@ def _run_costs(results: Sequence[SampleResult], price: TokenPrice | None) -> lis
     return [price.cost_usd(r.usage) if r.usage is not None else None for r in results]
 
 
-def _check_means(results: Sequence[SampleResult]) -> dict[str, float]:
+def _check_means(runs: Sequence[Mapping[str, float]]) -> dict[str, float]:
     """The mean score of each check over the runs it ran in, by check id."""
     scores: dict[str, list[float]] = {}
-    for result in results:
-        for check_id, score in _run_check_scores(result).items():
+    for checks in runs:
+        for check_id, score in checks.items():
             scores.setdefault(check_id, []).append(score)
     return {check_id: _round(_mean(values)) for check_id, values in sorted(scores.items())}
 
 
-def _run_check_scores(result: SampleResult) -> dict[str, float]:
+def run_check_scores(result: SampleResult) -> dict[str, float]:
     """One run's score per check: its layers and their leaf checks, skipped ones left out.
 
     A check without a score counts as its verdict (``1.0`` passed, ``0.0`` failed).
     A composed check between a layer and its leaves repeats the layer, so it is skipped.
+
+    Example::
+
+        >>> run_check_scores(result)  # doctest: +SKIP
+        {'file-exists': 1.0, 'tests': 0.5}
+    """
+    return report_check_scores(result.report.checks)
+
+
+def report_check_scores(layers: Iterable[CheckResult]) -> dict[str, float]:
+    """:func:`run_check_scores` over a report's layer results, for a report with no run.
+
+    Example::
+
+        >>> report_check_scores(report.checks)  # doctest: +SKIP
+        {'gate': 1.0, 'file-exists': 1.0}
     """
     scores: dict[str, float] = {}
-    for layer in result.report.checks:
+    for layer in layers:
         for check in (layer, *_leaves(layer)):
             if check.status == "run" and check.check_id not in scores:
                 scores[check.check_id] = (

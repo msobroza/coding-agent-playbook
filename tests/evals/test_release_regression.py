@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 
+from coding_agent_playbook.evals.release_carry import CarryPlan, carried_entry, merge_carried
 from coding_agent_playbook.evals.release_metrics_schema import validate_release_metrics
 from coding_agent_playbook.evals.release_regression import (
     RegressionCheck,
@@ -177,9 +178,9 @@ def test_the_table_names_each_sample_and_the_verdict() -> None:
     table = format_regression_table(check)
     assert table.splitlines()[0] == f"release {_NEW} vs {_OLD} on target 'claude-opus'"
     assert "REGRESSION: mean score drops 0.200" in table
-    assert (
-        table.splitlines()[-1]
-        == "1 regression (0 accepted), 0 improvements, 0 not comparable, 0 carried: BLOCKED"
+    assert table.splitlines()[-1] == (
+        "1 regression (0 accepted), 0 improvements, 0 not comparable, 0 carried, "
+        "0 rejudged: BLOCKED"
     )
 
 
@@ -235,7 +236,7 @@ def test_a_carried_entry_is_carried_with_the_previous_mean_and_no_delta() -> Non
 
 
 def test_a_carried_entry_never_blocks_even_when_its_scores_would_regress() -> None:
-    # Checked against another baseline than the one it was carried from.
+    # Its inputs digest equals the baseline entry's (both absent here), so it is not compared.
     old = {"s": sample_entry(0.9, cost=0.1)}
     check = _check(old, {"s": _carried(0.5, passes=0, cost=0.5)})
     verdict = check.samples[0]
@@ -248,9 +249,68 @@ def test_a_carried_entry_never_blocks_even_when_its_scores_would_regress() -> No
     assert not check.blocked
 
 
-def test_a_carried_entry_the_baseline_lacks_keeps_its_own_mean_as_the_previous() -> None:
-    verdict = _check({}, {"s": _carried(0.8)}).samples[0]
-    assert (verdict.status, verdict.previous_mean, verdict.delta) == ("carried", 0.8, 0.0)
+# Spec D2: a carried entry from an older release is compared unless its inputs
+# digest equals the previous release's entry.
+_OLDER = "9.9.2"
+
+
+def _carried_from_older(mean: float, **extra: Any) -> dict[str, Any]:
+    """An entry carried through the result index from a release before the baseline."""
+    measured_in = {"release": _OLDER, "commit": None, "target": "claude-opus"}
+    return sample_entry(mean, **extra) | {"measured_in": measured_in}
+
+
+def test_a_carried_entry_with_another_inputs_digest_is_compared() -> None:
+    old = {"s": sample_entry(0.9, inputs="inputs-b")}
+    check = _check(old, {"s": _carried_from_older(0.6, inputs="inputs-a")})
+    verdict = check.samples[0]
+    assert (verdict.status, verdict.previous_mean, verdict.delta) == ("regression", 0.9, -0.3)
+    assert verdict.blocks
+    assert any(f"measured in {_OLDER}" in reason for reason in verdict.reasons)
+    assert check.blocked
+
+
+def test_a_compared_carried_improvement_and_ok_are_noted_where_measured() -> None:
+    old = {"up": sample_entry(0.5, inputs="b"), "same": sample_entry(0.9, inputs="b")}
+    new = {"up": _carried_from_older(0.9, inputs="a"), "same": _carried_from_older(0.9, inputs="a")}
+    check = _check(old, new)
+    assert (_status(check, "up"), _status(check, "same")) == ("improvement", "ok")
+    assert all(v.reasons[-1] == f"measured in {_OLDER}" for v in check.samples)
+
+
+def test_a_carried_entry_with_the_same_digest_stays_carried() -> None:
+    old = {"s": sample_entry(0.9, inputs="inputs-a")}
+    check = _check(old, {"s": _carried_from_older(0.6, inputs="inputs-a")})
+    verdict = check.samples[0]
+    assert (verdict.status, verdict.previous_mean, verdict.delta) == ("carried", 0.9, 0.0)
+    assert verdict.reasons == ()
+    assert not check.blocked
+
+
+def test_a_carried_entry_without_a_previous_entry_is_new() -> None:
+    verdict = _check({}, {"s": _carried_from_older(0.8, inputs="inputs-a")}).samples[0]
+    assert (verdict.status, verdict.previous_mean, verdict.delta) == ("new", None, None)
+
+
+def test_a_compared_carried_regression_can_be_accepted() -> None:
+    old = {"s": sample_entry(0.9, inputs="inputs-b")}
+    new_file = metrics_file(_NEW, {"s": _carried_from_older(0.6, inputs="inputs-a")})
+    check = check_regressions(new_file, metrics_file(_OLD, old), accepted={"s": "revert"})
+    assert (check.samples[0].accepted, check.blocked) == ("revert", False)
+    annotated: Any = annotate_release_metrics(new_file, check)
+    validate_release_metrics(annotated)
+    assert annotated["samples"]["s"]["vs_previous"]["accepted"] == "revert"
+    assert annotated["summary"]["regressions"] == 1
+
+
+def test_the_summary_counts_a_compared_carried_entry_as_carried() -> None:
+    # The summary counts how each entry was measured (as the record run wrote it),
+    # not its verdict: a compared carried entry was still not rerun.
+    old = {"s": sample_entry(0.9, inputs="inputs-b")}
+    new_file = metrics_file(_NEW, {"s": _carried_from_older(0.6, inputs="inputs-a")})
+    check = check_regressions(new_file, metrics_file(_OLD, old), accepted={"s": "revert"})
+    summary: Any = annotate_release_metrics(new_file, check)["summary"]
+    assert (summary["rerun"], summary["carried"]) == (0, 1)
 
 
 def test_accepting_a_carried_sample_is_refused_as_did_not_regress() -> None:
@@ -286,6 +346,176 @@ def test_the_table_and_the_json_view_count_the_carried_samples() -> None:
     table = format_regression_table(check)
     assert "s       0.900     0.900  +0.000  carried" in table
     assert table.splitlines()[-1] == (
-        "0 regressions (0 accepted), 0 improvements, 0 not comparable, 1 carried: ok"
+        "0 regressions (0 accepted), 0 improvements, 0 not comparable, 1 carried, 0 rejudged: ok"
     )
     assert regression_check_to_dict(check)["carried"] == 1
+
+
+# --------------------------------------------------------------------------- #
+# Re-judged entries and a judge change (spec D11)
+# --------------------------------------------------------------------------- #
+
+_JUDGE_CHANGE = {
+    "from": [{"judge_model": "old-judge"}],
+    "to": {"judge_model": "new-judge"},
+    "runs": 9,
+    "pass_agreement": 0.9,
+    "mean_abs_score_diff": 0.04,
+    "tasks": {},
+}
+
+
+def _rejudged(mean: float, **extra: Any) -> dict[str, Any]:
+    """An entry whose stored answers the new judge re-graded (spec D9)."""
+    rejudged_from = {"release": _OLD, "commit": None, "judge": {"judge_model": "old-judge"}}
+    measured_in = {"release": _OLD, "commit": None}
+    return sample_entry(mean, **extra) | {
+        "rejudged_from": rejudged_from,
+        "measured_in": measured_in,
+    }
+
+
+def _with_judge_change(samples: dict[str, Any]) -> dict[str, Any]:
+    return metrics_file(_NEW, samples) | {"judge_change": _JUDGE_CHANGE}
+
+
+def test_a_rejudged_entry_never_blocks_and_shows_the_judge_delta() -> None:
+    check = _check({"s": sample_entry(0.9)}, {"s": _rejudged(0.5, passes=0)})
+    verdict = check.samples[0]
+    assert (verdict.status, verdict.previous_mean, verdict.delta) == ("rejudged", 0.9, -0.4)
+    assert verdict.reasons == (f"rejudged from {_OLD}",)
+    assert not verdict.blocks
+    assert not check.blocked
+
+
+def test_a_rejudged_entry_with_the_same_inputs_digest_is_still_rejudged() -> None:
+    # rejudged_from is read before measured_in: never mistaken for a carried entry.
+    check = _check({"s": sample_entry(0.9, inputs="i")}, {"s": _rejudged(0.8, inputs="i")})
+    assert (_status(check, "s"), check.samples[0].delta) == ("rejudged", -0.1)
+
+
+def test_a_rejudged_entry_without_a_previous_entry_has_no_delta() -> None:
+    verdict = _check({}, {"s": _rejudged(0.8)}).samples[0]
+    assert (verdict.status, verdict.previous_mean, verdict.delta) == ("rejudged", None, None)
+
+
+def test_accept_refuses_a_rejudged_sample() -> None:
+    with pytest.raises(RegressionCheckError, match=r"'s'.*did not regress"):
+        _check({"s": sample_entry(0.9)}, {"s": _rejudged(0.5, passes=0)}, s="why")
+
+
+def test_compared_samples_carry_the_judge_change_note() -> None:
+    old = {sid: sample_entry(0.9) for sid in ("down", "same", "edited", "rj", "c")}
+    old["up"] = sample_entry(0.5, passes=0)
+    new = _with_judge_change(
+        {
+            "down": sample_entry(0.7),
+            "up": sample_entry(0.9),
+            "same": sample_entry(0.9),
+            "edited": sample_entry(0.9, digest="sample-digest-2"),
+            "rj": _rejudged(0.9),
+            "c": _carried(0.9),
+            "fresh": sample_entry(0.9),
+        }
+    )
+    check = check_regressions(new, metrics_file(_OLD, old))
+    note = f"judge changed since {_OLD}: pass agreement 90%"
+    noted = {v.sample_id for v in check.samples if note in v.reasons}
+    assert noted == {"down", "up", "same", "edited"}
+    down = next(v for v in check.samples if v.sample_id == "down")
+    assert down.reasons == ("mean score drops 0.200", note)
+
+
+def test_without_a_judge_change_no_note_is_added() -> None:
+    check = _check({"s": sample_entry(0.9)}, {"s": sample_entry(0.9)})
+    assert check.samples[0].reasons == ()
+
+
+def test_the_summary_counts_rejudged_entries_apart_from_carried() -> None:
+    old = {sid: sample_entry(0.9) for sid in ("r", "c", "j")}
+    new_file = metrics_file(_NEW, {"r": sample_entry(0.9), "c": _carried(0.9), "j": _rejudged(0.6)})
+    check = check_regressions(new_file, metrics_file(_OLD, old))
+
+    annotated: Any = annotate_release_metrics(new_file, check)
+
+    validate_release_metrics(annotated)
+    summary = annotated["summary"]
+    assert (summary["rerun"], summary["carried"], summary["rejudged"]) == (1, 1, 1)
+    assert annotated["samples"]["j"]["vs_previous"]["status"] == "rejudged"
+    assert annotated["samples"]["j"]["vs_previous"]["delta"] == -0.3
+
+
+def test_the_tally_counts_rejudged() -> None:
+    check = _check({"s": sample_entry(0.9)}, {"s": _rejudged(0.8)})
+    table = format_regression_table(check)
+    assert "rejudged: rejudged from 9.9.8" in table
+    assert table.splitlines()[-1] == (
+        "0 regressions (0 accepted), 0 improvements, 0 not comparable, 0 carried, 1 rejudged: ok"
+    )
+    assert regression_check_to_dict(check)["rejudged"] == 1
+
+
+# Review fix round 1: an entry carried after a re-judge is a carried entry, and a
+# fresh re-judge on other inputs than the previous entry's is compared (D2, D11).
+
+
+def _rejudged_in(release: str, mean: float, inputs: str) -> dict[str, Any]:
+    """An entry re-judged in ``release``'s file from the answers measured in 9.9.1."""
+    rejudged_from = {"release": "9.9.1", "commit": None, "judge": {"judge_model": "old-judge"}}
+    measured_in = {"release": "9.9.1", "commit": None}
+    entry = sample_entry(mean, inputs=inputs)
+    return entry | {"rejudged_from": rejudged_from, "measured_in": measured_in}
+
+
+def test_an_entry_carried_after_a_rejudge_is_carried() -> None:
+    baseline_entry = _rejudged_in("9.9.2", 0.9, "i")
+    baseline = metrics_file("9.9.2", {"s": baseline_entry})
+    carried = carried_entry(baseline_entry, release="9.9.2", commit="c2")
+    plan = CarryPlan(None, {}, {"s": carried})
+    fresh = metrics_file("9.9.3", {})
+    fresh["summary"] |= {"tokens": None, "cost_usd": None}
+    record = merge_carried(fresh, plan)
+
+    check = check_regressions(record, baseline)
+
+    verdict = check.samples[0]
+    assert (verdict.status, verdict.delta, verdict.blocks) == ("carried", 0.0, False)
+    assert format_regression_table(check).splitlines()[-1].endswith("1 carried, 0 rejudged: ok")
+    summary = annotate_release_metrics(record, check)["summary"]
+    assert isinstance(summary, dict)
+    counts = ("rerun", "carried", "rejudged")
+    assert [summary[k] for k in counts] == [record["summary"][k] for k in counts] == [0, 1, 0]
+
+
+def test_a_reverted_entry_carried_after_a_rejudge_regresses_and_blocks() -> None:
+    rejudged = _rejudged_in("9.9.2", 0.45, "text-a")
+    baseline = metrics_file("9.9.3", {"s": sample_entry(0.9, inputs="text-b")})
+    reverted = carried_entry(rejudged, release="9.9.2", commit="c2")
+    new = metrics_file("9.9.4", {"s": reverted})
+
+    check = check_regressions(new, baseline)
+
+    verdict = check.samples[0]
+    assert (verdict.status, verdict.delta) == ("regression", -0.45)
+    assert verdict.blocks
+    assert verdict.reasons[-1] == "measured in 9.9.1"
+
+
+def test_a_rejudge_on_other_inputs_than_the_previous_entry_is_compared() -> None:
+    # Text A @9.9.1 (judge J1), text B @9.9.2 (J1), revert to A @9.9.3 (J2): the
+    # re-judge reads 9.9.1's answers, so its delta mixes text and judge change.
+    baseline = metrics_file("9.9.2", {"s": sample_entry(0.9, inputs="text-b")})
+    new = metrics_file("9.9.3", {"s": _rejudged_in("9.9.3", 0.5, "text-a")})
+    new["judge_change"] = _JUDGE_CHANGE
+
+    check = check_regressions(new, baseline)
+
+    verdict = check.samples[0]
+    assert (verdict.status, verdict.delta) == ("regression", -0.4)
+    assert verdict.blocks
+    assert verdict.reasons[-2:] == (
+        "rejudged from 9.9.1",
+        "judge changed since 9.9.2: pass agreement 90%",
+    )
+    summary: Any = annotate_release_metrics(new, check)["summary"]
+    assert (summary["rerun"], summary["carried"], summary["rejudged"]) == (0, 0, 1)

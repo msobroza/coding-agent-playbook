@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import sys
 import tempfile
 from typing import TYPE_CHECKING, Any
@@ -158,8 +159,14 @@ def test_every_release_target_is_recorded_by_the_checkouts_engine(
         _OPUS,
         "--record",
         str(out),
+        "--answers",
+        str(checkout / "catalog" / "releases" / _NEW / "answers" / f"{_OPUS}.jsonl.gz"),
         "--judge",
         "llm",
+        # Relative to the subprocess's cwd (the checkout), so reasons that name a
+        # skipped file read catalog/releases/<v>/metrics/<t>.json, not a temp path.
+        "--carry-from",
+        "catalog/releases",
         # Each finished sample is saved outside the checkout, per base and target.
         "--checkpoint",
         str(_temp_in_tmp_path / "playbook-release-checkpoints" / BASE / f"{_OPUS}.partial.jsonl"),
@@ -205,7 +212,7 @@ def test_without_previous_files_nothing_is_compared(tmp_path: Path) -> None:
     assert _stored(checkout, _OPUS)["previous"] is None
     (body,) = host.bodies
     assert body.startswith(f"# Release {_NEW}\n")
-    assert f"- `{_OPUS}`: 2 samples (full run), pass rate 1.0, mean score 0.9; no" in body
+    assert f"- `{_OPUS}`: 2 samples (changed-only: 2 rerun, 0 carried), pass rate 1.0, mean" in body
 
 
 def test_the_comparison_is_stored_and_summarised_in_the_pull_request(tmp_path: Path) -> None:
@@ -239,7 +246,21 @@ def test_the_pull_request_says_how_many_samples_were_rerun_and_carried(tmp_path:
     assert (stored["summary"]["rerun"], stored["summary"]["carried"]) == (1, 1)
     (body,) = host.bodies
     assert f"- `{_OPUS}`: 2 samples (changed-only: 1 rerun, 1 carried), pass rate" in body
-    assert f"- `{_CODER}`: 2 samples (full run), pass rate" in body
+    assert f"- `{_CODER}`: 2 samples (changed-only: 2 rerun, 0 carried), pass rate" in body
+
+
+def test_the_pull_request_body_holds_the_change_report(tmp_path: Path) -> None:
+    # Spec D3/D4: under the mode lines, the body is the release report itself.
+    checkout = _checkout(tmp_path, previous={_OPUS: _previous(_OPUS, mean=0.7)})
+    host = _host(claude_opus=_recorded(_OPUS, 0.9), coder=_recorded(_CODER, 0.9))
+
+    assert _run(checkout, host) == 0
+
+    (body,) = host.bodies
+    section = body[body.index("## Release metrics") :]
+    assert "| task | previous pass rate | pass rate |" in section
+    assert section.index(f"- `{_OPUS}`: 2 samples") < section.index(f"# Release metrics: {_NEW}")
+    assert f"## {_CODER}" in section
 
 
 def _carry_from(host: FakeReleaseHost, target: str) -> str | None:
@@ -248,15 +269,41 @@ def _carry_from(host: FakeReleaseHost, target: str) -> str | None:
     return command[command.index("--carry-from") + 1] if "--carry-from" in command else None
 
 
-def test_a_target_with_a_previous_file_records_changed_only_from_it(tmp_path: Path) -> None:
-    # #329 ticket 07: changed-only is the default; a target without a previous file runs full.
+def test_every_target_records_changed_only_from_the_releases_directory(tmp_path: Path) -> None:
+    # Spec D3: the record reuses results from every committed release, so a target
+    # without a previous file is changed-only too.
     checkout = _checkout(tmp_path, previous={_OPUS: _previous(_OPUS)})
     host = _host(claude_opus=_recorded(_OPUS, 0.9), coder=_recorded(_CODER, 0.9))
 
     assert _run(checkout, host) == 0
 
-    assert _carry_from(host, _OPUS) == str(_metrics_dir(checkout, _OLD) / f"{_OPUS}.json")
-    assert _carry_from(host, _CODER) is None
+    releases = "catalog/releases"
+    assert (_carry_from(host, _OPUS), _carry_from(host, _CODER)) == (releases, releases)
+
+
+def test_the_mode_line_counts_carried_entries_compared_with_the_previous_release(
+    tmp_path: Path,
+) -> None:
+    # Review fix: an entry carried along from the previous file keeps an older
+    # `measured_in` but is `carried`; only one whose inputs differ is compared.
+    recorded = _recorded(_OPUS, 0.9)
+    along = {"release": "9.9.6", "commit": "0ldest"}
+    recorded["samples"]["review/b"] = sample_entry(0.9, inputs="i1") | {"measured_in": along}
+    older = {"release": "9.9.7", "commit": "0lder", "target": _CODER}
+    recorded["samples"]["review/c"] = sample_entry(0.9, inputs="i0") | {"measured_in": older}
+    recorded["summary"] |= {"samples": 3, "rerun": 1, "carried": 2}
+    previous = _previous(_OPUS)
+    previous["samples"] |= {
+        "review/b": sample_entry(0.9, inputs="i1"),
+        "review/c": sample_entry(0.9, inputs="i1"),
+    }
+    checkout = _checkout(tmp_path, previous={_OPUS: previous})
+    host = _host(claude_opus=recorded, coder=_recorded(_CODER, 0.9))
+
+    assert _run(checkout, host) == 0
+
+    (body,) = host.bodies
+    assert f"changed-only: 1 rerun, 2 carried (1 compared with {_OLD})" in body
 
 
 def test_full_records_every_target_without_a_baseline(tmp_path: Path) -> None:
@@ -313,7 +360,7 @@ def test_full_rerun_reason_is_read_from_a_full_rerun_headline_only() -> None:
     assert full_rerun_reason([]) is None
 
 
-def test_the_first_release_records_every_target_in_full(tmp_path: Path) -> None:
+def test_the_first_release_records_from_the_releases_directory(tmp_path: Path) -> None:
     checkout = _checkout(tmp_path)
     host = FakeReleaseHost(
         recordings={_OPUS: _recorded(_OPUS, 0.9), _CODER: _recorded(_CODER, 0.9)}
@@ -322,7 +369,8 @@ def test_the_first_release_records_every_target_in_full(tmp_path: Path) -> None:
     argv = ["prepare-checkout", "--base", BASE, "--version", _NEW, "--eval"]
     assert main(argv, cwd=checkout, runner=host, snapshot=lambda b: _manifest("0", b, "o2")) == 0
 
-    assert (_carry_from(host, _OPUS), _carry_from(host, _CODER)) == (None, None)
+    releases = "catalog/releases"
+    assert (_carry_from(host, _OPUS), _carry_from(host, _CODER)) == (releases, releases)
 
 
 # --------------------------------------------------------------------------- #
@@ -441,6 +489,39 @@ def test_reuse_metrics_skips_recording_a_target_kept_on_the_same_base(tmp_path: 
     )
 
 
+def test_a_refused_then_reused_target_keeps_its_answers_in_the_release(
+    tmp_path: Path, _temp_in_tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Spec D8: the refused checkout is discarded, so the paid answers travel with the metrics.
+    checkout = _checkout(tmp_path, previous={_OPUS: _previous(_OPUS)})
+    host = _host(claude_opus=_recorded(_OPUS, 0.5), coder=_recorded(_CODER, 0.9))
+    assert _run(checkout, host) == 1
+    kept = _kept(_temp_in_tmp_path)[0].parent
+    assert (kept / f"{_OPUS}.jsonl.gz").read_bytes() == f"answers of {_OPUS}".encode()
+
+    answers = checkout / "catalog" / "releases" / _NEW / "answers"
+    shutil.rmtree(answers)  # as the discarded release checkout would be
+    flags = ("--reuse-metrics", str(kept), "--accept", "review/a=stricter rubric")
+    assert _run(checkout, _host(), *flags) == 0
+    assert (answers / f"{_OPUS}.jsonl.gz").read_bytes() == f"answers of {_OPUS}".encode()
+    assert "no answers kept" not in capsys.readouterr().out
+
+
+def test_a_kept_dir_without_answers_says_the_release_stores_none(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    checkout = _checkout(tmp_path)
+    kept = _kept_dir(tmp_path, claude_opus=_recorded(_OPUS, 0.9))
+
+    assert _run(checkout, _host(coder=_recorded(_CODER, 0.9)), "--reuse-metrics", str(kept)) == 0
+
+    assert (
+        f"release: {_OPUS}: no answers kept; this release stores none for that target"
+        in capsys.readouterr().out
+    )
+    assert not (checkout / "catalog" / "releases" / _NEW / "answers" / f"{_OPUS}.jsonl.gz").exists()
+
+
 def test_a_reused_file_with_carried_entries_says_changed_only(tmp_path: Path) -> None:
     # The kept file was recorded changed-only by the refused run; its mode comes from the file.
     reused = _recorded(_OPUS, 0.9)
@@ -453,7 +534,7 @@ def test_a_reused_file_with_carried_entries_says_changed_only(tmp_path: Path) ->
     assert host.recorded_targets() == [_CODER]
     (body,) = host.bodies
     assert f"- `{_OPUS}`: 2 samples (changed-only: 1 rerun, 1 carried), pass rate" in body
-    assert f"- `{_CODER}`: 2 samples (full run), pass rate" in body
+    assert f"- `{_CODER}`: 2 samples (changed-only: 2 rerun, 0 carried), pass rate" in body
 
 
 def test_a_reused_full_run_file_says_full_run_though_this_run_is_changed_only(
@@ -638,6 +719,18 @@ def test_prepare_passes_jobs_on_to_the_checkout(tmp_path: Path) -> None:
 
     inner = next(c for c in host.commands if "prepare-checkout" in c)
     assert inner[-3:] == ["--eval", "--jobs", "4"]
+
+
+def test_prepare_passes_answers_into_the_release_dir(tmp_path: Path) -> None:
+    checkout = _checkout(tmp_path)
+    host = _host(claude_opus=_recorded(_OPUS, 0.9), coder=_recorded(_CODER, 0.9))
+
+    assert _run(checkout, host) == 0
+
+    records = [c for c in host.commands if "--record" in c]
+    answers = [c[c.index("--answers") + 1] for c in records]
+    root = checkout / "catalog" / "releases" / _NEW / "answers"
+    assert answers == [str(root / f"{name}.jsonl.gz") for name in (_OPUS, _CODER)]
 
 
 def test_jobs_reach_every_recording(tmp_path: Path, _temp_in_tmp_path: Path) -> None:

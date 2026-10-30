@@ -102,11 +102,11 @@ from release_edition import (
 from release_eval import (
     EvalRequest,
     ReleaseTargets,
-    metrics_body,
     metrics_kept_on_refusal,
     record_release_metrics,
     release_targets,
 )
+from release_eval_body import metrics_body
 from release_tag import superseded, tag_release
 from release_tools import COMMITIZEN_REQUIREMENT as COMMITIZEN_REQUIREMENT
 from release_tools import (
@@ -452,7 +452,8 @@ def _bump_and_open(tools: Tools, plan: Plan, metrics: Sequence[TargetMetrics] | 
     with tempfile.TemporaryDirectory(prefix="playbook-release-body-") as scratch:
         body = Path(scratch) / "body.md"
         notes_text = notes.read_text(encoding="utf-8")
-        body.write_text(f"{notes_text}\n{metrics_body(metrics)}", encoding="utf-8")
+        section = metrics_body(metrics, checkout=tools.cwd, version=plan.version)
+        body.write_text(f"{notes_text}\n{section}", encoding="utf-8")
         return commit_push_open(tools, plan.branch, plan.title, paths, body)
 
 
@@ -524,6 +525,12 @@ def _parser() -> argparse.ArgumentParser:
         "--tested-commit",
         metavar="SHA",
         help="the CI tag job's commit, whose tests passed: tag only it, skip the CI lookup",
+    )
+    tag.add_argument(
+        "--github-output",
+        metavar="PATH",
+        type=Path,
+        help="append version=<v> to this file ($GITHUB_OUTPUT) when this run tagged",
     )
     for name, what in ((FREEZE, "freeze edition TAG"), (UNFREEZE, "unfreeze edition TAG")):
         commands.add_parser(name, help=f"open a PR to {what}").add_argument("tag", metavar="TAG")
@@ -626,6 +633,16 @@ def main(
         return FAILED_EXIT
 
 
+def _tag(tools: Tools, *, tested_commit: str | None, github_output: Path | None) -> int:
+    """Run ``tag``; a version this run tagged goes to ``$GITHUB_OUTPUT`` for the publish job."""
+    result = tag_release(tools, tested_commit=tested_commit)
+    print(f"release: {result.message}")
+    if github_output is not None and result.tagged is not None:
+        with github_output.open("a", encoding="utf-8") as output:
+            output.write(f"version={result.tagged}\n")
+    return 0
+
+
 def _dispatch(
     args: argparse.Namespace,
     tools: Tools,
@@ -639,8 +656,7 @@ def _dispatch(
     if command in (FREEZE, UNFREEZE):
         return edition_command(tools.cwd, command, args.tag, runner=tools.runner)
     if command == "tag":
-        print(f"release: {tag_release(tools, tested_commit=args.tested_commit)}")
-        return 0
+        return _tag(tools, tested_commit=args.tested_commit, github_output=args.github_output)
     if command == "check-editions":
         return _report_editions(check_editions(tools))
     if command == "prepare-checkout":

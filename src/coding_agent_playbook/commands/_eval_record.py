@@ -20,28 +20,31 @@ records its setup digest and parts (#329 ticket 04, ``evals.setup_digest``),
 with the judge CLI's version probed once like the harness's.
 ``--carry-from PREVIOUS`` (with ``--all`` only, #329 ticket 05,
 ``evals.release_carry``) loads that baseline before any run, refusing one of
-another target, prints the plan (each rerun with its reason, the carried count)
-before the first paid run, runs only new samples, samples whose inputs digest
+another target, or indexes the releases directory PREVIOUS
+(``commands._eval_record_carry``), prints the plan (each rerun with its reason,
+the carried count) before the first paid run, runs only new samples, samples whose inputs digest
 changed and every edition control (every sample when the setup differs or the
-baseline lacks the digests), and carries the other entries. The
+baseline lacks the digests), and carries the other entries. A sample that only a
+file of another judge holds is re-graded from its stored answers instead of
+rerun (spec D9, ``commands._eval_record_rejudge``), and the new judge's agreement
+with the old one is recorded (spec D10, ``commands._eval_record_agreement``). The
 file is written whatever the scores are: exit ``0`` once it is written, ``2`` on
 a refusal or an unscorable sample. Each finished sample is saved to a
 checkpoint as it ends (``--checkpoint``, ``evals.record_checkpoint``), which
 ``--resume`` reuses; ``--jobs N`` runs N samples at a time
-(``commands._eval_record_runs``).
+(``commands._eval_record_runs``). Each fresh run's answers are written beside the
+file or to ``--answers`` (spec D8, ``commands._eval_record_answers``).
 """
 
 from __future__ import annotations
 
 import dataclasses
-import json
 import os
-import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING
 
 import coding_agent_playbook
 from coding_agent_playbook.commands._eval_options import (
@@ -50,31 +53,43 @@ from coding_agent_playbook.commands._eval_options import (
     judge_sample_count,
     select_target,
 )
+from coding_agent_playbook.commands._eval_record_agreement import with_judge_change
+from coding_agent_playbook.commands._eval_record_answers import (
+    answers_out_path,
+    capturing,
+    stored_run,
+    write_record_answers,
+)
+from coding_agent_playbook.commands._eval_record_carry import (
+    load_carry_baseline,
+    print_carry_plan,
+)
 from coding_agent_playbook.commands._eval_record_flags import (
     carry_from_path,
     job_count,
     record_path,
     refuse_format,
     run_count,
+    selected_samples,
 )
-from coding_agent_playbook.commands._eval_record_runs import RecordUnit, record_units
+
+# Bound as ``_head_commit``: tests stub the commit stamp on this module.
+from coding_agent_playbook.commands._eval_record_output import head_commit as _head_commit
+from coding_agent_playbook.commands._eval_record_output import write_metrics
+from coding_agent_playbook.commands._eval_record_rejudge import rejudge_units, rejudger
+from coding_agent_playbook.commands._eval_record_runs import (
+    RecordUnit,
+    open_checkpoint,
+    record_units,
+)
 from coding_agent_playbook.evals import registry
+from coding_agent_playbook.evals.answers_store import judge_parts
 from coding_agent_playbook.evals.graded_source import graded_source
 from coding_agent_playbook.evals.judge import JudgeError
 from coding_agent_playbook.evals.model_pins import RecordRefusedError, check_recordable
 from coding_agent_playbook.evals.prompting import PromptResolutionError, render_prompt
-from coding_agent_playbook.evals.record_checkpoint import (
-    RecordCheckpoint,
-    default_checkpoint_path,
-)
 from coding_agent_playbook.evals.record_isolation import check_record_credentials
-from coding_agent_playbook.evals.release_carry import (
-    CarryPlan,
-    carry_plan_lines,
-    load_baseline,
-    merge_carried,
-    plan_carry,
-)
+from coding_agent_playbook.evals.release_carry import CarryPlan, merge_carried
 from coding_agent_playbook.evals.release_metrics import (
     GRADED_HEAD,
     RecordedTarget,
@@ -84,27 +99,25 @@ from coding_agent_playbook.evals.release_metrics import (
     sample_record,
 )
 from coding_agent_playbook.evals.release_metrics_schema import validate_release_metrics
-from coding_agent_playbook.evals.run.git_env import without_repo_location
 from coding_agent_playbook.evals.run.harness_version import harness_cli_version
 from coding_agent_playbook.evals.sample_digest import inputs_digest, prompt_digest, sample_digest
 from coding_agent_playbook.evals.setup_digest import UNKNOWN_VERSION, SetupParts, scoring_digest
-from coding_agent_playbook.evals.task_registry import TaskRegistry, TaskRegistryError
 from coding_agent_playbook.release.edition import EditionError
-from coding_agent_playbook.validation.context import SyncContext
 
 if TYPE_CHECKING:
     import argparse
     from collections.abc import Callable, Mapping
 
+    from coding_agent_playbook.evals.answers_store import CapturingJudge
     from coding_agent_playbook.evals.endpoints import Endpoint
     from coding_agent_playbook.evals.judge import Judge
+    from coding_agent_playbook.evals.record_checkpoint import (
+        RecordCheckpoint,
+    )
     from coding_agent_playbook.evals.run.harness_runner import HarnessRunner, SampleResult
     from coding_agent_playbook.evals.sample import EvalSample
     from coding_agent_playbook.evals.targets import EvalSettings, EvalTarget
     from coding_agent_playbook.release.edition import Edition
-
-#: Wall-clock bound (seconds) of the ``git rev-parse HEAD`` that names the commit.
-_GIT_TIMEOUT: Final = 30.0
 
 
 def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings) -> int:
@@ -119,13 +132,13 @@ def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings
     refuse_format(args)
     carry_from = carry_from_path(args)
     target = select_target(args, settings)
-    baseline = load_baseline(carry_from, target.name) if carry_from is not None else None
+    baseline = load_carry_baseline(carry_from, target_name=target.name, out_path=out_path)
     runs = run_count(getattr(args, "runs", None), target.runs)
     jobs = job_count(getattr(args, "jobs", None))
     uses_judge = getattr(args, "judge", None) is not None
     check_recordable(target, judge_model=settings.judge.model, uses_judge=uses_judge)
     isolated = _check_credentials(target, settings, getattr(args, "judge", None))
-    samples = _selected_samples(args, repo_root)
+    samples = selected_samples(args, repo_root)
     plan = _build_plan(args, settings, target, runs)
     if plan is None:
         return 2
@@ -133,16 +146,18 @@ def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings
     controls = plan.control_editions(samples)
     judge_model = settings.judge.model if uses_judge else None
     recorded = plan.recorded_target(target, judge_model=judge_model, isolated=isolated)
-    carry = _plan_carry(baseline, recorded, inputs, controls)
-    checkpoint = _open_checkpoint(args, out_path, recorded)
-    work = _RecordWork(plan, recorded, jobs, checkpoint)
+    carry = print_carry_plan(baseline, recorded, inputs, controls, samples)
+    checkpoint = open_checkpoint(args, out_path, recorded)
+    work = _RecordWork(plan, recorded, jobs, checkpoint, answers_out_path(args, out_path))
     metrics = _record_metrics(work, samples, inputs, controls, carry, repo_root)
     validate_release_metrics(metrics)
-    _write(out_path, metrics)
+    write_metrics(out_path, metrics)
     checkpoint.remove()
     extra = f" (+{len(controls)} edition controls)" if controls else ""
     jobs_note = f" on {jobs} jobs" if jobs > 1 else ""
-    carried = "" if carry is None else f" ({len(carry.rerun)} rerun, {len(carry.carried)} carried)"
+    rejudged = f", {len(carry.rejudge)} rejudged" if carry is not None and carry.rejudge else ""
+    counts = "" if carry is None else f"{len(carry.rerun)} rerun, {len(carry.carried)} carried"
+    carried = f" ({counts}{rejudged})" if counts else ""
     print(
         f"recorded {len(samples)} samples{carried}{extra} x {runs} runs on target "
         f"{target.name!r}{jobs_note} to {out_path}"
@@ -150,44 +165,15 @@ def run_record(args: argparse.Namespace, repo_root: Path, settings: EvalSettings
     return 0
 
 
-def _plan_carry(
-    baseline: Mapping[str, Any] | None,
-    recorded: RecordedTarget,
-    inputs: Mapping[str, str],
-    controls: Mapping[str, _Control],
-) -> CarryPlan | None:
-    """The ``--carry-from`` plan, printed before the first paid run; ``None`` without a baseline."""
-    if baseline is None:
-        return None
-    assert recorded.setup is not None  # a record always computes its setup parts
-    carry = plan_carry(baseline, setup=recorded.setup.as_dict(), inputs=inputs)
-    for line in carry_plan_lines(carry, controls=sorted(controls)):
-        print(line)
-    return carry
-
-
 @dataclass(frozen=True)
 class _RecordWork:
-    """What runs each unit: the plan, the target block, ``--jobs`` and the checkpoint."""
+    """What runs each unit: the plan, the target block, ``--jobs``, the checkpoint, the answers."""
 
     plan: _RecordPlan
     recorded: RecordedTarget
     jobs: int
     checkpoint: RecordCheckpoint
-
-
-def _open_checkpoint(
-    args: argparse.Namespace, out_path: Path, recorded: RecordedTarget
-) -> RecordCheckpoint:
-    """The run's checkpoint; with ``--resume``, say how many samples it may reuse."""
-    flag = getattr(args, "checkpoint", None)
-    path = Path(flag) if flag is not None else default_checkpoint_path(out_path)
-    assert recorded.setup is not None  # a record always computes its setup parts
-    resume = getattr(args, "resume", False)
-    checkpoint = RecordCheckpoint.open(path, setup_digest=recorded.setup.digest, resume=resume)
-    if resume:
-        print(f"checkpoint: {checkpoint.resumable} finished sample(s) to reuse from {path}")
-    return checkpoint
+    answers: Path
 
 
 def _record_metrics(
@@ -209,26 +195,39 @@ def _record_metrics(
         for index, sample in enumerate(samples)
         if (control := controls.get(sample.id)) is not None
     ]
-    records = record_units(
-        units, jobs=work.jobs, run=_unit_runner(work, len(samples)), checkpoint=work.checkpoint
-    )
+    units += rejudge_units(samples, inputs, carry)
+    run = _unit_runner(work, len(samples), carry)
+    records = record_units(units, jobs=work.jobs, run=run, checkpoint=work.checkpoint)
+    fresh = [records[unit.key] for unit in units if unit.kind == "sample"]
+    rejudged = [records[unit.key] for unit in units if unit.kind == "rejudge"]
+    write_record_answers(work.answers, [*fresh, *rejudged])
     metrics = build_release_metrics_from_records(
         release=coding_agent_playbook.__version__,
         commit=_head_commit(repo_root),
         recorded=work.recorded,
-        samples=[records[unit.key] for unit in units if unit.kind == "sample"],
+        samples=fresh,
         controls=[records[unit.key] for unit in units if unit.kind == "control"],
     )
-    return metrics if carry is None else merge_carried(metrics, carry)
+    if carry is None:
+        return metrics
+    merged = merge_carried(metrics, carry, {record.sample_id: record.entry for record in rejudged})
+    return with_judge_change(merged, carry, rejudged, samples, judge_parts(work.recorded.setup))
 
 
-def _unit_runner(work: _RecordWork, total: int) -> Callable[[RecordUnit], SampleRecord]:
-    """Run one unit's ``runs`` and fold them into its record."""
+def _unit_runner(
+    work: _RecordWork, total: int, carry: CarryPlan | None
+) -> Callable[[RecordUnit], SampleRecord]:
+    """Run one unit's ``runs`` and fold them into its record; re-grade a ``rejudge`` unit."""
     price = work.recorded.target.price
+    parts = judge_parts(work.recorded.setup)
+    plan = work.plan
+    regrade = rejudger(plan.judge, judge_samples=plan.judge_samples, parts=parts, carry=carry)
 
     def run(unit: RecordUnit) -> SampleRecord:
+        if regrade is not None and unit.kind == "rejudge":
+            return regrade(unit)
         runs = work.plan.run(
-            unit.sample, unit.index, total, unit.inputs_digest, edition=unit.edition
+            unit.sample, unit.index, total, unit.inputs_digest, edition=unit.edition, parts=parts
         )
         return sample_record(runs, price)
 
@@ -402,17 +401,19 @@ class _RecordPlan:
         inputs: str,
         *,
         edition: Edition | None = None,
+        parts: Mapping[str, object] | None = None,
     ) -> SampleRuns:
         """``sample``'s runs and digests on the current text, or on ``edition`` as a control.
 
         ``inputs`` is the inputs digest of the render checked before the first run.
+        A run on the current text keeps its answers, naming the judge ``parts``.
 
         Each run is reported on stderr as it ends.
         """
         label = sample.id if edition is None else f"{sample.id} (control, edition {edition.tag})"
-        results = []
+        results, answers = [], []
         for run_index in range(self.runs):
-            result = self._run_once(sample, edition)
+            result, judge = self._run_once(sample, edition)
             verdict = "PASS" if result.passed else "FAIL"
             print(
                 f"[{index + 1}/{total}] {label} run {run_index + 1}/{self.runs}: "
@@ -420,6 +421,8 @@ class _RecordPlan:
                 file=sys.stderr,
             )
             results.append(result)
+            if edition is None:  # an edition control keeps no answers (spec D8)
+                answers.append(stored_run(sample, inputs, run_index, result, judge, parts or {}))
         return SampleRuns(
             sample_id=sample.id,
             prompt_id=sample.prompt_id,
@@ -428,15 +431,20 @@ class _RecordPlan:
             sample_digest=sample_digest(sample),
             results=results,
             inputs_digest=inputs,
+            answers=tuple(answers),
         )
 
-    def _run_once(self, sample: EvalSample, edition: Edition | None) -> SampleResult:
+    def _run_once(
+        self, sample: EvalSample, edition: Edition | None
+    ) -> tuple[SampleResult, CapturingJudge | None]:
+        """One run, graded by its own capturing judge (never ``self.judge``, whose ``cli`` is read)."""
+        judge = capturing(self.judge)
         try:
             with tempfile.TemporaryDirectory(prefix="playbook-record-") as tmp:
-                return self.runner.run_sample(
+                result = self.runner.run_sample(
                     sample,
                     Path(tmp) / "scratch",
-                    judge=self.judge,
+                    judge=judge,
                     judge_samples=self.judge_samples,
                     fail_fast=self.fail_fast,
                     edition=edition,
@@ -445,6 +453,7 @@ class _RecordPlan:
             raise RecordRefusedError(
                 f"sample {sample.id!r} could not be scored, so nothing was recorded: {exc}"
             ) from exc
+        return result, judge
 
 
 def _cli_versions(*clis: str | None) -> dict[str | None, str | None]:
@@ -472,51 +481,3 @@ def _setup_version(cli: str | None, version: str | None) -> str | None:
 def _fingerprint(endpoint: Endpoint | None) -> str | None:
     """The endpoint's URL fingerprint, or ``None`` without an endpoint."""
     return endpoint.fingerprint if endpoint is not None else None
-
-
-def _selected_samples(args: argparse.Namespace, repo_root: Path) -> list[EvalSample]:
-    """Every sample (``--all``) or those ``<task>`` or ``<task>/<name>`` selects, sorted by id."""
-    sample_id = getattr(args, "id", None)
-    every = getattr(args, "all_samples", False)
-    if every == (sample_id is not None):
-        raise RecordRefusedError(
-            "--record runs either --all samples or one sample or task (<task>/<name> or <task>), "
-            f"got --all={every} and id={sample_id!r}"
-        )
-    ctx = SyncContext.from_repo(repo_root)
-    try:
-        registry = TaskRegistry.from_catalog(ctx.artifact_source, ctx.prompts_resolved)
-        if every:
-            chosen = [sample for task in registry.tasks() for sample in task.samples]
-        else:
-            chosen = list(registry.select(str(sample_id)))
-    except TaskRegistryError as exc:
-        raise RecordRefusedError(str(exc)) from exc
-    return sorted(chosen, key=_id)
-
-
-def _id(sample: EvalSample) -> str:
-    return sample.id
-
-
-def _head_commit(repo_root: Path) -> str | None:
-    """The commit ``repo_root`` has checked out, or ``None`` outside a git checkout."""
-    try:
-        completed = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            cwd=repo_root,
-            env=without_repo_location(os.environ),
-            capture_output=True,
-            text=True,
-            timeout=_GIT_TIMEOUT,
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    commit = completed.stdout.strip()
-    return commit if completed.returncode == 0 and commit else None
-
-
-def _write(path: Path, metrics: dict[str, object]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(metrics, indent=2, sort_keys=True) + "\n", encoding="utf-8")

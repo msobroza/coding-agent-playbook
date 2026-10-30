@@ -15,13 +15,22 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, labeled]
+  # Backfills the GitHub Release of an already tagged version (ADR 0014): runs
+  # publish-release only; every other job skips a dispatch.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version to publish, without the v (e.g. 0.4.0)"
+        required: true
+        type: string
 
-# Read-only by default; only the tag-release job asks for more.
+# Read-only by default; only the tag-release and publish-release jobs ask for more.
 permissions:
   contents: read
 
 jobs:
   test:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -112,12 +121,16 @@ jobs:
   # never moved. The decisions live in coding_agent_playbook.release.tagging;
   # `scripts/release.py tag` is the manual fallback. contents: write is only
   # for the tag push; a tag pushed with GITHUB_TOKEN starts no other workflow.
+  # outputs.version is set only when this run created or pushed the tag, and
+  # starts publish-release.
   tag-release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
     concurrency:
       group: tag-release
       cancel-in-progress: false
@@ -135,11 +148,67 @@ jobs:
         run: python -m pip install -e .
 
       - name: Tag the release commit
+        id: tag
         env:
           TESTED_COMMIT: ${{ github.sha }}
           GIT_COMMITTER_NAME: github-actions[bot]
           GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
-        run: python scripts/release.py tag --tested-commit "$TESTED_COMMIT"
+        run: python scripts/release.py tag --tested-commit "$TESTED_COMMIT" --github-output "$GITHUB_OUTPUT"
+
+  # Publishes the release's metric bundle (ADR 0014) as the GitHub Release
+  # v<version>: after tag-release tagged a release, or on a workflow_dispatch
+  # that backfills one. always() because a dispatch skips tag-release, and a
+  # skipped need would skip this job too. The bundle code runs from this
+  # workflow's own commit (older tags predate release_report.py); the release
+  # data comes from a second checkout of the tag in tag-tree/. A release that
+  # already exists gets its assets replaced and its notes rewritten.
+  # contents: write is only for the release; the version reaches the shell
+  # only through env:.
+  publish-release:
+    needs: tag-release
+    if: always() && (needs.tag-release.outputs.version != '' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      V: ${{ needs.tag-release.outputs.version || inputs.version }}
+    steps:
+      # persist-credentials: false keeps the contents:write token out of
+      # .git/config while pip installs run; gh gets GH_TOKEN on its own step.
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Check out the release tag's tree
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/v${{ env.V }}
+          path: tag-tree
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the engine and matplotlib
+        run: python -m pip install -e . matplotlib
+
+      - name: Build the release metric bundle
+        run: python scripts/release_report.py --version "$V" --checkout tag-tree --out release-report
+
+      # The bundle is flat (report.md and metrics-<target>.json, no
+      # subdirectory), so release-report/* names every asset and only files.
+      - name: Create or update the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "v$V" >/dev/null 2>&1; then
+            gh release upload "v$V" release-report/* --clobber
+            gh release edit "v$V" --notes-file release-report/report.md
+          else
+            gh release create "v$V" --verify-tag --title "v$V" --notes-file release-report/report.md release-report/*
+          fi
 
   # Dogfoods the commit convention (specs/prK-lifecycle-hooks.md §K OQ-6): only the
   # `commit-convention` step of `playbook ci` runs here, on pull requests. It checks
@@ -187,6 +256,7 @@ jobs:
   # example code (pytest's testpaths is tests/). UV_PYTHON picks the matrix
   # Python, which uv downloads when the runner lacks it.
   core-examples:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     # Examples run in consumer repos from Python 3.10 on (prU D40, D48).
     strategy:
@@ -225,6 +295,7 @@ jobs:
   # drops would otherwise go unnoticed: the editable install in `test` never
   # reads the packaged copy.
   wheel-smoke:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -243,13 +314,15 @@ jobs:
       - name: The wheel's _catalog/ equals the tracked catalog/ tree
         run: |
           python -c '
-          import glob, subprocess, sys, zipfile
+          import fnmatch, glob, subprocess, sys, zipfile
           (wheel,) = glob.glob("dist/*.whl")
           prefix = "coding_agent_playbook/_catalog/"
           names = zipfile.ZipFile(wheel).namelist()
           shipped = {n[len(prefix):] for n in names if n.startswith(prefix) and not n.endswith("/")}
           listed = subprocess.run(["git", "ls-files", "-z", "catalog"], capture_output=True, text=True, check=True).stdout
           tracked = {path[len("catalog/"):] for path in listed.split("\0") if path}
+          # pyproject excludes answers files from the wheel (ADR 0014).
+          tracked = {path for path in tracked if not fnmatch.fnmatch(path, "releases/*/answers/*")}
           if shipped != tracked:
               sys.exit(f"wheel-only: {sorted(shipped - tracked)}; tracked-only: {sorted(tracked - shipped)}")
           print(f"{len(shipped)} catalog files match git ls-files catalog")

@@ -13,6 +13,8 @@ import pytest
 
 from coding_agent_playbook.evals.release_carry import (
     CarryFromError,
+    CarryPlan,
+    RejudgeSource,
     carried_entry,
     carry_plan_lines,
     load_baseline,
@@ -22,12 +24,14 @@ from coding_agent_playbook.evals.release_carry import (
 from coding_agent_playbook.evals.release_metrics import entries_summary
 from coding_agent_playbook.evals.release_metrics_schema import (
     ReleaseMetricsError,
+    rejudged_here,
     validate_release_metrics,
 )
 from coding_agent_playbook.evals.setup_digest import SetupParts
 from tests.evals.release_metrics_files import metrics_file, sample_entry
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from pathlib import Path
 
 _SETUP: dict[str, object] = SetupParts(
@@ -125,6 +129,11 @@ def test_a_carried_entry_drops_the_comparison_and_records_where_it_was_measured(
     assert "measured_in" not in entry  # the baseline entry itself is left as it was
 
 
+def test_a_carried_entry_records_the_source_target_when_given() -> None:
+    carried = carried_entry(sample_entry(0.5), release="9.9.1", commit="c1", target="alpha")
+    assert carried["measured_in"] == {"release": "9.9.1", "commit": "c1", "target": "alpha"}
+
+
 def test_an_entry_carried_again_keeps_its_original_measured_in() -> None:
     first = carried_entry(sample_entry(0.5, inputs="i"), release="9.9.1", commit="c1")
     second = carried_entry(first, release="9.9.2", commit="c2")
@@ -174,6 +183,16 @@ def test_merge_adds_the_carried_entries_and_rebuilds_the_summary_from_all_entrie
     assert merged["target"]["reported_model"] == "claude-opus-5-5"
 
 
+def test_validation_accepts_a_measured_in_target_and_rejects_a_mistyped_one() -> None:
+    measured = {"release": "9.9.1", "commit": None, "target": "alpha"}
+    validate_release_metrics(
+        metrics_file("9.9.2", {"a": sample_entry(0.5) | {"measured_in": measured}})
+    )
+    mistyped = sample_entry(0.5) | {"measured_in": measured | {"target": 3}}
+    with pytest.raises(ReleaseMetricsError, match=r"samples\.a\.measured_in\.target"):
+        validate_release_metrics(metrics_file("9.9.2", {"a": mistyped}))
+
+
 def test_validation_rejects_a_mistyped_measured_in_and_carry_counts() -> None:
     entry = sample_entry(0.5) | {"measured_in": {"release": 9, "commit": None}}
     data = metrics_file("9.9.2", {"a": entry})
@@ -200,6 +219,15 @@ def test_plan_lines_of_a_full_rerun_give_the_reason() -> None:
     lines = carry_plan_lines(plan, controls=[])
     assert "every sample reruns" in lines[0]
     assert "runs" in lines[0]
+
+
+def test_plan_lines_count_the_carried_entries_of_each_source_sorted_by_source() -> None:
+    carried: dict[str, Mapping[str, object]] = {"a": {}, "b": {}, "c": {}}
+    sources = {"a": "9.9.3 (opus)", "b": "9.9.2 (opus)", "c": "9.9.3 (opus)"}
+    plan = CarryPlan(None, {"d": "new sample"}, carried, sources=sources)
+    lines = carry_plan_lines(plan, controls=[])
+    assert lines[0] == "carry plan: 1 rerun, 3 carried"
+    assert lines[-2:] == ["  carried from 9.9.2 (opus): 1", "  carried from 9.9.3 (opus): 2"]
 
 
 def _write(path: Path, data: object) -> Path:
@@ -233,3 +261,104 @@ def test_load_baseline_refuses_an_invalid_file(tmp_path: Path) -> None:
     path = _write(tmp_path / "base.json", {"schema_version": 1})
     with pytest.raises(CarryFromError, match=r"--carry-from .*base\.json: release metrics file: "):
         load_baseline(path, "claude-opus")
+
+
+def _rejudge_source(entry: dict[str, Any]) -> RejudgeSource:
+    return RejudgeSource("9.9.1", "c1", "opus", entry, {"judge_model": "old"})
+
+
+def test_merge_counts_the_rejudged_entries_without_their_tokens() -> None:
+    plan = CarryPlan(None, {}, {}, "claude-opus-5-5", rejudge={"b/two": _rejudge_source({})})
+    fresh = _fresh_file({"a/one": sample_entry(0.0, passes=0, runs=3, inputs="in-a")})
+    rejudged = {"b/two": sample_entry(1.0, passes=3, runs=3, inputs="in-b")}
+    merged = merge_carried(fresh, plan, rejudged)
+    validate_release_metrics(merged)
+    summary = merged["summary"]
+    assert (summary["rerun"], summary["carried"], summary["rejudged"]) == (1, 0, 1)
+    assert (summary["samples"], summary["pass_rate"]) == (2, 0.5)
+    assert (summary["tokens"], summary["cost_usd"]) == (1200, 0.5)
+    assert merged["target"]["reported_model"] == "claude-opus-5-5"
+
+
+def test_a_rejudge_source_measured_in_is_the_entrys_own_when_carried() -> None:
+    measured = {"release": "9.9.0", "commit": "c0", "target": "alpha"}
+    carried = _rejudge_source({"measured_in": measured})
+    assert carried.measured_in == measured
+    assert (carried.answers_at.release, carried.answers_at.target) == ("9.9.0", "alpha")
+    fresh = _rejudge_source({})
+    assert fresh.measured_in == {"release": "9.9.1", "commit": "c1", "target": "opus"}
+    assert fresh.rejudged_from == {
+        "release": "9.9.1",
+        "commit": "c1",
+        "judge": {"judge_model": "old"},
+    }
+
+
+def test_plan_lines_count_the_rejudges_by_source() -> None:
+    plan = CarryPlan(None, {}, {}, rejudge={"a": _rejudge_source({}), "b": _rejudge_source({})})
+    assert carry_plan_lines(plan, controls=[]) == [
+        "carry plan: 0 rerun, 0 carried, 2 rejudged",
+        "  rejudged from 9.9.1 (opus): 2",
+    ]
+
+
+def test_validation_accepts_rejudged_from_and_rejects_a_mistyped_one() -> None:
+    rejudged_from = {"release": "9.9.1", "commit": None, "judge": {"judge_model": "old"}}
+    data = metrics_file("9.9.2", {"a": sample_entry(0.5) | {"rejudged_from": rejudged_from}})
+    data["summary"] |= {"rejudged": 1}
+    validate_release_metrics(data)
+    data["samples"]["a"]["rejudged_from"] = rejudged_from | {"judge": "old"}
+    data["summary"]["rejudged"] = "1"
+    with pytest.raises(ReleaseMetricsError) as excinfo:
+        validate_release_metrics(data)
+    assert "samples.a.rejudged_from.judge" in str(excinfo.value)
+    assert "summary.rejudged" in str(excinfo.value)
+
+
+def test_answers_are_looked_up_where_the_latest_judge_graded() -> None:
+    judged_in = {"release": "9.9.2", "commit": "c2", "target": "beta"}
+    measured = {"release": "9.9.0", "commit": "c0", "target": "alpha"}
+    rejudged = {"release": "9.9.0", "commit": "c0", "judge": {}}
+
+    def at(entry: dict[str, Any]) -> tuple[str, str]:
+        ref = _rejudge_source(entry).answers_at
+        return ref.release, ref.target
+
+    both = {"measured_in": measured, "rejudged_from": rejudged}
+    assert at(both | {"judged_in": judged_in}) == ("9.9.2", "beta")
+    assert at(both) == ("9.9.1", "opus")  # re-judged in the source file itself
+    assert at({"measured_in": measured}) == ("9.9.0", "alpha")
+    assert at({"measured_in": {"release": "9.9.0", "commit": None}}) == ("9.9.0", "opus")
+    assert at({}) == ("9.9.1", "opus")
+
+
+def test_carrying_a_rejudged_entry_records_where_it_was_judged() -> None:
+    rejudged = {"release": "9.9.1", "commit": "c1", "judge": {}}
+    entry = {"runs": 3, "measured_in": {"release": "9.9.0", "commit": "c0"}}
+    plain = carried_entry(entry, release="9.9.2", commit="c2", target="opus")
+    assert "judged_in" not in plain
+    first = carried_entry(entry | {"rejudged_from": rejudged}, release="9.9.2", commit="c2")
+    assert first["judged_in"] == {"release": "9.9.2", "commit": "c2"}
+    assert first["measured_in"] == entry["measured_in"]
+    again = carried_entry(first, release="9.9.3", commit="c3", target="opus")
+    assert again["judged_in"] == {"release": "9.9.2", "commit": "c2"}
+
+
+def test_validation_accepts_judged_in_and_rejects_a_mistyped_one() -> None:
+    judged_in = {"release": "9.9.1", "commit": None, "target": "opus"}
+    validate_release_metrics(
+        metrics_file("9.9.2", {"a": sample_entry(0.5) | {"judged_in": judged_in}})
+    )
+    mistyped = sample_entry(0.5) | {"judged_in": judged_in | {"target": 3, "release": None}}
+    with pytest.raises(ReleaseMetricsError) as excinfo:
+        validate_release_metrics(metrics_file("9.9.2", {"a": mistyped}))
+    assert "samples.a.judged_in.target" in str(excinfo.value)
+    assert "samples.a.judged_in.release" in str(excinfo.value)
+
+
+def test_rejudged_here_is_rejudged_from_without_judged_in() -> None:
+    rejudged = {"release": "9.9.1", "commit": "c1", "judge": {}}
+    entry = {"runs": 3, "rejudged_from": rejudged, "measured_in": {"release": "9.9.0"}}
+    assert rejudged_here(entry)
+    assert not rejudged_here(carried_entry(entry, release="9.9.2", commit="c2"))
+    assert not rejudged_here({"runs": 3})

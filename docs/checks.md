@@ -939,8 +939,9 @@ The file is JSON with `"schema_version": 1`. It holds:
 | `release`, `commit` | the engine version, and the checked-out commit (`null` outside git) |
 | `previous` | `null`; the regression check sets the baseline release it compared with |
 | `target` | `name`, `harness`, `harness_version` (the CLI's `--version`), `model`, `reported_model` (the model the harness reported most often), `label`, `endpoint`, `price`, `judge_model`, `runs` and `isolated` (`true`: the harness and the judge ran without your personal settings; absent in older files) |
-| `summary` | `samples`, `runs`, `pass_rate` over every run, `mean_score` over the samples, total `tokens` and `cost_usd`; `rerun` and `carried` counts, written by `--carry-from` and by the regression check (in a full record every entry counts as rerun); with `--carry-from`, `tokens` and `cost_usd` count only the fresh runs |
-| `samples.<id>` | `prompt_id`, `graded` (`head`, the current text), `prompt_digest` (the prompt's artifact digest), `sample_digest` (`sample.toml` and `setup/`), `inputs_digest` (the strict render of what the agent received, rules included, with `sample_digest`; absent in older files), `passes` out of `runs`, `mean_score`, `stdev`, `checks` (the mean score of each check that ran), `duration_seconds_mean`, `tokens_mean` and `cost_usd_mean`; a carried entry adds `measured_in` (`release` and `commit`) |
+| `summary` | `samples`, `runs`, `pass_rate` over every run, `mean_score` over the samples, total `tokens` and `cost_usd`; `rerun` and `carried` counts, written by `--carry-from` and by the regression check (in a full record every entry counts as rerun); `rejudged`, the entries re-judged in this file, counted apart from `carried`; with `--carry-from`, `tokens` and `cost_usd` count only the fresh runs |
+| `samples.<id>` | `prompt_id`, `graded` (`head`, the current text), `prompt_digest` (the prompt's artifact digest), `sample_digest` (`sample.toml` and `setup/`), `inputs_digest` (the strict render of what the agent received, rules included, with `sample_digest`; absent in older files), `passes` out of `runs`, `mean_score`, `stdev`, `checks` (the mean score of each check that ran), `duration_seconds_mean`, `tokens_mean` and `cost_usd_mean`; a carried entry adds `measured_in` (`release` and `commit`, plus `target` when carried from the releases directory); a re-judged entry adds `rejudged_from` (`release`, `commit` and `judge`, the old judge parts, of the answers it re-graded); an entry carried after a re-judge adds `judged_in` (`release`, `commit`, `target`: the answers file whose lines its current judge graded) |
+| `judge_change` | only when an entry was re-judged: `from` (the list of distinct old judge parts), `to` (the new ones), `runs`, `pass_agreement`, `mean_abs_score_diff`, and the same three per task under `tasks` |
 | `controls.<id>` | a pinned sample's runs on its frozen edition, in the same shape, with `graded` the edition tag and `inputs_digest` hashing the edition's render; left out of `summary` |
 | `setup_digest`, `setup` | `setup_digest` is the sha256 of everything outside the samples that decides scores, and `setup` holds its parts by name: `harness`, `harness_version` (`"unknown"` when the CLI's `--version` probe fails, `null` without a CLI), `model`, `endpoint_fingerprint`, `small_model`, `runs`, `judge_model`, `judge_endpoint_fingerprint` (the `[evals.judge] endpoint`'s, `null` without one), `judge_samples`, `judge_version` (the judge CLI's `--version`, in the same way), `fail_fast`, `isolated` and `scoring_digest` (the engine's scoring modules: checks, rubric compiler, scoring, runners, the judge and its prompt, the sample model and the release metrics fold), so a later record can name the part that differs; an `"unknown"` version never matches; both keys are absent in older files |
 
@@ -967,7 +968,41 @@ changed and every edition control rerun; every other entry is carried: copied
 from the baseline without `vs_previous` or `accepted`, with `measured_in` naming
 the release and commit that measured it (kept when it was already carried).
 Before the first paid run the command prints the plan: each rerun with its
-reason, and the carried count.
+reason, and the carried count. `--carry-from` also takes the releases
+directory, such as `catalog/releases`: the record then indexes every
+`<release>/metrics/*.json` there whose `setup` matches this run's, whatever its
+target, leaving out the record's own output. A sample whose `inputs_digest` a
+file records is carried from the newest release that measured it (the target's
+own file first within a release), and its `measured_in` adds that file's
+`target`; the rest rerun. A file that cannot be read,
+fails the schema or lacks a setup digest is skipped, and when no file matches
+the setup every sample reruns, naming the first files skipped. The plan then
+ends with one `carried from <release> (<target>): <n>` line per source file.
+
+Every `--record OUT` also writes an answers file, gzip JSON Lines, beside `OUT`
+as `OUT.answers.jsonl.gz`, or at `--answers PATH`; `prepare --eval` writes one per
+target to `catalog/releases/<version>/answers/<target>.jsonl.gz`. A line is one
+fresh run: `sample`, `inputs_digest`, `run`, `artifact` (what the judge graded,
+the redacted transcript or diff; `null` when fail-fast skipped the judge, or on a
+re-judged run, whose `artifact_ref` names the file that holds it), `checks` (the
+judge-free check results), `criteria` (each rubric criterion's weight and the
+judge's mean score) and `judge` (the judge parts). Carried entries write no
+lines. The wheel does not ship these files; only the release flow reads them.
+
+With the releases directory, a sample that only a file with the same setup but
+another judge (`judge_model`, `judge_endpoint_fingerprint`, `judge_samples`,
+`judge_version`, `judge_reasoning_effort`) holds is re-graded instead of rerun: the new judge grades each
+stored run's `artifact`, and no agent runs. The gate comes from the stored
+checks, and the entry folds like a fresh one, recording `rejudged_from` and
+keeping `measured_in`. A run that failed its gate under fail-fast stays a fail.
+A sample reruns instead, with the reason `answers not stored` (no answers file,
+as for 0.4.0 and older) or `answers unreadable: <path>`; the plan lists the
+re-graded samples as `rejudged from <source>: <n>`. When an entry was
+re-judged, the file records `judge_change` and the record prints one line
+before writing it, for example `judge change: a -> b: pass agreement 93% over
+96 runs, mean |Δ| 0.04`: the share of runs whose rubric verdict is unchanged and
+the mean absolute difference of the weighted rubric score. These figures are
+reported in the release pull request and its report, and never block.
 
 Cost comes only from the target's `price`. Without one it is `null`, and so are
 tokens and cost when a run's harness reported no tokens. The harness's own cost
@@ -997,19 +1032,28 @@ Per sample:
   is a `regression` (the same rule as `--compare`); the mirror is an `improvement`;
 - a sample whose `sample_digest` changed is `not_comparable`, never a regression;
 - a sample the baseline lacks is `new`; one the new file lacks is noted;
-- a carried entry (one with `measured_in`, copied by `--carry-from`) is `carried`:
-  its `vs_previous` holds the previous mean and a delta of 0, and it never blocks;
+- a carried entry (one with `measured_in`, copied by `--carry-from`) is `carried`
+  when the previous file's entry has the same `inputs_digest`: its `vs_previous`
+  holds the previous mean and a delta of 0, and it never blocks. One carried from
+  an older release whose `inputs_digest` differs from the previous file's entry is
+  compared like a rerun, with the reason `measured in <release>`, so it can block;
+- an entry re-judged in this file (`rejudged_from` without `judged_in`) is
+  `rejudged` when its `inputs_digest` equals the previous file's entry (or there
+  is none): it never blocks, and its delta is the judge effect alone. On other
+  inputs it is compared like a rerun, with the reason `rejudged from <release>`;
 - a cost per run rise above 25%, or a token rise when either cost is `null`, is a
   warning only.
 
 A harness version change between the files is noted as a likely cause, and so is
 a control whose score moved on the same edition; controls never block.
+When the new file records `judge_change`, every compared sample notes `judge
+changed since <previous>: pass agreement <x>%`.
 `--accept SAMPLE=REASON` (repeatable) accepts one regression; accepting a sample
-that did not regress, a carried one included, is refused. The command stores the
+that did not regress, a carried or rejudged one included, is refused. The command stores the
 comparison in the new file: `previous`, each sample's `vs_previous` (`mean_score`,
 `delta`, `status`, `reasons`, `warnings` and the `accepted` reason) and
-`regressions`, `accepted_regressions`, `improvements`, `not_comparable`, `rerun`
-and `carried` in the summary. A
+`regressions`, `accepted_regressions`, `improvements`, `not_comparable`, `rerun`,
+`carried` and `rejudged` in the summary. A
 reason stored there still holds when the check runs again against the same
 baseline.
 
@@ -1035,15 +1079,24 @@ without a previous file is recorded without a comparison.
 
 It runs in one of two modes per target:
 
-- **changed-only** (the default): when the previous release has a file for the
-  target, `catalog/releases/<previous>/metrics/<name>.json` is passed as
-  `--carry-from`. Only new samples, samples whose `inputs_digest` changed and the
-  edition controls rerun; every other entry is carried from that file, with
-  `measured_in`, and its regression status is `carried`, which never blocks. A
-  `setup` part that differs, or a baseline without the digests, reruns everything.
+- **changed-only** (the default): the releases directory, `catalog/releases`, is
+  passed as `--carry-from`, so the run reuses results from every committed
+  release whose file has the target's setup, not only the previous release's.
+  Only new samples, samples whose `inputs_digest` changed and the edition
+  controls rerun; every other entry is carried from the newest release that
+  measured it, with `measured_in`. Its regression status is `carried`, which
+  never blocks, when the previous release's entry has the same `inputs_digest`;
+  otherwise it is compared like a rerun and can block. A sample whose setup
+  differs only in the judge is re-graded from its stored answers. When no
+  committed file has the target's setup (the first release among them), every
+  sample reruns. Any change to the engine's scoring code changes
+  `scoring_digest`, so the next release reruns everything once: v0.5.0 does,
+  since its engine adds `evals.rejudge` to the scoring modules. Re-grading pays
+  off from the release after the first one with stored answers, as long as no
+  scoring code changes in between.
 - **full run**: `--full` omits the baseline and reruns every sample, still
-  compared with the previous file. A target without a previous file always runs
-  in full. `--full` without `--eval` is a usage error (exit 2).
+  compared with the previous file. `--full` without `--eval` is a usage error
+  (exit 2).
 
 ```bash
 uv run scripts/release.py prepare --eval          # changed-only per target
@@ -1062,11 +1115,37 @@ uv run scripts/release.py prepare --eval --full   # every sample on every target
 
 Each record run's carry plan (why samples rerun, or which `setup` part made every
 sample rerun) is printed per target. The pull request body adds a `Release
-metrics` section to the notes, with one line per target and its notes; each line
-names the mode: "changed-only: N rerun, M carried" (with the reason when every
-sample reran) or "full run". A reused file is changed-only when it holds carried
+metrics` section to the notes, with one line per target and its notes, then the
+release report as Markdown (per-target headline, per-task table, changed
+samples, controls, judge change and trend), cut at a section boundary at 60,000
+characters to stay under GitHub's body limit. Each
+line names the mode: "changed-only: N rerun, M carried, R rejudged" (with the
+reason when every sample reran) or "full run". M counts carried entries only;
+"R rejudged" (entries re-judged in this file) shows only when R > 0, and N is
+the rest. "(K compared with <previous>)" follows when K > 0
+carried entries were compared like a rerun: carried from an older release with
+inputs that differ from the previous release's entry, so they can block. An
+entry carried along unchanged from the previous release's file is `carried` and
+not counted; without a previous file nothing is compared and no count is shown. A reused file is changed-only when it holds carried
 entries or its summary counts `carried`. These runs are paid and only the maintainer starts them;
 CI never does.
+
+Each release publishes its metric bundle as a GitHub Release (job
+`publish-release`, after `tag-release`) and a GitLab Release (the tag pipeline):
+`report.md` (also the release description), `metrics-history.csv`, a byte copy
+`metrics-<target>.json` of each metrics file, `judge-agreement.csv` for a
+release with a judge change, and three charts (`task-deltas.png`,
+`sample-deltas.png` and `task-trend.png`; a release with no baseline gets only
+the trend). The releases that have metrics (v0.2.0, v0.4.0) are backfilled by
+running the GitHub workflow manually with a `version` input, or a GitLab
+pipeline on the default branch with `RELEASE_VERSION=<x.y.z>`; v0.3.0 has no
+metrics, so its bundle cannot be built. To build the bundle locally (the charts need
+matplotlib, which is no project dependency; `--no-charts` builds without it):
+
+```bash
+python scripts/release_report.py --version 0.4.0 --out release-report
+python scripts/release_report.py --version 0.4.0 --out release-report --no-charts
+```
 
 `playbook eval` has no `--run-tests` flag. A sample runs the test suite if and only if
 its `[gate]` references an execution metric, `coverage` or `test_pass_rate`.

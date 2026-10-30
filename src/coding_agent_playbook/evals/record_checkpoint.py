@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 import os
 import threading
-from typing import TYPE_CHECKING, Any, Final, Literal
+from typing import TYPE_CHECKING, Any, Final, Literal, cast, get_args
 
 from coding_agent_playbook.evals.release_metrics import SampleRecord
 from coding_agent_playbook.evals.release_metrics_schema import INPUTS_DIGEST_KEY
@@ -37,8 +37,9 @@ CHECKPOINT_VERSION: Final = 1
 #: Appended to the record path's name for the default checkpoint path.
 CHECKPOINT_SUFFIX: Final = ".partial.jsonl"
 
-#: A line's kind: a sample graded on the current text, or a pinned sample's edition control.
-UnitKind = Literal["sample", "control"]
+#: A line's kind: a sample graded on the current text, a pinned sample's edition control,
+#: or a sample whose stored answers this record's judge re-graded (spec D9).
+UnitKind = Literal["sample", "control", "rejudge"]
 #: A checkpoint line's identity: its kind and its sample id.
 CheckpointKey = tuple[UnitKind, str]
 
@@ -127,6 +128,7 @@ def _line(kind: UnitKind, record: SampleRecord) -> str:
         "run_tokens": list(record.run_tokens),
         "run_costs": list(record.run_costs),
         "reported_models": list(record.reported_models),
+        "answers": list(record.answers),
     }
     return json.dumps(data, sort_keys=True) + "\n"
 
@@ -159,9 +161,9 @@ def _parse(line: str) -> dict[str, Any] | None:
 
 def _record(row: Mapping[str, Any]) -> tuple[CheckpointKey, SampleRecord] | None:
     """The key and record of one line, or ``None`` when it lacks a field."""
-    kind = row.get("kind")
-    if kind not in ("sample", "control"):
+    if row.get("kind") not in get_args(UnitKind):
         return None
+    kind = cast("UnitKind", row["kind"])
     try:
         record = SampleRecord(
             sample_id=str(row["sample_id"]),
@@ -169,6 +171,8 @@ def _record(row: Mapping[str, Any]) -> tuple[CheckpointKey, SampleRecord] | None
             run_tokens=tuple(row["run_tokens"]),
             run_costs=tuple(row["run_costs"]),
             reported_models=tuple(row["reported_models"]),
+            # A line written before answers were kept (spec D8) has none.
+            answers=tuple(dict(answer) for answer in row.get("answers", ())),
         )
     except (KeyError, TypeError, ValueError):
         return None
