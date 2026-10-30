@@ -1092,6 +1092,22 @@ not counted; without a previous file nothing is compared and no count is shown. 
 entries or its summary counts `carried`. These runs are paid and only the maintainer starts them;
 CI never does.
 
+Each release publishes its metric bundle as a GitHub Release (job
+`publish-release`, after `tag-release`) and a GitLab Release (the tag pipeline):
+`report.md` (also the release description), `metrics-history.csv`, a byte copy
+`metrics-<target>.json` of each metrics file, `judge-agreement.csv` for a
+release with a judge change, and three charts (`task-deltas.png`,
+`sample-deltas.png` and `task-trend.png`; a release with no baseline gets only
+the trend). Older tags are backfilled by running the GitHub workflow manually
+with a `version` input, or a GitLab pipeline on the default branch with
+`RELEASE_VERSION=<x.y.z>`. To build the bundle locally (the charts need
+matplotlib, which is no project dependency; `--no-charts` builds without it):
+
+```bash
+python scripts/release_report.py --version 0.4.0 --out release-report
+python scripts/release_report.py --version 0.4.0 --out release-report --no-charts
+```
+
 `playbook eval` has no `--run-tests` flag. A sample runs the test suite if and only if
 its `[gate]` references an execution metric, `coverage` or `test_pass_rate`.
 

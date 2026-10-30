@@ -224,6 +224,13 @@ disallow_untyped_defs = false
 module = "radon.*"
 ignore_missing_imports = true
 
+# matplotlib is no dependency at all: only scripts/release_report_charts.py
+# imports it, for the release bundle's charts (the CI publish jobs install it).
+# Ignored unconditionally for the same reason as radon: present or absent, clean.
+[[tool.mypy.overrides]]
+module = "matplotlib.*"
+ignore_missing_imports = true
+
 # --- pytest ---
 
 [tool.pytest.ini_options]

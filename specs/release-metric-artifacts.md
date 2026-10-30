@@ -196,7 +196,7 @@ index code also goes in `evals`, as `evals.result_index`, and joins the same lis
 |---|---|
 | `report.md` | `ReleaseReport.markdown()`; also the release description |
 | `metrics-history.csv` | `csv_rows()` |
-| `metrics/<target>.json` | the release's files, byte copies |
+| `metrics-<target>.json` | the release's files, byte copies (the bundle is flat: release assets are flat file names) |
 | `task-deltas.png` | per target: previous vs new pass rate per task (paired bars) |
 | `sample-deltas.png` | rows are samples that were not carried, columns are targets; cell color is the mean-score delta (diverging blue-red, gray at 0, labelled) |
 | `task-trend.png` | per task: pass rate over releases, one line per target; a dashed vertical line at each judge change |
