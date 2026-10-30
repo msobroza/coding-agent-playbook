@@ -1,0 +1,46 @@
+I have everything I need: the diff (CHANGE.diff), the applied working tree, and computed verification of the boundary behaviors. There is no CLAUDE.md in the repo (find returned none) and the user-level one is outside the sandbox, so the conventions angle yields nothing. Tests couldn't be executed (approval-gated), so I verified all suspicious arithmetic directly with Python 3 instead.
+
+Findings from the 8 angles, deduped and ranked:
+
+1. **Confirmed overcharge at exact-integer-kg boundaries (lb path).** `quote_cents(68.34330127731205, "lb")`: the true weight is 31 kg (68.34330127731205 = 31/0.45359237), but the float product is `31.000000000000004`, so `math.ceil` charges 32 kg (+120¢). Also `quote_cents(130.07273468907778, "lb")` → 59.00000000000001 → charged 60 kg. The multiplication by the inexact factor lands 1 ulp above the integer exactly when the parcel weighs a whole number of kg — precisely the case "every started kilogram is charged" should not extend to.
+2. **NaN bypasses validation.** `float("nan") <= 0` is False, so `quote_cents(float("nan"), "lb")` passes the guard and dies inside `math.ceil` with `ValueError: cannot convert float NaN to integer` instead of the intended "weight must be positive" error (verified). Pre-existing in the touched function; the diff keeps this guard as the sole validation.
+3. **Int > 2^53 behavior change on the kg path.** The removed line `math.ceil(weight)` was exact for ints; the replacement routes through `weight * 1.0` in `to_kilograms`, coercing to float: `quote_cents(2**53 + 1)` charged 9007199254740993 kg before, 9007199254740992 now (verified). Absurd magnitude, but a real, diff-introduced loss of exactness.
+4. **Free-form unit string, case-sensitive, runtime-only.** `quote_cents(5, "LB")` or `"KG"` raises `ValueError`; the only discovery of valid units is via the error message. A `Literal["kg", "lb"]` (or case-normalized lookup) would catch typos/case at the definition site.
+5. **Mutable shared pricing constant.** `KILOGRAMS_PER_UNIT` is a plain module-level dict imported into the pricing path; any imported caller can mutate it and silently change every quote. A frozen mapping (e.g. `MappingProxyType`/tuple) would make it read-only.
+
+```json
+[
+  {
+    "file": "src/shipping.py",
+    "line": 15,
+    "summary": "math.ceil on the float-converted weight overcharges one kilogram when the exact converted weight is a whole number of kg, because the multiply can round 1 ulp above the integer.",
+    "failure_scenario": "quote_cents(68.34330127731205, \"lb\") — true weight is exactly 31 kg (68.34330127731205 = 31/0.45359237), but 68.34330127731205 * 0.45359237 computes to 31.000000000000004, so ceil charges 32 kg (810+120 instead of 810). Also verified: 130.07273468907778 lb (exactly 59 kg) computes to 59.00000000000001 and is charged as 60 kg."
+  },
+  {
+    "file": "src/shipping.py",
+    "line": 13,
+    "summary": "A NaN weight slips past the `weight <= 0` guard (NaN <= 0 is False) and surfaces as an unrelated math.ceil error instead of the intended validation message.",
+    "failure_scenario": "quote_cents(float(\"nan\"), \"lb\") does not raise 'weight must be positive'; it raises ValueError('cannot convert float NaN to integer') from math.ceil, which callers matching on the validation message will not recognize. Verified by direct execution."
+  },
+  {
+    "file": "src/shipping.py",
+    "line": 15,
+    "summary": "The replaced line math.ceil(weight) was exact for integer weights, but the new path coerces int through float (weight * 1.0 in to_kilograms), changing results for int weights above 2**53.",
+    "failure_scenario": "quote_cents(2**53 + 1) previously charged 9007199254740993 started kg (exact int ceil); after the change, (2**53+1) * 1.0 rounds to 2**53 as a float, so it charges 9007199254740992. Verified by direct execution. Absurd magnitude, but a genuine behavior change the diff introduces on the kg path."
+  },
+  {
+    "file": "src/shipping.py",
+    "line": 11,
+    "summary": "The unit parameter is a free-form, case-sensitive string validated only at runtime, so 'LB'/'KG' are rejected and typos like 'kgs' are discoverable only via the error message.",
+    "failure_scenario": "A caller passing quote_cents(5, \"LB\") gets ValueError \"unknown weight unit 'LB'; expected one of ['kg', 'lb']\" despite clearly meaning pounds; a Literal[\"kg\", \"lb\"] annotation or case-normalized lookup would reject/accept at the right layer and make typos a static error."
+  },
+  {
+    "file": "src/units.py",
+    "line": 4,
+    "summary": "KILOGRAMS_PER_UNIT is a mutable module-level dict shared with the pricing path, so any importing module can alter the conversion factors and silently change all quotes.",
+    "failure_scenario": "An accidental or debug-purpose mutation such as KILOGRAMS_PER_UNIT['lb'] = 1.0 in one module changes quote_cents for every caller process-wide with no error; exposing it as a read-only mapping (e.g. types.MappingProxyType or a frozen constant) removes the shared-mutable-state hazard."
+  }
+]
+```
+
+Notes on the other angles for completeness: the removed-behavior audit found no other dropped invariants (the `weight <= 0` guard and default-kg semantics are preserved — `w * 1.0` is exact for floats, so existing kg callers see identical results); the cross-file trace found only test call sites, all compatible, and no `__init__.py` in `src/` is fine (PEP 420 namespace package with `pythonpath = ["."]` in `/private/tmp/.../scratch/pyproject.toml`); reuse/simplification/efficiency angles found nothing; no CLAUDE.md governs the changed code. All four pre-existing test expectations in `tests/test_shipping.py` plus the new ones are arithmetically correct (5 lb = 2.26796185 kg → 3 kg → 810¢).

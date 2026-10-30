@@ -1,0 +1,42 @@
+All checks are done. Here is my assessment.
+
+**Re-review verdict on the three earlier findings:**
+- **Finding 1 (remove → negative qty): fixed.** `0 < quantity <= held` guard verified: `remove("pen", 5)` and `remove("pen", -1)` both raise `ValueError` before mutating; full-quantity removal now `del`s the line (`cart.lines == {}` confirmed).
+- **Finding 2 (unbounded `discount_percent`): NOT fixed.** The fix commit touched only `add()` and `remove()`. Empirically: `total_cents(discount_percent=150)` → **-500** on a 1000-cent cart (negative charge); `discount_percent=-10` → **1100** (charges more than the 1000 subtotal). No regression test was added for it either.
+- **Finding 3 (add with qty ≤ 0): fixed.** `Cart().add("pen", 150, 0)` raises `ValueError`, covered by a parametrized test.
+
+**New candidates surfaced by the 8 angles:**
+- **Angle A (line-by-line):** `add()` gained a quantity guard but `unit_cents` is still unvalidated — `add("pen", -100, 3)` passes and `total_cents()` returns **-300**. Verified.
+- **Angle A (types):** the new guards only check ordering, not integrality — `add("pen", 100, 1.5)` and `remove("pen", 0.5)` both pass; the line becomes `(100, 1.5)` and `total_cents()` returns a **float** (`150.0`), violating the `-> int` annotation and the module docstring ("priced in whole cents"). Verified.
+- **Angle B (removed behavior):** the old `remove` always kept the line (held could hit 0); new `del` changes that, but the only callers in the repo are the tests, which match the new behavior — no breakage. `remove(sku, 0)` now raises instead of no-op; reasonable, no caller depends on it.
+- **Angle C (cross-file):** only caller is `tests/test_cart.py`; all new tests are consistent with the new behavior (error-message `match="2 held"` regexes check out).
+- **Reuse / Simplification / Efficiency:** nothing — trivial module, no duplicated logic, no wasted work.
+- **Altitude:** the guards are at the right depth for `add`/`remove`; the `total_cents` defect stands because it was never touched at all.
+- **Conventions:** no repo CLAUDE.md exists; the user-level `~/.claude/CLAUDE.md` rule "Every bug fix gets a regression test" is the only applicable hook — it's violated, but only as a symptom of finding 1 (the unfixed discount bug has no test), so it folds into that finding rather than standing alone.
+
+**Final findings (deduped, no verify pass, ranked):**
+
+```json
+[
+  {
+    "file": "src/cart.py",
+    "line": 24,
+    "summary": "total_cents() still accepts any discount_percent — the previously flagged finding #2 was not addressed by this fix commit.",
+    "failure_scenario": "Cart of 1000 cents: total_cents(discount_percent=150) returns -500 (a negative charge) and total_cents(discount_percent=-10) returns 1100, charging more than the 1000 subtotal; discount_percent=25.5 returns a float 745.0 despite the -> int annotation. The diff only added guards to add() and remove(); total_cents() needs to validate 0 <= discount_percent <= 100, and no regression test was added for it."
+  },
+  {
+    "file": "src/cart.py",
+    "line": 9,
+    "summary": "add() validates quantity but not unit_cents, so a negative unit price still produces a negative cart total.",
+    "failure_scenario": "Cart().add('pen', -100, 3) passes the new quantity guard; total_cents() then returns -300. The fix commit closes the quantity hole in add() but leaves the price hole open, so the cart can still be made to 'owe' money."
+  },
+  {
+    "file": "src/cart.py",
+    "line": 10,
+    "summary": "The new guards in add() and remove() check ordering but not integrality, so a fractional quantity corrupts the whole-cents invariant.",
+    "failure_scenario": "Cart().add('pen', 100, 2); cart.remove('pen', 0.5) passes 0 < 0.5 <= 2 and stores line ('pen', (100, 1.5)); total_cents() then returns the float 150.0, violating the -> int return annotation and the module docstring 'priced in whole cents' (add() has the same hole: add('pen', 100, 1.5) stores 1.5)."
+  }
+]
+```
+
+Note: the temporary verification script I used was removed; the working tree contains only the original files. The two earlier important findings are resolved except for `total_cents`' unbounded discount, which remains the most severe open issue in the fix commit.

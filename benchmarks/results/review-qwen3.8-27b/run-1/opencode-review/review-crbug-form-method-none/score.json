@@ -1,0 +1,119 @@
+{
+  "sample_id": "review/crbug-form-method-none",
+  "harness": "opencode:opencode-review",
+  "target": {
+    "name": null,
+    "harness": "opencode:opencode-review",
+    "model": null,
+    "reported_model": null,
+    "endpoint": null,
+    "harness_settings": "personal"
+  },
+  "passed": false,
+  "aggregate_score": 0.0,
+  "duration_seconds": 93.6,
+  "report": {
+    "passed": false,
+    "warn_count": 0,
+    "fail_count": 0,
+    "composite": null,
+    "checks": [
+      {
+        "check_id": "gate",
+        "passed": false,
+        "score": 0.0,
+        "weight": 0.0,
+        "required": true,
+        "status": "run",
+        "subresults": []
+      },
+      {
+        "check_id": "rubric",
+        "passed": true,
+        "score": 1.0,
+        "weight": 0.0,
+        "required": true,
+        "status": "run",
+        "subresults": []
+      }
+    ],
+    "findings": []
+  },
+  "uncalibrated_judge": true,
+  "experiment": "opencode-review",
+  "agent": {
+    "experiment": "opencode-review",
+    "sample_id": "review/crbug-form-method-none",
+    "harness": "opencode",
+    "model": "openrouter/qwen/qwen3.8-27b",
+    "command": [
+      "opencode",
+      "run",
+      "--pure",
+      "--dir",
+      "~/.cache/playbook-bench/review-qwen3.8-27b/run-1/opencode-review/review-crbug-form-method-none/scratch",
+      "--model",
+      "openrouter/qwen/qwen3.8-27b",
+      "--format",
+      "json",
+      "--command",
+      "review",
+      "{prompt}"
+    ],
+    "returncode": 0,
+    "timed_out": false,
+    "duration_seconds": 93.6,
+    "baseline_commit": "7ade869b8e8f787948db1c6298998fcad7be7278",
+    "scratch": "~/.cache/playbook-bench/review-qwen3.8-27b/run-1/opencode-review/review-crbug-form-method-none/scratch",
+    "setup_snapshot": "~/.cache/playbook-bench/review-qwen3.8-27b/run-1/opencode-review/review-crbug-form-method-none/scratch__setup_baseline",
+    "main_loop_tools": [
+      "task:build",
+      "read",
+      "bash",
+      "bash",
+      "read",
+      "read",
+      "bash",
+      "read",
+      "bash"
+    ],
+    "second_pass_ran": null,
+    "subagent_starts": null
+  },
+  "judge": {
+    "model": "gpt-6-luna",
+    "effort": "high",
+    "judge_samples": 3
+  },
+  "judge_calls": [
+    {
+      "criterion": "The review reports the backward-incompatible crash: kwargs.pop('method', form.method).upper() raises AttributeError when a caller passes method=None explicitly, which used to work (Request turns a None method into GET); the change should treat None like a missing method.",
+      "score": 1.0,
+      "n": 3,
+      "weight": 0.6
+    },
+    {
+      "criterion": "The review treats that bug as blocking (important, not a nit or an open question), cites its file and line in src/forms.py (from_form), and its verdict is 'request changes'.",
+      "score": 0.2833333333333333,
+      "n": 3,
+      "weight": 0.2
+    },
+    {
+      "criterion": "The review does not invent bugs: anything else it raises is a real problem in the code shown, and it does not ask to rewrite code that works.",
+      "score": 0.79,
+      "n": 3,
+      "weight": 0.2
+    }
+  ],
+  "rubric_weighted_score": 0.8146666666666667,
+  "gate_detail": {
+    "forms_untouched": true,
+    "tests_untouched": true,
+    "blocks": false,
+    "approves": false
+  },
+  "gate_detail_matches_engine": true,
+  "changed_files": [],
+  "graded_artifact": "transcript",
+  "judge_error": null
+}

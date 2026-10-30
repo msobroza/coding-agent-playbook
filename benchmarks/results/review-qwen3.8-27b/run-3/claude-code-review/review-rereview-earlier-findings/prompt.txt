@@ -1,0 +1,4 @@
+/code-review re-review my fix commit in CHANGE.diff (it is already applied to the working tree). Your earlier review of src/cart.py found:
+1. src/cart.py:15 - important - remove() lets a line's quantity go negative: removing 5 pens from a cart holding 2 stores -3 and makes total_cents() too low.
+2. src/cart.py:19 - important - total_cents() accepts any discount_percent: 150 gives a negative total, and -10 charges more than the subtotal.
+3. src/cart.py:9 - nit - add() accepts a zero or negative quantity.

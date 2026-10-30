@@ -1,0 +1,9 @@
+## Review findings for the `Service.stop()` log-closing change
+
+1. **High — file logs are never closed (the `TextIO` branch is dead code).** `isinstance(f, typing.TextIO)` is `False` for real file objects, so `str`-path logs (opened at `src/service.py:21`), the default `os.devnull` binary handle, and caller-supplied files all stay open — exactly the leak this change was meant to fix. Suggested fix: `isinstance(self.log_output, io.IOBase)` instead. The new test only covers the `int`/`PIPE` branches, which is why it passed.
+
+2. **Medium — `subprocess.DEVNULL` now crashes `stop()`.** `DEVNULL` is an `int` (`-3`), and the old `== DEVNULL` guard was removed, so `os.close(-3)` raises `OSError: Bad file descriptor` for the standard idiom. Re-add the guard.
+
+3. **Low — `stop()` can now raise.** The old `try/except Exception: pass` was dropped, so a second `stop()` or a caller-closed fd propagates `OSError`. Fine if intentional, but nothing pins it down.
+
+The fd test is a solid addition; removing the `# Todo` and stale `self.log_file` is good cleanup.

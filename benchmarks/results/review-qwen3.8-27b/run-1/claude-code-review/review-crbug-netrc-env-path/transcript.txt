@@ -1,0 +1,46 @@
+Working tree is clean again (probes removed). No other callers of `get_netrc_auth` exist in the repo, so no cross-file breakage. I have everything I need — all four candidate findings were empirically confirmed by running the actual module code.
+
+## Review summary
+
+**Change under review:** `src/netrc_auth.py` now reads the `NETRC` env var and, if set, uses it in place of the `~/.netrc` / `~/_netrc` fallbacks; a test was added.
+
+**Empirical verification** (ran the module under python3, exercising each NETRC value):
+
+| NETRC value | Result | Expected |
+|---|---|---|
+| `/abs/path/.netrc-ci` (file exists) | `None` | credentials |
+| `~/.netrc-ci` (file exists) | `None` | credentials |
+| `""` (with valid `~/.netrc`) | `None` | credentials from `~/.netrc` |
+| `/abs/path/.netrc-ci`, `HOME` unset | `None` | credentials |
+| `.netrc-ci` (relative, the only case tested) | `('alice', 's3cret')` | credentials |
+
+The root cause: the env var value — which the feature contract says is a **path** — is funneled into the same `f"~/{name}"` transform as bare home-directory filenames, so any absolute or tilde-prefixed value (the conventional `NETRC` usage per `netrc(4)`/curl) resolves to a nonexistent `~/…` path. A secondary defect: `is not None` lets an empty string through, yielding the home *directory* as the candidate, which passes `os.path.exists` and then fails in `netrc()` as `IsADirectoryError`.
+
+```json
+[
+  {
+    "file": "src/netrc_auth.py",
+    "line": 17,
+    "summary": "The NETRC env var value (a path) is treated as a bare home-directory filename: line 12 feeds it into the loop that prefixes every candidate with '~/~' at line 17, so absolute and tilde-prefixed values resolve to nonexistent paths and the feature fails on its own documented case.",
+    "failure_scenario": "User sets NETRC=/home/alice/.netrc-ci (the documented 'path to that file' and the conventional NETRC usage): f\"~/{name}\" yields '~//home/alice/.netrc-ci' -> expanduser -> '$HOME//home/alice/.netrc-ci', which does not exist, so get_netrc_auth returns None instead of the credentials. NETRC='~/.netrc-ci' fails the same way (only the leading '~' is expanded), and a relative value like NETRC=config/netrc is read from ~/config/netrc instead of as-given. Worse, because the forced '~/' prefix makes expanduser run even for absolute paths, in CI/cron where $HOME is unset the swallowed KeyError at lines 18-20 returns None even though the absolute NETRC path would work. Verified empirically: all three cases return None. Any broken NETRC value now also silently disables the previously-working ~/.netrc fallback, surfacing to users as unexplained 401s. Fix at the root: build a list of candidate paths (env value passed to expanduser as-is, defaults as home-joined) instead of reformatting the value into a filename."
+  },
+  {
+    "file": "src/netrc_auth.py",
+    "line": 12,
+    "summary": "'is not None' lets an empty NETRC string through, so NETRC='' makes the candidate list ('',) which resolves via os.path.expanduser('~/') to the home directory, a directory that passes os.path.exists and then blows up in netrc().",
+    "failure_scenario": "A user or tool sets NETRC= (empty — e.g. 'export NETRC=$UNSET_VAR' in a profile) while a valid ~/.netrc exists: netrc_locations becomes ('',), loc = expanduser('~/') = $HOME, os.path.exists($HOME) is True, so netrc($HOME) raises IsADirectoryError (an OSError) which is swallowed -> get_netrc_auth returns None and silently loses the credentials that ~/.netrc holds; with raise_errors=True it raises a misleading IsADirectoryError about the home directory. NETRC set to a directory path fails identically (exists() is True for directories). Verified empirically: returns None despite a valid ~/.netrc. Use a falsy check ('if netrc_file else NETRC_FILES') and/or os.path.isfile at line 21."
+  },
+  {
+    "file": "tests/test_netrc_auth.py",
+    "line": 33,
+    "summary": "The new test only exercises a relative filename (NETRC='.netrc-ci'), never an actual path, so it cements the buggy filename semantics and stays green while the documented 'path to that file' behavior is broken.",
+    "failure_scenario": "The feature is specified as 'NETRC holds the path to that file', but the test passes '.netrc-ci' (a name resolved against $HOME), which only works because of the exact bug in finding 1 (the forced '~/~' prefix). A user following the documented contract — export NETRC=/abs/path/.netrc-ci — gets None, yet CI is green. Add a regression test with an absolute path (and ideally a tilde path and an empty value) so the contract is actually pinned."
+  },
+  {
+    "file": "src/netrc_auth.py",
+    "line": 10,
+    "summary": "The public function's docstring was not updated to document the new NETRC env var that now determines which file is read.",
+    "failure_scenario": "Per the governing convention in ~/.claude/CLAUDE.md ('Docstring public functions with intent + one usage example'), a caller reading line 10 ('Return the (login, password) netrc holds for host, or None.') has no idea the function's file selection now depends on the NETRC environment variable — the single most important new input channel of this change is invisible to readers and to docs generated from the signature. Concrete cost: users hit the 'why is NETRC not working' confusion from finding 1 with no in-code pointer to where the path comes from."
+  }
+]
+```

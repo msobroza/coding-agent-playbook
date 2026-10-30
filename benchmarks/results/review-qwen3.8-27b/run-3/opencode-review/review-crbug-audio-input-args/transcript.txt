@@ -1,0 +1,26 @@
+Verified both findings by reproduction (4 existing tests pass; system `python3` is 3.8, so I used `uv run`).
+
+## Review: `CHANGE.diff` — audio detection now uses the camera's own ffmpeg input args
+
+### HIGH — `TypeError` for ordinary-string input args (a documented config form)
+`src/audio.py:15-20`. The `or` chain handles preset names and lists, but not the plain-string form that `src/config.py:3` explicitly documents ("either a preset name, a string of ordinary ffmpeg arguments, or a list of arguments"). For a non-preset string, `parse_preset_input` returns `None`, the chain falls through to the raw `str`, and `list + str` raises:
+
+- `input_args="-rtsp_transport udp"` on the audio input → `TypeError: can only concatenate list (not "str") to list` (reproduced)
+- same crash when the audio input has no args and the camera-wide `FfmpegConfig.input_args` is an ordinary string (reproduced)
+
+This fires in `AudioEventMaintainer.__init__` (`src/audio.py:34`), so any such camera crashes at startup. The new tests only cover preset, list, and default forms — the string form is untested. Fix: run both fallbacks through `get_ffmpeg_arg_list` (it `shlex`-splits strings, passes lists through, and yields `[]` for `""`, which preserves the fall-through to the camera-wide value):
+
+```python
+parse_preset_input(ffmpeg_input.input_args, 1)
+or get_ffmpeg_arg_list(ffmpeg_input.input_args)
+or parse_preset_input(ffmpeg.input_args, 1)
+or get_ffmpeg_arg_list(ffmpeg.input_args)
+```
+
+### LOW — `-r 1` silently injected when the effective preset is `preset-http-reolink`
+`src/audio.py:16,18` pass `detect_fps=1` to `parse_preset_input`, which for `preset-http-reolink` appends `"-r", "1"` (`src/ffmpeg_presets.py:20-21`). Reproduced command: `... -user_agent FFmpeg Frigate -avoid_negative_ts make_zero -r 1 -i /x.mp4 ...`. This is an argument the user never configured, and it's new behavior (the old code only ever expanded `preset-rtsp-audio-only`, which carries no `-r`). `ffmpeg` largely ignores input `-r` for audio, so impact is minor, but it deviates from "the camera's own ffmpeg input arguments," and `test_the_audio_input_preset_wins_over_the_camera_wide_one` doesn't assert `-r` is absent, so it goes unnoticed.
+
+### Non-issues checked
+- Hardcoded `-vn` preserves the old audio-only preset's video-dropping behavior.
+- `IndexError` when no input has the `audio` role is pre-existing (old `__init__` had the same `[0]` lookup) — out of scope.
+- Resolution priority (input-level beats camera-wide, else chain) matches the stated intent; the empty-string/list fall-through works.

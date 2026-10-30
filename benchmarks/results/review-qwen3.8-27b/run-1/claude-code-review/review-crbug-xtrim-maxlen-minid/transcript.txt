@@ -1,0 +1,41 @@
+All angles are complete. The working tree already contains the applied change (committed in the baseline), so the review scope is the `CHANGE.diff` hunk in `src/streams.py` plus the two new tests in `tests/test_streams.py`. I traced the command construction line by line, checked the old-vs-new API contract, confirmed the only caller is the test file (no cross-file breakage), found no CLAUDE.md governing the changed code, and hand-verified all four tests pass against the new code (the suite asserts on recorded argument lists, and each assertion matches the emitted `pieces`).
+
+Key facts established:
+- Old signature `xtrim(name, maxlen: int, approximate=True)` guaranteed exactly one strategy; the new signature makes both strategies optional and never validates their combination, and the pieces are built in two interleaved passes (strategy pass, then threshold pass) that let both `MAXLEN` and `MINID` land in one command.
+- Redis 6.2's parser accepts `~` generically after either strategy, so `MINID ~ <id>` is a server-accepted no-op, not an error — the finding there is misleading semantics, not a crash.
+- Argument ordering for the valid combos (`MAXLEN [~] N [LIMIT k]`, `MINID [~] id [LIMIT k]`) matches the documented syntax.
+
+```json
+[
+  {
+    "file": "src/streams.py",
+    "line": 37,
+    "summary": "xtrim accepts both maxlen and minid simultaneously and emits a malformed command the server rejects.",
+    "failure_scenario": "xtrim(\"events\", maxlen=100, minid=\"1700000000000-0\") builds 'XTRIM events MAXLEN MINID ~ 100 1700000000000-0'; Redis parses 'MINID' as the MAXLEN threshold and returns 'invalid MAXLEN integer value' instead of a client-side ValueError telling the caller the strategies are mutually exclusive."
+  },
+  {
+    "file": "src/streams.py",
+    "line": 34,
+    "summary": "maxlen was previously a required argument but is now optional with no validation, so an XTRIM with no strategy can be sent.",
+    "failure_scenario": "xtrim(\"events\") or xtrim(\"events\", limit=10) now builds 'XTRIM events ~' / 'XTRIM events ~ LIMIT 10', which Redis rejects with a syntax error; the old required positional maxlen raised TypeError at call time, so this is a silent API-contract regression that only surfaces at runtime against a server."
+  },
+  {
+    "file": "src/streams.py",
+    "line": 39,
+    "summary": "The approximate '~' flag is emitted for MINID, where approximation does not apply (it is a MAXLEN-only concept).",
+    "failure_scenario": "xtrim(\"events\", minid=\"1700000000000-0\") sends 'MINID ~ 1700000000000-0'; Redis >=6.2 accepts the flag but ignores it, so approximate=True and approximate=False produce indistinguishable behavior for MINID, every MINID call carries a meaningless flag by default, and test_xtrim_by_minid now pins b\"~\" in the expected command, cementing the misleading semantics."
+  },
+  {
+    "file": "src/streams.py",
+    "line": 35,
+    "summary": "The scattered two-pass if-blocks re-checking maxlen/minid are a fragile structure that is the root cause of the invalid-combination bugs.",
+    "failure_scenario": "Any fix or extension (enforcing exactly one strategy, adding a third strategy) must touch both the strategy-append pass and the threshold-append pass; the simpler form — picking a single (strategy, threshold) pair and raising ValueError when not exactly one of maxlen/minid is given — makes the MAXLEN+MINID interleaving and the missing-strategy case structurally impossible in one place."
+  },
+  {
+    "file": "tests/test_streams.py",
+    "line": 38,
+    "summary": "New tests only pin happy paths: no coverage for MINID with LIMIT, exact MINID (approximate=False), or the falsy maxlen=0 case.",
+    "failure_scenario": "A future refactor that reorders pieces (e.g., emitting LIMIT before the threshold) or switches 'is not None' checks to truthiness (silently dropping maxlen=0) passes the current suite, since only 4 of the strategy/flag/limit combinations are asserted."
+  }
+]
+```

@@ -1,0 +1,10 @@
+
+
+Re-review result: 2 of 3 findings resolved, 1 open.
+
+- **Fixed:** `remove()` now rejects `quantity` outside `0 < quantity <= held` (src/cart.py:17) and drops empty lines; `add()` rejects `quantity <= 0` (src/cart.py:10-11). Both have tests.
+- **Still open:** `total_cents()` (src/cart.py:24-26) accepts any `discount_percent` — `150` yields `-150`, `-10` yields `330`. No test covers it.
+
+Minor behavior changes flagged (look intentional): `remove(sku, 0)` now raises instead of no-op; fully removed lines are deleted from `cart.lines` rather than lingering as `(price, 0)`.
+
+Want me to add the `0 <= discount_percent <= 100` guard to `total_cents()` plus tests?

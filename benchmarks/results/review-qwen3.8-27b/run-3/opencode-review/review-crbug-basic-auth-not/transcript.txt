@@ -1,0 +1,39 @@
+
+
+Review found 3 issues in `src/auth.py`: a critical `SyntaxError` (JS-style `!` negation), a medium timing leak (the `or` short-circuits before the password comparison runs, defeating the change's purpose), and a low-severity `TypeError` on non-ASCII credentials. Let me verify against the actual file and fix them.
+
+
+
+
+
+
+
+
+
+
+
+
+
+Context confirmed. This change (CHANGE.diff) has a genuine, fatal bug. I'll fix both issues in `src/auth.py`:
+
+
+
+
+All 3 tests pass. Fixed `src/auth.py:15-20`:
+
+```python
+def is_authorized(given: Credentials, expected: Credentials) -> bool:
+    """True when the ``given`` credentials match the configured admin ``expected`` ones."""
+    # Be careful to use constant time comparison to prevent timing attacks
+    username_ok = hmac.compare_digest(given.username.encode(), expected.username.encode())
+    password_ok = hmac.compare_digest(given.password.encode(), expected.password.encode())
+    if not username_ok or not password_ok:
+        return False
+    return True
+```
+
+What was wrong and why the fix:
+
+1. **Critical** — `!hmac.compare_digest(...)` is JS/C negation, not Python. It's a hard `SyntaxError`, so `src.auth` was unimportable and every admin auth check crashed (and all tests failed at collection). Replaced with `not`.
+2. **Medium** — the `or` between the two negated comparisons short-circuits: when the username differs, the password `compare_digest` never runs, so response time still reveals whether the username matched — the exact leak the change claimed to close. Both comparisons now run unconditionally; the `or`/`and` only combines already-computed booleans.
+3. **Low** — `hmac.compare_digest` on `str` raises `TypeError` for non-ASCII input (old `!=` handled any Unicode), so a non-ASCII credential would 500 instead of 401. Explicit `.encode()` restores the reject-don't-crash behavior.

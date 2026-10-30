@@ -1,0 +1,1 @@
+/code-review review my change in CHANGE.diff (it is already applied to the working tree). It fixes duplicate references in Scene.mobjects when replace() is asked to put an object that is already on screen in place of another one, as a transform onto an existing object does.

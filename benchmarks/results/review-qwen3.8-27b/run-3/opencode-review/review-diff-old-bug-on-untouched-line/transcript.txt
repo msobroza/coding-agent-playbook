@@ -1,0 +1,4 @@
+Review complete: **approve** — no bugs in the diff; `restock()` validation order and tests are correct, all 5 tests pass.
+
+- Informational: duplicate SKUs would restock only the first match (unconstrained by design).
+- Out-of-scope observation on an untouched line: `items_to_reorder` docstring says "to or below" but code uses `<` (`src/inventory.py`) — worth a separate fix.

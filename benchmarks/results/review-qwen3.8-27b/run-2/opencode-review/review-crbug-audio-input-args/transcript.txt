@@ -1,0 +1,7 @@
+**Review summary** for the audio-input-args change:
+
+1. **Bug (high):** `src/audio.py:15-20` — the fallback chain passes plain-string `input_args` (e.g. `"-rtsp_transport udp"`) through unsplit, so `list + str` raises `TypeError` at startup, taking down audio detection entirely. Fix: normalize the non-preset fallbacks with `get_ffmpeg_arg_list(...)`.
+2. **Test gap:** `tests/test_audio.py` has no plain-string case, which is why the suite passes despite the crash. Add a case with `input_args="-rtsp_transport udp"` for both the audio-input and camera-wide positions.
+3. **Not issues:** hardcoded `detect_fps=1` (harmless `-r 1` in `-vn` pipeline, pre-existing), the `IndexError` when no audio input exists (pre-existing), and the new default preset replacing `preset-rtsp-audio-only` (intended behavior change).
+
+Want me to apply the `get_ffmpeg_arg_list` fix and add the missing tests?

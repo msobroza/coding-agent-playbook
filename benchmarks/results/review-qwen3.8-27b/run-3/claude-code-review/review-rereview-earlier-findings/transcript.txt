@@ -1,0 +1,49 @@
+The execution requires approval I can't wait for, but every flagged behavior is pure arithmetic on the unchanged/added lines, so I can confirm it by direct reasoning:
+
+- `1000 * (100 - 150) // 100 = -500` (negative total at 150% discount); `1000 * (100 - (-10)) // 100 = 1100` (surcharge at -10%).
+- `525.0 * 100 // 100 = 525.0` — `//` with a float operand returns a float, breaking the `-> int` / "whole cents" contract.
+- `self.lines[sku]` (line 16) raises `KeyError` for an unknown SKU before the new `ValueError` guard at line 17 is ever reached.
+- `self.lines.get(sku, (unit_cents, 0))` (line 12) returns the *stored* price on re-add, so a new `unit_cents` is silently dropped.
+
+I ran all 8 finder angles in this context (diff is fully in view; only `src/cart.py` and `tests/test_cart.py` are touched; no CLAUDE.md exists anywhere in scope, so the conventions angle yields nothing; no callers exist outside the tests, so the cross-file angle confirms no call-site breakage — all test expectations still hold). Dedup note: the earlier-review points #1 (negative stored quantity) and #3 (zero/negative add quantity) are genuinely fixed and verified by the new tests; point #2 (unvalidated discount) is not addressed by this commit and remains live.
+
+```json
+[
+  {
+    "file": "src/cart.py",
+    "line": 26,
+    "summary": "total_cents() still accepts any discount_percent (earlier review finding #2, not addressed by this fix commit): 150 produces a negative total and -10 charges more than the subtotal.",
+    "failure_scenario": "cart.add(\"pen\", 1000); cart.total_cents(discount_percent=150) == -500 (a negative charge), and cart.total_cents(discount_percent=-10) == 1100 (surcharge); the commit fixes the two quantity bugs but leaves this one unfixed."
+  },
+  {
+    "file": "src/cart.py",
+    "line": 9,
+    "summary": "add() validates quantity but not unit_cents, so a negative unit price flows into a negative total.",
+    "failure_scenario": "cart.add(\"pen\", -500, 2) is accepted; cart.total_cents() == -1000. The new quantity guard made add() look input-safe while leaving the other monetary input unvalidated."
+  },
+  {
+    "file": "src/cart.py",
+    "line": 12,
+    "summary": "add() silently ignores unit_cents when the SKU already exists, so a re-add at a changed price keeps the original price for the new units.",
+    "failure_scenario": "cart.add(\"pen\", 150, 2); cart.add(\"pen\", 200, 1) stores (150, 3), not (200, 1) — total_cents() is 450, off by 50 from the price the caller actually passed for the new unit."
+  },
+  {
+    "file": "src/cart.py",
+    "line": 16,
+    "summary": "remove() raises KeyError for an unknown SKU before the new ValueError guard is reached, so the error contract for invalid removals is inconsistent (ValueError for bad quantity, KeyError for missing SKU).",
+    "failure_scenario": "A caller that validates removals with `try: cart.remove(sku, n) except ValueError:` treats bad quantities as recoverable input but gets an uncaught KeyError on a typo'd or already-dropped SKU (e.g. remove after the line was just deleted via quantity == held)."
+  },
+  {
+    "file": "src/cart.py",
+    "line": 10,
+    "summary": "The quantity guards in add() and remove() are arithmetic, not type checks: a float quantity slips through and contaminates the int-typed lines dict.",
+    "failure_scenario": "cart.add(\"pen\", 150, 2); cart.add(\"pen\", 1.5) passes `quantity <= 0` and stores held=3.5; cart.remove(\"pen\", 1.5) passes `0 < quantity <= held`; total_cents() then returns a float (525.0) instead of the int the annotation and the 'whole cents' docstring promise."
+  },
+  {
+    "file": "src/cart.py",
+    "line": 26,
+    "summary": "total_cents() returns a float for a float discount_percent despite the -> int annotation.",
+    "failure_scenario": "cart.add(\"pen\", 1000); cart.total_cents(discount_percent=25.5) == 745.0 (float) because `subtotal * (100 - 25.5) // 100` performs float floor division; downstream `sum`/persist code expecting whole cents silently gets a float."
+  }
+]
+```

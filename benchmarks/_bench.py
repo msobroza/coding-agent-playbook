@@ -19,7 +19,8 @@ if TYPE_CHECKING:
 REPO_ROOT: Final = Path(__file__).resolve().parents[1]
 BENCH_ROOT: Final = REPO_ROOT / "benchmarks"
 RESULTS_ROOT: Final = BENCH_ROOT / "results"
-DEFAULT_RUN_NAME: Final = "review-qwen3.6-27b"
+#: One repeat of the committed results; the others are ``run-2`` and ``run-3``.
+DEFAULT_RUN_NAME: Final = "review-qwen3.8-27b/run-1"
 
 #: Where the agents' working trees live: outside the repo on purpose. OpenCode
 #: walks up from its directory for AGENTS.md/CLAUDE.md, and this checkout's own
@@ -28,16 +29,20 @@ WORK_ROOT: Final = Path(
     os.environ.get("BENCH_WORK_ROOT", Path.home() / ".cache" / "playbook-bench")
 )
 
-#: The agent under test: Qwen3.6 27B through OpenRouter, driven by OpenCode or Claude Code.
+#: The agent under test, an OpenRouter model id driven by OpenCode or Claude Code.
+#: ``BENCH_MODEL`` swaps it for a run without an edit here; the committed results
+#: were recorded on the default.
+BENCH_MODEL: Final = os.environ.get("BENCH_MODEL", "qwen/qwen3.8-27b")
 OPENCODE_BIN: Final = os.environ.get("OPENCODE_BIN", "opencode")
-AGENT_MODEL: Final = "openrouter/qwen/qwen3.6-27b"
-AGENT_TIMEOUT_S: Final = 900.0
+AGENT_MODEL: Final = f"openrouter/{BENCH_MODEL}"
+#: The release eval's per-run bound too, so both pipelines stop a run at the same point.
+AGENT_TIMEOUT_S: Final = 600.0
 
 #: Claude Code reaches the same model through OpenRouter's Anthropic-compatible
 #: API. Every model alias (subagents, the small background model) maps to it, so
 #: no Anthropic model is ever called.
 CLAUDE_BIN: Final = os.environ.get("CLAUDE_BIN", "claude")
-CLAUDE_AGENT_MODEL: Final = "qwen/qwen3.6-27b"
+CLAUDE_AGENT_MODEL: Final = BENCH_MODEL
 OPENROUTER_ANTHROPIC_BASE_URL: Final = "https://openrouter.ai/api"
 #: Tools a reviewer needs: read the tree, run git, Python and the tests. Edits in
 #: the scratch tree are allowed (as in OpenCode) and caught by the gate.
@@ -95,18 +100,15 @@ class Experiment:
     harness: str = "opencode"
 
 
-#: Each harness's built-in reviewer, then the playbook's releases in order.
+#: Each harness's built-in reviewer, then the playbook's prompt at its latest release.
+#: The committed playbook rows come from that release's eval record instead (see
+#: README), so these two setups re-run it through this pipeline, without fail-fast.
 EXPERIMENTS: Final = (
     Experiment("opencode-review", "OpenCode /review", None),
-    Experiment("opencode-playbook-v0.1.0", "OpenCode + playbook v0.1.0", "v0.1.0"),
-    Experiment("opencode-playbook-v0.2.0", "OpenCode + playbook v0.2.0", "v0.2.0"),
-    Experiment("opencode-playbook-v0.3.0", "OpenCode + playbook v0.3.0", "v0.3.0"),
+    Experiment("opencode-playbook-v0.4.0", "OpenCode + playbook v0.4.0", "v0.4.0"),
     Experiment("claude-code-review", "Claude Code /code-review", None, harness="claude"),
     Experiment(
-        "claude-playbook-v0.2.0", "Claude Code + playbook v0.2.0", "v0.2.0", harness="claude"
-    ),
-    Experiment(
-        "claude-playbook-v0.3.0", "Claude Code + playbook v0.3.0", "v0.3.0", harness="claude"
+        "claude-playbook-v0.4.0", "Claude Code + playbook v0.4.0", "v0.4.0", harness="claude"
     ),
 )
 
@@ -116,7 +118,7 @@ def experiment_by_key(key: str) -> Experiment:
 
     Example::
 
-        experiment_by_key("opencode-playbook-v0.1.0").playbook_text  # "v0.1.0"
+        experiment_by_key("opencode-playbook-v0.4.0").playbook_text  # "v0.4.0"
     """
     for experiment in EXPERIMENTS:
         if experiment.key == key:
@@ -211,8 +213,8 @@ def claude_agent_env(openrouter_key: str, config_dir: Path) -> dict[str, str]:
         "ANTHROPIC_DEFAULT_HAIKU_MODEL": model,
         "CLAUDE_CODE_SUBAGENT_MODEL": model,
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
-        # Qwen3.6 27B's real window; Claude Code does not know the model and would
-        # otherwise assume 200k and print a notice on every run.
+        # Qwen3.6/3.8 27B's real window; Claude Code does not know the model and
+        # would otherwise assume 200k and print a notice on every run.
         "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "262144",
         # An empty config dir per run: no user CLAUDE.md, settings, plugins or hooks.
         "CLAUDE_CONFIG_DIR": str(config_dir),

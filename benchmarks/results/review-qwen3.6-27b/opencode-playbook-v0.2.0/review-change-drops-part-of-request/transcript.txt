@@ -1,7 +1,0 @@
-src/report.py:46 — correctness — important — The stated intent includes a `--since YYYY-MM-DD` option to filter out entries before a given date; only `--csv` was implemented. There is no `--since` argument in the parser and no date-filtering logic in `read_ledger` or `monthly_totals`.
-
-src/report.py:39 — failure modes — nit — `f"{cents / 100:.2f}"` produces a float to format currency. The pre-existing `format_table` at line 30 uses the same pattern, but new code should prefer integer arithmetic (e.g., `cents // 100` and `cents % 100`) for exact decimal output.
-
-Findings: 1 important, 1 nit, 0 pre-existing
-
-request changes

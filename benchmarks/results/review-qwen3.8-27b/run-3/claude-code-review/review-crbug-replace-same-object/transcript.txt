@@ -1,0 +1,38 @@
+Review complete. All scenarios were verified against the patched code by executing them (all 5 tests pass; the only callers of `replace` are the tests, so no cross-file breakage). Findings, ranked most-severe first:
+
+```json
+[
+  {
+    "file": "src/scene.py",
+    "line": 37,
+    "summary": "A failed replace() still mutates the scene: new_m is removed from lists before the search for old_m is known to fail.",
+    "failure_scenario": "scene.add(square); scene.replace(Mobject('circle'), square) raises ValueError('Could not find ...') but leaves scene.mobjects == [] — the square is silently deleted by an operation that reported failure. Any caller catching the ValueError (the contract test 3 documents) observes a corrupted scene. Verified by execution."
+  },
+  {
+    "file": "src/scene.py",
+    "line": 37,
+    "summary": "Dedup is local to each list visited and the recursion short-circuits at old_m, so pre-existing references to new_m in lists the search never reaches survive — duplicate references remain in the scene, defeating the fix's stated goal.",
+    "failure_scenario": "groupA=(circle) and groupB=(square) both on screen; replace(circle, square) → groupA=[square] AND groupB=[square] (two references). Mirror: circle at top level, square inside a group; replace(circle, square) → square at top level AND inside the group. The new tests only cover new_m in the same list as old_m or at the top level, which is exactly where the local check works. Verified by execution."
+  },
+  {
+    "file": "src/scene.py",
+    "line": 37,
+    "summary": "replace(m, m) for an on-screen m regressed from a successful no-op to a misleading ValueError, and removes m from the scene.",
+    "failure_scenario": "scene.add(m); scene.replace(m, m): the guard removes m first, the scan then finds nothing, and it raises ValueError('Could not find Mobject('m') in the scene') even though m was in the scene — and the scene is left empty. Before this change the call succeeded as a no-op. Verified by execution."
+  },
+  {
+    "file": "src/scene.py",
+    "line": 38,
+    "summary": "list.remove() drops only the first occurrence, so a list holding two references to new_m keeps a duplicate after replace.",
+    "failure_scenario": "group = Mobject('group', circle, square, square) (groups, unlike Scene.add, do not dedup); scene.add(group); scene.replace(circle, square) → group.submobjects == [square, square]. To honor 'no duplicate references', all occurrences must be removed. Verified by execution."
+  },
+  {
+    "file": "src/scene.py",
+    "line": 35,
+    "summary": "Altitude: the dedup is woven into the find-and-replace traversal, so which references get removed depends on DFS short-circuit order — the root cause behind findings 1-4; the 'Breadth-first' comment (line 40) is also wrong (the walk is depth-first) and now load-bearing.",
+    "failure_scenario": "Maintainability cost: the dedup semantics are an emergent property of traversal order — any reordering of the search (or 'fixing' the BFS comment) silently changes what gets removed, and the failure path can never be made side-effect-free without restructuring. The general fix is: (1) find old_m with a pure search, (2) if found, remove every reference to new_m in a separate scene-wide pass, (3) insert new_m at the found position."
+  }
+]
+```
+
+Key context: the diff adds a 3-line guard (`if new_m in mobj_list: mobj_list.remove(new_m)`) at the top of the recursive `replace_in_list` helper in `/private/tmp/.../scratch/src/scene.py` (lines 36-38) plus two regression tests. The tests pass, but they only cover the narrow case where `new_m` sits in the same list as `old_m` or at the top level — precisely the cases where the per-list, traversal-coupled check happens to work. Findings 1-4 were all reproduced by running the scenarios against the patched code; the temp verification script was removed and the tree is clean.

@@ -1,0 +1,9 @@
+## Review Summary
+
+**High severity: `--since` option was never implemented.** The request asked for two options (`--csv` and `--since YYYY-MM-DD`), but only `--csv` was added. `src/report.py` has no `--since` argument, no date-filtering logic, and no related tests — anyone passing `--since` gets an argparse error.
+
+**`--csv` is correct.** `format_csv` (src/report.py:33-40) writes a `month,total` header plus one row per month via the `csv` module; all 4 tests pass including an end-to-end `main` check.
+
+Missing piece, for reference: add a `--since` argument parsed with `date.fromisoformat` (matching `read_ledger` at src/report.py:17), drop entries with `day < since` before `monthly_totals`, and add a test.
+
+Want me to implement the missing `--since` option?

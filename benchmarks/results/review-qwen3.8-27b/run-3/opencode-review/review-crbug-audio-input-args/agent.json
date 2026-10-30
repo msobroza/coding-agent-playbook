@@ -1,0 +1,41 @@
+{
+  "experiment": "opencode-review",
+  "sample_id": "review/crbug-audio-input-args",
+  "harness": "opencode",
+  "model": "openrouter/qwen/qwen3.8-27b",
+  "command": [
+    "opencode",
+    "run",
+    "--pure",
+    "--dir",
+    "~/.cache/playbook-bench/review-qwen3.8-27b/run-3/opencode-review/review-crbug-audio-input-args/scratch",
+    "--model",
+    "openrouter/qwen/qwen3.8-27b",
+    "--format",
+    "json",
+    "--command",
+    "review",
+    "{prompt}"
+  ],
+  "returncode": 0,
+  "timed_out": false,
+  "duration_seconds": 196.7,
+  "baseline_commit": "8d2daf94d56d54167c0f51ad978ab5ca8555f965",
+  "scratch": "~/.cache/playbook-bench/review-qwen3.8-27b/run-3/opencode-review/review-crbug-audio-input-args/scratch",
+  "setup_snapshot": "~/.cache/playbook-bench/review-qwen3.8-27b/run-3/opencode-review/review-crbug-audio-input-args/scratch__setup_baseline",
+  "main_loop_tools": [
+    "task:build",
+    "bash",
+    "read",
+    "read",
+    "read",
+    "read",
+    "bash",
+    "read",
+    "bash",
+    "bash",
+    "bash"
+  ],
+  "second_pass_ran": null,
+  "subagent_starts": null
+}

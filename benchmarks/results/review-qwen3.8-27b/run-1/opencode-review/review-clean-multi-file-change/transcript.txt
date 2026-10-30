@@ -1,0 +1,9 @@
+
+
+**Review verdict: clean, no bugs.** The lb/kg change to `quote_cents` is backward compatible (default `"kg"`, exact `0.45359237` lb→kg conversion, `weight <= 0` still validated before conversion), error handling is consistent, and the full suite passes 8/8 via `uv run pytest` (note: system Python 3.8 can't run it — use the project interpreter).
+
+Two non-blocking observations:
+1. `src/units.py:10` — unit lookup is case-sensitive; `"KG"`/`"LB"` raise `unknown weight unit`. Fine if inputs are controlled, a foot-gun if built from user input.
+2. Sub-milligram float edge: a lb value whose product lands within ~1e-15 of a whole kg could ceil either way — unrealistic for parcel weights, only relevant for high-precision input.
+
+No further action needed unless you want the unit lookup lowercased.

@@ -1,0 +1,44 @@
+I have completed all 8 finder angles with empirical verification. Let me summarize the analysis:
+
+**Angle A (line-by-line):** `isinstance(self.log_output, TextIO)` on line 37 uses `typing.TextIO`. I verified against the project's actual interpreter chain: the venv is CPython 3.13.9, whose `typing.py` (line 3573) defines `class TextIO(IO[str])` — an annotation-only abstract class, **not** `io.TextIOWrapper`. On system Python 3.8 I empirically confirmed `isinstance(open_file, typing.TextIO)` → `False`. Running the repo's own code: `Service('/bin/true', log_output='/tmp/svclog_review.txt').stop()` leaves `log_output.closed == False`; the default (devnull) case is also left open. Only the int-fd branch works.
+
+**Angle B (removed behavior):** the old `try/except Exception: pass` guard is gone. Demonstrated: double `stop()` on an fd log raises `OSError: [Errno 9] Bad file descriptor`. Also, a close failure now aborts `stop()` before `process.terminate()` (old code always terminated the child).
+
+**Angle C (cross-file):** only tests call `Service`; no other call sites.
+
+**Cleanup/efficiency:** nothing material beyond the mechanism critique folded into finding 1 (`io.TextIOWrapper` would still miss binary `BufferedWriter`/the devnull default; `hasattr(x, 'close')`/`io.IOBase` is the root-cause fix).
+
+**Conventions:** `~/.claude/CLAUDE.md` states "Every new function gets a test; every bug fix gets a regression test." The diff's stated goal covers "an open file or a file descriptor", but the added regression test covers only the fd branch; the file case (the broken one) has no test — the suite passes 3/3 green, masking the leak.
+
+**Test hygiene:** the new fd test leaks `read_end` if `stop()` raises (sibling test uses try/finally, this one doesn't).
+
+Dedup merged: the "wrong check class" and "narrower than IO[Any] signature allows" candidates are the same defect at the same line; kept one with the binary/default detail in the scenario.
+
+```json
+[
+  {
+    "file": "src/service.py",
+    "line": 37,
+    "summary": "isinstance(self.log_output, TextIO) uses typing.TextIO, an annotation-only class that no real file object is an instance of, so stop() never closes any file-based log.",
+    "failure_scenario": "Service('chromedriver', '/tmp/driver.log') or the default log_output=None -> line 37 is False for every real file (io.TextIOWrapper does not subclass typing.TextIO; confirmed on the project's CPython 3.13.9, typing.py:3573 'class TextIO(IO[str])', and on 3.8) -> demonstrated: after stop(), log_output.closed is still False -> the log file/fd is left open, so the diff's stated goal ('no log file is left open once the driver stops') is unmet for all file-based logs; behavior is unchanged from the baseline (which also failed via a swallowed AttributeError). Substituting io.TextIOWrapper would still miss the binary default (open(os.devnull, 'wb') is a BufferedWriter); the root-cause check is hasattr(x, 'close') or isinstance(x, io.IOBase)."
+  },
+  {
+    "file": "src/service.py",
+    "line": 40,
+    "summary": "stop() no longer guards the log close (the old 'except Exception: pass' was removed), so a close failure propagates out of stop() — before the child process is terminated.",
+    "failure_scenario": "Double stop: Service(exec, log_output=fd).stop() then svc.stop() -> second os.close raises OSError [Errno 9] Bad file descriptor (demonstrated) and propagates to the caller; previously the exception was swallowed. Worse, if a text log's close() fails on flush (ENOSPC/NFS error), stop() aborts at line 38 before process.terminate() runs, leaving the driver child process running while the caller sees the exception; the old code always terminated the child."
+  },
+  {
+    "file": "tests/test_service.py",
+    "line": 22,
+    "summary": "The new regression test covers only the file-descriptor branch; there is no test that stop() closes a file-based log — the exact case that is broken — violating the repo's rule that every bug fix gets a regression test.",
+    "failure_scenario": "~/.claude/CLAUDE.md: 'Every new function gets a test; every bug fix gets a regression test.' The diff's stated goal covers 'an open file or a file descriptor', but no test asserts log_output.closed for a str path or default Service; demonstrated: pytest passes 3/3 green while Service(path).stop() leaves the log file open, so the defect ships undetected."
+  },
+  {
+    "file": "tests/test_service.py",
+    "line": 24,
+    "summary": "test_stop_closes_a_file_descriptor_log leaks read_end if Service(...) or stop() raises, unlike its sibling test which uses try/finally for cleanup.",
+    "failure_scenario": "If stop() raises (e.g., the OSError path above) the test fails before line 25, leaving the read-end fd of os.pipe() open in the test process for the remainder of the session — a slow fd leak across repeated failing runs."
+  }
+]
+```

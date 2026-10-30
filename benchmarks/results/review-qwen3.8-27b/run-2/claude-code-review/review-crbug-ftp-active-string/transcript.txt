@@ -1,0 +1,31 @@
+All lines confirmed. My review is complete — I ran all 8 angles (line-by-line scan, removed-behavior audit, cross-file tracing, reuse, simplification, efficiency, altitude, and CLAUDE.md conventions) against the full codebase. The codebase is small (2 source files, 1 test file), so every candidate was checked against the actual call sites and the `Settings` contract. After deduplication, 3 genuine findings survive; I did not pad the list.
+
+**Summary of analysis:**
+
+- **The core bug (planted + real):** `from_settings` (src/feedstorage.py:27) reads the new boolean setting with `settings["FEED_STORAGE_FTP_ACTIVE"] or False` instead of the existing `Settings.getbool()` helper (src/settings.py:36). The `Settings` class docstring and `from_command_line` both document that CLI overrides arrive as *strings*, and `getbool` exists precisely to coerce "True/False, 1/0 and their text forms" (raising `ValueError` on garbage). Since any non-empty string is truthy, `or False` returns the string itself: `-s FEED_STORAGE_FTP_ACTIVE=false` → `active="false"` → `if self.active:` at line 34 is true → `ftp.set_pasv(False)` → the upload runs in **active** mode when the user explicitly asked for passive. There is no way to turn the setting off from the command line.
+- **Test gap:** the two new tests only cover in-memory booleans; the command-line string path the feature description explicitly promises is untested, so finding 1 passes the suite green.
+- **Convention (quotable rule, low severity):** `ftp.connect` in the touched `store()` has no timeout, against the explicit "timeouts and bounded retries by default" rule in `~/.claude/CLAUDE.md`.
+- Angles with no findings: removed behavior (passive default preserved), efficiency (no waste), simplification/altitude (root fix is just calling `getbool` — same defect as #1, not separate). No repo-level CLAUDE.md exists.
+
+```json
+[
+  {
+    "file": "src/feedstorage.py",
+    "line": 27,
+    "summary": "from_settings reads FEED_STORAGE_FTP_ACTIVE with `settings[...] or False` instead of `settings.getbool(...)`, so every non-empty command-line string (including \"false\" and \"0\") is truthy and enables FTP active mode.",
+    "failure_scenario": "Settings.from_command_line([\"-s FEED_STORAGE_FTP_ACTIVE=false\"], project) stores the string \"false\"; \"false\" or False → \"false\" (truthy) → self.active = \"false\" → `if self.active:` at line 34 fires → ftp.set_pasv(False) → the feed is uploaded in ACTIVE mode although the user explicitly disabled it. The user cannot turn the setting off from the CLI at all. Similarly `-s FEED_STORAGE_FTP_ACTIVE=yes` silently enables active mode where getbool would raise ValueError(\"FEED_STORAGE_FTP_ACTIVE='yes' is not a boolean; use True/False or 1/0\"). self.active also ends up a str, violating the declared `active: bool` annotation. Fix: `active=settings.getbool(\"FEED_STORAGE_FTP_ACTIVE\")`."
+  },
+  {
+    "file": "tests/test_feedstorage.py",
+    "line": 16,
+    "summary": "The new tests only exercise in-memory boolean values and never the command-line string path the feature explicitly supports, leaving the string-coercion regression untested.",
+    "failure_scenario": "test_passive_mode_is_the_default and test_the_setting_turns_active_mode_on construct Settings with real booleans ({\"FEED_STORAGE_FTP_ACTIVE\": True}); no test builds settings via Settings.from_command_line (e.g. [\"FEED_STORAGE_FTP_ACTIVE=false\"]) and asserts `storage.active is False`. The exact user-facing regression — `-s FEED_STORAGE_FTP_ACTIVE=false` silently enabling active mode — passes this suite green. Violates ~/.claude/CLAUDE.md: \"Every new function gets a test; every bug fix gets a regression test.\""
+  },
+  {
+    "file": "src/feedstorage.py",
+    "line": 32,
+    "summary": "store() (the function this diff modifies) performs network I/O with no timeout or bounded retry: ftp.connect(self.host, self.port) blocks indefinitely if the FTP server hangs.",
+    "failure_scenario": "A black-holing FTP server (connect accepted, never completing login/data) makes file.seek→connect→login hang forever, stalling the whole feed export with no failure signal. ~/.claude/CLAUDE.md (Global instructions, Clean Code, Comments & errors): \"Robustness is explicit, not inferred: code touching the network or external services gets timeouts and bounded retries by default\" — no timeout argument is passed to connect() and there is no retry, so this rule is broken in the function the PR touches. (Pre-existing lines, but in scope as the PR re-exposes the function.)"
+  }
+]
+```

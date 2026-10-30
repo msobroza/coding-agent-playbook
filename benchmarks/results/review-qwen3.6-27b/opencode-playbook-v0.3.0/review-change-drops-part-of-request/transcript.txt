@@ -1,8 +1,0 @@
-The `--csv` option is implemented correctly. However, the second part of the request is entirely absent.
-
-- **src/report.py:43-52** — *Correctness* — `important` — The `--since YYYY-MM-DD` option is not implemented. The request asked for two things; only `--csv` was added. No argument parser for `--since`, no date parsing, and no filtering of ledger entries by date. Entries before any given date are never excluded from the totals.
-- **tests/test_report.py:1-28** — *Correctness* — `important` — No test coverage for `--since` filtering. Even after the option is added, there needs to be a test that verifies entries before the cutoff date are excluded from the report.
-
-Findings: 2 important, 0 nit, 0 pre-existing
-
-request changes

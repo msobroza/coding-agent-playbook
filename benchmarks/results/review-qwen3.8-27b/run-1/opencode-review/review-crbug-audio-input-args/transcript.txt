@@ -1,0 +1,74 @@
+
+
+The review found a real bug: `src/audio.py` only handles preset names and lists, so a plain argument string (documented as valid in `config.py`) crashes `get_ffmpeg_arg_list(global_args) + "<str>"` with `TypeError` at construction time. Let me verify and fix.
+
+
+
+
+
+Confirmed. Now let me check how the rest of the codebase resolves `*_args` values, to follow the existing convention.
+
+
+
+
+Only `audio.py` uses these helpers. Let me check the tests and the diff to confirm scope before fixing.
+
+
+
+
+
+
+
+
+
+I've confirmed the bug and identified its scope: `config.py:3-5` documents plain argument strings as a valid `FfmpegArgs` form, but the `or` chain in `audio.py:15-20` only handles presets and lists, so plain strings crash on list concatenation. I'll fix this by routing non-preset values through `get_ffmpeg_arg_list` and add regression tests for both the input-level and camera-wide string cases.
+
+
+
+
+Now the regression tests:
+
+
+
+
+
+
+
+The error is pre-existing in `config.py` (Python 3.8 doesn't support `str | list[str]` at module level). Let me check for a compatible Python or venv.
+
+
+
+
+
+
+
+
+
+
+
+
+
+`python3.11` has pytest. Running the suite with it:
+
+
+
+
+All 6 pass. Now verifying the new tests actually catch the old bug — temporarily restoring the pre-fix `audio.py`:
+
+
+
+
+Verified: the new tests reproduce the exact `TypeError` on the old code and pass on the fix. Final diff:
+
+
+
+
+Done. Summary of the review and what I did:
+
+**Review finding (confirmed):** the change in `src/audio.py` handled only 2 of the 3 valid `FfmpegArgs` forms documented in `config.py:3-5`. A plain argument string (e.g. `input_args="-rtsp_transport udp"`) slipped through the `or` chain raw, so `list + str` raised `TypeError: can only concatenate list (not "str") to list` in `AudioEventMaintainer.__init__` — audio detection fails to start for any camera configured that way.
+
+**Fix applied** (`src/audio.py:12-21`): added `_resolved_args()`, which resolves any `FfmpegArgs` value via `parse_preset_input(...)` or, failing that, `get_ffmpeg_arg_list(...)` (shell-like split for strings, passthrough for lists). The selection order is unchanged: audio input's `input_args` if set, else camera-wide; empty `""`/`[]` still fall back as before.
+
+**Tests:** added 2 regression tests (input-level and camera-wide plain-string args). Verified they fail with the exact `TypeError` against the pre-fix code and pass with it — 6/6 passing under `python3.11 -m pytest`.
+
+**Left as-is (minor):** `detect_fps=1` is hardcoded for the reolink preset, appending a video-oriented `-r 1` to an audio-only command — harmless today, but the magic number is worth a comment or named constant if that preset ever gets a real framerate meaning.

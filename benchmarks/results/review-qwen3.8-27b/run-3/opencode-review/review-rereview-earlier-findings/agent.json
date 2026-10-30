@@ -1,0 +1,31 @@
+{
+  "experiment": "opencode-review",
+  "sample_id": "review/rereview-earlier-findings",
+  "harness": "opencode",
+  "model": "openrouter/qwen/qwen3.8-27b",
+  "command": [
+    "opencode",
+    "run",
+    "--pure",
+    "--dir",
+    "~/.cache/playbook-bench/review-qwen3.8-27b/run-3/opencode-review/review-rereview-earlier-findings/scratch",
+    "--model",
+    "openrouter/qwen/qwen3.8-27b",
+    "--format",
+    "json",
+    "--command",
+    "review",
+    "{prompt}"
+  ],
+  "returncode": 0,
+  "timed_out": false,
+  "duration_seconds": 79.7,
+  "baseline_commit": "c00ca662eb1a7d671621c6d1b67ff8491ed8c3e2",
+  "scratch": "~/.cache/playbook-bench/review-qwen3.8-27b/run-3/opencode-review/review-rereview-earlier-findings/scratch",
+  "setup_snapshot": "~/.cache/playbook-bench/review-qwen3.8-27b/run-3/opencode-review/review-rereview-earlier-findings/scratch__setup_baseline",
+  "main_loop_tools": [
+    "task:build"
+  ],
+  "second_pass_ran": null,
+  "subagent_starts": null
+}

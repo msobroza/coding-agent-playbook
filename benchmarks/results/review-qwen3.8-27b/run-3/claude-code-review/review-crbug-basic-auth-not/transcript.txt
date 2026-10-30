@@ -1,0 +1,44 @@
+All verification complete. Let me consolidate the findings from all 8 angles.
+
+**Summary of the finder pass:**
+
+- **Angle A (line-by-line):** The applied change writes `!hmac.compare_digest(...)` on lines 16–17. `!` is not a Python operator (it's C/JS/shell syntax). I confirmed with `py_compile` and direct import: `src/auth.py` raises `SyntaxError: invalid syntax` — the module cannot be imported at all. Correct form is `not hmac.compare_digest(...)`. Also found: `hmac.compare_digest` on `str` requires ASCII-only input (verified: `TypeError: comparing strings with non-ASCII characters is not supported`), so the check can now raise on legitimate credentials instead of returning False.
+- **Angle B (removed behavior):** The deleted `!=` line worked on arbitrary `str` and never raised. The replacement narrows the domain to ASCII-only strings and (as written) fails at parse time. Both behaviors lost.
+- **Angle C (cross-file):** Only caller is `tests/test_auth.py` (line 1 imports `src.auth`), so the SyntaxError breaks the entire test suite at collection time, and in production any admin-endpoint process importing this module crashes.
+- **Reuse / Simplification / Efficiency:** `hmac.compare_digest` is the right stdlib primitive; no duplication or waste. The `if not A or not B: return False; return True` shape could be `return A and B` after both comparisons are computed (folded into the timing finding below).
+- **Altitude:** The PR's stated goal is "no longer leaks through its timing how much of a username or password matched." Prefix-match leakage is fixed, but the `or` short-circuits: when the username fails, the password comparison is never run, so total wall time still distinguishes "wrong username" from "right username, wrong password." The constant-time property holds only per-field, not across the pair; both comparisons should be evaluated unconditionally.
+- **Conventions:** No CLAUDE.md exists anywhere in the repo (Glob found none; home-level check blocked out of workspace) — no findings.
+- **Test coverage:** The three tests are ASCII-only; nothing pins the narrowed str domain, so the `TypeError` regression would pass CI.
+
+Dedup: the two `!` occurrences (lines 16 and 17) are the same defect at the same location — kept as one finding.
+
+```json
+[
+  {
+    "file": "src/auth.py",
+    "line": 16,
+    "summary": "`!` is not a Python operator — `!hmac.compare_digest(...)` on lines 16-17 is a SyntaxError, so the module cannot be imported at all.",
+    "failure_scenario": "Any process importing src.auth (e.g. the admin endpoint, or `tests/test_auth.py` line 1) dies at import with `SyntaxError: invalid syntax` at line 16 (confirmed by py_compile and direct import). The entire credential check is dead code; no request can be authorized and the whole test suite fails at collection. Fix is `not hmac.compare_digest(...)`, not shell-style `!`."
+  },
+  {
+    "file": "src/auth.py",
+    "line": 16,
+    "summary": "`hmac.compare_digest` on str raises TypeError for non-ASCII input, so any credential containing non-ASCII characters crashes the auth check instead of being rejected.",
+    "failure_scenario": "A configured admin password (or an Authorization: Basic header decoded as latin-1) containing any non-ASCII character, e.g. password 'pässw0rd' or username 'admín', makes `hmac.compare_digest` raise `TypeError: comparing strings with non-ASCII characters is not supported` (verified). The admin endpoint gets an unhandled exception/500 instead of a 401, and with a non-ASCII expected credential, ALL authentication attempts crash. The old `!=` comparison worked on arbitrary str; encode both sides to bytes (UTF-8) before comparing to preserve that behavior."
+  },
+  {
+    "file": "src/auth.py",
+    "line": 16,
+    "summary": "The `or` short-circuits: when the username fails to match, the password comparison is never executed, so total timing still reveals whether the username was correct — the stated constant-time goal is only partially met.",
+    "failure_scenario": "An attacker who guesses the username but not the password measures ~2 comparison times of work; with a wrong username they measure ~1 comparison. That timing delta still distinguishes 'right username, wrong password' from 'wrong username', leaking the username match across the field boundary (and any error-handling asymmetry amplifies it). The root-cause form evaluates both fields unconditionally: `u = hmac.compare_digest(given.username, expected.username); p = hmac.compare_digest(given.password, expected.password); return u and p` — both comparisons always run, and the boolean combine adds no measurable branch."
+  },
+  {
+    "file": "tests/test_auth.py",
+    "line": 15,
+    "summary": "No test exercises non-ASCII credentials or pins the str-domain behavior, so the `compare_digest` TypeError narrowing is invisible to the suite.",
+    "failure_scenario": "All three tests use ASCII-only credentials, so after the SyntaxError is fixed, CI stays green while `is_authorized(Credentials(\"admín\", \"pw\"), ADMIN)` raises TypeError on real deployments. Adding one test with a non-ASCII expected or given credential (asserting it returns False, or asserting the chosen encode-to-bytes behavior) would have caught the finding above before merge."
+  }
+]
+```
+
+**Key context for the report:** The reviewed change (in `CHANGE.diff`, applied to the working tree and present at HEAD as the only commit's content) is fundamentally broken — it introduces a hard `SyntaxError` (Python's negation is `not`, not `!`), which supersedes all other concerns. Beyond that, even the syntactically-fixed version has a real availability bug (`compare_digest` rejects non-ASCII strings with `TypeError`) and only partially achieves its stated timing-attack goal due to the `or` short-circuit.

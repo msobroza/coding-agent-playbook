@@ -1,0 +1,42 @@
+Review complete. I examined the applied diff (CHANGE.diff), read `src/feedstorage.py`, `src/settings.py`, and `tests/test_feedstorage.py` in full, traced `from_settings`/`getbool` usage across the repo, and empirically confirmed the core defect by running the CLI-override path through `Settings.from_command_line` (temp script removed afterward; tree left clean).
+
+**Key angles and results:**
+- **A (line-by-line):** `settings["FEED_STORAGE_FTP_ACTIVE"] or False` is broken for string values — the docstring of `Settings.from_command_line` says command-line overrides "arrive as strings", and I confirmed `"false"`/`"0"`/`"yes"` all yield truthy `active` values, enabling active mode even when the user explicitly disabled it. The codebase already has `Settings.getbool()` for exactly this.
+- **B (removed behavior):** nothing removed — the old `cls(host, path)` just hardcoded the default.
+- **C (cross-file):** only test callers of `from_settings`; no broken call sites; `getbool` in `src/settings.py:36` is the intended helper the diff fails to use.
+- **Reuse/simplification/efficiency/altitude:** all fold into the one defect at line 27 (ad-hoc truthiness instead of the existing typed converter).
+- **Conventions:** no CLAUDE.md in the repo or applicable scope → none.
+- **Tests:** the two new tests only exercise Python `True` and defaults; the documented CLI string path is untested — which is precisely the broken path.
+
+Findings (JSON):
+
+```json
+[
+  {
+    "file": "src/feedstorage.py",
+    "line": 27,
+    "summary": "from_settings uses `settings[\"FEED_STORAGE_FTP_ACTIVE\"] or False`, so the string values that command-line overrides produce are treated as truthy — `FEED_STORAGE_FTP_ACTIVE=false` or `=0` enables FTP active mode instead of disabling it.",
+    "failure_scenario": "Running with `-s FEED_STORAGE_FTP_ACTIVE=false` (or `0`), Settings.from_command_line stores the text \"false\"; \"false\" or False is the truthy string \"false\", so storage.active becomes \"false\" (violating the `active: bool` annotation) and `if self.active:` in store() calls ftp.set_pasv(False) — uploads go out in active mode although the user explicitly requested the default passive mode. Any other non-empty text (e.g. \"yes\", \"off\") also silently enables active mode, bypassing the ValueError validation that the existing Settings.getbool() helper provides. Fix: `active=settings.getbool(\"FEED_STORAGE_FTP_ACTIVE\")`."
+  },
+  {
+    "file": "tests/test_feedstorage.py",
+    "line": 17,
+    "summary": "The new tests only cover the Python-bool `True` and the default; no test exercises the documented command-line override path where values arrive as text.",
+    "failure_scenario": "test_the_setting_turns_active_mode_on constructs Settings({\"FEED_STORAGE_FTP_ACTIVE\": True}) directly, and test_passive_mode_is_the_default uses the default — neither calls Settings.from_command_line, so the regression where `FEED_STORAGE_FTP_ACTIVE=false`/`0` as a CLI string activates active mode passes the whole suite. A test like `Settings.from_command_line([\"FEED_STORAGE_FTP_ACTIVE=0\"])` asserting `.active is False` would have caught it."
+  },
+  {
+    "file": "src/feedstorage.py",
+    "line": 39,
+    "summary": "store() only runs ftp.quit() on the happy path; any failure in connect/login/set_pasv/cwd/storbinary leaks the open FTP control connection.",
+    "failure_scenario": "If ftp.cwd(dirname) raises (wrong directory) or ftp.storbinary raises (e.g. a filename containing a space), the exception propagates without ftp.quit(), leaving the socket open until GC/timeout; the new set_pasv(F37) call added in this diff extends that unguarded block. Wrap the session in try/finally (or a contextlib.closing around ftp)."
+  },
+  {
+    "file": "src/feedstorage.py",
+    "line": 37,
+    "summary": "For a path without a directory component, posixpath.split returns dirname == \"\" and ftp.cwd(\"\") fails, so top-level filenames are unusable (pre-existing, in the touched function).",
+    "failure_scenario": "With self.path = \"items.json\", posixpath.split yields (\"\", \"items.json\") and ftp.cwd(\"\") sends `CWD ` with an empty argument, producing a 502/550 server error and aborting the upload even though a plain STOR in the current directory would succeed; guard with `if dirname: ftp.cwd(dirname)`."
+  }
+]
+```
+
+Note on count: I targeted 5+ findings, but after running all 8 angles only 4 genuine, non-duplicate candidates survived — the remaining candidates (e.g. `or False` as a reuse/simplification/altitude cleanup, the `active: bool` type-contract violation) are the same defect at the same location as finding 1 and were merged rather than duplicated.

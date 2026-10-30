@@ -1,0 +1,46 @@
+
+
+
+
+
+The review found two real issues, both from one root cause: no validation that exactly one strategy is given. Let me check the tests, then fix.
+
+
+
+
+
+
+
+Now I'll add the guard requiring exactly one strategy:
+
+
+
+
+Now add tests for the two invalid cases:
+
+
+
+
+
+Now let me verify pytest is used in this project and run the tests:
+
+
+
+
+pytest is a project dependency. Running the tests:
+
+
+
+
+All 6 tests pass via `uv run pytest` (the system python3.8 fallback failed on the pre-existing `Callable` import, irrelevant).
+
+## Summary
+
+The review found two issues in the `xtrim` change, both stemming from one root cause — no validation that a trimming strategy was supplied:
+
+1. **No-strategy call built a malformed command (high)** — `xtrim("events")` emitted `("XTRIM", "events", b"~")` and `xtrim("events", limit=10)` emitted `("XTRIM", "events", b"~", b"LIMIT", 10)`; both are syntax errors on the Redis server.
+2. **No mutual-exclusivity guard (medium)** — `xtrim("events", 100, minid=...)` emitted both `MAXLEN` and `MINID` strategies.
+
+**Fix applied** (`src/streams.py:34-35`): a single guard raising `ValueError("exactly one of maxlen or minid is required")` when zero or both are set. The existing append logic already handles the valid single-strategy paths correctly, so no other changes were needed.
+
+**Tests added** (`tests/test_streams.py`): `test_xtrim_requires_a_strategy` and `test_xtrim_rejects_both_strategies`, each asserting the `ValueError` and that no command was sent to the executor.

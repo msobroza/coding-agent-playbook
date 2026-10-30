@@ -1,0 +1,38 @@
+{
+  "experiment": "claude-code-review",
+  "sample_id": "review/crbug-ftp-active-string",
+  "harness": "claude",
+  "model": "qwen/qwen3.8-27b",
+  "command": [
+    "claude",
+    "-p",
+    "--setting-sources",
+    "",
+    "--strict-mcp-config",
+    "--settings",
+    "{\"autoMemoryEnabled\": false}",
+    "--model",
+    "qwen/qwen3.8-27b",
+    "--no-session-persistence",
+    "--permission-mode",
+    "acceptEdits",
+    "--allowedTools",
+    "Read,Grep,Glob,Task,Skill,Bash(git:*),Bash(python:*),Bash(python3:*),Bash(pytest:*),Bash(uv:*),Bash(ls:*)",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--",
+    "{prompt}"
+  ],
+  "returncode": 0,
+  "timed_out": false,
+  "duration_seconds": 76.6,
+  "baseline_commit": "9cdd14c3161f7d4017b795556ef58468e38a942d",
+  "scratch": "~/.cache/playbook-bench/review-qwen3.8-27b/run-1/claude-code-review/review-crbug-ftp-active-string/scratch",
+  "setup_snapshot": "~/.cache/playbook-bench/review-qwen3.8-27b/run-1/claude-code-review/review-crbug-ftp-active-string/scratch__setup_baseline",
+  "main_loop_tools": [],
+  "second_pass_ran": null,
+  "subagent_starts": {
+    "foreground": 1
+  }
+}

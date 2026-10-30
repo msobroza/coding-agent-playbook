@@ -1,0 +1,51 @@
+Review complete. I ran all 8 finder angles over the applied diff (`CHANGE.diff` = working tree; `git diff` empty because the baseline commit already contains it), and verified runtime behavior on the project's actual interpreter (CPython 3.13.9 from the venv, `requires-python = ">=3.12"`).
+
+Key empirical results:
+- `isinstance(open(path, "a+"), typing.TextIO)` is **False** in 3.13 (and 3.8) — `typing.TextIO` resolves to a typing-module placeholder class with MRO `(typing.TextIO, typing.IO, typing.Generic, object)`, so it is not a supertype of `io.TextIOWrapper`.
+- Repro of `stop()`: str-path log (the documented primary case) → `closed == False` after stop; default `None` (devnull, opened `"wb"`) → fd **still open** after stop; user-passed binary file → not closed; double `stop()` with an fd log → `OSError [Errno 9]`. Existing 3 tests pass because none exercises the file branch.
+
+```json
+[
+  {
+    "file": "src/service.py",
+    "line": 37,
+    "summary": "isinstance(self.log_output, TextIO) is never True for real file objects — typing.TextIO is a typing placeholder class, not io.TextIOWrapper/TextIOBase — so stop() silently never closes the log opened from a path (or any passed-in text file), leaving the exact bug the change claims to fix in place for the primary documented case.",
+    "failure_scenario": "Service(\"chromedriver\", log_output=\"/tmp/driver.log\") → __init__ stores a TextIOWrapper; verified on the project's Python 3.13.9: isinstance(wrapper, TextIO) is False and isinstance(wrapper, int) is False, so stop() closes nothing and the log file's fd stays open after the driver stops (reproduced: closed after stop() == False)."
+  },
+  {
+    "file": "src/service.py",
+    "line": 37,
+    "summary": "No branch matches binary IO streams, so the default case (log_output=None → open(os.devnull, \"wb\")) and any user-passed binary file are never closed — an fd is leaked on every stop().",
+    "failure_scenario": "Service(\"chromedriver\") with default log_output: verified the BufferedWriter's fileno is still open after stop(); a long-lived process that starts/stops the driver repeatedly accumulates leaked descriptors until every subsequent open() fails with OSError [Errno 24] Too many open files. Same leak for a caller passing open(path, \"ab\")."
+  },
+  {
+    "file": "src/service.py",
+    "line": 40,
+    "summary": "Removing try/except Exception: pass makes stop() raise OSError on an already-closed fd — verified double stop() gives OSError [Errno 9] — so stop() is no longer a safe, repeatable cleanup hook as the old code was.",
+    "failure_scenario": "A caller that invokes stop() from both a signal handler and shutdown (or that calls stop() twice after a failed start) gets an uncaught OSError on the second call; likewise, if process.wait(timeout=10) raises TimeoutExpired, the fd is already closed and self.process is left set, so a retry of stop() raises OSError instead of recovering. The old code swallowed both."
+  },
+  {
+    "file": "src/service.py",
+    "line": 39,
+    "summary": "isinstance(self.log_output, int) is also True for bool, so log_output=True/False is treated as fds 1/0 and stop() silently closes the process's stdout/stdin.",
+    "failure_scenario": "A caller threading a flag through (e.g. Service(exe, log_output=use_fd) where use_fd is a bool, legal at runtime since bool is a subclass of int) → stop() calls os.close(True), closing fd 1; the rest of the program's print() calls then fail with EBADF, far from the cause."
+  },
+  {
+    "file": "tests/test_service.py",
+    "line": 22,
+    "summary": "Violates the global CLAUDE.md rule \"Every new function gets a test; every bug fix gets a regression test\": the added regression test covers only the fd branch; the file branch — the branch that is actually broken — has no test, which is why the suite passes (3/3) while stop() still leaks the path-based log.",
+    "failure_scenario": "A regression test like Service(..., log_output=tmp_path).stop(); assert f.closed would have failed and caught the broken isinstance(TextIO) check; as written, CI is green while the primary documented case (a log path) is still left open after stop()."
+  },
+  {
+    "file": "src/service.py",
+    "line": 36,
+    "summary": "The fix dispatches on two concrete type tags (TextIO vs int) instead of the capability actually needed, so every non-matching stream kind (binary, custom file-likes) silently falls through — the root cause is the wrong abstraction, not a missing branch per type.",
+    "failure_scenario": "Any future log_output kind (e.g. a BufferedRandom log, an io-based fake injected by a test) is silently not closed, exactly as happens today for BufferedWriter; a single isinstance(self.log_output, io.IOBase) branch (inside the existing != PIPE guard) plus the int branch closes all real streams and keeps the code to one general mechanism instead of per-type special cases."
+  }
+]
+```
+
+Notes for the caller:
+- Findings 1 and 2 share one root cause and one fix (`isinstance(self.log_output, io.IOBase)` for the file case), but were kept separate because they have distinct, independently verifiable failure modes (text log not closed vs. default-case fd leak).
+- No repo-level or user-level CLAUDE.md rules are violated beyond the one quoted in finding 5 (no repo CLAUDE.md exists; only `~/.claude/CLAUDE.md` applies). No other callers of `Service`/`stop()` exist in the repo besides `tests/test_service.py`.
+- The removed `DEVNULL` check was dead code (any str, including the `DEVNULL` constant, is converted to a file object in `__init__`), so its removal is not a regression.

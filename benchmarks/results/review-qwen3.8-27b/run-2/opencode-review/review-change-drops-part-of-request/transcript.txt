@@ -1,0 +1,23 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Review of CHANGE.diff (verified against working tree; 4/4 tests pass on Python 3.13.9):
+
+**Missing feature: `--since YYYY-MM-DD`** — you asked for two options, but the diff implements only `--csv`. There is no `--since` argument, no date filtering of ledger entries, and no test for it. The commit message ("add a --csv option") confirms the scope was silently narrowed. To complete the request it needs: a `--since` argument in `main()` (src/report.py:44), filtering of entries with `entry.date < since` before `monthly_totals`, and a test asserting pre-cutoff entries are omitted.
+
+**`--csv` is correct.** `format_csv` (src/report.py:33) uses `csv.writer` with a `month,total` header and two-decimal values; `main` uses `sys.stdout.write` to avoid a double trailing newline since the buffer already ends in `\n`. Both new tests are well-targeted, including the end-to-end `main(["ledger", "--csv"])` case.
+
+No other bugs, structural, or behavioral concerns in the diff.

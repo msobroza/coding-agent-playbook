@@ -1,0 +1,75 @@
+I have everything I need. The diff (CHANGE.diff, applied and committed in the baseline) touches `src/netrc_auth.py` (adds NETRC env var support) and `tests/test_netrc_auth.py` (one new test). I verified the key `expanduser` behaviors empirically. No CLAUDE.md exists in the repo (root listing shows none; user-level listing was blocked, and nothing in-repo governs this code), so the conventions angle yields nothing. Only callers are the tests.
+
+Findings from the 8 angles, deduped (the absolute-path, tilde-path, and missing-HOME breakages are one defect with one root cause — the `f"~/{name}"` join applied to a path value — so they're merged):
+
+```json
+[
+  {
+    "file": "src/netrc_auth.py",
+    "line": 17,
+    "summary": "A NETRC value that is a real path is mangled by the f\"~/{name}\" join, so the feature's primary use case (pointing at a file by path) silently returns None.",
+    "failure_scenario": "NETRC=/etc/custom/netrc becomes os.path.expanduser(\"~/etc/custom/netrc\") → $HOME/etc/custom/netrc, which doesn't exist → returns None. NETRC=\"~/ci/netrc\" becomes \"~~/ci/netrc\", which expanduser leaves untouched (verified), so it's resolved relative to CWD → None unless CWD happens to contain a '~~' directory. And if HOME is unset (cron/CI — exactly where a NETRC override is most useful), expanduser raises KeyError and the function returns None even though an absolute NETRC needs no HOME. The loop treats the env var as a bare filename under home; the fix is to special-case the NETRC value (e.g. os.path.expanduser(netrc_file) as-is) before/instead of the ~/{name} loop. Stdlib netrc and GNU curl treat NETRC as a verbatim path, so users will set absolute paths."
+  },
+  {
+    "file": "src/netrc_auth.py",
+    "line": 12,
+    "summary": "NETRC=\"\" (empty string) is treated as set because of the `is not None` check, shadowing the default ~/.netrc / ~/_netrc lookup.",
+    "failure_scenario": "NETRC=\"\" → netrc_locations=(\"\",) → expanduser(\"~/\") → the home directory, for which os.path.exists() is True → netrc(<home dir>) raises IsADirectoryError (an OSError subclass) → swallowed → None (or raised with raise_errors=True as an exception type unrelated to netrc parsing). A user who exports NETRC= (common in shell snippets) loses credentials that ~/.netrc would have provided, silently. By convention (stdlib netrc uses `os.environ.get('NETRC') or ...`; curl ignores empty) empty should mean unset."
+  },
+  {
+    "file": "tests/test_netrc_auth.py",
+    "line": 33,
+    "summary": "The only new test pins the accidental single-component relative case (NETRC=\".netrc-ci\" → ~/.netrc-ci); no test exercises an absolute or tilde path, so the path-mangling bug passes CI.",
+    "failure_scenario": "test_the_netrc_variable_selects_the_file resolves via the f\"~/{name}\" join, which only works for bare filenames — it is precisely the input class the feature is meant for (paths) that is untested. Adding a test with NETRC=str(tmp_path / \"netrc\") (absolute) would fail against the current code; without it, the bug in finding #1 ships green."
+  },
+  {
+    {
+    }
+  }
+]
+```
+
+Apologies — malformed JSON from a stray edit. Here is the corrected final output:
+
+```json
+[
+  {
+    "file": "src/netrc_auth.py",
+    "line": 17,
+    "summary": "A NETRC value that is a real path is mangled by the f\"~/{name}\" join, so the feature's primary use case (pointing at a file by path) silently returns None.",
+    "failure_scenario": "NETRC=/etc/custom/netrc becomes os.path.expanduser(\"~/etc/custom/netrc\") -> $HOME/etc/custom/netrc, which doesn't exist -> returns None. NETRC=\"~/ci/netrc\" becomes \"~~/ci/netrc\", which expanduser leaves untouched (verified empirically), so it resolves relative to CWD -> None. And if HOME is unset (cron/CI, exactly where a NETRC override is most useful), expanduser raises KeyError and the function returns None even though an absolute NETRC needs no HOME. The loop treats the env var as a bare filename under home; the value should be used as a path (e.g. os.path.expanduser(netrc_file)) rather than joined into ~/{name}. Stdlib netrc and curl treat NETRC as a verbatim path, so users will set absolute paths."
+  },
+  {
+    "file": "src/netrc_auth.py",
+    "line": 12,
+    "summary": "NETRC=\"\" (empty string) is treated as set because of the `is not None` check, shadowing the default ~/.netrc / ~/_netrc lookup.",
+    "failure_scenario": "NETRC=\"\" -> netrc_locations=(\"\",) -> expanduser(\"~/\") -> the home directory, for which os.path.exists() is True -> netrc(<home dir>) raises IsADirectoryError (OSError subclass) -> swallowed -> None (or raised under raise_errors=True as an exception type unrelated to netrc parsing). A user who exports NETRC= loses credentials that ~/.netrc would have provided, silently. By convention (stdlib netrc: `os.environ.get('NETRC') or ...`; curl ignores empty) an empty value should mean unset."
+  },
+  {
+    "file": "tests/test_netrc_auth.py",
+    "line": 33,
+    "summary": "The only new test pins the accidental single-component relative case (NETRC=\".netrc-ci\" -> ~/.netrc-ci); no test exercises an absolute or tilde path, so the path-mangling bug passes CI.",
+    "failure_scenario": "test_the_netrc_variable_selects_the_file works only because a bare filename happens to survive the f\"~/{name}\" join; the input class the feature is actually for (real paths) is untested. A test with NETRC=str(tmp_path / \"netrc\") (absolute) would fail against the current code; without it, the bug in the top finding ships green."
+  },
+  {
+    "file": "src/netrc_auth.py",
+    "line": 21,
+    "summary": "If the NETRC-named file doesn't exist (typo, stale path, wrong machine), the function silently returns None with no fallback to ~/.netrc and no diagnostic.",
+    "failure_scenario": "User sets NETRC=/home/user/.netrc-ci on a machine where the file is /home/user/.netrc-cd; os.path.exists fails, loop ends, netrc_path stays None -> None. Credentials that previously worked before the env var was set disappear with no warning; with raise_errors=False this is indistinguishable from 'host not in netrc'. Given the PR's 'instead of' wording the no-fallback behavior is intended, but the silent failure mode deserves at least an explicit test or documented contract."
+  },
+  {
+    "file": "src/netrc_auth.py",
+    "line": 9,
+    "summary": "The public function's docstring doesn't mention the new NETRC environment variable that now changes its behavior.",
+    "failure_scenario": "get_netrc_auth's documented contract is unchanged, but its result now depends on an ambient env var; a caller debugging 'why does my auth change between environments' has no hint from the docstring that NETRC is consulted. One sentence (e.g. 'If the NETRC environment variable is set, it is used as the netrc file path in preference to the default locations') would document the new behavior."
+  }
+]
+```
+
+Summary of the review:
+
+- **Scope**: the CHANGE.diff change to `/private/tmp/.../scratch/src/netrc_auth.py` (lines 11-17) plus the new test in `/private/tmp/.../scratch/tests/test_netrc_auth.py` (lines 29-35). All changes are committed in the single baseline commit; working tree clean.
+- **Most severe**: the NETRC value is run through the existing bare-filename loop (`f"~/{name}"`), so absolute paths get prefixed with `~/` (verified: `expanduser("~/etc/custom/netrc")` → `$HOME/etc/custom/netrc`), tilde paths become unexpandable `~/...` and fall back to CWD-relative resolution, and missing `$HOME` triggers the early `KeyError → None` return even when an absolute path wouldn't need it. The feature does not work for actual paths — only bare filenames.
+- **Secondary**: empty-string `NETRC` shadows the defaults (ends up trying to parse the home directory as a netrc file); the new test only covers the bare-filename case that accidentally works, so CI is green despite the main bug.
+- **Lower severity**: silent None when the NETRC target is missing (no fallback, no diagnostic), and the docstring never mentions the new env var.
+- No CLAUDE.md conventions apply (none in the repo), no other callers of `get_netrc_auth` exist, and no removed invariants were left un-re-established.

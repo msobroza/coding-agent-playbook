@@ -1,0 +1,3 @@
+Review found one high-severity bug: `from_settings` read the setting with `settings["FEED_STORAGE_FTP_ACTIVE"] or False`, but command-line overrides arrive as strings, so `-s FEED_STORAGE_FTP_ACTIVE=false` is truthy and inverts the setting (active mode enabled when the user asked for passive). It also stored a `str` in the `active: bool` attribute.
+
+Fixed at `src/feedstorage.py:27` by using the existing `Settings.getbool` helper (`active=settings.getbool("FEED_STORAGE_FTP_ACTIVE")`), which maps `"true"/"1"` and `"false"/"0"` correctly and raises a clear `ValueError` for other text. Added `test_command_line_false_keeps_passive` to `tests/test_feedstorage.py` covering the string form. All 4 tests pass.

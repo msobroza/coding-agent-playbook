@@ -1,0 +1,35 @@
+
+
+
+
+
+
+
+
+
+
+The review found one real bug: `src/forms.py:43` — `kwargs.pop("method", form.method).upper()` crashes with `AttributeError` when the resolved method is `None`. That's reachable because `Request` explicitly supports `None` (its `__post_init__` normalizes it to GET), so `from_form(form, method=None)` and `Form(method=None)` both crash — previously the `None`-safe normalization in `Request.__post_init__` handled it. Fixing:
+
+
+
+
+
+
+
+
+
+
+
+
+
+Review summary and result:
+
+**Bug found (medium-high):** `src/forms.py:43` — moving `.upper()` into `from_form` bypassed the `None`-safe normalization in `Request.__post_init__`. Both `from_form(form, method=None)` and `Form(method=None)` (a parser seeing a missing method attribute) crashed with `AttributeError`, even though `None` is an explicitly supported value here.
+
+**Behavior note (left as-is, low):** explicit non-GET/POST overrides like `method="PATCH"` are now coerced to GET — this matches the change's stated intent, so no action.
+
+**Fix applied:**
+- `src/forms.py:43`: `method = (kwargs.pop("method", form.method) or "GET").upper()`
+- `tests/test_forms.py`: added `test_a_missing_form_method_falls_back_to_get` and `test_a_missing_method_keyword_falls_back_to_get`
+
+All 8 tests pass.

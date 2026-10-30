@@ -1,0 +1,71 @@
+
+
+Let me verify the findings against the actual code before acting on them.
+
+
+
+
+
+
+
+
+
+The subagent's bug report checks out. Let me check the test and CHANGE.diff before fixing.
+
+
+
+
+
+Confirmed the bug. Now reading the test file, then fixing.
+
+
+
+
+
+
+
+The edit failed; retrying after re-reading the file.
+
+
+
+
+The edit was applied despite the error message. Now updating the tests to cover the path-based behavior.
+
+
+
+
+
+
+
+Test needs the directory created. Fixing:
+
+
+
+
+
+
+
+All pass. Verifying the new tests actually catch the original bug by temporarily restoring the buggy source:
+
+
+
+
+All three new tests fail on the buggy code and pass with the fix. Checking for lint/typecheck commands:
+
+
+
+
+## Review summary (verified against the code)
+
+**Bug (High) — `NETRC` paths were mangled:** the loop applied the default-file logic to the env value too, so `os.path.expanduser(f"~/{name}")` (src/netrc_auth.py:17) turned `NETRC=/tmp/x/netrc-ci` into `$HOME//tmp/x/netrc-ci` and `NETRC=~/netrc-ci` into `$HOME/~/netrc-ci`. Only bare names worked; the advertised path-based lookup failed silently (returned `None`). The added test missed this because it only used a bare name.
+
+**Minor — `NETRC=""`** was treated as "set", resolving to `$HOME` and returning `None`/raising instead of falling back to the defaults.
+
+**Behavior note** — when `NETRC` is set, the defaults are no longer consulted (sensible override semantics; now documented in the docstring).
+
+## Fix applied
+
+- `src/netrc_auth.py:16-22` — env value is now used directly as a path (with `expanduser`, so `~/...` works and absolute paths pass through); `~/<name>` is only built for the default fallback; empty `NETRC` falls back to defaults; docstring documents the override.
+- `tests/test_netrc_auth.py` — replaced the bare-name test with one using an absolute path outside `$HOME`, plus new tests for `~/...` values and empty-`NETRC` fallback.
+
+**Verification:** all 5 tests pass with the fix; the 3 new tests fail against the original buggy code. No lint/typecheck commands are configured in this project.

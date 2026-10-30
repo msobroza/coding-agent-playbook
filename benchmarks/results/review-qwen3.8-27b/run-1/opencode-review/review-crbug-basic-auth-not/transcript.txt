@@ -1,0 +1,27 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+All fixed and verified. Summary of the review and the fixes applied to `src/auth.py:16-17`:
+
+**Blocker** — the diff used `!` (a JavaScript operator) in Python, so `src/auth.py` had a `SyntaxError` and couldn't even be imported. Fixed to `not`.
+
+**Medium** — `hmac.compare_digest` raises `TypeError` on non-ASCII strings. Since Basic auth is base64-encoded, any client could send non-ASCII credentials and turn a 401 into a 500. Fixed by comparing UTF-8 encoded bytes.
+
+Verification:
+- `py_compile` passes
+- All 3 tests in `tests/test_auth.py` pass
+- Non-ASCII username/password now correctly rejected (`False`) instead of raising
+- Matching credentials still authorized

@@ -1,0 +1,49 @@
+
+
+Let me verify the key finding against the actual code before summarizing.
+
+
+
+
+
+
+
+
+
+Let me confirm the crash concretely by running both scenarios.
+
+
+
+
+Verified: both scenarios crash with `AttributeError`. Here's the review.
+
+## Review: `FormRequest.from_form` form-method restriction
+
+**One real bug.** The rest of the change is fine.
+
+### Bug: `AttributeError` when the method is `None` — High (regression)
+
+`src/forms.py:43`
+```python
+method = kwargs.pop("method", form.method).upper()
+```
+
+Calling `.upper()` on the raw value crashes before `Request.__post_init__` (src/forms.py:27) gets a chance to coerce `None` → `"GET"`. The old code passed the value straight to `cls(...)`, so `None` was handled safely; the new unguarded `.upper()` is the only crash site.
+
+I confirmed both inputs raise:
+- **Parsed form with no `method` attribute** → `Form(action="/x", method=None)`. This is the *most common* real form shape and exactly the case the change means to handle as GET. `AttributeError: 'NoneType' object has no attribute 'upper'`.
+- **Caller override `method=None`** → `FormRequest.from_form(form, method=None)`. The docstring says `method` keywords override the form's, and `Request.method` is typed `str | None` with an explicit "missing method means GET" contract, so `None` is a first-class value here. Same crash.
+
+Also inconsistent with the `url` line directly above, which already falls back on a falsy override (`kwargs.pop("url", None) or form.action`).
+
+**Fix** — mirror the existing `Request` None-handling:
+```python
+method = (kwargs.pop("method", form.method) or "GET").upper()
+```
+Consider widening `Form.method` to `str | None` (src/forms.py:14) to reflect what parsers actually produce.
+
+The existing 5 tests pass, so the suite doesn't cover this.
+
+### Notes (no action needed)
+- **GET fallback for unrecognized methods** deviates from browser behavior: per WHATWG, an unknown `method` value submits as **POST**. Your stated intent says GET, so this is by design — flagging only in case the goal was strict browser emulation.
+- **Explicit `method="PUT"`/`"DELETE"` overrides** previously sent that method; they now silently become GET. Intended per the change description, but it's a behavior change for any existing caller relying on overrides.

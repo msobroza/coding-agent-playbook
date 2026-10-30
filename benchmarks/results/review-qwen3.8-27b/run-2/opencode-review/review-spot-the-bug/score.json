@@ -1,0 +1,123 @@
+{
+  "sample_id": "review/spot-the-bug",
+  "harness": "opencode:opencode-review",
+  "target": {
+    "name": null,
+    "harness": "opencode:opencode-review",
+    "model": null,
+    "reported_model": null,
+    "endpoint": null,
+    "harness_settings": "personal"
+  },
+  "passed": false,
+  "aggregate_score": 0.0,
+  "duration_seconds": 103.7,
+  "report": {
+    "passed": false,
+    "warn_count": 0,
+    "fail_count": 0,
+    "composite": null,
+    "checks": [
+      {
+        "check_id": "gate",
+        "passed": false,
+        "score": 0.0,
+        "weight": 0.0,
+        "required": true,
+        "status": "run",
+        "subresults": []
+      },
+      {
+        "check_id": "rubric",
+        "passed": true,
+        "score": 1.0,
+        "weight": 0.0,
+        "required": true,
+        "status": "run",
+        "subresults": []
+      }
+    ],
+    "findings": []
+  },
+  "uncalibrated_judge": true,
+  "experiment": "opencode-review",
+  "agent": {
+    "experiment": "opencode-review",
+    "sample_id": "review/spot-the-bug",
+    "harness": "opencode",
+    "model": "openrouter/qwen/qwen3.8-27b",
+    "command": [
+      "opencode",
+      "run",
+      "--pure",
+      "--dir",
+      "~/.cache/playbook-bench/review-qwen3.8-27b/run-2/opencode-review/review-spot-the-bug/scratch",
+      "--model",
+      "openrouter/qwen/qwen3.8-27b",
+      "--format",
+      "json",
+      "--command",
+      "review",
+      "{prompt}"
+    ],
+    "returncode": 0,
+    "timed_out": false,
+    "duration_seconds": 103.7,
+    "baseline_commit": "5b71147ba767049ac55046e73939db2ad0d616a9",
+    "scratch": "~/.cache/playbook-bench/review-qwen3.8-27b/run-2/opencode-review/review-spot-the-bug/scratch",
+    "setup_snapshot": "~/.cache/playbook-bench/review-qwen3.8-27b/run-2/opencode-review/review-spot-the-bug/scratch__setup_baseline",
+    "main_loop_tools": [
+      "task:build",
+      "read",
+      "edit",
+      "glob",
+      "bash",
+      "bash",
+      "bash",
+      "bash"
+    ],
+    "second_pass_ran": null,
+    "subagent_starts": null
+  },
+  "judge": {
+    "model": "gpt-6-luna",
+    "effort": "high",
+    "judge_samples": 3
+  },
+  "judge_calls": [
+    {
+      "criterion": "The review identifies the off-by-one bug in `paginate` (the last item on the final page is dropped when total_items is not a multiple of page_size)",
+      "score": 0.8333333333333334,
+      "n": 3,
+      "weight": 0.5
+    },
+    {
+      "criterion": "The correctness comment appears BEFORE any style or naming comments \u2014 priority order is respected",
+      "score": 0.0,
+      "n": 3,
+      "weight": 0.2
+    },
+    {
+      "criterion": "The review quotes the offending line or expression rather than describing it abstractly",
+      "score": 0.0,
+      "n": 3,
+      "weight": 0.15
+    },
+    {
+      "criterion": "The review does not propose unrelated changes (no rewriting of working code)",
+      "score": 1.0,
+      "n": 3,
+      "weight": 0.15
+    }
+  ],
+  "rubric_weighted_score": 0.5666666666666667,
+  "gate_detail": {
+    "untouched": false
+  },
+  "gate_detail_matches_engine": true,
+  "changed_files": [
+    "src/pagination.py"
+  ],
+  "graded_artifact": "diff",
+  "judge_error": null
+}

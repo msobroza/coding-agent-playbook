@@ -1,0 +1,41 @@
+
+
+**Re-review summary:** 2 of 3 earlier findings are fixed in the commit — `remove()` now rejects `quantity <= 0` and `quantity > held` (note: removing the last units now deletes the line), and `add()` rejects non-positive quantities. The third finding is **still open**: `total_cents()` accepts any `discount_percent` (150 → negative total, −10 → charges more than subtotal); the diff didn't touch that method and the new tests don't cover it.
+
+Continuing — let me look at the code and apply the remaining fix.
+
+
+
+
+
+
+
+
+
+
+
+
+Now fixing the open finding — a bounds guard on `discount_percent` in `total_cents()`:
+
+
+
+
+Now adding a test for the new guard, following the existing test conventions:
+
+
+
+
+
+
+
+All 9 tests pass. Verifying the boundary values (0 and 100) still work:
+
+
+
+
+Done. The remaining finding is fixed:
+
+- **`total_cents()`** now raises `ValueError` for any `discount_percent` outside `[0, 100]`
+- **9/9 tests pass**, including three new parametrized cases (`-10`, `101`, `150`)
+
+All three earlier findings are now resolved.

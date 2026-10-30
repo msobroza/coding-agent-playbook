@@ -1,0 +1,38 @@
+All verified. Here are the findings from the review:
+
+```json
+[
+  {
+    "file": "src/audio.py",
+    "line": 17,
+    "summary": "The raw-string fallbacks in the input_args resolution chain (lines 17 and 19) use the FfmpegArgs value as-is instead of get_ffmpeg_arg_list, so a documented 'ordinary ffmpeg arguments' string crashes with TypeError (list + str) when building the command.",
+    "failure_scenario": "CameraInput(\"/s.mp4\", [\"audio\"], input_args=\"-rtsp_transport udp\") → parse_preset_input returns None, the `or` chain falls back to the raw string, and `get_ffmpeg_arg_list(global_args) + \"-rtsp_transport udp\"` raises TypeError: can only concatenate list (not \"str\") to list at AudioEventMaintainer construction (verified). Same crash at line 19 when the per-input args are empty and camera-wide ffmpeg.input_args is an ordinary string, e.g. FfmpegConfig(inputs=[CameraInput(\"/s.mp4\", [\"audio\"])], input_args=\"-timeout 5000000\"). The config module docstring (src/config.py) explicitly documents str-or-list, so every camera configured with plain-string input args is broken. Fix: `or get_ffmpeg_arg_list(ffmpeg_input.input_args)` and `or get_ffmpeg_arg_list(ffmpeg.input_args)`."
+  },
+  {
+    "file": "src/audio.py",
+    "line": 14,
+    "summary": "[i for i in ffmpeg.inputs if \"audio\" in i.roles][0] raises a bare IndexError when the FfmpegConfig has no input with the audio role, now that get_ffmpeg_command is a public function accepting any FfmpegConfig.",
+    "failure_scenario": "AudioEventMaintainer(CameraConfig(\"x\", FfmpegConfig(inputs=[CameraInput(\"/s.mp4\", [\"detect\"])])]) → IndexError: list index out of range (verified) instead of an actionable error naming the missing audio input; the same crash is now reachable by any direct caller of get_ffmpeg_command, and the new tests call it directly with hand-built FfmpegConfigs."
+  },
+  {
+    "file": "tests/test_audio.py",
+    "line": 34,
+    "summary": "The new tests pin preset-name strings and list arguments but never the documented third FfmpegArgs form, a string of ordinary ffmpeg arguments, which is exactly the case that crashes in src/audio.py.",
+    "failure_scenario": "A test like CameraInput(path, [\"audio\"], input_args=\"-rtsp_transport udp\") (or camera-wide input_args=\"...\") would have caught the TypeError in src/audio.py lines 17/19 before merge; without it the suite passes (4 passed, verified) while the most common hand-written config form is broken in production."
+  },
+  {
+    "file": "src/audio.py",
+    "line": 16,
+    "summary": "detect_fps is hardcoded to 1 in the audio context, so a user-configured preset-http-reolink (per-input or camera-wide) silently appends `-r 1` to the audio input command — a video frame-rate option that is meaningless for audio.",
+    "failure_scenario": "FfmpegConfig(inputs=[CameraInput(\"/s.flv\", [\"audio\"], input_args=\"preset-http-reolink\")]) yields `... -avoid_negative_ts make_zero -r 1 -i /s.flv ...`; the `-r 1` comes from a parameter named detect_fps whose value has no audio semantics (harmless today, but the preset resolution was borrowed from the video path and will misfire if the preset's -r handling evolves, and the old code only ever applied it to the forced audio-only preset, which ignores detect_fps)."
+  },
+  {
+    "file": "src/audio.py",
+    "line": 15,
+    "summary": "The FfmpegArgs three-way resolution (preset name / shell string / list) is hand-rolled inline and duplicated twice in one expression, already diverging from the documented contract by dropping the shell-split branch; a shared resolver in ffmpeg_presets.py is the fix at the right depth.",
+    "failure_scenario": "The idiom `parse_preset_input(x, 1) or <raw>` is written twice (lines 16-17 and 18-19) and one of its branches is wrong (missing get_ffmpeg_arg_list); the next consumer of an *_args field will copy the same half-baked idiom. A helper in src/ffmpeg_presets.py such as resolve_input_args(arg, detect_fps) -> list[str] (parse_preset_input(arg, detect_fps) or get_ffmpeg_arg_list(arg)) makes the documented 'preset name or ordinary arguments or list' contract enforceable in one place and collapses the four-term chain to a first-wins fallback."
+  }
+]
+```
+
+**Summary of the review:** The diff's central defect is the raw-string fallback in the new input-args resolution chain in `src/audio.py` (`or ffmpeg_input.input_args` / `or ffmpeg.input_args`): config.py documents `FfmpegArgs` as "a preset name, a string of ordinary ffmpeg arguments, or a list," but strings that aren't preset names are concatenated into the command list unsplit, crashing with `TypeError` (verified by execution). The same function also raises a bare `IndexError` when no input has the `audio` role, and the new tests only cover the preset-name and list forms — leaving the crashing string form untested. Lower-severity items: a hardcoded `detect_fps=1` that leaks a meaningless `-r 1` into audio commands via `preset-http-reolink`, and the altitude gap of hand-rolling the FfmpegArgs resolver inline instead of sharing a helper in `src/ffmpeg_presets.py`. All four new/updated tests pass; no CLAUDE.md conventions apply.

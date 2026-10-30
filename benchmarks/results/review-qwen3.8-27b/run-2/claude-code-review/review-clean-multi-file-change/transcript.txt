@@ -1,0 +1,47 @@
+All 8 angles are complete. Summary of the sweep:
+
+- **Angle A (line-by-line):** the one substantive hazard is `math.ceil` applied to the unrounded float product on `src/shipping.py:15`. I verified it empirically in both billing directions: `41.88782981512674 lb` is true `18.999999999999999847 kg` (should charge 19 started kg) but the float product is `19.000000000000004` → charges 20 (overcharge); `19.841603596638983 lb` is true `9.000000000000000333 kg` (should charge 10) but the float product is exactly `9.0` → charges 9 (undercharge). Typical 2-decimal scale readings are safe (min distance to a boundary ≈ 9.5e-7), but precise inputs (upstream-computed weights) hit it.
+- **Angle B (removed behavior):** the kg path no longer goes straight to `math.ceil(weight)` — it now passes through `weight * 1.0` in `to_kilograms`, which breaks `Decimal` inputs that the old code accepted (`Decimal * float` → TypeError).
+- **Angle C (callers/callees):** only the tests call `quote_cents`; the new default `unit="kg"` keeps positional calls compatible; `sorted(KILOGRAMS_PER_UNIT)` in the error message is fine. No broken call sites.
+- **Reuse / Simplification / Efficiency:** nothing — the change is minimal and reuses nothing already in the repo.
+- **Altitude:** the unit-factor table is the right depth; no bandaid special-casing.
+- **Conventions:** no repo CLAUDE.md; the user-level `~/.claude/CLAUDE.md` applies. Its rule "Docstring public functions with intent + one usage example" is broken by the new `to_kilograms` docstring and the rewritten `quote_cents` docstring (intent, no usage example). Its "Raise errors carrying the offending value" rule is undermined by NaN weights slipping past the `weight <= 0` guard into `math.ceil` (which raises `cannot convert float NaN to integer`). `@RTK.md` (included by the global CLAUDE.md) has no code rules.
+
+Deduped pool, ranked most-severe first:
+
+```json
+[
+  {
+    "file": "src/shipping.py",
+    "line": 15,
+    "summary": "math.ceil is applied to the unrounded float product from the pound conversion, so weights landing within ~1 ulp of an exact kilogram boundary bill the wrong number of started kilograms, in both directions.",
+    "failure_scenario": "quote_cents(41.88782981512674, \"lb\"): true weight is 18.999999999999999847 kg (19 started kg), but the float product is 19.000000000000004, so ceil returns 20 and the customer is overcharged 120 cents; quote_cents(19.841603596638983, \"lb\") is true 9.000000000000000333 kg (10 started kg) but the float product is exactly 9.0, so the customer is undercharged 120 cents. Round the converted kilograms to a business precision (or use Decimal) before ceil."
+  },
+  {
+    "file": "src/units.py",
+    "line": 15,
+    "summary": "Routing the kg path through weight * factor breaks Decimal weights that quote_cents previously accepted, because Decimal * float is a TypeError.",
+    "failure_scenario": "quote_cents(Decimal(\"2.5\")) returned 450 + 2*120 before the change (math.ceil accepts Decimal), but now to_kilograms computes Decimal(\"2.5\") * 1.0 and raises TypeError: unsupported operand type(s) for *: 'Decimal' and 'float' — a silent behavior regression for any caller passing Decimal weights."
+  },
+  {
+    "file": "src/shipping.py",
+    "line": 13,
+    "summary": "NaN weights pass the weight <= 0 guard (comparison with NaN is False) and fail deep inside math.ceil with a message that names neither the value nor the expected shape.",
+    "failure_scenario": "quote_cents(float(\"nan\"), \"lb\") raises ValueError('cannot convert float NaN to integer') from math.ceil instead of the function's own 'weight must be positive' error — a confusing, value-less failure on the exact validation path this function owns (same for inf, which raises OverflowError)."
+  },
+  {
+    "file": "src/units.py",
+    "line": 10,
+    "summary": "An unhashable unit (e.g. a list) raises TypeError from the dict lookup instead of the ValueError the docstring promises for unknown units.",
+    "failure_scenario": "to_kilograms(1, [\"lb\"]) raises TypeError: unhashable type: 'list' from KILOGRAMS_PER_UNIT[unit] before the KeyError handler runs, so the documented contract 'an unknown unit raises ValueError' is violated and quote_cents leaks a TypeError for malformed unit input."
+  },
+  {
+    "file": "src/units.py",
+    "line": 8,
+    "summary": "New public function to_kilograms and the rewritten quote_cents docstring (src/shipping.py:12) have intent but no usage example, violating the user-level CLAUDE.md rule 'Docstring public functions with intent + one usage example'.",
+    "failure_scenario": "~/.claude/CLAUDE.md (global, applies to all projects) states 'Docstring public functions with intent + one usage example'; units.py:8-8 and shipping.py:12-12 both ship intent-only docstrings, so an agent grep'ing for how to call to_kilograms must reverse-engineer the (weight, unit) argument order from the signature instead of reading an example — the concrete cost is the documented convention being broken on every public function this diff adds or rewrites."
+  }
+]
+```
+
+Notes for the parent: the fixture is otherwise clean — the added tests are correct (5 lb → 2.26796185 kg → 3 started kg = 810¢; the approx/asserts in `tests/test_units.py` pass), backward compatibility of the `unit="kg"` default is preserved, the kg path's arithmetic is bit-identical for floats (`x * 1.0 == x`), and the unknown-unit error messages are well-formed. Finding 1 is the only realistic monetary-impact bug; the others are robustness/convention-level.

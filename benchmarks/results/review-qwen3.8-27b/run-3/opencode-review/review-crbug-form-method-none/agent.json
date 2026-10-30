@@ -1,0 +1,39 @@
+{
+  "experiment": "opencode-review",
+  "sample_id": "review/crbug-form-method-none",
+  "harness": "opencode",
+  "model": "openrouter/qwen/qwen3.8-27b",
+  "command": [
+    "opencode",
+    "run",
+    "--pure",
+    "--dir",
+    "~/.cache/playbook-bench/review-qwen3.8-27b/run-3/opencode-review/review-crbug-form-method-none/scratch",
+    "--model",
+    "openrouter/qwen/qwen3.8-27b",
+    "--format",
+    "json",
+    "--command",
+    "review",
+    "{prompt}"
+  ],
+  "returncode": 0,
+  "timed_out": false,
+  "duration_seconds": 77.9,
+  "baseline_commit": "e5864c4733a9feefe9629d8656baeb1284cf06f8",
+  "scratch": "~/.cache/playbook-bench/review-qwen3.8-27b/run-3/opencode-review/review-crbug-form-method-none/scratch",
+  "setup_snapshot": "~/.cache/playbook-bench/review-qwen3.8-27b/run-3/opencode-review/review-crbug-form-method-none/scratch__setup_baseline",
+  "main_loop_tools": [
+    "task:build",
+    "bash",
+    "read",
+    "bash",
+    "read",
+    "edit",
+    "edit",
+    "bash",
+    "bash"
+  ],
+  "second_pass_ran": null,
+  "subagent_starts": null
+}

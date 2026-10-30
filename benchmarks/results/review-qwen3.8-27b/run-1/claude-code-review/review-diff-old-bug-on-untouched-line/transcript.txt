@@ -1,0 +1,40 @@
+All scope gathered: the change under review is `CHANGE.diff` (adds `restock()` to `src/inventory.py` + 4 tests in `tests/test_inventory.py`), already applied and committed in the single baseline commit. The repo is otherwise just these two source files; no CLAUDE.md exists in the repo (user-level path not readable and no rules to quote, so the conventions angle yields nothing). I ran all 8 finder angles over the diff, the enclosing functions, the whole file, and the call sites (there are none outside the two files).
+
+Findings, deduped and ranked most-severe first:
+
+```json
+[
+  {
+    "file": "src/inventory.py",
+    "line": 15,
+    "summary": "items_to_reorder uses strict `<` while its docstring promises stock that has fallen \"to or below\" the reorder level (`<=`).",
+    "failure_scenario": "Item(\"pen\", 1, 1) — quantity exactly equal to reorder_level — is omitted from items_to_reorder's result, so a SKU that has just hit its reorder point is never flagged for reorder. This is a pre-existing bug on a line the diff doesn't touch, and it sits directly in the function the new restock feature is paired with (restock exists to clear exactly this condition)."
+  },
+  {
+    "file": "tests/test_inventory.py",
+    "line": 13,
+    "summary": "test_restock_adds_units_to_the_matching_item asserts only on the returned object and the non-matching item, never that items[1] itself was mutated in place.",
+    "failure_scenario": "An implementation that returns a copy without updating the list (e.g. `return replace(item, quantity=item.quantity + units)`) passes all four tests: the return value equals Item(\"ink\", 9, 2) and items[0] is untouched. The list is never actually restocked, so total_units(items) would still report 7 instead of 11 — the core in-place-mutation contract of restock is untested."
+  },
+  {
+    "file": "src/inventory.py",
+    "line": 31,
+    "summary": "restock updates only the first item whose sku matches and silently ignores any later duplicates (Item does not enforce unique SKUs).",
+    "failure_scenario": "restock([Item(\"pen\", 3, 1), Item(\"pen\", 3, 1)], \"pen\", 5) updates only the first entry to 8 and returns it; the second \"pen\" stays at 3 with no error or warning, so the caller believes the SKU is fully restocked when half of it is not."
+  },
+  {
+    "file": "tests/test_inventory.py",
+    "line": 1,
+    "summary": "The test module never imports or exercises items_to_reorder, so it has zero coverage — which is why the `<` vs `<=` bug survives a PR that adds this module's first batch of logic tests.",
+    "failure_scenario": "Any future regression in items_to_reorder (e.g. the boundary condition on line 15) ships with the whole suite green; the boundary case Item(\"ink\", 2, 2) vs Item(\"ink\", 3, 2) is indistinguishable in the current tests."
+  },
+  {
+    "file": "src/inventory.py",
+    "line": 28,
+    "summary": "restock's guard only checks `units <= 0`, so non-integer units (floats) pass and corrupt the int-typed quantity.",
+    "failure_scenario": "restock(items, \"pen\", 1.5) succeeds and sets quantity to 4.5 despite the `units: int` signature and `quantity: int` field; downstream consumers comparing or serializing quantities as ints (e.g. total_units -> int) silently receive a float."
+  }
+]
+```
+
+Notes on what the angles ruled out (no candidate surfaced): the diff deletes no behavior (only widens the test import), no call sites are broken (the two files are the entire codebase), the new code reuses nothing that already exists, adds no redundant state or wasted work (the O(n) SKU scan is fine at this scale), the fix is at the right altitude for the feature it adds, and no CLAUDE.md governs the changed files. The headline finding is the first one: the planted old bug on the untouched line 15 (`<` instead of `<=` against the "to or below" docstring), with findings 2–5 covering real, if smaller, gaps in the new code and its tests.

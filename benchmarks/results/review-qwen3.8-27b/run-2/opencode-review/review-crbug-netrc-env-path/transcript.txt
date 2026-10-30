@@ -1,0 +1,43 @@
+
+
+
+
+
+
+
+
+
+
+
+Confirmed the bug at `src/netrc_auth.py:11-17`: the `NETRC` value flows through the same loop that always does `os.path.expanduser(f"~/{name}")`, so absolute and `~`-prefixed values get `~/` prepended and never resolve. The existing test only covers a bare relative filename, which is why the suite is green.
+
+Let me fix the source and add the missing tests.
+
+
+
+
+Now the tests — the absolute-path case that would have caught the bug, plus a `~`-prefixed case:
+
+
+
+
+Now run the test suite to verify:
+
+
+
+
+That error is pre-existing and environmental — Python 3.8 can't evaluate the `tuple[str, str] | None` annotation (needs 3.10+). It's on line 9, which I didn't touch. Let me find a newer interpreter:
+
+
+
+
+
+
+
+
+
+
+Project requires Python ≥3.12. Let me install pytest for that interpreter and run:
+
+
+error: UnknownError: Failed to execute statement

@@ -1,0 +1,73 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Verified all three findings myself by running them against the working tree. The subagent's review is correct.
+
+## Review: `fix(scene): no duplicate references after replace`
+
+**Verdict:** The dedup achieves its goal on the happy path, but the removal is placed at the *top of every recursive `replace_in_list` call* (`src/scene.py:37-38`) — before it's known whether `old_m` is even in that list. So `new_m` is stripped from **any** list it appears in, not just the list where the replacement actually happens. Two real regressions result.
+
+### Bug 1 — a failed `replace` mutates the scene (medium)
+If `old_mobject` isn't in the scene but `new_mobject` already is, `new_mobject` is removed *before* the `ValueError`:
+
+```python
+s.add(square)
+s.replace(circle, square)   # raises ValueError
+s.mobjects                   # []  — square silently gone
+```
+Confirmed: scene ends up empty. A failed operation corrupting state is the core problem.
+
+### Bug 2 — an unrelated group silently loses a member (medium, ordering-dependent)
+On a *successful* replace, any group that contains `new_m` (but not `old_m`) and is scanned before the group holding `old_m` loses `new_m`:
+
+```python
+g_new = Mobject("g_new", square)   # has new, not old
+g_old = Mobject("g_old", circle)   # has old
+scene.add(g_new, g_old)
+scene.replace(circle, square)
+g_new.submobjects   # []  — square removed though circle was never in g_new
+```
+Confirmed. Reversing the order (`g_old` first) leaves `g_new` intact — so severity depends on object ordering.
+
+### Bug 3 — `replace(x, x)` behavior change (low)
+Now removes `x` and raises `ValueError`; previously a clean no-op. Same root cause.
+
+### Suggested fix
+Only dedupe in the list where the match is found:
+
+```python
+def replace_in_list(mobj_list, old_m, new_m) -> bool:
+    for i, m in enumerate(mobj_list):
+        if m == old_m:
+            if new_m is not old_m and new_m in mobj_list:
+                mobj_list.remove(new_m)
+            mobj_list[mobj_list.index(old_m)] = new_m
+            return True
+    for mobj in mobj_list:
+        if replace_in_list(mobj.submobjects, old_m, new_m):
+            return True
+    return False
+```
+Note the `index()` re-lookup after `remove()`: if `new_m` sat before `old_m`, the removal shifts `old_m`'s position, so writing to the original index `i` would hit the wrong slot. The `is not old_m` guard keeps self-replace a no-op.
+
+### Test gap
+The two new tests cover happy paths only. Add: (1) a failed replace asserting the scene is unchanged after the `ValueError`, and (2) the unrelated-group case above to pin the "only remove where replaced" behavior.
+
+Want me to apply the fix and add those two tests?

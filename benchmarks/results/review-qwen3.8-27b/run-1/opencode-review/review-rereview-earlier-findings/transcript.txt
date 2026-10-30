@@ -1,0 +1,16 @@
+
+
+
+
+
+
+
+
+
+Re-review of the fix commit — verified against the working tree:
+
+1. **src/cart.py:17 — fixed.** `remove()` now rejects `quantity <= 0` and over-removal with `ValueError` (verified live: removing 5 with 1 held raises).
+2. **src/cart.py:24-26 — NOT fixed.** `total_cents()` still takes any `discount_percent`: `150` → negative total, `-10` → charges more than subtotal (verified live). This was an important finding; it needs the same guard — reject (or deliberately clamp) outside `0..100`.
+3. **src/cart.py:10-11 — fixed.** `add()` rejects `quantity <= 0`.
+
+One behavior note (not a defect): removing the last unit deletes the line entirely (src/cart.py:19-20), so a later `add()` for that SKU uses the new price rather than the original. Tests assert this, so it's fine.

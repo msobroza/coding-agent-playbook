@@ -1,0 +1,47 @@
+I've completed the review. The environment blocked running the test suite/interpreter, so I traced every combination by hand against the code (it's deterministic list-building). No CLAUDE.md exists in the repo (Glob found none; home dir is outside the sandbox), so the conventions angle yields nothing.
+
+**Analysis summary across the 8 angles:**
+
+- **A (line-by-line):** The old signature made `maxlen` a required positional, so every emitted command contained exactly one strategy. The new all-optional kwargs drop that invariant with no replacement validation: `xtrim("events")` → `XTRIM events ~`; `xtrim("events", limit=10)` → `XTRIM events ~ LIMIT 10`; and `maxlen`+`minid` together → `XTRIM events MAXLEN MINID ~ 100 170-0`, all of which Redis rejects with a syntax error. Falsy-zero handling is correct (`is not None`, so `maxlen=0` works). `~` placement and `LIMIT` placement match Redis 6.2 grammar; `~` is valid for MINID in 6.2.
+- **B (removed behavior):** the removed `[b"MAXLEN"]` seed and required `maxlen` parameter enforced "a strategy is always present" — never re-established (findings 1).
+- **C (cross-file):** only caller is the test file; positional compatibility preserved (`(name, maxlen, approximate)` unchanged); no other callers affected.
+- **Reuse / Efficiency:** single-module codebase, nothing to reuse, no hot path.
+- **Simplification:** the two-pass append (strategy names at lines 35–38, thresholds at 41–44) repeats each `is not None` test and splits `~` from the strategy it qualifies.
+- **Doc accuracy:** MINID evicts entries with id **less than or equal to** the threshold (inclusive in Redis 6.2), but the docstring says "lower than".
+
+```json
+[
+  {
+    "file": "src/streams.py",
+    "line": 39,
+    "summary": "xtrim() no longer guarantees a trimming strategy, so calls without maxlen/minid emit a malformed XTRIM command that the old required-positional API made impossible.",
+    "failure_scenario": "xtrim('events') builds ('XTRIM', 'events', b'~') and xtrim('events', limit=10) builds ('XTRIM', 'events', b'~', b'LIMIT', 10) — both are Redis syntax errors. Previously xtrim(name) raised TypeError for missing maxlen; now the bad command sails through to the server and fails at runtime, and the unconditional b'~' (line 39-40) is emitted with no strategy to qualify."
+  },
+  {
+    "file": "src/streams.py",
+    "line": 35,
+    "summary": "No mutual-exclusion check between maxlen and minid, so both can be emitted in one command, which Redis 6.2's grammar (MAXLEN | MINID) forbids.",
+    "failure_scenario": "xtrim('events', 100, minid='170-0') builds ('XTRIM', 'events', b'MAXLEN', b'MINID', b'~', 100, '170-0') — Redis expects '='/'~'/number after MAXLEN and returns a syntax error. xtrim('events', 100, approximate=False, minid='170-0') is equally malformed. The client should raise ValueError when both are given."
+  },
+  {
+    "file": "src/streams.py",
+    "line": 31,
+    "summary": "Docstring understates MINID semantics: it says 'evict the entries whose id is lower than this one', but Redis MINID evicts entries with id less than or equal to the threshold (inclusive).",
+    "failure_scenario": "A caller relying on 'lower than' assumes the threshold entry survives the trim (e.g., it is the checkpoint they want to keep); after the call it is gone, causing a silent off-by-one data-loss surprise in retention/checkpoint logic."
+  },
+  {
+    "file": "tests/test_streams.py",
+    "line": 29,
+    "summary": "No test pins the newly introduced failure modes: no-strategy calls, maxlen+minid together, or exact (approximate=False) MINID are untested, so the malformed commands are silently 'correct' per the suite.",
+    "failure_scenario": "The four existing tests all pass while xtrim() can emit invalid commands (e.g. 'XTRIM events MAXLEN MINID ~ 100 170-0'); a future 'fix' that adds or removes validation has no test to regress against, and the malformed output above ships undetected."
+  },
+  {
+    "file": "src/streams.py",
+    "line": 34,
+    "summary": "Two-pass argument building repeats each 'is not None' check (lines 35-38 for strategy names, 41-44 for thresholds) and decouples b'~' from the strategy it belongs to.",
+    "failure_scenario": "Maintenance cost: a single branch per strategy (if maxlen is not None: pieces += [b'MAXLEN', b'~' if approximate else b'', maxlen] — and symmetrically for MINID) is shorter, keeps the tilde glued to its strategy, and is the natural single place to add the exactly-one-strategy validation that findings 1-2 require; the current shape invites the two branches to drift apart."
+  }
+]
+```
+
+**Notes:** 5 findings (2 correctness, 1 docs-semantics, 1 test coverage, 1 simplification). The two correctness findings share a root cause — the diff made all trimming arguments optional without adding "exactly one of maxlen/minid" validation that the old required positional parameter implicitly enforced — but they produce distinct invalid commands (`XTRIM key ~` vs `XTRIM key MAXLEN MINID ~ ...`), so both are kept.

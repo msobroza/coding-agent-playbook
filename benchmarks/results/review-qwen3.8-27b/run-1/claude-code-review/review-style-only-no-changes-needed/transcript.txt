@@ -1,0 +1,19 @@
+I've completed the review. Here's what I did and found.
+
+**Scope:** No upstream/main range diff and no working-tree changes exist — the review target `src/temperature.py` is a 27-line module added in the sole baseline commit (`841eeb8`), so the entire file is the diff under review.
+
+**Phase 1 — all 8 finder angles, in sequence:**
+
+- **A (line-by-line):** Verified all three formulas: `celsius * 9.0 / 5.0 + 32.0` (correct precedence, correct F=C·9/5+32), `(fahrenheit - 32.0) * 5.0 / 9.0` (correct), `celsius + 273.15` with a `kelvin < 0.0` guard (boundary case -273.15 C → 0.0 K correctly allowed, since 0 K is physically valid). No inverted conditions, off-by-ones, falsy-zero traps, or swallowed errors. NaN/inf inputs pass the guard, but the docstring scopes the raise to "below absolute zero" only, so the function behaves exactly as documented — flagging that would be manufacturing a problem.
+- **B (removed behavior):** Zero deleted lines in the diff (27 insertions, 0 deletions). Nothing removed.
+- **C (cross-file):** `src/` contains only this file; no callers, no other modules, no tests to break.
+- **Reuse / Simplification / Efficiency / Altitude:** No utility modules exist to reuse; the code is already minimal (3-line functions, no state, no I/O, no closures, no special-case band-aids). Nothing to flag.
+- **Conventions:** No repo-level or directory-level CLAUDE.md exists; only the user-level `~/.claude/CLAUDE.md` applies. Its "Clean Code for AI Agents" rules (function length, nesting depth, type hints on every signature, errors carrying the offending value) are all satisfied. The only arguable literal miss is "Docstring public functions with intent + one usage example" — the one-line docstrings give intent but no usage example. I judged this not a genuine change-needed defect: the functions are trivially named single-expression converters, the file is correct and fully documented per its own module docstring, and the user's explicit instruction was to be honest if there's nothing to change.
+
+**Phase 2:** Pool contained no surviving candidates — no correctness bugs, no cleanup issues, no clear conventions violations.
+
+**Honest assessment: there is nothing to change.** The module is plain, correct, type-annotated, and documented; no review finding survives.
+
+```json
+[]
+```

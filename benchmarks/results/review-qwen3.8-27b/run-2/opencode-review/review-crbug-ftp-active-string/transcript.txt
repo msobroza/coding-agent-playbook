@@ -1,0 +1,55 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Review: `FEED_STORAGE_FTP_ACTIVE` setting
+
+**Bug — command-line `false`/`0` overrides enable active mode instead of disabling it** (high, whenever the CLI override path is used)
+
+`src/feedstorage.py:27`:
+
+```python
+return cls(host, path, active=settings["FEED_STORAGE_FTP_ACTIVE"] or False)
+```
+
+`Settings.from_command_line` (src/settings.py:22-28) keeps every `-s NAME=VALUE` value as a **string**, and any non-empty string is truthy. Reproduced against the working tree:
+
+```
+FEED_STORAGE_FTP_ACTIVE=false -> active = 'false' (truthy -> active mode ON)
+FEED_STORAGE_FTP_ACTIVE=0     -> active = '0'     (truthy -> active mode ON)
+FEED_STORAGE_FTP_ACTIVE=true  -> active = 'true'  (truthy -> active mode ON)
+```
+
+So the documented path — set in project settings, overridden on the command line — is inverted for falsy values: a user with `FEED_STORAGE_FTP_ACTIVE=True` in project settings who one-offs with `-s FEED_STORAGE_FTP_ACTIVE=false` silently gets active mode. That's not a cosmetic issue: in active mode the *server* initiates the data connection, so behind NAT/firewalls the upload hangs or fails where passive mode worked.
+
+**Fix:** use the existing `Settings.getbool()` helper (src/settings.py:36-45), which exists precisely to parse `True/False`, `1/0` and their text forms:
+
+```python
+return cls(host, path, active=settings.getbool("FEED_STORAGE_FTP_ACTIVE"))
+```
+
+**Secondary (same root cause):** `__init__` declares `active: bool` (src/feedstorage.py:16), but the string passes through and is stored as a `str`. Switching to `getbool` fixes this too.
+
+**Test gap:** `tests/test_feedstorage.py:16-18` only exercises the typed `True` path, which is why all 3 tests pass while the CLI path is broken. Add a case through `Settings.from_command_line(["FEED_STORAGE_FTP_ACTIVE=false"])` asserting `active is False`.
+
+Everything else is fine: the default stays passive, `set_pasv(False)` is applied after login but before any transfer command, and the `DEFAULTS` entry follows the existing pattern.

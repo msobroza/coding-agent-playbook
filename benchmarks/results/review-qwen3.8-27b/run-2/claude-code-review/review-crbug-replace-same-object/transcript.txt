@@ -1,0 +1,48 @@
+All hypotheses verified empirically against the patched `src/scene.py`; the working tree is clean again. Final findings:
+
+```json
+[
+  {
+    "file": "src/scene.py",
+    "line": 45,
+    "summary": "The early `return True` on match skips the dedup for lists not yet traversed, so the duplicate reference the fix is meant to remove can still be left on screen.",
+    "failure_scenario": "scene.add(circle, g) where g contains square, then scene.replace(circle, square): the top-level match returns before g.submobjects is ever visited, so square is never removed from g. Verified: scene.mobjects == [square, g] and g.submobjects == [square] — the same object is still referenced twice on screen, the exact bug the change claims to fix."
+  },
+  {
+    "file": "src/scene.py",
+    "line": 37,
+    "summary": "A failed replace() no longer fails atomically: `new_mobject` is removed from every list visited before the ValueError is raised, silently deleting it from the scene.",
+    "failure_scenario": "scene.add(circle, square); scene.replace(Mobject(\"ghost\"), square) raises ValueError, but square has already been removed — verified scene.mobjects == [circle] after the exception. Pre-fix, a failed replace left the scene untouched; callers catching ValueError (e.g. to retry with a different object) now find the scene corrupted."
+  },
+  {
+    "file": "src/scene.py",
+    "line": 37,
+    "summary": "replace(m, m) regressed from a no-op success to raising ValueError while removing m from the scene, because the dedup removes the very object the search is then looking for.",
+    "failure_scenario": "scene.add(m); scene.replace(m, m) — before the fix this found m and reassigned it (harmless no-op). After the fix the dedup deletes m first, the search finds nothing, and it raises 'Could not find Mobject' while leaving scene.mobjects == [] — the object vanishes from the screen. Verified."
+  },
+  {
+    "file": "src/scene.py",
+    "line": 38,
+    "summary": "The dedup runs at entry to every list the search traverses, not just the list where the replacement lands, so a successful replace strips `new_mobject` from unrelated groups even though the swap happened elsewhere.",
+    "failure_scenario": "gA contains square, gB contains circle; scene.replace(circle, square) succeeds in gB, but the search visits gA first and removes square from it — verified gA.submobjects == [] and gB.submobjects == [square]. The square silently migrated from gA into gB, destroying gA's contents as a side effect of replacing an object gA never contained."
+  },
+  {
+    "file": "src/scene.py",
+    "line": 35,
+    "summary": "Altitude: the fix couples dedup to the search traversal, which both over-removes (lists visited before the match) and under-removes (lists after it); the removal should be decoupled from the search.",
+    "failure_scenario": "A search that returns as soon as it finds `old_m` cannot also serve as the place to dedup, so correctness depends on traversal order. The root-cause fix: run replace_in_list as a pure search (no mutation), then remove `new_mobject` from all lists it currently appears in (or at least from the list where the swap lands) and perform the swap — mirroring the no-duplicate invariant `Scene.add` already enforces with `if mobject not in self.mobjects` (line 26)."
+  },
+  {
+    "file": "tests/test_scene.py",
+    "line": 37,
+    "summary": "The new tests only cover old and new in the same list, missing the cross-container cases where the fix misbehaves, which is why the findings above are undetected.",
+    "failure_scenario": "A test like scene.add(circle, Mobject(\"g\", square)); scene.replace(circle, square); assert scene.mobjects.count(square-ish references) == 1 (or checking group contents after a failed replace / self-replace) would have caught the persistent duplicate, the corrupted failure path, and the self-replace regression before merge."
+  }
+]
+```
+
+**Key notes for the caller:**
+
+- Scope: `git diff` of the working tree vs the single baseline commit is clean, so I reviewed `CHANGE.diff` (4 added lines in `src/scene.py` `replace_in_list`, plus 2 new tests) as applied to the tree at `/private/tmp/.../review-crbug-replace-same-object/scratch`.
+- All four behavioral findings were verified by executing the scenarios against the patched code (venv/system python); no CLAUDE.md files exist in the repo or user scope, and `Scene.replace` has no other call sites, so the conventions and cross-file angles returned nothing.
+- Most important: the fix does not actually fix its stated bug when `new_mobject` sits in a group that the BFS search reaches *after* the match (finding 1) — and the dedup's placement before the search makes failure non-atomic (findings 2–4).

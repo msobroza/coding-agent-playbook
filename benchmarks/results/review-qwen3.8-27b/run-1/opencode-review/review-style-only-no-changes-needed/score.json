@@ -1,0 +1,115 @@
+{
+  "sample_id": "review/style-only-no-changes-needed",
+  "harness": "opencode:opencode-review",
+  "target": {
+    "name": null,
+    "harness": "opencode:opencode-review",
+    "model": null,
+    "reported_model": null,
+    "endpoint": null,
+    "harness_settings": "personal"
+  },
+  "passed": false,
+  "aggregate_score": 0.0,
+  "duration_seconds": 49.8,
+  "report": {
+    "passed": false,
+    "warn_count": 0,
+    "fail_count": 0,
+    "composite": null,
+    "checks": [
+      {
+        "check_id": "gate",
+        "passed": false,
+        "score": 0.0,
+        "weight": 0.0,
+        "required": true,
+        "status": "run",
+        "subresults": []
+      },
+      {
+        "check_id": "rubric",
+        "passed": false,
+        "score": 0.0,
+        "weight": 0.0,
+        "required": true,
+        "status": "run",
+        "subresults": []
+      }
+    ],
+    "findings": []
+  },
+  "uncalibrated_judge": true,
+  "experiment": "opencode-review",
+  "agent": {
+    "experiment": "opencode-review",
+    "sample_id": "review/style-only-no-changes-needed",
+    "harness": "opencode",
+    "model": "openrouter/qwen/qwen3.8-27b",
+    "command": [
+      "opencode",
+      "run",
+      "--pure",
+      "--dir",
+      "~/.cache/playbook-bench/review-qwen3.8-27b/run-1/opencode-review/review-style-only-no-changes-needed/scratch",
+      "--model",
+      "openrouter/qwen/qwen3.8-27b",
+      "--format",
+      "json",
+      "--command",
+      "review",
+      "{prompt}"
+    ],
+    "returncode": 1,
+    "timed_out": false,
+    "duration_seconds": 49.8,
+    "baseline_commit": "980c61070c271fab7c0506adaf96440a7713dc22",
+    "scratch": "~/.cache/playbook-bench/review-qwen3.8-27b/run-1/opencode-review/review-style-only-no-changes-needed/scratch",
+    "setup_snapshot": "~/.cache/playbook-bench/review-qwen3.8-27b/run-1/opencode-review/review-style-only-no-changes-needed/scratch__setup_baseline",
+    "main_loop_tools": [],
+    "second_pass_ran": null,
+    "subagent_starts": null
+  },
+  "judge": {
+    "model": "gpt-6-luna",
+    "effort": "high",
+    "judge_samples": 3
+  },
+  "judge_calls": [
+    {
+      "criterion": "The review's verdict is 'approve' (with no comments) or 'approve with comments' (style-only, framed as suggestions)",
+      "score": 0.0,
+      "n": 3,
+      "weight": 0.4
+    },
+    {
+      "criterion": "No correctness, security, or failure-mode bugs are claimed \u2014 because none exist",
+      "score": 0.0,
+      "n": 3,
+      "weight": 0.3
+    },
+    {
+      "criterion": "Any suggestions are framed as preferences, not as required changes",
+      "score": 1.0,
+      "n": 3,
+      "weight": 0.15
+    },
+    {
+      "criterion": "The review does not propose to rewrite the function or change its signature",
+      "score": 1.0,
+      "n": 3,
+      "weight": 0.15
+    }
+  ],
+  "rubric_weighted_score": 0.3,
+  "gate_detail": {
+    "untouched": true,
+    "approves": false,
+    "blocks": false,
+    "counts_important": false
+  },
+  "gate_detail_matches_engine": true,
+  "changed_files": [],
+  "graded_artifact": "transcript",
+  "judge_error": null
+}

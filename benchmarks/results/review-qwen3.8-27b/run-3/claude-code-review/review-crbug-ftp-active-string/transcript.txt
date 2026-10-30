@@ -1,0 +1,44 @@
+All angles complete. The repo has no CLAUDE.md (conventions angle: nothing). Key verified facts: `Settings` docstring states command-line overrides "arrive as strings" and `from_command_line` keeps "each value as text"; `Settings.getbool` (src/settings.py:36) exists to normalize True/False, 1/0 and their text forms but has zero call sites; `from_settings` is the only consumer of the new setting; and every non-empty string — including `"false"`, `"0"`, `"off"` — is truthy, so `settings["FEED_STORAGE_FTP_ACTIVE"] or False` turns an explicit opt-*out* into a truthy value that flips the FTP connection into active mode.
+
+```json
+[
+  {
+    "file": "src/feedstorage.py",
+    "line": 27,
+    "summary": "from_settings reads the raw setting value with `settings[\"FEED_STORAGE_FTP_ACTIVE\"] or False`, but command-line overrides are stored as text, so any non-empty string is truthy and an explicit opt-out silently enables active mode.",
+    "failure_scenario": "Settings.from_command_line([\"FEED_STORAGE_FTP_ACTIVE=false\"], project={\"FEED_STORAGE_FTP_ACTIVE\": True}) stores the string \"false\"; \"false\" or False -> \"false\", so storage.active is the truthy string \"false\" and store() calls ftp.set_pasv(False). The upload runs in FTP active mode even though the user explicitly requested passive (typically the mode required behind NAT/firewalls, where active mode fails and feed uploads are lost). \"0\", \"off\", and \"False\" misbehave identically; the declared `active: bool` type is also violated (a str is stored at runtime)."
+  },
+  {
+    "file": "tests/test_feedstorage.py",
+    "line": 16,
+    "summary": "The new tests only exercise dict-bool values; the documented command-line override path (string values via Settings.from_command_line) has no test, which is why the truthy-string bug ships with a green suite.",
+    "failure_scenario": "test_the_setting_turns_active_mode_on uses Settings({\"FEED_STORAGE_FTP_ACTIVE\": True}) — a Python bool. No test passes a text value (\"true\"/\"false\") through from_settings, so the regression from finding 1 (CLI \"false\" -> active mode) would not be caught by any assertion; the PR's stated guarantee that the setting \"can be overridden on the command line\" is unverified."
+  },
+  {
+    "file": "src/feedstorage.py",
+    "line": 34,
+    "summary": "The PR's entire behavioral payload — `if self.active: ftp.set_pasv(False)` inside store() — is untested; no test asserts the FTP connection actually switches modes.",
+    "failure_scenario": "Deleting or mistyping the two new lines in store() (e.g. set_pasv(True), or calling it before connect()) leaves the whole test suite passing because no test inspects store()'s effect on the FTP connection; the setting could silently have no effect in production."
+  },
+  {
+    "file": "src/feedstorage.py",
+    "line": 27,
+    "summary": "Reimplements setting-to-bool normalization with `... or False` instead of calling the existing Settings.getbool helper, which already accepts True/False, 1/0 and their text forms and raises ValueError on garbage.",
+    "failure_scenario": "src/settings.py:36 defines getbool specifically for settings that arrive as command-line text, yet from_settings bypasses it; the hand-rolled `or False` accepts junk values like \"off\" or \"yes\" as truthy (silent wrong mode) instead of raising, and any second consumer of this setting will duplicate the flawed coercion. Fix: active=settings.getbool(\"FEED_STORAGE_FTP_ACTIVE\")."
+  },
+  {
+    "file": "src/feedstorage.py",
+    "line": 27,
+    "summary": "Band-aid altitude: text-to-bool coercion belongs in the settings layer (the Settings docstring states command-line overrides arrive as strings and getbool is the sanctioned API), not ad-hoc at each consumer.",
+    "failure_scenario": "Coercing with `or False` at the call site fixes only this one setting; the next boolean setting read via __getitem__ (e.g. a future FEED_STORAGE_* toggle) repeats the same truthy-string bug. The root-cause fix is to consume boolean settings exclusively through Settings.getbool (or type-normalize in Settings) so the conversion lives in one place."
+  },
+  {
+    "file": "src/feedstorage.py",
+    "line": 26,
+    "summary": "from_settings wires only `active` from settings while port, username and password remain hard-defaulted, an asymmetry the diff re-exposes in the touched function.",
+    "failure_scenario": "A storage constructed via from_settings always connects to port 21 as the empty-username anonymous account even though FTPFeedStorage supports custom port/credentials; a deployer who discovers they can configure the mode via settings will expect the same path for host port or credentials and find there is none, forcing code changes instead of settings."
+  }
+]
+```
+
+Notes on scope: the diff (CHANGE.diff, already applied; working tree is clean against the single baseline commit) touches `src/feedstorage.py`, `src/settings.py` (new DEFAULTS entry, correct), and `tests/test_feedstorage.py`. The DEFAULTS addition and the `set_pasv(False)` placement (after `connect()`, before the first data transfer) are correct; no CLAUDE.md governs this tree, so no convention violations were found.
