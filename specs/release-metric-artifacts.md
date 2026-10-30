@@ -134,8 +134,10 @@ answers file into `catalog/releases/<v>/answers/` (D8).
 
 The release pull request's `Release metrics` section is the change report of D4,
 up to `ReleaseReport.markdown(limit=...)` characters with a pointer to the full
-bundle. The `N rerun, M carried` line now also says where the carried entries
-come from, for example `M carried (K from older releases)`.
+bundle. The `N rerun, M carried` line now also counts the entries re-judged in
+the file apart, as `R rejudged` (shown when R > 0), and the carried entries the
+regression check compared like a rerun, for example
+`changed-only: N rerun, M carried, R rejudged (K compared with <previous>)`.
 
 ### D4. The report data lives in the engine
 
@@ -221,28 +223,35 @@ same workflow as tagging:
   release.
 - **New job `publish-release`** has `needs: tag-release`, `if: version output !=
   ''` and `permissions: contents: write`. It:
-  1. checks out the tag;
+  1. checks out the workflow's own commit for the code, then the tag's tree
+     with a second `actions/checkout` (`ref: refs/tags/v<V>`, `path: tag-tree`):
+     older tags hold no report code;
   2. runs `pip install -e . matplotlib`, then `python scripts/release_report.py
-     --version X --out release-report`;
-  3. runs `gh release create vX --title vX --notes-file release-report/report.md
-     release-report/*`.
+     --version X --checkout tag-tree --out release-report`;
+  3. runs `gh release create vX --verify-tag --title vX --notes-file
+     release-report/report.md release-report/*`, so no release is created for a
+     missing tag.
 
   When the release already exists, it runs `gh release upload --clobber` and
   `gh release edit --notes-file` instead, so a rerun is safe. The notes stay
   under GitHub's 125,000-character body limit through `markdown(limit=...)`.
 - **Backfill:** `workflow_dispatch` with a `version` input runs `publish-release`
-  alone for an existing tag. It is used once for v0.2.0, v0.3.0 and v0.4.0.
+  alone for an existing tag. It is used once for the releases that have
+  metrics, v0.2.0 and v0.4.0; v0.3.0 has none, so its bundle cannot be built.
 
 ### D7. GitLab publishes on tag pipelines
 
 New jobs in `.gitlab-ci.yml`, both with rules `if: $CI_COMMIT_TAG =~
-/^v\d+\.\d+\.\d+$/`:
+/^v\d+\.\d+\.\d+$/`, or a manual (web or API) pipeline of the default branch
+with a `RELEASE_VERSION` variable:
 
 - **`release-report`** (stage `build`, image `$PYTHON_IMAGE`) builds the bundle
   into `release-report/` as artifacts that never expire.
 - **`release`** (stage `deploy`, image `$RELEASE_CLI_IMAGE`, a variable so a
   company registry can supply it) uses `needs: [release-report]`. It creates the
   GitLab Release for `$CI_COMMIT_TAG`:
+  - it runs `release-cli create` with `--ref "$RELEASE_TAG"`, so a missing tag
+    fails instead of being created;
   - its description is `release-report/report.md`;
   - its asset links point to the job artifacts
     (`$CI_PROJECT_URL/-/jobs/<id>/artifacts/file/release-report/<file>`).
@@ -251,8 +260,11 @@ New jobs in `.gitlab-ci.yml`, both with rules `if: $CI_COMMIT_TAG =~
   of failing.
 
 `PIP_INDEX_URL` and the image variables keep working behind the company proxy,
-as for the docs jobs. A tag pipeline started by hand from the GitLab UI (*Run
-pipeline* on the tag) backfills older tags.
+as for the docs jobs. Older tags are backfilled by a manual pipeline of the
+default branch with `RELEASE_VERSION=<x.y.z>`, not by *Run pipeline* on the tag:
+an old tag's own `.gitlab-ci.yml` has no release jobs. The report job then
+checks the tag out into `tag-tree` and builds the bundle from it with this
+pipeline's code; the release is for the existing tag `v<x.y.z>`.
 
 ### D8. Releases keep their answers
 
@@ -313,9 +325,11 @@ and the new judge on:
 - **mean absolute score difference** of the weighted rubric score.
 
 The metrics file stores the result under `judge_change`:
-`{from: <judge parts>, to: <judge parts>, runs, pass_agreement,
+`{from: [<judge parts>, ...], to: <judge parts>, runs, pass_agreement,
 mean_abs_score_diff, tasks: {<task>: {runs, pass_agreement, mean_abs_score_diff}}}`.
-It is written only when at least one entry was re-judged.
+`from` is the list of the distinct old judge parts (usually one), since the
+re-judged entries can come from files of different judges. It is written only
+when at least one entry was re-judged.
 
 - The record prints one line before writing:
   `judge change: <old> -> <new>: pass agreement 93% over 96 runs, mean |Δ| 0.04`.
@@ -416,19 +430,26 @@ under `tests/fixtures/release_metrics_history/`.
   - `publish-release` needs `tag-release` and runs only on its output;
   - it is the only new job with `contents: write`;
   - `workflow_dispatch` takes a `version`;
-  - the GitLab jobs run only on `v*` tags.
+  - the GitLab jobs run only on `v*` tags, or on a manual default-branch
+    pipeline with `RELEASE_VERSION`.
 
-  The jobs' behavior is checked once with `workflow_dispatch` on v0.4.0.
+  The jobs' behavior is checked once with `workflow_dispatch` (`version`) on
+  v0.4.0 on GitHub, and with a manual default-branch pipeline
+  (`RELEASE_VERSION=0.4.0`) on GitLab.
 
 ## Rollout
 
 1. ADR 0014, D1, D2, D3 and D8: the engine and `prepare`. The next release's
-   evals reuse every committed result and store their answers.
-2. D9, D10 and D11: re-judging. This is useful from the release after the first
-   one with stored answers.
+   evals store their answers, but rerun everything once: this branch changes the
+   scoring digest (`evals.rejudge` joins `SCORING_MODULES`, and
+   `release_metrics.py` and `scoring.py` change), so v0.5.0 matches no committed
+   setup. Reuse of every committed result starts with the release after it.
+2. D9, D10 and D11: re-judging. This pays off from the release after the first
+   one with stored answers, as long as no scoring code changes in between.
 3. D4: the report module, and the release PR body uses it.
 4. D5: the bundle script.
-5. D6: GitHub publishing, then backfill v0.2.0, v0.3.0 and v0.4.0.
+5. D6: GitHub publishing, then backfill the releases that have metrics (v0.2.0,
+   v0.4.0).
 6. D7: GitLab publishing, verified on the internal GitLab.
 
 ## Open questions

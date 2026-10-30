@@ -233,8 +233,9 @@ decisions D1-D11. ADR: `docs/adr/0014-…`.
 - Modify: `scripts/release_eval.py`:
   - `record_release_metrics` passes `tools.cwd / _CATALOG / "releases"`, not
     `_previous_file(...)`, unless `request.full`;
-  - `_mode` adds `" (K from older releases)"` when a carried entry's
-    `measured_in.release != previous`;
+  - `_mode` adds `" (K compared with <previous>)"` when K > 0 carried entries
+    were compared like a rerun by the regression check (amended by ruling;
+    re-judged entries are counted apart as `R rejudged`, Task 12);
   - `_previous_file` is deleted if unused.
 - Test: `tests/release/test_release_prepare_eval.py`: update `_carry_from`
   assertions and add the K-line test.
@@ -242,8 +243,8 @@ decisions D1-D11. ADR: `docs/adr/0014-…`.
 - [ ] **Step 1: Update the failing tests**
   - Both targets receive `str(checkout / "catalog" / "releases")`.
   - `--full` still passes none.
-  - `test_the_mode_line_counts_entries_carried_from_older_releases`: assert
-    `"changed-only: 1 rerun, 2 carried (1 from older releases)"`.
+  - `test_the_mode_line_counts_carried_entries_compared_with_the_previous_release`:
+    assert `"changed-only: 1 rerun, 2 carried (1 compared with <previous>)"`.
 - [ ] **Step 2: Run `pytest tests/release/test_release_prepare_eval.py -q`.** Expected: FAIL.
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run it.** Expected: PASS.
@@ -467,7 +468,8 @@ decisions D1-D11. ADR: `docs/adr/0014-…`.
   - `judge_change(runs: Sequence[AgreementRun], *, old: Mapping[str, object], new: Mapping[str, object]) -> dict[str, object] | None`.
     It returns `None` for no runs; otherwise
     `{"from", "to", "runs", "pass_agreement", "mean_abs_score_diff", "tasks"}`,
-    rounded like the metrics file's other values.
+    rounded like the metrics file's other values; `from` is the list of the
+    distinct old judge parts (amended by ruling).
   - `agreement_line(change: Mapping[str, object]) -> str` returns
     `"judge change: <old model> -> <new model>: pass agreement 93% over 96 runs, mean |Δ| 0.04"`.
 
@@ -655,10 +657,12 @@ decisions D1-D11. ADR: `docs/adr/0014-…`.
       skipped need would skip this job too.
     - `V` is `${{ needs.tag-release.outputs.version || inputs.version }}`;
     - `permissions: contents: write`;
-    - checks out the tag;
+    - checks out the workflow's own commit, then the tag's tree with a second
+      checkout (`ref: refs/tags/v${{ env.V }}`, `path: tag-tree`), both with
+      `persist-credentials: false`;
     - runs `pip install -e . matplotlib` and
-      `python scripts/release_report.py --version $V --out release-report`;
-    - then `gh release view "v$V" && { gh release upload "v$V" release-report/* --clobber; gh release edit "v$V" --notes-file release-report/report.md; } || gh release create "v$V" --title "v$V" --notes-file release-report/report.md release-report/*`;
+      `python scripts/release_report.py --version $V --checkout tag-tree --out release-report`;
+    - then `gh release view "v$V" && { gh release upload "v$V" release-report/* --clobber; gh release edit "v$V" --notes-file release-report/report.md; } || gh release create "v$V" --verify-tag --title "v$V" --notes-file release-report/report.md release-report/*`;
   - `on.workflow_dispatch.inputs.version` (required string). `test`,
     `tag-release` and `playbook-ci` get
     `if: github.event_name != 'workflow_dispatch'` (merged into their existing
@@ -691,10 +695,13 @@ decisions D1-D11. ADR: `docs/adr/0014-…`.
 - Modify: `.gitlab-ci.yml`:
   - stage `build`;
   - variable `RELEASE_CLI_IMAGE: "registry.gitlab.com/gitlab-org/release-cli:latest"`;
-  - job `release-report` (rules `$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/`;
-    artifacts `release-report/`, `expire_in: never`);
+  - job `release-report` (rules `$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/`, or a
+    manual web/API pipeline of the default branch with `RELEASE_VERSION`, which
+    checks the tag out into `tag-tree`; artifacts `release-report/`,
+    `expire_in: never`);
   - job `release` (`needs: [release-report]`). It creates the release with
-    `release-cli create`, with asset links to
+    `release-cli create --ref "$RELEASE_TAG"` (a missing tag fails, never
+    created), with asset links to
     `$CI_PROJECT_URL/-/jobs/$REPORT_JOB_ID/artifacts/file/release-report/<file>`
     (the job id passed through a dotenv artifact). When creation fails because
     the release exists, it falls back to
@@ -718,8 +725,11 @@ decisions D1-D11. ADR: `docs/adr/0014-…`.
 - [ ] **Step 1:** Run the full gate (Global Constraints) in Python 3.12 and 3.13,
   without extras. Expected: green.
 - [ ] **Step 2:** Run `python scripts/release_report.py --version 0.4.0 --out /tmp/rr`
-  and open `report.md` and the PNGs. The bundle must hold v0.4.0 against 0.3.0,
-  with no judge change.
-- [ ] **Step 3:** Open the PR. After merge, the maintainer runs
-  `workflow_dispatch` for 0.2.0, 0.3.0 and 0.4.0 on GitHub, then *Run pipeline*
-  on those tags on GitLab.
+  and open `report.md` and the PNGs. v0.4.0 has no baseline (v0.3.0 has no
+  metrics and v0.4.0's file records no `previous`), so the bundle shows
+  "no baseline", the trend chart only, and no judge change.
+- [ ] **Step 3:** Open the PR. After merge, the maintainer backfills the
+  releases that have metrics (0.2.0 and 0.4.0; 0.3.0 has none): the GitHub
+  `workflow_dispatch` with the `version` input, then on GitLab a manual pipeline
+  of the default branch with `RELEASE_VERSION=<x.y.z>` (*Run pipeline* on an old
+  tag has no release jobs).

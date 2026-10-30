@@ -24,7 +24,7 @@ Each release also publishes a metric-change bundle on GitHub and on GitLab: a ch
 
 - A release reruns only the samples whose inputs no committed release measured under the same setup. The plan line names the release and target each carried entry comes from.
 - A carried entry can come from any earlier release. `measured_in` stays the provenance, and the regression check notes `measured in <release>` when it compares one.
-- GitHub publishes from the tagging workflow, because a tag pushed with `GITHUB_TOKEN` starts no other workflow. GitLab publishes on `v*` tag pipelines. Rerunning either job updates the release instead of failing. A manual trigger backfills v0.2.0 to v0.4.0.
+- GitHub publishes from the tagging workflow, because a tag pushed with `GITHUB_TOKEN` starts no other workflow. GitLab publishes on `v*` tag pipelines. Rerunning either job updates the release instead of failing. A manual trigger (GitHub `workflow_dispatch` with `version`, a GitLab default-branch pipeline with `RELEASE_VERSION`) backfills the releases that have metrics, v0.2.0 and v0.4.0; v0.3.0 has none.
 - Each release commits its answers files, about 1 MB per target per release, compressed. A carried entry's answers stay in the release that measured them.
 - A re-judge costs judge calls only. A scoring-code change, the judge prompt included, still reruns everything.
 - matplotlib is installed only in the publish jobs, never as an engine dependency.
