@@ -16,8 +16,9 @@ if TYPE_CHECKING:
 
     from coding_agent_playbook.evals.release_regression import RegressionCheck
 
-#: Verdicts of a carried entry that the check did not compare with a previous entry.
-_NOT_COMPARED: Final = frozenset({"carried", "new"})
+#: Verdicts of a carried entry that the check did not compare with a previous entry
+#: (a re-judged entry has ``measured_in`` too, spec D11).
+_NOT_COMPARED: Final = frozenset({"carried", "new", "rejudged"})
 
 
 def carried_count(metrics: Mapping[str, object]) -> int:
@@ -34,8 +35,9 @@ def carried_count(metrics: Mapping[str, object]) -> int:
 def carried_compared(metrics: Mapping[str, object], check: RegressionCheck) -> int:
     """The carried entries of ``metrics`` that ``check`` compared like a rerun.
 
-    A ``carried`` verdict (same inputs as the previous entry) and a ``new`` one
-    (no previous entry) were not compared; any other verdict was, and can block.
+    A ``carried`` verdict (same inputs as the previous entry), a ``new`` one
+    (no previous entry) and a ``rejudged`` one (same answers, new judge) were not
+    compared; any other verdict was, and can block.
 
     Example::
 

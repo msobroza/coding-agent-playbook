@@ -177,9 +177,9 @@ def test_the_table_names_each_sample_and_the_verdict() -> None:
     table = format_regression_table(check)
     assert table.splitlines()[0] == f"release {_NEW} vs {_OLD} on target 'claude-opus'"
     assert "REGRESSION: mean score drops 0.200" in table
-    assert (
-        table.splitlines()[-1]
-        == "1 regression (0 accepted), 0 improvements, 0 not comparable, 0 carried: BLOCKED"
+    assert table.splitlines()[-1] == (
+        "1 regression (0 accepted), 0 improvements, 0 not comparable, 0 carried, "
+        "0 rejudged: BLOCKED"
     )
 
 
@@ -345,6 +345,110 @@ def test_the_table_and_the_json_view_count_the_carried_samples() -> None:
     table = format_regression_table(check)
     assert "s       0.900     0.900  +0.000  carried" in table
     assert table.splitlines()[-1] == (
-        "0 regressions (0 accepted), 0 improvements, 0 not comparable, 1 carried: ok"
+        "0 regressions (0 accepted), 0 improvements, 0 not comparable, 1 carried, 0 rejudged: ok"
     )
     assert regression_check_to_dict(check)["carried"] == 1
+
+
+# --------------------------------------------------------------------------- #
+# Re-judged entries and a judge change (spec D11)
+# --------------------------------------------------------------------------- #
+
+_JUDGE_CHANGE = {
+    "from": [{"judge_model": "old-judge"}],
+    "to": {"judge_model": "new-judge"},
+    "runs": 9,
+    "pass_agreement": 0.9,
+    "mean_abs_score_diff": 0.04,
+    "tasks": {},
+}
+
+
+def _rejudged(mean: float, **extra: Any) -> dict[str, Any]:
+    """An entry whose stored answers the new judge re-graded (spec D9)."""
+    rejudged_from = {"release": _OLD, "commit": None, "judge": {"judge_model": "old-judge"}}
+    measured_in = {"release": _OLD, "commit": None}
+    return sample_entry(mean, **extra) | {
+        "rejudged_from": rejudged_from,
+        "measured_in": measured_in,
+    }
+
+
+def _with_judge_change(samples: dict[str, Any]) -> dict[str, Any]:
+    return metrics_file(_NEW, samples) | {"judge_change": _JUDGE_CHANGE}
+
+
+def test_a_rejudged_entry_never_blocks_and_shows_the_judge_delta() -> None:
+    check = _check({"s": sample_entry(0.9)}, {"s": _rejudged(0.5, passes=0)})
+    verdict = check.samples[0]
+    assert (verdict.status, verdict.previous_mean, verdict.delta) == ("rejudged", 0.9, -0.4)
+    assert verdict.reasons == (f"rejudged from {_OLD}",)
+    assert not verdict.blocks
+    assert not check.blocked
+
+
+def test_a_rejudged_entry_with_the_same_inputs_digest_is_still_rejudged() -> None:
+    # rejudged_from is read before measured_in: never mistaken for a carried entry.
+    check = _check({"s": sample_entry(0.9, inputs="i")}, {"s": _rejudged(0.8, inputs="i")})
+    assert (_status(check, "s"), check.samples[0].delta) == ("rejudged", -0.1)
+
+
+def test_a_rejudged_entry_without_a_previous_entry_has_no_delta() -> None:
+    verdict = _check({}, {"s": _rejudged(0.8)}).samples[0]
+    assert (verdict.status, verdict.previous_mean, verdict.delta) == ("rejudged", None, None)
+
+
+def test_accept_refuses_a_rejudged_sample() -> None:
+    with pytest.raises(RegressionCheckError, match=r"'s'.*did not regress"):
+        _check({"s": sample_entry(0.9)}, {"s": _rejudged(0.5, passes=0)}, s="why")
+
+
+def test_compared_samples_carry_the_judge_change_note() -> None:
+    old = {sid: sample_entry(0.9) for sid in ("down", "same", "edited", "rj", "c")}
+    old["up"] = sample_entry(0.5, passes=0)
+    new = _with_judge_change(
+        {
+            "down": sample_entry(0.7),
+            "up": sample_entry(0.9),
+            "same": sample_entry(0.9),
+            "edited": sample_entry(0.9, digest="sample-digest-2"),
+            "rj": _rejudged(0.9),
+            "c": _carried(0.9),
+            "fresh": sample_entry(0.9),
+        }
+    )
+    check = check_regressions(new, metrics_file(_OLD, old))
+    note = f"judge changed since {_OLD}: pass agreement 90%"
+    noted = {v.sample_id for v in check.samples if note in v.reasons}
+    assert noted == {"down", "up", "same", "edited"}
+    down = next(v for v in check.samples if v.sample_id == "down")
+    assert down.reasons == ("mean score drops 0.200", note)
+
+
+def test_without_a_judge_change_no_note_is_added() -> None:
+    check = _check({"s": sample_entry(0.9)}, {"s": sample_entry(0.9)})
+    assert check.samples[0].reasons == ()
+
+
+def test_the_summary_counts_rejudged_entries_apart_from_carried() -> None:
+    old = {sid: sample_entry(0.9) for sid in ("r", "c", "j")}
+    new_file = metrics_file(_NEW, {"r": sample_entry(0.9), "c": _carried(0.9), "j": _rejudged(0.6)})
+    check = check_regressions(new_file, metrics_file(_OLD, old))
+
+    annotated: Any = annotate_release_metrics(new_file, check)
+
+    validate_release_metrics(annotated)
+    summary = annotated["summary"]
+    assert (summary["rerun"], summary["carried"], summary["rejudged"]) == (1, 1, 1)
+    assert annotated["samples"]["j"]["vs_previous"]["status"] == "rejudged"
+    assert annotated["samples"]["j"]["vs_previous"]["delta"] == -0.3
+
+
+def test_the_tally_counts_rejudged() -> None:
+    check = _check({"s": sample_entry(0.9)}, {"s": _rejudged(0.8)})
+    table = format_regression_table(check)
+    assert "rejudged: rejudged from 9.9.8" in table
+    assert table.splitlines()[-1] == (
+        "0 regressions (0 accepted), 0 improvements, 0 not comparable, 0 carried, 1 rejudged: ok"
+    )
+    assert regression_check_to_dict(check)["rejudged"] == 1

@@ -71,3 +71,14 @@ def test_a_file_is_changed_only_when_it_carries_or_counts_carried_entries() -> N
     assert recorded_changed_only(_new_file())
     assert recorded_changed_only({"samples": {}, "summary": {"carried": 0}})
     assert not recorded_changed_only({"samples": {"a": {}}, "summary": {}})
+
+
+def test_a_rejudged_entry_is_not_counted_as_compared() -> None:
+    # Spec D11: a re-judged entry has measured_in too, but its verdict is
+    # rejudged, which the check never compares like a rerun.
+    new = _new_file()
+    rejudged_from = {"release": _PREVIOUS, "commit": "c", "judge": {"judge_model": "j"}}
+    new["samples"]["c"] = new["samples"]["c"] | {"rejudged_from": rejudged_from}
+    check = check_regressions(new, _previous_file())
+
+    assert carried_compared(new, check) == 0

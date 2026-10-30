@@ -25,6 +25,14 @@ blocks; one the baseline lacks is ``new``. The annotated summary counts the
 ``rerun`` and ``carried`` entries by ``measured_in``, as the record run wrote
 them, not by verdict.
 
+A *re-judged entry* (``rejudged_from``, release-metric-artifacts D9) is read
+before ``measured_in``, which it also has: it is ``rejudged``, never blocks, and
+its delta is the new judge's mean minus the previous entry's, the judge effect
+alone (D11). ``--accept`` refuses it like ``carried``. When the new file records
+``judge_change``, every compared sample notes ``judge changed since <previous>:
+pass agreement <x>%``. The summary counts it as ``rejudged``, apart from
+``carried``.
+
 A regression is *accepted* with a reason; :func:`annotate_release_metrics`
 stores it in the new file (``samples.<id>.vs_previous.accepted``), so a rerun
 against the same baseline keeps it. The check is *blocked* while any regression
@@ -46,19 +54,25 @@ from coding_agent_playbook.evals.comparison import (
 from coding_agent_playbook.evals.release_metrics_schema import (
     CONTROLS_KEY,
     INPUTS_DIGEST_KEY,
+    JUDGE_CHANGE_KEY,
     MEASURED_IN_KEY,
+    REJUDGED_FROM_KEY,
 )
 from coding_agent_playbook.exit_two import ExitTwoError
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-type SampleStatus = Literal["ok", "improvement", "regression", "not_comparable", "new", "carried"]
+type SampleStatus = Literal[
+    "ok", "improvement", "regression", "not_comparable", "new", "carried", "rejudged"
+]
 type _Entry = Mapping[str, object]
 
 #: A cost (or token) rise above this fraction of the previous release's is a warning.
 MAX_COST_RISE: Final = 0.25
 _DIGITS: Final = 6
+#: Verdicts compared with the previous entry, which a judge change note qualifies (D11).
+_COMPARED: Final = frozenset({"ok", "improvement", "regression", "not_comparable"})
 
 
 class RegressionCheckError(ExitTwoError):
@@ -160,6 +174,7 @@ def check_regressions(
         _verdict(sample_id, entry, old_samples.get(sample_id), str(new["release"]))
         for sample_id, entry in sorted(new_samples.items())
     )
+    verdicts = _note_judge_change(verdicts, new, previous)
     verdicts = _accept(verdicts, reasons, accepted or {})
     notes = (
         _harness_notes(new, baseline)
@@ -208,9 +223,11 @@ def annotate_release_metrics(
     summary["accepted_regressions"] = check.accepted_regressions
     summary["improvements"] = check.count("improvement")
     summary["not_comparable"] = check.count("not_comparable")
-    carried = sum(1 for entry in samples.values() if MEASURED_IN_KEY in entry)
-    summary["rerun"] = len(samples) - carried
+    rejudged = sum(1 for entry in samples.values() if REJUDGED_FROM_KEY in entry)
+    carried = sum(1 for entry in samples.values() if MEASURED_IN_KEY in entry) - rejudged
+    summary["rerun"] = len(samples) - carried - rejudged
     summary["carried"] = carried
+    summary["rejudged"] = rejudged
     return annotated
 
 
@@ -239,6 +256,8 @@ def _same_target(new: Mapping[str, object], baseline: Mapping[str, object]) -> s
 
 def _verdict(sample_id: str, entry: _Entry, old: _Entry | None, release: str) -> SampleVerdict:
     mean = _num(entry["mean_score"])
+    if REJUDGED_FROM_KEY in entry:
+        return _rejudged_verdict(sample_id, entry, old)
     if old is None:
         return SampleVerdict(sample_id, "new", None, mean)
     if MEASURED_IN_KEY not in entry:
@@ -264,6 +283,29 @@ def _compared_verdict(sample_id: str, entry: _Entry, old: _Entry, release: str) 
     improved = improvement_reasons(before, now)
     status: SampleStatus = "improvement" if improved else "ok"
     return SampleVerdict(sample_id, status, previous_mean, mean, improved, warnings)
+
+
+def _rejudged_verdict(sample_id: str, entry: _Entry, old: _Entry | None) -> SampleVerdict:
+    """A re-judged entry: the same answers under a new judge, so its delta is the judge effect."""
+    previous_mean = None if old is None else _num(old["mean_score"])
+    rejudged_from = entry[REJUDGED_FROM_KEY]
+    source = rejudged_from.get("release") if isinstance(rejudged_from, dict) else rejudged_from
+    reason = (f"rejudged from {source}",)
+    return SampleVerdict(sample_id, "rejudged", previous_mean, _num(entry["mean_score"]), reason)
+
+
+def _note_judge_change(
+    verdicts: tuple[SampleVerdict, ...], new: Mapping[str, object], previous: str
+) -> tuple[SampleVerdict, ...]:
+    """Each compared verdict with the judge change note, when ``new`` records ``judge_change``."""
+    change = new.get(JUDGE_CHANGE_KEY)
+    if not isinstance(change, dict):
+        return verdicts
+    agreement = round(_num(change["pass_agreement"]) * 100)
+    note = f"judge changed since {previous}: pass agreement {agreement}%"
+    return tuple(
+        replace(v, reasons=(*v.reasons, note)) if v.status in _COMPARED else v for v in verdicts
+    )
 
 
 def _measured_in(entry: _Entry) -> str:
