@@ -15,7 +15,14 @@ import pytest
 
 from coding_agent_playbook.evals.release_report_rows import AGREEMENT_COLUMNS, CSV_COLUMNS
 from release_report import build_bundle, main
-from tests.evals.release_report_history import OPUS, QWEN, write_history
+from tests.evals.release_report_history import (
+    OPUS,
+    QWEN,
+    entry,
+    file_of,
+    write_file,
+    write_history,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CHARTS = ("sample-deltas.png", "task-deltas.png", "task-trend.png")
@@ -63,13 +70,29 @@ def test_report_and_history_csv(checkout: Path, tmp_path: Path) -> None:
     assert {row["release"] for row in rows} == {"9.9.2", "9.9.3", "9.9.4"}
 
 
-def test_judge_agreement_only_with_a_judge_change(checkout: Path, tmp_path: Path) -> None:
+def _add_995(checkout: Path) -> None:
+    """A 9.9.5 of ``claude-opus`` after the 9.9.4 judge change, with no judge change itself."""
+    data = file_of("9.9.5", OPUS, {"review/a": entry("review", 0.9, 3)}) | {"previous": "9.9.4"}
+    write_file(checkout / "catalog" / "releases", data)
+
+
+def test_judge_agreement_holds_only_this_release_rows(checkout: Path, tmp_path: Path) -> None:
+    _add_995(checkout)
     out = tmp_path / "bundle"
     build_bundle(checkout, "9.9.4", out, charts=False)
     with (out / "judge-agreement.csv").open(encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
     assert rows
     assert list(rows[0]) == list(AGREEMENT_COLUMNS)
+    assert {row["release"] for row in rows} == {"9.9.4"}
+
+
+def test_no_judge_agreement_after_the_judge_change(checkout: Path, tmp_path: Path) -> None:
+    _add_995(checkout)
+    out = tmp_path / "bundle"
+    names = _names(build_bundle(checkout, "9.9.5", out, charts=False))
+    assert "judge-agreement.csv" not in names
+    assert not (out / "judge-agreement.csv").exists()
 
 
 def test_unknown_version_exits_two(

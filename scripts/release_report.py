@@ -16,7 +16,8 @@ file names):
   release description, cut under GitHub's 125,000-character body cap;
 - ``metrics-history.csv``: one row per release, target and sample;
 - ``metrics-<target>.json``: byte copies of the release's metrics files;
-- ``judge-agreement.csv``: only for a release with a judge change;
+- ``judge-agreement.csv``: only for a release whose own files record a judge
+  change, with that release's rows only;
 - ``task-deltas.png``, ``sample-deltas.png``, ``task-trend.png``
   (``scripts/release_report_charts.py``): the charts need matplotlib, which
   only this script imports, lazily; ``--no-charts`` builds without it.
@@ -69,7 +70,8 @@ def build_bundle(checkout: Path, version: str, out: Path, *, charts: bool) -> li
     (out / REPORT_NAME).write_text(report.markdown(), encoding="utf-8")
     paths = [out / REPORT_NAME, _write_csv(out / HISTORY_NAME, CSV_COLUMNS, report.csv_rows())]
     paths += _copy_metrics(releases / version / METRICS_DIRNAME, out)
-    agreement = report.agreement_rows()
+    # agreement_rows() spans the history; the bundle keeps only this release's judge change.
+    agreement = [row for row in report.agreement_rows() if row["release"] == version]
     if agreement:
         paths.append(_write_csv(out / AGREEMENT_NAME, AGREEMENT_COLUMNS, agreement))
     if charts:
