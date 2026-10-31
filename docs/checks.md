@@ -732,8 +732,9 @@ at most three tests. The first rule broken is the reason:
 7. no test passed, and none failed: a run of skips and xfails alone. A run
    whose tests all fail is graded as the failure it is.
 
-The rules read the test files as the agent left them, captured before the suite
-runs, so a `conftest.py` that edits a test file during the run changes nothing.
+The rules read the test files as the agent left them, read into memory before
+the suite runs, so a `conftest.py` that edits a test file during the run changes
+nothing.
 
 What a `conftest.py` does inside the pytest process is out of reach, for example
 a `pytest_runtest_makereport` wrapper that flips outcomes: the judge's rubric
@@ -753,11 +754,21 @@ The layers compile into one rubric of checks, with the same `Metric` / `Check` /
 predicates (`file_exists`, `file_contains`, `file_unchanged` and `file_forbidden`)
 and static or execution metric checks. A metric check uses a threshold normalized to
 0–1, or non-regression against the `setup/` baseline. That baseline is the
-sample's own `setup/` in the catalog, which the agent cannot reach; its suite runs
-on a temporary copy. The file predicates grade the paths they name as the agent
-left them, copied before the suite runs, so a `conftest.py` that rewrites a file
-during the run, or a test that creates one, does not change their answer. A
-predicate path must be relative and stay inside the tree.
+sample's own `setup/` in the catalog, which the engine reads into memory once per
+sample, before any agent code runs, and grades from: every trial's scratch repo
+is written from that copy, and the baseline's metrics and suite are measured on
+it once, in a temporary tree, before the first agent runs. The catalog itself is
+not out of the agent's reach (the agent and its tests run as the same user, and
+with an editable install it is your checkout), so when it differs from that copy
+after the agent's suite, the sample stops (exit 2) with the first changed path:
+restore it, for example with `git checkout`, and run again. `setup/` may hold only
+regular files and directories. The file predicates grade the paths they name as
+the agent left them, read into memory before the suite runs and written to a
+fresh temporary tree only after it exited, so a `conftest.py` that rewrites a
+file during the run, or a test that creates one, does not change their answer. A
+predicate path must be relative and stay inside the tree. A process that leaves
+its session (a `setsid` daemon) outlives the suite and is out of the engine's
+reach without a sandbox.
 
 The `[gate]` layer is scored deterministically into one report, rendered like the
 report of `playbook metrics`. The verdict of each trial is derived from the layer

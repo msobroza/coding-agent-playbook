@@ -240,11 +240,15 @@ class EvalSample:
     def setup_dir(self) -> Path:
         """The sample's ``setup/`` tree in the catalog, beside its ``sample.toml``.
 
-        The one place that names it: materialize copies it into the agent's
-        scratch repo, prompting detects facts over it, and scoring grades against
-        it as the baseline. Why shared: an edition pins this same directory by
-        digest, and the three readers must agree on which tree that is. The
-        directory may be missing (a sample with no fixture).
+        The one place that names it: prompting detects facts over it, and the
+        runner reads it into memory once per sample, before any agent runs
+        (:func:`~coding_agent_playbook.evals.run.setup_baseline.take_setup_snapshot`);
+        every trial's scratch repo is written from that copy and graded against
+        it. It is not out of the agent's reach (same user, and with an editable
+        install the user's checkout): scoring stops the sample when it changed
+        meanwhile. Why shared: an edition pins this same directory by digest, and
+        its readers must agree on which tree that is. The directory may be
+        missing (a sample with no fixture).
 
         Example::
 

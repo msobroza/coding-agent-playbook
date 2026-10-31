@@ -85,6 +85,7 @@ SCORING_MODULES: Final = (
     "evals.run.scoring",
     "evals.run.scoring_suite",
     "evals.run.secret_redaction",
+    "evals.run.setup_baseline",
     "evals.run.suite_integrity",
     # The grading kernel and its metrics.
     "grading.baseline_git",

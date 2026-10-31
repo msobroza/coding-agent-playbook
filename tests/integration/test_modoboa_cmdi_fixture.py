@@ -10,6 +10,7 @@ import pytest
 from coding_agent_playbook.evals.judge import StubJudge
 from coding_agent_playbook.evals.run.harness_runner import capture, materialize
 from coding_agent_playbook.evals.run.scoring import score
+from coding_agent_playbook.evals.run.setup_baseline import prepare_setup_baseline
 from coding_agent_playbook.evals.sample import Verdict
 from coding_agent_playbook.evals.task_registry import load_task_sample
 from tests._catalog import CORE_ROOT
@@ -54,7 +55,7 @@ def test_fixture_runs_with_stub_judge(tmp_path: Path, stub_uv_sync: None) -> Non
     sample = _sample()
     baseline = materialize(sample, tmp_path / "scratch")
     candidate = capture(baseline.repo_root, baseline, CORRECT_ANSWER[sample.id])
-    report = score(sample, baseline, candidate, judge=StubJudge(default=0.9))
+    report = score(sample, prepare_setup_baseline(sample), candidate, judge=StubJudge(default=0.9))
     gate = next(c for c in report.checks if c.check_id == "gate")
     rubric = next(c for c in report.checks if c.check_id == "rubric")
     # The no-op fake runner leaves the files unchanged and the answer names CWE-78.

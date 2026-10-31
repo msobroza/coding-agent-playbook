@@ -47,6 +47,7 @@ import pytest
 from coding_agent_playbook.catalog.layers import ENGINE_PACKAGE
 from coding_agent_playbook.evals.run.harness_runner import capture, materialize
 from coding_agent_playbook.evals.run.scoring import score
+from coding_agent_playbook.evals.run.setup_baseline import prepare_setup_baseline
 from coding_agent_playbook.evals.task_registry import (
     TaskRegistry,
     load_layer_samples,
@@ -212,7 +213,7 @@ def gate_result(sample: EvalSample, workdir: Path, attempt: Attempt = NO_OP) -> 
     if attempt.overlay is not None:
         overlay_solution(attempt.overlay, baseline.repo_root)
     candidate = capture(baseline.repo_root, baseline, attempt.transcript)
-    report = score(sample, baseline, candidate, judge=None, fail_fast=True)
+    report = score(sample, prepare_setup_baseline(sample), candidate, judge=None, fail_fast=True)
     return next(c for c in report.checks if c.check_id == "gate")
 
 

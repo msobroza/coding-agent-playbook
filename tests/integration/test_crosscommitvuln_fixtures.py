@@ -24,6 +24,7 @@ import pytest
 from coding_agent_playbook.evals.judge import StubJudge
 from coding_agent_playbook.evals.run.harness_runner import capture, materialize
 from coding_agent_playbook.evals.run.scoring import score
+from coding_agent_playbook.evals.run.setup_baseline import prepare_setup_baseline
 from coding_agent_playbook.evals.task_registry import load_task_sample
 from tests._catalog import CORE_ROOT
 from tests.integration.ccv_answers import CORRECT_ANSWER, WRONG_CLASS_ANSWER
@@ -205,7 +206,7 @@ def test_fixture_runs_hermetically(fixture_id: str, tmp_path: Path, stub_uv_sync
     sample = _sample(fixture_id)
     baseline = materialize(sample, tmp_path / "scratch")
     candidate = capture(baseline.repo_root, baseline, CORRECT_ANSWER[fixture_id])
-    report = score(sample, baseline, candidate, judge=StubJudge(default=0.9))
+    report = score(sample, prepare_setup_baseline(sample), candidate, judge=StubJudge(default=0.9))
     gate = next(c for c in report.checks if c.check_id == "gate")
     rubric = next(c for c in report.checks if c.check_id == "rubric")
     # Review-only gate: the no-op fake runner leaves the files unchanged, and the
@@ -234,7 +235,7 @@ def test_wrong_class_answer_loses_the_gate(
     baseline = materialize(sample, tmp_path / "scratch")
     candidate = capture(baseline.repo_root, baseline, WRONG_CLASS_ANSWER)
 
-    report = score(sample, baseline, candidate, judge=StubJudge(default=0.9))
+    report = score(sample, prepare_setup_baseline(sample), candidate, judge=StubJudge(default=0.9))
 
     gate = next(c for c in report.checks if c.check_id == "gate")
     assert gate.passed is False
@@ -255,7 +256,7 @@ def test_wrong_class_answer_never_reaches_the_judge(
     candidate = capture(baseline.repo_root, baseline, WRONG_CLASS_ANSWER)
 
     judge = StubJudge(default=0.9)
-    score(sample, baseline, candidate, judge=judge, fail_fast=True)
+    score(sample, prepare_setup_baseline(sample), candidate, judge=judge, fail_fast=True)
 
     assert judge.calls == []
 
@@ -274,7 +275,7 @@ def test_correct_class_answer_does_reach_the_judge(
     candidate = capture(baseline.repo_root, baseline, CORRECT_ANSWER[fixture_id])
 
     judge = StubJudge(default=0.9)
-    score(sample, baseline, candidate, judge=judge, fail_fast=True)
+    score(sample, prepare_setup_baseline(sample), candidate, judge=judge, fail_fast=True)
 
     assert judge.calls != []
 
@@ -311,7 +312,7 @@ def test_judge_grades_the_answer_not_an_empty_diff(
     candidate = capture(baseline.repo_root, baseline, answer)
 
     judge = StubJudge(default=0.9)
-    score(sample, baseline, candidate, judge=judge)
+    score(sample, prepare_setup_baseline(sample), candidate, judge=judge)
 
     assert candidate.diff.strip() == ""  # review-only: nothing was edited
     _criterion, artifact, _n = judge.calls[0]

@@ -1,8 +1,9 @@
 """Scoring bridge — grade an agent's output through the compiled sample.
 
-:func:`score` turns a materialized :class:`~coding_agent_playbook.evals.run.harness_runner.Baseline`
-and the captured :class:`~coding_agent_playbook.evals.run.harness_runner.Candidate` into one
-:class:`~coding_agent_playbook.grading.types.EvaluationReport`. It sources the
+:func:`score` grades the captured
+:class:`~coding_agent_playbook.evals.run.harness_runner.Candidate` against the sample's
+``setup/`` baseline (:class:`~coding_agent_playbook.evals.run.setup_baseline.SetupBaseline`)
+into one :class:`~coding_agent_playbook.grading.types.EvaluationReport`. It sources the
 checks from the sample compiler (:mod:`coding_agent_playbook.evals.compile.compiler`):
 the sample's ``[gate]``/``[rubric]`` blocks compile (via
 :func:`~coding_agent_playbook.evals.sample.compile_eval_sample`) into one per-trial
@@ -21,23 +22,16 @@ gate/rubric layer checks → their composers → the metric leaves) rather than 
 flat ``[metrics]`` block:
 
 * **static** metrics (``not needs_project``) are measured per candidate ``*.py``
-  file (and over the sample's catalog ``setup/`` for the baseline); a file that
+  file (the ``setup/`` baseline's rows are measured once per sample); a file that
   cannot be read, parsed or measured, or is over 1 MB, is skipped;
-* **execution** metrics (``needs_project``) run a
-  :class:`~coding_agent_playbook.grading.execution_metrics.project.ProjectHandle` over
-  the candidate tree (and a throwaway copy of ``setup/`` for the baseline) — but **only when** an
-  execution metric is actually referenced (``run_tests`` is *inferred*, not
-  authored). Each run stops after 300 s and runs with an allowlisted
-  environment (:func:`~coding_agent_playbook.evals.run.scoring_suite.suite_env`:
-  ``PATH``, ``HOME``, the locale, the temp dirs, the Python path and the Windows
-  system variables), so no API key, token, agent socket or ``PYTEST_*`` option
-  of the caller reaches agent code.
-  The command is ``python -P -m pytest`` with the engine's session-record
-  plugin (:mod:`~coding_agent_playbook.grading.execution_metrics.suite_record`),
-  writing to a temp dir outside the suite's argv, so neither a planted
-  ``pytest.py`` nor a ``conftest.py`` that rewrites the reports passes for pytest.
-  A candidate suite that gives no result (it timed out, left no readable junit
-  or coverage report, or its session disagrees with them) fails every execution
+* **execution** metrics (``needs_project``) run the candidate's test suite
+  (:mod:`~coding_agent_playbook.evals.run.scoring_suite`: bounded, in an
+  allowlisted environment, ``python -P`` with the session-record plugin
+  :mod:`~coding_agent_playbook.grading.execution_metrics.suite_record_plugin`) —
+  but **only when** an execution metric is actually referenced (``run_tests`` is
+  *inferred*, not authored). A candidate suite that gives no result (it timed
+  out, left no readable junit or coverage report, or its session disagrees with
+  them) fails every execution
   check with its reason, and so does one whose result does not count because it
   hid tests from the pass rate: a setup/ test it no longer runs, a new skip,
   a non-strict xfail, a deselected or uncollected test, or no test that passed or failed
@@ -59,24 +53,28 @@ exactly when its metric is named there.
 
 The file checks (``[gate]`` predicates) ignore the
 :class:`~coding_agent_playbook.grading.check.MeasurementSet` and read
-``ctx.tree`` / ``ctx.baseline_tree`` directly. ``ctx.tree`` holds the paths they
-name as the agent left them, copied
+``ctx.tree`` / ``ctx.baseline_tree`` directly. Both are temporary trees written
+only after the trial's suite exited, immediately before grading: ``ctx.tree`` from
+the paths those checks name, read into engine memory
 (:func:`~coding_agent_playbook.evals.checks.files.freeze_file_inputs`) before the
-suite runs: the suite runs agent code, which could otherwise put an edited
-file's original bytes back, or create a file the agent never wrote. The static
-rows and the suite still read the candidate tree itself.
+suite ran, and ``ctx.baseline_tree`` from the sample's ``setup/`` snapshot. Why:
+the suite runs agent code as the same user, which could put an edited file's
+original bytes back, create a file the agent never wrote, or rewrite any file
+the engine kept on disk while it ran. The static rows and the suite still read
+the candidate tree itself.
 
-The baseline is always the sample's catalog ``setup/``
-(:attr:`~coding_agent_playbook.evals.sample.EvalSample.setup_dir`), never a copy
-beside the agent's scratch repo: such a copy was the agent's to edit, which let
-an edited file pass ``file_unchanged`` and a planted ``conftest.py`` break the
-baseline suite. The baseline suite runs on a temporary copy of it, so the
-suite's own writes (``.pyc`` files, caches) never touch the catalog.
+The baseline is the sample's catalog ``setup/``, read into engine memory once
+per sample before any agent code runs
+(:mod:`~coding_agent_playbook.evals.run.setup_baseline`); scoring grades from that
+copy and never reads the live catalog again, except to stop the sample
+(:class:`~coding_agent_playbook.evals.run.setup_baseline.CatalogSetupChangedError`)
+when the agent or its code modified it. A process that leaves its session (a
+``setsid`` daemon) outlives the suite and is out of the engine's reach without
+a sandbox.
 """
 
 from __future__ import annotations
 
-import shutil
 import tempfile
 from contextlib import ExitStack
 from dataclasses import dataclass
@@ -85,7 +83,6 @@ from typing import TYPE_CHECKING
 
 from coding_agent_playbook.evals.checks.files import freeze_file_inputs
 from coding_agent_playbook.evals.run.scoring_suite import (
-    UnscorableSuiteError,
     check_suite_toolchain,
     open_suite_handle,
     static_metrics_of,
@@ -93,17 +90,21 @@ from coding_agent_playbook.evals.run.scoring_suite import (
     suite_rows,
     tree_static_rows,
 )
+from coding_agent_playbook.evals.run.setup_baseline import require_catalog_unchanged
 from coding_agent_playbook.evals.run.suite_integrity import freeze_test_files, suite_violation
 from coding_agent_playbook.grading.check import MeasurementSet
 from coding_agent_playbook.grading.measuring import measured_metrics, referenced_metrics
 from coding_agent_playbook.grading.types import EvalContext, EvaluationReport, MeasureSetup
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from coding_agent_playbook.evals.checks.files import FrozenFileInputs
     from coding_agent_playbook.evals.compile.compiler import VerdictSpec
-    from coding_agent_playbook.evals.run.harness_runner import Baseline, Candidate
+    from coding_agent_playbook.evals.run.harness_runner import Candidate
+    from coding_agent_playbook.evals.run.setup_baseline import SetupBaseline
     from coding_agent_playbook.evals.sample import EvalSample
     from coding_agent_playbook.grading.execution_metrics.project import ProjectHandle
-    from coding_agent_playbook.grading.metric import Metric
     from coding_agent_playbook.grading.rubric import Rubric
     from coding_agent_playbook.grading.types import JudgeLike, Measurement
 
@@ -112,13 +113,9 @@ if TYPE_CHECKING:
 _RUBRIC_LABEL = "rubric"
 
 
-class BaselineSuiteError(UnscorableSuiteError):
-    """The ``setup/`` baseline's own suite gave no result: the sample author's to fix."""
-
-
 def score(
     sample: EvalSample,
-    baseline: Baseline,
+    setup_baseline: SetupBaseline,
     candidate: Candidate,
     *,
     judge: JudgeLike | None = None,
@@ -130,8 +127,8 @@ def score(
     Compiles the sample's ``[gate]``/``[rubric]`` blocks into one per-trial
     :class:`~coding_agent_playbook.grading.rubric.Rubric`
     (:func:`~coding_agent_playbook.evals.sample.compile_eval_sample`), pre-computes the
-    metrics that rubric's checks reference over the candidate (and, for
-    regression/execution, the sample's catalog ``setup/``), runs
+    metrics that rubric's checks reference over the candidate (the ``setup/``
+    side comes from ``setup_baseline``), runs
     :meth:`Rubric.evaluate`, then derives the per-trial verdict from the gate/rubric
     layer results (**skipped-neutral**) and writes it onto ``report.passed``.
 
@@ -149,19 +146,24 @@ def score(
     verdict, a weighted verdict, an aggregate over a skippable layer — see
     :attr:`~coding_agent_playbook.evals.compile.compiler.CompiledSample.short_circuit_safe`).
 
-    ``baseline`` is the runner's materialized scratch repo; the reference tree
-    scoring compares against is ``sample.setup_dir``, which the agent cannot reach.
+    ``setup_baseline`` is ``sample``'s, measured once before any agent ran
+    (:func:`~coding_agent_playbook.evals.run.setup_baseline.prepare_setup_baseline`);
+    a baseline of another sample raises :exc:`ValueError`. After the candidate's
+    suite the live catalog ``setup/`` must still match its snapshot, else
+    :class:`~coding_agent_playbook.evals.run.setup_baseline.CatalogSetupChangedError`.
 
     Example::
 
-        >>> score(sample, baseline, capture(baseline.repo_root, baseline, log)).passed  # doctest: +SKIP
+        >>> score(sample, prepare_setup_baseline(sample), candidate).passed  # doctest: +SKIP
         True
     """
     from coding_agent_playbook.evals.sample import compile_eval_sample
 
+    _require_baseline_of(sample, setup_baseline)
     compiled = compile_eval_sample(sample)
     rubric = compiled.per_trial
     fail_fast = fail_fast and compiled.short_circuit_safe
+    graded = freeze_file_inputs(rubric.checks, candidate.tree)
 
     # Judge-backed metrics are NOT pre-measured here: a metric-backed check whose
     # metric ``needs_judge`` is JUDGED-tier and measures itself lazily at grade time
@@ -169,15 +171,16 @@ def score(
     # short-circuit it when a cheaper required gate already failed (no wasted judge
     # call). With no judge configured its rubric layer reports unavailable -> skipped.
     with ExitStack() as stack:
-        graded = _frozen_file_inputs(rubric, candidate, stack)
-        measured = _measure(rubric, sample, candidate, stack)
+        measured = _measure(rubric, setup_baseline, candidate, stack)
+        require_catalog_unchanged(setup_baseline)
+        tree, baseline_tree = _graded_trees(graded, setup_baseline, stack)
         ctx = EvalContext(
             module=None,
             source="",
             label=_RUBRIC_LABEL,
             project=measured.project,
-            tree=graded,
-            baseline_tree=sample.setup_dir,
+            tree=tree,
+            baseline_tree=baseline_tree,
             artifact=_graded_artifact(candidate),
             judge_samples=judge_samples,
             judge=judge,
@@ -194,14 +197,25 @@ def score(
     return report
 
 
-def _frozen_file_inputs(rubric: Rubric, candidate: Candidate, stack: ExitStack) -> Path:
-    """A copy of the paths ``rubric``'s file checks name, made now; ``stack`` removes it.
+def _require_baseline_of(sample: EvalSample, setup_baseline: SetupBaseline) -> None:
+    """Raise :exc:`ValueError` when ``setup_baseline`` was measured for another sample."""
+    if setup_baseline.sample_id != sample.id:
+        raise ValueError(
+            f"score() got the setup/ baseline of {setup_baseline.sample_id!r} for sample "
+            f"{sample.id!r}; expected prepare_setup_baseline() of the same sample"
+        )
 
-    Called before the suite runs, for every sample (one code path; a few file
-    copies), so the file checks grade the files as the agent left them.
+
+def _graded_trees(
+    graded: FrozenFileInputs, setup_baseline: SetupBaseline, stack: ExitStack
+) -> tuple[Path, Path]:
+    """The file checks' ``(tree, baseline_tree)``, written now from memory; ``stack`` removes them.
+
+    Called after every suite of the trial exited, so no agent code of this trial
+    runs while they exist (an escaped ``setsid`` process aside).
     """
     work = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix="playbook-eval-graded-")))
-    return freeze_file_inputs(rubric.checks, candidate.tree, work / "tree")
+    return graded.write_tree(work / "tree"), setup_baseline.snapshot.write_tree(work / "setup")
 
 
 def apply_verdict(report: EvaluationReport, spec: VerdictSpec) -> None:
@@ -250,7 +264,7 @@ def _graded_artifact(candidate: Candidate) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# The measuring pass (grading/measuring.py), over the candidate and setup/ trees
+# The measuring pass (grading/measuring.py), over the candidate tree
 # --------------------------------------------------------------------------- #
 
 
@@ -271,96 +285,53 @@ class _Measured:
 
 
 def _measure(
-    rubric: Rubric, sample: EvalSample, candidate: Candidate, stack: ExitStack
+    rubric: Rubric, setup_baseline: SetupBaseline, candidate: Candidate, stack: ExitStack
 ) -> _Measured:
-    """Measure the candidate and ``sample``'s ``setup/`` with every metric ``rubric`` references.
+    """Measure the candidate with every metric ``rubric`` references, beside the setup/ rows.
 
-    Static metrics run per ``*.py`` file; execution metrics run the suite once
-    per tree, and only when one is referenced (``run_tests`` is inferred). The
+    Static metrics run per ``*.py`` file; execution metrics run the candidate's
+    suite, and only when one is referenced (``run_tests`` is inferred). The
+    ``setup/`` rows were measured once per sample, before any agent ran. The
     candidate handle stays open on ``stack``: grading sees it as ``ctx.project``.
     """
     setup = MeasureSetup()
-    static = static_metrics_of(rubric)
-    execution = suite_metrics_of(rubric)
-    candidate_rows = tree_static_rows(candidate.tree, static, setup)
-    baseline_rows = tree_static_rows(sample.setup_dir, static, setup)
+    candidate_rows = tree_static_rows(candidate.tree, static_metrics_of(rubric), setup)
+    baseline_rows = list(setup_baseline.static_rows)
     promised = measured_metrics(referenced_metrics(rubric.checks, nested=True), setup)
+    execution = suite_metrics_of(rubric)
     if not execution:
-        return _Measured(candidate_rows, baseline_rows, None, promised)
+        return _Measured(candidate_rows, baseline_rows, project=None, measured_metrics=promised)
     check_suite_toolchain()
-    tests = _frozen_test_files(candidate, stack)
+    tests = freeze_test_files(candidate.tree, candidate.changed_files)
     project = open_suite_handle(candidate.tree, stack)
     candidate_rows += suite_rows(project, execution, setup)
-    baseline = open_suite_handle(_setup_copy(sample.setup_dir, stack), stack)
-    baseline_rows += _baseline_suite_rows(sample, baseline, execution, setup)
+    baseline_rows += setup_baseline.suite_rows
     if project.no_result is not None:
         failure = project.no_result.reason
-        return _Measured(candidate_rows, baseline_rows, project, promised, failure)
-    violation = _suite_violation(project, baseline, sample, candidate, tests)
-    return _Measured(candidate_rows, baseline_rows, project, promised, None, violation)
-
-
-def _frozen_test_files(candidate: Candidate, stack: ExitStack) -> Path:
-    """The agent's changed test files, copied before its suite runs; ``stack`` removes them."""
-    work = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix="playbook-eval-tests-")))
-    return freeze_test_files(candidate.tree, candidate.changed_files, work / "tree")
-
-
-def _baseline_suite_rows(
-    sample: EvalSample, handle: ProjectHandle, metrics: list[Metric], setup: MeasureSetup
-) -> list[Measurement]:
-    """``sample``'s ``setup/`` suite measurements; :class:`BaselineSuiteError` when it gave none.
-
-    ``handle`` runs over a throwaway copy of ``setup/`` (:func:`_setup_copy`). Why
-    raise: ``setup/`` is the sample author's, so its failure is not the agent's
-    to carry, and a regression check with no baseline row grades a "new" scope
-    against unset bounds and passes. The message names the catalog ``setup/``,
-    the tree the author edits, not the temporary copy the suite ran in.
-    """
-    rows = suite_rows(handle, metrics, setup)
-    if handle.no_result is not None:
-        raise BaselineSuiteError(
-            f"the setup/ baseline suite of {sample.id} ({sample.setup_dir}) gave no result "
-            f"({handle.no_result.reason}); a sample's setup/ suite must finish and write its reports"
-        )
-    return rows
+        return _Measured(candidate_rows, baseline_rows, project, promised, suite_failure=failure)
+    violation = _suite_violation(project, setup_baseline, candidate, tests)
+    return _Measured(candidate_rows, baseline_rows, project, promised, suite_violation=violation)
 
 
 def _suite_violation(
     project: ProjectHandle,
-    baseline: ProjectHandle,
-    sample: EvalSample,
+    setup_baseline: SetupBaseline,
     candidate: Candidate,
-    tests: Path,
+    tests: Mapping[str, bytes],
 ) -> str | None:
     """Why the candidate's suite result does not count against the ``setup/`` baseline's, or ``None``.
 
-    Both handles already ran and gave a result (cached, so nothing reruns), and
-    :func:`~coding_agent_playbook.evals.run.scoring_suite.open_suite_handle` asked each for a session record. ``tests`` holds the agent's
-    test files as it left them (:func:`_frozen_test_files`).
+    The candidate's handle already ran and gave a result (cached, so nothing
+    reruns). ``tests`` holds the agent's changed test files as it left them, read
+    before its suite ran; the ``setup/`` files are the sample's snapshot.
     """
-    ours, theirs = project.run().record, baseline.run().record
+    ours, theirs = project.run().record, setup_baseline.record
     if ours is None or theirs is None:
         return None
     return suite_violation(
         ours,
         theirs,
-        candidate_tree=tests,
-        setup_tree=sample.setup_dir,
+        candidate_files=tests,
+        setup_files=setup_baseline.snapshot.files,
         changed_files=candidate.changed_files,
     )
-
-
-def _setup_copy(setup_dir: Path, stack: ExitStack) -> Path:
-    """A throwaway copy of ``setup_dir`` (empty when it is missing); ``stack`` removes it.
-
-    Why a copy: the suite writes ``.pyc`` files and caches into its rootdir, and the
-    catalog ``setup/`` must stay as its edition digest pins it.
-    """
-    work = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix="playbook-eval-setup-")))
-    tree = work / "setup"
-    if setup_dir.is_dir():
-        shutil.copytree(setup_dir, tree, symlinks=True)
-    else:
-        tree.mkdir()
-    return tree

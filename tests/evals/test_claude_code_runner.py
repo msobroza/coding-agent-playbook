@@ -498,6 +498,7 @@ def test_a_token_written_into_a_file_is_redacted_from_the_graded_diff(
     # Regression (PR #310 review): the judge grades the diff, so a token the agent
     # wrote into a file reached the judge's argv unredacted.
     from coding_agent_playbook.evals.run import harness_runner
+    from coding_agent_playbook.evals.run.setup_baseline import SetupBaseline, take_setup_snapshot
 
     recorder = _RecordingScore()
     monkeypatch.setattr(harness_runner, "score", recorder)
@@ -507,10 +508,13 @@ def test_a_token_written_into_a_file_is_redacted_from_the_graded_diff(
     program = 'import pathlib; pathlib.Path("leak.txt").write_text("t0k3n-in-file\\n")'
     runner = ClaudeCodeRunner(command=[sys.executable, "-c", program], model="m", route=route)
 
+    sample = _make_sample(sample_dir)
     runner._run_trial(
-        _make_sample(sample_dir),
+        sample,
         "p",
         tmp_path / "scratch",
+        # score is faked, so a bare snapshot stands in for the measured baseline.
+        SetupBaseline(sample.id, sample.setup_dir, take_setup_snapshot(sample.setup_dir)),
         judge=None,
         judge_samples=1,
         fail_fast=True,

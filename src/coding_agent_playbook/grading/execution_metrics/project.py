@@ -19,8 +19,9 @@ is the lever that neutralises an inherited config), and ``--cov-config`` pins
 coverage to the target. The exit code of the run is *not* asserted here (a
 failing suite is a legitimate measurement, not a handle error); only a command
 that cannot be *launched* (its program is missing) raises, and so does a suite
-that gives no result: it ran past ``timeout_s``, or left no readable junit or
-coverage report (:class:`NoSuiteResultError`). A ``-m pytest`` command whose
+that gives no result: it ran past ``timeout_s``, left no readable junit or
+coverage report, or its pytest session disagrees with them
+(:class:`NoSuiteResultError`). A ``-m pytest`` command whose
 interpreter lacks pytest starts, then exits 1 with no report, so it is a suite with
 no result too: eval scoring checks that toolchain in-process first. A timeout, or
 any interrupt such as Ctrl-C, kills the suite's process group, with the
@@ -90,7 +91,11 @@ class RunArtifacts:
 
 
 class NoSuiteResultError(RuntimeError):
-    """The suite ran but gave no result: it timed out, or left no readable junit or coverage report.
+    """The suite ran but gave no result: a timeout, no readable report, or a session that disagrees.
+
+    A readable report means a junit and a coverage report; the session is the one
+    the record plugin wrote (:attr:`ProjectHandle.suite_record`), which must agree
+    with the junit report and the exit code.
 
     Distinct from a command that cannot start (a plain ``RuntimeError``): the
     suite started, so the cause is usually its own, for example an endless test or

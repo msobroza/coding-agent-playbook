@@ -38,6 +38,7 @@ from coding_agent_playbook.evals.judge import StubJudge
 from coding_agent_playbook.evals.run.fake_runner import write_files
 from coding_agent_playbook.evals.run.harness_runner import capture, materialize
 from coding_agent_playbook.evals.run.scoring import score
+from coding_agent_playbook.evals.run.setup_baseline import prepare_setup_baseline
 from coding_agent_playbook.evals.sample import Verdict
 from coding_agent_playbook.evals.task_registry import (
     TaskRegistry,
@@ -141,7 +142,7 @@ def test_shipped_sample_runs_deterministic_only(
     baseline = materialize(sample, scratch)
     candidate = capture(baseline.repo_root, baseline, ALL_CLASSES_ANSWER)
 
-    report = score(sample, baseline, candidate)  # no judge
+    report = score(sample, prepare_setup_baseline(sample), candidate)  # no judge
     # No judged scope leaves were produced (deterministic-only).
     assert not any(d.evaluator.startswith("judge:") for d in report.findings)
     # The verdict equals the gate layer's pass/fail (rubric skipped-neutral).
@@ -159,7 +160,7 @@ def test_shipped_sample_runs_with_a_judge(
     candidate = capture(baseline.repo_root, baseline, ALL_CLASSES_ANSWER)
 
     # A high default keeps every judged criterion above its 0.5 floor.
-    report = score(sample, baseline, candidate, judge=StubJudge(default=0.9))
+    report = score(sample, prepare_setup_baseline(sample), candidate, judge=StubJudge(default=0.9))
     rubric = next(c for c in report.checks if c.check_id == "rubric")
     assert rubric.status == "run"
     assert rubric.passed is True  # composite 0.9 >= 0.5 floor
@@ -181,8 +182,8 @@ def test_judge_verdict_can_diverge_from_gate(tmp_path: Path, stub_uv_sync: None)
     write_files({})(baseline.repo_root)
     candidate = capture(baseline.repo_root, baseline, ALL_CLASSES_ANSWER)
 
-    high = score(sample, baseline, candidate, judge=StubJudge(default=0.9))
-    low = score(sample, baseline, candidate, judge=StubJudge(default=0.1))
+    high = score(sample, prepare_setup_baseline(sample), candidate, judge=StubJudge(default=0.9))
+    low = score(sample, prepare_setup_baseline(sample), candidate, judge=StubJudge(default=0.1))
 
     gate_high = next(c for c in high.checks if c.check_id == "gate")
     assert gate_high.passed is True

@@ -1,7 +1,8 @@
-"""Tests for :func:`freeze_file_inputs`: the file checks grade a copy made before the suite.
+"""Tests for :func:`freeze_file_inputs`: the file checks grade what was read before the suite.
 
 Regression: the file checks read the candidate tree after the scoring suite ran,
-so a ``conftest.py`` could run edited code and then put the original bytes back.
+so a ``conftest.py`` could run edited code and then put the original bytes back;
+and a frozen copy kept on disk during the suite could be rewritten by it.
 """
 
 from __future__ import annotations
@@ -39,10 +40,11 @@ def test_only_the_paths_the_checks_name_are_copied(tmp_path: Path) -> None:
     tree = _tree(tmp_path / "tree", {"a.py": "a", "pkg/b.py": "b", "other.py": "o"})
     checks = [AllOf(FileUnchangedCheck("a.py"), Not(FileExistsCheck("pkg/b.py")))]
 
-    frozen = freeze_file_inputs(checks, tree, tmp_path / "frozen")
+    frozen = freeze_file_inputs(checks, tree)
 
-    assert _frozen_files(frozen) == ["a.py", "pkg/b.py"]
-    assert (frozen / "pkg" / "b.py").read_text(encoding="utf-8") == "b"
+    assert dict(frozen.files) == {"a.py": b"a", "pkg/b.py": b"b"}
+    written = frozen.write_tree(tmp_path / "frozen")
+    assert _frozen_files(written) == ["a.py", "pkg/b.py"]
 
 
 def test_a_symlinked_file_is_frozen_by_content(tmp_path: Path) -> None:
@@ -52,26 +54,39 @@ def test_a_symlinked_file_is_frozen_by_content(tmp_path: Path) -> None:
     tree.mkdir()
     (tree / "link.py").symlink_to(target)
 
-    frozen = freeze_file_inputs([FileUnchangedCheck("link.py")], tree, tmp_path / "frozen")
+    frozen = freeze_file_inputs([FileUnchangedCheck("link.py")], tree)
     target.write_text("after", encoding="utf-8")
 
-    assert not (frozen / "link.py").is_symlink()
-    assert (frozen / "link.py").read_text(encoding="utf-8") == "before"
+    written = frozen.write_tree(tmp_path / "frozen")
+    assert not (written / "link.py").is_symlink()
+    assert (written / "link.py").read_text(encoding="utf-8") == "before"
 
 
 def test_a_missing_path_stays_missing_and_a_dir_stays_a_non_file(tmp_path: Path) -> None:
     tree = _tree(tmp_path / "tree", {"build/out.txt": "x"})
     checks = [FileForbiddenCheck("gone.py"), FileForbiddenCheck("build")]
 
-    frozen = freeze_file_inputs(checks, tree, tmp_path / "frozen")
+    frozen = freeze_file_inputs(checks, tree)
 
-    assert not (frozen / "gone.py").exists()
-    assert (frozen / "build").is_dir()
-    assert _frozen_files(frozen) == []
+    assert (dict(frozen.files), frozen.dirs) == ({}, frozenset({"build"}))
+    written = frozen.write_tree(tmp_path / "frozen")
+    assert not (written / "gone.py").exists()
+    assert (written / "build").is_dir()
+    assert _frozen_files(written) == []
+
+
+def test_freezing_writes_nothing_to_disk(tmp_path: Path) -> None:
+    """Regression: the frozen copy sat in a temp dir the suite could rewrite."""
+    tree = _tree(tmp_path / "tree", {"a.py": "a"})
+    before = sorted(tmp_path.rglob("*"))
+
+    freeze_file_inputs([FileUnchangedCheck("a.py")], tree)
+
+    assert sorted(tmp_path.rglob("*")) == before
 
 
 @pytest.mark.parametrize("path", ["../x.py", "a/../../x.py", "/etc/passwd"])
 def test_a_path_outside_the_tree_is_refused(tmp_path: Path, path: str) -> None:
     with pytest.raises(ValueError, match=r"names '.*'; expected a relative path") as raised:
-        freeze_file_inputs([FileExistsCheck(path)], tmp_path, tmp_path / "frozen")
+        freeze_file_inputs([FileExistsCheck(path)], tmp_path)
     assert repr(path) in str(raised.value)

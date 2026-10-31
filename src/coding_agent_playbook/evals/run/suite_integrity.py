@@ -29,26 +29,27 @@ with ``the test suite result does not count: <reason>``. The rules, in order:
 
 The rules judge the test files as the agent left them: the suite runs agent
 code, which could edit an ignored test file during the run so that it looked
-edited (rule 1) or defined no test (rule 4). So a file counts as changed only when
-the agent's ``changed_files`` (captured before the suite) name it, and rule 4
-reads the copies :func:`freeze_test_files` makes before the suite runs.
+edited (rule 1) or defined no test (rule 4), or rewrite any copy the engine kept
+on disk. So a file counts as changed only when the agent's ``changed_files``
+(captured before the suite) name it, and rules 1 and 4 read the bytes
+:func:`freeze_test_files` reads into engine memory before the suite runs, beside
+the ``setup/`` files the engine read before any agent ran.
 
 The reason lists at most three node ids, then ``+N more``: short, and free of
 command output, so it fits a committed report. :func:`suite_violation` is pure:
-it reads only the two records and the files of the two trees.
+it reads only the two records and the two in-memory file mappings.
 """
 
 from __future__ import annotations
 
 import ast
 import fnmatch
-import shutil
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Final
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Sequence
+    from collections.abc import Callable, Iterable, Mapping, Sequence
     from pathlib import Path
 
     from coding_agent_playbook.grading.execution_metrics.suite_record import (
@@ -71,12 +72,12 @@ _TEST_FILE_PATTERNS: Final = ("test_*.py", "*_test.py")
 
 @dataclass(frozen=True)
 class _Suites:
-    """The two records a rule compares, with the trees and the agent's changed files."""
+    """The two records a rule compares, with the file contents and the agent's changed files."""
 
     candidate: SuiteRecord
     baseline: SuiteRecord
-    candidate_tree: Path
-    setup_tree: Path
+    candidate_files: Mapping[str, bytes]
+    setup_files: Mapping[str, bytes]
     changed_files: Sequence[str]
 
 
@@ -84,22 +85,23 @@ def suite_violation(
     candidate: SuiteRecord,
     baseline: SuiteRecord,
     *,
-    candidate_tree: Path,
-    setup_tree: Path,
+    candidate_files: Mapping[str, bytes],
+    setup_files: Mapping[str, bytes],
     changed_files: Sequence[str],
 ) -> str | None:
     """The first rule ``candidate``'s suite breaks against ``baseline``'s; ``None`` when it counts.
 
     ``changed_files`` are the agent's changed paths, relative to the tree root as
-    the records' paths are. ``candidate_tree`` holds the agent's test files as it
-    left them (:func:`freeze_test_files`); ``setup_tree`` is the sample's ``setup/``.
+    the records' paths are. ``candidate_files`` holds the agent's changed test files
+    as it left them (:func:`freeze_test_files`); ``setup_files`` the sample's
+    ``setup/`` files (relative POSIX path to bytes).
 
     Example::
 
-        >>> suite_violation(cand, base, candidate_tree=t, setup_tree=s, changed_files=[])  # doctest: +SKIP
+        >>> suite_violation(cand, base, candidate_files={}, setup_files={}, changed_files=[])  # doctest: +SKIP
         'test(s) skipped: test_x.py::test_slow'
     """
-    suites = _Suites(candidate, baseline, candidate_tree, setup_tree, changed_files)
+    suites = _Suites(candidate, baseline, candidate_files, setup_files, changed_files)
     for rule in _RULES:
         reason = rule(suites)
         if reason is not None:
@@ -126,7 +128,10 @@ def _unchanged(s: _Suites, path: str) -> bool:
     Why ``changed_files`` first: they were captured before the suite ran agent
     code, which could touch an ignored setup test file to make it look edited.
     """
-    return path not in s.changed_files or _same_file(s.candidate_tree / path, s.setup_tree / path)
+    if path not in s.changed_files:
+        return True
+    ours = s.candidate_files.get(path)
+    return ours is not None and ours == s.setup_files.get(path)
 
 
 def _setup_tests_now_skipped(s: _Suites) -> str | None:
@@ -154,7 +159,7 @@ def _test_files_not_collected(s: _Suites) -> str | None:
     uncollected = [
         path
         for path in s.changed_files
-        if _is_test_file(path) and path not in seen and _defines_tests(s.candidate_tree / path)
+        if _is_test_file(path) and path not in seen and _defines_tests(s.candidate_files.get(path))
     ]
     return _reason("test file(s) define tests that never ran", uncollected)
 
@@ -193,22 +198,24 @@ _RULES: Final[tuple[Callable[[_Suites], str | None], ...]] = (
 )
 
 
-def freeze_test_files(tree: Path, changed_files: Sequence[str], dest: Path) -> Path:
-    """Copy the changed test files of ``tree`` into ``dest`` before the suite runs; return ``dest``.
+def freeze_test_files(tree: Path, changed_files: Sequence[str]) -> dict[str, bytes]:
+    """Read the changed test files of ``tree`` into memory before the suite runs.
 
-    Only ``test_*.py`` / ``*_test.py`` paths that exist as files are copied; a path
-    that is absolute, climbs out with ``..``, or cannot be read is left out.
+    Only ``test_*.py`` / ``*_test.py`` paths that exist as files are read; a path
+    that is absolute, climbs out with ``..``, or cannot be read is left out (it
+    defines no tests). Nothing is written: a copy on disk could be rewritten by the
+    agent code the suite runs.
 
     Example::
 
-        >>> freeze_test_files(candidate.tree, candidate.changed_files, tmp / "tests")  # doctest: +SKIP
-        PosixPath('.../tests')
+        >>> freeze_test_files(candidate.tree, candidate.changed_files)  # doctest: +SKIP
+        {'tests/test_new.py': b'def test_x(): ...'}
     """
-    dest.mkdir(parents=True, exist_ok=True)
+    frozen: dict[str, bytes] = {}
     for path in changed_files:
         if _is_test_file(path) and _inside(path) and (tree / path).is_file():
-            _copy(tree / path, dest / path)
-    return dest
+            _read_into(tree / path, path, frozen)
+    return frozen
 
 
 def _inside(path: str) -> bool:
@@ -216,11 +223,10 @@ def _inside(path: str) -> bool:
     return not pure.is_absolute() and ".." not in pure.parts
 
 
-def _copy(source: Path, target: Path) -> None:
-    """Copy ``source`` to ``target``; an unreadable file is left out (it defines no tests)."""
+def _read_into(source: Path, path: str, frozen: dict[str, bytes]) -> None:
+    """Add ``source``'s bytes to ``frozen`` under ``path``; an unreadable file is left out."""
     try:
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(source, target)
+        frozen[path] = source.read_bytes()
     except OSError:
         return
 
@@ -235,29 +241,23 @@ def _ids(tests: Iterable[RecordedTest]) -> set[str]:
     return {test.nodeid for test in tests}
 
 
-def _same_file(a: Path, b: Path) -> bool:
-    """Whether ``a`` and ``b`` are both readable files with the same bytes."""
-    try:
-        return a.is_file() and b.is_file() and a.read_bytes() == b.read_bytes()
-    except OSError:
-        return False
-
-
 def _is_test_file(path: str) -> bool:
     """Whether ``path``'s name matches pytest's default test-file patterns."""
     name = PurePosixPath(path).name
     return any(fnmatch.fnmatch(name, pattern) for pattern in _TEST_FILE_PATTERNS)
 
 
-def _defines_tests(path: Path) -> bool:
-    """Whether ``path`` defines a module-level ``test*`` function or ``Test*`` class.
+def _defines_tests(source: bytes | None) -> bool:
+    """Whether ``source`` defines a module-level ``test*`` function or ``Test*`` class.
 
-    An unreadable or unparseable file defines none here: it is a collection error,
-    graded as a failure on its own.
+    A missing (unreadable) or unparseable file defines none here: it is a
+    collection error, graded as a failure on its own.
     """
+    if source is None:
+        return False
     try:
-        module = ast.parse(path.read_bytes())
-    except (OSError, SyntaxError, ValueError):
+        module = ast.parse(source)
+    except (SyntaxError, ValueError):
         return False
     return any(_is_test_node(node) for node in module.body)
 

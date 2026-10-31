@@ -314,9 +314,10 @@ class EvalContext:
     (:mod:`coding_agent_playbook.evals.checks.files`) read ``tree`` (the
     paths they name as the agent left them: eval scoring copies them out of the
     candidate repo before its test suite runs, which runs agent code that could
-    rewrite them) and ``baseline_tree`` (the sample's
-    catalog ``setup/``, out of the agent's reach, for the ``file_unchanged``
-    check). The runner sets both; every other family ignores them.
+    rewrite them) and ``baseline_tree`` (the sample's ``setup/`` as the engine
+    read it before any agent ran, for the ``file_unchanged`` check). Eval scoring
+    writes both from engine memory after the suite exited; every other family
+    ignores them.
 
     The two ``*_measurements`` fields (T4a) let a
     :class:`~coding_agent_playbook.grading.rubric.Rubric` act as a

@@ -45,8 +45,12 @@ from coding_agent_playbook.evals.run.harness_runner import (
     materialize,
     timed_out_run,
 )
-from coding_agent_playbook.evals.run.scoring import BaselineSuiteError, score
+from coding_agent_playbook.evals.run.scoring import score
 from coding_agent_playbook.evals.run.scoring_suite import SuiteToolchainError, suite_env
+from coding_agent_playbook.evals.run.setup_baseline import (
+    BaselineSuiteError,
+    prepare_setup_baseline,
+)
 from coding_agent_playbook.evals.sample import EvalSample, SampleInvocation
 from coding_agent_playbook.grading.types import CheckResult, EvaluationReport, ScopeDetail
 from tests._catalog import CORE_ROOT
@@ -719,17 +723,18 @@ def test_score_itself_checks_the_suite_toolchain(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """``score`` called without the runner's preflight still refuses a missing toolchain."""
-    monkeypatch.setattr(
-        "coding_agent_playbook.evals.run.scoring_suite._importable", lambda name: name != "pytest"
-    )
     sample_dir = tmp_path / "sample"
     _make_setup(sample_dir)
     sample = _make_sample(sample_dir, gate=_suite_green_gate())
+    setup_baseline = prepare_setup_baseline(sample)
     baseline = materialize(sample, tmp_path / "scratch")
     candidate = capture(baseline.repo_root, baseline, "transcript")
+    monkeypatch.setattr(
+        "coding_agent_playbook.evals.run.scoring_suite._importable", lambda name: name != "pytest"
+    )
 
     with pytest.raises(SuiteToolchainError, match=r"cannot import pytest:"):
-        score(sample, baseline, candidate)
+        score(sample, setup_baseline, candidate)
 
 
 def test_a_missing_suite_toolchain_stops_the_sample_before_the_agent_runs(
@@ -838,7 +843,7 @@ def test_no_judge_rubric_layer_is_skipped_not_a_vacuous_pass(tmp_path: Path) -> 
 
 
 def test_score_is_callable_directly_with_handles(tmp_path: Path) -> None:
-    """``score(sample, baseline, candidate)`` works without going through run_sample."""
+    """``score(sample, setup_baseline, candidate)`` works without going through run_sample."""
     sample_dir = tmp_path / "sample"
     _make_setup(sample_dir)
     sample = _make_sample(sample_dir, gate=_cc_gate())
@@ -849,7 +854,7 @@ def test_score_is_callable_directly_with_handles(tmp_path: Path) -> None:
     assert isinstance(baseline, Baseline)
     assert isinstance(candidate, Candidate)
 
-    report = score(sample, baseline, candidate)
+    report = score(sample, prepare_setup_baseline(sample), candidate)
     assert report.passed is True
 
 
@@ -1216,7 +1221,7 @@ def test_uv_sync_invoked_when_pyproject_present(
 
     The fake ``subprocess.run`` captures the invocation so we can assert its cwd.
     Regression: a second sync ran in a baseline copy beside the scratch repo, a
-    copy the agent could edit; scoring now reads the catalog ``setup/`` itself.
+    copy the agent could edit; scoring now grades the ``setup/`` it read into memory.
     """
     uv_calls: list[tuple[list[str], Path]] = []
     real_run = subprocess.run
@@ -1245,7 +1250,7 @@ def test_uv_sync_invoked_when_pyproject_present(
 
     baseline = materialize(sample, tmp_path / "scratch")
 
-    # One ``uv sync``, in the scratch repo: scoring's baseline is the catalog setup/.
+    # One ``uv sync``, in the scratch repo: scoring's baseline is the in-memory setup/.
     assert [cwd for _args, cwd in uv_calls] == [baseline.repo_root]
     # Without a uv.lock the runner falls back to the non-frozen form (it
     # resolves + locks on the fly — the right default for a fresh fixture).

@@ -8,11 +8,13 @@ metric-backed checks these ignore the
 candidate tree (:attr:`EvalContext.tree`) - and, for the unchanged check, the
 baseline tree (:attr:`EvalContext.baseline_tree`) - directly.
 
-In eval scoring ``ctx.tree`` is not the live candidate repo but the copy
-:func:`freeze_file_inputs` makes of the paths these checks name, before the
-scoring suite runs. Why: the suite runs agent code, so a ``conftest.py`` could
-run edited code and then put the original bytes back, or a test could create a
-file the agent never wrote.
+In eval scoring ``ctx.tree`` is not the live candidate repo: :func:`freeze_file_inputs`
+reads the paths these checks name into engine memory before the scoring suite
+runs, and scoring writes them to a fresh temporary tree only after the suite
+exited. Why: the suite runs agent code as the same user, so a ``conftest.py``
+could run edited code and then put the original bytes back, a test could create
+a file the agent never wrote, and a copy kept on disk during the suite could be
+rewritten.
 
 Each is a pure gate (``weight=0.0``, ``required=True`` by default, DETERMINISTIC,
 DETERMINISTIC-cost) whose ``passed`` comes **straight from the predicate**. The
@@ -29,8 +31,9 @@ copy.
 from __future__ import annotations
 
 import re
-import shutil
+from dataclasses import dataclass
 from pathlib import PurePosixPath
+from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.grading.check import Check
@@ -41,7 +44,7 @@ from coding_agent_playbook.grading.scope import CostTier, Determinism
 from coding_agent_playbook.grading.types import CheckResult, ScopeDetail
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
     from pathlib import Path
 
     from coding_agent_playbook.grading.check import MeasurementSet
@@ -160,7 +163,8 @@ class FileContainsCheck(_FileCheck):
 class FileUnchangedCheck(_FileCheck):
     """``files_unchanged`` - the candidate file is byte-identical to the baseline.
 
-    Requires a baseline tree (the sample's catalog ``setup/``); with no baseline
+    Requires a baseline tree (in eval scoring, the sample's ``setup/`` as the
+    engine read it before any agent ran); with no baseline
     tree the check cannot hold (``available`` is False, and ``_holds`` grades
     ``False`` defensively).
     """
@@ -187,50 +191,79 @@ class FileForbiddenCheck(_FileCheck):
         return not (tree / self.path).exists()
 
 
-def freeze_file_inputs(checks: Sequence[Check], tree: Path, dest: Path) -> Path:
-    """Copy each path a file check under ``checks`` names from ``tree`` into ``dest``; return it.
+@dataclass(frozen=True)
+class FrozenFileInputs:
+    """The paths the file checks name, as they were when frozen, held in engine memory.
 
-    A file is copied by content (a symlink is followed, so a later change to its
-    target does not reach the copy), a directory becomes an empty one, and a
-    missing path stays missing, so every file check answers over ``dest`` as it
-    would have over ``tree`` at this moment. An unreadable file becomes an empty
-    one: it still exists. A path that is absolute or climbs out with ``..``
-    raises :exc:`ValueError` naming it, as it would grade a file outside the tree.
+    ``files`` maps a relative POSIX path to its bytes and ``dirs`` names the paths
+    that were directories; any other named path was missing.
 
     Example::
 
-        >>> freeze_file_inputs(rubric.checks, candidate.tree, Path(tmp) / "tree")  # doctest: +SKIP
-        PosixPath('/tmp/.../tree')
+        >>> FrozenFileInputs({"a.py": b"x"}, frozenset()).write_tree(Path(tmp))  # doctest: +SKIP
+        PosixPath('/tmp/...')
     """
-    dest.mkdir(parents=True, exist_ok=True)
+
+    files: Mapping[str, bytes]
+    dirs: frozenset[str]
+
+    def write_tree(self, dest: Path) -> Path:
+        """Write the frozen paths under ``dest`` (created if missing): files' bytes, directories."""
+        dest.mkdir(parents=True, exist_ok=True)
+        for rel in sorted(self.dirs):
+            (dest / rel).mkdir(parents=True, exist_ok=True)
+        for rel, data in self.files.items():
+            (dest / rel).parent.mkdir(parents=True, exist_ok=True)
+            (dest / rel).write_bytes(data)
+        return dest
+
+
+def freeze_file_inputs(checks: Sequence[Check], tree: Path) -> FrozenFileInputs:
+    """Read each path a file check under ``checks`` names from ``tree`` into memory.
+
+    A file is read by content (a symlink is followed, so a later change to its
+    target does not reach the frozen bytes), a directory is recorded as one, and a
+    missing path stays missing, so every file check answers over
+    :meth:`FrozenFileInputs.write_tree` as it would have over ``tree`` at this
+    moment. Nothing is written: a copy on disk could be rewritten by the agent
+    code the scoring suite runs. An unreadable file becomes an empty one: it
+    still exists. A path that is absolute or climbs out with ``..`` raises
+    :exc:`ValueError` naming it, as it would grade a file outside the tree.
+
+    Example::
+
+        >>> freeze_file_inputs(rubric.checks, candidate.tree).files  # doctest: +SKIP
+        mappingproxy({'mod.py': b'def f(): ...'})
+    """
+    files: dict[str, bytes] = {}
+    dirs: set[str] = set()
     for check in iter_checks(checks):
         if isinstance(check, _FileCheck):
-            _freeze_path(check, tree, dest)
-    return dest
+            _freeze_path(check, tree, files, dirs)
+    return FrozenFileInputs(MappingProxyType(files), frozenset(dirs))
 
 
-def _freeze_path(check: _FileCheck, tree: Path, dest: Path) -> None:
-    """Copy ``check.path`` from ``tree`` into ``dest``: a file's bytes, a directory's existence."""
+def _freeze_path(check: _FileCheck, tree: Path, files: dict[str, bytes], dirs: set[str]) -> None:
+    """Record ``check.path`` of ``tree`` in ``files`` (its bytes) or ``dirs`` (a directory)."""
     rel = PurePosixPath(check.path)
     if rel.is_absolute() or ".." in rel.parts:
         raise ValueError(
             f"file check {check.id!r} names {check.path!r}; "
             "expected a relative path inside the candidate tree"
         )
-    source, frozen = tree / rel, dest / rel
+    source = tree / rel
     if source.is_file():
-        _copy_file_or_placeholder(source, frozen)
+        files[rel.as_posix()] = _bytes_or_empty(source)
     elif source.exists():
-        frozen.mkdir(parents=True, exist_ok=True)
+        dirs.add(rel.as_posix())
 
 
-def _copy_file_or_placeholder(source: Path, frozen: Path) -> None:
-    """Copy ``source``'s bytes to ``frozen``; an empty file when ``source`` cannot be read."""
-    frozen.parent.mkdir(parents=True, exist_ok=True)
+def _bytes_or_empty(source: Path) -> bytes:
+    """``source``'s bytes; empty when it cannot be read."""
     try:
-        shutil.copyfile(source, frozen)
+        return source.read_bytes()
     except OSError:
-        frozen.write_bytes(b"")
+        return b""
 
 
 def _file_matches(path: Path, pattern: str) -> bool:
@@ -262,6 +295,7 @@ __all__ = [
     "FileExistsCheck",
     "FileForbiddenCheck",
     "FileUnchangedCheck",
+    "FrozenFileInputs",
     "freeze_file_inputs",
     "slug",
 ]

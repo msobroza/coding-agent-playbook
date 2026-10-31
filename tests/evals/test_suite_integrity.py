@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import pytest
 
@@ -12,9 +12,6 @@ from coding_agent_playbook.grading.execution_metrics.suite_record import (
     RecordedTest,
     SuiteRecord,
 )
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 #: ``{nodeid: outcome}``; an outcome of ``"xfailed!"`` is a strict xfail.
 Outcomes = dict[str, str]
@@ -53,15 +50,15 @@ def _outcome(outcome: str) -> RecordedOutcome:
 _BASE = _record({"test_mod.py::test_small": "passed"})
 
 
-def _trees(tmp_path: Path, candidate: dict[str, str], setup: dict[str, str]) -> tuple[Path, Path]:
-    """Write the two trees; ``test_mod.py`` is the same in both unless one overrides it."""
-    trees = (tmp_path / "candidate", tmp_path / "setup")
-    for tree, files in zip(trees, (candidate, setup), strict=True):
-        tree.mkdir()
-        for name, text in {"test_mod.py": "def test_small(): pass\n", **files}.items():
-            (tree / name).parent.mkdir(parents=True, exist_ok=True)
-            (tree / name).write_text(text, encoding="utf-8")
-    return trees
+def _files(
+    candidate: dict[str, str], setup: dict[str, str]
+) -> tuple[dict[str, bytes], dict[str, bytes]]:
+    """The two file mappings; ``test_mod.py`` is the same in both unless one overrides it."""
+    base = {"test_mod.py": "def test_small(): pass\n"}
+    return (
+        {name: text.encode() for name, text in {**base, **candidate}.items()},
+        {name: text.encode() for name, text in {**base, **setup}.items()},
+    )
 
 
 def _violation(
@@ -72,12 +69,12 @@ def _violation(
     files: dict[str, str] | None = None,
     changed: tuple[str, ...] = (),
 ) -> str | None:
-    candidate_tree, setup_tree = _trees(tmp_path, files or {}, {})
+    candidate_files, setup_files = _files(files or {}, {})
     return suite_violation(
         candidate,
         baseline,
-        candidate_tree=candidate_tree,
-        setup_tree=setup_tree,
+        candidate_files=candidate_files,
+        setup_files=setup_files,
         changed_files=changed,
     )
 
@@ -121,14 +118,14 @@ def test_a_setup_test_file_the_agent_did_not_change_counts_as_unchanged(tmp_path
 
 def test_a_deleted_setup_test_file_may_go(tmp_path: Path) -> None:
     candidate = _record({"test_new.py::test_x": "passed"})
-    candidate_tree, setup_tree = _trees(tmp_path, {}, {})
-    (candidate_tree / "test_mod.py").unlink()
+    candidate_files, setup_files = _files({}, {})
+    del candidate_files["test_mod.py"]
 
     reason = suite_violation(
         candidate,
         _BASE,
-        candidate_tree=candidate_tree,
-        setup_tree=setup_tree,
+        candidate_files=candidate_files,
+        setup_files=setup_files,
         changed_files=("test_mod.py",),
     )
 
@@ -324,19 +321,18 @@ def test_a_long_node_id_is_shortened(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_freeze_test_files_copies_only_the_changed_test_files_that_exist(tmp_path: Path) -> None:
+def test_freeze_test_files_reads_only_the_changed_test_files_that_exist(tmp_path: Path) -> None:
     tree = tmp_path / "tree"
     for name in ("test_a.py", "tests/b_test.py", "helpers.py", "test_unchanged.py"):
         (tree / name).parent.mkdir(parents=True, exist_ok=True)
         (tree / name).write_text(name, encoding="utf-8")
     changed = ("test_a.py", "tests/b_test.py", "helpers.py", "test_gone.py", "../test_x.py")
 
-    dest = freeze_test_files(tree, changed, tmp_path / "frozen")
+    frozen = freeze_test_files(tree, changed)
 
-    copied = sorted(p.relative_to(dest).as_posix() for p in dest.rglob("*") if p.is_file())
-    assert copied == ["test_a.py", "tests/b_test.py"]
+    assert frozen == {"test_a.py": b"test_a.py", "tests/b_test.py": b"tests/b_test.py"}
     (tree / "test_a.py").write_text("changed by the suite", encoding="utf-8")
-    assert (dest / "test_a.py").read_text(encoding="utf-8") == "test_a.py"
+    assert frozen["test_a.py"] == b"test_a.py"
 
 
 def test_freeze_test_files_leaves_out_a_file_it_cannot_copy(
@@ -346,11 +342,11 @@ def test_freeze_test_files_leaves_out_a_file_it_cannot_copy(
     tree.mkdir()
     (tree / "test_a.py").write_text("def test_x(): pass\n", encoding="utf-8")
 
-    def _refuse(source: object, target: object) -> None:
-        raise PermissionError(13, "denied", str(source))
+    def _refuse(self: Path) -> bytes:
+        raise PermissionError(13, "denied", str(self))
 
-    monkeypatch.setattr("coding_agent_playbook.evals.run.suite_integrity.shutil.copyfile", _refuse)
+    monkeypatch.setattr(Path, "read_bytes", _refuse)
 
-    dest = freeze_test_files(tree, ("test_a.py",), tmp_path / "frozen")
+    frozen = freeze_test_files(tree, ("test_a.py",))
 
-    assert not (dest / "test_a.py").exists()
+    assert frozen == {}

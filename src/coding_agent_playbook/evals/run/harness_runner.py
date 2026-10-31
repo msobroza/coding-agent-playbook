@@ -43,12 +43,17 @@ from coding_agent_playbook.evals.prompting import render_prompt
 from coding_agent_playbook.evals.run.git_env import without_repo_location
 from coding_agent_playbook.evals.run.scoring import score
 from coding_agent_playbook.evals.run.scoring_suite import require_suite_toolchain
+from coding_agent_playbook.evals.run.setup_baseline import (
+    prepare_setup_baseline,
+    take_setup_snapshot,
+)
 from coding_agent_playbook.evals.token_usage import TokenUsage, sum_usage
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from coding_agent_playbook.evals.graded_source import GradedRecord
+    from coding_agent_playbook.evals.run.setup_baseline import SetupBaseline, SetupSnapshot
     from coding_agent_playbook.evals.sample import EvalSample
     from coding_agent_playbook.grading.check import Check
     from coding_agent_playbook.grading.types import (
@@ -230,11 +235,12 @@ class Baseline:
     """The materialized ``setup/`` state — the non-regression reference.
 
     ``repo_root`` is the git-init'd scratch repo (the agent edits this in place);
-    ``commit`` is the baseline commit ref. The reference tree that scoring compares
-    against is the sample's catalog ``setup/`` (:attr:`EvalSample.setup_dir`), not a
-    copy made here. Why: a copy beside the agent's cwd was writable by the agent, so
-    editing it too passed ``file_unchanged`` and a planted ``conftest.py`` broke the
-    baseline suite.
+    ``commit`` is the baseline commit ref. Scoring never compares against this
+    repo: its reference is the sample's ``setup/`` as the engine read it into
+    memory before any agent ran
+    (:class:`~coding_agent_playbook.evals.run.setup_baseline.SetupBaseline`). Why: a
+    copy beside the agent's cwd was writable by the agent, so editing it too
+    passed ``file_unchanged`` and a planted ``conftest.py`` broke the baseline suite.
     """
 
     repo_root: Path
@@ -294,18 +300,24 @@ def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
 # --------------------------------------------------------------------------- #
 
 
-def materialize(sample: EvalSample, scratch_dir: Path) -> Baseline:
-    """Copy the sample's ``setup/`` into ``scratch_dir``, install deps, commit baseline.
+def materialize(
+    sample: EvalSample, scratch_dir: Path, *, snapshot: SetupSnapshot | None = None
+) -> Baseline:
+    """Write the sample's ``setup/`` into ``scratch_dir``, install deps, commit baseline.
 
-    The ``setup/`` tree (sibling of the sample's ``sample.toml``) is byte-copied into
-    ``scratch_dir`` (which becomes the agent's working tree). When that tree
-    carries a ``pyproject.toml`` :func:`_uv_sync_scratch` shells out to ``uv
+    The ``setup/`` files come from ``snapshot``, the runner's per-sample
+    :class:`~coding_agent_playbook.evals.run.setup_baseline.SetupSnapshot` read
+    before any agent ran (default: one read now from the catalog), so every trial
+    starts from the same bytes even if the catalog changed meanwhile. They are
+    written into ``scratch_dir`` (which becomes the agent's working tree). When
+    that tree carries a ``pyproject.toml`` :func:`_uv_sync_scratch` shells out to ``uv
     sync`` (``--frozen`` if a ``uv.lock`` is present) so the agent and the
     execution evaluators see a real installed environment — the canonical Python
     project metadata lives in ``setup/pyproject.toml``, not in ``sample.toml``.
     The scratch repo is then ``git init``'d and the initial state committed so
-    :func:`capture` can ``git diff`` against it. No second copy of ``setup/`` is made: scoring reads the
-    catalog ``setup/`` itself as the baseline, out of the agent's reach.
+    :func:`capture` can ``git diff`` against it. No second copy of ``setup/`` is
+    made here: scoring grades against the snapshot, never against a tree the agent
+    can edit.
 
     A sample whose ``setup/`` directory is missing yields an empty baseline repo —
     the runner still works, the static/execution layers simply have nothing to
@@ -316,9 +328,8 @@ def materialize(sample: EvalSample, scratch_dir: Path) -> Baseline:
     scratch_dir = Path(scratch_dir)
     scratch_dir.mkdir(parents=True, exist_ok=True)
 
-    setup_dir = sample.setup_dir
-    if setup_dir.is_dir():
-        shutil.copytree(setup_dir, scratch_dir, dirs_exist_ok=True)
+    snapshot = take_setup_snapshot(sample.setup_dir) if snapshot is None else snapshot
+    snapshot.write_tree(scratch_dir)
 
     _uv_sync_scratch(scratch_dir)
 
@@ -504,6 +515,9 @@ class HarnessRunner(ABC):
         # Before any agent runs: a scoring interpreter without pytest-cov would
         # otherwise surface only after a paid agent run, at the first trial's score.
         require_suite_toolchain(compiled.per_trial)
+        # Once, before any agent runs: setup/ read into memory and measured here is
+        # what every trial starts from and is graded against (see setup_baseline).
+        setup_baseline = prepare_setup_baseline(sample)
         n = compiled.trials_needed
 
         trials: list[TrialResult] = []
@@ -518,6 +532,7 @@ class HarnessRunner(ABC):
                 sample,
                 prompt,
                 trial_dir,
+                setup_baseline,
                 judge=judge,
                 judge_samples=judge_samples,
                 fail_fast=fail_fast,
@@ -537,6 +552,7 @@ class HarnessRunner(ABC):
         sample: EvalSample,
         prompt: str,
         trial_dir: Path,
+        setup_baseline: SetupBaseline,
         *,
         judge: JudgeLike | None,
         judge_samples: int,
@@ -544,20 +560,21 @@ class HarnessRunner(ABC):
     ) -> _Trial:
         """Run one trial's fixed pipeline and grade it into a :class:`_Trial`.
 
-        :func:`materialize` the ``setup/`` baseline → :meth:`_invoke_agent` (with
-        the pre-resolved ``prompt``) → :func:`capture` → :func:`score`, then derive
+        :func:`materialize` the ``setup/`` snapshot of ``setup_baseline`` →
+        :meth:`_invoke_agent` (with the pre-resolved ``prompt``) → :func:`capture` →
+        :func:`score` against ``setup_baseline``, then derive
         the per-trial :class:`~coding_agent_playbook.grading.types.TrialResult`
         (``verdict = report.passed``, the skipped-neutral gate/rubric verdict the
         scorer already wrote).
         """
         from coding_agent_playbook.grading.types import TrialResult
 
-        baseline = materialize(sample, trial_dir)
+        baseline = materialize(sample, trial_dir, snapshot=setup_baseline.snapshot)
         run = self._invoke_bounded(prompt, trial_dir)
         candidate = capture(trial_dir, baseline, run.transcript, redact=self._redact)
         report = score(
             sample,
-            baseline,
+            setup_baseline,
             candidate,
             judge=judge,
             judge_samples=judge_samples,
