@@ -706,8 +706,10 @@ plugin records the pytest session itself, apart from the reports. A run whose
 session left no record, or disagrees with them, gives no result too: an exit code
 the session never ended with, failures the junit report hides or passes it adds,
 or a run that stopped (`pytest.exit()`) before every selected test ran with no
-failure recorded. A run that stopped after a failure, a collection error for
-example, is still graded as failing. When the `setup/`
+failure recorded. On POSIX the record must come from the engine's own child
+process; on Windows that check is off, because a venv's `python.exe` is a
+launcher that starts the real interpreter as its child. A run that stopped after
+a failure, a collection error for example, is still graded as failing. When the `setup/`
 baseline's own suite gives no result, the sample cannot be scored (exit 2).
 
 A pass rate leaves skipped and xfailed tests out, and a suite with no runnable

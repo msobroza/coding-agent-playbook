@@ -12,6 +12,7 @@ every selected test with no failure to show for it. Stdlib only.
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
@@ -32,6 +33,12 @@ SUITE_RECORD_ENV: Final = "PLAYBOOK_SUITE_RECORD"
 SUITE_RECORD_COVERAGE_OMIT: Final = (
     "*/coding_agent_playbook/grading/execution_metrics/suite_record_plugin.py"
 )
+
+#: Whether the suite's pytest is the engine's direct child, so its record's ``ppid``
+#: must be the engine's pid. Why not on Windows: a venv's ``Scripts\python.exe`` (and
+#: a uv trampoline) is a launcher that starts the base interpreter as its own child,
+#: so pytest's parent is the launcher, never the engine. Read at call time.
+_SUITE_PARENT_IS_ENGINE: bool = os.name != "nt"
 
 #: The outcomes the plugin records for one test.
 OUTCOMES: Final = frozenset({"passed", "failed", "error", "skipped", "xfailed", "xpassed"})
@@ -120,16 +127,17 @@ def session_disagreement(
 ) -> str | None:
     """Why the suite's session disagrees with its process and junit report; ``None`` when it agrees.
 
-    ``engine_pid`` is this process's id: the suite's pytest is its direct child, so
-    a record whose parent is anyone else came from another process. A run that
-    stopped early with a failure already recorded stays a graded failure.
+    ``engine_pid`` is this process's id: on POSIX the suite's pytest is its direct
+    child, so a record whose parent is anyone else came from another process (on
+    Windows the parent is the venv launcher, see :data:`_SUITE_PARENT_IS_ENGINE`).
+    A run that stopped early with a failure already recorded stays a graded failure.
 
     Example::
 
         >>> session_disagreement(None, junit, 0, engine_pid=os.getpid())  # doctest: +SKIP
         'it left no record of its pytest session'
     """
-    if record is None or record.ppid != engine_pid:
+    if record is None or (_SUITE_PARENT_IS_ENGINE and record.ppid != engine_pid):
         return "it left no record of its pytest session"
     if record.exitstatus != returncode:
         return f"it exited {returncode}, but its pytest session ended {record.exitstatus}"

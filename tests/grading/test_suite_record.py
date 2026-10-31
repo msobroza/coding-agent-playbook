@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from coding_agent_playbook.grading.execution_metrics import suite_record
 from coding_agent_playbook.grading.execution_metrics.junit import JunitSummary
 from coding_agent_playbook.grading.execution_metrics.project import (
     NoSuiteResultError,
@@ -171,13 +172,30 @@ def test_a_missing_record_is_no_record() -> None:
     assert reason == "it left no record of its pytest session"
 
 
-def test_a_record_from_another_process_counts_as_no_record() -> None:
-    """A test's own pytest subprocess is the engine's grandchild, not its child."""
+def test_a_record_from_another_process_counts_as_no_record(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """On POSIX a test's own pytest subprocess is the engine's grandchild, not its child."""
+    monkeypatch.setattr(suite_record, "_SUITE_PARENT_IS_ENGINE", True)
     record = _record({"t.py::a": "passed"}, ppid=_ENGINE + 1)
 
     reason = session_disagreement(record, _junit(1), 0, engine_pid=_ENGINE)
 
     assert reason == "it left no record of its pytest session"
+
+
+def test_on_windows_a_record_from_the_venv_launchers_child_is_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A Windows venv python.exe starts the real interpreter as its child: pytest's parent is it."""
+    monkeypatch.setattr(suite_record, "_SUITE_PARENT_IS_ENGINE", False)
+    record = _record({"t.py::a": "passed"}, ppid=_ENGINE + 1)
+
+    assert session_disagreement(record, _junit(1), 0, engine_pid=_ENGINE) is None
+
+
+def test_on_posix_the_parent_check_is_on() -> None:
+    assert suite_record._SUITE_PARENT_IS_ENGINE is (os.name != "nt")
 
 
 def test_an_exit_code_the_session_never_ended_with_disagrees() -> None:

@@ -327,7 +327,9 @@ def _suite_violation(
     """
     ours, theirs = project.run().record, setup_baseline.record
     if ours is None or theirs is None:
-        return None
+        # Unreachable while _project sets suite_record (a missing record is then
+        # NoSuiteResultError); fail closed anyway: with no record, no rule can run.
+        return "the suite left no session record to check"
     return suite_violation(
         ours,
         theirs,

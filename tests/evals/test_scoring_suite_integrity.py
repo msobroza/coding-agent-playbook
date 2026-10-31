@@ -11,11 +11,20 @@ and a passing ``test_mod.py::test_small``).
 from __future__ import annotations
 
 import textwrap
-from typing import TYPE_CHECKING
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
+from coding_agent_playbook.evals.run import scoring
 from coding_agent_playbook.evals.run.fake_runner import FakeRunner, write_files
+from coding_agent_playbook.evals.run.harness_runner import Candidate
+from coding_agent_playbook.evals.run.setup_baseline import SetupBaseline, SetupSnapshot
+from coding_agent_playbook.grading.execution_metrics.suite_record import (
+    RecordedOutcome,
+    RecordedTest,
+    SuiteRecord,
+)
 from tests.evals.test_harness_runner import (
     _REFACTORED,
     _TEST_OK,
@@ -28,6 +37,8 @@ from tests.evals.test_harness_runner import (
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
+
+    from coding_agent_playbook.grading.execution_metrics.project import ProjectHandle
 
 _BROKEN = 'def classify(n):\n    return "WRONG"\n'
 _FAILING_TEST = "def test_new():\n    assert False\n"
@@ -334,4 +345,56 @@ def test_a_test_file_emptied_during_the_run_still_defines_its_tests(tmp_path: Pa
     assert (passed, detail) == (
         False,
         _DOES_NOT_COUNT + "test file(s) define tests that never ran: test_new.py",
+    )
+
+
+# --------------------------------------------------------------------------- #
+# A missing session record never lets a result count
+# --------------------------------------------------------------------------- #
+
+
+class _RecordlessHandle:
+    """A suite handle whose run left no session record (``_project`` always asks for one)."""
+
+    def run(self) -> SimpleNamespace:
+        return SimpleNamespace(record=None)
+
+
+@pytest.mark.parametrize("missing", ["candidate", "baseline"])
+def test_a_suite_with_no_session_record_does_not_count(tmp_path: Path, missing: str) -> None:
+    """Fail closed: with no record to check, no rule could catch a hidden test."""
+    record = _record_of_one_pass()
+    handle = _RecordlessHandle() if missing == "candidate" else _RecordedHandle(record)
+    baseline = SetupBaseline(
+        "t-fixture",
+        tmp_path,
+        SetupSnapshot({}, "digest"),
+        record=None if missing == "baseline" else record,
+    )
+
+    reason = scoring._suite_violation(
+        cast("ProjectHandle", handle), baseline, Candidate(tmp_path, "", ""), {}
+    )
+
+    assert reason == "the suite left no session record to check"
+
+
+class _RecordedHandle:
+    def __init__(self, record: SuiteRecord) -> None:
+        self._record = record
+
+    def run(self) -> SimpleNamespace:
+        return SimpleNamespace(record=self._record)
+
+
+def _record_of_one_pass() -> SuiteRecord:
+    test = RecordedTest("test_mod.py::test_small", "test_mod.py")
+    return SuiteRecord(
+        pid=1,
+        ppid=0,
+        exitstatus=0,
+        collected=(test,),
+        selected=(test,),
+        outcomes={test.nodeid: RecordedOutcome("passed")},
+        finished=frozenset({test.nodeid}),
     )
