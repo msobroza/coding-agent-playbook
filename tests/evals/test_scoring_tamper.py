@@ -160,6 +160,46 @@ def test_file_checks_ignore_files_the_suite_creates(tmp_path: Path) -> None:
     assert (tmp_path / "scratch" / "out.txt").is_file()  # the suite did write it
 
 
+def _suite_edits_conftest(rel: str, text: str | None) -> str:
+    """A ``conftest.py`` that, once the session ends, deletes ``rel`` (``None``) or writes ``text``."""
+    action = "unlink()" if text is None else f"write_text({text!r}, encoding='utf-8')"
+    return (
+        "from pathlib import Path\n\n\n"
+        "def pytest_sessionfinish(session, exitstatus):\n"
+        f"    (Path(__file__).parent / {rel!r}).{action}\n"
+    )
+
+
+@pytest.mark.parametrize(
+    ("bound", "files"),
+    [
+        (
+            {"check": "file_exists", "path": "made.py"},
+            {"made.py": "x = 1\n", "conftest.py": _suite_edits_conftest("made.py", None)},
+        ),
+        (
+            {"check": "file_unchanged", "path": "mod.py"},
+            {"conftest.py": _suite_edits_conftest("mod.py", _REFACTORED)},
+        ),
+    ],
+    ids=["deleted-by-the-suite", "rewritten-by-the-suite"],
+)
+def test_a_file_check_in_the_rubric_layer_grades_the_file_as_the_agent_left_it(
+    tmp_path: Path, bound: dict[str, str], files: dict[str, str]
+) -> None:
+    """A file check the ``[rubric]`` layer binds is frozen before the suite, like a gate's."""
+    sample_dir = tmp_path / "sample"
+    _make_setup(sample_dir)
+    gate = {"expr": "suite_green", "bind": {"suite_green": {"check": "tests_pass"}}}
+    rubric = {"expr": "kept", "bind": {"kept": bound}}
+    sample = _make_sample(sample_dir, gate=gate, rubric=rubric)
+
+    result = FakeRunner(write_files(files)).run_sample(sample, tmp_path / "scratch")
+
+    assert _check(result.report, f"{bound['check']}:{bound['path']}").passed is True
+    assert result.passed is True
+
+
 @pytest.fixture
 def private_tmpdir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     """A temp dir of this test's own, for the engine and its suite alike.

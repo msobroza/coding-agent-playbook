@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from coding_agent_playbook.evals.run.scoring_suite import open_suite_handle
+from coding_agent_playbook.grading.execution_metrics.suite_record import SUITE_RECORD_ENV
 from tests.evals.test_harness_runner import (
     _REFACTORED,
     _TEST_OK,
@@ -101,6 +102,49 @@ def test_a_conftest_that_rewrites_the_junit_report_fails_tests_pass(tmp_path: Pa
 
     assert (passed, trial) == (False, False)
     assert detail == "the test suite gave no result: its junit report hides 1 failed test(s)"
+
+
+#: Appends two passing test cases to the junit report once pytest wrote it.
+_PAD_JUNIT = textwrap.dedent(
+    """\
+    import pytest
+
+    _PADDING = '<testcase classname="x" name="a"/><testcase classname="x" name="b"/>'
+
+
+    @pytest.hookimpl(trylast=True)
+    def pytest_unconfigure(config):
+        with open(config.option.xmlpath) as fh:
+            report = fh.read()
+        with open(config.option.xmlpath, "w") as fh:
+            fh.write(report.replace("</testsuite>", _PADDING + "</testsuite>", 1))
+    """
+)
+
+
+def test_a_conftest_that_pads_the_junit_report_with_passes_gives_no_result(
+    tmp_path: Path,
+) -> None:
+    """A report with more passes than the session ran is forged, even when nothing failed."""
+    files = {"mod.py": _REFACTORED, "conftest.py": _PAD_JUNIT}
+
+    passed, detail, trial = _gate_detail(files, tmp_path)
+
+    assert (passed, trial) == (False, False)
+    assert detail == (
+        "the test suite gave no result: its junit report shows 2 passed test(s) its session never ran"
+    )
+
+
+def test_the_candidates_tests_never_see_the_session_record_path(tmp_path: Path) -> None:
+    """The plugin pops the variable at import, so a test cannot find (and forge) the record."""
+    probe = (
+        "import os\n\n\ndef test_no_record_path():\n"
+        f"    assert {SUITE_RECORD_ENV!r} not in os.environ\n"
+    )
+    files = {"mod.py": _REFACTORED, "test_env.py": probe}
+
+    assert _gate_detail(files, tmp_path) == (True, "", True)
 
 
 @pytest.mark.parametrize(
