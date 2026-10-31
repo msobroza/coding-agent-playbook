@@ -699,7 +699,15 @@ variable of the caller reaches the agent's code, so no API key, token or
 variable fails, with the error in the report. A candidate suite that gives no result fails
 every execution check (`tests_pass`, coverage), with the reason in the report:
 it ran past 300 s, or left no readable junit or coverage report, for example
-because a `conftest.py` raised or called `os._exit`. When the `setup/`
+because a `conftest.py` raised or called `os._exit`. The suite runs as
+`python -P -m pytest`, so a `pytest.py` or `pytest/` in the tree cannot stand in
+for pytest (the tree's root stays importable, after the toolchain), and an engine
+plugin records the pytest session itself, apart from the reports. A run whose
+session left no record, or disagrees with them, gives no result too: an exit code
+the session never ended with, failures the junit report hides or passes it adds,
+or a run that stopped (`pytest.exit()`) before every selected test ran with no
+failure recorded. A run that stopped after a failure, a collection error for
+example, is still graded as failing. When the `setup/`
 baseline's own suite gives no result, the sample cannot be scored (exit 2).
 
 A sample declares its success criteria as layers (SPEC §6.5.3):

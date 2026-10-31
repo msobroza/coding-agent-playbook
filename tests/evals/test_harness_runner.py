@@ -580,7 +580,7 @@ def test_a_scoring_suite_that_hangs_is_stopped_and_fails_tests_pass(
         """The candidate's pytest never finishes within a bound; an unbounded wait lets it."""
 
         def __init__(self, args: Any, **kwargs: Any) -> None:
-            self.hangs = args[1:3] == ["-m", "pytest"] and kwargs.get("cwd") == candidate_tree
+            self.hangs = args[1:4] == ["-P", "-m", "pytest"] and kwargs.get("cwd") == candidate_tree
             super().__init__(args, **kwargs)
 
         def communicate(self, input: Any = None, timeout: float | None = None) -> tuple[Any, Any]:

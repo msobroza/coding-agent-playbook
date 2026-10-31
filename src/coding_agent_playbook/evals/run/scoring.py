@@ -31,8 +31,13 @@ flat ``[metrics]`` block:
   environment (:func:`_suite_env`: ``PATH``, ``HOME``, the locale, the temp dirs,
   the Python path and the Windows system variables), so no API key, token,
   agent socket or ``PYTEST_*`` option of the caller reaches agent code.
-  A candidate suite that gives no result (it timed out, or left no readable
-  junit or coverage report) fails every execution check with its reason. The
+  The command is ``python -P -m pytest`` with the engine's session-record
+  plugin (:mod:`~coding_agent_playbook.grading.execution_metrics.suite_record`),
+  writing to a temp dir outside the suite's argv, so neither a planted
+  ``pytest.py`` nor a ``conftest.py`` that rewrites the reports passes for pytest.
+  A candidate suite that gives no result (it timed out, left no readable junit
+  or coverage report, or its session disagrees with them) fails every execution
+  check with its reason. The
   sample cannot be scored (:class:`UnscorableSuiteError`) when this interpreter
   lacks pytest or pytest-cov (:func:`require_suite_toolchain`), or when the
   ``setup/`` baseline's own suite gives no result;
@@ -424,9 +429,16 @@ def _setup_copy(setup_dir: Path, stack: ExitStack) -> Path:
 
 
 def _project(tree: Path, stack: ExitStack) -> ProjectHandle:
-    """A bounded handle over ``tree`` in :func:`_suite_env`; ``stack`` removes its report dir."""
+    """A bounded, recorded handle over ``tree`` in :func:`_suite_env`; ``stack`` removes its dirs.
+
+    The session record lives in a temp dir of its own: the report dir is in the
+    suite's argv, where agent code can read it.
+    """
     reports = Path(
         stack.enter_context(tempfile.TemporaryDirectory(prefix="playbook-eval-reports-"))
+    )
+    session = Path(
+        stack.enter_context(tempfile.TemporaryDirectory(prefix="playbook-eval-session-"))
     )
     return ProjectHandle.create(
         tree,
@@ -434,6 +446,7 @@ def _project(tree: Path, stack: ExitStack) -> ProjectHandle:
         timeout_s=_SUITE_TIMEOUT_S,
         env_overrides=_suite_env(reports),
         inherit_env=False,
+        suite_record=session / "session.json",
     )
 
 

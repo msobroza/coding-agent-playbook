@@ -34,7 +34,9 @@ new file in the worktree; ``inherit_env=False`` runs the suite with exactly
 ``env_overrides`` (eval scoring, so agent code sees no caller secret);
 :func:`default_test_cmd` takes the interpreter to run (a hook passes the
 project's, not the engine's) and the ``--cov`` sources that put coverage.py in
-source mode (:func:`import_roots`).
+source mode (:func:`import_roots`); ``suite_record`` (eval scoring only) runs
+``python -P`` with the engine's record plugin and fails a run whose pytest
+session disagrees with its reports (:mod:`.suite_record`).
 """
 
 from __future__ import annotations
@@ -54,6 +56,14 @@ from coding_agent_playbook.grading.execution_metrics.coverage_xml import (
     parse_coverage_xml,
 )
 from coding_agent_playbook.grading.execution_metrics.junit import JunitSummary, parse_junit_xml
+from coding_agent_playbook.grading.execution_metrics.suite_record import (
+    SUITE_RECORD_COVERAGE_OMIT,
+    SUITE_RECORD_ENV,
+    SUITE_RECORD_PLUGIN,
+    SuiteRecord,
+    read_suite_record,
+    session_disagreement,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -69,12 +79,14 @@ class RunArtifacts:
 
     ``junit`` and ``coverage`` are the reduced summaries both execution
     evaluators read; ``returncode`` is the inner pytest exit code (``0`` all
-    passed, ``1`` test failures, ``5`` no tests collected, ...).
+    passed, ``1`` test failures, ``5`` no tests collected, ...). ``record`` is the
+    session's own record when the handle asked for one (eval scoring), else ``None``.
     """
 
     junit: JunitSummary
     coverage: CoverageReport
     returncode: int
+    record: SuiteRecord | None = None
 
 
 class NoSuiteResultError(RuntimeError):
@@ -99,7 +111,11 @@ class NoSuiteResultError(RuntimeError):
 
 
 def default_test_cmd(
-    report_dir: Path, *, python: str | None = None, cov_sources: Sequence[str] = ()
+    report_dir: Path,
+    *,
+    python: str | None = None,
+    cov_sources: Sequence[str] = (),
+    recorded: bool = False,
 ) -> list[str]:
     """The default pytest command writing junit + coverage XML into ``report_dir``.
 
@@ -110,6 +126,9 @@ def default_test_cmd(
     coverage is measured without picking up an outer ``[tool.coverage]`` table.
     Each of ``cov_sources`` becomes ``--cov=<source>`` instead of the bare
     ``--cov``, so coverage.py also reports never-imported files, at 0%.
+    ``recorded`` adds ``-P`` (the cwd is not ``sys.path[0]``, so a planted
+    ``pytest.py`` cannot shadow pytest) and loads the engine's record plugin, so
+    ``python`` must be an interpreter that has the engine installed.
 
     Example::
 
@@ -120,8 +139,11 @@ def default_test_cmd(
     cov = report_dir / "coverage.xml"
     cov_config = report_dir / "coveragerc"
     cov_flags = [f"--cov={source}" for source in cov_sources] or ["--cov"]
+    safe_path = ["-P"] if recorded else []
+    plugin = ["-p", SUITE_RECORD_PLUGIN] if recorded else []
     return [
         python or sys.executable,
+        *safe_path,
         "-m",
         "pytest",
         f"--junitxml={junit}",
@@ -133,6 +155,7 @@ def default_test_cmd(
         "-p",
         "no:cacheprovider",
         "-q",
+        *plugin,
     ]
 
 
@@ -181,6 +204,8 @@ class ProjectHandle:
     require_report: bool = False
     #: Start from the caller's environment; ``False`` runs with exactly :attr:`env_overrides`.
     inherit_env: bool = True
+    #: Where the record plugin writes the session's record; ``None``: no record is read.
+    suite_record: Path | None = None
     _artifacts: RunArtifacts | None = field(default=None, init=False, repr=False)
     _no_result: NoSuiteResultError | None = field(default=None, init=False, repr=False)
 
@@ -198,6 +223,7 @@ class ProjectHandle:
         python: str | None = None,
         cov_sources: Sequence[str] = (),
         inherit_env: bool = True,
+        suite_record: Path | None = None,
     ) -> ProjectHandle:
         """Build a handle, defaulting to the isolated pytest command.
 
@@ -209,6 +235,9 @@ class ProjectHandle:
         ``test_cmd`` runs exactly as given. Only the default command must leave
         a junit report (:attr:`require_report`): an explicit one may not write it.
         ``inherit_env=False`` drops the caller's environment (:attr:`inherit_env`).
+        ``suite_record`` (:attr:`suite_record`) names the record path to the plugin
+        through ``env_overrides``, has the default command load it, and omits the
+        plugin from coverage, so the candidate's totals and sources stay its own.
 
         Example::
 
@@ -218,10 +247,13 @@ class ProjectHandle:
         require_report = test_cmd is None
         report_dir = Path(report_dir)
         report_dir.mkdir(parents=True, exist_ok=True)
-        # Empty coverage config: a present-but-blank file beats outer discovery.
-        (report_dir / "coveragerc").write_text("[run]\n", encoding="utf-8")
+        # A present coverage config (blank, or omitting the plugin) beats outer discovery.
+        (report_dir / "coveragerc").write_text(_coveragerc(suite_record), encoding="utf-8")
         if test_cmd is None:
-            test_cmd = default_test_cmd(report_dir, python=python, cov_sources=cov_sources)
+            recorded = suite_record is not None
+            test_cmd = default_test_cmd(
+                report_dir, python=python, cov_sources=cov_sources, recorded=recorded
+            )
         return cls(
             root=Path(root),
             test_cmd=list(test_cmd),
@@ -229,9 +261,10 @@ class ProjectHandle:
             flaky_retries=flaky_retries,
             diff_base=diff_base,
             timeout_s=timeout_s,
-            env_overrides=dict(env_overrides or {}),
+            env_overrides=_record_env(env_overrides, suite_record),
             require_report=require_report,
             inherit_env=inherit_env,
+            suite_record=suite_record,
         )
 
     def run(self) -> RunArtifacts:
@@ -297,9 +330,13 @@ class ProjectHandle:
 
         Raises :class:`RuntimeError` when the command cannot be launched, and
         :class:`NoSuiteResultError` when it runs past :attr:`timeout_s` or leaves
-        no readable junit or coverage report (see :meth:`_check_result`).
+        no readable junit or coverage report (see :meth:`_check_result`), or its
+        session disagrees with them (:meth:`_session_record`).
         """
         self.report_dir.mkdir(parents=True, exist_ok=True)
+        if self.suite_record is not None:
+            # Every run, retries included: a leftover record must never pass for this one.
+            self.suite_record.unlink(missing_ok=True)
         env = self._child_env()
         try:
             proc = _run_in_session(self.test_cmd, cwd=self.root, env=env, timeout_s=self.timeout_s)
@@ -318,7 +355,26 @@ class ProjectHandle:
         junit = self._read_junit()
         coverage = self._read_coverage()
         self._check_result(junit, proc)
-        return RunArtifacts(junit=junit, coverage=coverage, returncode=proc.returncode)
+        record = self._session_record(junit, proc.returncode)
+        return RunArtifacts(
+            junit=junit, coverage=coverage, returncode=proc.returncode, record=record
+        )
+
+    def _session_record(self, junit: JunitSummary, returncode: int) -> SuiteRecord | None:
+        """The run's session record; :class:`NoSuiteResultError` when it disagrees with the run.
+
+        ``None`` when the handle reads no record. Checked after :meth:`_check_result`,
+        so its "no junit report" reasons win.
+        """
+        if self.suite_record is None:
+            return None
+        record = read_suite_record(self.suite_record)
+        reason = session_disagreement(record, junit, returncode, engine_pid=os.getpid())
+        if reason is not None:
+            raise NoSuiteResultError(
+                f"the suite's pytest session disagrees with its reports: {reason}", reason=reason
+            )
+        return record
 
     def _child_env(self) -> dict[str, str] | None:
         """The suite's environment; ``None`` inherits the caller's unchanged."""
@@ -356,6 +412,21 @@ class ProjectHandle:
         if not path.is_file():
             return CoverageReport()
         return _parsed(path, parse_coverage_xml)
+
+
+def _coveragerc(suite_record: Path | None) -> str:
+    """The coverage config :meth:`ProjectHandle.create` writes: empty, or omitting the plugin."""
+    if suite_record is None:
+        return "[run]\n"
+    return f"[run]\nomit =\n    {SUITE_RECORD_COVERAGE_OMIT}\n"
+
+
+def _record_env(overrides: Mapping[str, str] | None, suite_record: Path | None) -> dict[str, str]:
+    """``overrides``, plus the variable naming ``suite_record`` to the plugin when one is set."""
+    env = dict(overrides or {})
+    if suite_record is not None:
+        env[SUITE_RECORD_ENV] = str(suite_record)
+    return env
 
 
 def _parsed[R](path: Path, parse: Callable[[str], R]) -> R:
