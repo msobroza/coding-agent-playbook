@@ -200,3 +200,12 @@ def test_the_scoring_suite_reports_no_coverage_outside_the_candidate_tree(tmp_pa
 
     assert not [name for name in coverage.per_file if "suite_record" in name]
     assert coverage.sources == (str(tree),)
+
+
+def test_a_test_that_passes_despite_a_lenient_xfail_still_gives_a_result(tmp_path: Path) -> None:
+    """Regression: junit counts a non-strict xpass as a pass; the record called that a forged pass."""
+    xpass = "import pytest\n\n\n@pytest.mark.xfail(strict=False)\ndef test_new():\n    pass\n"
+
+    _, detail, _ = _gate_detail({"mod.py": _REFACTORED, "test_new.py": xpass}, tmp_path)
+
+    assert "gave no result" not in detail

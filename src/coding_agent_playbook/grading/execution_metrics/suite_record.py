@@ -39,6 +39,9 @@ OUTCOMES: Final = frozenset({"passed", "failed", "error", "skipped", "xfailed", 
 #: The outcomes that count against the run: a failure in or around the test call.
 _FAILING: Final = frozenset({"failed", "error"})
 
+#: The outcomes junit reports as a pass.
+_PASSING: Final = frozenset({"passed", "xpassed"})
+
 
 class _MalformedRecordError(ValueError):
     """A record field is missing or has the wrong type; the reader returns ``None``."""
@@ -88,8 +91,8 @@ class SuiteRecord:
 
     @property
     def passes(self) -> int:
-        """Tests that passed (an ``xpassed`` one is reported as skipped in junit)."""
-        return sum(1 for o in self.outcomes.values() if o.outcome == "passed")
+        """Tests that passed, as junit counts them: a non-strict ``xpassed`` one included."""
+        return sum(1 for o in self.outcomes.values() if o.outcome in _PASSING)
 
     def outcome_of(self, nodeid: str) -> str | None:
         """``nodeid``'s outcome, or ``None`` when it never reported one."""

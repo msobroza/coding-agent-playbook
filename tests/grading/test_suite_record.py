@@ -151,7 +151,7 @@ def test_a_missing_or_malformed_record_reads_as_none(tmp_path: Path, content: st
             _junit(errors=1),
             2,
         ),
-        (_record({"t.py::a": "xfailed", "t.py::b": "xpassed"}), _junit(skipped=2), 0),
+        (_record({"t.py::a": "xfailed", "t.py::b": "xpassed"}), _junit(1, skipped=1), 0),
     ],
     ids=["no-tests-rc5", "one-failure-rc1", "collection-error-rc2", "xfail-and-xpass"],
 )
