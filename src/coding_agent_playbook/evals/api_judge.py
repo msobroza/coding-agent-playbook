@@ -13,7 +13,8 @@ no judge CLI version for it.
 A request that fails (an HTTP error, a timeout, a body that is not a JSON
 object, a refusal, an incomplete or empty answer, or an answer that is not one
 number in ``[0, 1]``) raises :class:`~coding_agent_playbook.evals.judge.JudgeError`
-after its retries. No error message carries the endpoint's token.
+after its retries. No error message carries the endpoint's token or an extra
+header's value, as written or JSON-escaped.
 """
 
 from __future__ import annotations
@@ -38,7 +39,7 @@ from coding_agent_playbook.evals.judge import (
     grade_with_retries,
     parse_score,
 )
-from coding_agent_playbook.evals.run.secret_redaction import redact_secrets
+from coding_agent_playbook.evals.run.secret_redaction import redact_secrets, with_escaped_forms
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -52,8 +53,12 @@ _DEFAULT_TIMEOUT: Final = 120.0
 #: Extra attempts after a failed grading request (3 attempts in all), as for the CLI judge.
 _DEFAULT_RETRIES: Final = 2
 
-#: How much of a failed response to quote in a :class:`JudgeError`.
+#: How much of a failed response :class:`ApiJudge` quotes in a :class:`JudgeError`.
 _EXCERPT_CHARS: Final = 200
+
+#: How much raw text a failed request's :class:`JudgeError` keeps. :class:`ApiJudge`
+#: redacts it before it cuts the excerpt, so a cut cannot split a secret.
+_RAW_CHARS: Final = 4096
 
 #: The URL schemes a judge endpoint may use: never ``file:`` or another opener urllib knows.
 _URL_SCHEMES: Final = ("https://", "http://")
@@ -87,9 +92,16 @@ def post_json(url: str, headers: Mapping[str, str], body: JsonObject, timeout: f
         with urllib.request.urlopen(request, timeout=timeout) as response:
             raw = response.read()
     except urllib.error.HTTPError as exc:
-        raise JudgeError(f"HTTP {exc.code}: {_excerpt(_error_body(exc))}") from exc
+        raise JudgeError(f"HTTP {exc.code}: {_tail(_error_body(exc))}") from exc
     except (urllib.error.URLError, OSError) as exc:  # TimeoutError is an OSError
         raise JudgeError(f"request failed: {exc}") from exc
+    except ValueError as exc:
+        # http.client refuses a header with a line break or a non-Latin-1 character,
+        # quoting the value, which can be the Bearer token: name only the kind.
+        kind = type(exc).__name__
+        raise JudgeError(
+            f"request failed: {kind}: a header value or the URL is not valid HTTP"
+        ) from None
     return _json_object(raw)
 
 
@@ -105,9 +117,9 @@ def _json_object(raw: bytes) -> JsonObject:
         payload = json.loads(raw)
     except ValueError as exc:  # JSONDecodeError and UnicodeDecodeError
         text = raw.decode("utf-8", errors="replace")
-        raise JudgeError(f"answered with no JSON: {_excerpt(text)}") from exc
+        raise JudgeError(f"answered with no JSON: {_tail(text)}") from exc
     if not isinstance(payload, dict):
-        raise JudgeError(f"answered with JSON that is not an object: {_excerpt(str(payload))}")
+        raise JudgeError(f"answered with JSON that is not an object: {_tail(str(payload))}")
     return payload
 
 
@@ -161,14 +173,14 @@ def _responses_text(payload: JsonObject) -> str:
     status = payload.get("status")
     if status not in (None, "completed"):
         reason = payload.get("incomplete_details") or payload.get("error")
-        raise JudgeError(f"response {status}: {_excerpt(json.dumps(reason))}")
+        raise JudgeError(f"response {status}: {_tail(json.dumps(reason))}")
     parts = _message_parts(payload)
     refusals = [str(part.get("refusal")) for part in parts if part.get("type") == "refusal"]
     if refusals:
-        raise JudgeError(f"refused: {_excerpt(refusals[0])}")
+        raise JudgeError(f"refused: {_tail(refusals[0])}")
     texts = [part["text"] for part in parts if _is_output_text(part)]
     if not texts:
-        raise JudgeError(f"answered with no output text: {_excerpt(json.dumps(payload))}")
+        raise JudgeError(f"answered with no output text: {_tail(json.dumps(payload))}")
     return "".join(texts)
 
 
@@ -194,16 +206,21 @@ def _chat_text(payload: JsonObject) -> str:
     choices = payload.get("choices")
     first = choices[0] if isinstance(choices, list) and choices else None
     if not isinstance(first, dict):
-        raise JudgeError(f"answered with no choices: {_excerpt(json.dumps(payload))}")
+        raise JudgeError(f"answered with no choices: {_tail(json.dumps(payload))}")
     given = first.get("message")
     message: JsonObject = given if isinstance(given, dict) else {}
     if message.get("refusal"):
-        raise JudgeError(f"refused: {_excerpt(str(message['refusal']))}")
+        raise JudgeError(f"refused: {_tail(str(message['refusal']))}")
     content = message.get("content")
     if not isinstance(content, str) or not content.strip():
         reason = first.get("finish_reason")
         raise JudgeError(f"answered with no message content (finish_reason {reason!r})")
     return content
+
+
+def _tail(text: str) -> str:
+    """The last :data:`_RAW_CHARS` of ``text``, as is, for :class:`ApiJudge` to redact."""
+    return text[-_RAW_CHARS:]
 
 
 def _excerpt(text: str) -> str:
@@ -246,8 +263,10 @@ class ApiJudge(Judge):
             raise ValueError(f"ApiJudge retries must be >= 0, got {retries}")
         self.endpoint = endpoint
         self.model = model
-        self._token = token
         self._headers = {**(headers or {}), "Authorization": f"Bearer {token}"}
+        # Extra headers come from headers_env and may be secrets too; a server can
+        # echo any of them, plain or JSON-escaped, as the endpoint routes redact them.
+        self._secrets = with_escaped_forms((token, *(headers or {}).values()))
         self._timeout = timeout
         self._retries = retries
         self._post = post
@@ -267,19 +286,32 @@ class ApiJudge(Judge):
         return grade_with_retries(lambda: self._attempt(url, body), self._retries + 1, who)
 
     def _attempt(self, url: str, body: JsonObject) -> float:
-        """Send one request; its score, or :class:`JudgeError` saying why not (token redacted)."""
+        """Send one request; its score, or :class:`JudgeError` saying why not (secrets redacted)."""
         try:
             text = answer_text(
                 self.endpoint.api, self._post(url, self._headers, body, self._timeout)
             )
         except JudgeError as exc:
-            # A fresh error, not a chained one: the original message may echo the token.
-            raise JudgeError(redact_secrets(str(exc), [self._token])) from None
+            # A fresh error, not a chained one: the original message may echo a secret.
+            raise JudgeError(self._redacted(str(exc))) from None
         score = parse_score(text)
         if score is None:
-            answer = redact_secrets(_excerpt(text), [self._token])
+            answer = _excerpt(redact_secrets(text, self._secrets))
             raise JudgeError(f"answered off-format (want one number in [0, 1]): {answer!r}")
         return score
+
+    def _redacted(self, message: str) -> str:
+        """``message`` with its secrets redacted, then the detail after its first ``": "`` excerpted.
+
+        Why redact first: an excerpt can cut a secret or collapse a run of
+        whitespace inside it, and the cut or collapsed form no longer matches.
+
+        Example::
+
+            judge._redacted("HTTP 401: bad key sk-1")  # 'HTTP 401: bad key [redacted]'
+        """
+        prefix, sep, detail = redact_secrets(message, self._secrets).partition(": ")
+        return prefix + sep + _excerpt(detail)
 
 
 def _check_endpoint(endpoint: Endpoint) -> None:

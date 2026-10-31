@@ -34,6 +34,8 @@ if TYPE_CHECKING:
 _TOKEN = "sk-fake-judge-token-0000"
 _RESPONSES = Endpoint("openai", "openai-responses", "https://api.example/v1", token_env="OAI")
 _CHAT = Endpoint("router", "openai-chat", "https://router.example/api/v1/", token_env="OAI")
+#: An extra header's secret value; its quotes make the JSON-escaped form differ.
+_HEADER_SECRET = 'org-"key"-0000'
 
 
 @pytest.fixture
@@ -169,6 +171,40 @@ def test_a_judge_error_names_the_model_and_endpoint_but_never_the_token() -> Non
 
 
 @pytest.mark.parametrize(
+    "echoed", [_HEADER_SECRET, json.dumps(_HEADER_SECRET)], ids=["as-written", "json-escaped"]
+)
+def test_a_judge_error_never_carries_an_extra_header_value(echoed: str) -> None:
+    post = FakeJsonPost([JudgeError(f"HTTP 400: unknown header X-Org-Key: {echoed}")])
+
+    with pytest.raises(JudgeError) as caught:
+        _judge(post, retries=0, headers={"X-Org-Key": _HEADER_SECRET}).score_criterion("c", "a")
+
+    message = str(caught.value)
+    assert "[redacted]" in message
+    assert "org-" not in message
+
+
+def test_an_off_format_answer_never_carries_an_extra_header_value() -> None:
+    post = FakeJsonPost([responses_payload(f"The header was {_HEADER_SECRET}.")])
+
+    with pytest.raises(JudgeError, match="answered off-format") as caught:
+        _judge(post, retries=0, headers={"X-Org-Key": _HEADER_SECRET}).score_criterion("c", "a")
+
+    assert "org-" not in str(caught.value)
+
+
+def test_a_secret_with_a_run_of_whitespace_is_redacted_before_the_excerpt_collapses_it() -> None:
+    spaced = "org  key-1234"
+    failed = {"status": "failed", "error": {"message": f"bad header {spaced}"}}
+    post = FakeJsonPost([failed])
+
+    with pytest.raises(JudgeError, match="response failed") as caught:
+        _judge(post, retries=0, headers={"X-Org-Key": spaced}).score_criterion("c", "a")
+
+    assert "key-1234" not in str(caught.value)
+
+
+@pytest.mark.parametrize(
     ("endpoint", "message"),
     [
         (Endpoint("a", "anthropic", "https://x"), "speaks api = openai-responses or openai-chat"),
@@ -247,6 +283,47 @@ def test_an_api_judge_grades_end_to_end_over_http(server: FakeOpenAIServer) -> N
     assert request.headers["Authorization"] == f"Bearer {_TOKEN}"
     assert request.body["store"] is False
     assert json.dumps(request.body).count("Criterion: c") == 1
+
+
+def test_an_http_error_echoing_a_headers_env_value_never_reaches_the_judge_error(
+    server: FakeOpenAIServer,
+) -> None:
+    """Regression: the API judge redacted only its token, not ``headers_env`` values."""
+    server.replies.extend([(401, b'{"error": "bad header X-Org-Key: org-key-1234"}')] * 3)
+    endpoint = Endpoint("local", "openai-chat", server.base_url, token_env="OAI", headers_env="H")
+    judge = build_api_judge(endpoint, "gpt-x", {"OAI": _TOKEN, "H": "X-Org-Key: org-key-1234"})
+
+    with pytest.raises(JudgeError, match="HTTP 401") as caught:
+        judge.score_criterion("c", "a")
+
+    assert "org-key-1234" not in str(caught.value)
+    assert server.requests[0].headers["X-Org-Key"] == "org-key-1234"
+
+
+def test_a_secret_cut_by_the_excerpt_window_is_still_redacted(server: FakeOpenAIServer) -> None:
+    """Regression: the error excerpt was taken before redaction, so a cut token's tail leaked."""
+    secret = "sk-live-0123456789abcdefghijklmnopqrstuv"
+    # The excerpt keeps the last 200 characters; this tail puts its cut inside the token.
+    server.replies.append((401, f"invalid key {secret} {'x' * 180}".encode()))
+    endpoint = Endpoint("local", "openai-chat", server.base_url, token_env="OAI")
+    judge = ApiJudge(endpoint=endpoint, model="gpt-x", token=secret, retries=0)
+
+    with pytest.raises(JudgeError, match="HTTP 401") as caught:
+        judge.score_criterion("c", "a")
+
+    assert secret[-12:] not in str(caught.value)
+
+
+def test_a_token_that_is_not_valid_http_fails_without_quoting_it() -> None:
+    """Regression: http.client's ValueError escaped the judge, quoting ``Bearer <token>``."""
+    endpoint = Endpoint("local", "openai-chat", "http://127.0.0.1:9/v1", token_env="OAI")
+    judge = ApiJudge(endpoint=endpoint, model="gpt-x", token="sk-one\nsk-two", retries=0)
+
+    with pytest.raises(JudgeError, match="not valid HTTP") as caught:
+        judge.score_criterion("c", "a")
+
+    assert "sk-one" not in str(caught.value)
+    assert "sk-two" not in str(caught.value)
 
 
 # --------------------------------------------------------------------------- #
