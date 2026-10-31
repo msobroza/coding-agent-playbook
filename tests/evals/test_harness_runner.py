@@ -317,6 +317,23 @@ def test_capture_includes_new_files_in_diff_and_changed(tmp_path: Path) -> None:
     assert candidate.transcript == "transcript-here"
 
 
+def test_capture_lists_both_sides_of_a_rename_and_unquoted_paths(tmp_path: Path) -> None:
+    """Regression: git paired a rename (only the new path listed) and quoted non-ASCII names."""
+    sample_dir = tmp_path / "sample"
+    _make_setup(sample_dir)
+    (sample_dir / "setup" / "test_\u00e9.py").write_text(_TEST_OK, encoding="utf-8")
+    sample = _make_sample(sample_dir, gate=_cc_gate())
+    scratch = tmp_path / "scratch"
+    baseline = materialize(sample, scratch)
+
+    (scratch / "tests").mkdir()
+    (scratch / "test_mod.py").rename(scratch / "tests" / "test_mod.py")
+    (scratch / "test_\u00e9.py").write_text(_TEST_OK + "# edited\n", encoding="utf-8")
+    candidate = capture(scratch, baseline, "transcript")
+
+    assert sorted(candidate.changed_files) == ["test_mod.py", "test_\u00e9.py", "tests/test_mod.py"]
+
+
 def test_render_prompt_falls_back_for_unresolvable_prompt(tmp_path: Path) -> None:
     """A synthetic sample outside any ``eval_samples/`` layer resolves to a placeholder."""
     sample_dir = tmp_path / "sample"

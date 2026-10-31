@@ -278,6 +278,19 @@ _GIT_ENV_ARGS = [
 ]
 
 
+#: ``git diff`` of the staged tree, one unquoted NUL-terminated path per change,
+#: a rename listed as its deletion and its addition (see :func:`_changed_paths`).
+_CHANGED_PATHS_ARGS = (
+    "-c",
+    "core.quotepath=false",
+    "diff",
+    "--cached",
+    "--name-only",
+    "--no-renames",
+    "-z",
+)
+
+
 def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     """Run ``git`` in ``repo_root`` with a pinned hermetic identity.
 
@@ -389,14 +402,31 @@ def capture(
     # Stage everything so new/untracked files participate in the diff.
     _git(scratch_dir, "add", "-A")
     diff = _git(scratch_dir, "diff", "--cached", baseline.commit).stdout
-    name_only = _git(scratch_dir, "diff", "--cached", "--name-only", baseline.commit).stdout
-    changed = [line for line in name_only.splitlines() if line.strip()]
     return Candidate(
         tree=scratch_dir,
         diff=diff if redact is None else redact(diff),
         transcript=transcript,
-        changed_files=changed,
+        changed_files=_changed_paths(scratch_dir, baseline.commit),
     )
+
+
+def _changed_paths(scratch_dir: Path, commit: str) -> list[str]:
+    """Every path the staged tree changed against ``commit``, both sides of a rename included.
+
+    Why ``--no-renames``: git pairs a move or a delete-plus-similar-file as a rename
+    and lists only the new path, so the old setup/ test file read as untouched and
+    suite integrity rule 1 failed an honest move. Why ``-z`` and UTF-8: git quotes
+    and octal-escapes a non-ASCII path otherwise, so it never matched the session
+    record's path. ``surrogateescape`` keeps an undecodable name a usable path.
+    """
+    raw = subprocess.run(
+        ["git", *_GIT_ENV_ARGS, *_CHANGED_PATHS_ARGS, commit],
+        cwd=scratch_dir,
+        env=without_repo_location(os.environ),
+        capture_output=True,
+        check=True,
+    ).stdout
+    return [path for path in raw.decode("utf-8", "surrogateescape").split("\0") if path]
 
 
 def _grade_aggregate(

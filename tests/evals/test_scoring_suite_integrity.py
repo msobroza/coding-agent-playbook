@@ -38,11 +38,16 @@ _DOES_NOT_COUNT = "the test suite result does not count: "
 
 
 def _grade(
-    tmp_path: Path, agent: Callable[[Path], None], *, setup_test: str = _TEST_OK
+    tmp_path: Path,
+    agent: Callable[[Path], None],
+    *,
+    setup_test: str = _TEST_OK,
+    setup_test_name: str = "test_mod.py",
 ) -> tuple[bool, str, bool]:
     """``(tests_pass passed, its detail, trial passed)`` for ``agent`` over the fixture setup/."""
     sample_dir = tmp_path / "sample"
     _make_setup(sample_dir, test_source=setup_test)
+    (sample_dir / "setup" / "test_mod.py").rename(sample_dir / "setup" / setup_test_name)
     sample = _make_sample(sample_dir, gate=_suite_green_gate())
     result = FakeRunner(agent).run_sample(sample, tmp_path / "scratch")
     check = _check(result.report, "threshold:test_pass_rate")
@@ -223,6 +228,58 @@ def test_a_deleted_or_edited_setup_test_does_not_count_as_missing(
     passed, detail, trial = _grade(tmp_path, agent)
 
     assert (passed, detail, trial) == (True, "", True)
+
+
+def _rename_setup_test_file(scratch: Path) -> None:
+    (scratch / "test_mod.py").rename(scratch / "test_classify.py")
+
+
+def _move_setup_test_file(scratch: Path) -> None:
+    (scratch / "tests").mkdir()
+    (scratch / "test_mod.py").rename(scratch / "tests" / "test_mod.py")
+
+
+def _replace_setup_test_file(scratch: Path) -> None:
+    (scratch / "test_mod.py").unlink()
+    (scratch / "test_new.py").write_text(_TEST_OK, encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    "agent",
+    [_rename_setup_test_file, _move_setup_test_file, _replace_setup_test_file],
+    ids=["renamed", "moved-into-tests", "deleted-and-copied"],
+)
+def test_a_setup_test_file_moved_away_does_not_count_as_missing(
+    tmp_path: Path, agent: Callable[[Path], None]
+) -> None:
+    """Regression: git paired the move as a rename and left the old path out of changed_files."""
+    passed, detail, trial = _grade(tmp_path, agent)
+
+    assert (passed, detail, trial) == (True, "", True)
+
+
+def test_an_edited_setup_test_file_with_a_non_ascii_name_does_not_count_as_missing(
+    tmp_path: Path,
+) -> None:
+    """Regression: git quoted the non-ASCII path, so it never matched the record's path."""
+    name = "test_\u00e9.py"
+    edited = _TEST_OK.replace("test_small", "test_five")
+
+    passed, detail, trial = _grade(tmp_path, _writes({name: edited}), setup_test_name=name)
+
+    assert (passed, detail, trial) == (True, "", True)
+
+
+def test_a_new_non_ascii_test_file_whose_tests_never_ran_fails_tests_pass(tmp_path: Path) -> None:
+    name = "test_\u00e9.py"
+    files = {"conftest.py": f"collect_ignore = [{name!r}]\n", name: _FAILING_TEST}
+
+    passed, detail, _ = _grade(tmp_path, _writes(files))
+
+    assert (passed, detail) == (
+        False,
+        _DOES_NOT_COUNT + f"test file(s) define tests that never ran: {name}",
+    )
 
 
 def test_a_skip_already_in_setup_is_not_a_new_skip(tmp_path: Path) -> None:
