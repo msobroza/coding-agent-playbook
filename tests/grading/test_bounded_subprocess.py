@@ -14,7 +14,7 @@ import subprocess
 import sys
 import threading
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import pytest
 
@@ -31,6 +31,7 @@ from tests._process_tree import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
 posix_only = pytest.mark.skipif(os.name != "posix", reason="process groups are POSIX")
@@ -262,17 +263,79 @@ def test_a_bounded_child_gets_half_its_parents_grace(monkeypatch: pytest.MonkeyP
     assert (float(inherited.stdout), float(given.stdout)) == (1.0, 2.5)
 
 
-def test_a_halted_thread_starts_no_bounded_child(tmp_path: Path) -> None:
+class _RecordedPopen(subprocess.Popen[Any]):
+    """``Popen`` that keeps every process it starts in :attr:`started`, then calls :attr:`on_start`."""
+
+    started: ClassVar[list[subprocess.Popen[Any]]] = []
+    on_start: ClassVar[Callable[[], object]] = staticmethod(lambda: None)
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        type(self).started.append(self)
+        type(self).on_start()
+
+
+def test_a_halted_thread_starts_no_bounded_child(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """After an interrupt, a record's worker must not start its next agent or judge CLI."""
     halt = threading.Event()
     marker = tmp_path / "started"
     halt.set()
+    monkeypatch.setattr(_RecordedPopen, "started", [])
+    monkeypatch.setattr(subprocess, "Popen", _RecordedPopen)
 
     with pytest.raises(bounded_subprocess.BoundedRunHalted, match="touch"):
         bounded_subprocess.halted_by(halt, run_bounded)(["touch", str(marker)], timeout_s=30)
 
-    assert not marker.exists()
+    # Not even started and ended at once: a CLI's first moments can bill a call.
+    assert (_RecordedPopen.started, marker.exists()) == ([], False)
     assert run_bounded(["true"], timeout_s=30).returncode == 0  # other threads still run
+
+
+@posix_only
+def test_a_halt_landing_as_the_child_starts_ends_it_at_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A halt set between the first refusal and the add is missed by the halt's snapshot.
+
+    So the run checks again once its child is live, rather than waiting for its timeout.
+    """
+    halt = threading.Event()
+    monkeypatch.setattr(_RecordedPopen, "started", [])
+    monkeypatch.setattr(_RecordedPopen, "on_start", staticmethod(halt.set))
+    monkeypatch.setattr(subprocess, "Popen", _RecordedPopen)
+    sleeper = [sys.executable, "-c", "import time; time.sleep(60)"]
+
+    with pytest.raises(bounded_subprocess.BoundedRunHalted):
+        bounded_subprocess.halted_by(halt, run_bounded)(sleeper, timeout_s=TIMEOUT_S)
+
+    assert _RecordedPopen.started[0].returncode == -signal.SIGTERM
+
+
+def test_a_halt_is_set_before_it_snapshots_the_live_groups_and_takes_the_own_grace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Set after the snapshot, a run that registers in between is neither ended nor refused."""
+    halt = threading.Event()
+    ended: list[tuple[bool, float]] = []
+
+    def _record_ending(pgids: object, signum: int, grace_s: float) -> None:
+        ended.append((halt.is_set(), grace_s))
+
+    class _SnapshotSpy(set[int]):
+        def copy(self) -> set[int]:
+            ended.append((halt.is_set(), -1.0))
+            return set(self)
+
+    monkeypatch.setattr(bounded_subprocess, "_live_bounded_groups", _SnapshotSpy())
+    monkeypatch.setattr(bounded_subprocess, "_end_groups", _record_ending)
+    monkeypatch.setattr(bounded_subprocess, "_POSIX", True)
+    monkeypatch.setenv(_GRACE_ENV, "1.5")
+
+    bounded_subprocess.halt_bounded_runs(halt)
+
+    assert ended == [(True, -1.0), (True, 1.5)]
 
 
 @posix_only

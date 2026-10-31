@@ -115,9 +115,10 @@ def test_a_failure_saves_the_running_units_and_starts_no_queued_one(tmp_path: Pa
     assert saved.resumable == len(ran) - 1  # every unit that ran, but the failed one
 
 
-#: A record of 4 units on 2 workers; each unit starts an "agent" then a "judge"
-#: leaf through ``run_bounded``. A leaf ignores SIGINT, as a CLI that traps Ctrl-C
-#: does, so only the record's own ending stops it.
+#: A record of 4 units on 2 workers; each unit marks that it entered, then starts
+#: an "agent" then a "judge" leaf through ``run_bounded``. A leaf ignores SIGINT,
+#: as a CLI that traps Ctrl-C does, so only the record's own ending stops it. The
+#: mark stands for a unit's work outside a subprocess (an API judge's billed call).
 _INTERRUPTED_RECORD = """
 import pathlib, signal
 signal.signal(signal.SIGINT, signal.default_int_handler)
@@ -128,6 +129,7 @@ from coding_agent_playbook.grading import bounded_subprocess
 bounded_subprocess.forward_signals_to_bounded_children()
 work = pathlib.Path({work!r})
 def run(unit):
+    (work / f"{{unit.sample.id}}.entered").touch()
     for step in ("agent", "judge"):
         script = f"trap '' INT; echo $$ > {{work}}/{{unit.sample.id}}.{{step}}; exec sleep 60"
         bounded_subprocess.run_bounded(["/bin/sh", "-c", script], timeout_s=60)
@@ -154,6 +156,7 @@ def test_ctrl_c_under_jobs_starts_no_queued_unit_and_ends_the_running_ones(
 
         assert proc.wait(timeout=20) == -signal.SIGINT
         assert sorted(f.name for f in leaf_files if f.exists()) == ["u0.agent", "u1.agent"]
+        assert sorted(f.name for f in tmp_path.glob("*.entered")) == ["u0.entered", "u1.entered"]
         assert not any(is_alive(pid, grace_s=1.0) for pid in agents)
 
 
