@@ -18,11 +18,13 @@ pytest in a way that does *not* inherit a surrounding ``pyproject.toml``'s
 is the lever that neutralises an inherited config), and ``--cov-config`` pins
 coverage to the target. The exit code of the run is *not* asserted here (a
 failing suite is a legitimate measurement, not a handle error); only a command
-that cannot be *launched* (e.g. pytest absent) raises, and so does a suite
-that gives no result: it ran past ``timeout_s``, or left no readable junit report
-(:class:`NoSuiteResultError`, which callers may score apart from a launch failure).
-A timeout kills the whole session the suite started, its tests' own subprocesses
-included.
+that cannot be *launched* (its program is missing) raises, and so does a suite
+that gives no result: it ran past ``timeout_s``, or left no readable junit or
+coverage report (:class:`NoSuiteResultError`). A ``-m pytest`` command whose
+interpreter lacks pytest starts, then exits 1 with no report, so it is a suite with
+no result too: eval scoring checks that toolchain in-process first. A timeout, or
+any interrupt such as Ctrl-C, kills the suite's process group, with the
+subprocesses its tests started that stayed in it.
 
 **prK §F.1.1 extensions** (keyword-only, defaults byte-identical):
 ``diff_base`` is the ref ``diff_coverage`` diffs against; ``timeout_s`` bounds
@@ -74,11 +76,13 @@ class RunArtifacts:
 
 
 class NoSuiteResultError(RuntimeError):
-    """The suite ran but gave no result: it timed out, or left no readable junit report.
+    """The suite ran but gave no result: it timed out, or left no readable junit or coverage report.
 
-    Distinct from a command that cannot start (a plain ``RuntimeError``): here
-    the suite itself is at fault, for example an endless test or a ``conftest.py``
-    that raises, so eval scoring fails every execution check with :attr:`reason`.
+    Distinct from a command that cannot start (a plain ``RuntimeError``): the
+    suite started, so the cause is usually its own, for example an endless test or
+    a ``conftest.py`` that raises, and eval scoring fails every execution check with
+    :attr:`reason`. A missing pytest looks the same from outside, which is why eval
+    scoring checks its toolchain in this process before the run.
 
     Example::
 
@@ -286,7 +290,7 @@ class ProjectHandle:
 
         Raises :class:`RuntimeError` when the command cannot be launched, and
         :class:`NoSuiteResultError` when it runs past :attr:`timeout_s` or leaves
-        no readable junit report (see :meth:`_check_result`).
+        no readable junit or coverage report (see :meth:`_check_result`).
         """
         self.report_dir.mkdir(parents=True, exist_ok=True)
         env = {**os.environ, **self.env_overrides} if self.env_overrides else None
@@ -359,12 +363,14 @@ def _parsed[R](path: Path, parse: Callable[[str], R]) -> R:
 def _run_in_session(
     argv: Sequence[str], *, cwd: Path, env: Mapping[str, str] | None, timeout_s: float | None
 ) -> subprocess.CompletedProcess[str]:
-    """``argv`` with captured text output, in a session of its own on POSIX.
+    """``argv`` with captured text output, in a session and process group of its own on POSIX.
 
     Why: ``subprocess.run`` kills only its child at the timeout, and a test's own
-    subprocess kept running after it. Raises ``TimeoutExpired`` once the whole
-    session is killed. It waits for the child rather than draining its pipes, as
-    ``subprocess.run`` does on POSIX: a process that left the session can hold them.
+    subprocess kept running after it. The group is killed on a timeout and on any
+    other exception, Ctrl-C included: in its own session the suite no longer gets
+    the terminal's ``SIGINT``. Then the exception propagates (``TimeoutExpired``
+    for a timeout). It waits for the child rather than draining its pipes, as
+    ``subprocess.run`` does on POSIX: a process that left the group can hold them.
 
     Example::
 
@@ -383,7 +389,7 @@ def _run_in_session(
     ) as proc:
         try:
             stdout, stderr = proc.communicate(timeout=timeout_s)
-        except subprocess.TimeoutExpired:
+        except BaseException:
             _kill_session(proc, posix=posix)
             proc.wait()
             raise
@@ -391,12 +397,16 @@ def _run_in_session(
 
 
 def _kill_session(proc: subprocess.Popen[str], *, posix: bool) -> None:
-    """Kill ``proc``'s whole session on POSIX, else ``proc`` alone (Windows has no ``killpg``)."""
-    if not posix:
-        proc.kill()
-        return
-    with contextlib.suppress(ProcessLookupError):
-        os.killpg(proc.pid, signal.SIGKILL)
+    """Kill ``proc``'s process group on POSIX, then ``proc`` itself.
+
+    Why both: Windows has no ``killpg``, and on macOS ``killpg`` fails with
+    ``EPERM`` once the group holds only the leader's zombie, while a process that
+    left the group still holds the pipes. ``proc.kill`` is a no-op on a reaped child.
+    """
+    if posix:
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.killpg(proc.pid, signal.SIGKILL)
+    proc.kill()
 
 
 class ProjectFactory(Protocol):

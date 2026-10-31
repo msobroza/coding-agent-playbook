@@ -27,11 +27,13 @@ flat ``[metrics]`` block:
   :class:`~coding_agent_playbook.grading.execution_metrics.project.ProjectHandle` over
   the candidate tree (and the snapshot for the baseline) — but **only when** an
   execution metric is actually referenced (``run_tests`` is *inferred*, not
-  authored). Each run stops after 300 s in a pytest environment the caller's
-  variables cannot steer, and a suite that gives no result (it timed out, or
-  left no readable junit report) fails every execution check with its reason.
-  The run needs pytest and pytest-cov in this interpreter
-  (:func:`require_suite_toolchain`);
+  authored). Each run stops after 300 s and ignores the caller's
+  ``PYTEST_ADDOPTS``, ``PYTEST_PLUGINS`` and ``PYTEST_DISABLE_PLUGIN_AUTOLOAD``.
+  A candidate suite that gives no result (it timed out, or left no readable
+  junit or coverage report) fails every execution check with its reason. The
+  sample cannot be scored (:class:`UnscorableSuiteError`) when this interpreter
+  lacks pytest or pytest-cov (:func:`require_suite_toolchain`), or when the
+  ``setup/`` baseline's own suite gives no result;
 * **judge-backed** metrics (a
   :class:`~coding_agent_playbook.grading.judge_metric.JudgeMetric`, or a
   rubric-group :class:`~coding_agent_playbook.grading.rubric.Rubric` containing
@@ -58,6 +60,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.exit_two import ExitTwoError
 from coding_agent_playbook.grading.check import MeasurementSet
 from coding_agent_playbook.grading.execution_metrics.project import (
     NoSuiteResultError,
@@ -93,8 +96,16 @@ _SUITE_TIMEOUT_S: Final = 300.0
 _SUITE_TOOLCHAIN: Final = ("pytest", "pytest_cov")
 
 
-class SuiteToolchainError(RuntimeError):
+class UnscorableSuiteError(ExitTwoError):
+    """The scoring suite cannot judge the agent fairly, so the sample cannot be scored (exit 2)."""
+
+
+class SuiteToolchainError(UnscorableSuiteError):
     """This interpreter lacks a module the scoring suite runs: the environment's fault."""
+
+
+class BaselineSuiteError(UnscorableSuiteError):
+    """The ``setup/`` baseline's own suite gave no result: the sample author's to fix."""
 
 
 def require_suite_toolchain(rubric: Rubric) -> None:
@@ -286,7 +297,7 @@ def _measure(
     _require_toolchain()
     project = _project(candidate.tree, stack)
     candidate_rows += _suite_rows(project, execution, setup)
-    baseline_rows += _suite_rows(_project(baseline.setup_snapshot, stack), execution, setup)
+    baseline_rows += _baseline_suite_rows(baseline.setup_snapshot, execution, setup, stack)
     failure = None if project.no_result is None else project.no_result.reason
     return _Measured(candidate_rows, baseline_rows, project, promised, failure)
 
@@ -317,6 +328,25 @@ def _suite_rows(
         return measure_suite(project, metrics, setup)
     except NoSuiteResultError:
         return []
+
+
+def _baseline_suite_rows(
+    tree: Path, metrics: list[Metric], setup: MeasureSetup, stack: ExitStack
+) -> list[Measurement]:
+    """The ``setup/`` snapshot's suite measurements; :class:`BaselineSuiteError` when it gave none.
+
+    Why raise: ``setup/`` is the sample author's, so its failure is not the agent's
+    to carry, and a regression check with no baseline row grades a "new" scope
+    against unset bounds and passes.
+    """
+    handle = _project(tree, stack)
+    rows = _suite_rows(handle, metrics, setup)
+    if handle.no_result is not None:
+        raise BaselineSuiteError(
+            f"the setup/ baseline suite in {tree} gave no result ({handle.no_result.reason}); "
+            "a sample's setup/ suite must finish and write its reports"
+        )
+    return rows
 
 
 def _project(tree: Path, stack: ExitStack) -> ProjectHandle:

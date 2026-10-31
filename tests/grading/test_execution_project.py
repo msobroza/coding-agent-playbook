@@ -12,10 +12,11 @@ from __future__ import annotations
 import contextlib
 import os
 import signal
+import subprocess
 import sys
 import textwrap
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -105,7 +106,6 @@ def test_run_is_cached_single_subprocess(tmp_path: Path, monkeypatch: pytest.Mon
     handle = ProjectHandle.create(root, tmp_path / "reports")
 
     import subprocess as _subprocess
-    from typing import Any
 
     calls = {"n": 0}
     real_popen = _subprocess.Popen
@@ -253,14 +253,22 @@ def test_an_explicit_command_may_exit_0_with_no_junit_report(tmp_path: Path) -> 
     assert handle.run().returncode == 0
 
 
-@pytest.mark.parametrize("report", ["junit.xml", "coverage.xml"])
-def test_an_unreadable_report_is_no_result(tmp_path: Path, report: str) -> None:
+@pytest.mark.parametrize(
+    ("report", "content"),
+    [
+        ("junit.xml", "<oops"),
+        ("coverage.xml", "<oops"),
+        ("coverage.xml", '<coverage line-rate="abc"/>'),
+    ],
+    ids=["truncated-junit", "truncated-coverage", "coverage-bad-rate"],
+)
+def test_an_unreadable_report_is_no_result(tmp_path: Path, report: str, content: str) -> None:
     """Regression: a truncated report raised ``ParseError``, which aborted a whole eval record."""
     reports = tmp_path / "reports"
     junit = '<testsuite tests="1"><testcase name="t"/></testsuite>'
     script = (
         "import pathlib, sys; d = pathlib.Path(sys.argv[1]); "
-        f"(d / 'junit.xml').write_text({junit!r}); (d / {report!r}).write_text('<oops')"
+        f"(d / 'junit.xml').write_text({junit!r}); (d / {report!r}).write_text({content!r})"
     )
     handle = ProjectHandle(
         root=tmp_path, test_cmd=[sys.executable, "-c", script, str(reports)], report_dir=reports
@@ -272,16 +280,11 @@ def test_an_unreadable_report_is_no_result(tmp_path: Path, report: str) -> None:
 
 
 def test_a_run_with_no_result_is_cached_and_never_rerun(tmp_path: Path) -> None:
-    """A second ``run()`` re-raises the first failure instead of paying the timeout again."""
+    """A second ``run()`` re-raises the first failure instead of paying a timeout again."""
     runs = tmp_path / "runs.txt"
-    script = (
-        f"import pathlib, time; pathlib.Path({str(runs)!r}).open('a').write('x'); time.sleep(30)"
-    )
+    script = f"import pathlib, sys; pathlib.Path({str(runs)!r}).open('a').write('x'); sys.exit(4)"
     handle = ProjectHandle(
-        root=tmp_path,
-        test_cmd=[sys.executable, "-c", script],
-        report_dir=tmp_path / "reports",
-        timeout_s=2.0,
+        root=tmp_path, test_cmd=[sys.executable, "-c", script], report_dir=tmp_path / "reports"
     )
 
     with pytest.raises(NoSuiteResultError) as first:
@@ -294,7 +297,7 @@ def test_a_run_with_no_result_is_cached_and_never_rerun(tmp_path: Path) -> None:
 
 
 def test_a_flaky_retry_with_no_result_keeps_the_best_rate_so_far(tmp_path: Path) -> None:
-    """A retry that hangs must not discard the cached run's rate and coverage."""
+    """A retry that gives no result must not discard the cached run's rate and coverage."""
     reports = tmp_path / "reports"
     marker = tmp_path / "ran-once"
     junit = (
@@ -302,16 +305,15 @@ def test_a_flaky_retry_with_no_result_keeps_the_best_rate_so_far(tmp_path: Path)
         '<testcase name="b"><failure message="x"/></testcase></testsuite>'
     )
     script = (
-        "import pathlib, sys, time; m = pathlib.Path(sys.argv[2])\n"
-        "if m.exists(): time.sleep(30)\n"
-        f"m.touch(); (pathlib.Path(sys.argv[1]) / 'junit.xml').write_text({junit!r}); sys.exit(1)"
+        "import pathlib, sys; d, m = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])\n"
+        "if m.exists(): (d / 'junit.xml').unlink(); sys.exit(4)\n"
+        f"m.touch(); (d / 'junit.xml').write_text({junit!r}); sys.exit(1)"
     )
     handle = ProjectHandle(
         root=tmp_path,
         test_cmd=[sys.executable, "-c", script, str(reports), str(marker)],
         report_dir=reports,
         flaky_retries=1,
-        timeout_s=3.0,
     )
 
     assert handle.best_pass_rate() == pytest.approx(0.5)
@@ -341,6 +343,58 @@ def test_a_timed_out_suite_takes_the_processes_it_started_with_it(tmp_path: Path
     finally:
         with contextlib.suppress(ProcessLookupError):
             os.kill(pid, signal.SIGKILL)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="process groups are POSIX")
+def test_an_interrupted_suite_takes_its_processes_with_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression: in its own session the suite missed Ctrl-C, and only a timeout killed it."""
+    started: list[subprocess.Popen[str]] = []
+
+    class _InterruptedWait(subprocess.Popen[str]):
+        def communicate(self, input: Any = None, timeout: float | None = None) -> tuple[Any, Any]:
+            if self not in started:
+                started.append(self)
+                raise KeyboardInterrupt
+            return super().communicate(input, timeout)
+
+    monkeypatch.setattr(
+        "coding_agent_playbook.grading.execution_metrics.project.subprocess.Popen", _InterruptedWait
+    )
+    handle = ProjectHandle(
+        root=tmp_path,
+        test_cmd=[sys.executable, "-c", "import time; time.sleep(60)"],
+        report_dir=tmp_path / "reports",
+    )
+
+    with pytest.raises(KeyboardInterrupt):
+        handle.run()
+    assert started[0].returncode == -signal.SIGKILL
+
+
+@pytest.mark.skipif(os.name != "posix", reason="process groups are POSIX")
+def test_a_group_kill_refused_by_the_os_still_ends_in_no_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression: macOS refuses ``killpg`` (EPERM) once the group holds only a zombie."""
+
+    def _refused(pid: int, sig: int) -> None:
+        raise PermissionError(1, "Operation not permitted")
+
+    monkeypatch.setattr(
+        "coding_agent_playbook.grading.execution_metrics.project.os.killpg", _refused
+    )
+    handle = ProjectHandle(
+        root=tmp_path,
+        test_cmd=[sys.executable, "-c", "import time; time.sleep(60)"],
+        report_dir=tmp_path / "reports",
+        timeout_s=0.5,
+    )
+
+    with pytest.raises(NoSuiteResultError) as excinfo:
+        handle.run()
+    assert excinfo.value.reason == "it timed out after 0.5 s"
 
 
 def _alive(pid: int) -> bool:

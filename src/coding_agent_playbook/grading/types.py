@@ -346,7 +346,7 @@ class EvalContext:
     unavailable at grade time.
 
     ``suite_failure`` says why the candidate's test suite gave no result (it
-    timed out, or left no readable junit report); every execution-metric check
+    timed out, or left no readable junit or coverage report); every execution-metric check
     then fails with it. ``None``, the default, when it gave one or never ran.
     """
 

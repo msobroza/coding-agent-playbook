@@ -123,6 +123,7 @@ from coding_agent_playbook.evals.report_format import (
     sample_result_to_dict,
 )
 from coding_agent_playbook.evals.run.comparison_sides import EDITION_DIR_FLAG
+from coding_agent_playbook.evals.run.scoring import UnscorableSuiteError
 from coding_agent_playbook.evals.target_config import load_eval_settings
 from coding_agent_playbook.evals.targets import TargetError
 from coding_agent_playbook.evals.task_registry import TaskRegistry, TaskRegistryError
@@ -406,7 +407,7 @@ def _run_one(sample: EvalSample, how: _SampleRun) -> tuple[int, SampleResult | N
                 edition=source.edition,
             )
         graded = graded_record(sample, source)
-    except (PromptResolutionError, JudgeError, EditionError) as exc:
+    except (PromptResolutionError, JudgeError, EditionError, UnscorableSuiteError) as exc:
         # Neither a pass nor a fail: no verdict exists, so never exit 0/1 here.
         print(f"error: sample {sample.id!r} could not be scored: {exc}", file=sys.stderr)
         return 2, None

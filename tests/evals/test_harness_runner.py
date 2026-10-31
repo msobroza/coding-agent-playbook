@@ -45,7 +45,7 @@ from coding_agent_playbook.evals.run.harness_runner import (
     materialize,
     timed_out_run,
 )
-from coding_agent_playbook.evals.run.scoring import SuiteToolchainError, score
+from coding_agent_playbook.evals.run.scoring import BaselineSuiteError, SuiteToolchainError, score
 from coding_agent_playbook.evals.sample import EvalSample, SampleInvocation
 from coding_agent_playbook.grading.types import CheckResult, EvaluationReport, ScopeDetail
 from tests._catalog import CORE_ROOT
@@ -570,12 +570,17 @@ def test_a_scoring_suite_that_hangs_is_stopped_and_fails_tests_pass(
     and ``tests_pass`` over no measurement passes vacuously.
     """
 
+    candidate_tree = tmp_path / "scratch"
+
     class _HangingPytest(subprocess.Popen[str]):
-        """A pytest that never finishes within a bound; an unbounded wait lets it finish."""
+        """The candidate's pytest never finishes within a bound; an unbounded wait lets it."""
+
+        def __init__(self, args: Any, **kwargs: Any) -> None:
+            self.hangs = args[1:3] == ["-m", "pytest"] and kwargs.get("cwd") == candidate_tree
+            super().__init__(args, **kwargs)
 
         def communicate(self, input: Any = None, timeout: float | None = None) -> tuple[Any, Any]:
-            is_pytest = isinstance(self.args, list) and self.args[1:3] == ["-m", "pytest"]
-            if is_pytest and timeout is not None:
+            if self.hangs and timeout is not None:
                 raise subprocess.TimeoutExpired(self.args, timeout)
             return super().communicate(input, timeout)
 
@@ -636,6 +641,36 @@ def test_an_inherited_pytest_addopts_cannot_deselect_the_failing_tests(
 
     assert _check(result.report, "threshold:test_pass_rate").passed is False
     assert result.passed is False
+
+
+def test_a_scoring_suite_that_cannot_start_stops_the_sample(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Regression: scoring swallowed a launch failure, and every execution check passed on no rows."""
+
+    def _no_program(argv: Any, **kwargs: Any) -> Any:
+        raise FileNotFoundError(2, "No such file or directory", argv[0])
+
+    monkeypatch.setattr(
+        "coding_agent_playbook.grading.execution_metrics.project._run_in_session", _no_program
+    )
+
+    with pytest.raises(RuntimeError, match=r"could not run the test command"):
+        _run_suite_green(tmp_path, {"mod.py": _REFACTORED})
+
+
+def test_a_baseline_suite_with_no_result_makes_the_sample_unscorable(tmp_path: Path) -> None:
+    """``setup/`` is the author's: its suite giving no result is not the agent's failure.
+
+    Without a baseline row a regression check graded a "new" scope and passed.
+    """
+    sample_dir = tmp_path / "sample"
+    _make_setup(sample_dir)
+    (sample_dir / "setup" / "conftest.py").write_text("import os\nos._exit(0)\n", encoding="utf-8")
+    sample = _make_sample(sample_dir, gate=_exec_gate())
+
+    with pytest.raises(BaselineSuiteError, match=r"exited 0 with no junit report"):
+        FakeRunner().run_sample(sample, tmp_path / "scratch")
 
 
 def test_the_scoring_suite_leaves_no_coverage_data_in_the_candidate_tree(tmp_path: Path) -> None:
