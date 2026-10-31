@@ -27,8 +27,10 @@ flat ``[metrics]`` block:
   :class:`~coding_agent_playbook.grading.execution_metrics.project.ProjectHandle` over
   the candidate tree (and the snapshot for the baseline) — but **only when** an
   execution metric is actually referenced (``run_tests`` is *inferred*, not
-  authored). Each run stops after 300 s and ignores the caller's
-  ``PYTEST_ADDOPTS``, ``PYTEST_PLUGINS`` and ``PYTEST_DISABLE_PLUGIN_AUTOLOAD``.
+  authored). Each run stops after 300 s and runs with an allowlisted
+  environment (:func:`_suite_env`: ``PATH``, ``HOME``, the locale, the temp dirs,
+  the Python path and the Windows system variables), so no API key, token,
+  agent socket or ``PYTEST_*`` option of the caller reaches agent code.
   A candidate suite that gives no result (it timed out, or left no readable
   junit or coverage report) fails every execution check with its reason. The
   sample cannot be scored (:class:`UnscorableSuiteError`) when this interpreter
@@ -53,6 +55,7 @@ The file checks (``[gate]`` predicates) ignore the
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 import tempfile
 from contextlib import ExitStack
@@ -76,6 +79,8 @@ from coding_agent_playbook.grading.measuring import (
 from coding_agent_playbook.grading.types import EvalContext, EvaluationReport, MeasureSetup
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from coding_agent_playbook.evals.compile.compiler import VerdictSpec
     from coding_agent_playbook.evals.run.harness_runner import Baseline, Candidate
     from coding_agent_playbook.evals.sample import EvalSample
@@ -91,6 +96,26 @@ _RUBRIC_LABEL = "rubric"
 #: tests, can loop forever, and the run had no timeout, so one trial stalled a whole
 #: ``eval --record``. The shipped samples' suites finish in seconds.
 _SUITE_TIMEOUT_S: Final = 300.0
+
+#: The caller's variables the scoring suite keeps (compared upper-cased, as Windows
+#: names are case-insensitive); every other one is dropped. Why an allowlist: the
+#: suite runs agent-written code, and the engine's environment holds API keys,
+#: endpoint tokens, ``GITHUB_TOKEN`` and ``SSH_AUTH_SOCK``. ``PYTHONPATH`` and
+#: ``PYTHONHOME`` stay because :func:`require_suite_toolchain`'s in-process
+#: ``find_spec`` saw them: without them the suite could miss a toolchain the check
+#: found, and every trial would give no result. ``SYSTEMROOT`` and the other
+#: Windows names stay because Python there needs them for sockets and ``random``.
+_SUITE_ENV_NAMES: Final = frozenset(
+    {
+        "PATH", "HOME", "USER", "LOGNAME", "LANG", "TZ", "TMPDIR", "TEMP", "TMP",
+        "PYTHONPATH", "PYTHONHOME", "PYTHONUTF8", "PYTHONIOENCODING", "VIRTUAL_ENV",
+        "SYSTEMROOT", "SYSTEMDRIVE", "COMSPEC", "PATHEXT", "WINDIR", "USERPROFILE",
+        "APPDATA", "LOCALAPPDATA",
+    }
+)  # fmt: skip
+
+#: Name prefixes the scoring suite keeps too: the ``LC_*`` locale categories.
+_SUITE_ENV_PREFIXES: Final = ("LC_",)
 
 #: The modules the suite's ``python -m pytest --cov`` imports from this interpreter.
 _SUITE_TOOLCHAIN: Final = ("pytest", "pytest_cov")
@@ -355,26 +380,35 @@ def _project(tree: Path, stack: ExitStack) -> ProjectHandle:
         stack.enter_context(tempfile.TemporaryDirectory(prefix="playbook-eval-reports-"))
     )
     return ProjectHandle.create(
-        tree, reports, timeout_s=_SUITE_TIMEOUT_S, env_overrides=_suite_env(reports)
+        tree,
+        reports,
+        timeout_s=_SUITE_TIMEOUT_S,
+        env_overrides=_suite_env(reports),
+        inherit_env=False,
     )
 
 
-def _suite_env(reports: Path) -> dict[str, str]:
-    """The variables the scoring suite must not inherit from the caller, and its coverage file.
+def _suite_env(reports: Path, base: Mapping[str, str] | None = None) -> dict[str, str]:
+    """The whole scoring-suite environment: the allowlisted part of ``base``, and its coverage file.
 
-    Why: ``-o addopts=`` does not clear ``PYTEST_ADDOPTS``, so a caller's ``-k``
-    deselected the failing tests, and an inherited plugin list or autoload switch
-    broke the run; pytest reads an empty value as unset. ``COVERAGE_FILE`` keeps
-    coverage's data file out of the candidate tree and apart between trials.
+    ``base`` defaults to this process's environment. Only :data:`_SUITE_ENV_NAMES`
+    and the :data:`_SUITE_ENV_PREFIXES` names survive, so no secret reaches agent
+    code. That also drops every ``PYTEST_*`` name: ``-o addopts=`` does not clear
+    ``PYTEST_ADDOPTS``, so a caller's ``-k`` deselected the failing tests, and an
+    inherited plugin list or autoload switch broke the run. ``COVERAGE_FILE``
+    keeps coverage's data file out of the candidate tree and apart between trials.
 
     Example::
 
-        >>> _suite_env(Path("/r"))["COVERAGE_FILE"]
-        '/r/.coverage'
+        >>> sorted(_suite_env(Path("/r"), {"PATH": "/bin", "ANTHROPIC_API_KEY": "k"}))
+        ['COVERAGE_FILE', 'PATH']
     """
-    return {
-        "PYTEST_ADDOPTS": "",
-        "PYTEST_PLUGINS": "",
-        "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "",
-        "COVERAGE_FILE": str(reports / ".coverage"),
-    }
+    source = os.environ if base is None else base
+    kept = {name: value for name, value in source.items() if _suite_keeps(name)}
+    return {**kept, "COVERAGE_FILE": str(reports / ".coverage")}
+
+
+def _suite_keeps(name: str) -> bool:
+    """Whether the scoring suite keeps the caller's variable ``name``, in any case."""
+    upper = name.upper()
+    return upper in _SUITE_ENV_NAMES or upper.startswith(_SUITE_ENV_PREFIXES)

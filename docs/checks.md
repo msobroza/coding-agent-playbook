@@ -689,9 +689,14 @@ the interpreter that runs the playbook, not the scratch venv, which holds only t
 sample's declared dependencies. That interpreter must have `pytest` and
 `pytest-cov`, as the `dev` extra provides; without them a sample that runs the
 suite cannot be scored (exit 2), and it stops before its agent runs. Each run
-stops after 300 s, together with the processes its tests started, and ignores
-the caller's `PYTEST_ADDOPTS`, `PYTEST_PLUGINS` and
-`PYTEST_DISABLE_PLUGIN_AUTOLOAD`. A candidate suite that gives no result fails
+stops after 300 s, together with the processes its tests started, and runs with
+an allowlisted environment: `PATH`, `HOME`, `USER`, `LOGNAME`, `LANG`, `TZ`, the
+`LC_*` locale, the temp dirs, `PYTHONPATH`, `PYTHONHOME`, `PYTHONUTF8`,
+`PYTHONIOENCODING`, `VIRTUAL_ENV` and the Windows system variables. No other
+variable of the caller reaches the agent's code, so no API key, token or
+`SSH_AUTH_SOCK`, and no `PYTEST_ADDOPTS`, `PYTEST_PLUGINS` or
+`PYTEST_DISABLE_PLUGIN_AUTOLOAD` either. A sample whose tests need another
+variable fails, with the error in the report. A candidate suite that gives no result fails
 every execution check (`tests_pass`, coverage), with the reason in the report:
 it ran past 300 s, or left no readable junit or coverage report, for example
 because a `conftest.py` raised or called `os._exit`. When the `setup/`

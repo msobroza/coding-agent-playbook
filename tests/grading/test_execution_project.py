@@ -428,6 +428,41 @@ def test_env_overrides_passed_to_subprocess(tmp_path: Path) -> None:
     assert out.read_text(encoding="utf-8") == "/state/.coverage|True"
 
 
+# Writes whether the suite saw the caller's secret; a non-zero exit with no junit is no result.
+_SECRET_PROBE = (
+    "import os, pathlib; "
+    "pathlib.Path(os.environ['PLAYBOOK_OUT']).write_text(str('PLAYBOOK_SECRET' in os.environ))"
+)
+
+
+def _secret_seen(tmp_path: Path, label: str, *, inherit_env: bool) -> str:
+    """Run :data:`_SECRET_PROBE` in a handle and return whether it saw ``PLAYBOOK_SECRET``."""
+    out = tmp_path / f"seen-{label}.txt"
+    ProjectHandle.create(
+        tmp_path,
+        tmp_path / f"reports-{label}",
+        test_cmd=[sys.executable, "-c", _SECRET_PROBE],
+        env_overrides={"PLAYBOOK_OUT": str(out)},
+        inherit_env=inherit_env,
+    ).run()
+    return out.read_text(encoding="utf-8")
+
+
+def test_inherit_env_false_runs_with_only_the_overrides(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """With ``inherit_env=False`` the caller's variables stay out; ``True`` still passes them."""
+    monkeypatch.setenv("PLAYBOOK_SECRET", "1")
+
+    assert _secret_seen(tmp_path, "isolated", inherit_env=False) == "False"
+    assert _secret_seen(tmp_path, "inherited", inherit_env=True) == "True"
+
+
+def test_inherit_env_defaults_to_true(tmp_path: Path) -> None:
+    """The default keeps the metrics gate and the hook path inheriting the caller's environment."""
+    assert ProjectHandle.create(tmp_path, tmp_path / "reports").inherit_env is True
+
+
 def test_default_test_cmd_unchanged_without_kwargs(tmp_path: Path) -> None:
     reports = tmp_path / "reports"
 

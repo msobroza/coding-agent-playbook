@@ -30,9 +30,11 @@ subprocesses its tests started that stayed in it.
 ``diff_base`` is the ref ``diff_coverage`` diffs against; ``timeout_s`` bounds
 the run (a hook-driven suite must never hang the agent); ``env_overrides``
 lets a hook point ``COVERAGE_FILE`` into its state dir, so the run leaves no
-new file in the worktree; :func:`default_test_cmd` takes the interpreter to run
-(a hook passes the project's, not the engine's) and the ``--cov`` sources that
-put coverage.py in source mode (:func:`import_roots`).
+new file in the worktree; ``inherit_env=False`` runs the suite with exactly
+``env_overrides`` (eval scoring, so agent code sees no caller secret);
+:func:`default_test_cmd` takes the interpreter to run (a hook passes the
+project's, not the engine's) and the ``--cov`` sources that put coverage.py in
+source mode (:func:`import_roots`).
 """
 
 from __future__ import annotations
@@ -177,6 +179,8 @@ class ProjectHandle:
     env_overrides: Mapping[str, str] = field(default_factory=dict)
     #: The run must leave a junit report whatever its exit code; the default command writes one.
     require_report: bool = False
+    #: Start from the caller's environment; ``False`` runs with exactly :attr:`env_overrides`.
+    inherit_env: bool = True
     _artifacts: RunArtifacts | None = field(default=None, init=False, repr=False)
     _no_result: NoSuiteResultError | None = field(default=None, init=False, repr=False)
 
@@ -193,6 +197,7 @@ class ProjectHandle:
         env_overrides: Mapping[str, str] | None = None,
         python: str | None = None,
         cov_sources: Sequence[str] = (),
+        inherit_env: bool = True,
     ) -> ProjectHandle:
         """Build a handle, defaulting to the isolated pytest command.
 
@@ -203,6 +208,7 @@ class ProjectHandle:
         ``cov_sources`` shape the default command only; an explicit
         ``test_cmd`` runs exactly as given. Only the default command must leave
         a junit report (:attr:`require_report`): an explicit one may not write it.
+        ``inherit_env=False`` drops the caller's environment (:attr:`inherit_env`).
 
         Example::
 
@@ -225,6 +231,7 @@ class ProjectHandle:
             timeout_s=timeout_s,
             env_overrides=dict(env_overrides or {}),
             require_report=require_report,
+            inherit_env=inherit_env,
         )
 
     def run(self) -> RunArtifacts:
@@ -293,7 +300,7 @@ class ProjectHandle:
         no readable junit or coverage report (see :meth:`_check_result`).
         """
         self.report_dir.mkdir(parents=True, exist_ok=True)
-        env = {**os.environ, **self.env_overrides} if self.env_overrides else None
+        env = self._child_env()
         try:
             proc = _run_in_session(self.test_cmd, cwd=self.root, env=env, timeout_s=self.timeout_s)
         except FileNotFoundError as exc:
@@ -312,6 +319,12 @@ class ProjectHandle:
         coverage = self._read_coverage()
         self._check_result(junit, proc)
         return RunArtifacts(junit=junit, coverage=coverage, returncode=proc.returncode)
+
+    def _child_env(self) -> dict[str, str] | None:
+        """The suite's environment; ``None`` inherits the caller's unchanged."""
+        if not self.inherit_env:
+            return dict(self.env_overrides)
+        return {**os.environ, **self.env_overrides} if self.env_overrides else None
 
     def _check_result(self, junit: JunitSummary, proc: subprocess.CompletedProcess[str]) -> None:
         """Raise :class:`NoSuiteResultError` when ``proc`` left no junit report to read.

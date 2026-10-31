@@ -45,7 +45,12 @@ from coding_agent_playbook.evals.run.harness_runner import (
     materialize,
     timed_out_run,
 )
-from coding_agent_playbook.evals.run.scoring import BaselineSuiteError, SuiteToolchainError, score
+from coding_agent_playbook.evals.run.scoring import (
+    BaselineSuiteError,
+    SuiteToolchainError,
+    _suite_env,
+    score,
+)
 from coding_agent_playbook.evals.sample import EvalSample, SampleInvocation
 from coding_agent_playbook.grading.types import CheckResult, EvaluationReport, ScopeDetail
 from tests._catalog import CORE_ROOT
@@ -641,6 +646,39 @@ def test_an_inherited_pytest_addopts_cannot_deselect_the_failing_tests(
 
     assert _check(result.report, "threshold:test_pass_rate").passed is False
     assert result.passed is False
+
+
+_SECRET_NAMES = ("ANTHROPIC_API_KEY", "OPENROUTER_API_KEY", "PLAYBOOK_PROBE_TOKEN", "SSH_AUTH_SOCK")
+
+
+def test_the_scoring_suite_does_not_inherit_secrets(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Regression: agent code in the scoring suite read the engine's API keys, tokens and agent socket."""
+    for name in _SECRET_NAMES:
+        monkeypatch.setenv(name, "leaked")
+    probe = (
+        "import os\n\n\ndef test_env():\n"
+        f"    assert not [n for n in {_SECRET_NAMES!r} if n in os.environ]\n"
+        "    assert os.environ.get('PATH')\n"
+    )
+
+    result = _run_suite_green(tmp_path, {"mod.py": _REFACTORED, "test_env.py": probe})
+
+    assert _check(result.report, "threshold:test_pass_rate").passed is True
+    assert result.passed is True
+
+
+def test_the_suite_env_keeps_only_the_allowlist_and_sets_the_coverage_file() -> None:
+    """Only the allowlisted names and the ``LC_`` locale reach the suite, Windows case included."""
+    kept = {"PATH": "/bin", "HOME": "/h", "TMPDIR": "/t", "LC_ALL": "C", "PYTHONPATH": "/p"}
+    kept |= {"SystemRoot": "C:\\Windows"}
+    dropped = ["ANTHROPIC_API_KEY", "GITHUB_TOKEN", "SSH_AUTH_SOCK", "PYTEST_ADDOPTS"]
+    dropped += ["COVERAGE_PROCESS_START", "COV_CORE_SOURCE"]
+
+    env = _suite_env(Path("/r"), {**kept, **dict.fromkeys(dropped, "x")})
+
+    assert env == {**kept, "COVERAGE_FILE": str(Path("/r") / ".coverage")}
 
 
 def test_a_scoring_suite_that_cannot_start_stops_the_sample(
