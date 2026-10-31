@@ -30,7 +30,10 @@ from typing import Any
 import pytest
 
 from coding_agent_playbook.evals.prompting import render_prompt
-from coding_agent_playbook.evals.report_format import format_sample_result_text
+from coding_agent_playbook.evals.report_format import (
+    format_sample_result_text,
+    sample_result_to_dict,
+)
 from coding_agent_playbook.evals.run.fake_runner import FakeRunner, write_files
 from coding_agent_playbook.evals.run.harness_runner import (
     TIMED_OUT_RETURNCODE,
@@ -586,6 +589,8 @@ def test_a_scoring_suite_that_hangs_is_stopped_and_fails_tests_pass(
     assert check.detail == "the test suite gave no result: it timed out after 300 s"
     assert result.passed is False
     assert "it timed out after 300 s" in format_sample_result_text(result)
+    gate = sample_result_to_dict(result)["report"]["checks"][0]  # type: ignore[index]
+    assert gate["details"] == [f"threshold:test_pass_rate: {check.detail}"]
 
 
 @pytest.mark.parametrize(
@@ -631,6 +636,31 @@ def test_an_inherited_pytest_addopts_cannot_deselect_the_failing_tests(
 
     assert _check(result.report, "threshold:test_pass_rate").passed is False
     assert result.passed is False
+
+
+def test_the_scoring_suite_leaves_no_coverage_data_in_the_candidate_tree(tmp_path: Path) -> None:
+    """Regression: pytest-cov wrote ``.coverage`` into the tree, one path shared by ``--jobs``."""
+    result = _run_suite_green(tmp_path, {"mod.py": _REFACTORED})
+
+    assert result.passed is True
+    assert not (tmp_path / "scratch" / ".coverage").exists()
+
+
+def test_score_itself_checks_the_suite_toolchain(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``score`` called without the runner's preflight still refuses a missing toolchain."""
+    monkeypatch.setattr(
+        "coding_agent_playbook.evals.run.scoring._importable", lambda name: name != "pytest"
+    )
+    sample_dir = tmp_path / "sample"
+    _make_setup(sample_dir)
+    sample = _make_sample(sample_dir, gate=_suite_green_gate())
+    baseline = materialize(sample, tmp_path / "scratch")
+    candidate = capture(baseline.repo_root, baseline, "transcript")
+
+    with pytest.raises(SuiteToolchainError, match=r"cannot import pytest:"):
+        score(sample, baseline, candidate)
 
 
 def test_a_missing_suite_toolchain_stops_the_sample_before_the_agent_runs(
