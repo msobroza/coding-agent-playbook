@@ -85,7 +85,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.evals.checks.files import freeze_file_inputs
-from coding_agent_playbook.evals.run.suite_integrity import suite_violation
+from coding_agent_playbook.evals.run.suite_integrity import freeze_test_files, suite_violation
 from coding_agent_playbook.exit_two import ExitTwoError
 from coding_agent_playbook.grading.check import MeasurementSet
 from coding_agent_playbook.grading.execution_metrics.project import (
@@ -365,6 +365,7 @@ def _measure(
     if not execution:
         return _Measured(candidate_rows, baseline_rows, None, promised)
     _require_toolchain()
+    tests = _frozen_test_files(candidate, stack)
     project = _project(candidate.tree, stack)
     candidate_rows += _suite_rows(project, execution, setup)
     baseline = _project(_setup_copy(sample.setup_dir, stack), stack)
@@ -372,8 +373,14 @@ def _measure(
     if project.no_result is not None:
         failure = project.no_result.reason
         return _Measured(candidate_rows, baseline_rows, project, promised, failure)
-    violation = _suite_violation(project, baseline, sample, candidate)
+    violation = _suite_violation(project, baseline, sample, candidate, tests)
     return _Measured(candidate_rows, baseline_rows, project, promised, None, violation)
+
+
+def _frozen_test_files(candidate: Candidate, stack: ExitStack) -> Path:
+    """The agent's changed test files, copied before its suite runs; ``stack`` removes them."""
+    work = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix="playbook-eval-tests-")))
+    return freeze_test_files(candidate.tree, candidate.changed_files, work / "tree")
 
 
 def _static_rows(tree: Path, metrics: list[Metric], setup: MeasureSetup) -> list[Measurement]:
@@ -425,12 +432,17 @@ def _baseline_suite_rows(
 
 
 def _suite_violation(
-    project: ProjectHandle, baseline: ProjectHandle, sample: EvalSample, candidate: Candidate
+    project: ProjectHandle,
+    baseline: ProjectHandle,
+    sample: EvalSample,
+    candidate: Candidate,
+    tests: Path,
 ) -> str | None:
     """Why the candidate's suite result does not count against the ``setup/`` baseline's, or ``None``.
 
     Both handles already ran and gave a result (cached, so nothing reruns), and
-    :func:`_project` asked each for a session record.
+    :func:`_project` asked each for a session record. ``tests`` holds the agent's
+    test files as it left them (:func:`_frozen_test_files`).
     """
     ours, theirs = project.run().record, baseline.run().record
     if ours is None or theirs is None:
@@ -438,7 +450,7 @@ def _suite_violation(
     return suite_violation(
         ours,
         theirs,
-        candidate_tree=candidate.tree,
+        candidate_tree=tests,
         setup_tree=sample.setup_dir,
         changed_files=candidate.changed_files,
     )

@@ -732,6 +732,9 @@ at most three tests. The first rule broken is the reason:
 7. no test passed, and none failed: a run of skips and xfails alone. A run
    whose tests all fail is graded as the failure it is.
 
+The rules read the test files as the agent left them, captured before the suite
+runs, so a `conftest.py` that edits a test file during the run changes nothing.
+
 What a `conftest.py` does inside the pytest process is out of reach, for example
 a `pytest_runtest_makereport` wrapper that flips outcomes: the judge's rubric
 criteria are the check for that.

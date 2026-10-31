@@ -27,15 +27,22 @@ with ``the test suite result does not count: <reason>``. The rules, in order:
 7. no test passed, and none failed either: with a failure the pass rate is a
    real measurement, while a run of skips and xfails alone scores a vacuous 1.0.
 
+The rules judge the test files as the agent left them: the suite runs agent
+code, which could edit an ignored test file during the run so that it looked
+edited (rule 1) or defined no test (rule 4). So a file counts as changed only when
+the agent's ``changed_files`` (captured before the suite) name it, and rule 4
+reads the copies :func:`freeze_test_files` makes before the suite runs.
+
 The reason lists at most three node ids, then ``+N more``: short, and free of
-command output, so it fits a committed report. Pure: it reads only the two
-records and the files of the two trees.
+command output, so it fits a committed report. :func:`suite_violation` is pure:
+it reads only the two records and the files of the two trees.
 """
 
 from __future__ import annotations
 
 import ast
 import fnmatch
+import shutil
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Final
@@ -83,8 +90,9 @@ def suite_violation(
 ) -> str | None:
     """The first rule ``candidate``'s suite breaks against ``baseline``'s; ``None`` when it counts.
 
-    ``changed_files`` are the agent's changed paths, relative to ``candidate_tree``
-    as the records' paths are to their trees.
+    ``changed_files`` are the agent's changed paths, relative to the tree root as
+    the records' paths are. ``candidate_tree`` holds the agent's test files as it
+    left them (:func:`freeze_test_files`); ``setup_tree`` is the sample's ``setup/``.
 
     Example::
 
@@ -107,9 +115,18 @@ def _setup_tests_not_run(s: _Suites) -> str | None:
         for test in s.baseline.selected or ()
         if s.baseline.outcome_of(test.nodeid) not in (None, "skipped")
         and test.nodeid not in ran
-        and _same_file(s.candidate_tree / test.path, s.setup_tree / test.path)
+        and _unchanged(s, test.path)
     ]
     return _reason("setup/ test(s) did not run", missing)
+
+
+def _unchanged(s: _Suites, path: str) -> bool:
+    """Whether the agent left ``path`` as ``setup/`` has it.
+
+    Why ``changed_files`` first: they were captured before the suite ran agent
+    code, which could touch an ignored setup test file to make it look edited.
+    """
+    return path not in s.changed_files or _same_file(s.candidate_tree / path, s.setup_tree / path)
 
 
 def _setup_tests_now_skipped(s: _Suites) -> str | None:
@@ -174,6 +191,38 @@ _RULES: Final[tuple[Callable[[_Suites], str | None], ...]] = (
     _non_strict_xfails,
     _nothing_passed,
 )
+
+
+def freeze_test_files(tree: Path, changed_files: Sequence[str], dest: Path) -> Path:
+    """Copy the changed test files of ``tree`` into ``dest`` before the suite runs; return ``dest``.
+
+    Only ``test_*.py`` / ``*_test.py`` paths that exist as files are copied; a path
+    that is absolute, climbs out with ``..``, or cannot be read is left out.
+
+    Example::
+
+        >>> freeze_test_files(candidate.tree, candidate.changed_files, tmp / "tests")  # doctest: +SKIP
+        PosixPath('.../tests')
+    """
+    dest.mkdir(parents=True, exist_ok=True)
+    for path in changed_files:
+        if _is_test_file(path) and _inside(path) and (tree / path).is_file():
+            _copy(tree / path, dest / path)
+    return dest
+
+
+def _inside(path: str) -> bool:
+    pure = PurePosixPath(path)
+    return not pure.is_absolute() and ".." not in pure.parts
+
+
+def _copy(source: Path, target: Path) -> None:
+    """Copy ``source`` to ``target``; an unreadable file is left out (it defines no tests)."""
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+    except OSError:
+        return
 
 
 def _xfailed_leniently(record: SuiteRecord, nodeid: str) -> bool:

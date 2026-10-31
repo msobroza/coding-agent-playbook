@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.evals.run.suite_integrity import suite_violation
+from coding_agent_playbook.evals.run.suite_integrity import freeze_test_files, suite_violation
 from coding_agent_playbook.grading.execution_metrics.suite_record import (
     RecordedOutcome,
     RecordedTest,
@@ -104,9 +104,19 @@ def test_a_setup_test_left_unchanged_but_not_run_is_a_violation(tmp_path: Path) 
 def test_a_setup_test_in_an_edited_file_may_go(tmp_path: Path) -> None:
     candidate = _record({"test_mod.py::test_renamed": "passed"})
 
-    assert (
-        _violation(tmp_path, candidate, files={"test_mod.py": "def test_renamed(): pass\n"}) is None
-    )
+    files = {"test_mod.py": "def test_renamed(): pass\n"}
+
+    assert _violation(tmp_path, candidate, files=files, changed=("test_mod.py",)) is None
+
+
+def test_a_setup_test_file_the_agent_did_not_change_counts_as_unchanged(tmp_path: Path) -> None:
+    """Different bytes without a change by the agent: the suite touched it, so it still counts."""
+    candidate = _record({"test_new.py::test_x": "passed"})
+    files = {"test_mod.py": "def test_small(): pass\n# touched\n"}
+
+    reason = _violation(tmp_path, candidate, files=files)
+
+    assert reason == "setup/ test(s) did not run: test_mod.py::test_small"
 
 
 def test_a_deleted_setup_test_file_may_go(tmp_path: Path) -> None:
@@ -115,7 +125,11 @@ def test_a_deleted_setup_test_file_may_go(tmp_path: Path) -> None:
     (candidate_tree / "test_mod.py").unlink()
 
     reason = suite_violation(
-        candidate, _BASE, candidate_tree=candidate_tree, setup_tree=setup_tree, changed_files=()
+        candidate,
+        _BASE,
+        candidate_tree=candidate_tree,
+        setup_tree=setup_tree,
+        changed_files=("test_mod.py",),
     )
 
     assert reason is None
@@ -303,3 +317,40 @@ def test_a_long_node_id_is_shortened(tmp_path: Path) -> None:
 
     assert reason is not None and reason.endswith("...")
     assert len(reason) == len("test(s) skipped: ") + 120
+
+
+# --------------------------------------------------------------------------- #
+# freeze_test_files
+# --------------------------------------------------------------------------- #
+
+
+def test_freeze_test_files_copies_only_the_changed_test_files_that_exist(tmp_path: Path) -> None:
+    tree = tmp_path / "tree"
+    for name in ("test_a.py", "tests/b_test.py", "helpers.py", "test_unchanged.py"):
+        (tree / name).parent.mkdir(parents=True, exist_ok=True)
+        (tree / name).write_text(name, encoding="utf-8")
+    changed = ("test_a.py", "tests/b_test.py", "helpers.py", "test_gone.py", "../test_x.py")
+
+    dest = freeze_test_files(tree, changed, tmp_path / "frozen")
+
+    copied = sorted(p.relative_to(dest).as_posix() for p in dest.rglob("*") if p.is_file())
+    assert copied == ["test_a.py", "tests/b_test.py"]
+    (tree / "test_a.py").write_text("changed by the suite", encoding="utf-8")
+    assert (dest / "test_a.py").read_text(encoding="utf-8") == "test_a.py"
+
+
+def test_freeze_test_files_leaves_out_a_file_it_cannot_copy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    (tree / "test_a.py").write_text("def test_x(): pass\n", encoding="utf-8")
+
+    def _refuse(source: object, target: object) -> None:
+        raise PermissionError(13, "denied", str(source))
+
+    monkeypatch.setattr("coding_agent_playbook.evals.run.suite_integrity.shutil.copyfile", _refuse)
+
+    dest = freeze_test_files(tree, ("test_a.py",), tmp_path / "frozen")
+
+    assert not (dest / "test_a.py").exists()

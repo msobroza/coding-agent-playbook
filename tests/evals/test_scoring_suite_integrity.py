@@ -231,3 +231,50 @@ def test_a_skip_already_in_setup_is_not_a_new_skip(tmp_path: Path) -> None:
     passed, detail, trial = _grade(tmp_path, _writes({"mod.py": _REFACTORED}), setup_test=skipping)
 
     assert (passed, detail, trial) == (True, "", True)
+
+
+# --------------------------------------------------------------------------- #
+# The rules judge the test files as the agent left them, not as the suite did
+# --------------------------------------------------------------------------- #
+
+
+def test_a_setup_test_file_touched_during_the_run_still_counts_as_unchanged(
+    tmp_path: Path,
+) -> None:
+    """Regression: a ``conftest.py`` that edits an ignored setup test file made it look edited."""
+    conftest = """\
+        collect_ignore = ["test_mod.py"]
+
+
+        def pytest_sessionfinish(session):
+            with open("test_mod.py", "a") as fh:
+                fh.write("# touched\\n")
+        """
+    files = {"mod.py": _BROKEN, "conftest.py": conftest, "test_other.py": "def test_x(): pass\n"}
+
+    passed, detail, _ = _grade(tmp_path, _writes(files))
+
+    assert (passed, detail) == (
+        False,
+        _DOES_NOT_COUNT + "setup/ test(s) did not run: test_mod.py::test_small",
+    )
+
+
+def test_a_test_file_emptied_during_the_run_still_defines_its_tests(tmp_path: Path) -> None:
+    """Regression: a ``conftest.py`` that blanks an ignored test file after the run hid it."""
+    conftest = """\
+        collect_ignore = ["test_new.py"]
+
+
+        def pytest_sessionfinish(session):
+            with open("test_new.py", "w") as fh:
+                fh.write("x = 1\\n")
+        """
+    files = {"conftest.py": conftest, "test_new.py": _FAILING_TEST}
+
+    passed, detail, _ = _grade(tmp_path, _writes(files))
+
+    assert (passed, detail) == (
+        False,
+        _DOES_NOT_COUNT + "test file(s) define tests that never ran: test_new.py",
+    )
