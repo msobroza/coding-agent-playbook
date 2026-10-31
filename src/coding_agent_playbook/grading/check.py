@@ -284,7 +284,12 @@ class _MetricCheck(Check):
         judge call itself, which must be deferred until the cost-tiered scheduler
         actually grades this JUDGED-tier check — so a cheaper required gate that
         already failed short-circuits it and the judge is never invoked.
+
+        An **execution** metric fails outright when ``ctx.suite_failure`` says the
+        suite gave no result (:meth:`_no_suite_result`).
         """
+        if self.metric.needs_project and ctx.suite_failure is not None:
+            return self._no_suite_result(ctx.suite_failure)
         measurements = self._lazily_measure(ctx, measurements)
         details: list[ScopeDetail] = []
         scores: list[float] = []
@@ -331,6 +336,29 @@ class _MetricCheck(Check):
             return measurements
         fresh = list(self.metric.measure(ctx))
         return MeasurementSet([*measurements.candidate, *fresh], measurements.baseline)
+
+    def _no_suite_result(self, reason: str) -> CheckResult:
+        """The failed result of an execution check over a suite that gave no result.
+
+        Why fail and not grade: the suite left no rows, and zero scopes pass
+        vacuously, so an agent's endless test or crashing ``conftest.py`` scored green.
+
+        Example::
+
+            >>> check._no_suite_result("it timed out after 300 s").detail  # doctest: +SKIP
+            'the test suite gave no result: it timed out after 300 s'
+        """
+        return CheckResult(
+            check_id=self.id,
+            passed=False,
+            score=0.0,
+            weight=self.weight,
+            required=self.required,
+            determinism=self.determinism,
+            cost=self.cost,
+            status="run",
+            detail=f"the test suite gave no result: {reason}",
+        )
 
     def _build_result(self, details: list[ScopeDetail], scores: list[float]) -> CheckResult:
         """Fold per-scope ``details`` + normalized ``scores`` into one result.

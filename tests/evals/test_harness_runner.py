@@ -30,17 +30,19 @@ from typing import Any
 import pytest
 
 from coding_agent_playbook.evals.prompting import render_prompt
+from coding_agent_playbook.evals.report_format import format_sample_result_text
 from coding_agent_playbook.evals.run.fake_runner import FakeRunner, write_files
 from coding_agent_playbook.evals.run.harness_runner import (
     TIMED_OUT_RETURNCODE,
     AgentRun,
     Baseline,
     Candidate,
+    SampleResult,
     capture,
     materialize,
     timed_out_run,
 )
-from coding_agent_playbook.evals.run.scoring import score
+from coding_agent_playbook.evals.run.scoring import SuiteToolchainError, score
 from coding_agent_playbook.evals.sample import EvalSample, SampleInvocation
 from coding_agent_playbook.grading.types import CheckResult, EvaluationReport, ScopeDetail
 from tests._catalog import CORE_ROOT
@@ -539,6 +541,133 @@ def test_execution_non_regression_fails_when_a_test_breaks(tmp_path: Path) -> No
     assert tpr.value < 1.0
     assert tpr.level == "fail"
     assert result.passed is False
+
+
+def _suite_green_gate() -> dict[str, Any]:
+    """The shipped samples' ``suite_green`` gate: every test passes (``tests_pass``)."""
+    return {"expr": "suite_green", "bind": {"suite_green": {"check": "tests_pass"}}}
+
+
+def _run_suite_green(
+    tmp_path: Path, files: dict[str, str], gate: dict[str, Any] | None = None
+) -> SampleResult:
+    """Run the ``suite_green`` sample (or ``gate``) with an agent that writes ``files``."""
+    sample_dir = tmp_path / "sample"
+    _make_setup(sample_dir)
+    sample = _make_sample(sample_dir, gate=gate or _suite_green_gate())
+    return FakeRunner(write_files(files)).run_sample(sample, tmp_path / "scratch")
+
+
+def test_a_scoring_suite_that_hangs_is_stopped_and_fails_tests_pass(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Regression: the scoring pytest ran with no timeout, so an agent's endless test stalled a run.
+
+    A bound alone was not enough: scoring swallowed the timeout's ``RuntimeError``,
+    and ``tests_pass`` over no measurement passes vacuously.
+    """
+
+    class _HangingPytest(subprocess.Popen[str]):
+        """A pytest that never finishes within a bound; an unbounded wait lets it finish."""
+
+        def communicate(self, input: Any = None, timeout: float | None = None) -> tuple[Any, Any]:
+            is_pytest = isinstance(self.args, list) and self.args[1:3] == ["-m", "pytest"]
+            if is_pytest and timeout is not None:
+                raise subprocess.TimeoutExpired(self.args, timeout)
+            return super().communicate(input, timeout)
+
+    monkeypatch.setattr(
+        "coding_agent_playbook.grading.execution_metrics.project.subprocess.Popen", _HangingPytest
+    )
+    result = _run_suite_green(tmp_path, {"mod.py": _REFACTORED})
+
+    check = _check(result.report, "threshold:test_pass_rate")
+    assert check.passed is False
+    assert check.detail == "the test suite gave no result: it timed out after 300 s"
+    assert result.passed is False
+    assert "it timed out after 300 s" in format_sample_result_text(result)
+
+
+@pytest.mark.parametrize(
+    ("conftest", "reason"),
+    [
+        ('raise RuntimeError("boom")\n', "it exited 4 with no junit report"),
+        ("import os\nos._exit(0)\n", "it exited 0 with no junit report"),
+    ],
+    ids=["conftest-raises", "conftest-exits-0"],
+)
+def test_a_scoring_suite_that_leaves_no_report_fails_tests_pass(
+    tmp_path: Path, conftest: str, reason: str
+) -> None:
+    """Regression: a suite that wrote no junit report passed ``tests_pass`` with no measurement.
+
+    A raising ``conftest.py`` makes pytest exit 4 and scoring swallowed the error;
+    an ``os._exit(0)`` exits 0, which read as an empty, all-passing report.
+    """
+    result = _run_suite_green(tmp_path, {"conftest.py": conftest})
+
+    check = _check(result.report, "threshold:test_pass_rate")
+    assert (check.passed, check.detail) == (False, f"the test suite gave no result: {reason}")
+    assert result.passed is False
+
+
+def test_every_execution_check_fails_over_a_suite_with_no_result(tmp_path: Path) -> None:
+    """Regression: a coverage check over a suite with no result graded zero scopes and passed."""
+    result = _run_suite_green(tmp_path, {"conftest.py": "import os\nos._exit(0)\n"}, _exec_gate())
+
+    for check_id in ("nonreg:test_pass_rate", "nonreg:coverage"):
+        assert _check(result.report, check_id).passed is False, check_id
+    assert result.passed is False
+
+
+def test_an_inherited_pytest_addopts_cannot_deselect_the_failing_tests(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Regression: ``-o addopts=`` leaves ``PYTEST_ADDOPTS``, so a caller's ``-k`` hid failures."""
+    monkeypatch.setenv("PYTEST_ADDOPTS", "-k nothing_matches")
+    broken = 'def classify(n):\n    return "WRONG"\n'
+
+    result = _run_suite_green(tmp_path, {"mod.py": broken})
+
+    assert _check(result.report, "threshold:test_pass_rate").passed is False
+    assert result.passed is False
+
+
+def test_a_missing_suite_toolchain_stops_the_sample_before_the_agent_runs(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Regression: no pytest-cov scored every trial 0, the environment's fault charged to the agent.
+
+    The check runs in this process: a ``pytest.py`` in the candidate tree can fake
+    any output the suite's subprocess prints, but not what this interpreter imports.
+    """
+    monkeypatch.setattr(
+        "coding_agent_playbook.evals.run.scoring._importable", lambda name: name != "pytest_cov"
+    )
+    ran: list[Path] = []
+    sample_dir = tmp_path / "sample"
+    _make_setup(sample_dir)
+    sample = _make_sample(sample_dir, gate=_suite_green_gate())
+
+    with pytest.raises(SuiteToolchainError, match=r"pytest_cov"):
+        FakeRunner(ran.append).run_sample(sample, tmp_path / "scratch")
+    assert ran == []
+
+
+def test_a_sample_that_runs_no_suite_needs_no_suite_toolchain(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Only a sample whose checks run the suite needs pytest and pytest-cov."""
+    monkeypatch.setattr("coding_agent_playbook.evals.run.scoring._importable", lambda name: False)
+    sample_dir = tmp_path / "sample"
+    _make_setup(sample_dir)
+    sample = _make_sample(sample_dir, gate=_cc_gate())
+
+    result = FakeRunner(write_files({"mod.py": _REFACTORED})).run_sample(
+        sample, tmp_path / "scratch"
+    )
+
+    assert result.passed is True
 
 
 # --------------------------------------------------------------------------- #

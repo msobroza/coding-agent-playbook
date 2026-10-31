@@ -344,6 +344,10 @@ class EvalContext:
     (:mod:`coding_agent_playbook.grading.measuring`) ran before grading, whether
     or not a file produced a row: a check over any other non-judge metric is
     unavailable at grade time.
+
+    ``suite_failure`` says why the candidate's test suite gave no result (it
+    timed out, or left no readable junit report); every execution-metric check
+    then fails with it. ``None``, the default, when it gave one or never ran.
     """
 
     module: ModuleModel | None
@@ -361,6 +365,7 @@ class EvalContext:
     tool_paths: Mapping[str, str] = field(default_factory=dict)
     tool_setup: ToolSetup = field(default_factory=ToolSetup)
     measured_metrics: frozenset[str] = frozenset()
+    suite_failure: str | None = None
 
     @property
     def measure_setup(self) -> MeasureSetup:

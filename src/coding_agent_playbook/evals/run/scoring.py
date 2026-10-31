@@ -27,7 +27,11 @@ flat ``[metrics]`` block:
   :class:`~coding_agent_playbook.grading.execution_metrics.project.ProjectHandle` over
   the candidate tree (and the snapshot for the baseline) — but **only when** an
   execution metric is actually referenced (``run_tests`` is *inferred*, not
-  authored);
+  authored). Each run stops after 300 s in a pytest environment the caller's
+  variables cannot steer, and a suite that gives no result (it timed out, or
+  left no readable junit report) fails every execution check with its reason.
+  The run needs pytest and pytest-cov in this interpreter
+  (:func:`require_suite_toolchain`);
 * **judge-backed** metrics (a
   :class:`~coding_agent_playbook.grading.judge_metric.JudgeMetric`, or a
   rubric-group :class:`~coding_agent_playbook.grading.rubric.Rubric` containing
@@ -46,14 +50,19 @@ The file checks (``[gate]`` predicates) ignore the
 
 from __future__ import annotations
 
+import importlib.util
+import sys
 import tempfile
 from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.grading.check import MeasurementSet
-from coding_agent_playbook.grading.execution_metrics.project import ProjectHandle
+from coding_agent_playbook.grading.execution_metrics.project import (
+    NoSuiteResultError,
+    ProjectHandle,
+)
 from coding_agent_playbook.grading.measuring import (
     SourceMeter,
     measure_suite,
@@ -74,6 +83,54 @@ if TYPE_CHECKING:
 #: Label the candidate ``EvalContext`` carries — the artifact/rubric scope key
 #: judged checks key their per-artifact measurements on.
 _RUBRIC_LABEL = "rubric"
+
+#: Bound on one scoring suite run, in seconds. Why: an agent's test, or the code it
+#: tests, can loop forever, and the run had no timeout, so one trial stalled a whole
+#: ``eval --record``. The shipped samples' suites finish in seconds.
+_SUITE_TIMEOUT_S: Final = 300.0
+
+#: The modules the suite's ``python -m pytest --cov`` imports from this interpreter.
+_SUITE_TOOLCHAIN: Final = ("pytest", "pytest_cov")
+
+
+class SuiteToolchainError(RuntimeError):
+    """This interpreter lacks a module the scoring suite runs: the environment's fault."""
+
+
+def require_suite_toolchain(rubric: Rubric) -> None:
+    """Raise :class:`SuiteToolchainError` when ``rubric`` runs the suite and a module is missing.
+
+    Why in this process: the suite runs this interpreter in the candidate tree,
+    where a ``pytest.py`` can fake any output or exit code, so the run cannot tell
+    a missing pytest-cov from the agent's crash. Without it every trial scored 0.
+    The runner calls it before any agent runs, :func:`score` before the suite.
+
+    Example::
+
+        >>> require_suite_toolchain(compile_eval_sample(sample).per_trial)  # doctest: +SKIP
+    """
+    if _execution_metrics(rubric):
+        _require_toolchain()
+
+
+def _require_toolchain() -> None:
+    """Raise :class:`SuiteToolchainError` naming each suite module this interpreter lacks."""
+    missing = [name for name in _SUITE_TOOLCHAIN if not _importable(name)]
+    if missing:
+        raise SuiteToolchainError(
+            f"the scoring suite runs {sys.executable} -m pytest --cov, which cannot import "
+            f"{', '.join(missing)}: install the playbook's dev extra into that interpreter"
+        )
+
+
+def _importable(name: str) -> bool:
+    """Whether this interpreter can import ``name``; the seam a test replaces."""
+    return importlib.util.find_spec(name) is not None
+
+
+def _execution_metrics(rubric: Rubric) -> list[Metric]:
+    """The metrics ``rubric`` references that run the test suite."""
+    return [m for m in referenced_metrics(rubric.checks) if not m.needs_judge and m.needs_project]
 
 
 def score(
@@ -135,6 +192,7 @@ def score(
             candidate_measurements=measured.candidate,
             baseline_measurements=measured.baseline,
             measured_metrics=measured.measured_metrics,
+            suite_failure=measured.suite_failure,
         )
         ms = MeasurementSet(measured.candidate, measured.baseline or None)
         report = rubric.evaluate(ctx, ms, strict=False, fail_fast=fail_fast)
@@ -195,12 +253,16 @@ def _graded_artifact(candidate: Candidate) -> str:
 
 @dataclass(frozen=True)
 class _Measured:
-    """One trial's measuring pass: the rows, the candidate handle and the metrics it ran."""
+    """One trial's measuring pass: the rows, the candidate handle, the metrics it ran.
+
+    ``suite_failure`` is why the candidate's suite gave no result, or ``None``.
+    """
 
     candidate: list[Measurement]
     baseline: list[Measurement]
     project: ProjectHandle | None
     measured_metrics: frozenset[str]
+    suite_failure: str | None = None
 
 
 def _measure(
@@ -215,15 +277,18 @@ def _measure(
     setup = MeasureSetup()
     referenced = referenced_metrics(rubric.checks)
     static = [m for m in referenced if not m.needs_judge and not m.needs_project]
-    execution = [m for m in referenced if not m.needs_judge and m.needs_project]
+    execution = _execution_metrics(rubric)
     candidate_rows = _static_rows(candidate.tree, static, setup)
     baseline_rows = _static_rows(baseline.setup_snapshot, static, setup)
-    project = _project(candidate.tree, stack) if execution else None
-    if project is not None:
-        candidate_rows += _suite_rows(project, execution, setup)
-        baseline_rows += _suite_rows(_project(baseline.setup_snapshot, stack), execution, setup)
     promised = measured_metrics(referenced_metrics(rubric.checks, nested=True), setup)
-    return _Measured(candidate_rows, baseline_rows, project, promised)
+    if not execution:
+        return _Measured(candidate_rows, baseline_rows, None, promised)
+    _require_toolchain()
+    project = _project(candidate.tree, stack)
+    candidate_rows += _suite_rows(project, execution, setup)
+    baseline_rows += _suite_rows(_project(baseline.setup_snapshot, stack), execution, setup)
+    failure = None if project.no_result is None else project.no_result.reason
+    return _Measured(candidate_rows, baseline_rows, project, promised, failure)
 
 
 def _static_rows(tree: Path, metrics: list[Metric], setup: MeasureSetup) -> list[Measurement]:
@@ -241,17 +306,45 @@ def _static_rows(tree: Path, metrics: list[Metric], setup: MeasureSetup) -> list
 def _suite_rows(
     project: ProjectHandle, metrics: list[Metric], setup: MeasureSetup
 ) -> list[Measurement]:
-    """The suite's measurements; one that cannot be launched (no pytest) yields none.
+    """The suite's measurements; none when it gave no result, and ``project.no_result`` says why.
 
-    The deterministic ``[gate]`` layer still grades rather than the whole score failing.
+    The candidate's reason reaches grading as ``ctx.suite_failure``, which fails
+    every execution check: over no rows they graded zero scopes and passed. A
+    command that cannot start raises, as :func:`require_suite_toolchain` does,
+    since the environment, not the agent, has to change.
     """
     try:
         return measure_suite(project, metrics, setup)
-    except RuntimeError:
+    except NoSuiteResultError:
         return []
 
 
 def _project(tree: Path, stack: ExitStack) -> ProjectHandle:
-    """A handle over ``tree`` whose throwaway report dir is removed when ``stack`` exits."""
-    reports = stack.enter_context(tempfile.TemporaryDirectory(prefix="playbook-eval-reports-"))
-    return ProjectHandle.create(tree, Path(reports))
+    """A bounded handle over ``tree`` in :func:`_suite_env`; ``stack`` removes its report dir."""
+    reports = Path(
+        stack.enter_context(tempfile.TemporaryDirectory(prefix="playbook-eval-reports-"))
+    )
+    return ProjectHandle.create(
+        tree, reports, timeout_s=_SUITE_TIMEOUT_S, env_overrides=_suite_env(reports)
+    )
+
+
+def _suite_env(reports: Path) -> dict[str, str]:
+    """The variables the scoring suite must not inherit from the caller, and its coverage file.
+
+    Why: ``-o addopts=`` does not clear ``PYTEST_ADDOPTS``, so a caller's ``-k``
+    deselected the failing tests, and an inherited plugin list or autoload switch
+    broke the run; pytest reads an empty value as unset. ``COVERAGE_FILE`` keeps
+    coverage's data file out of the candidate tree and apart between trials.
+
+    Example::
+
+        >>> _suite_env(Path("/r"))["COVERAGE_FILE"]
+        '/r/.coverage'
+    """
+    return {
+        "PYTEST_ADDOPTS": "",
+        "PYTEST_PLUGINS": "",
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "",
+        "COVERAGE_FILE": str(reports / ".coverage"),
+    }

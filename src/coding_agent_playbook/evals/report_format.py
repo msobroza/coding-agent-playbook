@@ -108,8 +108,12 @@ def _target_line(result: SampleResult) -> str:
 
 
 def _check_to_dict(check: CheckResult) -> dict[str, object]:
-    """Stable JSON view of one :class:`CheckResult` + its leaf ``subresults``."""
-    return {
+    """Stable JSON view of one :class:`CheckResult` + its leaf ``subresults``.
+
+    ``details`` (only when some check under it says why it failed) lists
+    :func:`_failure_details`, so a view without one keeps its exact keys.
+    """
+    out: dict[str, object] = {
         "check_id": check.check_id,
         "passed": check.passed,
         "score": check.score,
@@ -120,6 +124,27 @@ def _check_to_dict(check: CheckResult) -> dict[str, object]:
             _finding_to_dict(sub) for sub in check.subresults if isinstance(sub, ScopeDetail)
         ],
     }
+    if details := _failure_details(check):
+        out["details"] = details
+    return out
+
+
+def _failure_details(check: CheckResult) -> list[str]:
+    """``<check id>: <detail>`` for ``check`` and every check nested under it that has one.
+
+    Why walk the tree: a layer's children (``tests_pass`` inside ``[gate]``) are
+    not rendered, and only they know why they failed, e.g. a suite with no result.
+
+    Example::
+
+        >>> _failure_details(gate_layer)  # doctest: +SKIP
+        ['threshold:test_pass_rate: the test suite gave no result: it timed out after 300 s']
+    """
+    found = [f"{check.check_id}: {check.detail}"] if check.detail else []
+    for sub in check.subresults:
+        if isinstance(sub, CheckResult):
+            found += _failure_details(sub)
+    return found
 
 
 def _finding_to_dict(finding: ScopeDetail) -> dict[str, object]:
@@ -148,6 +173,7 @@ def format_sample_result_text(result: SampleResult) -> str:
         verdict = "PASS" if check.passed else "FAIL"
         score = "n/a" if check.score is None else f"{check.score:.3f}"
         lines.append(f"  [{verdict}] {check.check_id} (score={score})")
+        lines.extend(f"      [why] {detail}" for detail in _failure_details(check))
         for sub in check.subresults:
             if not isinstance(sub, ScopeDetail) or sub.level == "ok":
                 continue

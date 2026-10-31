@@ -554,3 +554,26 @@ def test_file_forbidden_fail_when_dir_present(tmp_path: Path) -> None:
     # exists(), not is_file(): a forbidden directory present also breaches.
     result = FileForbiddenCheck("__pycache__").grade(_tree_ctx(tmp_path), _ms([]))
     assert result.passed is False
+
+
+# --------------------------------------------------------------------------- #
+# A suite that gave no result
+# --------------------------------------------------------------------------- #
+
+
+def test_an_execution_check_fails_with_the_reason_when_the_suite_gave_no_result() -> None:
+    """Regression: over a suite with no result an execution check graded zero scopes and passed."""
+    ctx = EvalContext(module=None, source="", label="check", suite_failure="it timed out after 3 s")
+
+    result = NonRegressionCheck(_Cov()).grade(ctx, _ms([], [_cov("a.py", 90.0)]))
+
+    assert (result.passed, result.score, result.subresults) == (False, 0.0, ())
+    assert result.detail == "the test suite gave no result: it timed out after 3 s"
+
+
+def test_a_static_check_ignores_a_suite_with_no_result() -> None:
+    ctx = EvalContext(module=None, source="", label="check", suite_failure="it timed out after 3 s")
+
+    result = ThresholdCheck(_CC(), fail=0.5).grade(ctx, _ms([_cc("m.py::f", 3.0)]))
+
+    assert (result.passed, result.detail) == (True, "")

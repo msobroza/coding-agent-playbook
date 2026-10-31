@@ -9,13 +9,18 @@ handle's command construction + ``rootdir`` pinning.
 
 from __future__ import annotations
 
+import contextlib
+import os
+import signal
 import sys
 import textwrap
+import time
 from typing import TYPE_CHECKING
 
 import pytest
 
 from coding_agent_playbook.grading.execution_metrics.project import (
+    NoSuiteResultError,
     ProjectHandle,
     default_test_cmd,
     import_roots,
@@ -103,15 +108,15 @@ def test_run_is_cached_single_subprocess(tmp_path: Path, monkeypatch: pytest.Mon
     from typing import Any
 
     calls = {"n": 0}
-    real_run = _subprocess.run
+    real_popen = _subprocess.Popen
 
-    def _counting_run(*args: Any, **kwargs: Any) -> Any:
+    def _counting_popen(*args: Any, **kwargs: Any) -> Any:
         calls["n"] += 1
-        return real_run(*args, **kwargs)
+        return real_popen(*args, **kwargs)
 
     monkeypatch.setattr(
-        "coding_agent_playbook.grading.execution_metrics.project.subprocess.run",
-        _counting_run,
+        "coding_agent_playbook.grading.execution_metrics.project.subprocess.Popen",
+        _counting_popen,
     )
     first = handle.run()
     second = handle.run()
@@ -187,6 +192,167 @@ def test_timeout_maps_to_runtime_error(tmp_path: Path) -> None:
 
     with pytest.raises(RuntimeError, match=r"timed out after 0\.2s"):
         handle.run()
+
+
+@pytest.mark.parametrize(
+    ("script", "timeout_s", "reason"),
+    [
+        ("import time; time.sleep(30)", 0.2, "it timed out after 0.2 s"),
+        ("import sys; sys.exit(4)", None, "it exited 4 with no junit report"),
+    ],
+    ids=["timed-out", "no-junit-report"],
+)
+def test_a_suite_that_gives_no_result_raises_no_suite_result_error(
+    tmp_path: Path, script: str, timeout_s: float | None, reason: str
+) -> None:
+    """Eval scoring fails every execution check on this error, quoting its ``reason``."""
+    handle = ProjectHandle(
+        root=tmp_path,
+        test_cmd=[sys.executable, "-c", script],
+        report_dir=tmp_path / "reports",
+        timeout_s=timeout_s,
+    )
+
+    with pytest.raises(NoSuiteResultError) as excinfo:
+        handle.run()
+    assert excinfo.value.reason == reason
+
+
+def test_a_command_that_cannot_start_is_not_a_no_result_error(tmp_path: Path) -> None:
+    """A missing program is the environment's fault, not the suite's: a plain ``RuntimeError``."""
+    handle = ProjectHandle(
+        root=tmp_path,
+        test_cmd=["definitely-not-a-real-program-xyz"],
+        report_dir=tmp_path / "reports",
+    )
+
+    with pytest.raises(RuntimeError) as excinfo:
+        handle.run()
+    assert not isinstance(excinfo.value, NoSuiteResultError)
+
+
+def test_the_default_command_must_leave_a_junit_report_whatever_its_exit_code(
+    tmp_path: Path,
+) -> None:
+    """Regression: an ``os._exit(0)`` read as an empty, all-passing report (pass rate 1.0)."""
+    root = tmp_path / "proj"
+    _make_project(root, _TEST_PASS)
+    (root / "conftest.py").write_text("import os\nos._exit(0)\n", encoding="utf-8")
+
+    with pytest.raises(NoSuiteResultError) as excinfo:
+        ProjectHandle.create(root, tmp_path / "reports").run()
+    assert excinfo.value.reason == "it exited 0 with no junit report"
+
+
+def test_an_explicit_command_may_exit_0_with_no_junit_report(tmp_path: Path) -> None:
+    """A ``--test-cmd`` need not write junit: only the default command promises one."""
+    handle = ProjectHandle.create(
+        tmp_path, tmp_path / "reports", test_cmd=[sys.executable, "-c", "pass"]
+    )
+
+    assert handle.run().returncode == 0
+
+
+@pytest.mark.parametrize("report", ["junit.xml", "coverage.xml"])
+def test_an_unreadable_report_is_no_result(tmp_path: Path, report: str) -> None:
+    """Regression: a truncated report raised ``ParseError``, which aborted a whole eval record."""
+    reports = tmp_path / "reports"
+    junit = '<testsuite tests="1"><testcase name="t"/></testsuite>'
+    script = (
+        "import pathlib, sys; d = pathlib.Path(sys.argv[1]); "
+        f"(d / 'junit.xml').write_text({junit!r}); (d / {report!r}).write_text('<oops')"
+    )
+    handle = ProjectHandle(
+        root=tmp_path, test_cmd=[sys.executable, "-c", script, str(reports)], report_dir=reports
+    )
+
+    with pytest.raises(NoSuiteResultError) as excinfo:
+        handle.run()
+    assert excinfo.value.reason == f"its {report} report cannot be read"
+
+
+def test_a_run_with_no_result_is_cached_and_never_rerun(tmp_path: Path) -> None:
+    """A second ``run()`` re-raises the first failure instead of paying the timeout again."""
+    runs = tmp_path / "runs.txt"
+    script = (
+        f"import pathlib, time; pathlib.Path({str(runs)!r}).open('a').write('x'); time.sleep(30)"
+    )
+    handle = ProjectHandle(
+        root=tmp_path,
+        test_cmd=[sys.executable, "-c", script],
+        report_dir=tmp_path / "reports",
+        timeout_s=2.0,
+    )
+
+    with pytest.raises(NoSuiteResultError) as first:
+        handle.run()
+    with pytest.raises(NoSuiteResultError) as second:
+        handle.run()
+    assert second.value is first.value
+    assert handle.no_result is first.value
+    assert runs.read_text(encoding="utf-8") == "x"
+
+
+def test_a_flaky_retry_with_no_result_keeps_the_best_rate_so_far(tmp_path: Path) -> None:
+    """A retry that hangs must not discard the cached run's rate and coverage."""
+    reports = tmp_path / "reports"
+    marker = tmp_path / "ran-once"
+    junit = (
+        '<testsuite tests="2"><testcase name="a"/>'
+        '<testcase name="b"><failure message="x"/></testcase></testsuite>'
+    )
+    script = (
+        "import pathlib, sys, time; m = pathlib.Path(sys.argv[2])\n"
+        "if m.exists(): time.sleep(30)\n"
+        f"m.touch(); (pathlib.Path(sys.argv[1]) / 'junit.xml').write_text({junit!r}); sys.exit(1)"
+    )
+    handle = ProjectHandle(
+        root=tmp_path,
+        test_cmd=[sys.executable, "-c", script, str(reports), str(marker)],
+        report_dir=reports,
+        flaky_retries=1,
+        timeout_s=3.0,
+    )
+
+    assert handle.best_pass_rate() == pytest.approx(0.5)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="process groups are POSIX")
+def test_a_timed_out_suite_takes_the_processes_it_started_with_it(tmp_path: Path) -> None:
+    """Regression: the timeout killed pytest only; a test's own subprocess kept running."""
+    pid_file = tmp_path / "grandchild.pid"
+    script = (
+        "import pathlib, subprocess, sys, time; "
+        "p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
+        f"pathlib.Path({str(pid_file)!r}).write_text(str(p.pid)); time.sleep(60)"
+    )
+    handle = ProjectHandle(
+        root=tmp_path,
+        test_cmd=[sys.executable, "-c", script],
+        report_dir=tmp_path / "reports",
+        timeout_s=5.0,
+    )
+
+    with pytest.raises(NoSuiteResultError):
+        handle.run()
+    pid = int(pid_file.read_text(encoding="utf-8"))
+    try:
+        assert not _alive(pid)
+    finally:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(pid, signal.SIGKILL)
+
+
+def _alive(pid: int) -> bool:
+    """Whether ``pid`` still runs, after a short grace for the kernel to reap it."""
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        time.sleep(0.1)
+    return True
 
 
 def test_env_overrides_passed_to_subprocess(tmp_path: Path) -> None:

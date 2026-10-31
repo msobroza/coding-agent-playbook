@@ -687,7 +687,13 @@ import path. Review-only setups without tests do not declare it. The `tests_pass
 check is different: it runs `python -m pytest --cov` in the candidate tree with
 the interpreter that runs the playbook, not the scratch venv, which holds only the
 sample's declared dependencies. That interpreter must have `pytest` and
-`pytest-cov`, as the `dev` extra provides.
+`pytest-cov`, as the `dev` extra provides; without them a sample that runs the
+suite stops before its agent runs. Each run stops after 300 s, together with the
+processes its tests started, and ignores the caller's `PYTEST_ADDOPTS`,
+`PYTEST_PLUGINS` and `PYTEST_DISABLE_PLUGIN_AUTOLOAD`. A suite that gives no
+result fails every execution check (`tests_pass`, coverage), with the reason in
+the report: it ran past 300 s, or left no readable junit report, for example
+because a `conftest.py` raised or called `os._exit`.
 
 A sample declares its success criteria as layers (SPEC §6.5.3):
 
