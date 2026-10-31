@@ -706,8 +706,9 @@ def test_a_baseline_suite_with_no_result_makes_the_sample_unscorable(tmp_path: P
     (sample_dir / "setup" / "conftest.py").write_text("import os\nos._exit(0)\n", encoding="utf-8")
     sample = _make_sample(sample_dir, gate=_exec_gate())
 
-    with pytest.raises(BaselineSuiteError, match=r"exited 0 with no junit report"):
+    with pytest.raises(BaselineSuiteError, match=r"exited 0 with no junit report") as raised:
         FakeRunner().run_sample(sample, tmp_path / "scratch")
+    assert f"of t-fixture ({sample_dir / 'setup'})" in str(raised.value)
 
 
 def test_the_scoring_suite_leaves_no_coverage_data_in_the_candidate_tree(tmp_path: Path) -> None:
