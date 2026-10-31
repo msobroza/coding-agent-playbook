@@ -270,22 +270,34 @@ _GIT_ENV_ARGS = [
     "commit.gpgsign=false",
 ]
 
+#: Wall-clock bound (seconds) on one ``git`` step in a scratch repo; a hung step
+#: would otherwise stall a whole ``eval --record`` run.
+_GIT_TIMEOUT: Final = 120.0
+
 
 def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     """Run ``git`` in ``repo_root`` with a pinned hermetic identity.
 
     The inherited ``GIT_DIR``/``GIT_INDEX_FILE`` and the other repo-location
     variables are dropped: inside a hook in a linked worktree git exports them,
-    and the scratch repo would otherwise be the caller's gitdir and index.
+    and the scratch repo would otherwise be the caller's gitdir and index. A step
+    still running after :data:`_GIT_TIMEOUT` raises :exc:`RuntimeError`.
     """
-    return subprocess.run(
-        ["git", *_GIT_ENV_ARGS, *args],
-        cwd=repo_root,
-        env=without_repo_location(os.environ),
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    try:
+        return subprocess.run(
+            ["git", *_GIT_ENV_ARGS, *args],
+            cwd=repo_root,
+            env=without_repo_location(os.environ),
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=_GIT_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired as exc:
+        command = " ".join(args)
+        raise RuntimeError(
+            f"git {command} timed out after {_GIT_TIMEOUT:g} s in {repo_root}"
+        ) from exc
 
 
 # --------------------------------------------------------------------------- #
@@ -344,12 +356,18 @@ def materialize(sample: EvalSample, scratch_dir: Path) -> Baseline:
     return Baseline(repo_root=scratch_dir, commit=commit, setup_snapshot=snapshot)
 
 
+#: Wall-clock bound (seconds) on one ``uv sync`` of a scratch tree: it resolves and
+#: downloads from the package index, and a hang there would stall a whole record run.
+_UV_SYNC_TIMEOUT: Final = 600.0
+
+
 def _uv_sync_scratch(scratch_dir: Path) -> None:
     """Install the scratch tree's ``pyproject.toml`` deps via ``uv sync``.
 
     No-op when the tree has no ``pyproject.toml`` (a deps-less fixture; the
     ``uv`` binary is not required in that case). When a pyproject exists,
-    ``uv`` must be on ``PATH`` — raises a clear :exc:`RuntimeError` otherwise.
+    ``uv`` must be on ``PATH`` — raises a clear :exc:`RuntimeError` otherwise,
+    and when the sync fails or outlives :data:`_UV_SYNC_TIMEOUT`.
     Uses ``uv sync --frozen`` if a ``uv.lock`` is present; falls back to
     ``uv sync`` to resolve and lock on the fly when it is not (the default for
     fixtures that ship without a lockfile).
@@ -367,7 +385,21 @@ def _uv_sync_scratch(scratch_dir: Path) -> None:
             "uv binary required to materialize setup/pyproject.toml; install uv on PATH"
         )
     args = ["uv", "sync", "--frozen"] if (scratch_dir / "uv.lock").is_file() else ["uv", "sync"]
-    result = subprocess.run(args, cwd=scratch_dir, capture_output=True, text=True, check=False)
+    try:
+        result = subprocess.run(
+            args,
+            cwd=scratch_dir,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=_UV_SYNC_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired as exc:
+        # What uv wrote before the bound (a stuck resolve or download) says why it hung.
+        raise RuntimeError(
+            f"uv sync timed out after {_UV_SYNC_TIMEOUT:g} s in {scratch_dir}: "
+            f"{_decoded(exc.stderr)}"
+        ) from exc
     if result.returncode != 0:
         raise RuntimeError(f"uv sync failed in {scratch_dir}: {result.stderr}")
 

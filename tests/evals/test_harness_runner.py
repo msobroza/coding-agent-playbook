@@ -1113,6 +1113,65 @@ def test_uv_sync_raises_clear_error_when_sync_fails(
         materialize(sample, tmp_path / "scratch")
 
 
+def test_uv_sync_that_hangs_is_stopped_with_a_clear_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Regression: ``uv sync`` reaches the package index with no timeout, so a hang stalled a run."""
+    real_run = subprocess.run
+
+    def _hanging_uv(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if args and args[0] == "uv":
+            if "timeout" not in kwargs:  # unbounded: succeed, so the test fails
+                return subprocess.CompletedProcess(args, 0, "", "")
+            raise subprocess.TimeoutExpired(
+                args, kwargs["timeout"], stderr=b"Downloading numpy (14.2MiB)"
+            )
+        return real_run(args, **kwargs)
+
+    monkeypatch.setattr(
+        "coding_agent_playbook.evals.run.harness_runner.subprocess.run", _hanging_uv
+    )
+    monkeypatch.setattr(
+        "coding_agent_playbook.evals.run.harness_runner.shutil.which", lambda _binary: "/fake/uv"
+    )
+
+    sample_dir = tmp_path / "sample"
+    _make_setup(sample_dir)
+    (sample_dir / "setup" / "pyproject.toml").write_text(
+        '[project]\nname = "fx"\nversion = "0"\nrequires-python = ">=3.12"\ndependencies = []\n',
+        encoding="utf-8",
+    )
+    sample = _make_sample(sample_dir, gate=_cc_gate())
+
+    with pytest.raises(
+        RuntimeError, match=r"uv sync timed out after \d+ s in .*: Downloading numpy"
+    ):
+        materialize(sample, tmp_path / "scratch")
+
+
+def test_a_git_step_that_hangs_is_stopped_with_a_clear_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Regression: the scratch repo's ``git`` calls had no timeout either."""
+    real_run = subprocess.run
+
+    def _hanging_git_init(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if args[0] == "git" and "init" in args and "timeout" in kwargs:
+            raise subprocess.TimeoutExpired(args, kwargs["timeout"])
+        return real_run(args, **kwargs)
+
+    monkeypatch.setattr(
+        "coding_agent_playbook.evals.run.harness_runner.subprocess.run", _hanging_git_init
+    )
+
+    sample_dir = tmp_path / "sample"
+    _make_setup(sample_dir)
+    sample = _make_sample(sample_dir, gate=_cc_gate())
+
+    with pytest.raises(RuntimeError, match=r"git init -q timed out after \d+ s in "):
+        materialize(sample, tmp_path / "scratch")
+
+
 # --------------------------------------------------------------------------- #
 # An agent stopped at its timeout
 # --------------------------------------------------------------------------- #
