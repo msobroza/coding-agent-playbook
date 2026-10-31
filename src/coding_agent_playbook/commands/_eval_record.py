@@ -100,6 +100,7 @@ from coding_agent_playbook.evals.release_metrics import (
 )
 from coding_agent_playbook.evals.release_metrics_schema import validate_release_metrics
 from coding_agent_playbook.evals.run.harness_version import harness_cli_version
+from coding_agent_playbook.evals.run.scoring import UnscorableSuiteError
 from coding_agent_playbook.evals.sample_digest import inputs_digest, prompt_digest, sample_digest
 from coding_agent_playbook.evals.setup_digest import UNKNOWN_VERSION, SetupParts, scoring_digest
 from coding_agent_playbook.release.edition import EditionError
@@ -449,7 +450,7 @@ class _RecordPlan:
                     fail_fast=self.fail_fast,
                     edition=edition,
                 )
-        except (PromptResolutionError, JudgeError) as exc:
+        except (PromptResolutionError, JudgeError, UnscorableSuiteError) as exc:
             raise RecordRefusedError(
                 f"sample {sample.id!r} could not be scored, so nothing was recorded: {exc}"
             ) from exc

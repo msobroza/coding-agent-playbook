@@ -147,14 +147,14 @@ def test_both_metrics_share_one_run(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     import subprocess as _subprocess
 
     calls = {"n": 0}
-    real = _subprocess.run
+    real = _subprocess.Popen
 
     def _counting(*args: Any, **kwargs: Any) -> Any:
         calls["n"] += 1
         return real(*args, **kwargs)
 
     monkeypatch.setattr(
-        "coding_agent_playbook.grading.execution_metrics.project.subprocess.run",
+        "coding_agent_playbook.grading.execution_metrics.project.subprocess.Popen",
         _counting,
     )
     ctx = _ctx(handle)

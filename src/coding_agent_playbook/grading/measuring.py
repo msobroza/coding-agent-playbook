@@ -264,7 +264,8 @@ def measure_suite(
 
     Every metric reads the same cached :meth:`ProjectHandle.run`. Raises the
     ``RuntimeError`` a metric raises; the caller applies its policy (eval scoring
-    measures nothing, the gate raises ``MetricsGateUsageError``).
+    fails every execution check over a suite with no result, the gate raises
+    ``MetricsGateUsageError``).
 
     Example::
 

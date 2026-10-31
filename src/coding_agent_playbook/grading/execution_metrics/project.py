@@ -18,7 +18,13 @@ pytest in a way that does *not* inherit a surrounding ``pyproject.toml``'s
 is the lever that neutralises an inherited config), and ``--cov-config`` pins
 coverage to the target. The exit code of the run is *not* asserted here (a
 failing suite is a legitimate measurement, not a handle error); only a command
-that cannot be *launched* (e.g. pytest absent) raises.
+that cannot be *launched* (its program is missing) raises, and so does a suite
+that gives no result: it ran past ``timeout_s``, or left no readable junit or
+coverage report (:class:`NoSuiteResultError`). A ``-m pytest`` command whose
+interpreter lacks pytest starts, then exits 1 with no report, so it is a suite with
+no result too: eval scoring checks that toolchain in-process first. A timeout, or
+any interrupt such as Ctrl-C, kills the suite's process group, with the
+subprocesses its tests started that stayed in it.
 
 **prK §F.1.1 extensions** (keyword-only, defaults byte-identical):
 ``diff_base`` is the ref ``diff_coverage`` diffs against; ``timeout_s`` bounds
@@ -31,12 +37,15 @@ put coverage.py in source mode (:func:`import_roots`).
 
 from __future__ import annotations
 
+import contextlib
 import os
+import signal
 import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Final, Protocol
+from xml.etree import ElementTree as ET
 
 from coding_agent_playbook.grading.execution_metrics.coverage_xml import (
     CoverageReport,
@@ -45,7 +54,11 @@ from coding_agent_playbook.grading.execution_metrics.coverage_xml import (
 from coding_agent_playbook.grading.execution_metrics.junit import JunitSummary, parse_junit_xml
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Callable, Mapping, Sequence
+
+#: What a truncated or tampered report raises while parsed (``ParseError`` is a
+#: ``SyntaxError``, a bad count a ``ValueError``): the run then gives no result.
+_UNREADABLE_REPORT: Final = (ET.ParseError, ValueError)
 
 
 @dataclass(frozen=True)
@@ -60,6 +73,27 @@ class RunArtifacts:
     junit: JunitSummary
     coverage: CoverageReport
     returncode: int
+
+
+class NoSuiteResultError(RuntimeError):
+    """The suite ran but gave no result: it timed out, or left no readable junit or coverage report.
+
+    Distinct from a command that cannot start (a plain ``RuntimeError``): the
+    suite started, so the cause is usually its own, for example an endless test or
+    a ``conftest.py`` that raises, and eval scoring fails every execution check with
+    :attr:`reason`. A missing pytest looks the same from outside, which is why eval
+    scoring checks its toolchain in this process before the run.
+
+    Example::
+
+        >>> NoSuiteResultError("test command timed out", reason="it timed out after 3 s").reason
+        'it timed out after 3 s'
+    """
+
+    def __init__(self, message: str, *, reason: str) -> None:
+        super().__init__(message)
+        #: Why, in a few words with no command or output: fit for a committed report.
+        self.reason = reason
 
 
 def default_test_cmd(
@@ -141,7 +175,10 @@ class ProjectHandle:
     timeout_s: float | None = None
     #: Environment variables set on top of the inherited environment for the run.
     env_overrides: Mapping[str, str] = field(default_factory=dict)
+    #: The run must leave a junit report whatever its exit code; the default command writes one.
+    require_report: bool = False
     _artifacts: RunArtifacts | None = field(default=None, init=False, repr=False)
+    _no_result: NoSuiteResultError | None = field(default=None, init=False, repr=False)
 
     @classmethod
     def create(
@@ -164,13 +201,15 @@ class ProjectHandle:
         ``[tool.coverage]`` table. ``flaky_retries`` (default ``0``) enables the
         flaky-tolerant pass rate (see :meth:`best_pass_rate`). ``python`` and
         ``cov_sources`` shape the default command only; an explicit
-        ``test_cmd`` runs exactly as given.
+        ``test_cmd`` runs exactly as given. Only the default command must leave
+        a junit report (:attr:`require_report`): an explicit one may not write it.
 
         Example::
 
             >>> ProjectHandle.create(root, report_dir, timeout_s=300).timeout_s  # doctest: +SKIP
             300
         """
+        require_report = test_cmd is None
         report_dir = Path(report_dir)
         report_dir.mkdir(parents=True, exist_ok=True)
         # Empty coverage config: a present-but-blank file beats outer discovery.
@@ -185,6 +224,7 @@ class ProjectHandle:
             diff_base=diff_base,
             timeout_s=timeout_s,
             env_overrides=dict(env_overrides or {}),
+            require_report=require_report,
         )
 
     def run(self) -> RunArtifacts:
@@ -194,11 +234,23 @@ class ProjectHandle:
         the program is missing) - distinct from a *failing* suite, which is a
         valid measurement with a non-zero ``returncode``. The result is cached:
         ``coverage`` and ``test_pass_rate`` reading the same handle share this
-        one run (no double execution).
+        one run (no double execution). A run with no result is cached too: a later
+        call re-raises its :class:`NoSuiteResultError` rather than pay the timeout again.
         """
+        if self._no_result is not None:
+            raise self._no_result
         if self._artifacts is None:
-            self._artifacts = self._run_once()
+            try:
+                self._artifacts = self._run_once()
+            except NoSuiteResultError as exc:
+                self._no_result = exc
+                raise
         return self._artifacts
+
+    @property
+    def no_result(self) -> NoSuiteResultError | None:
+        """Why the cached run gave no result; ``None`` when it gave one or has not run."""
+        return self._no_result
 
     def best_pass_rate(self) -> float:
         """Flaky-tolerant pass rate: the *best* across the cached run + retries.
@@ -209,71 +261,152 @@ class ProjectHandle:
         maximum pass rate observed is returned - so a test that passes on a retry
         no longer counts as a failure. These reruns do **not** disturb the cached
         :meth:`run` artifacts that ``coverage`` reads (one coverage run, many
-        attempts at the rate).
+        attempts at the rate), and a retry with no result ends the retries.
         """
         best = self.run().junit.pass_rate()
         attempts = max(0, self.flaky_retries)
         for _ in range(attempts):
             if best >= 1.0:
                 break
-            best = max(best, self._run_once().junit.pass_rate())
+            rate = self._retry_pass_rate()
+            if rate is None:
+                break
+            best = max(best, rate)
         return best
+
+    def _retry_pass_rate(self) -> float | None:
+        """One uncached rerun's pass rate; ``None`` when it gave no result.
+
+        Why ``None`` and not the error: the cached run already gave a rate and
+        coverage, and a retry that hangs must not throw both away.
+        """
+        try:
+            return self._run_once().junit.pass_rate()
+        except NoSuiteResultError:
+            return None
 
     def _run_once(self) -> RunArtifacts:
         """Execute the test command once and parse its reports (uncached).
 
-        Raises :class:`RuntimeError` when the command cannot be launched or runs
-        past :attr:`timeout_s`.
+        Raises :class:`RuntimeError` when the command cannot be launched, and
+        :class:`NoSuiteResultError` when it runs past :attr:`timeout_s` or leaves
+        no readable junit or coverage report (see :meth:`_check_result`).
         """
         self.report_dir.mkdir(parents=True, exist_ok=True)
         env = {**os.environ, **self.env_overrides} if self.env_overrides else None
         try:
-            proc = subprocess.run(
-                self.test_cmd,
-                cwd=self.root,
-                capture_output=True,
-                text=True,
-                timeout=self.timeout_s,
-                env=env,
-            )
+            proc = _run_in_session(self.test_cmd, cwd=self.root, env=env, timeout_s=self.timeout_s)
         except FileNotFoundError as exc:
             raise RuntimeError(
                 f"could not run the test command {self.test_cmd!r}: {exc}. "
                 "Is pytest installed in the target environment?"
             ) from exc
         except subprocess.TimeoutExpired as exc:
-            raise RuntimeError(
+            raise NoSuiteResultError(
                 f"test command timed out after {exc.timeout:g}s: {self.test_cmd!r}; "
-                "raise [metrics] test_timeout_s for a slow suite"
+                "raise [metrics] test_timeout_s for a slow suite",
+                reason=f"it timed out after {exc.timeout:g} s",
             ) from exc
 
         junit = self._read_junit()
         coverage = self._read_coverage()
-
-        # A non-zero exit with *no* junit produced usually means pytest itself
-        # failed to start (bad args / collection crash) rather than test
-        # failures; surface that as a runtime error so the caller does not treat
-        # an empty report as "all passed".
-        if junit.total == 0 and proc.returncode not in (0, 5):
-            detail = (proc.stderr or proc.stdout or "").strip()
-            raise RuntimeError(
-                f"test command exited {proc.returncode} with no junit report; "
-                f"the suite may not be runnable. Output:\n{detail}"
-            )
-
+        self._check_result(junit, proc)
         return RunArtifacts(junit=junit, coverage=coverage, returncode=proc.returncode)
+
+    def _check_result(self, junit: JunitSummary, proc: subprocess.CompletedProcess[str]) -> None:
+        """Raise :class:`NoSuiteResultError` when ``proc`` left no junit report to read.
+
+        A non-zero exit with *no* junit usually means pytest itself failed to
+        start (bad args, a ``conftest.py`` that raises) rather than test
+        failures, so an empty report must not read as "all passed". With
+        :attr:`require_report` any exit counts: an ``os._exit(0)`` in a test or
+        ``conftest.py`` ends pytest before it writes the report.
+        """
+        missing = self.require_report and not (self.report_dir / "junit.xml").is_file()
+        if not missing and (junit.total > 0 or proc.returncode in (0, 5)):
+            return
+        detail = (proc.stderr or proc.stdout or "").strip()
+        raise NoSuiteResultError(
+            f"test command exited {proc.returncode} with no junit report; "
+            f"the suite may not be runnable. Output:\n{detail}",
+            reason=f"it exited {proc.returncode} with no junit report",
+        )
 
     def _read_junit(self) -> JunitSummary:
         path = self.report_dir / "junit.xml"
         if not path.is_file():
             return JunitSummary(passed=0, failed=0, errors=0, skipped=0, total=0)
-        return parse_junit_xml(path.read_text(encoding="utf-8"))
+        return _parsed(path, parse_junit_xml)
 
     def _read_coverage(self) -> CoverageReport:
         path = self.report_dir / "coverage.xml"
         if not path.is_file():
             return CoverageReport()
-        return parse_coverage_xml(path.read_text(encoding="utf-8"))
+        return _parsed(path, parse_coverage_xml)
+
+
+def _parsed[R](path: Path, parse: Callable[[str], R]) -> R:
+    """``parse`` over ``path``'s text; an unreadable report is :class:`NoSuiteResultError`.
+
+    Why: a truncated report raised ``ParseError``, which no caller catches, so a
+    candidate's suite could abort a whole ``eval --record`` run.
+    """
+    try:
+        return parse(path.read_text(encoding="utf-8"))
+    except _UNREADABLE_REPORT as exc:
+        raise NoSuiteResultError(
+            f"the suite's {path.name} cannot be read: {exc}",
+            reason=f"its {path.name} report cannot be read",
+        ) from exc
+
+
+def _run_in_session(
+    argv: Sequence[str], *, cwd: Path, env: Mapping[str, str] | None, timeout_s: float | None
+) -> subprocess.CompletedProcess[str]:
+    """``argv`` with captured text output, in a session and process group of its own on POSIX.
+
+    Why: ``subprocess.run`` kills only its child at the timeout, and a test's own
+    subprocess kept running after it. The group is killed on a timeout and on any
+    other exception, Ctrl-C included: in its own session the suite no longer gets
+    the terminal's ``SIGINT``. Then the exception propagates (``TimeoutExpired``
+    for a timeout). It waits for the child rather than draining its pipes, as
+    ``subprocess.run`` does on POSIX: a process that left the group can hold them.
+
+    Example::
+
+        >>> _run_in_session(["true"], cwd=Path("."), env=None, timeout_s=5).returncode
+        0
+    """
+    posix = os.name == "posix"
+    with subprocess.Popen(
+        argv,
+        cwd=cwd,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=posix,
+    ) as proc:
+        try:
+            stdout, stderr = proc.communicate(timeout=timeout_s)
+        except BaseException:
+            _kill_session(proc, posix=posix)
+            proc.wait()
+            raise
+    return subprocess.CompletedProcess(argv, proc.returncode, stdout, stderr)
+
+
+def _kill_session(proc: subprocess.Popen[str], *, posix: bool) -> None:
+    """Kill ``proc``'s process group on POSIX, then ``proc`` itself.
+
+    Why both: Windows has no ``killpg``, and on macOS ``killpg`` fails with
+    ``EPERM`` once the group holds only the leader's zombie, while a process that
+    left the group still holds the pipes. ``proc.kill`` is a no-op on a reaped child.
+    """
+    if posix:
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.killpg(proc.pid, signal.SIGKILL)
+    proc.kill()
 
 
 class ProjectFactory(Protocol):

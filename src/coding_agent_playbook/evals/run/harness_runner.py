@@ -41,7 +41,7 @@ from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.evals.prompting import render_prompt
 from coding_agent_playbook.evals.run.git_env import without_repo_location
-from coding_agent_playbook.evals.run.scoring import score
+from coding_agent_playbook.evals.run.scoring import require_suite_toolchain, score
 from coding_agent_playbook.evals.token_usage import TokenUsage, sum_usage
 
 if TYPE_CHECKING:
@@ -515,6 +515,9 @@ class HarnessRunner(ABC):
         # strict resolution raises before any trial.
         prompt = render_prompt(sample, strict=self.requires_resolved_prompt, edition=edition)
         compiled = compile_eval_sample(sample)
+        # Before any agent runs: a scoring interpreter without pytest-cov would
+        # otherwise surface only after a paid agent run, at the first trial's score.
+        require_suite_toolchain(compiled.per_trial)
         n = compiled.trials_needed
 
         trials: list[TrialResult] = []

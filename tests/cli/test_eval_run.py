@@ -506,6 +506,22 @@ def test_run_judge_error_exits_2_not_a_verdict(
     assert "summary:" not in captured.out
 
 
+def test_run_without_the_suite_toolchain_exits_2_before_the_agent(
+    tmp_path: Path, make_synthetic_repo: Any, capsys: Any, monkeypatch: Any
+) -> None:
+    """Regression: a scoring interpreter without pytest-cov crashed ``eval --run`` (exit 1)."""
+    _seed(tmp_path, make_synthetic_repo)
+    monkeypatch.setattr(
+        "coding_agent_playbook.evals.run.scoring._importable", lambda name: name != "pytest_cov"
+    )
+    rc = _eval.run(_ns(tmp_path, id_="characterize/legacy-pricing", run=True, runner="fake"))
+    captured = capsys.readouterr()
+    assert rc == 2
+    assert "could not be scored" in captured.err
+    assert "cannot import pytest_cov" in captured.err
+    assert "summary:" not in captured.out
+
+
 def test_run_prompt_render_error_exits_2(
     tmp_path: Path, make_synthetic_repo: Any, capsys: Any, monkeypatch: Any
 ) -> None:
