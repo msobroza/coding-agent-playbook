@@ -149,6 +149,55 @@ def test_a_normal_exit_ends_the_rest_of_the_group(tmp_path: Path) -> None:
         assert not is_alive(recorded_pid(pid_file), grace_s=1.0)
 
 
+def _leftover_member_script(pid_file: Path, member: str, ready: Path) -> str:
+    """A shell that leaves ``member`` running in its group, waits until it creates ``ready``, exits 0."""
+    return (
+        f"( {member} ) >/dev/null 2>&1 & echo $! > {pid_file}; "
+        f"while [ ! -e {ready} ]; do sleep 0.01; done; exit 0"
+    )
+
+
+@posix_only
+def test_a_normal_exit_lets_a_leftover_member_clean_up_on_sigterm(tmp_path: Path) -> None:
+    """Regression: the SIGKILL killed a background ``git commit`` and left its ``index.lock``."""
+    pid_file, lock = tmp_path / "member.pid", tmp_path / "index.lock"
+    member = f"trap 'rm -f {lock}; exit 0' TERM; touch {lock}; while :; do sleep 0.05; done"
+    script = _leftover_member_script(pid_file, member, lock)
+
+    with reaped_grandchild(pid_file):
+        assert run_bounded(["/bin/sh", "-c", script], timeout_s=30).returncode == 0
+        assert not lock.exists()
+        assert not is_alive(recorded_pid(pid_file), grace_s=1.0)
+
+
+@posix_only
+def test_a_normal_exit_sigkills_a_leftover_member_that_ignores_sigterm(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The SIGTERM after a normal exit is a courtesy; the SIGKILL after the grace is the bound."""
+    pid_file = tmp_path / "member.pid"
+    monkeypatch.setattr(bounded_subprocess, "_POST_EXIT_GRACE_S", 0.3)
+    ready = tmp_path / "ready"
+    member = f"trap '' TERM; touch {ready}; exec sleep 60"
+    script = _leftover_member_script(pid_file, member, ready)
+
+    with reaped_grandchild(pid_file):
+        assert run_bounded(["/bin/sh", "-c", script], timeout_s=30).returncode == 0
+        assert not is_alive(recorded_pid(pid_file), grace_s=1.0)
+
+
+@posix_only
+def test_a_normal_exit_without_a_leftover_member_waits_for_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The post-exit grace is paid only by a child that left a member in its group."""
+    monkeypatch.setattr(bounded_subprocess, "_POST_EXIT_GRACE_S", 30.0)
+
+    started = time.monotonic()
+    assert run_bounded(["true"], timeout_s=30).returncode == 0
+    assert time.monotonic() - started < 10.0
+
+
 @posix_only
 def test_an_ended_run_leaves_no_live_group() -> None:
     """A stale pid would get a later Ctrl-C once the system reuses its number."""

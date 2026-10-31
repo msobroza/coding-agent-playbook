@@ -6,7 +6,8 @@ test's own subprocess kept running for the rest of an ``eval --record`` run.
 :func:`run_bounded` starts the child in a session (and process group) of its own
 and ends the group when the run ends in a timeout or any other exception: SIGTERM
 first, then SIGKILL once the leader exits or :data:`_TERM_GRACE_S` ends. After a
-normal exit the rest of the group gets SIGKILL at once.
+normal exit the rest of the group gets SIGTERM, then SIGKILL if it is still there
+after :data:`_POST_EXIT_GRACE_S`.
 
 In its own session the child no longer gets the signals sent to its parent's
 group (a terminal's Ctrl-C or hangup, a supervisor's ``kill -TERM -<pgid>``), so
@@ -64,6 +65,12 @@ _TERM_GRACE_S: Final = 5.0
 #: the SIGTERM, wait, SIGKILL) must end strictly earlier, or a CLI under it that
 #: ignores SIGTERM outlives them both.
 _NESTED_TERM_GRACE_S: Final = _TERM_GRACE_S / 2
+
+#: Why about 1 s: long enough for git to remove its lock files on the SIGTERM (a
+#: background ``git commit`` an agent left mid pre-commit hook, whose SIGKILL left
+#: ``.git/index.lock`` and failed the harness's next git command), short because
+#: it is paid only when the child left a member in its group.
+_POST_EXIT_GRACE_S: Final = 1.0
 
 #: How long an ending sleeps between two checks of the leaders it signalled.
 _LEADER_POLL_S: Final = 0.05
@@ -157,10 +164,12 @@ def run_bounded(
     does on POSIX: a process that left the group can hold them open. On Windows a
     timeout reads the output after the kill, as ``subprocess.run`` does there.
 
-    After a normal exit the rest of the group gets SIGKILL: a daemon that did not
-    call ``setsid``, an MCP server the CLI left behind or a test's background
-    process does not outlive the run. A process that left the group (``git gc
-    --auto`` detaches with ``setsid``) is untouched.
+    After a normal exit the rest of the group gets SIGTERM, then SIGKILL if any of
+    it is still there after :data:`_POST_EXIT_GRACE_S`: a daemon that did not call
+    ``setsid``, an MCP server the CLI left behind or a test's background process
+    does not outlive the run, and a background ``git commit`` still removes its
+    lock files. A child that left no member adds no wait. A process that left
+    the group (``git gc --auto`` detaches with ``setsid``) is untouched.
 
     One window is left: a signal landing inside ``Popen`` itself, after the fork
     and before the pid is known, leaves the child running (an accepted risk of
@@ -195,16 +204,14 @@ def run_bounded(
             # missed this pid in its snapshot of the live groups.
             _refuse_if_halted(argv)
             stdout, stderr = proc.communicate(input, timeout=timeout_s)
+            if posix:
+                # Still in the live set, so a signal to this process reaches them.
+                _end_leftover_members(proc.pid)
         except BaseException as exc:
             _end_bounded_child(proc, exc, posix=posix)
             raise
         finally:
             _live_bounded_groups.discard(proc.pid)
-        if posix:
-            # Why safe although the leader is reaped: its pid is not reused while
-            # the group has a member, and a reuse in the microseconds since would
-            # also need the new process to lead a group of that id.
-            _signal_group(proc.pid, signal.SIGKILL)
     return subprocess.CompletedProcess(list(argv), proc.returncode, stdout, stderr)
 
 
@@ -336,6 +343,22 @@ def _forget_parent_groups() -> None:
 
 if _POSIX:
     os.register_at_fork(after_in_child=_forget_parent_groups)
+
+
+def _end_leftover_members(pgid: int) -> None:
+    """After a normal exit: SIGTERM the rest of the group, then SIGKILL it if it outlives the grace.
+
+    Why poll :func:`_group_gone`, not the leader: it is reaped already. Why safe
+    although it is: a pid is not reused while a group of that id has a member,
+    and the SIGKILL is never sent once the group was seen gone.
+    """
+    _signal_group(pgid, signal.SIGTERM)
+    deadline = time.monotonic() + _POST_EXIT_GRACE_S
+    while not _group_gone(pgid):
+        if time.monotonic() >= deadline:
+            _signal_group(pgid, signal.SIGKILL)
+            return
+        time.sleep(_LEADER_POLL_S)
 
 
 def _end_bounded_child(proc: subprocess.Popen[Any], exc: BaseException, *, posix: bool) -> None:
