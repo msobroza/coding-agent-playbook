@@ -81,7 +81,7 @@ class SuiteRecord:
     outcomes: Mapping[str, RecordedOutcome]
     finished: frozenset[str]
     collector_skips: tuple[RecordedTest, ...] = ()
-    collection_errors: tuple[str, ...] = ()
+    collection_errors: tuple[RecordedTest, ...] = ()
 
     @property
     def failures(self) -> int:
@@ -173,7 +173,7 @@ def _record(raw: object) -> SuiteRecord:
         outcomes={_str(k): _outcome(v) for k, v in _mapping(data.get("outcomes")).items()},
         finished=frozenset(_str(n) for n in _list(data.get("finished"))),
         collector_skips=_tests(data.get("collector_skips")),
-        collection_errors=tuple(_str(n) for n in _list(data.get("collection_errors"))),
+        collection_errors=_tests(data.get("collection_errors")),
     )
 
 

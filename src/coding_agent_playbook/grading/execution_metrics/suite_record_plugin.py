@@ -137,7 +137,7 @@ class SessionRecorder:
         self._imperative: set[str] = set()
         self._finished: list[str] = []
         self._collector_skips: list[dict[str, str]] = []
-        self._collection_errors: list[str] = []
+        self._collection_errors: list[dict[str, str]] = []
 
     def pytest_itemcollected(self, item: _Item) -> None:
         self._collected.append(self._test(item.nodeid, item.path))
@@ -147,11 +147,12 @@ class SessionRecorder:
         self._selected = [self._test(item.nodeid, item.path) for item in session.items]
 
     def pytest_collectreport(self, report: _Report) -> None:
-        if report.failed:
-            self._collection_errors.append(report.nodeid)
-        elif report.skipped:
-            path = self._root / report.nodeid.split("::")[0]
-            self._collector_skips.append(self._test(report.nodeid, path))
+        # A collector's node id is relative to rootdir, which an ini file above the
+        # start dir moves away from it: record its path from the start dir, as for tests.
+        if not (report.failed or report.skipped):
+            return
+        entry = self._test(report.nodeid, self._root / report.nodeid.split("::")[0])
+        (self._collection_errors if report.failed else self._collector_skips).append(entry)
 
     def pytest_runtest_makereport(self, item: _Item, call: _Call) -> None:
         # A plain impl of a firstresult hook: it returns None, so pytest's own still

@@ -159,8 +159,28 @@ def test_collector_skips_and_collection_errors_are_recorded(
     record = _run(pytester, record_path)
 
     assert record["collector_skips"] == [{"nodeid": "test_skipmod.py", "path": "test_skipmod.py"}]
-    assert record["collection_errors"] == ["test_broken.py"]
+    assert record["collection_errors"] == [{"nodeid": "test_broken.py", "path": "test_broken.py"}]
     assert (record["selected"], record["exitstatus"]) == ([], 2)
+
+
+def test_a_collection_error_path_is_relative_to_where_pytest_started(
+    pytester: pytest.Pytester, record_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression: an error kept its rootdir-relative node id while every other path was start-relative.
+
+    With a ``pytest.ini`` above the tree, rootdir is not the start dir, so rule 4
+    missed the error on ``test_bad.py`` and reported its tests as never run.
+    """
+    pytester.makeini("[pytest]\n")
+    tree = pytester.mkdir("tree")
+    (tree / "test_ok.py").write_text("def test_ok(): pass\n", encoding="utf-8")
+    (tree / "test_bad.py").write_text("import no_such_module_xyz\n", encoding="utf-8")
+    monkeypatch.chdir(tree)
+
+    record = _run(pytester, record_path)
+
+    assert record["collected"] == [{"nodeid": "tree/test_ok.py::test_ok", "path": "test_ok.py"}]
+    assert record["collection_errors"] == [{"nodeid": "tree/test_bad.py", "path": "test_bad.py"}]
 
 
 def test_the_record_is_written_once_and_never_overwritten(

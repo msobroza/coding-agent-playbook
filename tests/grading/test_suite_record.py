@@ -67,7 +67,7 @@ _PLUGIN_JSON: dict[str, Any] = {
     "outcomes": {"t.py::a": {"outcome": "xfailed", "xfail_strict": True}},
     "finished": ["t.py::a"],
     "collector_skips": [{"nodeid": "s.py", "path": "s.py"}],
-    "collection_errors": ["e.py"],
+    "collection_errors": [{"nodeid": "e.py", "path": "e.py"}],
 }
 
 
@@ -86,7 +86,7 @@ def test_a_plugin_record_reads_back_whole(tmp_path: Path) -> None:
         outcomes={"t.py::a": RecordedOutcome("xfailed", xfail_strict=True)},
         finished=frozenset({"t.py::a"}),
         collector_skips=(RecordedTest("s.py", "s.py"),),
-        collection_errors=("e.py",),
+        collection_errors=(RecordedTest("e.py", "e.py"),),
     )
     assert (record.failures, record.passes, record.outcome_of("t.py::a")) == (1, 0, "xfailed")
     assert record.outcome_of("t.py::b") is None
@@ -114,6 +114,7 @@ def test_a_record_that_never_finished_collecting_has_no_run_set(tmp_path: Path) 
         json.dumps({**_PLUGIN_JSON, "finished": "t.py::a"}),
         json.dumps({**_PLUGIN_JSON, "collected": [{"nodeid": 1, "path": "t.py"}]}),
         json.dumps({k: v for k, v in _PLUGIN_JSON.items() if k != "ppid"}),
+        json.dumps({**_PLUGIN_JSON, "collection_errors": ["e.py"]}),
     ],
     ids=[
         "missing",
@@ -126,6 +127,7 @@ def test_a_record_that_never_finished_collecting_has_no_run_set(tmp_path: Path) 
         "finished-str",
         "nodeid-int",
         "no-ppid",
+        "collection-error-str",
     ],
 )
 def test_a_missing_or_malformed_record_reads_as_none(tmp_path: Path, content: str | None) -> None:
@@ -147,7 +149,9 @@ def test_a_missing_or_malformed_record_reads_as_none(tmp_path: Path, content: st
         (_record({}, exitstatus=5), _junit(), 5),
         (_record({"t.py::a": "passed", "t.py::b": "failed"}, exitstatus=1), _junit(1, 1), 1),
         (
-            _record({}, exitstatus=2, selected=(), collection_errors=("t.py",)),
+            _record(
+                {}, exitstatus=2, selected=(), collection_errors=(RecordedTest("t.py", "t.py"),)
+            ),
             _junit(errors=1),
             2,
         ),

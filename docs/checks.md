@@ -722,14 +722,17 @@ at most three tests. The first rule broken is the reason:
 3. a collected test was deselected, for example by a `conftest.py`, unless the
    baseline deselected it too;
 4. a test file the agent changed defines tests, but none was collected (a
-   `collect_ignore`, or a `python_files` that no longer matches);
+   `collect_ignore`, or a `python_files` that no longer matches). A `Test*`
+   class pytest refuses to collect (one with `__init__` or `__new__`, or
+   `__test__ = False`) defines none;
 5. a test or test module skips, and the baseline did not skip it. There is no
    opt-out yet: a sample whose tests must skip needs one first;
 6. a test xfails without `strict=True`, an imperative `pytest.xfail()` included,
    unless the baseline xfailed it the same way. A non-strict xfail passes whatever
    the code does. A strict one that xfails counts, so a characterization test can
    still pin a known bug with `xfail(strict=True)`;
-7. no test passed, and none failed: a run of skips and xfails alone. A run
+7. no test passed, and none failed: a run of skips and xfails alone (a test
+   that xpasses counts as a pass, as junit counts it). A run
    whose tests all fail is graded as the failure it is.
 
 The rules read the test files as the agent left them, read into memory before

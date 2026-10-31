@@ -15,8 +15,8 @@ with ``the test suite result does not count: <reason>``. The rules, in order:
 2. a ``setup/`` test that ran in the baseline now skips or xfails;
 3. a collected test was deselected, unless the baseline deselected it too;
 4. a test file the agent changed (``test_*.py`` / ``*_test.py``, defining a
-   ``test*`` function or ``Test*`` class) had no test collected, no collector skip
-   and no collection error;
+   ``test*`` function or a ``Test*`` class pytest would collect) had no test
+   collected, no collector skip and no collection error;
 5. a test skipped, or a module skipped as a whole, that the baseline did not skip.
    Policy, with no opt-out until a sample needs one: a new skip hides a test, so
    it fails;
@@ -155,7 +155,7 @@ def _deselected(s: _Suites) -> str | None:
 def _test_files_not_collected(s: _Suites) -> str | None:
     """Rule 4: changed test files that define tests none of which was collected."""
     seen = {test.path for test in (*s.candidate.collected, *s.candidate.collector_skips)}
-    seen |= set(s.candidate.collection_errors)
+    seen |= {test.path for test in s.candidate.collection_errors}
     uncollected = [
         path
         for path in s.changed_files
@@ -182,7 +182,9 @@ def _non_strict_xfails(s: _Suites) -> str | None:
 
 def _nothing_passed(s: _Suites) -> str | None:
     """Rule 7: a run in which no test passed or failed, so its pass rate measures nothing."""
-    if s.candidate.failures or any(o.outcome == "passed" for o in s.candidate.outcomes.values()):
+    # Why the record's passes: junit counts a lenient xpass as a pass, and so does
+    # the record (7a104a50); one definition of a pass for one record.
+    if s.candidate.failures or s.candidate.passes:
         return None
     return "no test ran and passed"
 
@@ -265,7 +267,24 @@ def _defines_tests(source: bytes | None) -> bool:
 def _is_test_node(node: ast.stmt) -> bool:
     if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
         return node.name.startswith("test")
-    return isinstance(node, ast.ClassDef) and node.name.startswith("Test")
+    if not isinstance(node, ast.ClassDef) or not node.name.startswith("Test"):
+        return False
+    return not any(_refuses_collection(stmt) for stmt in node.body)
+
+
+def _refuses_collection(stmt: ast.stmt) -> bool:
+    """Whether a class-body ``stmt`` makes pytest skip its ``Test*`` class.
+
+    Why: pytest collects no class that defines ``__init__`` or ``__new__`` (a
+    ``TestClock`` fake, say) or sets ``__test__ = False``, so such a class hides
+    no test. A class with no ``test*`` method still counts: it may inherit them.
+    """
+    if isinstance(stmt, ast.FunctionDef | ast.AsyncFunctionDef):
+        return stmt.name in ("__init__", "__new__")
+    if not isinstance(stmt, ast.Assign) or not isinstance(stmt.value, ast.Constant):
+        return False
+    named = any(isinstance(t, ast.Name) and t.id == "__test__" for t in stmt.targets)
+    return named and stmt.value.value is False
 
 
 def _reason(label: str, ids: Iterable[str]) -> str | None:

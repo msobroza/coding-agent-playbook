@@ -35,7 +35,7 @@ def _record(
         outcomes={n: _outcome(o) for n, o in outcomes.items()},
         finished=frozenset(outcomes),
         collector_skips=tuple(_test(path) for path in module_skips),
-        collection_errors=collection_errors,
+        collection_errors=tuple(_test(path) for path in collection_errors),
     )
 
 
@@ -112,6 +112,17 @@ def test_a_setup_test_file_the_agent_did_not_change_counts_as_unchanged(tmp_path
     files = {"test_mod.py": "def test_small(): pass\n# touched\n"}
 
     reason = _violation(tmp_path, candidate, files=files)
+
+    assert reason == "setup/ test(s) did not run: test_mod.py::test_small"
+
+
+def test_a_listed_setup_test_file_with_unchanged_bytes_still_counts_as_unchanged(
+    tmp_path: Path,
+) -> None:
+    """git can list a file whose bytes did not change (a mode-only change): it still counts."""
+    candidate = _record({"test_new.py::test_x": "passed"})
+
+    reason = _violation(tmp_path, candidate, changed=("test_mod.py",))
 
     assert reason == "setup/ test(s) did not run: test_mod.py::test_small"
 
@@ -214,6 +225,33 @@ def test_a_changed_file_is_exempt_when_pytest_would_not_or_could_not_collect_it(
     assert _violation(tmp_path, candidate, files=files, changed=tuple(files)) is None
 
 
+@pytest.mark.parametrize(
+    "helper",
+    [
+        "class TestClock:\n    def __init__(self, now):\n        self.now = now\n",
+        "class TestClock:\n    def __new__(cls):\n        return object.__new__(cls)\n",
+        "class TestClock:\n    __test__ = False\n\n    def test_tick(self): pass\n",
+    ],
+    ids=["init", "new", "dunder-test-false"],
+)
+def test_a_test_class_pytest_refuses_to_collect_defines_no_tests(
+    tmp_path: Path, helper: str
+) -> None:
+    """A helper such as a ``TestClock`` fake yields no test item, so nothing is hidden."""
+    files = {"test_support.py": helper}
+
+    assert _violation(tmp_path, _BASE, files=files, changed=("test_support.py",)) is None
+
+
+def test_a_test_class_that_only_inherits_its_tests_still_defines_tests(tmp_path: Path) -> None:
+    """``class TestX(Base): pass`` collects ``Base``'s tests: exempting it would hide them."""
+    files = {"test_new.py": "from base import Base\n\n\nclass TestX(Base):\n    pass\n"}
+
+    reason = _violation(tmp_path, _BASE, files=files, changed=("test_new.py",))
+
+    assert reason == "test file(s) define tests that never ran: test_new.py"
+
+
 # --------------------------------------------------------------------------- #
 # Rule 5: new skips
 # --------------------------------------------------------------------------- #
@@ -268,12 +306,21 @@ def test_a_non_strict_xfail_already_in_the_baseline_is_not_new(tmp_path: Path) -
 
 
 @pytest.mark.parametrize(
-    "outcomes", [{}, {"test_new.py::test_x": "xpassed"}], ids=["no-tests", "only-xpassed"]
+    "outcomes",
+    [{}, {"test_new.py::test_x": "skipped"}, {"test_new.py::test_x": "xfailed!"}],
+    ids=["no-tests", "only-skipped", "only-strict-xfailed"],
 )
 def test_a_run_where_no_test_passed_is_a_violation(tmp_path: Path, outcomes: Outcomes) -> None:
-    baseline = _record({})
+    """The baseline ran the same, so only rule 7 can fire."""
+    assert _violation(tmp_path, _record(outcomes), _record(outcomes)) == "no test ran and passed"
 
-    assert _violation(tmp_path, _record(outcomes), baseline) == "no test ran and passed"
+
+def test_a_lenient_xfail_that_now_xpasses_is_a_pass(tmp_path: Path) -> None:
+    """Regression: rule 7 counted only ``passed``, while the record and junit count ``xpassed``."""
+    baseline = _record({"test_mod.py::test_bug": "xfailed"})
+    candidate = _record({"test_mod.py::test_bug": "xpassed"})
+
+    assert _violation(tmp_path, candidate, baseline) is None
 
 
 def test_a_run_where_every_test_failed_is_a_measured_failure(tmp_path: Path) -> None:
