@@ -29,7 +29,9 @@ from __future__ import annotations
 import contextlib
 import os
 import subprocess
-from typing import TYPE_CHECKING, Any, Final, Protocol
+from typing import TYPE_CHECKING, Final, Protocol
+
+from coding_agent_playbook.grading import bounded_subprocess
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -126,7 +128,7 @@ class SubprocessBaselineGit:
         self,
         timeout_s: float,
         *,
-        run: Callable[..., subprocess.CompletedProcess[bytes]] = subprocess.run,
+        run: Callable[..., subprocess.CompletedProcess[bytes]] | None = None,
         executable: str = "git",
     ) -> None:
         self._timeout_s = timeout_s
@@ -205,7 +207,7 @@ class SubprocessGitRunner:
         repo_root: Path,
         timeout_s: float,
         *,
-        run: Callable[..., subprocess.CompletedProcess[bytes]] = subprocess.run,
+        run: Callable[..., subprocess.CompletedProcess[bytes]] | None = None,
         executable: str = "git",
     ) -> None:
         self._repo_root = repo_root
@@ -298,7 +300,7 @@ def _is_unframeable(rel_path: str) -> bool:
 
 
 def _run_git(
-    run: Callable[..., subprocess.CompletedProcess[bytes]],
+    run: Callable[..., subprocess.CompletedProcess[bytes]] | None,
     executable: str,
     args: Sequence[str],
     cwd: Path,
@@ -306,10 +308,15 @@ def _run_git(
     *,
     stdin: bytes | None = None,
 ) -> subprocess.CompletedProcess[bytes]:
-    """``<executable> <args>`` in ``cwd`` within ``timeout_s``; timeouts and OS errors become typed."""
-    kwargs: dict[str, Any] = {"cwd": cwd, "capture_output": True, "check": False}
+    """``<executable> <args>`` in ``cwd`` within ``timeout_s``; timeouts and OS errors become typed.
+
+    ``run`` takes :func:`~coding_agent_playbook.grading.bounded_subprocess.run_bounded`'s
+    keywords; ``None`` is that function, looked up at call time. Why bounded: a hook
+    or helper git starts (``worktree add`` runs ``post-checkout``) dies with it.
+    """
+    run_git = bounded_subprocess.run_bounded if run is None else run
     try:
-        return run([executable, *args], input=stdin, timeout=timeout_s, **kwargs)
+        return run_git([executable, *args], cwd=cwd, input=stdin, timeout_s=timeout_s, text=False)
     except subprocess.TimeoutExpired as exc:
         raise GitTimeoutError(_command_label(args), timeout_s) from exc
     except OSError as exc:

@@ -43,6 +43,7 @@ from typing import TYPE_CHECKING, Any
 
 from coding_agent_playbook.evals.run.claude_code_route import routed_argv, routed_env
 from coding_agent_playbook.evals.run.cli_argv import PROMPT_TOKEN, build_cli_argv
+from coding_agent_playbook.grading import bounded_subprocess
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Sequence
@@ -306,18 +307,16 @@ class LLMJudge(Judge):
         """Run the CLI once; its score, or :class:`JudgeError` saying why not."""
         try:
             with routed_env(self.route, None) as env, _judge_cwd(self.route) as cwd:
-                completed = subprocess.run(
+                # In a process group of its own: the CLI's children die with it.
+                completed = bounded_subprocess.run_bounded(
                     self._build_command(prompt),
                     env=env,
                     cwd=cwd,
-                    capture_output=True,
-                    text=True,
                     # Undecodable bytes become U+FFFD and then fail the parse as
                     # off-format, instead of escaping as UnicodeDecodeError.
                     encoding="utf-8",
                     errors="replace",
-                    timeout=self._timeout,
-                    check=False,
+                    timeout_s=self._timeout,
                 )
         except subprocess.TimeoutExpired as exc:
             raise JudgeError(f"timed out after {self._timeout:g}s") from exc

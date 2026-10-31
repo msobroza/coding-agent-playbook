@@ -38,6 +38,13 @@ from coding_agent_playbook.evals.task_registry import load_task_sample
 from coding_agent_playbook.exit_two import ExitTwoError
 from coding_agent_playbook.release.edition import load_edition
 from coding_agent_playbook.release.edition_digests import edition_dir
+from tests._process_tree import (
+    TIMEOUT_S,
+    is_alive,
+    reaped_grandchild,
+    recorded_pid,
+    spawning_program,
+)
 from tests.edition_fixtures import (
     ENGINE,
     SAMPLE_ID,
@@ -305,6 +312,23 @@ def test_a_run_past_its_timeout_is_unscorable(tmp_path: Path) -> None:
     assert (output.exit_code, output.stdout) == (2, "")
     assert "timed out" in output.stderr
     assert RunOutcome.from_run(output.exit_code, output.stdout).score is None
+
+
+@pytest.mark.skipif(os.name != "posix", reason="process groups are POSIX")
+def test_a_timed_out_run_takes_its_child_processes_with_it(tmp_path: Path) -> None:
+    """Regression: the timeout killed the side's engine only; its agent CLI kept running.
+
+    The checkout's ``src/`` comes first on the child's ``PYTHONPATH``, so its
+    ``coding_agent_playbook.cli`` is the fake that starts a grandchild.
+    """
+    engine = tmp_path / "src" / "coding_agent_playbook"
+    engine.mkdir(parents=True)
+    (engine / "__init__.py").write_text("", encoding="utf-8")
+    with reaped_grandchild(tmp_path / "grandchild.pid") as pid_file:
+        (engine / "cli.py").write_text(spawning_program(pid_file), encoding="utf-8")
+        output = PlaybookEvalRun(timeout_s=TIMEOUT_S)(tmp_path, "refactor/extract-helper", ())
+        assert output.exit_code == 2
+        assert not is_alive(recorded_pid(pid_file))
 
 
 def test_a_checkout_with_an_engine_puts_its_src_first_on_pythonpath(tmp_path: Path) -> None:

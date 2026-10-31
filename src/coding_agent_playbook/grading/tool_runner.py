@@ -20,6 +20,8 @@ import hashlib
 import subprocess
 from typing import TYPE_CHECKING
 
+from coding_agent_playbook.grading import bounded_subprocess
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
     from pathlib import Path
@@ -51,13 +53,9 @@ def subprocess_tool_runner(
         (0, b'ruff 0.15.10\\n')
     """
     try:
-        done = subprocess.run(
-            list(argv),
-            input=stdin,
-            cwd=cwd,
-            capture_output=True,
-            timeout=timeout_s,
-            check=False,
+        # In a process group of its own: a helper the tool starts dies with it.
+        done = bounded_subprocess.run_bounded(
+            argv, input=stdin, cwd=cwd, timeout_s=timeout_s, text=False
         )
     except subprocess.TimeoutExpired as exc:
         raise ToolRunError(f"{argv[0]} timed out after {timeout_s:g}s") from exc

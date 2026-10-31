@@ -1,7 +1,8 @@
 """A fake ``claude`` (and ``opencode``) CLI for the ``playbook eval`` endpoint tests (spec #281).
 
-:class:`FakeClaudeCli` replaces ``subprocess.run`` for those two executables
-only: it records each argv and child environment (and what the isolated config
+:class:`FakeClaudeCli` replaces ``subprocess.run`` (the ``--version`` probe)
+and ``bounded_subprocess.run_bounded`` (the agent and judge calls) for those two
+executables only: it records each argv and child environment (and what the isolated config
 dir held, and the working directory with whether it held a ``CLAUDE.md``), then answers like the real CLI would. ``--version`` prints a version
 line; a call that asks for ``--output-format json`` gets one
 ``{"type": "result", ...}`` object carrying the answer, so the runner's JSON
@@ -26,6 +27,7 @@ from coding_agent_playbook.evals.judge import LLMJudge
 from coding_agent_playbook.evals.run.claude_code_output import JSON_OUTPUT_ARGS
 from coding_agent_playbook.evals.run.claude_code_runner import ClaudeCodeRunner
 from coding_agent_playbook.evals.run.opencode_runner import OpenCodeRunner
+from coding_agent_playbook.grading import bounded_subprocess
 
 if TYPE_CHECKING:
     import pytest
@@ -47,9 +49,16 @@ class FakeClaudeCli:
         self._answer = answer
         self._rc = rc
         self._real_run = subprocess.run
+        self._real_bounded = bounded_subprocess.run_bounded
         for cls in (ClaudeCodeRunner, OpenCodeRunner, LLMJudge):
             monkeypatch.setattr(cls, "available", classmethod(lambda _cls: True))
         monkeypatch.setattr(subprocess, "run", self._run)
+        monkeypatch.setattr(bounded_subprocess, "run_bounded", self._run_bounded)
+
+    def _run_bounded(self, args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[Any]:
+        if not args or args[0] not in ("claude", "opencode"):
+            return self._real_bounded(args, **kwargs)
+        return self._run(args, **kwargs)
 
     def _run(self, args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
         if not args or args[0] not in ("claude", "opencode"):

@@ -34,6 +34,7 @@ from coding_agent_playbook.evals.run.comparison_sides import (
     prepare_side,
 )
 from coding_agent_playbook.evals.run.git_env import without_repo_location
+from coding_agent_playbook.grading import bounded_subprocess
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -112,14 +113,9 @@ class PlaybookEvalRun:
         argv = [sys.executable, "-m", "coding_agent_playbook.cli", "eval", sample_id, "--run"]
         argv += ["--format", "json", "--repo-root", str(checkout), *self.flags, *side_flags]
         try:
-            done = subprocess.run(
-                argv,
-                cwd=checkout,
-                env=checkout_env(checkout, os.environ),
-                capture_output=True,
-                text=True,
-                timeout=self.timeout_s,
-                check=False,
+            # In a process group of its own: the side's agent and judge CLIs die with it.
+            done = bounded_subprocess.run_bounded(
+                argv, cwd=checkout, env=checkout_env(checkout, os.environ), timeout_s=self.timeout_s
             )
         except subprocess.TimeoutExpired:
             return EvalRunOutput(2, "", f"timed out after {self.timeout_s:g}s")

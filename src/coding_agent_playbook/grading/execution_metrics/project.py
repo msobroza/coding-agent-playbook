@@ -37,9 +37,7 @@ put coverage.py in source mode (:func:`import_roots`).
 
 from __future__ import annotations
 
-import contextlib
 import os
-import signal
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -47,6 +45,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final, Protocol
 from xml.etree import ElementTree as ET
 
+from coding_agent_playbook.grading import bounded_subprocess
 from coding_agent_playbook.grading.execution_metrics.coverage_xml import (
     CoverageReport,
     parse_coverage_xml,
@@ -295,7 +294,10 @@ class ProjectHandle:
         self.report_dir.mkdir(parents=True, exist_ok=True)
         env = {**os.environ, **self.env_overrides} if self.env_overrides else None
         try:
-            proc = _run_in_session(self.test_cmd, cwd=self.root, env=env, timeout_s=self.timeout_s)
+            # In a process group of its own: a test's own subprocess dies with the suite.
+            proc = bounded_subprocess.run_bounded(
+                self.test_cmd, cwd=self.root, env=env, timeout_s=self.timeout_s
+            )
         except FileNotFoundError as exc:
             raise RuntimeError(
                 f"could not run the test command {self.test_cmd!r}: {exc}. "
@@ -358,55 +360,6 @@ def _parsed[R](path: Path, parse: Callable[[str], R]) -> R:
             f"the suite's {path.name} cannot be read: {exc}",
             reason=f"its {path.name} report cannot be read",
         ) from exc
-
-
-def _run_in_session(
-    argv: Sequence[str], *, cwd: Path, env: Mapping[str, str] | None, timeout_s: float | None
-) -> subprocess.CompletedProcess[str]:
-    """``argv`` with captured text output, in a session and process group of its own on POSIX.
-
-    Why: ``subprocess.run`` kills only its child at the timeout, and a test's own
-    subprocess kept running after it. The group is killed on a timeout and on any
-    other exception, Ctrl-C included: in its own session the suite no longer gets
-    the terminal's ``SIGINT``. Then the exception propagates (``TimeoutExpired``
-    for a timeout). It waits for the child rather than draining its pipes, as
-    ``subprocess.run`` does on POSIX: a process that left the group can hold them.
-
-    Example::
-
-        >>> _run_in_session(["true"], cwd=Path("."), env=None, timeout_s=5).returncode
-        0
-    """
-    posix = os.name == "posix"
-    with subprocess.Popen(
-        argv,
-        cwd=cwd,
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        start_new_session=posix,
-    ) as proc:
-        try:
-            stdout, stderr = proc.communicate(timeout=timeout_s)
-        except BaseException:
-            _kill_session(proc, posix=posix)
-            proc.wait()
-            raise
-    return subprocess.CompletedProcess(argv, proc.returncode, stdout, stderr)
-
-
-def _kill_session(proc: subprocess.Popen[str], *, posix: bool) -> None:
-    """Kill ``proc``'s process group on POSIX, then ``proc`` itself.
-
-    Why both: Windows has no ``killpg``, and on macOS ``killpg`` fails with
-    ``EPERM`` once the group holds only the leader's zombie, while a process that
-    left the group still holds the pipes. ``proc.kill`` is a no-op on a reaped child.
-    """
-    if posix:
-        with contextlib.suppress(ProcessLookupError, PermissionError):
-            os.killpg(proc.pid, signal.SIGKILL)
-    proc.kill()
 
 
 class ProjectFactory(Protocol):

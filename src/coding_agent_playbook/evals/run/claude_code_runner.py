@@ -35,7 +35,6 @@ instantiating directly.
 from __future__ import annotations
 
 import shutil
-import subprocess
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.evals.run.agent_env import agent_env
@@ -50,6 +49,7 @@ from coding_agent_playbook.evals.run.harness_runner import (
     HarnessRunner,
     with_stderr,
 )
+from coding_agent_playbook.grading import bounded_subprocess
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -156,14 +156,9 @@ class ClaudeCodeRunner(HarnessRunner):
         the decoded transcript (and the raw output when it is not JSON).
         """
         with routed_env(self.route, agent_env(scratch_dir)) as env:
-            completed = subprocess.run(
-                self._build_command(prompt),
-                cwd=scratch_dir,
-                env=env,
-                capture_output=True,
-                text=True,
-                timeout=self._timeout,
-                check=False,
+            # In a process group of its own: the CLI's workers and MCP servers die with it.
+            completed = bounded_subprocess.run_bounded(
+                self._build_command(prompt), cwd=scratch_dir, env=env, timeout_s=self._timeout
             )
         stderr = self._redact(completed.stderr)
         # Parse the raw stdout, then redact what came out of it: JSON escapes a

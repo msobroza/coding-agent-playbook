@@ -8,7 +8,9 @@ under ``hermetic_git_env``.
 
 from __future__ import annotations
 
+import os
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -23,6 +25,14 @@ from coding_agent_playbook.grading.baseline_git import (
     clean_head_tree,
     parse_batch_output,
 )
+from coding_agent_playbook.grading.bounded_subprocess import run_bounded
+from tests._process_tree import (
+    TIMEOUT_S,
+    is_alive,
+    reaped_grandchild,
+    recorded_pid,
+    spawning_program,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -36,7 +46,7 @@ _NEWLINE_PATH = "odd\nname.py"
 
 @dataclass
 class SpyGitRunner:
-    """Records each git argv and its timeout, then runs it with the real ``subprocess.run``.
+    """Records each git argv and its timeout, then runs it with the real ``run_bounded``.
 
     The git command named in ``timeout_on`` (``"rev-parse"``, ``"worktree remove"``)
     raises :class:`subprocess.TimeoutExpired` instead of running.
@@ -51,11 +61,11 @@ class SpyGitRunner:
         while rest[:1] == ["-c"]:  # skip `-c key=value` options before the subcommand
             rest = rest[2:]
         command = " ".join(rest[:2]) if rest[0] == "worktree" else rest[0]
-        self.calls.append((command, kwargs.get("timeout")))
+        self.calls.append((command, kwargs.get("timeout_s")))
         self.argvs.append(list(args))
         if command == self.timeout_on:
-            raise subprocess.TimeoutExpired(list(args), kwargs.get("timeout") or 0)
-        return subprocess.run(args, **kwargs)
+            raise subprocess.TimeoutExpired(list(args), kwargs.get("timeout_s") or 0)
+        return run_bounded(args, **kwargs)
 
     def commands(self, name: str) -> int:
         return sum(1 for command, _ in self.calls if command == name)
@@ -193,6 +203,19 @@ def test_git_timeout_names_the_command_and_the_seconds(repo: Path, command: str,
 
     assert f"git {command} timed out after 7.5s" in str(excinfo.value)
     assert "[metrics] git_timeout_s" in str(excinfo.value)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="process groups are POSIX")
+def test_a_timed_out_git_takes_its_child_processes_with_it(tmp_path: Path) -> None:
+    """Regression: the timeout killed git only; a hook or helper it started kept running."""
+    fake_git = tmp_path / "fake-git"
+    with reaped_grandchild(tmp_path / "grandchild.pid") as pid_file:
+        fake_git.write_text(f"#!{sys.executable}\n{spawning_program(pid_file)}\n", encoding="utf-8")
+        fake_git.chmod(0o755)
+        git = SubprocessBaselineGit(TIMEOUT_S, executable=str(fake_git))
+        with pytest.raises(GitTimeoutError):
+            git.is_commit(tmp_path, "HEAD")
+        assert not is_alive(recorded_pid(pid_file))
 
 
 def test_worktree_remove_timeout_is_swallowed(repo: Path, tmp_path: Path) -> None:

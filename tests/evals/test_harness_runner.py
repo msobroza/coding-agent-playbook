@@ -651,9 +651,7 @@ def test_a_scoring_suite_that_cannot_start_stops_the_sample(
     def _no_program(argv: Any, **kwargs: Any) -> Any:
         raise FileNotFoundError(2, "No such file or directory", argv[0])
 
-    monkeypatch.setattr(
-        "coding_agent_playbook.grading.execution_metrics.project._run_in_session", _no_program
-    )
+    monkeypatch.setattr("coding_agent_playbook.grading.bounded_subprocess.run_bounded", _no_program)
 
     with pytest.raises(RuntimeError, match=r"could not run the test command"):
         _run_suite_green(tmp_path, {"mod.py": _REFACTORED})

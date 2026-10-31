@@ -27,6 +27,13 @@ from coding_agent_playbook.evals.judge import (
     parse_score,
 )
 from coding_agent_playbook.evals.run.claude_code_route import ClaudeCodeKeyRoute
+from tests._process_tree import (
+    TIMEOUT_S,
+    is_alive,
+    reaped_grandchild,
+    recorded_pid,
+    spawning_program,
+)
 
 # --------------------------------------------------------------------------- #
 # Judge ABC — batch wrapper + n-sample averaging
@@ -249,6 +256,17 @@ def test_llm_timeout_raises() -> None:
     judge = LLMJudge(command=[sys.executable, "-c", program], timeout=0.2, retries=0)
     with pytest.raises(JudgeError, match="timed out"):
         judge.score_criterion("crit", "artifact")
+
+
+@pytest.mark.skipif(os.name != "posix", reason="process groups are POSIX")
+def test_a_timed_out_judge_takes_its_child_processes_with_it(tmp_path: Path) -> None:
+    """Regression: the timeout killed the judge CLI only; its children kept running."""
+    with reaped_grandchild(tmp_path / "grandchild.pid") as pid_file:
+        program = spawning_program(pid_file)
+        judge = LLMJudge(command=[sys.executable, "-c", program], timeout=TIMEOUT_S, retries=0)
+        with pytest.raises(JudgeError, match="timed out"):
+            judge.score_criterion("crit", "artifact")
+        assert not is_alive(recorded_pid(pid_file))
 
 
 def test_llm_retries_a_failed_attempt_then_scores(tmp_path: Path) -> None:

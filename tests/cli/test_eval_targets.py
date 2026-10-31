@@ -18,6 +18,7 @@ from coding_agent_playbook.evals.judge import LLMJudge
 from coding_agent_playbook.evals.run.claude_code_runner import ClaudeCodeRunner
 from coding_agent_playbook.evals.run.opencode_runner import OpenCodeRunner
 from coding_agent_playbook.evals.targets import TARGET_ENV_VAR
+from coding_agent_playbook.grading import bounded_subprocess
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -63,10 +64,18 @@ class FakeHarnessCli:
     def __init__(self, monkeypatch: pytest.MonkeyPatch, answer: str = "done") -> None:
         self.argvs: list[list[str]] = []
         self._answer = answer
+        self._real_bounded = bounded_subprocess.run_bounded
         self._real_run = subprocess.run
         for cls in (ClaudeCodeRunner, OpenCodeRunner, LLMJudge):
             monkeypatch.setattr(cls, "available", classmethod(lambda _cls: True))
         monkeypatch.setattr(subprocess, "run", self._run)
+        monkeypatch.setattr(bounded_subprocess, "run_bounded", self._run_bounded)
+
+    def _run_bounded(self, args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[Any]:
+        """The agent and judge calls; every other program runs for real."""
+        if not args or args[0] not in ("claude", "opencode"):
+            return self._real_bounded(args, **kwargs)
+        return self._run(args, **kwargs)
 
     def _run(self, args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
         if args and args[0] in ("claude", "opencode"):

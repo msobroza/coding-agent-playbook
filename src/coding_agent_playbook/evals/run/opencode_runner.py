@@ -37,7 +37,6 @@ instantiating directly.
 from __future__ import annotations
 
 import shutil
-import subprocess
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -47,6 +46,7 @@ from coding_agent_playbook.evals.run.harness_runner import AgentRun, HarnessRunn
 from coding_agent_playbook.evals.run.opencode_output import OpenCodeOutput, parse_opencode_output
 from coding_agent_playbook.evals.run.opencode_route import routed_opencode_env
 from coding_agent_playbook.evals.token_usage import TokenUsage
+from coding_agent_playbook.grading import bounded_subprocess
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -138,14 +138,9 @@ class OpenCodeRunner(HarnessRunner):
         an endpoint it is isolated too, and the token is redacted from the transcript.
         """
         with routed_opencode_env(self.route, agent_env(scratch_dir)) as env:
-            completed = subprocess.run(
-                self._build_command(prompt),
-                cwd=scratch_dir,
-                env=env,
-                capture_output=True,
-                text=True,
-                timeout=self._timeout,
-                check=False,
+            # In a process group of its own: the CLI's workers and MCP servers die with it.
+            completed = bounded_subprocess.run_bounded(
+                self._build_command(prompt), cwd=scratch_dir, env=env, timeout_s=self._timeout
             )
         output = parse_opencode_output(completed.stdout)
         transcript = completed.stdout if output is None else output.text

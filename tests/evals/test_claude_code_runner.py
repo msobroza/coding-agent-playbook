@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import subprocess
 import sys
 import textwrap
 from importlib import metadata
@@ -29,6 +30,13 @@ from coding_agent_playbook.evals.run.claude_code_runner import (
 from coding_agent_playbook.evals.run.fake_runner import write_files
 from coding_agent_playbook.evals.run.harness_runner import AgentRun, Candidate, materialize
 from coding_agent_playbook.evals.sample import EvalSample, SampleInvocation
+from tests._process_tree import (
+    TIMEOUT_S,
+    is_alive,
+    reaped_grandchild,
+    recorded_pid,
+    spawning_program,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -144,6 +152,19 @@ def test_timeout_is_configurable(tmp_path: Path) -> None:
     runner = ClaudeCodeRunner(command=[sys.executable, "-c", program], timeout=0.2)
     with pytest.raises(Exception):  # noqa: B017  (TimeoutExpired or wrapper)
         runner._invoke_agent("p", scratch)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="process groups are POSIX")
+def test_a_timed_out_agent_takes_its_child_processes_with_it(tmp_path: Path) -> None:
+    """Regression: the timeout killed the CLI only; its workers ran on through the eval run."""
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    with reaped_grandchild(tmp_path / "grandchild.pid") as pid_file:
+        program = spawning_program(pid_file)
+        runner = ClaudeCodeRunner(command=[sys.executable, "-c", program], timeout=TIMEOUT_S)
+        with pytest.raises(subprocess.TimeoutExpired):
+            runner._invoke_agent("p", scratch)
+        assert not is_alive(recorded_pid(pid_file))
 
 
 def test_invoke_agent_child_env_is_unattended(

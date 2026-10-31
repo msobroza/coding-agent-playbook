@@ -40,6 +40,7 @@ from coding_agent_playbook.evals.setup_digest import (
 )
 from coding_agent_playbook.evals.targets import TARGET_ENV_VAR
 from coding_agent_playbook.evals.task_registry import load_task_sample
+from coding_agent_playbook.grading import bounded_subprocess
 from coding_agent_playbook.grading.types import EvaluationReport
 from coding_agent_playbook.release.edition import load_edition
 from coding_agent_playbook.release.edition_digests import edition_dir
@@ -93,10 +94,18 @@ class FakeClaudeCli:
 
     def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
         self.argvs: list[list[str]] = []
+        self._real_bounded = bounded_subprocess.run_bounded
         self._real_run = subprocess.run
         for cls in (ClaudeCodeRunner, LLMJudge):
             monkeypatch.setattr(cls, "available", classmethod(lambda _cls: True))
         monkeypatch.setattr(subprocess, "run", self._run)
+        monkeypatch.setattr(bounded_subprocess, "run_bounded", self._run_bounded)
+
+    def _run_bounded(self, args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[Any]:
+        """The agent and judge calls; every other program runs for real."""
+        if not args or args[0] != "claude":
+            return self._real_bounded(args, **kwargs)
+        return self._run(args, **kwargs)
 
     def _run(self, args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
         if not args or args[0] != "claude":

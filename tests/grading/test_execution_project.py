@@ -382,9 +382,7 @@ def test_a_group_kill_refused_by_the_os_still_ends_in_no_result(
     def _refused(pid: int, sig: int) -> None:
         raise PermissionError(1, "Operation not permitted")
 
-    monkeypatch.setattr(
-        "coding_agent_playbook.grading.execution_metrics.project.os.killpg", _refused
-    )
+    monkeypatch.setattr("coding_agent_playbook.grading.bounded_subprocess.os.killpg", _refused)
     handle = ProjectHandle(
         root=tmp_path,
         test_cmd=[sys.executable, "-c", "import time; time.sleep(60)"],
