@@ -94,19 +94,25 @@ def test_an_outer_sigterm_ends_a_nested_leaf_that_ignores_sigterm(tmp_path: Path
 
 
 def test_a_forked_child_forgets_its_parents_bounded_groups() -> None:
-    """Regression: a forked worker inherited the live set; terminating it ended our runs."""
+    """Regression: a forked worker inherited the live set; terminating it ended our runs.
+
+    Nor does it inherit a terminating parent's switch, which would refuse its runs.
+    """
     parents_group = 2**30 - 1  # never a real pid: only its presence in the set matters
     bounded_subprocess._live_bounded_groups.add(parents_group)
+    bounded_subprocess._process_terminating.set()
     try:
         with warnings.catch_warnings():
             # Why: Python warns that forking a multi-threaded process (pytest's) may deadlock.
             warnings.simplefilter("ignore", DeprecationWarning)
             pid = os.fork()
         if pid == 0:
-            os._exit(len(bounded_subprocess._live_bounded_groups))
+            terminating = bounded_subprocess._process_terminating.is_set()
+            os._exit(len(bounded_subprocess._live_bounded_groups) + 10 * terminating)
         _, status = os.waitpid(pid, 0)
     finally:
         bounded_subprocess._live_bounded_groups.discard(parents_group)
+        bounded_subprocess._process_terminating.clear()
     assert os.waitstatus_to_exitcode(status) == 0
 
 

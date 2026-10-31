@@ -12,8 +12,8 @@ In its own session the child no longer gets the signals sent to its parent's
 group (a terminal's Ctrl-C or hangup, a supervisor's ``kill -TERM -<pgid>``), so
 :func:`forward_signals_to_bounded_children` installs a handler that forwards
 SIGINT, SIGTERM and SIGHUP to every live bounded group, then acts as the process
-did before; after a SIGTERM or SIGHUP it SIGKILLs the groups still led by a live
-process before it dies. The CLI entry point installs it from the main thread,
+did before; after a SIGTERM or SIGHUP it refuses every new bounded run and
+SIGKILLs the groups still led by a live process before it dies. The CLI entry point installs it from the main thread,
 which covers the children of worker threads, and :func:`halted_by` with
 :func:`halt_bounded_runs` stop a thread pool's units after an interrupt (``eval
 --record --jobs N``). A bounded child has no controlling terminal: an
@@ -80,6 +80,14 @@ _live_bounded_groups: set[int] = set()
 _thread_halt: contextvars.ContextVar[threading.Event | None] = contextvars.ContextVar(
     "bounded_run_halt", default=None
 )
+
+#: Set once a SIGTERM or SIGHUP is ending this process; every thread's
+#: :func:`run_bounded` is then refused. Why: the handler signals a snapshot of the
+#: live groups and waits out a grace, and meanwhile a worker whose agent CLI just
+#: died would start its judge in a group of its own that the process, dying by
+#: the re-raised signal, then orphans. Why not on SIGINT: a program may catch the
+#: ``KeyboardInterrupt`` and go on, and a pool's own halt covers ``--jobs``.
+_process_terminating = threading.Event()
 
 
 class BoundedRunHalted(KeyboardInterrupt):
@@ -239,7 +247,9 @@ def halt_bounded_runs(halt: threading.Event) -> None:
 
 
 def _refuse_if_halted(argv: Sequence[str]) -> None:
-    """Raise :class:`BoundedRunHalted` when this thread's unit was halted."""
+    """Raise :class:`BoundedRunHalted` when this process is terminating or this thread's unit was halted."""
+    if _process_terminating.is_set():
+        raise BoundedRunHalted(f"not started, this process is terminating: {list(argv)!r}")
     halt = _thread_halt.get()
     if halt is not None and halt.is_set():
         raise BoundedRunHalted(f"not started, its run was interrupted: {list(argv)!r}")
@@ -279,14 +289,25 @@ def _forward_to_bounded_groups(signum: int, frame: FrameType | None) -> None:
     SIGINT raises ``KeyboardInterrupt``, whose unwinding ends the groups. SIGTERM
     and SIGHUP cannot unwind, so the groups whose leader outlives the grace
     (:func:`_own_term_grace_s`) get SIGKILL here; then ``SIG_DFL`` is restored and
-    the signal re-sent, so the process still dies by it.
+    the signal re-sent, so the process still dies by it. From the start no thread
+    may start a bounded child (:data:`_process_terminating`).
+
+    One window is left: a thread that passed its refusal check before the switch
+    and is inside ``Popen`` during the final sweep is not yet in the live set (an
+    accepted risk of microseconds, as in :func:`run_bounded`).
     """
     if signum == signal.SIGINT:
         for pgid in _live_bounded_groups.copy():
             _signal_group(pgid, signum)
         signal.default_int_handler(signum, frame)
         return
+    _process_terminating.set()  # before the snapshot, so no group can miss both
     _end_groups(_live_bounded_groups.copy(), signum, _own_term_grace_s())
+    # Why a second sweep: a group registered after the snapshot (its thread had
+    # passed the first refusal) is being ended by its own thread, whose grace
+    # the process does not live to see out.
+    for pgid in _live_bounded_groups.copy():
+        _signal_group(pgid, signal.SIGKILL)
     signal.signal(signum, signal.SIG_DFL)
     os.kill(os.getpid(), signum)
 
@@ -303,12 +324,14 @@ def _own_term_grace_s() -> float:
 
 
 def _forget_parent_groups() -> None:
-    """Empty the live set in a forked child: its parent's groups are not its to signal.
+    """Empty the live set and clear the terminating switch in a forked child.
 
     Why: a forked worker (``multiprocessing``'s fork context) inherits the handler
-    and the set, so terminating it ended every run its parent had going.
+    and the set, so terminating it ended every run its parent had going; and a
+    child forked while its parent terminates is not itself terminating.
     """
     _live_bounded_groups.clear()
+    _process_terminating.clear()
 
 
 if _POSIX:

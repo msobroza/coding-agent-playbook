@@ -12,6 +12,7 @@ import contextlib
 import os
 import signal
 import threading
+import time
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, cast
 
@@ -154,3 +155,26 @@ def test_ctrl_c_under_jobs_starts_no_queued_unit_and_ends_the_running_ones(
         assert proc.wait(timeout=20) == -signal.SIGINT
         assert sorted(f.name for f in leaf_files if f.exists()) == ["u0.agent", "u1.agent"]
         assert not any(is_alive(pid, grace_s=1.0) for pid in agents)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="process groups are POSIX")
+def test_sigterm_under_jobs_leaves_no_bounded_child_running(tmp_path: Path) -> None:
+    """Regression: a judge started during the SIGTERM handler's grace outlived the record.
+
+    Each agent leaf dies on the SIGTERM, so its worker went on to start its judge
+    in a group the handler's snapshot of the live groups did not hold.
+    """
+    leaf_files = [tmp_path / f"u{i}.{step}" for i in range(4) for step in ("agent", "judge")]
+
+    with contextlib.ExitStack() as stack:
+        for leaf_file in leaf_files:
+            stack.enter_context(reaped_grandchild(leaf_file))
+        proc = stack.enter_context(own_group(_INTERRUPTED_RECORD.format(work=str(tmp_path))))
+        for i in (0, 1):
+            wait_for_pid(tmp_path / f"u{i}.agent")
+        os.killpg(proc.pid, signal.SIGTERM)
+
+        assert proc.wait(timeout=20) == -signal.SIGTERM
+        time.sleep(1.0)  # a leaf started at the end has written its pid by now
+        started = [wait_for_pid(f, limit_s=1.0) for f in leaf_files if f.exists()]
+        assert [pid for pid in started if is_alive(pid, grace_s=0.5)] == []
