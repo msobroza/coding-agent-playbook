@@ -8,12 +8,12 @@ timeout case uses :class:`FakeGitRunner` instead of patching :mod:`subprocess`.
 
 from __future__ import annotations
 
-import subprocess
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from coding_agent_playbook.grading import bounded_subprocess
 from coding_agent_playbook.grading.baseline_git import GitTimeoutError, SubprocessGitRunner
 from coding_agent_playbook.grading.execution_metrics.git_diff import (
     changed_lines,
@@ -22,6 +22,7 @@ from coding_agent_playbook.grading.execution_metrics.git_diff import (
 from tests.fakes import FakeGitRunner
 
 if TYPE_CHECKING:
+    import subprocess
     from collections.abc import Callable, Sequence
     from pathlib import Path
 
@@ -130,13 +131,13 @@ def test_untracked_file_counts_all_lines(repo: Path) -> None:
 
 @dataclass
 class _SpyRun:
-    """Wraps the real ``subprocess.run`` and records each git argv and its timeout."""
+    """Wraps the real ``run_bounded`` and records each git argv and its timeout."""
 
     calls: list[tuple[list[str], float | None]] = field(default_factory=list)
 
     def __call__(self, args: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
-        self.calls.append((list(args), kwargs.get("timeout")))
-        return subprocess.run(args, **kwargs)
+        self.calls.append((list(args), kwargs.get("timeout_s")))
+        return bounded_subprocess.run_bounded(args, **kwargs)
 
 
 def test_git_argv_is_hardened_and_bounded(repo: Path) -> None:

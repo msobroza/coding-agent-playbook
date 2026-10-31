@@ -29,7 +29,7 @@ from __future__ import annotations
 import contextlib
 import os
 import subprocess
-from typing import TYPE_CHECKING, Final, Protocol
+from typing import TYPE_CHECKING, Final, Literal, Protocol
 
 from coding_agent_playbook.grading import bounded_subprocess
 
@@ -94,6 +94,32 @@ class GitTimeoutError(BaselineGitError):
         self.timeout_s = timeout_s
 
 
+class BoundedGitRun(Protocol):
+    """The injectable git run: :func:`~coding_agent_playbook.grading.bounded_subprocess.run_bounded`'s keywords.
+
+    Why a protocol, not ``Callable[..., ...]``: a fake shaped like
+    ``subprocess.run`` (``timeout=``) type-checks against ``Callable[...]`` and
+    then fails at run time on ``timeout_s=``; here mypy rejects it.
+
+    Example::
+
+        >>> SubprocessGitRunner(Path("."), 10.0, run=bounded_subprocess.run_bounded)  # doctest: +SKIP
+    """
+
+    def __call__(
+        self,
+        argv: Sequence[str],
+        /,
+        *,
+        timeout_s: float | None,
+        cwd: Path,
+        input: bytes | None,
+        text: Literal[False],
+    ) -> subprocess.CompletedProcess[bytes]:
+        """Run ``argv`` in ``cwd`` within ``timeout_s``, in bytes mode; ``input`` feeds stdin."""
+        ...
+
+
 class BaselineGit(Protocol):
     """The git queries a ``git:`` metrics baseline needs."""
 
@@ -117,6 +143,9 @@ class BaselineGit(Protocol):
 class SubprocessBaselineGit:
     """:class:`BaselineGit` over the ``git`` binary (arg lists, no shell), bounded by ``timeout_s``.
 
+    An injected ``run`` is a :class:`BoundedGitRun`: it takes ``run_bounded``'s
+    keywords (``timeout_s=``, ``text=False``), not ``subprocess.run``'s.
+
     Example::
 
         >>> git = SubprocessBaselineGit(10.0)
@@ -128,7 +157,7 @@ class SubprocessBaselineGit:
         self,
         timeout_s: float,
         *,
-        run: Callable[..., subprocess.CompletedProcess[bytes]] | None = None,
+        run: BoundedGitRun | None = None,
         executable: str = "git",
     ) -> None:
         self._timeout_s = timeout_s
@@ -193,7 +222,9 @@ class SubprocessGitRunner:
     """A :data:`GitRunner` over the ``git`` binary at ``repo_root``, bounded by ``timeout_s``.
 
     Every call disables ``core.fsmonitor``; a non-zero exit raises
-    :class:`BaselineGitError` carrying git's stderr.
+    :class:`BaselineGitError` carrying git's stderr. An injected ``run`` is a
+    :class:`BoundedGitRun`: it takes ``run_bounded``'s keywords (``timeout_s=``,
+    ``text=False``), not ``subprocess.run``'s.
 
     Example::
 
@@ -207,7 +238,7 @@ class SubprocessGitRunner:
         repo_root: Path,
         timeout_s: float,
         *,
-        run: Callable[..., subprocess.CompletedProcess[bytes]] | None = None,
+        run: BoundedGitRun | None = None,
         executable: str = "git",
     ) -> None:
         self._repo_root = repo_root
@@ -300,7 +331,7 @@ def _is_unframeable(rel_path: str) -> bool:
 
 
 def _run_git(
-    run: Callable[..., subprocess.CompletedProcess[bytes]] | None,
+    run: BoundedGitRun | None,
     executable: str,
     args: Sequence[str],
     cwd: Path,
