@@ -236,6 +236,23 @@ class EvalSample:
             edition=edition,
         )
 
+    @property
+    def setup_dir(self) -> Path:
+        """The sample's ``setup/`` tree in the catalog, beside its ``sample.toml``.
+
+        The one place that names it: materialize copies it into the agent's
+        scratch repo, prompting detects facts over it, and scoring grades against
+        it as the baseline. Why shared: an edition pins this same directory by
+        digest, and the three readers must agree on which tree that is. The
+        directory may be missing (a sample with no fixture).
+
+        Example::
+
+            >>> sample.setup_dir  # doctest: +SKIP
+            PosixPath('catalog/core/eval_samples/characterize/legacy-pricing/setup')
+        """
+        return self.source_path.parent / "setup"
+
     def compiled(self) -> CompiledSample:
         """Compile this sample's blocks into a :class:`CompiledSample` (single-trial).
 

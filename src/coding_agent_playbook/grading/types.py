@@ -312,9 +312,9 @@ class EvalContext:
 
     The ``[expected]`` file checks
     (:mod:`coding_agent_playbook.evals.checks.files`) read ``tree`` (the
-    candidate repo root after the agent ran) and ``baseline_tree`` (the pristine
-    ``setup/`` snapshot, for the ``file_unchanged`` check). The runner sets both;
-    every other family ignores them.
+    candidate repo root after the agent ran) and ``baseline_tree`` (the sample's
+    catalog ``setup/``, out of the agent's reach, for the ``file_unchanged``
+    check). The runner sets both; every other family ignores them.
 
     The two ``*_measurements`` fields (T4a) let a
     :class:`~coding_agent_playbook.grading.rubric.Rubric` act as a

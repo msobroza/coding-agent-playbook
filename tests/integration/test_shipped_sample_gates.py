@@ -567,10 +567,10 @@ def test_materialize_ignores_solution(tmp_path: Path, stub_uv_sync: None) -> Non
     sample_dir = _edit_sample(tmp_path / "samples")
     baseline = materialize(_load(sample_dir, "tests"), tmp_path / "scratch")
 
-    for tree in (baseline.repo_root, baseline.setup_snapshot):
-        assert not (tree / _SOLUTION_DIR).exists()
-        assert not (tree / "tests" / "test_greet.py").exists()
-        assert (tree / "app" / "greet.py").read_text(encoding="utf-8") == _GREET
+    tree = baseline.repo_root
+    assert not (tree / _SOLUTION_DIR).exists()
+    assert not (tree / "tests" / "test_greet.py").exists()
+    assert (tree / "app" / "greet.py").read_text(encoding="utf-8") == _GREET
 
 
 def test_loader_and_validator_ignore_solution(tmp_path: Path) -> None:

@@ -299,8 +299,7 @@ def test_materialize_copies_setup_and_commits_baseline(tmp_path: Path) -> None:
     assert (scratch / "mod.py").is_file()
     assert (scratch / ".git").is_dir()
     assert baseline.commit  # a real SHA
-    assert baseline.setup_snapshot != scratch
-    assert (baseline.setup_snapshot / "mod.py").read_text() == _LONG_FN
+    assert (scratch / "mod.py").read_text() == _LONG_FN
 
 
 def test_capture_includes_new_files_in_diff_and_changed(tmp_path: Path) -> None:
@@ -1076,8 +1075,7 @@ def test_materialize_with_no_setup_dir_yields_empty_baseline(tmp_path: Path) -> 
 
     baseline = materialize(sample, tmp_path / "scratch")
     assert baseline.commit
-    assert baseline.setup_snapshot.is_dir()
-    assert not any(baseline.setup_snapshot.iterdir())  # empty snapshot
+    assert [p.name for p in baseline.repo_root.iterdir()] == [".git"]  # empty repo
 
 
 @pytest.mark.catalog
@@ -1214,11 +1212,11 @@ def test_uv_sync_skipped_when_no_pyproject(monkeypatch: pytest.MonkeyPatch, tmp_
 def test_uv_sync_invoked_when_pyproject_present(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """A scratch tree with a ``pyproject.toml`` triggers one ``uv sync`` per tree.
+    """A scratch tree with a ``pyproject.toml`` triggers one ``uv sync``, in the scratch repo.
 
-    The fake ``subprocess.run`` captures both invocations (the scratch repo and
-    the pristine ``setup/`` snapshot — the execution baseline) so we can assert
-    each one ran from the right cwd.
+    The fake ``subprocess.run`` captures the invocation so we can assert its cwd.
+    Regression: a second sync ran in a baseline copy beside the scratch repo, a
+    copy the agent could edit; scoring now reads the catalog ``setup/`` itself.
     """
     uv_calls: list[tuple[list[str], Path]] = []
     real_run = subprocess.run
@@ -1247,11 +1245,8 @@ def test_uv_sync_invoked_when_pyproject_present(
 
     baseline = materialize(sample, tmp_path / "scratch")
 
-    # Two ``uv sync`` calls: one in the scratch repo, one in the pristine snapshot.
-    assert len(uv_calls) == 2
-    cwds = {call[1] for call in uv_calls}
-    assert baseline.repo_root in cwds
-    assert baseline.setup_snapshot in cwds
+    # One ``uv sync``, in the scratch repo: scoring's baseline is the catalog setup/.
+    assert [cwd for _args, cwd in uv_calls] == [baseline.repo_root]
     # Without a uv.lock the runner falls back to the non-frozen form (it
     # resolves + locks on the fly — the right default for a fresh fixture).
     for args, _cwd in uv_calls:

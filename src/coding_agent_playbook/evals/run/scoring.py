@@ -21,11 +21,11 @@ gate/rubric layer checks → their composers → the metric leaves) rather than 
 flat ``[metrics]`` block:
 
 * **static** metrics (``not needs_project``) are measured per candidate ``*.py``
-  file (and over the pristine ``setup/`` snapshot for the baseline); a file that
+  file (and over the sample's catalog ``setup/`` for the baseline); a file that
   cannot be read, parsed or measured, or is over 1 MB, is skipped;
 * **execution** metrics (``needs_project``) run a
   :class:`~coding_agent_playbook.grading.execution_metrics.project.ProjectHandle` over
-  the candidate tree (and the snapshot for the baseline) — but **only when** an
+  the candidate tree (and a throwaway copy of ``setup/`` for the baseline) — but **only when** an
   execution metric is actually referenced (``run_tests`` is *inferred*, not
   authored). Each run stops after 300 s and runs with an allowlisted
   environment (:func:`_suite_env`: ``PATH``, ``HOME``, the locale, the temp dirs,
@@ -50,12 +50,20 @@ exactly when its metric is named there.
 The file checks (``[gate]`` predicates) ignore the
 :class:`~coding_agent_playbook.grading.check.MeasurementSet` and read
 ``ctx.tree`` / ``ctx.baseline_tree`` directly.
+
+The baseline is always the sample's catalog ``setup/``
+(:attr:`~coding_agent_playbook.evals.sample.EvalSample.setup_dir`), never a copy
+beside the agent's scratch repo: such a copy was the agent's to edit, which let
+an edited file pass ``file_unchanged`` and a planted ``conftest.py`` break the
+baseline suite. The baseline suite runs on a temporary copy of it, so the
+suite's own writes (``.pyc`` files, caches) never touch the catalog.
 """
 
 from __future__ import annotations
 
 import importlib.util
 import os
+import shutil
 import sys
 import tempfile
 from contextlib import ExitStack
@@ -184,7 +192,7 @@ def score(
     :class:`~coding_agent_playbook.grading.rubric.Rubric`
     (:func:`~coding_agent_playbook.evals.sample.compile_eval_sample`), pre-computes the
     metrics that rubric's checks reference over the candidate (and, for
-    regression/execution, the pristine ``setup/`` baseline snapshot), runs
+    regression/execution, the sample's catalog ``setup/``), runs
     :meth:`Rubric.evaluate`, then derives the per-trial verdict from the gate/rubric
     layer results (**skipped-neutral**) and writes it onto ``report.passed``.
 
@@ -201,6 +209,14 @@ def score(
     sample whose verdict or aggregate the short-circuit could change (an ``or``
     verdict, a weighted verdict, an aggregate over a skippable layer — see
     :attr:`~coding_agent_playbook.evals.compile.compiler.CompiledSample.short_circuit_safe`).
+
+    ``baseline`` is the runner's materialized scratch repo; the reference tree
+    scoring compares against is ``sample.setup_dir``, which the agent cannot reach.
+
+    Example::
+
+        >>> score(sample, baseline, capture(baseline.repo_root, baseline, log)).passed  # doctest: +SKIP
+        True
     """
     from coding_agent_playbook.evals.sample import compile_eval_sample
 
@@ -214,14 +230,14 @@ def score(
     # short-circuit it when a cheaper required gate already failed (no wasted judge
     # call). With no judge configured its rubric layer reports unavailable -> skipped.
     with ExitStack() as stack:
-        measured = _measure(rubric, baseline, candidate, stack)
+        measured = _measure(rubric, sample, candidate, stack)
         ctx = EvalContext(
             module=None,
             source="",
             label=_RUBRIC_LABEL,
             project=measured.project,
             tree=candidate.tree,
-            baseline_tree=baseline.setup_snapshot,
+            baseline_tree=sample.setup_dir,
             artifact=_graded_artifact(candidate),
             judge_samples=judge_samples,
             judge=judge,
@@ -302,9 +318,9 @@ class _Measured:
 
 
 def _measure(
-    rubric: Rubric, baseline: Baseline, candidate: Candidate, stack: ExitStack
+    rubric: Rubric, sample: EvalSample, candidate: Candidate, stack: ExitStack
 ) -> _Measured:
-    """Measure the candidate and the ``setup/`` snapshot with every metric ``rubric`` references.
+    """Measure the candidate and ``sample``'s ``setup/`` with every metric ``rubric`` references.
 
     Static metrics run per ``*.py`` file; execution metrics run the suite once
     per tree, and only when one is referenced (``run_tests`` is inferred). The
@@ -315,14 +331,14 @@ def _measure(
     static = [m for m in referenced if not m.needs_judge and not m.needs_project]
     execution = _execution_metrics(rubric)
     candidate_rows = _static_rows(candidate.tree, static, setup)
-    baseline_rows = _static_rows(baseline.setup_snapshot, static, setup)
+    baseline_rows = _static_rows(sample.setup_dir, static, setup)
     promised = measured_metrics(referenced_metrics(rubric.checks, nested=True), setup)
     if not execution:
         return _Measured(candidate_rows, baseline_rows, None, promised)
     _require_toolchain()
     project = _project(candidate.tree, stack)
     candidate_rows += _suite_rows(project, execution, setup)
-    baseline_rows += _baseline_suite_rows(baseline.setup_snapshot, execution, setup, stack)
+    baseline_rows += _baseline_suite_rows(sample, execution, setup, stack)
     failure = None if project.no_result is None else project.no_result.reason
     return _Measured(candidate_rows, baseline_rows, project, promised, failure)
 
@@ -356,22 +372,38 @@ def _suite_rows(
 
 
 def _baseline_suite_rows(
-    tree: Path, metrics: list[Metric], setup: MeasureSetup, stack: ExitStack
+    sample: EvalSample, metrics: list[Metric], setup: MeasureSetup, stack: ExitStack
 ) -> list[Measurement]:
-    """The ``setup/`` snapshot's suite measurements; :class:`BaselineSuiteError` when it gave none.
+    """``sample``'s ``setup/`` suite measurements; :class:`BaselineSuiteError` when it gave none.
 
     Why raise: ``setup/`` is the sample author's, so its failure is not the agent's
     to carry, and a regression check with no baseline row grades a "new" scope
-    against unset bounds and passes.
+    against unset bounds and passes. The message names the catalog ``setup/``,
+    the tree the author edits, not the temporary copy the suite ran in.
     """
-    handle = _project(tree, stack)
+    handle = _project(_setup_copy(sample.setup_dir, stack), stack)
     rows = _suite_rows(handle, metrics, setup)
     if handle.no_result is not None:
         raise BaselineSuiteError(
-            f"the setup/ baseline suite in {tree} gave no result ({handle.no_result.reason}); "
-            "a sample's setup/ suite must finish and write its reports"
+            f"the setup/ baseline suite of {sample.id} ({sample.setup_dir}) gave no result "
+            f"({handle.no_result.reason}); a sample's setup/ suite must finish and write its reports"
         )
     return rows
+
+
+def _setup_copy(setup_dir: Path, stack: ExitStack) -> Path:
+    """A throwaway copy of ``setup_dir`` (empty when it is missing); ``stack`` removes it.
+
+    Why a copy: the suite writes ``.pyc`` files and caches into its rootdir, and the
+    catalog ``setup/`` must stay as its edition digest pins it.
+    """
+    work = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix="playbook-eval-setup-")))
+    tree = work / "setup"
+    if setup_dir.is_dir():
+        shutil.copytree(setup_dir, tree, symlinks=True)
+    else:
+        tree.mkdir()
+    return tree
 
 
 def _project(tree: Path, stack: ExitStack) -> ProjectHandle:

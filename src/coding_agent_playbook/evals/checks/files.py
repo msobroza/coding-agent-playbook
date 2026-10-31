@@ -150,7 +150,7 @@ class FileContainsCheck(_FileCheck):
 class FileUnchangedCheck(_FileCheck):
     """``files_unchanged`` - the candidate file is byte-identical to the baseline.
 
-    Requires a baseline tree (the pristine ``setup/`` snapshot); with no baseline
+    Requires a baseline tree (the sample's catalog ``setup/``); with no baseline
     tree the check cannot hold (``available`` is False, and ``_holds`` grades
     ``False`` defensively).
     """

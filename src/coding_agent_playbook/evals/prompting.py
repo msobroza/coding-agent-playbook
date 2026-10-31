@@ -221,16 +221,12 @@ def _sample_session(
     elif rules is None:
         rules = _resolved_rules(sample)
     context = _sample_template_context(sample, facts)
-    return RenderSession.open(rules, context, repo_root=_setup_dir(sample))
+    return RenderSession.open(rules, context, repo_root=sample.setup_dir)
 
 
 # --------------------------------------------------------------------------- #
 # Facts + context
 # --------------------------------------------------------------------------- #
-
-
-def _setup_dir(sample: EvalSample) -> Path:
-    return sample.source_path.parent / "setup"
 
 
 def _sample_facts(sample: EvalSample) -> Facts:
@@ -239,7 +235,7 @@ def _sample_facts(sample: EvalSample) -> Facts:
     An authored ``[setup] project_kind`` wins over the detected kind; the
     unauthored default does not. Extra mock keys win over detected ones.
     """
-    setup_dir = _setup_dir(sample)
+    setup_dir = sample.setup_dir
     facts: dict[str, Any] = dict(detect(setup_dir)) if setup_dir.is_dir() else {}
     if sample.setup.project_kind != _UNSET_PROJECT_KIND or "project_kind" not in facts:
         facts["project_kind"] = sample.setup.project_kind
@@ -271,7 +267,7 @@ def _sample_template_context(sample: EvalSample, facts: Facts) -> TemplateContex
 
 def _setup_project_table(sample: EvalSample) -> dict[str, Any]:
     """``[project]`` of ``setup/pyproject.toml``, or ``{}`` when absent/invalid."""
-    pyproject = _setup_dir(sample) / "pyproject.toml"
+    pyproject = sample.setup_dir / "pyproject.toml"
     try:
         data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
     except (OSError, tomllib.TOMLDecodeError):
@@ -296,7 +292,7 @@ def _resolved_rules(sample: EvalSample) -> list[Rule]:
     overlays = (
         [] if sample.source_package in (_ENGINE_PACKAGE, _REPO_LOCAL) else [sample.source_package]
     )
-    source = FileSystemArtifactSource(repo_root=_setup_dir(sample), overlay_packages=overlays)
+    source = FileSystemArtifactSource(repo_root=sample.setup_dir, overlay_packages=overlays)
     return OverlayResolver().resolve_rules(source.list_rules(), [], [])
 
 

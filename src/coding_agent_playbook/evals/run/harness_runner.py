@@ -229,15 +229,15 @@ class Baseline:
     """The materialized ``setup/`` state — the non-regression reference.
 
     ``repo_root`` is the git-init'd scratch repo (the agent edits this in place);
-    ``commit`` is the baseline commit ref; ``setup_snapshot`` is a *separate*,
-    untouched copy of the ``setup/`` tree that the execution evaluators run their
-    baseline suite against (so a candidate that breaks tests is compared against a
-    pristine baseline rather than the post-agent tree).
+    ``commit`` is the baseline commit ref. The reference tree that scoring compares
+    against is the sample's catalog ``setup/`` (:attr:`EvalSample.setup_dir`), not a
+    copy made here. Why: a copy beside the agent's cwd was writable by the agent, so
+    editing it too passed ``file_unchanged`` and a planted ``conftest.py`` broke the
+    baseline suite.
     """
 
     repo_root: Path
     commit: str
-    setup_snapshot: Path
 
 
 @dataclass
@@ -303,10 +303,8 @@ def materialize(sample: EvalSample, scratch_dir: Path) -> Baseline:
     execution evaluators see a real installed environment — the canonical Python
     project metadata lives in ``setup/pyproject.toml``, not in ``sample.toml``.
     The scratch repo is then ``git init``'d and the initial state committed so
-    :func:`capture` can ``git diff`` against it and the ``file_unchanged`` check
-    has a reference. A *second*, pristine copy of ``setup/`` is kept alongside
-    the scratch repo as the execution-evaluator baseline (also ``uv sync``'d, so
-    the baseline suite runs against the same installed deps as the candidate).
+    :func:`capture` can ``git diff`` against it. No second copy of ``setup/`` is made: scoring reads the
+    catalog ``setup/`` itself as the baseline, out of the agent's reach.
 
     A sample whose ``setup/`` directory is missing yields an empty baseline repo —
     the runner still works, the static/execution layers simply have nothing to
@@ -317,7 +315,7 @@ def materialize(sample: EvalSample, scratch_dir: Path) -> Baseline:
     scratch_dir = Path(scratch_dir)
     scratch_dir.mkdir(parents=True, exist_ok=True)
 
-    setup_dir = sample.source_path.parent / "setup"
+    setup_dir = sample.setup_dir
     if setup_dir.is_dir():
         shutil.copytree(setup_dir, scratch_dir, dirs_exist_ok=True)
 
@@ -328,20 +326,7 @@ def materialize(sample: EvalSample, scratch_dir: Path) -> Baseline:
     _git(scratch_dir, "commit", "-q", "--allow-empty", "-m", "setup baseline")
     commit = _git(scratch_dir, "rev-parse", "HEAD").stdout.strip()
 
-    # Pristine snapshot of setup/ for the execution baseline. Kept *outside* the
-    # scratch repo (sibling dir) so the agent cannot touch it.
-    snapshot = scratch_dir.parent / f"{scratch_dir.name}__setup_baseline"
-    if snapshot.exists():
-        shutil.rmtree(snapshot)
-    if setup_dir.is_dir():
-        shutil.copytree(setup_dir, snapshot)
-    else:
-        snapshot.mkdir(parents=True, exist_ok=True)
-    # The baseline tree is what the execution evaluators run against, so it
-    # needs its own ``uv sync`` (same pyproject => same install).
-    _uv_sync_scratch(snapshot)
-
-    return Baseline(repo_root=scratch_dir, commit=commit, setup_snapshot=snapshot)
+    return Baseline(repo_root=scratch_dir, commit=commit)
 
 
 def _uv_sync_scratch(scratch_dir: Path) -> None:
