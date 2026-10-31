@@ -710,6 +710,32 @@ failure recorded. A run that stopped after a failure, a collection error for
 example, is still graded as failing. When the `setup/`
 baseline's own suite gives no result, the sample cannot be scored (exit 2).
 
+A pass rate leaves skipped and xfailed tests out, and a suite with no runnable
+test scores 1.0, so eval scoring also compares the candidate's session with the
+`setup/` baseline's. A result that hides tests does not count, and fails every
+execution check with `the test suite result does not count: <reason>`, naming
+at most three tests. The first rule broken is the reason:
+
+1. a `setup/` test that ran in the baseline, in a file the agent left unchanged,
+   did not run. An edited or deleted `setup/` test file is the agent's to change;
+2. a `setup/` test that ran in the baseline now skips or xfails;
+3. a collected test was deselected, for example by a `conftest.py`, unless the
+   baseline deselected it too;
+4. a test file the agent changed defines tests, but none was collected (a
+   `collect_ignore`, or a `python_files` that no longer matches);
+5. a test or test module skips, and the baseline did not skip it. There is no
+   opt-out yet: a sample whose tests must skip needs one first;
+6. a test xfails without `strict=True`, an imperative `pytest.xfail()` included,
+   unless the baseline xfailed it the same way. A non-strict xfail passes whatever
+   the code does. A strict one that xfails counts, so a characterization test can
+   still pin a known bug with `xfail(strict=True)`;
+7. no test passed, and none failed: a run of skips and xfails alone. A run
+   whose tests all fail is graded as the failure it is.
+
+What a `conftest.py` does inside the pytest process is out of reach, for example
+a `pytest_runtest_makereport` wrapper that flips outcomes: the judge's rubric
+criteria are the check for that.
+
 A sample declares its success criteria as layers (SPEC §6.5.3):
 
 | Layer | What it declares |

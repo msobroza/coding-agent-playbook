@@ -577,3 +577,34 @@ def test_a_static_check_ignores_a_suite_with_no_result() -> None:
     result = ThresholdCheck(_CC(), fail=0.5).grade(ctx, _ms([_cc("m.py::f", 3.0)]))
 
     assert (result.passed, result.detail) == (True, "")
+
+
+def test_an_execution_check_fails_when_the_suite_result_does_not_count() -> None:
+    """Regression: a suite that skipped its failing tests passed on the tests left."""
+    ctx = EvalContext(
+        module=None, source="", label="check", suite_violation="no test ran and passed"
+    )
+
+    result = NonRegressionCheck(_Cov()).grade(ctx, _ms([_cov("a.py", 90.0)], [_cov("a.py", 90.0)]))
+
+    assert (result.passed, result.score, result.subresults) == (False, 0.0, ())
+    assert result.detail == "the test suite result does not count: no test ran and passed"
+
+
+def test_a_suite_with_no_result_is_reported_before_a_result_that_does_not_count() -> None:
+    ctx = EvalContext(
+        module=None, source="", label="check", suite_failure="it timed out", suite_violation="x"
+    )
+
+    assert ctx.suite_failure_detail == "the test suite gave no result: it timed out"
+    assert EvalContext(module=None, source="", label="check").suite_failure_detail is None
+
+
+def test_a_static_check_ignores_a_suite_result_that_does_not_count() -> None:
+    ctx = EvalContext(
+        module=None, source="", label="check", suite_violation="no test ran and passed"
+    )
+
+    result = ThresholdCheck(_CC(), fail=0.5).grade(ctx, _ms([_cc("m.py::f", 3.0)]))
+
+    assert (result.passed, result.detail) == (True, "")

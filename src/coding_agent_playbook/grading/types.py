@@ -350,6 +350,10 @@ class EvalContext:
     ``suite_failure`` says why the candidate's test suite gave no result (it
     timed out, or left no readable junit or coverage report); every execution-metric check
     then fails with it. ``None``, the default, when it gave one or never ran.
+    ``suite_violation`` says why a result it gave does not count (eval scoring's
+    :func:`~coding_agent_playbook.evals.run.suite_integrity.suite_violation`: a
+    test hidden by a skip, an xfail or collection); it fails them the same way.
+    Both reach the checks as one :attr:`suite_failure_detail`.
     """
 
     module: ModuleModel | None
@@ -368,6 +372,22 @@ class EvalContext:
     tool_setup: ToolSetup = field(default_factory=ToolSetup)
     measured_metrics: frozenset[str] = frozenset()
     suite_failure: str | None = None
+    suite_violation: str | None = None
+
+    @property
+    def suite_failure_detail(self) -> str | None:
+        """Why every execution check fails, as its detail; ``None`` when the suite result counts.
+
+        Example::
+
+            >>> EvalContext(module=None, source="", label="x", suite_violation="no test ran and passed").suite_failure_detail
+            'the test suite result does not count: no test ran and passed'
+        """
+        if self.suite_failure is not None:
+            return f"the test suite gave no result: {self.suite_failure}"
+        if self.suite_violation is not None:
+            return f"the test suite result does not count: {self.suite_violation}"
+        return None
 
     @property
     def measure_setup(self) -> MeasureSetup:

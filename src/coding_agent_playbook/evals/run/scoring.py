@@ -37,7 +37,10 @@ flat ``[metrics]`` block:
   ``pytest.py`` nor a ``conftest.py`` that rewrites the reports passes for pytest.
   A candidate suite that gives no result (it timed out, left no readable junit
   or coverage report, or its session disagrees with them) fails every execution
-  check with its reason. The
+  check with its reason, and so does one whose result does not count because it
+  hid tests from the pass rate: a setup/ test it no longer runs, a new skip,
+  a non-strict xfail, a deselected or uncollected test, or no test that passed or failed
+  (:func:`~coding_agent_playbook.evals.run.suite_integrity.suite_violation`). The
   sample cannot be scored (:class:`UnscorableSuiteError`) when this interpreter
   lacks pytest or pytest-cov (:func:`require_suite_toolchain`), or when the
   ``setup/`` baseline's own suite gives no result;
@@ -82,6 +85,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.evals.checks.files import freeze_file_inputs
+from coding_agent_playbook.evals.run.suite_integrity import suite_violation
 from coding_agent_playbook.exit_two import ExitTwoError
 from coding_agent_playbook.grading.check import MeasurementSet
 from coding_agent_playbook.grading.execution_metrics.project import (
@@ -257,6 +261,7 @@ def score(
             baseline_measurements=measured.baseline,
             measured_metrics=measured.measured_metrics,
             suite_failure=measured.suite_failure,
+            suite_violation=measured.suite_violation,
         )
         ms = MeasurementSet(measured.candidate, measured.baseline or None)
         report = rubric.evaluate(ctx, ms, strict=False, fail_fast=fail_fast)
@@ -329,7 +334,8 @@ def _graded_artifact(candidate: Candidate) -> str:
 class _Measured:
     """One trial's measuring pass: the rows, the candidate handle, the metrics it ran.
 
-    ``suite_failure`` is why the candidate's suite gave no result, or ``None``.
+    ``suite_failure`` is why the candidate's suite gave no result, and
+    ``suite_violation`` why the result it gave does not count; ``None`` when fine.
     """
 
     candidate: list[Measurement]
@@ -337,6 +343,7 @@ class _Measured:
     project: ProjectHandle | None
     measured_metrics: frozenset[str]
     suite_failure: str | None = None
+    suite_violation: str | None = None
 
 
 def _measure(
@@ -360,9 +367,13 @@ def _measure(
     _require_toolchain()
     project = _project(candidate.tree, stack)
     candidate_rows += _suite_rows(project, execution, setup)
-    baseline_rows += _baseline_suite_rows(sample, execution, setup, stack)
-    failure = None if project.no_result is None else project.no_result.reason
-    return _Measured(candidate_rows, baseline_rows, project, promised, failure)
+    baseline = _project(_setup_copy(sample.setup_dir, stack), stack)
+    baseline_rows += _baseline_suite_rows(sample, baseline, execution, setup)
+    if project.no_result is not None:
+        failure = project.no_result.reason
+        return _Measured(candidate_rows, baseline_rows, project, promised, failure)
+    violation = _suite_violation(project, baseline, sample, candidate)
+    return _Measured(candidate_rows, baseline_rows, project, promised, None, violation)
 
 
 def _static_rows(tree: Path, metrics: list[Metric], setup: MeasureSetup) -> list[Measurement]:
@@ -394,16 +405,16 @@ def _suite_rows(
 
 
 def _baseline_suite_rows(
-    sample: EvalSample, metrics: list[Metric], setup: MeasureSetup, stack: ExitStack
+    sample: EvalSample, handle: ProjectHandle, metrics: list[Metric], setup: MeasureSetup
 ) -> list[Measurement]:
     """``sample``'s ``setup/`` suite measurements; :class:`BaselineSuiteError` when it gave none.
 
-    Why raise: ``setup/`` is the sample author's, so its failure is not the agent's
+    ``handle`` runs over a throwaway copy of ``setup/`` (:func:`_setup_copy`). Why
+    raise: ``setup/`` is the sample author's, so its failure is not the agent's
     to carry, and a regression check with no baseline row grades a "new" scope
     against unset bounds and passes. The message names the catalog ``setup/``,
     the tree the author edits, not the temporary copy the suite ran in.
     """
-    handle = _project(_setup_copy(sample.setup_dir, stack), stack)
     rows = _suite_rows(handle, metrics, setup)
     if handle.no_result is not None:
         raise BaselineSuiteError(
@@ -411,6 +422,26 @@ def _baseline_suite_rows(
             f"({handle.no_result.reason}); a sample's setup/ suite must finish and write its reports"
         )
     return rows
+
+
+def _suite_violation(
+    project: ProjectHandle, baseline: ProjectHandle, sample: EvalSample, candidate: Candidate
+) -> str | None:
+    """Why the candidate's suite result does not count against the ``setup/`` baseline's, or ``None``.
+
+    Both handles already ran and gave a result (cached, so nothing reruns), and
+    :func:`_project` asked each for a session record.
+    """
+    ours, theirs = project.run().record, baseline.run().record
+    if ours is None or theirs is None:
+        return None
+    return suite_violation(
+        ours,
+        theirs,
+        candidate_tree=candidate.tree,
+        setup_tree=sample.setup_dir,
+        changed_files=candidate.changed_files,
+    )
 
 
 def _setup_copy(setup_dir: Path, stack: ExitStack) -> Path:

@@ -285,11 +285,12 @@ class _MetricCheck(Check):
         actually grades this JUDGED-tier check — so a cheaper required gate that
         already failed short-circuits it and the judge is never invoked.
 
-        An **execution** metric fails outright when ``ctx.suite_failure`` says the
-        suite gave no result (:meth:`_no_suite_result`).
+        An **execution** metric fails outright when the suite gave no result, or one
+        that does not count (``ctx.suite_failure_detail``, :meth:`_failed_suite`).
         """
-        if self.metric.needs_project and ctx.suite_failure is not None:
-            return self._no_suite_result(ctx.suite_failure)
+        failure = ctx.suite_failure_detail
+        if self.metric.needs_project and failure is not None:
+            return self._failed_suite(failure)
         measurements = self._lazily_measure(ctx, measurements)
         details: list[ScopeDetail] = []
         scores: list[float] = []
@@ -337,16 +338,17 @@ class _MetricCheck(Check):
         fresh = list(self.metric.measure(ctx))
         return MeasurementSet([*measurements.candidate, *fresh], measurements.baseline)
 
-    def _no_suite_result(self, reason: str) -> CheckResult:
-        """The failed result of an execution check over a suite that gave no result.
+    def _failed_suite(self, detail: str) -> CheckResult:
+        """The failed result of an execution check over a suite with no result that counts.
 
-        Why fail and not grade: the suite left no rows, and zero scopes pass
-        vacuously, so an agent's endless test or crashing ``conftest.py`` scored green.
+        Why fail and not grade: a suite with no result left no rows, and zero scopes
+        pass vacuously, so an agent's endless test or crashing ``conftest.py`` scored
+        green; a suite whose failing tests were skipped scored green the same way.
 
         Example::
 
-            >>> check._no_suite_result("it timed out after 300 s").detail  # doctest: +SKIP
-            'the test suite gave no result: it timed out after 300 s'
+            >>> check._failed_suite("the test suite gave no result: it timed out").detail  # doctest: +SKIP
+            'the test suite gave no result: it timed out'
         """
         return CheckResult(
             check_id=self.id,
@@ -357,7 +359,7 @@ class _MetricCheck(Check):
             determinism=self.determinism,
             cost=self.cost,
             status="run",
-            detail=f"the test suite gave no result: {reason}",
+            detail=detail,
         )
 
     def _build_result(self, details: list[ScopeDetail], scores: list[float]) -> CheckResult:
