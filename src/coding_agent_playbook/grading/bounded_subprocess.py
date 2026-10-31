@@ -60,11 +60,14 @@ _POSIX = os.name == "posix"
 #: groups (the agent CLI, the judge, the scoring suite); SIGKILL gives it none.
 _TERM_GRACE_S: Final = 5.0
 
-#: Why shorter: a nested bounded child (that ``eval`` child) is SIGKILLed by its
-#: parent :data:`_TERM_GRACE_S` after the SIGTERM, so its own escalation (forward
-#: the SIGTERM, wait, SIGKILL) must end strictly earlier, or a CLI under it that
-#: ignores SIGTERM outlives them both.
-_NESTED_TERM_GRACE_S: Final = _TERM_GRACE_S / 2
+#: The environment variable through which :func:`run_bounded` gives its child the
+#: grace that child may take (half its own). Why explicit, not guessed from the
+#: session: a nested bounded child is SIGKILLed by its parent at the end of the
+#: parent's grace, so its own escalation (forward the SIGTERM, wait, SIGKILL) must
+#: end strictly earlier, or a CLI under it that ignores SIGTERM outlives them
+#: both; and a top-level process that leads its session (``setsid``, a service
+#: manager, a container's init) looked nested and tied with its child.
+_TERM_GRACE_ENV: Final = "PLAYBOOK_TERM_GRACE_S"
 
 #: Why about 1 s: long enough for git to remove its lock files on the SIGTERM (a
 #: background ``git commit`` an agent left mid pre-commit hook, whose SIGKILL left
@@ -171,6 +174,10 @@ def run_bounded(
     lock files. A child that left no member adds no wait. A process that left
     the group (``git gc --auto`` detaches with ``setsid``) is untouched.
 
+    On POSIX the child's environment (``env``, or this process's) also carries
+    :data:`_TERM_GRACE_ENV`, half this process's own grace, which a nested
+    playbook process takes as its own; its descendants inherit it, harmlessly.
+
     One window is left: a signal landing inside ``Popen`` itself, after the fork
     and before the pid is known, leaves the child running (an accepted risk of
     microseconds).
@@ -189,7 +196,7 @@ def run_bounded(
     with subprocess.Popen(
         list(argv),
         cwd=cwd,
-        env=env,
+        env=_env_with_child_grace(env) if posix else env,
         stdin=None if input is None else subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -241,7 +248,7 @@ def halt_bounded_runs(halt: threading.Event) -> None:
 
     The threads :func:`halted_by` bound to ``halt`` start no new bounded child,
     and the running ones end even if they ignore SIGINT. Blocks for the grace at
-    most (:data:`_TERM_GRACE_S`, or :data:`_NESTED_TERM_GRACE_S` in a nested run).
+    most (:func:`_own_term_grace_s`).
     On Windows only the refusal applies.
 
     Example::
@@ -322,12 +329,22 @@ def _forward_to_bounded_groups(signum: int, frame: FrameType | None) -> None:
 def _own_term_grace_s() -> float:
     """How long this process lets its groups end after a SIGTERM before the SIGKILL.
 
-    Why the session test: a bounded child leads a session of its own, and the
-    run above it SIGKILLs it :data:`_TERM_GRACE_S` after the SIGTERM; a terminal's
-    job does not lead its session and has no such deadline. A top-level process
-    that does (``setsid``, a container's init) takes the shorter grace too.
+    The grace its bounded parent gave it in :data:`_TERM_GRACE_ENV`: a positive
+    number no larger than :data:`_TERM_GRACE_S`. Absent or malformed, the full
+    :data:`_TERM_GRACE_S`: a top-level process has no deadline above it.
     """
-    return _NESTED_TERM_GRACE_S if os.getsid(0) == os.getpid() else _TERM_GRACE_S
+    try:
+        given = float(os.environ.get(_TERM_GRACE_ENV, "nan"))
+    except ValueError:
+        return _TERM_GRACE_S
+    # Why the chained comparison: it is False for nan and inf too.
+    return given if 0 < given <= _TERM_GRACE_S else _TERM_GRACE_S
+
+
+def _env_with_child_grace(env: Mapping[str, str] | None) -> dict[str, str]:
+    """``env`` (or this process's environment) with half this process's grace for the child."""
+    base = os.environ if env is None else env
+    return {**base, _TERM_GRACE_ENV: repr(_own_term_grace_s() / 2)}
 
 
 def _forget_parent_groups() -> None:

@@ -93,6 +93,28 @@ def test_an_outer_sigterm_ends_a_nested_leaf_that_ignores_sigterm(tmp_path: Path
         assert not is_alive(leaf, grace_s=1.0)
 
 
+def test_a_session_leading_top_gives_its_nested_child_the_longer_grace(tmp_path: Path) -> None:
+    """Regression: a top run under ``setsid`` took the nested grace, tying with its child's.
+
+    With both at half the grace, a leaf that ignores SIGTERM could outlive the
+    middle's SIGKILL and the top's (1 run in 5); the graces show the tie at once.
+    """
+    leaf_pid_file, top_grace, middle_grace = (tmp_path / n for n in ("leaf", "top", "middle"))
+    middle = bounded_parent_program(
+        ignoring_leaf_argv(leaf_pid_file, "TERM"), grace_file=middle_grace
+    )
+    top = bounded_parent_program([sys.executable, "-c", middle], grace_file=top_grace)
+
+    full = bounded_subprocess._TERM_GRACE_S
+    with reaped_grandchild(leaf_pid_file), own_group(top, new_session=True) as proc:
+        leaf = wait_for_pid(leaf_pid_file)
+        graces = (float(top_grace.read_text()), float(middle_grace.read_text()))
+        assert graces == (full, full / 2)
+        os.killpg(proc.pid, signal.SIGTERM)
+        assert proc.wait(timeout=20) == -signal.SIGTERM
+        assert not is_alive(leaf, grace_s=1.0)
+
+
 def test_a_forked_child_forgets_its_parents_bounded_groups() -> None:
     """Regression: a forked worker inherited the live set; terminating it ended our runs.
 

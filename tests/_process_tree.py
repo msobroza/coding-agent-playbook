@@ -90,14 +90,23 @@ _DEFAULT_SIGNALS = (
 )
 
 
-def bounded_parent_program(child_argv: Sequence[str], *, in_thread: bool = False) -> str:
+def bounded_parent_program(
+    child_argv: Sequence[str], *, in_thread: bool = False, grace_file: Path | None = None
+) -> str:
     """Python source that runs ``child_argv`` through ``run_bounded`` (timeout 60 s).
 
     ``in_thread`` runs it from a worker thread while the main thread joins, as
     ``eval --record --jobs N`` does, after installing the forwarding the CLI entry
-    point installs. Example: ``[sys.executable, "-c", bounded_parent_program(leaf_argv(f))]``.
+    point installs. ``grace_file`` gets, before the child starts, the grace the
+    process would give its groups after a SIGTERM.
+    Example: ``[sys.executable, "-c", bounded_parent_program(leaf_argv(f))]``.
     """
     call = f"bounded_subprocess.run_bounded({list(child_argv)!r}, timeout_s=60.0)"
+    if grace_file is not None:
+        call = (
+            f"__import__('pathlib').Path({str(grace_file)!r}).write_text("
+            f"repr(bounded_subprocess._own_term_grace_s()))\n{call}"
+        )
     if not in_thread:
         return "\n".join((*_DEFAULT_SIGNALS, call))
     threaded = (
@@ -111,14 +120,17 @@ def bounded_parent_program(child_argv: Sequence[str], *, in_thread: bool = False
 
 
 @contextlib.contextmanager
-def own_group(program: str) -> Iterator[subprocess.Popen[bytes]]:
+def own_group(program: str, *, new_session: bool = False) -> Iterator[subprocess.Popen[bytes]]:
     """Start ``python -c program`` in a process group of its own; afterwards kill the group.
 
-    Why a group, not a session: a terminal's job does not lead its session, and
-    ``run_bounded`` treats a session leader as a nested bounded child.
+    A group, as a terminal starts a job; ``new_session`` leads a session of its
+    own too, as ``setsid``, a service manager or a container's init starts it.
     """
     proc = subprocess.Popen(
-        [sys.executable, "-c", program], stdin=subprocess.DEVNULL, process_group=0
+        [sys.executable, "-c", program],
+        stdin=subprocess.DEVNULL,
+        start_new_session=new_session,
+        process_group=None if new_session else 0,
     )
     try:
         yield proc

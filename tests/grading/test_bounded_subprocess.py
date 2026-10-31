@@ -226,6 +226,42 @@ def test_a_member_ignoring_sigterm_gets_the_sigkill_after_the_grace(
         assert not is_alive(wait_for_pid(pid_file, limit_s=1.0), grace_s=1.0)
 
 
+_GRACE_ENV = "PLAYBOOK_TERM_GRACE_S"
+
+
+@pytest.mark.parametrize(
+    ("given", "taken"),
+    [
+        *[(None, 5.0), ("soon", 5.0), ("0", 5.0), ("-1", 5.0), ("nan", 5.0), ("inf", 5.0)],
+        *[("5.5", 5.0), ("2.5", 2.5), ("1.25", 1.25), ("5", 5.0)],
+    ],
+)
+def test_the_own_grace_is_the_one_the_parent_gave_or_the_full_one(
+    monkeypatch: pytest.MonkeyPatch, given: str | None, taken: float
+) -> None:
+    """A top-level process, session leader or not, takes the full grace; a child takes its parent's word."""
+    monkeypatch.delenv(_GRACE_ENV, raising=False)
+    if given is not None:
+        monkeypatch.setenv(_GRACE_ENV, given)
+
+    assert bounded_subprocess._own_term_grace_s() == taken
+
+
+_PRINT_GRACE = [sys.executable, "-c", f"import os; print(os.environ[{_GRACE_ENV!r}])"]
+
+
+@posix_only
+def test_a_bounded_child_gets_half_its_parents_grace(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Halving per level keeps every child's escalation strictly inside its parent's."""
+    monkeypatch.setenv(_GRACE_ENV, "2")
+    inherited = run_bounded(_PRINT_GRACE, timeout_s=30)
+
+    monkeypatch.delenv(_GRACE_ENV)
+    given = run_bounded(_PRINT_GRACE, env={"PATH": os.environ["PATH"]}, timeout_s=30)
+
+    assert (float(inherited.stdout), float(given.stdout)) == (1.0, 2.5)
+
+
 def test_a_halted_thread_starts_no_bounded_child(tmp_path: Path) -> None:
     """After an interrupt, a record's worker must not start its next agent or judge CLI."""
     halt = threading.Event()
