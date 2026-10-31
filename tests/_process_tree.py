@@ -7,6 +7,11 @@ rest of an ``eval --record`` run. A regression test starts
 asserts with :func:`is_alive` that the grandchild it recorded died too.
 :func:`reaped_grandchild` kills a survivor whatever the test's outcome.
 
+The signal tests chain bounded runs instead: :func:`bounded_parent_program` runs
+:func:`leaf_argv` (or another bounded parent) through ``run_bounded``, and
+:func:`own_session` starts the outermost one in a session of its own, so a test
+can signal its group as a terminal or a supervisor would.
+
 Example::
 
     with reaped_grandchild(tmp_path / "grandchild.pid") as pid_file:
@@ -18,12 +23,15 @@ from __future__ import annotations
 
 import contextlib
 import os
+import shlex
 import signal
+import subprocess
+import sys
 import time
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterator, Sequence
     from pathlib import Path
 
 #: A bound the fake CLI always outlives yet starts its grandchild well within, on a
@@ -56,7 +64,68 @@ def reaped_grandchild(pid_file: Path) -> Iterator[Path]:
 
 def recorded_pid(pid_file: Path) -> int:
     """The grandchild pid the fake CLI wrote to ``pid_file``."""
-    return int(pid_file.read_text(encoding="utf-8"))
+    return int(pid_file.read_text(encoding="utf-8").strip())
+
+
+def leaf_argv(pid_file: Path) -> list[str]:
+    """A shell that writes its pid to ``pid_file`` and becomes ``sleep 60``: the innermost CLI."""
+    return ["/bin/sh", "-c", f"echo $$ > {shlex.quote(str(pid_file))}; exec sleep 60"]
+
+
+#: Why: a background job of a non-interactive shell starts with SIGINT ignored, and
+#: a child inherits that; the processes under test must see what a terminal's
+#: foreground job sees.
+_DEFAULT_SIGNALS = (
+    "import signal",
+    "signal.signal(signal.SIGINT, signal.default_int_handler)",
+    "signal.signal(signal.SIGTERM, signal.SIG_DFL)",
+    "signal.signal(signal.SIGHUP, signal.SIG_DFL)",
+    "from coding_agent_playbook.grading import bounded_subprocess",
+)
+
+
+def bounded_parent_program(child_argv: Sequence[str], *, in_thread: bool = False) -> str:
+    """Python source that runs ``child_argv`` through ``run_bounded`` (timeout 60 s).
+
+    ``in_thread`` runs it from a worker thread while the main thread joins, as
+    ``eval --record --jobs N`` does, after installing the forwarding the CLI entry
+    point installs. Example: ``[sys.executable, "-c", bounded_parent_program(leaf_argv(f))]``.
+    """
+    call = f"bounded_subprocess.run_bounded({list(child_argv)!r}, timeout_s=60.0)"
+    if not in_thread:
+        return "\n".join((*_DEFAULT_SIGNALS, call))
+    threaded = (
+        "import threading",
+        "bounded_subprocess.forward_signals_to_bounded_children()",
+        f"worker = threading.Thread(target=lambda: {call})",
+        "worker.start()",
+        "worker.join()",
+    )
+    return "\n".join((*_DEFAULT_SIGNALS, *threaded))
+
+
+@contextlib.contextmanager
+def own_session(program: str) -> Iterator[subprocess.Popen[bytes]]:
+    """Start ``python -c program`` in a session of its own; afterwards kill its group."""
+    proc = subprocess.Popen(
+        [sys.executable, "-c", program], stdin=subprocess.DEVNULL, start_new_session=True
+    )
+    try:
+        yield proc
+    finally:
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.killpg(proc.pid, signal.SIGKILL)
+        proc.wait()
+
+
+def wait_for_pid(pid_file: Path, limit_s: float = 30.0) -> int:
+    """Block until a process has written its pid to ``pid_file``, then return it."""
+    deadline = time.monotonic() + limit_s
+    while not pid_file.is_file() or not pid_file.read_text(encoding="utf-8").strip():
+        if time.monotonic() > deadline:
+            raise AssertionError(f"{pid_file} never got a pid within {limit_s:g}s")
+        time.sleep(0.05)
+    return recorded_pid(pid_file)
 
 
 def is_alive(pid: int, grace_s: float = 5.0) -> bool:

@@ -370,7 +370,8 @@ def test_an_interrupted_suite_takes_its_processes_with_it(
 
     with pytest.raises(KeyboardInterrupt):
         handle.run()
-    assert started[0].returncode == -signal.SIGKILL
+    # SIGTERM first: a nested playbook process gets the moment to end its own groups.
+    assert started[0].returncode == -signal.SIGTERM
 
 
 @pytest.mark.skipif(os.name != "posix", reason="process groups are POSIX")
@@ -383,6 +384,7 @@ def test_a_group_kill_refused_by_the_os_still_ends_in_no_result(
         raise PermissionError(1, "Operation not permitted")
 
     monkeypatch.setattr("coding_agent_playbook.grading.bounded_subprocess.os.killpg", _refused)
+    monkeypatch.setattr("coding_agent_playbook.grading.bounded_subprocess._TERM_GRACE_S", 0.2)
     handle = ProjectHandle(
         root=tmp_path,
         test_cmd=[sys.executable, "-c", "import time; time.sleep(60)"],

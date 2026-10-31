@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from coding_agent_playbook.grading import bounded_subprocess
 from coding_agent_playbook.grading.bounded_subprocess import run_bounded
 from tests._process_tree import (
     TIMEOUT_S,
@@ -23,6 +24,7 @@ from tests._process_tree import (
     reaped_grandchild,
     recorded_pid,
     spawning_program,
+    wait_for_pid,
 )
 
 if TYPE_CHECKING:
@@ -100,7 +102,7 @@ def test_an_interrupt_takes_the_group_with_it(
 
     class _InterruptedOnceStarted(subprocess.Popen[Any]):
         def communicate(self, input: Any = None, timeout: float | None = None) -> tuple[Any, Any]:
-            _wait_for(pid_file)
+            wait_for_pid(pid_file)
             raise KeyboardInterrupt
 
     monkeypatch.setattr(subprocess, "Popen", _InterruptedOnceStarted)
@@ -127,15 +129,62 @@ def test_a_group_kill_refused_by_the_os_still_ends_in_timeout(
 
     monkeypatch.setattr(os, "killpg", _refused)
     monkeypatch.setattr(subprocess, "Popen", _Recorded)
+    monkeypatch.setattr(bounded_subprocess, "_TERM_GRACE_S", 0.2)
     with pytest.raises(subprocess.TimeoutExpired):
         run_bounded([sys.executable, "-c", "import time; time.sleep(60)"], timeout_s=1.0)
     assert started[0].returncode == -signal.SIGKILL
 
 
-def _wait_for(path: Path, limit_s: float = 30.0) -> None:
-    """Block until ``path`` exists: the fake CLI has started its grandchild."""
-    deadline = time.monotonic() + limit_s
-    while not path.is_file() or not path.read_text(encoding="utf-8"):
-        if time.monotonic() > deadline:
-            raise AssertionError(f"{path} never appeared")
-        time.sleep(0.05)
+@posix_only
+def test_a_grandchild_that_left_the_group_cannot_hold_the_timeout_open(tmp_path: Path) -> None:
+    """Draining the pipes after the kill would wait for every process that still holds them."""
+    program = (
+        "import pathlib, subprocess, sys, time; "
+        "p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(8)'], "
+        "start_new_session=True); "
+        f"pathlib.Path({str(tmp_path / 'escaped.pid')!r}).write_text(str(p.pid)); time.sleep(60)"
+    )
+
+    with reaped_grandchild(tmp_path / "escaped.pid"):
+        started = time.monotonic()
+        with pytest.raises(subprocess.TimeoutExpired):
+            run_bounded([sys.executable, "-c", program], timeout_s=1.0)
+        assert time.monotonic() - started < 6.0
+
+
+def test_a_windows_timeout_reads_the_output_after_the_kill(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Windows' ``communicate`` times out without the partial output; ``subprocess.run`` reads it after."""
+
+    class _WindowsTimeout:
+        pid = 2**30 - 1  # never a real pid: a killpg on it finds no group
+        returncode = None
+
+        def __init__(self, args: Any, **kwargs: Any) -> None:
+            self.args = args
+            self.communicated = 0
+
+        def __enter__(self) -> _WindowsTimeout:
+            return self
+
+        def __exit__(self, *exc_info: object) -> None:
+            return None
+
+        def communicate(self, input: Any = None, timeout: float | None = None) -> tuple[Any, Any]:
+            self.communicated += 1
+            if self.communicated == 1:
+                raise subprocess.TimeoutExpired(self.args, timeout or 0.0)
+            return b"part", b"err"
+
+        def kill(self) -> None:
+            self.returncode = 1
+
+        def wait(self, timeout: float | None = None) -> int:
+            return 1
+
+    monkeypatch.setattr(bounded_subprocess, "_POSIX", False)
+    monkeypatch.setattr(subprocess, "Popen", _WindowsTimeout)
+
+    with pytest.raises(subprocess.TimeoutExpired) as excinfo:
+        run_bounded(["agent"], timeout_s=1.0)
+
+    assert (excinfo.value.stdout, excinfo.value.stderr) == (b"part", b"err")

@@ -19,6 +19,7 @@ from coding_agent_playbook.catalog.roots import CatalogMissingError
 from coding_agent_playbook.cli.parser import build_parser as _build_parser
 from coding_agent_playbook.config.schema import ConfigError
 from coding_agent_playbook.exit_two import ExitTwoError
+from coding_agent_playbook.grading import bounded_subprocess
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -49,6 +50,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         >>> main(["--repo-root", "."])  # doctest: +SKIP
     """
+    # First, from the main thread: a command's worker threads (eval --record
+    # --jobs N, the grading scheduler) run bounded children but cannot install
+    # the handler that forwards Ctrl-C, SIGTERM and SIGHUP to their groups.
+    bounded_subprocess.forward_signals_to_bounded_children()
     parser = _build_parser()
     args = parser.parse_args(argv)
     if getattr(args, "func", None) is None:

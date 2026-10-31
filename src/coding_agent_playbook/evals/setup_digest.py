@@ -86,6 +86,7 @@ SCORING_MODULES: Final = (
     "evals.run.secret_redaction",
     # The grading kernel and its metrics.
     "grading.baseline_git",
+    "grading.bounded_subprocess",
     "grading.check",
     "grading.check_registry",
     "grading.compose",
