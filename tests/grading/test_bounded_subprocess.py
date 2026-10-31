@@ -12,6 +12,7 @@ import os
 import signal
 import subprocess
 import sys
+import threading
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -174,6 +175,19 @@ def test_a_member_ignoring_sigterm_gets_the_sigkill_after_the_grace(
         with pytest.raises(subprocess.TimeoutExpired):
             run_bounded([sys.executable, "-c", leader], timeout_s=TIMEOUT_S)
         assert not is_alive(wait_for_pid(pid_file, limit_s=1.0), grace_s=1.0)
+
+
+def test_a_halted_thread_starts_no_bounded_child(tmp_path: Path) -> None:
+    """After an interrupt, a record's worker must not start its next agent or judge CLI."""
+    halt = threading.Event()
+    marker = tmp_path / "started"
+    halt.set()
+
+    with pytest.raises(bounded_subprocess.BoundedRunHalted, match="touch"):
+        bounded_subprocess.halted_by(halt, run_bounded)(["touch", str(marker)], timeout_s=30)
+
+    assert not marker.exists()
+    assert run_bounded(["true"], timeout_s=30).returncode == 0  # other threads still run
 
 
 @posix_only

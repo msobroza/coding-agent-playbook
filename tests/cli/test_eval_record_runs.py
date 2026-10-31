@@ -1,11 +1,16 @@
 """``--jobs`` and ``--resume`` scheduling of a record's units (``commands._eval_record_runs``).
 
 The units' samples are stand-ins with only an ``id``, and ``run`` is a plain
-function, so nothing here starts a harness or a judge.
+function, so nothing here starts a harness or a judge. The Ctrl-C test runs a
+record in a process of its own whose units start shell leaves through
+``run_bounded``, as the agent and judge runners do.
 """
 
 from __future__ import annotations
 
+import contextlib
+import os
+import signal
 import threading
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, cast
@@ -15,6 +20,7 @@ import pytest
 from coding_agent_playbook.commands._eval_record_runs import RecordUnit, record_units
 from coding_agent_playbook.evals.record_checkpoint import RecordCheckpoint
 from coding_agent_playbook.evals.release_metrics import SampleRecord
+from tests._process_tree import is_alive, own_group, reaped_grandchild, wait_for_pid
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -106,3 +112,45 @@ def test_a_failure_saves_the_running_units_and_starts_no_queued_one(tmp_path: Pa
     saved = _checkpoint(tmp_path, resume=True)
     assert saved.resumed("sample", "review/b", inputs_digest=_INPUTS, graded="head") is not None
     assert saved.resumable == len(ran) - 1  # every unit that ran, but the failed one
+
+
+#: A record of 4 units on 2 workers; each unit starts an "agent" then a "judge"
+#: leaf through ``run_bounded``. A leaf ignores SIGINT, as a CLI that traps Ctrl-C
+#: does, so only the record's own ending stops it.
+_INTERRUPTED_RECORD = """
+import pathlib, signal
+signal.signal(signal.SIGINT, signal.default_int_handler)
+from types import SimpleNamespace
+from coding_agent_playbook.commands._eval_record_runs import RecordUnit, record_units
+from coding_agent_playbook.evals.record_checkpoint import RecordCheckpoint
+from coding_agent_playbook.grading import bounded_subprocess
+bounded_subprocess.forward_signals_to_bounded_children()
+work = pathlib.Path({work!r})
+def run(unit):
+    for step in ("agent", "judge"):
+        script = f"trap '' INT; echo $$ > {{work}}/{{unit.sample.id}}.{{step}}; exec sleep 60"
+        bounded_subprocess.run_bounded(["/bin/sh", "-c", script], timeout_s=60)
+    raise AssertionError("a unit outlived the interrupt")
+units = [RecordUnit("sample", SimpleNamespace(id=f"u{{i}}"), i, "i" * 64) for i in range(4)]
+checkpoint = RecordCheckpoint.open(work / "c.jsonl", setup_digest="s", resume=False)
+record_units(units, jobs=2, run=run, checkpoint=checkpoint)
+"""
+
+
+@pytest.mark.skipif(os.name != "posix", reason="process groups are POSIX")
+def test_ctrl_c_under_jobs_starts_no_queued_unit_and_ends_the_running_ones(
+    tmp_path: Path,
+) -> None:
+    """Regression: the pool's exit waited for the running units, then started every queued one."""
+    leaf_files = [tmp_path / f"u{i}.{step}" for i in range(4) for step in ("agent", "judge")]
+
+    with contextlib.ExitStack() as stack:
+        for leaf_file in leaf_files:
+            stack.enter_context(reaped_grandchild(leaf_file))
+        proc = stack.enter_context(own_group(_INTERRUPTED_RECORD.format(work=str(tmp_path))))
+        agents = [wait_for_pid(tmp_path / f"u{i}.agent") for i in (0, 1)]
+        os.killpg(proc.pid, signal.SIGINT)
+
+        assert proc.wait(timeout=20) == -signal.SIGINT
+        assert sorted(f.name for f in leaf_files if f.exists()) == ["u0.agent", "u1.agent"]
+        assert not any(is_alive(pid, grace_s=1.0) for pid in agents)

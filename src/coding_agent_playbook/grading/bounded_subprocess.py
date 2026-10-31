@@ -14,7 +14,9 @@ group (a terminal's Ctrl-C or hangup, a supervisor's ``kill -TERM -<pgid>``), so
 SIGINT, SIGTERM and SIGHUP to every live bounded group, then acts as the process
 did before; after a SIGTERM or SIGHUP it SIGKILLs the groups still led by a live
 process before it dies. The CLI entry point installs it from the main thread,
-which covers the children of worker threads. A bounded child has no controlling terminal: an
+which covers the children of worker threads, and :func:`halted_by` with
+:func:`halt_bounded_runs` stop a thread pool's units after an interrupt (``eval
+--record --jobs N``). A bounded child has no controlling terminal: an
 inherited TTY stdin stays readable, but ``/dev/tty`` and job control are
 unavailable, so a CLI that prompts on the terminal fails fast instead of waiting.
 
@@ -28,6 +30,7 @@ replace that one attribute for every caller.
 from __future__ import annotations
 
 import contextlib
+import contextvars
 import os
 import signal
 import subprocess
@@ -36,11 +39,17 @@ import time
 from typing import TYPE_CHECKING, Any, Final, Literal, overload
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Mapping, Sequence
+    from collections.abc import Callable, Collection, Mapping, Sequence
     from pathlib import Path
     from types import FrameType
 
-__all__ = ["forward_signals_to_bounded_children", "run_bounded"]
+__all__ = [
+    "BoundedRunHalted",
+    "forward_signals_to_bounded_children",
+    "halt_bounded_runs",
+    "halted_by",
+    "run_bounded",
+]
 
 #: Read at call time, not import time, so a test can take the Windows path.
 _POSIX = os.name == "posix"
@@ -64,6 +73,25 @@ _LEADER_POLL_S: Final = 0.05
 #: a lock the main thread already held would deadlock it, while ``set.add``,
 #: ``discard`` and ``copy`` are each atomic under the GIL.
 _live_bounded_groups: set[int] = set()
+
+#: The halt switch of the pool unit this thread runs (:func:`halted_by`), if any.
+#: Why a context variable: it binds a switch to the threads of one pool only, so
+#: an interrupted record never refuses the bounded runs of another caller.
+_thread_halt: contextvars.ContextVar[threading.Event | None] = contextvars.ContextVar(
+    "bounded_run_halt", default=None
+)
+
+
+class BoundedRunHalted(KeyboardInterrupt):
+    """A :func:`run_bounded` call refused: the interrupted run that started its thread is ending.
+
+    Why a ``KeyboardInterrupt``: a runner's ``except Exception`` must not record
+    it as a failed attempt and go on to the next one.
+
+    Example::
+
+        >>> raise BoundedRunHalted("not started: ['claude', '-p']")  # doctest: +SKIP
+    """
 
 
 @overload
@@ -130,12 +158,16 @@ def run_bounded(
     and before the pid is known, leaves the child running (an accepted risk of
     microseconds).
 
+    In a thread bound by :func:`halted_by` whose switch is set, it starts nothing
+    and raises :class:`BoundedRunHalted`.
+
     Example::
 
         >>> run_bounded(["true"], timeout_s=5).returncode  # doctest: +SKIP
         0
     """
     forward_signals_to_bounded_children()
+    _refuse_if_halted(argv)
     posix = _POSIX
     with subprocess.Popen(
         list(argv),
@@ -151,6 +183,9 @@ def run_bounded(
     ) as proc:
         try:
             _live_bounded_groups.add(proc.pid)
+            # Again once live: a halt set between the first check and the add
+            # missed this pid in its snapshot of the live groups.
+            _refuse_if_halted(argv)
             stdout, stderr = proc.communicate(input, timeout=timeout_s)
         except BaseException as exc:
             _end_bounded_child(proc, exc, posix=posix)
@@ -163,6 +198,51 @@ def run_bounded(
             # also need the new process to lead a group of that id.
             _signal_group(proc.pid, signal.SIGKILL)
     return subprocess.CompletedProcess(list(argv), proc.returncode, stdout, stderr)
+
+
+def halted_by[**P, R](halt: threading.Event, run: Callable[P, R]) -> Callable[P, R]:
+    """``run``, with every :func:`run_bounded` in its thread refused once ``halt`` is set.
+
+    Wrap each unit a thread pool runs, so :func:`halt_bounded_runs` on an
+    interrupt stops a running unit at its next agent or judge CLI.
+
+    Example::
+
+        >>> pool.submit(halted_by(halt, run_unit), unit)  # doctest: +SKIP
+    """
+
+    def run_unless_halted(*args: P.args, **kwargs: P.kwargs) -> R:
+        token = _thread_halt.set(halt)
+        try:
+            return run(*args, **kwargs)
+        finally:
+            _thread_halt.reset(token)
+
+    return run_unless_halted
+
+
+def halt_bounded_runs(halt: threading.Event) -> None:
+    """Set ``halt``, then end every live bounded group: SIGTERM, a grace, SIGKILL (POSIX).
+
+    The threads :func:`halted_by` bound to ``halt`` start no new bounded child,
+    and the running ones end even if they ignore SIGINT. Blocks for the grace at
+    most (:data:`_TERM_GRACE_S`, or :data:`_NESTED_TERM_GRACE_S` in a nested run).
+    On Windows only the refusal applies.
+
+    Example::
+
+        >>> halt_bounded_runs(halt)  # doctest: +SKIP
+    """
+    halt.set()
+    if _POSIX:
+        _end_groups(_live_bounded_groups.copy(), signal.SIGTERM, _own_term_grace_s())
+
+
+def _refuse_if_halted(argv: Sequence[str]) -> None:
+    """Raise :class:`BoundedRunHalted` when this thread's unit was halted."""
+    halt = _thread_halt.get()
+    if halt is not None and halt.is_set():
+        raise BoundedRunHalted(f"not started, its run was interrupted: {list(argv)!r}")
 
 
 def forward_signals_to_bounded_children() -> None:

@@ -7,11 +7,14 @@ runs. A unit the checkpoint already holds for the same inputs is reused
 and judge subprocesses, so threads are enough, and each run already works in its
 own scratch and config directories. A unit that fails stops new units from
 starting; units already running finish and are checkpointed before the first
-failure is raised, so a rerun with ``--resume`` loses nothing that ended.
+failure is raised, so a rerun with ``--resume`` loses nothing that ended. An
+interrupt (Ctrl-C) instead cancels the queue and ends the running units at once:
+their agent and judge CLIs get SIGTERM, then SIGKILL, and start no next one.
 """
 
 from __future__ import annotations
 
+import threading
 from concurrent.futures import CancelledError, Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,6 +25,7 @@ from coding_agent_playbook.evals.record_checkpoint import (
     default_checkpoint_path,
 )
 from coding_agent_playbook.evals.release_metrics import GRADED_HEAD
+from coding_agent_playbook.grading import bounded_subprocess
 
 if TYPE_CHECKING:
     import argparse
@@ -124,24 +128,46 @@ def _run_parallel(
     run: Callable[[RecordUnit], SampleRecord],
     finish: Callable[[RecordUnit, SampleRecord], None],
 ) -> None:
-    """Run ``units`` on ``jobs`` threads; on a failure, cancel the queue and raise it last."""
-    first_error: BaseException | None = None
-    with ThreadPoolExecutor(max_workers=jobs, thread_name_prefix="playbook-record") as pool:
-        futures: dict[Future[SampleRecord], RecordUnit] = {
-            pool.submit(run, unit): unit for unit in units
-        }
-        for future in as_completed(futures):
-            try:
-                record = future.result()
-            except CancelledError:
-                continue
-            # Kept, not raised: the units still running finish and are saved first.
-            except Exception as exc:
-                if first_error is None:
-                    first_error = exc
-                    for other in futures:
-                        other.cancel()
-                continue
-            finish(futures[future], record)
+    """Run ``units`` on ``jobs`` threads; on a failure, cancel the queue and raise it last.
+
+    On an interrupt, or an error of its own, cancel the queue, end the running
+    units' bounded children and refuse their next ones, then re-raise.
+    """
+    halt = threading.Event()
+    pool = ThreadPoolExecutor(max_workers=jobs, thread_name_prefix="playbook-record")
+    try:
+        halting_run = bounded_subprocess.halted_by(halt, run)
+        futures = {pool.submit(halting_run, unit): unit for unit in units}
+        first_error = _finish_as_completed(futures, finish)
+    except BaseException:
+        # Why not the pool's own exit: shutdown(wait=True) lets each worker run
+        # its unit to the end and then start every queued one, each an agent and
+        # a judge run billed after the user asked to stop.
+        pool.shutdown(wait=False, cancel_futures=True)
+        bounded_subprocess.halt_bounded_runs(halt)
+        raise
+    pool.shutdown(wait=True)
     if first_error is not None:
         raise first_error
+
+
+def _finish_as_completed(
+    futures: dict[Future[SampleRecord], RecordUnit],
+    finish: Callable[[RecordUnit, SampleRecord], None],
+) -> Exception | None:
+    """Finish each unit as it ends; on the first failure cancel the queue and return it."""
+    first_error: Exception | None = None
+    for future in as_completed(futures):
+        try:
+            record = future.result()
+        except CancelledError:
+            continue
+        # Kept, not raised: the units still running finish and are saved first.
+        except Exception as exc:
+            if first_error is None:
+                first_error = exc
+                for other in futures:
+                    other.cancel()
+            continue
+        finish(futures[future], record)
+    return first_error
