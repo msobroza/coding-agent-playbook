@@ -83,6 +83,7 @@ SCORING_MODULES: Final = (
     "evals.run.opencode_route",
     "evals.run.opencode_runner",
     "evals.run.scoring",
+    "evals.run.scoring_suite",
     "evals.run.secret_redaction",
     "evals.run.suite_integrity",
     # The grading kernel and its metrics.

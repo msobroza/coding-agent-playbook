@@ -41,7 +41,8 @@ from typing import TYPE_CHECKING, Final
 
 from coding_agent_playbook.evals.prompting import render_prompt
 from coding_agent_playbook.evals.run.git_env import without_repo_location
-from coding_agent_playbook.evals.run.scoring import require_suite_toolchain, score
+from coding_agent_playbook.evals.run.scoring import score
+from coding_agent_playbook.evals.run.scoring_suite import require_suite_toolchain
 from coding_agent_playbook.evals.token_usage import TokenUsage, sum_usage
 
 if TYPE_CHECKING:

@@ -123,7 +123,7 @@ from coding_agent_playbook.evals.report_format import (
     sample_result_to_dict,
 )
 from coding_agent_playbook.evals.run.comparison_sides import EDITION_DIR_FLAG
-from coding_agent_playbook.evals.run.scoring import UnscorableSuiteError
+from coding_agent_playbook.evals.run.scoring_suite import UnscorableSuiteError
 from coding_agent_playbook.evals.target_config import load_eval_settings
 from coding_agent_playbook.evals.targets import TargetError
 from coding_agent_playbook.evals.task_registry import TaskRegistry, TaskRegistryError

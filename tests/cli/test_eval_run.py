@@ -512,7 +512,8 @@ def test_run_without_the_suite_toolchain_exits_2_before_the_agent(
     """Regression: a scoring interpreter without pytest-cov crashed ``eval --run`` (exit 1)."""
     _seed(tmp_path, make_synthetic_repo)
     monkeypatch.setattr(
-        "coding_agent_playbook.evals.run.scoring._importable", lambda name: name != "pytest_cov"
+        "coding_agent_playbook.evals.run.scoring_suite._importable",
+        lambda name: name != "pytest_cov",
     )
     rc = _eval.run(_ns(tmp_path, id_="characterize/legacy-pricing", run=True, runner="fake"))
     captured = capsys.readouterr()

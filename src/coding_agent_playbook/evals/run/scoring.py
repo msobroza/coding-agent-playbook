@@ -28,9 +28,10 @@ flat ``[metrics]`` block:
   the candidate tree (and a throwaway copy of ``setup/`` for the baseline) — but **only when** an
   execution metric is actually referenced (``run_tests`` is *inferred*, not
   authored). Each run stops after 300 s and runs with an allowlisted
-  environment (:func:`_suite_env`: ``PATH``, ``HOME``, the locale, the temp dirs,
-  the Python path and the Windows system variables), so no API key, token,
-  agent socket or ``PYTEST_*`` option of the caller reaches agent code.
+  environment (:func:`~coding_agent_playbook.evals.run.scoring_suite.suite_env`:
+  ``PATH``, ``HOME``, the locale, the temp dirs, the Python path and the Windows
+  system variables), so no API key, token, agent socket or ``PYTEST_*`` option
+  of the caller reaches agent code.
   The command is ``python -P -m pytest`` with the engine's session-record
   plugin (:mod:`~coding_agent_playbook.grading.execution_metrics.suite_record`),
   writing to a temp dir outside the suite's argv, so neither a planted
@@ -42,8 +43,9 @@ flat ``[metrics]`` block:
   a non-strict xfail, a deselected or uncollected test, or no test that passed or failed
   (:func:`~coding_agent_playbook.evals.run.suite_integrity.suite_violation`). The
   sample cannot be scored (:class:`UnscorableSuiteError`) when this interpreter
-  lacks pytest or pytest-cov (:func:`require_suite_toolchain`), or when the
-  ``setup/`` baseline's own suite gives no result;
+  lacks pytest or pytest-cov
+  (:func:`~coding_agent_playbook.evals.run.scoring_suite.require_suite_toolchain`),
+  or when the ``setup/`` baseline's own suite gives no result;
 * **judge-backed** metrics (a
   :class:`~coding_agent_playbook.grading.judge_metric.JudgeMetric`, or a
   rubric-group :class:`~coding_agent_playbook.grading.rubric.Rubric` containing
@@ -74,39 +76,33 @@ suite's own writes (``.pyc`` files, caches) never touch the catalog.
 
 from __future__ import annotations
 
-import importlib.util
-import os
 import shutil
-import sys
 import tempfile
 from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING
 
 from coding_agent_playbook.evals.checks.files import freeze_file_inputs
+from coding_agent_playbook.evals.run.scoring_suite import (
+    UnscorableSuiteError,
+    check_suite_toolchain,
+    open_suite_handle,
+    static_metrics_of,
+    suite_metrics_of,
+    suite_rows,
+    tree_static_rows,
+)
 from coding_agent_playbook.evals.run.suite_integrity import freeze_test_files, suite_violation
-from coding_agent_playbook.exit_two import ExitTwoError
 from coding_agent_playbook.grading.check import MeasurementSet
-from coding_agent_playbook.grading.execution_metrics.project import (
-    NoSuiteResultError,
-    ProjectHandle,
-)
-from coding_agent_playbook.grading.measuring import (
-    SourceMeter,
-    measure_suite,
-    measure_tree,
-    measured_metrics,
-    referenced_metrics,
-)
+from coding_agent_playbook.grading.measuring import measured_metrics, referenced_metrics
 from coding_agent_playbook.grading.types import EvalContext, EvaluationReport, MeasureSetup
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from coding_agent_playbook.evals.compile.compiler import VerdictSpec
     from coding_agent_playbook.evals.run.harness_runner import Baseline, Candidate
     from coding_agent_playbook.evals.sample import EvalSample
+    from coding_agent_playbook.grading.execution_metrics.project import ProjectHandle
     from coding_agent_playbook.grading.metric import Metric
     from coding_agent_playbook.grading.rubric import Rubric
     from coding_agent_playbook.grading.types import JudgeLike, Measurement
@@ -115,81 +111,9 @@ if TYPE_CHECKING:
 #: judged checks key their per-artifact measurements on.
 _RUBRIC_LABEL = "rubric"
 
-#: Bound on one scoring suite run, in seconds. Why: an agent's test, or the code it
-#: tests, can loop forever, and the run had no timeout, so one trial stalled a whole
-#: ``eval --record``. The shipped samples' suites finish in seconds.
-_SUITE_TIMEOUT_S: Final = 300.0
-
-#: The caller's variables the scoring suite keeps (compared upper-cased, as Windows
-#: names are case-insensitive); every other one is dropped. Why an allowlist: the
-#: suite runs agent-written code, and the engine's environment holds API keys,
-#: endpoint tokens, ``GITHUB_TOKEN`` and ``SSH_AUTH_SOCK``. ``PYTHONPATH`` and
-#: ``PYTHONHOME`` stay because :func:`require_suite_toolchain`'s in-process
-#: ``find_spec`` saw them: without them the suite could miss a toolchain the check
-#: found, and every trial would give no result. ``SYSTEMROOT`` and the other
-#: Windows names stay because Python there needs them for sockets and ``random``.
-_SUITE_ENV_NAMES: Final = frozenset(
-    {
-        "PATH", "HOME", "USER", "LOGNAME", "LANG", "TZ", "TMPDIR", "TEMP", "TMP",
-        "PYTHONPATH", "PYTHONHOME", "PYTHONUTF8", "PYTHONIOENCODING", "VIRTUAL_ENV",
-        "SYSTEMROOT", "SYSTEMDRIVE", "COMSPEC", "PATHEXT", "WINDIR", "USERPROFILE",
-        "APPDATA", "LOCALAPPDATA",
-    }
-)  # fmt: skip
-
-#: Name prefixes the scoring suite keeps too: the ``LC_*`` locale categories.
-_SUITE_ENV_PREFIXES: Final = ("LC_",)
-
-#: The modules the suite's ``python -m pytest --cov`` imports from this interpreter.
-_SUITE_TOOLCHAIN: Final = ("pytest", "pytest_cov")
-
-
-class UnscorableSuiteError(ExitTwoError):
-    """The scoring suite cannot judge the agent fairly, so the sample cannot be scored (exit 2)."""
-
-
-class SuiteToolchainError(UnscorableSuiteError):
-    """This interpreter lacks a module the scoring suite runs: the environment's fault."""
-
 
 class BaselineSuiteError(UnscorableSuiteError):
     """The ``setup/`` baseline's own suite gave no result: the sample author's to fix."""
-
-
-def require_suite_toolchain(rubric: Rubric) -> None:
-    """Raise :class:`SuiteToolchainError` when ``rubric`` runs the suite and a module is missing.
-
-    Why in this process: the suite runs this interpreter in the candidate tree,
-    where a ``pytest.py`` can fake any output or exit code, so the run cannot tell
-    a missing pytest-cov from the agent's crash. Without it every trial scored 0.
-    The runner calls it before any agent runs, :func:`score` before the suite.
-
-    Example::
-
-        >>> require_suite_toolchain(compile_eval_sample(sample).per_trial)  # doctest: +SKIP
-    """
-    if _execution_metrics(rubric):
-        _require_toolchain()
-
-
-def _require_toolchain() -> None:
-    """Raise :class:`SuiteToolchainError` naming each suite module this interpreter lacks."""
-    missing = [name for name in _SUITE_TOOLCHAIN if not _importable(name)]
-    if missing:
-        raise SuiteToolchainError(
-            f"the scoring suite runs {sys.executable} -m pytest --cov, which cannot import "
-            f"{', '.join(missing)}: install the playbook's dev extra into that interpreter"
-        )
-
-
-def _importable(name: str) -> bool:
-    """Whether this interpreter can import ``name``; the seam a test replaces."""
-    return importlib.util.find_spec(name) is not None
-
-
-def _execution_metrics(rubric: Rubric) -> list[Metric]:
-    """The metrics ``rubric`` references that run the test suite."""
-    return [m for m in referenced_metrics(rubric.checks) if not m.needs_judge and m.needs_project]
 
 
 def score(
@@ -356,19 +280,18 @@ def _measure(
     candidate handle stays open on ``stack``: grading sees it as ``ctx.project``.
     """
     setup = MeasureSetup()
-    referenced = referenced_metrics(rubric.checks)
-    static = [m for m in referenced if not m.needs_judge and not m.needs_project]
-    execution = _execution_metrics(rubric)
-    candidate_rows = _static_rows(candidate.tree, static, setup)
-    baseline_rows = _static_rows(sample.setup_dir, static, setup)
+    static = static_metrics_of(rubric)
+    execution = suite_metrics_of(rubric)
+    candidate_rows = tree_static_rows(candidate.tree, static, setup)
+    baseline_rows = tree_static_rows(sample.setup_dir, static, setup)
     promised = measured_metrics(referenced_metrics(rubric.checks, nested=True), setup)
     if not execution:
         return _Measured(candidate_rows, baseline_rows, None, promised)
-    _require_toolchain()
+    check_suite_toolchain()
     tests = _frozen_test_files(candidate, stack)
-    project = _project(candidate.tree, stack)
-    candidate_rows += _suite_rows(project, execution, setup)
-    baseline = _project(_setup_copy(sample.setup_dir, stack), stack)
+    project = open_suite_handle(candidate.tree, stack)
+    candidate_rows += suite_rows(project, execution, setup)
+    baseline = open_suite_handle(_setup_copy(sample.setup_dir, stack), stack)
     baseline_rows += _baseline_suite_rows(sample, baseline, execution, setup)
     if project.no_result is not None:
         failure = project.no_result.reason
@@ -383,34 +306,6 @@ def _frozen_test_files(candidate: Candidate, stack: ExitStack) -> Path:
     return freeze_test_files(candidate.tree, candidate.changed_files, work / "tree")
 
 
-def _static_rows(tree: Path, metrics: list[Metric], setup: MeasureSetup) -> list[Measurement]:
-    """``metrics`` over every ``*.py`` file of ``tree``; no walk when there is nothing to run.
-
-    The label is the tree-relative POSIX path, so a candidate file matches its
-    ``setup/`` baseline counterpart in the
-    :class:`~coding_agent_playbook.grading.check.MeasurementSet` (same scope keys).
-    """
-    if not metrics:
-        return []
-    return list(measure_tree(tree, SourceMeter(metrics, setup)).measurements)
-
-
-def _suite_rows(
-    project: ProjectHandle, metrics: list[Metric], setup: MeasureSetup
-) -> list[Measurement]:
-    """The suite's measurements; none when it gave no result, and ``project.no_result`` says why.
-
-    The candidate's reason reaches grading as ``ctx.suite_failure``, which fails
-    every execution check: over no rows they graded zero scopes and passed. A
-    command that cannot start raises, as :func:`require_suite_toolchain` does,
-    since the environment, not the agent, has to change.
-    """
-    try:
-        return measure_suite(project, metrics, setup)
-    except NoSuiteResultError:
-        return []
-
-
 def _baseline_suite_rows(
     sample: EvalSample, handle: ProjectHandle, metrics: list[Metric], setup: MeasureSetup
 ) -> list[Measurement]:
@@ -422,7 +317,7 @@ def _baseline_suite_rows(
     against unset bounds and passes. The message names the catalog ``setup/``,
     the tree the author edits, not the temporary copy the suite ran in.
     """
-    rows = _suite_rows(handle, metrics, setup)
+    rows = suite_rows(handle, metrics, setup)
     if handle.no_result is not None:
         raise BaselineSuiteError(
             f"the setup/ baseline suite of {sample.id} ({sample.setup_dir}) gave no result "
@@ -441,7 +336,7 @@ def _suite_violation(
     """Why the candidate's suite result does not count against the ``setup/`` baseline's, or ``None``.
 
     Both handles already ran and gave a result (cached, so nothing reruns), and
-    :func:`_project` asked each for a session record. ``tests`` holds the agent's
+    :func:`~coding_agent_playbook.evals.run.scoring_suite.open_suite_handle` asked each for a session record. ``tests`` holds the agent's
     test files as it left them (:func:`_frozen_test_files`).
     """
     ours, theirs = project.run().record, baseline.run().record
@@ -469,51 +364,3 @@ def _setup_copy(setup_dir: Path, stack: ExitStack) -> Path:
     else:
         tree.mkdir()
     return tree
-
-
-def _project(tree: Path, stack: ExitStack) -> ProjectHandle:
-    """A bounded, recorded handle over ``tree`` in :func:`_suite_env`; ``stack`` removes its dirs.
-
-    The session record lives in a temp dir of its own: the report dir is in the
-    suite's argv, where agent code can read it.
-    """
-    reports = Path(
-        stack.enter_context(tempfile.TemporaryDirectory(prefix="playbook-eval-reports-"))
-    )
-    session = Path(
-        stack.enter_context(tempfile.TemporaryDirectory(prefix="playbook-eval-session-"))
-    )
-    return ProjectHandle.create(
-        tree,
-        reports,
-        timeout_s=_SUITE_TIMEOUT_S,
-        env_overrides=_suite_env(reports),
-        inherit_env=False,
-        suite_record=session / "session.json",
-    )
-
-
-def _suite_env(reports: Path, base: Mapping[str, str] | None = None) -> dict[str, str]:
-    """The whole scoring-suite environment: the allowlisted part of ``base``, and its coverage file.
-
-    ``base`` defaults to this process's environment. Only :data:`_SUITE_ENV_NAMES`
-    and the :data:`_SUITE_ENV_PREFIXES` names survive, so no secret reaches agent
-    code. That also drops every ``PYTEST_*`` name: ``-o addopts=`` does not clear
-    ``PYTEST_ADDOPTS``, so a caller's ``-k`` deselected the failing tests, and an
-    inherited plugin list or autoload switch broke the run. ``COVERAGE_FILE``
-    keeps coverage's data file out of the candidate tree and apart between trials.
-
-    Example::
-
-        >>> sorted(_suite_env(Path("/r"), {"PATH": "/bin", "ANTHROPIC_API_KEY": "k"}))
-        ['COVERAGE_FILE', 'PATH']
-    """
-    source = os.environ if base is None else base
-    kept = {name: value for name, value in source.items() if _suite_keeps(name)}
-    return {**kept, "COVERAGE_FILE": str(reports / ".coverage")}
-
-
-def _suite_keeps(name: str) -> bool:
-    """Whether the scoring suite keeps the caller's variable ``name``, in any case."""
-    upper = name.upper()
-    return upper in _SUITE_ENV_NAMES or upper.startswith(_SUITE_ENV_PREFIXES)

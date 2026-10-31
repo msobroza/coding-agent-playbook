@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from coding_agent_playbook.evals.run.scoring import _project
+from coding_agent_playbook.evals.run.scoring_suite import open_suite_handle
 from tests.evals.test_harness_runner import (
     _REFACTORED,
     _TEST_OK,
@@ -196,7 +196,7 @@ def test_the_scoring_suite_reports_no_coverage_outside_the_candidate_tree(tmp_pa
     (tree / "test_mod.py").write_text(_TEST_OK, encoding="utf-8")
 
     with ExitStack() as stack:
-        coverage = _project(tree, stack).run().coverage
+        coverage = open_suite_handle(tree, stack).run().coverage
 
     assert not [name for name in coverage.per_file if "suite_record" in name]
     assert coverage.sources == (str(tree),)

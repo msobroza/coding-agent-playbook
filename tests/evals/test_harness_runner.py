@@ -45,12 +45,8 @@ from coding_agent_playbook.evals.run.harness_runner import (
     materialize,
     timed_out_run,
 )
-from coding_agent_playbook.evals.run.scoring import (
-    BaselineSuiteError,
-    SuiteToolchainError,
-    _suite_env,
-    score,
-)
+from coding_agent_playbook.evals.run.scoring import BaselineSuiteError, score
+from coding_agent_playbook.evals.run.scoring_suite import SuiteToolchainError, suite_env
 from coding_agent_playbook.evals.sample import EvalSample, SampleInvocation
 from coding_agent_playbook.grading.types import CheckResult, EvaluationReport, ScopeDetail
 from tests._catalog import CORE_ROOT
@@ -675,7 +671,7 @@ def test_the_suite_env_keeps_only_the_allowlist_and_sets_the_coverage_file() -> 
     dropped = ["ANTHROPIC_API_KEY", "GITHUB_TOKEN", "SSH_AUTH_SOCK", "PYTEST_ADDOPTS"]
     dropped += ["COVERAGE_PROCESS_START", "COV_CORE_SOURCE"]
 
-    env = _suite_env(Path("/r"), {**kept, **dict.fromkeys(dropped, "x")})
+    env = suite_env(Path("/r"), {**kept, **dict.fromkeys(dropped, "x")})
 
     assert env == {**kept, "COVERAGE_FILE": str(Path("/r") / ".coverage")}
 
@@ -724,7 +720,7 @@ def test_score_itself_checks_the_suite_toolchain(
 ) -> None:
     """``score`` called without the runner's preflight still refuses a missing toolchain."""
     monkeypatch.setattr(
-        "coding_agent_playbook.evals.run.scoring._importable", lambda name: name != "pytest"
+        "coding_agent_playbook.evals.run.scoring_suite._importable", lambda name: name != "pytest"
     )
     sample_dir = tmp_path / "sample"
     _make_setup(sample_dir)
@@ -745,7 +741,8 @@ def test_a_missing_suite_toolchain_stops_the_sample_before_the_agent_runs(
     any output the suite's subprocess prints, but not what this interpreter imports.
     """
     monkeypatch.setattr(
-        "coding_agent_playbook.evals.run.scoring._importable", lambda name: name != "pytest_cov"
+        "coding_agent_playbook.evals.run.scoring_suite._importable",
+        lambda name: name != "pytest_cov",
     )
     ran: list[Path] = []
     sample_dir = tmp_path / "sample"
@@ -761,7 +758,9 @@ def test_a_sample_that_runs_no_suite_needs_no_suite_toolchain(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Only a sample whose checks run the suite needs pytest and pytest-cov."""
-    monkeypatch.setattr("coding_agent_playbook.evals.run.scoring._importable", lambda name: False)
+    monkeypatch.setattr(
+        "coding_agent_playbook.evals.run.scoring_suite._importable", lambda name: False
+    )
     sample_dir = tmp_path / "sample"
     _make_setup(sample_dir)
     sample = _make_sample(sample_dir, gate=_cc_gate())
