@@ -96,6 +96,8 @@ SCORING_MODULES: Final = (
     "grading.execution_metrics.git_diff",
     "grading.execution_metrics.junit",
     "grading.execution_metrics.project",
+    "grading.execution_metrics.suite_record",
+    "grading.execution_metrics.suite_record_plugin",
     "grading.execution_metrics.test_pass",
     "grading.judge_metric",
     "grading.judged",
