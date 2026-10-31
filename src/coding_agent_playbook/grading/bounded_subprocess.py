@@ -5,7 +5,8 @@ CLI's node workers and MCP servers, a judge CLI's children, a tool's helpers or 
 test's own subprocess kept running for the rest of an ``eval --record`` run.
 :func:`run_bounded` starts the child in a session (and process group) of its own
 and ends the group when the run ends in a timeout or any other exception: SIGTERM
-first, then SIGKILL once the leader exits or :data:`_TERM_GRACE_S` ends.
+first, then SIGKILL once the leader exits or :data:`_TERM_GRACE_S` ends. After a
+normal exit the rest of the group gets SIGKILL at once.
 
 In its own session the child no longer gets the signals sent to its parent's
 group (a terminal's Ctrl-C or hangup, a supervisor's ``kill -TERM -<pgid>``), so
@@ -120,6 +121,11 @@ def run_bounded(
     does on POSIX: a process that left the group can hold them open. On Windows a
     timeout reads the output after the kill, as ``subprocess.run`` does there.
 
+    After a normal exit the rest of the group gets SIGKILL: a daemon that did not
+    call ``setsid``, an MCP server the CLI left behind or a test's background
+    process does not outlive the run. A process that left the group (``git gc
+    --auto`` detaches with ``setsid``) is untouched.
+
     One window is left: a signal landing inside ``Popen`` itself, after the fork
     and before the pid is known, leaves the child running (an accepted risk of
     microseconds).
@@ -151,6 +157,11 @@ def run_bounded(
             raise
         finally:
             _live_bounded_groups.discard(proc.pid)
+        if posix:
+            # Why safe although the leader is reaped: its pid is not reused while
+            # the group has a member, and a reuse in the microseconds since would
+            # also need the new process to lead a group of that id.
+            _signal_group(proc.pid, signal.SIGKILL)
     return subprocess.CompletedProcess(list(argv), proc.returncode, stdout, stderr)
 
 

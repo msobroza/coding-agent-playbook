@@ -137,6 +137,18 @@ def test_an_interrupt_right_after_the_start_takes_the_group_with_it(
 
 
 @posix_only
+def test_a_normal_exit_ends_the_rest_of_the_group(tmp_path: Path) -> None:
+    """Regression: a daemon, MCP server or test helper left in the group outlived the run."""
+    pid_file = tmp_path / "background.pid"
+    script = f"sleep 60 >/dev/null 2>&1 & echo $! > {pid_file}; echo done"
+
+    with reaped_grandchild(pid_file):
+        done = run_bounded(["/bin/sh", "-c", script], timeout_s=30)
+        assert (done.returncode, done.stdout, done.stderr) == (0, "done\n", "")
+        assert not is_alive(recorded_pid(pid_file), grace_s=1.0)
+
+
+@posix_only
 def test_an_ended_run_leaves_no_live_group() -> None:
     """A stale pid would get a later Ctrl-C once the system reuses its number."""
     run_bounded(["true"], timeout_s=30)
