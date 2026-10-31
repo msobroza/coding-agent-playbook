@@ -7,6 +7,7 @@ a timeout sleep into one.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import signal
 import subprocess
@@ -20,6 +21,7 @@ from coding_agent_playbook.grading import bounded_subprocess
 from coding_agent_playbook.grading.bounded_subprocess import run_bounded
 from tests._process_tree import (
     TIMEOUT_S,
+    ignoring_leaf_argv,
     is_alive,
     reaped_grandchild,
     recorded_pid,
@@ -110,6 +112,56 @@ def test_an_interrupt_takes_the_group_with_it(
         with pytest.raises(KeyboardInterrupt):
             run_bounded([sys.executable, "-c", spawning_program(pid_file)], timeout_s=None)
         assert not is_alive(recorded_pid(pid_file))
+
+
+@posix_only
+def test_an_interrupt_right_after_the_start_takes_the_group_with_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: a Ctrl-C landing between ``Popen`` and the ``try`` left the child running."""
+    started: list[int] = []
+
+    class _InterruptedOnAdd(set[int]):
+        def add(self, pid: int) -> None:
+            started.append(pid)
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(bounded_subprocess, "_live_bounded_groups", _InterruptedOnAdd())
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            run_bounded([sys.executable, "-c", "import time; time.sleep(60)"], timeout_s=None)
+        assert not is_alive(started[0], grace_s=1.0)
+    finally:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(started[0], signal.SIGKILL)
+
+
+@posix_only
+def test_an_ended_run_leaves_no_live_group() -> None:
+    """A stale pid would get a later Ctrl-C once the system reuses its number."""
+    run_bounded(["true"], timeout_s=30)
+    with pytest.raises(subprocess.TimeoutExpired):
+        run_bounded([sys.executable, "-c", "import time; time.sleep(60)"], timeout_s=0.5)
+
+    assert bounded_subprocess._live_bounded_groups == set()
+
+
+@posix_only
+def test_a_member_ignoring_sigterm_gets_the_sigkill_after_the_grace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The leader dies on the SIGTERM; only the group's SIGKILL ends a member that ignores it."""
+    pid_file = tmp_path / "member.pid"
+    leader = (
+        "import subprocess, time; "
+        f"subprocess.Popen({ignoring_leaf_argv(pid_file, 'TERM')!r}); time.sleep(60)"
+    )
+    monkeypatch.setattr(bounded_subprocess, "_TERM_GRACE_S", 0.5)
+
+    with reaped_grandchild(pid_file):
+        with pytest.raises(subprocess.TimeoutExpired):
+            run_bounded([sys.executable, "-c", leader], timeout_s=TIMEOUT_S)
+        assert not is_alive(wait_for_pid(pid_file, limit_s=1.0), grace_s=1.0)
 
 
 @posix_only

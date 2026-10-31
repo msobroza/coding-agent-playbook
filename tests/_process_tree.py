@@ -9,8 +9,9 @@ asserts with :func:`is_alive` that the grandchild it recorded died too.
 
 The signal tests chain bounded runs instead: :func:`bounded_parent_program` runs
 :func:`leaf_argv` (or another bounded parent) through ``run_bounded``, and
-:func:`own_session` starts the outermost one in a session of its own, so a test
-can signal its group as a terminal or a supervisor would.
+:func:`own_group` starts the outermost one in a process group of its own, as a
+terminal starts a job, so a test can signal its group as a terminal or a
+supervisor would.
 
 Example::
 
@@ -72,6 +73,11 @@ def leaf_argv(pid_file: Path) -> list[str]:
     return ["/bin/sh", "-c", f"echo $$ > {shlex.quote(str(pid_file))}; exec sleep 60"]
 
 
+def ignoring_leaf_argv(pid_file: Path, signame: str) -> list[str]:
+    """:func:`leaf_argv` with ``signame`` (``TERM``, ``INT``) ignored: a CLI only a SIGKILL ends."""
+    return ["/bin/sh", "-c", f"trap '' {signame}; {leaf_argv(pid_file)[2]}"]
+
+
 #: Why: a background job of a non-interactive shell starts with SIGINT ignored, and
 #: a child inherits that; the processes under test must see what a terminal's
 #: foreground job sees.
@@ -105,10 +111,14 @@ def bounded_parent_program(child_argv: Sequence[str], *, in_thread: bool = False
 
 
 @contextlib.contextmanager
-def own_session(program: str) -> Iterator[subprocess.Popen[bytes]]:
-    """Start ``python -c program`` in a session of its own; afterwards kill its group."""
+def own_group(program: str) -> Iterator[subprocess.Popen[bytes]]:
+    """Start ``python -c program`` in a process group of its own; afterwards kill the group.
+
+    Why a group, not a session: a terminal's job does not lead its session, and
+    ``run_bounded`` treats a session leader as a nested bounded child.
+    """
     proc = subprocess.Popen(
-        [sys.executable, "-c", program], stdin=subprocess.DEVNULL, start_new_session=True
+        [sys.executable, "-c", program], stdin=subprocess.DEVNULL, process_group=0
     )
     try:
         yield proc

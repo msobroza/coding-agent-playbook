@@ -114,9 +114,10 @@ class PlaybookEvalRun:
         argv += ["--format", "json", "--repo-root", str(checkout), *self.flags, *side_flags]
         try:
             # The eval child runs the agent, judge and scoring suite in groups of their
-            # own, which a kill of its group misses. On a timeout or Ctrl-C it gets
-            # SIGTERM first and forwards it to them, then its group gets SIGKILL; a
-            # side's CLI that ignores SIGTERM can outlive it.
+            # own, which a kill of its group misses. On Ctrl-C it first gets the
+            # forwarded SIGINT; then (and on a timeout, first) SIGTERM, which it
+            # forwards to them, SIGKILLing within half the grace those that ignore
+            # it; its own group gets SIGKILL once it exits or the grace ends.
             done = bounded_subprocess.run_bounded(
                 argv, cwd=checkout, env=checkout_env(checkout, os.environ), timeout_s=self.timeout_s
             )
