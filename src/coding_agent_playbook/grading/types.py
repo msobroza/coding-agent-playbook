@@ -312,7 +312,9 @@ class EvalContext:
 
     The ``[expected]`` file checks
     (:mod:`coding_agent_playbook.evals.checks.files`) read ``tree`` (the
-    candidate repo root after the agent ran) and ``baseline_tree`` (the sample's
+    paths they name as the agent left them: eval scoring copies them out of the
+    candidate repo before its test suite runs, which runs agent code that could
+    rewrite them) and ``baseline_tree`` (the sample's
     catalog ``setup/``, out of the agent's reach, for the ``file_unchanged``
     check). The runner sets both; every other family ignores them.
 

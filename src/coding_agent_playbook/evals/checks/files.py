@@ -8,6 +8,12 @@ metric-backed checks these ignore the
 candidate tree (:attr:`EvalContext.tree`) - and, for the unchanged check, the
 baseline tree (:attr:`EvalContext.baseline_tree`) - directly.
 
+In eval scoring ``ctx.tree`` is not the live candidate repo but the copy
+:func:`freeze_file_inputs` makes of the paths these checks name, before the
+scoring suite runs. Why: the suite runs agent code, so a ``conftest.py`` could
+run edited code and then put the original bytes back, or a test could create a
+file the agent never wrote.
+
 Each is a pure gate (``weight=0.0``, ``required=True`` by default, DETERMINISTIC,
 DETERMINISTIC-cost) whose ``passed`` comes **straight from the predicate**. The
 result carries one
@@ -23,15 +29,19 @@ copy.
 from __future__ import annotations
 
 import re
+import shutil
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
 
 from coding_agent_playbook.grading.check import Check
 from coding_agent_playbook.grading.check import slug as _slug
 from coding_agent_playbook.grading.check_registry import register_check
+from coding_agent_playbook.grading.measuring import iter_checks
 from coding_agent_playbook.grading.scope import CostTier, Determinism
 from coding_agent_playbook.grading.types import CheckResult, ScopeDetail
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from pathlib import Path
 
     from coding_agent_playbook.grading.check import MeasurementSet
@@ -177,6 +187,52 @@ class FileForbiddenCheck(_FileCheck):
         return not (tree / self.path).exists()
 
 
+def freeze_file_inputs(checks: Sequence[Check], tree: Path, dest: Path) -> Path:
+    """Copy each path a file check under ``checks`` names from ``tree`` into ``dest``; return it.
+
+    A file is copied by content (a symlink is followed, so a later change to its
+    target does not reach the copy), a directory becomes an empty one, and a
+    missing path stays missing, so every file check answers over ``dest`` as it
+    would have over ``tree`` at this moment. An unreadable file becomes an empty
+    one: it still exists. A path that is absolute or climbs out with ``..``
+    raises :exc:`ValueError` naming it, as it would grade a file outside the tree.
+
+    Example::
+
+        >>> freeze_file_inputs(rubric.checks, candidate.tree, Path(tmp) / "tree")  # doctest: +SKIP
+        PosixPath('/tmp/.../tree')
+    """
+    dest.mkdir(parents=True, exist_ok=True)
+    for check in iter_checks(checks):
+        if isinstance(check, _FileCheck):
+            _freeze_path(check, tree, dest)
+    return dest
+
+
+def _freeze_path(check: _FileCheck, tree: Path, dest: Path) -> None:
+    """Copy ``check.path`` from ``tree`` into ``dest``: a file's bytes, a directory's existence."""
+    rel = PurePosixPath(check.path)
+    if rel.is_absolute() or ".." in rel.parts:
+        raise ValueError(
+            f"file check {check.id!r} names {check.path!r}; "
+            "expected a relative path inside the candidate tree"
+        )
+    source, frozen = tree / rel, dest / rel
+    if source.is_file():
+        _copy_file_or_placeholder(source, frozen)
+    elif source.exists():
+        frozen.mkdir(parents=True, exist_ok=True)
+
+
+def _copy_file_or_placeholder(source: Path, frozen: Path) -> None:
+    """Copy ``source``'s bytes to ``frozen``; an empty file when ``source`` cannot be read."""
+    frozen.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        shutil.copyfile(source, frozen)
+    except OSError:
+        frozen.write_bytes(b"")
+
+
 def _file_matches(path: Path, pattern: str) -> bool:
     """True when ``path`` exists and its text matches the regex ``pattern``.
 
@@ -206,5 +262,6 @@ __all__ = [
     "FileExistsCheck",
     "FileForbiddenCheck",
     "FileUnchangedCheck",
+    "freeze_file_inputs",
     "slug",
 ]

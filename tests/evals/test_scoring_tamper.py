@@ -2,16 +2,18 @@
 
 Each test stands an agent in with a :class:`FakeRunner` mutation that edits the
 candidate tree and then reaches for the grading inputs: the ``setup/`` baseline
-that ``file_unchanged`` and the baseline suite compare against.
+that ``file_unchanged`` and the baseline suite compare against, or the files the
+file checks read, which the scoring suite runs agent code beside.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from coding_agent_playbook.evals.run.fake_runner import FakeRunner
+from coding_agent_playbook.evals.run.fake_runner import FakeRunner, write_files
 from coding_agent_playbook.evals.run.harness_runner import materialize
 from tests.evals.test_harness_runner import (
+    _LONG_FN,
     _REFACTORED,
     _TEST_OK,
     _check,
@@ -94,3 +96,56 @@ def test_materialize_builds_no_baseline_copy_beside_the_scratch_repo(tmp_path: P
     materialize(sample, scratch)
 
     assert not _old_snapshot(scratch).exists()
+
+
+def _restore_conftest(rel: str, original: str) -> str:
+    """A ``conftest.py`` that writes ``original`` back to ``rel`` once the session ends."""
+    return (
+        "from pathlib import Path\n\n\n"
+        "def pytest_sessionfinish(session, exitstatus):\n"
+        f"    (Path(__file__).parent / {rel!r}).write_text({original!r}, encoding='utf-8')\n"
+    )
+
+
+def test_a_suite_that_restores_an_edited_file_fails_file_unchanged(tmp_path: Path) -> None:
+    """Regression: file checks graded the tree after the suite, which had put the bytes back."""
+    files = {
+        "mod.py": _REFACTORED,
+        "test_refactor.py": _TEST_OK,
+        "conftest.py": _restore_conftest("mod.py", _LONG_FN),
+    }
+    sample_dir = tmp_path / "sample"
+    _make_setup(sample_dir)
+    sample = _make_sample(sample_dir, gate=_unchanged_and_green_gate())
+
+    result = FakeRunner(write_files(files)).run_sample(sample, tmp_path / "scratch")
+
+    unchanged = _check(result.report, "file_unchanged:mod.py")
+    assert (unchanged.passed, unchanged.status) == (False, "run")
+    assert result.passed is False
+
+
+def test_file_checks_ignore_files_the_suite_creates(tmp_path: Path) -> None:
+    """A file a test writes during the suite is not one the agent left behind."""
+    writer = (
+        "from pathlib import Path\n\n\n"
+        "def test_writes():\n"
+        "    (Path(__file__).parent / 'out.txt').write_text('made by the suite')\n"
+    )
+    sample_dir = tmp_path / "sample"
+    _make_setup(sample_dir)
+    gate = {
+        "expr": "made and suite_green",
+        "bind": {
+            "made": {"check": "file_exists", "path": "out.txt"},
+            "suite_green": {"check": "tests_pass"},
+        },
+    }
+    sample = _make_sample(sample_dir, gate=gate)
+
+    result = FakeRunner(write_files({"test_out.py": writer})).run_sample(
+        sample, tmp_path / "scratch"
+    )
+
+    assert _check(result.report, "file_exists:out.txt").passed is False
+    assert (tmp_path / "scratch" / "out.txt").is_file()  # the suite did write it

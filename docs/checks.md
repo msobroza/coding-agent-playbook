@@ -715,7 +715,12 @@ The layers compile into one rubric of checks, with the same `Metric` / `Check` /
 `Rubric` model as the metrics gate (SPEC §21). The `[gate]` layer holds file
 predicates (`file_exists`, `file_contains`, `file_unchanged` and `file_forbidden`)
 and static or execution metric checks. A metric check uses a threshold normalized to
-0–1, or non-regression against the `setup/` baseline.
+0–1, or non-regression against the `setup/` baseline. That baseline is the
+sample's own `setup/` in the catalog, which the agent cannot reach; its suite runs
+on a temporary copy. The file predicates grade the paths they name as the agent
+left them, copied before the suite runs, so a `conftest.py` that rewrites a file
+during the run, or a test that creates one, does not change their answer. A
+predicate path must be relative and stay inside the tree.
 
 The `[gate]` layer is scored deterministically into one report, rendered like the
 report of `playbook metrics`. The verdict of each trial is derived from the layer

@@ -8,6 +8,8 @@ and hostile-source handling; :func:`measure_suite` runs every execution metric o
 one project handle. :func:`measured_metrics` is the pass's promise: a metric-backed
 check over a non-judge metric is available at grade time exactly when its metric is
 named in ``EvalContext.measured_metrics``, whether or not a file produced a row.
+:func:`iter_checks` walks every node of a check tree, for callers that need the
+non-metric checks too.
 """
 
 from __future__ import annotations
@@ -22,7 +24,7 @@ from coding_agent_playbook.grading.rubric import Rubric
 from coding_agent_playbook.grading.types import MAX_FILE_BYTES, EvalContext
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Iterable, Iterator, Sequence
     from pathlib import Path
 
     from coding_agent_playbook.grading.check import Check
@@ -337,6 +339,33 @@ def _collect_metric(metric: Metric, found: dict[str, Metric], *, nested: bool) -
     if nested and isinstance(metric, Rubric):
         for check in metric.checks:
             _collect(check, found, nested=nested)
+
+
+def iter_checks(checks: Sequence[Check]) -> Iterator[Check]:
+    """Every node of the check tree, pre-order: composer children and a rubric metric's checks.
+
+    The same descent as ``referenced_metrics(..., nested=True)``, but it yields
+    the checks themselves, so eval scoring can find the file checks a ``[rubric]``
+    group binds. Each rubric is entered once, so a rubric that nests itself ends.
+
+    Example::
+
+        >>> [c.id for c in iter_checks([Not(FileExistsCheck("a.py"))])]
+        ['not', 'file_exists:a.py']
+    """
+    yield from _iter_nodes(checks, set())
+
+
+def _iter_nodes(checks: Sequence[Check], entered: set[int]) -> Iterator[Check]:
+    """:func:`iter_checks` over ``checks``, skipping the rubrics already in ``entered``."""
+    for check in checks:
+        yield check
+        if isinstance(check, (AllOf, AnyOf, Not)):
+            yield from _iter_nodes(check.children, entered)
+        metric = check.metric if isinstance(check, _MetricCheck) else None
+        if isinstance(metric, Rubric) and id(metric) not in entered:
+            entered.add(id(metric))
+            yield from _iter_nodes(metric.checks, entered)
 
 
 def measured_metrics(metrics: Iterable[Metric], setup: MeasureSetup) -> frozenset[str]:

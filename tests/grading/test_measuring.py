@@ -24,6 +24,7 @@ from coding_agent_playbook.grading.judge_metric import JudgeMetric
 from coding_agent_playbook.grading.measuring import (
     SourceMeter,
     decode_source_blob,
+    iter_checks,
     measure_files,
     measure_suite,
     measure_tree,
@@ -287,6 +288,28 @@ def test_referenced_metrics_descend_into_a_nested_rubric_only_when_asked() -> No
 
     assert [metric.name for metric in referenced_metrics(checks)] == ["inner"]
     assert [metric.name for metric in referenced_metrics(checks, nested=True)] == ["inner", "dit"]
+
+
+def test_iter_checks_descends_composers_and_a_rubric_metrics_checks() -> None:
+    """Every node, a ``[rubric]`` group's bound file check included (hole 2's freeze input)."""
+    bound = FileExistsCheck("tests/test_a.py")
+    group = ThresholdCheck(Rubric([AllOf(bound)], name="group"), fail=0.5)
+    negated = FileExistsCheck("b.py")
+    checks = [AnyOf(Not(negated), group)]
+
+    walked = list(iter_checks(checks))
+
+    assert walked[0] is checks[0]
+    assert {id(c) for c in (negated, group, bound)} <= {id(c) for c in walked}
+    assert len(walked) == 6
+
+
+def test_iter_checks_visits_a_rubric_that_nests_itself_once() -> None:
+    loop = Rubric([], name="loop")
+    leaf = FileExistsCheck("a.py")
+    loop.checks.extend([ThresholdCheck(loop, fail=0.5), leaf])
+
+    assert [c for c in iter_checks([ThresholdCheck(loop, fail=0.5)]) if c is leaf] == [leaf]
 
 
 def test_referenced_metrics_visit_a_rubric_that_nests_itself_once() -> None:

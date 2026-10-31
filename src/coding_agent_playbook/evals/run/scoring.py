@@ -49,7 +49,12 @@ exactly when its metric is named there.
 
 The file checks (``[gate]`` predicates) ignore the
 :class:`~coding_agent_playbook.grading.check.MeasurementSet` and read
-``ctx.tree`` / ``ctx.baseline_tree`` directly.
+``ctx.tree`` / ``ctx.baseline_tree`` directly. ``ctx.tree`` holds the paths they
+name as the agent left them, copied
+(:func:`~coding_agent_playbook.evals.checks.files.freeze_file_inputs`) before the
+suite runs: the suite runs agent code, which could otherwise put an edited
+file's original bytes back, or create a file the agent never wrote. The static
+rows and the suite still read the candidate tree itself.
 
 The baseline is always the sample's catalog ``setup/``
 (:attr:`~coding_agent_playbook.evals.sample.EvalSample.setup_dir`), never a copy
@@ -71,6 +76,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
+from coding_agent_playbook.evals.checks.files import freeze_file_inputs
 from coding_agent_playbook.exit_two import ExitTwoError
 from coding_agent_playbook.grading.check import MeasurementSet
 from coding_agent_playbook.grading.execution_metrics.project import (
@@ -230,13 +236,14 @@ def score(
     # short-circuit it when a cheaper required gate already failed (no wasted judge
     # call). With no judge configured its rubric layer reports unavailable -> skipped.
     with ExitStack() as stack:
+        graded = _frozen_file_inputs(rubric, candidate, stack)
         measured = _measure(rubric, sample, candidate, stack)
         ctx = EvalContext(
             module=None,
             source="",
             label=_RUBRIC_LABEL,
             project=measured.project,
-            tree=candidate.tree,
+            tree=graded,
             baseline_tree=sample.setup_dir,
             artifact=_graded_artifact(candidate),
             judge_samples=judge_samples,
@@ -251,6 +258,16 @@ def score(
 
     apply_verdict(report, compiled.verdict_spec)
     return report
+
+
+def _frozen_file_inputs(rubric: Rubric, candidate: Candidate, stack: ExitStack) -> Path:
+    """A copy of the paths ``rubric``'s file checks name, made now; ``stack`` removes it.
+
+    Called before the suite runs, for every sample (one code path; a few file
+    copies), so the file checks grade the files as the agent left them.
+    """
+    work = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix="playbook-eval-graded-")))
+    return freeze_file_inputs(rubric.checks, candidate.tree, work / "tree")
 
 
 def apply_verdict(report: EvaluationReport, spec: VerdictSpec) -> None:
